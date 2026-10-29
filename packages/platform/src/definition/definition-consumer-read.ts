@@ -90,7 +90,7 @@ export const applicationDefinitionConsumerReadResultSchema = z
     content: applicationContentSchema,
     toolBundle: applicationToolBundleSchema,
     ...definitionConsumerReadResultCommon,
-    validationContractVersion: z.literal("3.0.0"),
+    validationContractVersion: z.literal("4.0.0"),
     platformCompatibilityVersion: applicationPlatformCompatibilityVersionSchema,
   })
   .strict()
@@ -103,14 +103,14 @@ export const applicationDefinitionConsumerReadResultSchema = z
       });
   });
 
-/** The Module 3.0.0 stored consumer projection and its exact immutable release identity. */
+/** The Module 4.0.0 stored consumer projection and its exact immutable release identity. */
 export const moduleDefinitionConsumerReadResultSchema = z
   .object({
     kind: z.literal("module"),
     rootId: moduleRootIdSchema,
     content: moduleContentSchema,
     ...definitionConsumerReadResultCommon,
-    validationContractVersion: z.literal("3.0.0"),
+    validationContractVersion: z.literal("4.0.0"),
   })
   .strict();
 

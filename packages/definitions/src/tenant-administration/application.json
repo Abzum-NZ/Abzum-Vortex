@@ -1,5 +1,5 @@
 {
-  "source_contract_version": "3.0.0",
+  "source_contract_version": "4.0.0",
   "root_alias": "app_tenant_administration",
   "key": "vortex.app.tenant_administration",
   "kind": "application",
@@ -1307,7 +1307,6 @@
     ],
     "flows": [
       {
-        "contractVersion": "1.0.0",
         "id": "flow_suspend_tenant_organization",
         "key": "suspend_tenant_organization",
         "labels": {
@@ -1363,7 +1362,6 @@
         "finally": []
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_reactivate_tenant_organization",
         "key": "reactivate_tenant_organization",
         "labels": {
@@ -1419,7 +1417,6 @@
         "finally": []
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_rename_tenant_organization",
         "key": "rename_tenant_organization",
         "labels": {
@@ -1529,7 +1526,6 @@
         "finally": []
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_create_tenant_organization",
         "key": "create_tenant_organization",
         "labels": {
@@ -1740,7 +1736,6 @@
         "finally": []
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_reparent_tenant_organization",
         "key": "reparent_tenant_organization",
         "labels": {
@@ -2073,7 +2068,6 @@
         "finally": []
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_open_tenant_organization",
         "key": "open_tenant_organization",
         "labels": {
@@ -2119,7 +2113,6 @@
         "finally": []
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_open_tenant_administrator",
         "key": "open_tenant_administrator",
         "labels": {

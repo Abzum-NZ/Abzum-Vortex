@@ -4,7 +4,6 @@ import {
   type PlatformServiceOperationKey,
 } from "../../catalogue/platform-service-operation-catalogue";
 import {
-  flowContractVersion,
   type FlowDefinition,
   type FlowInputDeclaration,
   type FlowTask,
@@ -252,7 +251,6 @@ export function compileActionFlow(
 
   const label = String(action.label);
   return {
-    contractVersion: flowContractVersion,
     id: canonicalAction.actionId as unknown as FlowDefinition["id"],
     key: flowKey,
     ...(/\{\{|\{%/.test(label) ? {} : { description: label }),

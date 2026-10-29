@@ -45,9 +45,9 @@ import type { FlowFormula, FlowLiteral, FlowValue } from "./flow-values";
  * registry (`flow-task-registry.ts`: which task types exist, where they run, their typed
  * properties, and the publication placement check), the value-type catalogue, permanent-identity
  * compilation and cross-definition validation are separate contracts that only read the shapes
- * declared here.
+ * declared here. A flow has no version of its own: it is versioned by the definition contract of the
+ * module or application source that owns it (`application-contract-versions.ts`).
  */
-export const flowContractVersion = "1.0.0" as const;
 
 /** Closed limits from the architecture decisions, exported so one number governs every consumer. */
 export const flowMaximumTaskCount = 100;
@@ -721,7 +721,6 @@ const collectValueFormulas = (value: FlowValue, into: FlowFormula[]): void => {
 // ─── The flow ────────────────────────────────────────────────────────────────────────────────
 
 const flowBaseShape = {
-  contractVersion: z.literal(flowContractVersion),
   id: flowIdSchema,
   key: builderKeySchema,
   description: templateFreeText(descriptionSchema).optional(),

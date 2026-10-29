@@ -128,7 +128,7 @@ export const resolvedDefinitionSchema = z.discriminatedUnion("kind", [
 
 export const definitionResolutionSnapshotSchema = z
   .object({
-    contractVersion: z.literal("3.0.0"),
+    contractVersion: z.literal("4.0.0"),
     fingerprint: fingerprintSchema,
     definitions: z.array(resolvedDefinitionSchema).min(1),
     identities: z.array(sourceIdentityAssignmentSchema),

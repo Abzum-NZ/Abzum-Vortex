@@ -1,4 +1,3 @@
-import { flowContractVersion } from "./flow-contracts";
 import type { SourceFlow } from "./flow-source-contracts";
 import type { ProtectedOperationDescriptor } from "../definition/application-flow-bindings";
 
@@ -45,7 +44,6 @@ export type DefaultSaveFlowInput = DefaultFlowIdentity &
  * a form binding maps both by name and no save is hidden in the page.
  */
 export const defaultSaveFlowSource = (input: DefaultSaveFlowInput): SourceFlow => ({
-  contractVersion: flowContractVersion,
   id: input.id,
   key: input.key,
   ...(input.description === undefined ? {} : { description: input.description }),
@@ -129,7 +127,6 @@ export type DefaultOperationFlowInput = DefaultFlowIdentity &
  * shows each safely.
  */
 export const defaultOperationFlowSource = (input: DefaultOperationFlowInput): SourceFlow => ({
-  contractVersion: flowContractVersion,
   id: input.id,
   key: input.key,
   ...(input.description === undefined ? {} : { description: input.description }),

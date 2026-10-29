@@ -494,7 +494,7 @@ const theme = {
  */
 export const operationsApplication: ApplicationSourceDocument =
   applicationSourceDocumentSchema.parse({
-    source_contract_version: "3.0.0",
+    source_contract_version: "4.0.0",
     root_alias: "app_operations",
     key: "vortex.app.operations",
     kind: "application",
@@ -668,7 +668,6 @@ export const operationsApplication: ApplicationSourceDocument =
         {
           // Clicking an incident row opens its own detail page with the record identity the row
           // carries, so the page subject is read through the normal record read path.
-          contractVersion: "1.0.0",
           id: openIncidentRowClick.flow,
           key: openIncidentRowClick.flow,
           description: openIncidentRowClick.description,

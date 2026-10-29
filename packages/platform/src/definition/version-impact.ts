@@ -17,7 +17,7 @@ import {
 import { moduleContentSchema, moduleDraftSchema } from "./module-contracts";
 
 export const versionImpactSchema = z.enum(["patch", "minor", "major"]);
-export const moduleVersionImpactPolicyVersion = "3.0.0" as const;
+export const moduleVersionImpactPolicyVersion = "4.0.0" as const;
 export { stableDefinitionReleaseVersionSchema };
 
 export const versionImpactReasonCodes = [
@@ -174,17 +174,17 @@ const historyLimit = 10_000;
 export const applicationVersionImpactRequestSchema = z
   .object({
     kind: z.literal("application"),
-    validationContractVersion: z.literal("3.0.0"),
+    validationContractVersion: z.literal("4.0.0"),
     history: z.array(publishedApplicationDefinitionSchema).max(historyLimit),
     candidate: applicationDraftSchema,
   })
   .strict();
 
-/** Immutable Module history evidence; publication dispatch requires the exact 3.0.0 pair. */
+/** Immutable Module history evidence; publication dispatch requires the exact 4.0.0 pair. */
 export const moduleVersionImpactHistoryEntrySchema = z
   .object({
     publication: publishedModuleReferenceSchema.extend({
-      validationContractVersion: z.literal("3.0.0"),
+      validationContractVersion: z.literal("4.0.0"),
     }),
     content: moduleContentSchema,
     dependencyManifest: z.array(publishedDefinitionReferenceSchema),

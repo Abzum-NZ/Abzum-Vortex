@@ -848,7 +848,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     if (
       evidence.authoredSource.kind !== "application" ||
       evidence.compilationOutput.kind !== "application" ||
-      evidence.resolutionSnapshot.contractVersion !== "3.0.0"
+      evidence.resolutionSnapshot.contractVersion !== "4.0.0"
     )
       return invalidStorage(
         "readApplicationPageAdoptionRelease found inconsistent stored evidence",
@@ -901,7 +901,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         } catch (error) {
           return invalidStorage("materializeHistory found inconsistent stored evidence", error);
         }
-        if (output.validationContractVersion !== "3.0.0" || resolution.contractVersion !== "3.0.0")
+        if (output.validationContractVersion !== "4.0.0" || resolution.contractVersion !== "4.0.0")
           return invalidStorage("materializeHistory found inconsistent stored evidence");
       }
       if (kind === "module") {
@@ -919,7 +919,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         } catch (error) {
           return invalidStorage("materializeHistory found inconsistent stored evidence", error);
         }
-        if (output.validationContractVersion !== "3.0.0" || resolution.contractVersion !== "3.0.0")
+        if (output.validationContractVersion !== "4.0.0" || resolution.contractVersion !== "4.0.0")
           return invalidStorage("materializeHistory found inconsistent stored evidence");
       }
       const ownResolution = resolution.definitions.filter(

@@ -8,7 +8,6 @@ import {
   applicationSourceDocumentSchema,
   authoredRecordsTableEventAvailable,
   builderKeySchema,
-  flowContractVersion,
   defaultSaveFlowSource,
   sourcePageItems,
   validateFlow,
@@ -448,7 +447,6 @@ const interactiveFlow = (
   parts: Pick<SourceFlow, "inputs" | "tasks" | "outputs"> &
     Readonly<{ description?: string; recordInput?: string }>,
 ): SourceFlow => ({
-  contractVersion: flowContractVersion,
   id: key,
   key,
   ...(parts.description === undefined ? {} : { description: parts.description }),
@@ -584,7 +582,6 @@ export const applyStudioFlowCreate = (
           reason: "No free name could be made for this flow. Choose another name.",
         };
       const flow: SourceFlow = {
-        contractVersion: flowContractVersion,
         id: key,
         key,
         labels: { name },

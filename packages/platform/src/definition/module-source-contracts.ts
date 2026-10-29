@@ -50,7 +50,7 @@ import {
 } from "./record-type-pipelines";
 
 /** The one current Module source/validation contract pair. */
-export const moduleSourceContractVersion = "3.0.0" as const;
+export const moduleSourceContractVersion = "4.0.0" as const;
 
 /**
  * The closed set of protected read models the platform has a writer for. A system projection of one

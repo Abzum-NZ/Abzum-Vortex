@@ -1,5 +1,5 @@
 {
-  "source_contract_version": "3.0.0",
+  "source_contract_version": "4.0.0",
   "root_alias": "app_organisation_administration",
   "key": "vortex.app.organisation_administration",
   "kind": "application",
@@ -1861,7 +1861,6 @@
     ],
     "flows": [
       {
-        "contractVersion": "1.0.0",
         "id": "flow_record_organisation_notice",
         "key": "record_organisation_notice",
         "labels": {
@@ -1904,7 +1903,6 @@
         "finally": []
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_record_privacy_request",
         "key": "record_privacy_request",
         "labels": {
@@ -1947,7 +1945,6 @@
         "finally": []
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_suspend_organization_account",
         "key": "suspend_organization_account",
         "labels": {
@@ -2003,7 +2000,6 @@
         "finally": []
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_reactivate_organization_account",
         "key": "reactivate_organization_account",
         "labels": {
@@ -2059,7 +2055,6 @@
         "finally": []
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_close_organization_account",
         "key": "close_organization_account",
         "labels": {
@@ -2115,7 +2110,6 @@
         "finally": []
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_create_organization_invitation",
         "key": "create_organization_invitation",
         "labels": {
@@ -2309,7 +2303,6 @@
         "finally": []
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_revoke_organization_invitation",
         "key": "revoke_organization_invitation",
         "labels": {
@@ -2365,7 +2358,6 @@
         "finally": []
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_open_organization_settings",
         "key": "open_organization_settings",
         "labels": {
@@ -2411,7 +2403,6 @@
         "finally": []
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_save_organization_settings_record",
         "key": "save_organization_settings_record",
         "labels": {
@@ -2482,7 +2473,6 @@
         "finally": []
       },
       {
-        "contractVersion": "1.0.0",
         "id": "navigate_new_notice",
         "key": "navigate_new_notice",
         "description": "Opens the organisation notice form.",
@@ -2513,7 +2503,6 @@
         "outputs": {}
       },
       {
-        "contractVersion": "1.0.0",
         "id": "navigate_new_privacy_request",
         "key": "navigate_new_privacy_request",
         "description": "Opens the privacy request form.",

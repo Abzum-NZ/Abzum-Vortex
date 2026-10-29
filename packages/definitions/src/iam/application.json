@@ -1,5 +1,5 @@
 {
-  "source_contract_version": "3.0.0",
+  "source_contract_version": "4.0.0",
   "root_alias": "app_iam",
   "key": "vortex.app.iam",
   "kind": "application",
@@ -3698,7 +3698,6 @@
     ],
     "flows": [
       {
-        "contractVersion": "1.0.0",
         "id": "flow_update_own_profile",
         "key": "update_own_profile",
         "labels": {
@@ -3864,7 +3863,6 @@
         "outputs": {}
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_revise_role_metadata",
         "key": "revise_role_metadata",
         "labels": {
@@ -3986,7 +3984,6 @@
         }
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_retire_role",
         "key": "retire_role",
         "labels": {
@@ -4038,7 +4035,6 @@
         }
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_create_group",
         "key": "create_group",
         "labels": {
@@ -4089,7 +4085,6 @@
         }
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_rename_group",
         "key": "rename_group",
         "labels": {
@@ -4195,7 +4190,6 @@
         }
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_retire_group",
         "key": "retire_group",
         "labels": {
@@ -4247,7 +4241,6 @@
         }
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_remove_group_membership",
         "key": "remove_group_membership",
         "labels": {
@@ -4299,7 +4292,6 @@
         }
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_make_steward",
         "key": "make_steward",
         "description": "Appoints the person in the selected organisation-account row through the protected operation after confirmation.",
@@ -4645,7 +4637,6 @@
         "outputs": {}
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_revoke_role_assignment",
         "key": "revoke_role_assignment",
         "labels": {
@@ -4697,7 +4688,6 @@
         }
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_deactivate_role_activation",
         "key": "deactivate_role_activation",
         "labels": {
@@ -4749,7 +4739,6 @@
         }
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_revoke_delegation_authority",
         "key": "revoke_delegation_authority",
         "labels": {
@@ -4801,7 +4790,6 @@
         }
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_add_group_membership",
         "key": "add_group_membership",
         "labels": {
@@ -5020,7 +5008,6 @@
         "outputs": {}
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_assign_role_assignment",
         "key": "assign_role_assignment",
         "labels": {
@@ -5952,7 +5939,6 @@
         "outputs": {}
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_access_request_create",
         "key": "access_request_create",
         "labels": {
@@ -6011,7 +5997,6 @@
         "finally": []
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_access_request_update",
         "key": "access_request_update",
         "labels": {
@@ -6102,7 +6087,6 @@
         "finally": []
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_create_custom_role",
         "key": "create_custom_role",
         "labels": {
@@ -6268,7 +6252,6 @@
         "outputs": {}
       },
       {
-        "contractVersion": "1.0.0",
         "id": "iam_open_access_request",
         "key": "iam_open_access_request",
         "description": "Opens the clicked access request's own detail page with the record identity the clicked row carries.",
@@ -6311,7 +6294,6 @@
         "outputs": {}
       },
       {
-        "contractVersion": "1.0.0",
         "id": "iam_open_person",
         "key": "iam_open_person",
         "description": "Opens the clicked person's own detail page with the record identity the clicked row carries.",
@@ -6354,7 +6336,6 @@
         "outputs": {}
       },
       {
-        "contractVersion": "1.0.0",
         "id": "navigate_new_access_request",
         "key": "navigate_new_access_request",
         "description": "Opens the access request creation form.",
@@ -6385,7 +6366,6 @@
         "outputs": {}
       },
       {
-        "contractVersion": "1.0.0",
         "id": "navigate_edit_access_request",
         "key": "navigate_edit_access_request",
         "description": "Opens the current access request in the edit form.",
@@ -6428,7 +6408,6 @@
         "outputs": {}
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_grant_install_authority_person",
         "key": "grant_install_authority_person",
         "labels": {
@@ -6703,7 +6682,6 @@
         "description": "Grants organisation-catalogue delegation only. Manage applications permission must be assigned separately through Roles. Grants no stewardship or Studio permissions."
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_grant_install_authority_group",
         "key": "grant_install_authority_group",
         "labels": {

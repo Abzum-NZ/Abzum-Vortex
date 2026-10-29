@@ -3,7 +3,6 @@ import { workflowValueTypeSchema } from "../catalogue/catalogues";
 import { descriptionSchema, jsonValueSchema, retryPolicySchema } from "../catalogue/common";
 import { definitionProvenanceEntrySchema } from "../definition/definition-provenance";
 import {
-  flowContractVersion,
   flowExecutionKindSchema,
   flowMaximumTaskCount,
   flowReadFieldsProjectionSchema,
@@ -469,7 +468,6 @@ const refineSourceTaskContracts = (
 
 export const sourceFlowSchema = z
   .object({
-    contractVersion: z.literal(flowContractVersion),
     /** The flow's owner alias; resolves, with `key`, to the one permanent flow identity. */
     id: flowAliasSchema,
     key: builderKeySchema,

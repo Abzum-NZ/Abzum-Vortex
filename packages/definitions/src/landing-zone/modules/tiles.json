@@ -636,7 +636,6 @@
   "events": [],
   "flows": [
     {
-      "contractVersion": "1.0.0",
       "id": "flow_tile_pin_create",
       "key": "tile_pin_create",
       "execution": "transaction",
@@ -1014,7 +1013,6 @@
       ]
     },
     {
-      "contractVersion": "1.0.0",
       "id": "flow_tile_pin_update",
       "key": "tile_pin_update",
       "execution": "transaction",

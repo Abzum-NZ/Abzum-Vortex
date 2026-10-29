@@ -694,7 +694,7 @@ export function compileParsedModuleRequest(
     const ownDefinition = resolution.definition(definitionKey, "module");
     const output = moduleCompilationOutputSchema.safeParse({
       kind: "module",
-      validationContractVersion: "3.0.0",
+      validationContractVersion: "4.0.0",
       canonical,
       artifact: {
         kind: "module",

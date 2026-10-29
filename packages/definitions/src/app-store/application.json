@@ -1,5 +1,5 @@
 {
-  "source_contract_version": "3.0.0",
+  "source_contract_version": "4.0.0",
   "root_alias": "app_app_store",
   "key": "vortex.app.app_store",
   "kind": "application",
@@ -539,7 +539,6 @@
     ],
     "flows": [
       {
-        "contractVersion": "1.0.0",
         "id": "flow_install_or_upgrade_application",
         "key": "install_or_upgrade_application",
         "description": "Reviews the latest published version of the selected application, then installs it for the first time or upgrades to it after the person confirms.",
@@ -2487,7 +2486,6 @@
         "finally": []
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_open_store_application",
         "key": "open_store_application",
         "labels": {
@@ -2533,7 +2531,6 @@
         "finally": []
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_remove_application",
         "key": "remove_application",
         "description": "Removes an installed ordinary application after confirming the retained records and withdrawn access.",

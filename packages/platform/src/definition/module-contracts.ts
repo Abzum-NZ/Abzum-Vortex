@@ -61,7 +61,7 @@ import {
   recordTypePipelineSchema,
 } from "./record-type-pipelines";
 
-export const moduleValidationContractVersion = "3.0.0" as const;
+export const moduleValidationContractVersion = "4.0.0" as const;
 
 /** The one current Module source/validation contract pair. */
 export const moduleContractVersionPairSchema = z
