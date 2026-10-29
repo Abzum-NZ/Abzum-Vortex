@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { isBuilderKey, isPlatformIdentifier } from "./identifier-predicates";
+import { isBuilderKey } from "./identifier-predicates";
+import { isStableId } from "./stable-id";
 
-const nonNilUuidSchema = z.uuid().refine(isPlatformIdentifier, {
-  message: "A platform-issued identifier cannot be the nil UUID",
+const nonNilUuidSchema = z.string().refine(isStableId, {
+  message: "A platform-issued identifier must be a non-nil UUID",
 });
 const stableId = <Name extends string>() => nonNilUuidSchema.brand<Name>();
 

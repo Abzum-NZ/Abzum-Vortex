@@ -1,5 +1,5 @@
 {
-  "source_contract_version": "4.0.0",
+  "source_contract_version": "4.1.0",
   "root_alias": "app_landing_zone",
   "key": "vortex.app.landing_zone",
   "kind": "application",

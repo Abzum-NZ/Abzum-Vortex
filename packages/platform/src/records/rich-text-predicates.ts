@@ -1,4 +1,4 @@
-import { isPlatformIdentifier } from "../catalogue/identifier-predicates";
+import { isStableId } from "../catalogue/stable-id";
 import { isSafeHttpsUrl, normalizeHttpsUrlText } from "../catalogue/safe-https-url";
 
 export type RichTextInline =
@@ -83,7 +83,7 @@ export const isRecordRichTextBlock = (value: unknown): value is RecordRichTextBl
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
   const item = value as Record<string, unknown>;
   if (item.kind === "file")
-    return objectWithKeys(item, ["kind", "fileId"]) && isPlatformIdentifier(item.fileId);
+    return objectWithKeys(item, ["kind", "fileId"]) && isStableId(item.fileId);
   return (
     item.kind === "table" &&
     objectWithKeys(item, ["kind", "rows"]) &&

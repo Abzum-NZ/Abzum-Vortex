@@ -219,8 +219,6 @@ const seedValue = (
             { op: "literal", type: "whole_number", value: 0 },
             { op: "literal", type: "whole_number", value: 0 },
           ],
-          scale: 0,
-          rounding: "half_up",
         },
       };
     case "record_type_id":
@@ -313,6 +311,14 @@ const seededTask = (
   // A dialog is headed by what the person was doing: the flow's name.
   if (definition.type === "interface.show_message")
     properties.title = text(flow.labels?.name ?? "");
+  if (definition.type === "data.calculate") {
+    properties.formula = {
+      kind: "formula",
+      formula: { op: "literal", type: "decimal_number", value: "0" },
+    };
+    properties.places = { kind: "literal", literal: { type: "whole_number", value: 2 } };
+    properties.rounding = text("half_up");
+  }
   return { id, type: definition.type, version: definition.version, properties };
 };
 
@@ -757,7 +763,21 @@ export const applyStudioFlowCommand = (
         if (!built.ok) return { kind: "invalid", reason: built.reason };
         // Settings that come out as the step already has them apply as no change.
         list[index] = built.value;
-        return done(command.taskId);
+        const checked = done(command.taskId);
+        // A well-formed formula belongs in the draft even when its type or references will
+        // prevent publication. Other new validation issues still refuse the edit.
+        if (
+          checked.kind === "invalid" &&
+          Array.isArray(checked.cause) &&
+          checked.cause.length > 0 &&
+          checked.cause.every((issue) => {
+            if (issue.taskId !== command.taskId || !Array.isArray(issue.path)) return false;
+            const property = issue.path.lastIndexOf("properties");
+            return property >= 0 && issue.path[property + 1] === "formula";
+          })
+        )
+          return { kind: "applied", source: candidate, taskId: command.taskId };
+        return checked;
       }
     }
   } catch (cause) {

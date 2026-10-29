@@ -355,7 +355,12 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     runLocations: allLocations,
     effect: "pure",
     // `result_type` names a value type; the formula's type must match it and `value` takes it.
-    properties: { formula: required("formula"), result_type: required("builder_key") },
+    properties: {
+      formula: required("formula"),
+      result_type: required("builder_key"),
+      places: optional("whole_number"),
+      rounding: optional("builder_key"),
+    },
     outputs: [output("value", "json")],
   },
   "data.record_link": {
@@ -389,8 +394,14 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     summary: "Formats a value with a registered formatter.",
     runLocations: allLocations,
     effect: "pure",
-    properties: { formatter: required("builder_key"), input: required("any_value") },
-    outputs: [output("value", "json")],
+    properties: {
+      formatter: required("builder_key"),
+      input: required("any_value"),
+      places: optional("whole_number"),
+      currency: optional("text"),
+      unit: optional("builder_key"),
+    },
+    outputs: [output("value", "text")],
   },
   // Save rules give feedback in the browser and are authoritative in the save transaction.
   "rule.require": {

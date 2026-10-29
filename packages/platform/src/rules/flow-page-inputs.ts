@@ -1,5 +1,5 @@
 import type { JsonValue } from "../catalogue/json-value";
-import { isRecordLinkValue } from "../records/value-predicates";
+import { isRecordLinkValue } from "../records/module-field-value-predicates";
 import type { FlowBindingInput } from "../workflows/flow-contracts";
 import type { FlowFormulaScope } from "./flow-formula";
 import type { FlowProgram } from "./flow-interpreter-core";

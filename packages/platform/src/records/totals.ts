@@ -8,6 +8,7 @@ import type { ConditionNode } from "../definition/module-foundation-contracts";
 import type { FlowFormula } from "../workflows/flow-values";
 import { moneyValueSchema } from "./module-field-values";
 import { compareFlowText, evaluateFlowFormula } from "../rules/flow-formula";
+import { flowRuntimeValueOf } from "../rules/flow-runtime-value";
 import { evaluateTypedCondition } from "../rules/typed-condition";
 import { persistedRecordFieldValueMatches } from "./field-values";
 import { isRecord } from "../catalogue/runtime-primitives";
@@ -76,28 +77,6 @@ const fieldResultType = (field: ModuleField | undefined): string | undefined =>
   field?.type === "calculation" || field?.type === "total"
     ? field.settings.resultType
     : field?.type;
-
-const formulaTypeOf = (field: ModuleField): string => {
-  const type = fieldResultType(field);
-  switch (type) {
-    case "yes_no":
-      return "yes_no";
-    case "long_text":
-    case "reference_number":
-    case "email_address":
-    case "phone_number":
-    case "web_address":
-      return "text";
-    case "link":
-    case "link_to_one_of_several":
-      return "record_reference";
-    case "table":
-    case "attachment":
-      return "json";
-    default:
-      return type ?? "json";
-  }
-};
 
 const literal = (type: string, value: JsonValue): FlowFormula =>
   ({ op: "literal", type, value }) as unknown as FlowFormula;
@@ -169,24 +148,23 @@ const relationshipReaches = (
   );
 };
 
-const evaluateFormula = (formula: FlowFormula) =>
+const evaluateFormula = (formula: FlowFormula, resultScale?: number) =>
   evaluateFlowFormula(
     formula,
     {
       now: "1970-01-01T00:00:00.000Z",
       reference: () => undefined,
     },
-    { preserveExactArithmetic: true },
+    resultScale === undefined ? {} : { resultScale, resultRounding: "half_even" },
   );
 
-const sumFormula = (operands: readonly FlowFormula[], scale: number): FlowFormula => {
+const sumFormula = (operands: readonly FlowFormula[]): FlowFormula => {
   if (operands.length === 1) return operands[0]!;
-  if (operands.length <= 10)
-    return { op: "add", args: [...operands], scale, rounding: "half_even" };
+  if (operands.length <= 10) return { op: "add", args: [...operands] };
   const groups: FlowFormula[] = [];
   for (let index = 0; index < operands.length; index += 10)
-    groups.push(sumFormula(operands.slice(index, index + 10), scale));
-  return sumFormula(groups, scale);
+    groups.push(sumFormula(operands.slice(index, index + 10)));
+  return sumFormula(groups);
 };
 
 /**
@@ -245,7 +223,7 @@ const totalResult = (
   )
     return { issue: issue("money_dimension_mismatch", field.fieldId) };
 
-  const sourceType = formulaTypeOf(sourceField);
+  const sourceType = flowRuntimeValueOf(fieldResultType(sourceField) ?? "json", null).type;
   const operands = values.map((value) => literal(sourceType, value));
   if (operation === "minimum" || operation === "maximum") {
     let selected: JsonValue = values[0]!;
@@ -286,33 +264,28 @@ const totalResult = (
     return { value: selected };
   }
 
-  const sumScale = resultType === "whole_number" ? 0 : 18;
   const sum =
     operation === "sum" && operands.length === 1
-      ? sumFormula(
-          [
-            operands[0]!,
-            literal(
-              sourceType,
-              sourceType === "money"
-                ? { amount: "0", currency: currencies[0]! }
-                : sourceType === "whole_number"
-                  ? 0
-                  : "0",
-            ),
-          ],
-          sumScale,
-        )
-      : sumFormula(operands, sumScale);
+      ? sumFormula([
+          operands[0]!,
+          literal(
+            sourceType,
+            sourceType === "money"
+              ? { amount: "0", currency: currencies[0]! }
+              : sourceType === "whole_number"
+                ? 0
+                : "0",
+          ),
+        ])
+      : sumFormula(operands);
   const evaluated = evaluateFormula(
     operation === "average"
       ? {
           op: "divide",
           args: [sum, literal("whole_number", values.length)],
-          scale: field.settings.decimalPlaces!,
-          rounding: "half_even",
         }
       : sum,
+    operation === "average" ? field.settings.decimalPlaces : undefined,
   );
   if (evaluated === undefined) {
     return {

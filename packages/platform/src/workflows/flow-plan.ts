@@ -1,4 +1,5 @@
 import { fingerprintCanonicalValue } from "../definition/canonical-json-definition";
+import { prepareFlowFormulas } from "../rules/flow-formula-preparation";
 import { flowOperationOutputMembers } from "./flow-operation-output-members";
 import type { FlowBindingInput, FlowDefinition, FlowTask } from "./flow-contracts";
 import { flowTaskChildLists, isFlowControlTask } from "./flow-contracts";
@@ -438,6 +439,7 @@ export const compileFlowPlan = (
   flow: FlowDefinition,
   bindings: readonly FlowBindingInputs[] = [],
 ): FlowPlan => {
+  prepareFlowFormulas(flow);
   const drafts = [
     ...cut(flow, "tasks", flow.tasks),
     ...cut(flow, "errors", flow.errors),

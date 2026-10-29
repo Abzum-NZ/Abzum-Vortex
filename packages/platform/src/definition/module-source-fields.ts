@@ -1,4 +1,8 @@
-import { flowFormulaSchema, flowFormulaUsesNow } from "../workflows/flow-values";
+import {
+  flowFormulaSchema,
+  flowFormulaUsesNow,
+  flowRoundingModeSchema,
+} from "../workflows/flow-values";
 import { z } from "zod";
 import {
   personalDataClassSchema,
@@ -373,6 +377,7 @@ const sourceCalculationSettingsSchema = z
     decimal_places: sourceProvenanceTarget(z.number().int().min(0).max(12).optional(), [
       "decimalPlaces",
     ]),
+    rounding: sourceProvenanceUnchanged(flowRoundingModeSchema.optional()),
     expression: sourceProvenanceTarget(
       flowFormulaSchema,
       ["expression/**", "dependencyFieldIds/#"],
@@ -388,7 +393,7 @@ const sourceCalculationSettingsSchema = z
         message: "A formula using the current time is read-time",
       });
     if (
-      value.decimal_places !== undefined &&
+      (value.decimal_places !== undefined || value.rounding !== undefined) &&
       value.result_type !== "decimal_number" &&
       value.result_type !== "money"
     )
@@ -396,6 +401,12 @@ const sourceCalculationSettingsSchema = z
         code: "custom",
         path: ["decimal_places"],
         message: "Only decimal and money calculations declare result precision",
+      });
+    if ((value.decimal_places === undefined) !== (value.rounding === undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["rounding"],
+        message: "Calculation places and rounding must be declared together",
       });
   });
 const sourceTotalSettingsSchema = z

@@ -10,11 +10,13 @@ import {
   builderKeySchema,
   defaultFlowBindingSettings,
   defaultSaveFlowSource,
+  sourceItemTree,
   sourcePageItems,
   validateFlow,
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
   type SourceFlow,
+  type FlowFormula,
 } from "@vortex/platform/schema";
 import {
   studioQueryChoices,
@@ -167,6 +169,7 @@ export type StudioFlowCreateCommand =
       name: string;
       message: string;
       operations: readonly ("create" | "update")[];
+      condition?: FlowFormula;
     }>;
 
 export type StudioFlowCreateResult =
@@ -388,7 +391,9 @@ const bindControl = (
       ? blockRowAction.trim()
       : undefined;
   const eventId =
-    blockEventId ??
+    (blockEventId !== undefined && blockEventId.length > 40
+      ? keyFrom(blockEventId, aliases)
+      : blockEventId) ??
     shared ??
     keyFrom(
       rowActionMenu || recordType === undefined
@@ -583,6 +588,67 @@ export const applyStudioFlowCreate = (
           kind: "refused",
           reason: "No free name could be made for this flow. Choose another name.",
         };
+      let condition: FlowFormula | undefined;
+      if (command.condition !== undefined) {
+        const target = `${command.moduleKey}:${command.recordTypeKey}`;
+        const items = [
+          ...body.pages.flatMap((page) => sourcePageItems(page.composition)),
+          ...body.shells.flatMap((shell) => sourceItemTree(shell.layout.content)),
+        ];
+        const targetFields = new Set(
+          module.record_types
+            .find((recordType) => recordType.key === command.recordTypeKey)!
+            .fields.map((field) => field.key),
+        );
+        const map = (value: unknown): unknown => {
+          if (Array.isArray(value)) return value.map(map);
+          if (!isRecord(value)) return value;
+          if (value.op === "literal") return value;
+          if (value.op === "reference" && isRecord(value.reference)) {
+            const reference = value.reference;
+            if (reference.source === "page")
+              throw new FlowCreateRefusal("A page value cannot be enforced on save.");
+            if (
+              reference.source !== "form" ||
+              typeof reference.form !== "string" ||
+              typeof reference.field !== "string"
+            )
+              throw new FlowCreateRefusal(
+                "Only fields of the selected form can be enforced on save.",
+              );
+            const form = items.find((item) => item.props.id === reference.form);
+            // A form reference names the control as the author sees it: its name, else its field.
+            const controls = (form === undefined ? [] : sourceItemTree([form])).flatMap((item) => {
+              const field = item.props.field;
+              if (typeof field !== "string") return [];
+              const dot = field.lastIndexOf(".");
+              if (dot <= 0) return [];
+              const name = typeof item.props.name === "string" ? item.props.name : "";
+              return [{ record: field.slice(0, dot), field: field.slice(dot + 1), name }];
+            });
+            const control = controls.find(
+              (candidate) =>
+                (candidate.name === "" ? candidate.field : candidate.name) === reference.field,
+            );
+            const records = new Set(controls.map((candidate) => candidate.record));
+            if (
+              control === undefined ||
+              records.size !== 1 ||
+              !records.has(target) ||
+              !targetFields.has(control.field)
+            )
+              throw new FlowCreateRefusal(
+                "The form field does not belong to the selected record type.",
+              );
+            return {
+              op: "reference",
+              reference: { source: "trigger_record", field: control.field },
+            };
+          }
+          return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, map(child)]));
+        };
+        condition = map(command.condition) as FlowFormula;
+      }
       const flow: SourceFlow = {
         id: key,
         key,
@@ -603,14 +669,34 @@ export const applyStudioFlowCreate = (
             operations: command.operations.map((kind) => ({ kind })),
           },
         ],
-        tasks: [
-          {
-            id: "warn",
-            type: "rule.warn",
-            version: "1.0.0",
-            properties: { message: message(command.message.trim()) },
-          },
-        ],
+        tasks:
+          condition === undefined
+            ? [
+                {
+                  id: "warn",
+                  type: "rule.warn",
+                  version: "1.0.0",
+                  properties: { message: message(command.message.trim()) },
+                },
+              ]
+            : [
+                {
+                  id: "condition",
+                  type: "if",
+                  condition,
+                  then: [
+                    {
+                      id: "refuse",
+                      type: "rule.refuse",
+                      version: "1.0.0",
+                      properties: {
+                        reason: { kind: "literal", literal: { type: "text", value: "validation" } },
+                        message: message(command.message.trim()),
+                      },
+                    },
+                  ],
+                },
+              ],
       };
       module.flows.push(flow);
       // A new rule runs after the record type's existing rules.

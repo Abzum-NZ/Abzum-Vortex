@@ -1,4 +1,4 @@
-import { isPlatformIdentifier } from "../catalogue/identifier-predicates";
+import { isStableId } from "../catalogue/stable-id";
 import { isJsonValue, type JsonValue } from "../catalogue/json-value";
 import { isCanonicalExactDecimal } from "../records/value-predicates";
 import { isRecordRichTextDocument } from "../records/rich-text-predicates";
@@ -22,7 +22,7 @@ export const flowValueMatchesType = (value: unknown, type: string): value is Jso
     case "date_time":
       return flowInstantMicros(value) !== undefined;
     case "organization_account_reference":
-      return isPlatformIdentifier(value);
+      return isStableId(value);
     case "text_collection":
       return Array.isArray(value) && value.every(validText);
     case "opaque_json":

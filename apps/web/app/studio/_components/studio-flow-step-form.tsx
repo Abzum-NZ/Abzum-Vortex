@@ -18,6 +18,7 @@ import {
   projectStudioFlowCondition,
   studioFlowConditionFormula,
   studioFlowLabel,
+  studioFlowValueSourceOf,
   studioWords,
   type StudioConditionValidation,
   type StudioFlowConditionContext,
@@ -30,10 +31,7 @@ import {
   type StudioFlowStepDraft,
   type StudioFlowValueSource,
 } from "@vortex/ui/studio";
-import {
-  StudioFlowCalculationControl,
-  defaultStudioFlowCalculation,
-} from "./studio-flow-calculation";
+import { StudioFormulaEditor, formulaReferenceName } from "./studio-formula-editor";
 import { StudioFlowValueControl } from "./studio-flow-value-control";
 
 /**
@@ -49,7 +47,6 @@ type StudioFlowStepFormProps = Readonly<{
   fields: readonly StudioFlowPropertyField[];
   draft: StudioFlowStepDraft;
   controlEntries: readonly StudioFlowNamedEntry[] | undefined;
-  calculationReferences: Parameters<typeof StudioFlowCalculationControl>[0]["references"];
   references: readonly StudioFlowReferenceChoice[];
   condition: StudioFlowConditionContext;
   choices: StudioFlowDraftChoices;
@@ -375,7 +372,6 @@ function PropertyControl({
   references,
   choices,
   flows,
-  calculationReferences,
   disabled,
   onChange,
 }: Readonly<{
@@ -385,7 +381,6 @@ function PropertyControl({
   references: readonly StudioFlowReferenceChoice[];
   choices: StudioFlowDraftChoices;
   flows: readonly SourceFlow[];
-  calculationReferences: StudioFlowStepFormProps["calculationReferences"];
   disabled: boolean;
   onChange: (value: StudioFlowPropertyDraft | null) => void;
 }>) {
@@ -434,13 +429,25 @@ function PropertyControl({
     case "calculation":
       return (
         <div className="space-y-1.5">
-          <p className="text-sm font-medium">{label}</p>
-          <StudioFlowCalculationControl
+          <Label htmlFor={id}>{label}</Label>
+          <StudioFormulaEditor
             id={id}
             disabled={disabled}
-            references={calculationReferences}
-            value={value?.kind === "calculation" ? value.calculation : defaultStudioFlowCalculation}
-            onChange={(calculation) => onChange({ kind: "calculation", calculation })}
+            references={references.map((entry) => ({
+              ...entry,
+              name: formulaReferenceName(entry.reference),
+            }))}
+            value={
+              value?.kind === "calculation" && value.calculation.formula !== undefined
+                ? value.calculation.formula
+                : { op: "literal", type: "whole_number", value: 0 }
+            }
+            onChange={(formula, error) =>
+              onChange({
+                kind: "calculation",
+                calculation: { formula, ...(error === undefined ? {} : { error }) },
+              })
+            }
           />
         </div>
       );
@@ -805,7 +812,6 @@ export function StudioFlowStepForm({
   fields,
   draft,
   controlEntries,
-  calculationReferences,
   references,
   condition,
   choices,
@@ -828,28 +834,58 @@ export function StudioFlowStepForm({
           onChange={(control, problem) => onChange({ ...draft, control }, problem, "control")}
         />
       )}
-      {fields.map((field) => (
-        <div key={field.key} className="space-y-1" data-vortex-setting={field.key}>
-          <PropertyControl
-            id={`${id}-${field.key}`}
-            field={field}
-            disabled={disabled}
-            value={Object.hasOwn(draft.properties, field.key) ? draft.properties[field.key]! : null}
-            references={references}
-            choices={choices}
-            flows={flows}
-            calculationReferences={calculationReferences}
-            onChange={(value) =>
-              onChange(
-                { ...draft, properties: { ...draft.properties, [field.key]: value } },
-                null,
-                field.key,
-              )
-            }
-          />
-          {field.help === undefined ? null : <StudioHelp hint={field.help} />}
-        </div>
-      ))}
+      {fields
+        .filter((field) => {
+          if (!fields.some((entry) => entry.key === "formula" && entry.control === "calculation"))
+            return true;
+          if (field.key !== "places" && field.key !== "rounding") return true;
+          const result = draft.properties.result_type;
+          return (
+            result?.kind === "text" &&
+            (result.value === "decimal_number" || result.value === "money")
+          );
+        })
+        .map((field) => (
+          <div key={field.key} className="space-y-1" data-vortex-setting={field.key}>
+            <PropertyControl
+              id={`${id}-${field.key}`}
+              field={field}
+              disabled={disabled}
+              value={
+                Object.hasOwn(draft.properties, field.key) ? draft.properties[field.key]! : null
+              }
+              references={references}
+              choices={choices}
+              flows={flows}
+              onChange={(value) => {
+                const properties = { ...draft.properties, [field.key]: value };
+                if (
+                  field.key === "result_type" &&
+                  fields.some(
+                    (entry) => entry.key === "formula" && entry.control === "calculation",
+                  ) &&
+                  value?.kind === "text"
+                ) {
+                  if (value.value === "decimal_number" || value.value === "money") {
+                    properties.places = {
+                      kind: "whole",
+                      source: studioFlowValueSourceOf({
+                        kind: "literal",
+                        literal: { type: "whole_number", value: 2 },
+                      }),
+                    };
+                    properties.rounding = { kind: "text", value: "half_up" };
+                  } else {
+                    properties.places = null;
+                    properties.rounding = null;
+                  }
+                }
+                onChange({ ...draft, properties }, null, field.key);
+              }}
+            />
+            {field.help === undefined ? null : <StudioHelp hint={field.help} />}
+          </div>
+        ))}
       <StudioInspectorGroup title="Description">
         <Label htmlFor={`${id}-description`}>
           Description <span className="text-xs text-muted-foreground">Optional</span>

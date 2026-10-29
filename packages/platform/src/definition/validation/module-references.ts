@@ -1,8 +1,12 @@
 import {
-  calculationFormulaType,
+  checkCalculationFormula,
   calculationReadTimeSupported,
 } from "../module-calculation-formula";
-import { flowFormulaSchema, flowFormulaUsesNow } from "../../workflows/flow-values";
+import {
+  flowFormulaHasUnroundedDivide,
+  flowFormulaSchema,
+  flowFormulaUsesNow,
+} from "../../workflows/flow-values";
 import type { DefinitionRuleFailure } from "../../catalogue/validation-errors";
 import type { FlowDefinition } from "../../workflows/flow-contracts";
 import type { ModuleField } from "../module-contracts";
@@ -421,9 +425,10 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
             fieldReferencesValid(settings.expression, fields) &&
             JSON.stringify([...new Set(settings.dependencyFieldIds as string[])]) ===
               JSON.stringify(expectedDependencies) &&
-            (["decimal_number", "money"].includes(String(settings.resultType))
-              ? settings.decimalPlaces !== undefined
-              : settings.decimalPlaces === undefined);
+            (["decimal_number", "money"].includes(String(settings.resultType)) ||
+              settings.decimalPlaces === undefined) &&
+            (settings.decimalPlaces !== undefined ||
+              !flowFormulaHasUnroundedDivide(flowFormulaSchema.parse(expression)));
           if (settings.evaluation === "stored" && readTimeFieldIds.has(String(field.fieldId)))
             valid = false;
           if (
@@ -431,7 +436,7 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
             !calculationReadTimeSupported(flowFormulaSchema.parse(expression))
           )
             valid = false;
-          const actualType = calculationFormulaType(
+          const actualType = checkCalculationFormula(
             flowFormulaSchema.parse(expression),
             (id) => typedFieldValueType(fieldMap.get(id)),
             "canonical",

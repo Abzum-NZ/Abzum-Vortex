@@ -3,7 +3,8 @@ export { pageStepIntents } from "./flow-page-steps";
 import { describeFailure } from "../catalogue/runtime-primitives";
 import { flowValueMatchesType } from "./flow-value-shapes";
 import type { JsonValue } from "../catalogue/common";
-import { isRecordLinkValue } from "../records/value-predicates";
+import { isRecordLinkValue } from "../records/module-field-value-predicates";
+import { calculateFlowValue } from "./flow-calculate";
 import type { FlowDefinition, FlowExecutionKind, FlowTask } from "../workflows/flow-contracts";
 import { isFlowReadFieldsProjection, isFlowReadFieldsTypeMap } from "../workflows/flow-read-fields";
 import { flowTaskChildLists } from "../workflows/flow-task-tree";
@@ -63,6 +64,7 @@ export type FlowFailureCode =
   | "flow_not_runnable"
   | "inputs_invalid"
   | "value_unresolved"
+  | "non_integral_whole_number"
   | "task_not_available"
   | "task_unknown"
   | "for_each_limit"
@@ -903,7 +905,11 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
   const definition = flowTaskRegistry[registered.type as keyof typeof flowTaskRegistry];
   if (definition === undefined) return failed("task_unknown", "failed", taskId);
   const properties = evaluateProperties(
-    registered.properties,
+    registered.type === "data.calculate"
+      ? Object.fromEntries(
+          Object.entries(registered.properties).filter(([name]) => name !== "formula"),
+        )
+      : registered.properties,
     state,
     activation,
     flow,
@@ -955,8 +961,24 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
       return { kind: "continue" };
     }
     if (registered.type === "data.calculate") {
-      if (properties.formula === undefined) return failed("value_unresolved", "failed", taskId);
-      replaceTop(machine, storeTaskOutputs(next, taskId, { value: properties.formula }));
+      const formula = registered.properties.formula;
+      const resultType = properties.result_type?.value;
+      if (formula?.kind !== "formula" || typeof resultType !== "string")
+        return failed("value_unresolved", "failed", taskId);
+      const result = calculateFlowValue(
+        formula.formula,
+        resultType,
+        properties.places?.value,
+        properties.rounding?.value,
+        scopeOf(state, activation, flow, machine.resolveMember, machine.resolveForm),
+      );
+      if ("error" in result)
+        return failed(
+          result.error,
+          result.error === "non_integral_whole_number" ? "validation" : "failed",
+          taskId,
+        );
+      replaceTop(machine, storeTaskOutputs(next, taskId, { value: result.value }));
       return { kind: "continue" };
     }
     if (registered.type === "data.set_variable") {

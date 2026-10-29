@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { blockPaletteGroupSchema } from "../../catalogue/catalogues";
+import { blockPaletteGroupSchema, workflowValueTypeSchema } from "../../catalogue/catalogues";
 import { labelSchema } from "../../catalogue/common";
 import { sourceProvenanceTarget, sourceProvenanceUnchanged } from "../definition-source-common";
 import { componentSemanticEventKindSchema } from "../component-semantic-events";
@@ -89,6 +89,21 @@ export const platformBlockReleaseSchema = z
     icon: sourceProvenanceUnchanged(iconKeySchema),
     paletteGroup: sourceProvenanceUnchanged(blockPaletteGroupSchema),
     rendererKey: sourceProvenanceUnchanged(namespacedKeySchema),
+    value_type: sourceProvenanceUnchanged(
+      z
+        .discriminatedUnion("kind", [
+          z.object({ kind: z.literal("fixed"), type: workflowValueTypeSchema }).strict(),
+          z
+            .object({
+              kind: z.literal("boolean_setting"),
+              setting: builderKeySchema,
+              when_true: workflowValueTypeSchema,
+              when_false: workflowValueTypeSchema,
+            })
+            .strict(),
+        ])
+        .optional(),
+    ),
     properties: sourceProvenanceUnchanged(z.array(blockPropertySchema)),
     /**
      * Present only on a release whose binding property derives an automatic field input: every

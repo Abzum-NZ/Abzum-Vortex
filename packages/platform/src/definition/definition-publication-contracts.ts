@@ -225,7 +225,7 @@ export type DefinitionReleaseAppend = Readonly<{
   reasons: DefinitionPublicationConfirmation["reasons"];
   dependencyManifest: readonly ExactDefinitionDependency[];
   resolutionSnapshot: DefinitionResolution;
-  validationContractVersion: "4.0.0";
+  validationContractVersion: "4.1.0";
   releaseNote: string;
 }>;
 
