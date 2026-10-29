@@ -307,6 +307,10 @@
         "defaultValue": {
           "kind": "choice",
           "value": "plain"
+        },
+        "showWhen": {
+          "property": "source",
+          "values": ["page_value"]
         }
       },
       {
@@ -368,7 +372,11 @@
         "required": false,
         "integer": true,
         "minimum": 0,
-        "maximum": 18
+        "maximum": 18,
+        "showWhen": {
+          "property": "source",
+          "values": ["page_value"]
+        }
       },
       {
         "kind": "list",
@@ -420,6 +428,10 @@
               ]
             }
           ]
+        },
+        "showWhen": {
+          "property": "source",
+          "values": ["page_value"]
         }
       }
     ]

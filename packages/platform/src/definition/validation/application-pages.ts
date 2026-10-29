@@ -547,6 +547,15 @@ export function applicationPageRules(scope: ApplicationScope): void {
             invalid = true;
           if (format === "unit" && source.unit === undefined) invalid = true;
           const thresholds = array(object(source.thresholds).items);
+          if (
+            kind === "projection" &&
+            (format !== "plain" ||
+              thresholds.length > 0 ||
+              source.places !== undefined ||
+              source.unit !== undefined ||
+              source.currency !== undefined)
+          )
+            invalid = true;
           if (kind === "page_value") {
             const name = String(
               source.page_value === undefined ? "" : object(source.page_value).value,
