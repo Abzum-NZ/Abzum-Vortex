@@ -1,4 +1,4 @@
-create or replace function vortex_record.change_record_by_named_action_internal(
+create or replace function vortex_record.prepare_named_action_record_change_internal(
   p_record_type_id uuid,
   p_record_id uuid,
   p_expected_concurrency_number bigint,
@@ -31,12 +31,7 @@ declare
   field_type text;
   storage_type text;
   submitted_id uuid;
-  assignments text[] := array[]::text[];
-  update_sql text;
-  changed_rows integer;
-  saved_record_id uuid;
-  new_concurrency_number bigint;
-  notice_sequence bigint;
+  physical_values jsonb := '{}'::jsonb;
   values_value jsonb := '{}'::jsonb;
   field_id text;
 begin
@@ -138,25 +133,8 @@ begin
     end if;
 
     proposed_values := proposed_values || pg_catalog.jsonb_build_object(entry_key, entry_value);
-    assignments := pg_catalog.array_append(
-      assignments,
-      pg_catalog.format(
-        '%I = %s',
-        column_entry ->> 'token',
-        case
-          when pg_catalog.jsonb_typeof(entry_value) = 'null' then 'null'
-          else case storage_type
-            when 'decimal' then pg_catalog.format('%L::numeric', entry_value #>> '{}')
-            when 'timestamp_with_time_zone' then
-              pg_catalog.format('%L::timestamptz', entry_value #>> '{}')
-            when 'date' then pg_catalog.format('%L::date', entry_value #>> '{}')
-            when 'integer' then pg_catalog.format('%L::bigint', entry_value #>> '{}')
-            when 'boolean' then pg_catalog.format('%L::boolean', entry_value #>> '{}')
-            when 'json' then pg_catalog.format('%L::jsonb', entry_value::text)
-            else pg_catalog.format('%L::text', entry_value #>> '{}')
-          end
-        end
-      )
+    physical_values := physical_values || pg_catalog.jsonb_build_object(
+      column_entry ->> 'token', entry_value
     );
   end loop;
 
@@ -189,52 +167,6 @@ begin
   end if;
   bounds := vortex_record.decide_record_field_bounds_internal(decision);
 
-  -- The write: the typed columns, the next concurrency number, and the change
-  -- stamp from the verified context and the installed binding. Owner columns
-  -- and lifecycle state are not writable here.
-  update_sql := pg_catalog.format(
-    'update record_data.%I as stored set %s%sconcurrency_number = stored.concurrency_number + 1,
-       updated_at = pg_catalog.statement_timestamp(), updated_by = $3,
-       definition_revision = $4
-     where stored.organisation_id = $1 and stored.record_id = $2
-       and stored.concurrency_number = $5
-     returning stored.record_id, stored.concurrency_number',
-    loaded ->> 'table',
-    pg_catalog.array_to_string(assignments, ', '),
-    case when pg_catalog.cardinality(assignments) = 0 then '' else ', ' end
-  );
-
-  execute update_sql
-  into saved_record_id, new_concurrency_number
-  using (context_value ->> 'organizationId')::uuid, p_record_id,
-    (context_value ->> 'organizationAccountId')::uuid,
-    (loaded ->> 'moduleReleaseRevision')::bigint,
-    p_expected_concurrency_number;
-
-  get diagnostics changed_rows = row_count;
-  if changed_rows <> 1 then
-    raise exception using errcode = '40001',
-      message = 'Record change did not apply to exactly one row';
-  end if;
-
-  if loaded #>> '{actionContext,storageScope}' = 'application_contained' then
-    begin
-      notice_sequence := pg_catalog.nextval(
-        'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
-      );
-      perform vortex_platform.publish_change_notice(
-        (context_value ->> 'organizationId')::uuid,
-        (context_value ->> 'applicationRootId')::uuid,
-        p_record_type_id, saved_record_id, new_concurrency_number, 'changed',
-        notice_sequence, notice_sequence, (context_value ->> 'correlationId')::uuid
-      );
-    exception
-      when others then
-        -- Invalidation is advisory; a lost notice must not refuse the scalar write.
-        null;
-    end;
-  end if;
-
   for field_id in
     select item.value #>> '{}'
     from pg_catalog.jsonb_array_elements(bounds -> 'readableFieldIds') as item(value)
@@ -248,14 +180,22 @@ begin
 
   return pg_catalog.jsonb_build_object(
     'outcome', 'allowed',
-    'recordId', saved_record_id,
-    'concurrencyNumber', new_concurrency_number,
-    'values', values_value
+    'recordId', p_record_id,
+    'concurrencyNumber', p_expected_concurrency_number + 1,
+    'values', values_value,
+    'storageChange', pg_catalog.jsonb_build_object(
+      'storageContractId', loaded #> '{actionContext,storageContractId}',
+      'recordId', p_record_id, 'expectedConcurrencyNumber', p_expected_concurrency_number,
+      'values', physical_values || pg_catalog.jsonb_build_object(
+        'definition_revision', loaded -> 'moduleReleaseRevision'
+      )
+    )
   );
 end
 $function$;
 
-alter function vortex_record.change_record_by_named_action_internal(uuid,uuid,bigint,jsonb,uuid[],text,uuid,bigint,uuid) owner to vortex_record_adapter;
-revoke all on function vortex_record.change_record_by_named_action_internal(uuid,uuid,bigint,jsonb,uuid[],text,uuid,bigint,uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.change_record_by_named_action_internal(uuid,uuid,bigint,jsonb,uuid[],text,uuid,bigint,uuid) to vortex_record_adapter;
-comment on function vortex_record.change_record_by_named_action_internal(uuid,uuid,bigint,jsonb,uuid[],text,uuid,bigint,uuid) is null;
+alter function vortex_record.prepare_named_action_record_change_internal(uuid,uuid,bigint,jsonb,uuid[],text,uuid,bigint,uuid) owner to vortex_record_adapter;
+revoke all on function vortex_record.prepare_named_action_record_change_internal(uuid,uuid,bigint,jsonb,uuid[],text,uuid,bigint,uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.prepare_named_action_record_change_internal(uuid,uuid,bigint,jsonb,uuid[],text,uuid,bigint,uuid) to vortex_record_adapter;
+comment on function vortex_record.prepare_named_action_record_change_internal(uuid,uuid,bigint,jsonb,uuid[],text,uuid,bigint,uuid) is
+  'Private named-action update preparation: checks current and proposed action authority and field bounds, and returns the typed storage mutation without writing the record.';

@@ -1362,7 +1362,9 @@ declare
   value_final_values jsonb := '{}'::jsonb;
   value_submitted_field_ids uuid[] := array[]::uuid[];
   relationship_change jsonb;
-  increment_for_relationship boolean;
+  storage_change jsonb;
+  prepared_relationship jsonb;
+  prepared_relationships jsonb;
   update_bounds jsonb;
   proposed_field_values jsonb;
   proposed_records jsonb;
@@ -1378,7 +1380,6 @@ declare
   named_relationship_subject_saved boolean := false;
   named_action_receipt_pending boolean := false;
   named_action_receipt_subject_write boolean := false;
-  changed_rows integer;
   changed_field_ids uuid[];
   activity_time timestamptz := pg_catalog.statement_timestamp();
   event_kind text;
@@ -2470,94 +2471,27 @@ begin
         'outcome', 'refused', 'reasonCode', 'empty_base_update'
       );
     end if;
-    if value_final_values <> '{}'::jsonb then
-      if action_mode then
-        mutation := vortex_record.change_record_by_named_action_internal(
-          p_record_type_id, p_record_id, p_expected_concurrency_number,
-          value_final_values, value_submitted_field_ids,
-          action_owner_kind, action_owner_id, action_release_revision, action_id_value
-        );
-      else
-        mutation := vortex_record.prepare_record_change_internal(
-          p_record_type_id, p_record_id, p_expected_concurrency_number,
-          value_final_values, value_submitted_field_ids
-        );
-      end if;
-      increment_for_relationship := false;
-    elsif not action_mode
-      and preview_installation is null
-      and meta ->> 'storageScope' = 'application_contained'
-      and pg_catalog.jsonb_array_length(relationship_changes) > 0 then
+    if action_mode then
+      mutation := vortex_record.prepare_named_action_record_change_internal(
+        p_record_type_id, p_record_id, p_expected_concurrency_number,
+        value_final_values, value_submitted_field_ids,
+        action_owner_kind, action_owner_id, action_release_revision, action_id_value
+      );
+    else
       mutation := vortex_record.prepare_record_change_internal(
         p_record_type_id, p_record_id, p_expected_concurrency_number,
         value_final_values, value_submitted_field_ids
       );
-      increment_for_relationship := false;
-    elsif action_mode
-      and p_operation = 'update'
-      and preview_installation is null
-      and meta ->> 'storageScope' = 'application_contained'
-      and pg_catalog.jsonb_array_length(relationship_changes) > 0
-      and creation_count = 0
-      and pg_catalog.jsonb_typeof(action_parents) = 'array'
-      and pg_catalog.jsonb_array_length(action_parents) = 0
-      and (case
-        when copy_plan is null then true
-        when pg_catalog.jsonb_typeof(copy_plan) = 'object'
-          and copy_plan ->> 'outcome' = 'planned'
-          and pg_catalog.jsonb_typeof(copy_plan -> 'copies') = 'array'
-          then pg_catalog.jsonb_array_length(copy_plan -> 'copies') = 0
-        else false
-      end)
-      and not exists (
-        select 1
-        from pg_catalog.jsonb_array_elements(action_context -> 'action' -> 'tasks') task(value)
-        where task.value ->> 'type' = 'record.delete'
-      ) then
-      -- The named declaration and proposed graph already passed their protected
-      -- decisions and target locks. Save one actual subject tuple before edges.
-      execute pg_catalog.format(
-        'update record_data.%I as stored
-         set concurrency_number = stored.concurrency_number + 1,
-           updated_at = pg_catalog.statement_timestamp(), updated_by = $3,
-           definition_revision = $4
-         where stored.organisation_id = $1 and stored.record_id = $2
-           and stored.concurrency_number = $5
-         returning stored.record_id, stored.concurrency_number',
-        loaded ->> 'table'
-      ) into saved_record_id, saved_concurrency_number
-      using organization_id_value, p_record_id, actor_id_value,
-        (loaded ->> 'moduleReleaseRevision')::bigint, p_expected_concurrency_number;
-      get diagnostics changed_rows = row_count;
-      if changed_rows <> 1 then
-        raise exception using errcode = '40001',
-          message = 'Named relationship change did not apply to exactly one row';
-      end if;
-      if saved_record_id is distinct from p_record_id
-        or saved_record_id = '00000000-0000-0000-0000-000000000000'::uuid
-        or saved_concurrency_number is null
-        or saved_concurrency_number not between 1 and 9007199254740991 then
-        raise exception using errcode = '55000',
-          message = 'Named relationship saved identity is unavailable';
-      end if;
-      mutation := pg_catalog.jsonb_build_object(
-        'outcome', 'completed', 'recordId', saved_record_id,
-        'concurrencyNumber', saved_concurrency_number
-      );
-      named_relationship_subject_saved := true;
-      increment_for_relationship := false;
-    else
-      mutation := pg_catalog.jsonb_build_object(
-        'outcome', 'completed', 'recordId', p_record_id,
-        'concurrencyNumber', p_expected_concurrency_number + 1
-      );
-      increment_for_relationship := true;
     end if;
 
-    if mutation ->> 'outcome' in ('completed', 'allowed') then
-      if mutation ? 'storageChange' then
-        perform vortex_record.apply_record_storage_changes_internal(
-          pg_catalog.jsonb_build_array(mutation -> 'storageChange')
+    if mutation ->> 'outcome' = 'allowed' then
+      storage_change := mutation -> 'storageChange';
+      prepared_relationships := '[]'::jsonb;
+      if preview_installation is null and pg_catalog.jsonb_array_length(relationship_changes) > 0 then
+        perform vortex_record.bump_record_data_version_internal(
+          organization_id_value, (meta ->> 'storageContractId')::uuid,
+          case when meta ->> 'storageScope' = 'application_contained'
+            then application_root_id_value else null end
         );
       end if;
       for relationship_change in
@@ -2565,13 +2499,28 @@ begin
         from pg_catalog.jsonb_array_elements(relationship_changes) as item(value)
         order by (item.value ->> 'relationshipId')::uuid
       loop
-        perform vortex_record.write_relationship_value_internal(
+        prepared_relationship := vortex_record.prepare_relationship_value_internal(
           p_record_type_id, p_record_id,
           (relationship_change ->> 'relationshipId')::uuid,
-          relationship_change -> 'value', increment_for_relationship
+          relationship_change -> 'value', false
         );
-        increment_for_relationship := false;
+        storage_change := pg_catalog.jsonb_set(storage_change, '{values}',
+          (storage_change -> 'values') || pg_catalog.jsonb_build_object(
+            prepared_relationship ->> 'column', prepared_relationship -> 'value'
+          )
+        );
+        prepared_relationships := prepared_relationships ||
+          pg_catalog.jsonb_build_array(prepared_relationship);
       end loop;
+      -- Scalar and link values share the same tuple write and revision. Edge
+      -- identities were locked during preparation and are replaced together.
+      perform vortex_record.apply_record_storage_changes_internal(
+        pg_catalog.jsonb_build_array(storage_change)
+      );
+      perform vortex_record.apply_relationship_edges_internal(prepared_relationships);
+      named_relationship_subject_saved := action_mode
+        and preview_installation is null
+        and meta ->> 'storageScope' = 'application_contained';
     end if;
   end if;
 
@@ -7088,6 +7037,210 @@ revoke all on function vortex_record.write_relationship_value_internal(uuid, uui
 
 comment on function vortex_record.write_relationship_value_internal(uuid, uuid, uuid, jsonb, boolean) is
   'Private relationship writer: validates the declared relationship and target eligibility, checks current application access for flagged Person links, share-locks the record or protected projection target, then takes the source data version and the shared edge identities before replacing the source link edge and typed value atomically. Owner-only.';
+drop function vortex_record.change_record_by_named_action_internal(uuid,uuid,bigint,jsonb,uuid[],text,uuid,bigint,uuid);
+
+create or replace function vortex_record.prepare_named_action_record_change_internal(
+  p_record_type_id uuid,
+  p_record_id uuid,
+  p_expected_concurrency_number bigint,
+  p_final_values jsonb,
+  p_submitted_field_ids uuid[],
+  p_action_owner_kind text,
+  p_action_owner_id uuid,
+  p_action_release_revision bigint,
+  p_action_id uuid
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  loaded jsonb;
+  context_value jsonb;
+  columns_value jsonb;
+  decision jsonb;
+  bounds jsonb;
+  changeable text[];
+  proposed_values jsonb;
+  proposed_facts jsonb;
+  proposed_records jsonb;
+  entry_key text;
+  entry_value jsonb;
+  column_entry jsonb;
+  field_type text;
+  storage_type text;
+  submitted_id uuid;
+  physical_values jsonb := '{}'::jsonb;
+  values_value jsonb := '{}'::jsonb;
+  field_id text;
+begin
+  -- The next number must still fit the column's own range, so the highest
+  -- accepted expected number is one below its maximum.
+  if p_record_type_id is null or p_record_id is null
+    or p_record_type_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_record_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_expected_concurrency_number is null
+    or p_expected_concurrency_number not between 1 and 9007199254740990
+    or p_final_values is null
+    or pg_catalog.jsonb_typeof(p_final_values) <> 'object'
+    or p_submitted_field_ids is null
+    or pg_catalog.array_position(p_submitted_field_ids, null::uuid) is not null then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused', 'reasonCode', 'command_invalid'
+    );
+  end if;
+
+  loaded := vortex_record.load_named_action_facts_internal(
+    p_action_owner_kind, p_action_owner_id, p_action_release_revision,
+    p_action_id, p_record_type_id, p_record_id, p_expected_concurrency_number
+  );
+  if loaded ->> 'outcome' = 'conflict' then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'conflict', 'concurrencyNumber', loaded -> 'concurrencyNumber'
+    );
+  end if;
+  if loaded ->> 'outcome' <> 'loaded'
+    or pg_catalog.jsonb_typeof(loaded -> 'declaration') <> 'object' then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused', 'reasonCode', 'record_unavailable'
+    );
+  end if;
+  context_value := loaded -> 'context';
+  columns_value := loaded -> 'columns';
+
+  -- The old row's own update decision, and the changeable set it carries.
+  decision := vortex_access.evaluate_organization_record_access_internal(
+    loaded -> 'declaration', p_record_id, loaded -> 'facts'
+  );
+  if decision ->> 'outcome' <> 'allowed' then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused', 'reasonCode', 'record_unavailable'
+    );
+  end if;
+  bounds := vortex_record.decide_record_field_bounds_internal(decision);
+  select coalesce(pg_catalog.array_agg(item.value #>> '{}'), array[]::text[])
+  into changeable
+  from pg_catalog.jsonb_array_elements(bounds -> 'changeableFieldIds') as item(value);
+
+  -- Every submitted field must be a field of the exact installed definition and
+  -- inside that changeable set. The first one outside it refuses the whole
+  -- change, before any value is cast and before any statement writes.
+  foreach submitted_id in array p_submitted_field_ids loop
+    if not (columns_value ? pg_catalog.lower(submitted_id::text)) then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'unknown_field'
+      );
+    end if;
+    if not (pg_catalog.lower(submitted_id::text) = any (changeable)) then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'field_not_changeable'
+      );
+    end if;
+  end loop;
+
+  -- Every final value must name a field of that same definition: an unknown
+  -- identifier and a system column are the same refusal, because neither is a
+  -- field of this record type.
+  proposed_values := loaded -> 'fieldValues';
+  for entry_key, entry_value in
+    select pg_catalog.lower(entry.key), entry.value
+    from pg_catalog.jsonb_each(p_final_values) as entry(key, value)
+  loop
+    column_entry := columns_value -> entry_key;
+    if column_entry is null then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'unknown_field'
+      );
+    end if;
+    field_type := column_entry ->> 'type';
+    storage_type := column_entry ->> 'databaseValueType';
+
+    -- Link fields carry relationship edges, and edge writes are S2's. Refusing
+    -- with a fixed code keeps a link change from being silently dropped.
+    if field_type in ('link', 'link_to_one_of_several') then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'link_change_unsupported'
+      );
+    end if;
+
+    if not vortex_record.canonical_record_value_matches(
+      entry_value, field_type, storage_type
+    ) then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'value_invalid'
+      );
+    end if;
+
+    proposed_values := proposed_values || pg_catalog.jsonb_build_object(entry_key, entry_value);
+    physical_values := physical_values || pg_catalog.jsonb_build_object(
+      column_entry ->> 'token', entry_value
+    );
+  end loop;
+
+  -- The proposed row's own update decision. Values that move the record out of
+  -- every route the caller holds are refused here, after the old row admitted
+  -- them and before anything is written.
+  proposed_records := coalesce((
+    select pg_catalog.jsonb_agg(
+      case
+        when pg_catalog.lower(stored.value -> 'recordScope' ->> 'recordId')
+          = pg_catalog.lower(p_record_id::text)
+          then stored.value || pg_catalog.jsonb_build_object('fieldValues', proposed_values)
+        else stored.value
+      end
+      order by stored.ordinality
+    )
+    from pg_catalog.jsonb_array_elements(loaded -> 'facts' -> 'records')
+      with ordinality as stored(value, ordinality)
+  ), '[]'::jsonb);
+  proposed_facts := (loaded -> 'facts')
+    || pg_catalog.jsonb_build_object('records', proposed_records);
+
+  decision := vortex_access.evaluate_organization_record_access_internal(
+    loaded -> 'declaration', p_record_id, proposed_facts
+  );
+  if decision ->> 'outcome' <> 'allowed' then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused', 'reasonCode', 'proposed_record_refused'
+    );
+  end if;
+  bounds := vortex_record.decide_record_field_bounds_internal(decision);
+
+  for field_id in
+    select item.value #>> '{}'
+    from pg_catalog.jsonb_array_elements(bounds -> 'readableFieldIds') as item(value)
+  loop
+    if columns_value ? field_id then
+      values_value := values_value || pg_catalog.jsonb_build_object(
+        field_id, proposed_values -> field_id
+      );
+    end if;
+  end loop;
+
+  return pg_catalog.jsonb_build_object(
+    'outcome', 'allowed',
+    'recordId', p_record_id,
+    'concurrencyNumber', p_expected_concurrency_number + 1,
+    'values', values_value,
+    'storageChange', pg_catalog.jsonb_build_object(
+      'storageContractId', loaded #> '{actionContext,storageContractId}',
+      'recordId', p_record_id, 'expectedConcurrencyNumber', p_expected_concurrency_number,
+      'values', physical_values || pg_catalog.jsonb_build_object(
+        'definition_revision', loaded -> 'moduleReleaseRevision'
+      )
+    )
+  );
+end
+$function$;
+
+alter function vortex_record.prepare_named_action_record_change_internal(uuid,uuid,bigint,jsonb,uuid[],text,uuid,bigint,uuid) owner to vortex_record_adapter;
+revoke all on function vortex_record.prepare_named_action_record_change_internal(uuid,uuid,bigint,jsonb,uuid[],text,uuid,bigint,uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.prepare_named_action_record_change_internal(uuid,uuid,bigint,jsonb,uuid[],text,uuid,bigint,uuid) to vortex_record_adapter;
+comment on function vortex_record.prepare_named_action_record_change_internal(uuid,uuid,bigint,jsonb,uuid[],text,uuid,bigint,uuid) is
+  'Private named-action update preparation: checks current and proposed action authority and field bounds, and returns the typed storage mutation without writing the record.';
+
 set role vortex_owner;
 revoke create on schema vortex_record from vortex_record_adapter;
 reset role;
