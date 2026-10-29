@@ -1,11 +1,14 @@
 import {
   browserFlowMemberTypeResolver,
+  evaluateFlowFormula,
+  pageFlowScope,
   pageFlowFinalOutputs,
   resolvePageFlowInputs,
   pageFlowFormValue,
   type FlowBindingInput,
   type BrowserFlowPlan,
   type FlowFailure,
+  type FlowFormula,
   type FlowFormReferenceResolver,
   type FlowProgram,
   type FlowRunStart,
@@ -20,6 +23,7 @@ export type BrowserFlowResult =
   | Readonly<{ kind: "completed"; outputs: Readonly<Record<string, JsonValue>> }>
   | Readonly<{ kind: "failed"; failure: FlowFailure }>
   | Readonly<{ kind: "abandoned" }>
+  | Readonly<{ kind: "skipped" }>
   | Readonly<{ kind: "not_page_only" }>;
 
 /** Runs page-only plans with the shared segment interpreter; protected plans stay with the gate. */
@@ -29,10 +33,11 @@ export async function runBrowserFlow(
     start: FlowRunStart;
     host: FlowIntentHost;
     resolveForm?: FlowFormReferenceResolver;
+    condition?: FlowFormula | null;
     signal?: AbortSignal;
   }>,
 ): Promise<BrowserFlowResult> {
-  const { plan, start, host, resolveForm, signal } = input;
+  const { plan, start, host, resolveForm, signal, condition } = input;
   if (
     plan.segments.some((segment) => segment.kind !== "page" || segment.guard.length !== 0) ||
     Object.values(plan.outputs).some(
@@ -71,6 +76,21 @@ export async function runBrowserFlow(
     return result;
   };
   try {
+    if (condition !== undefined && condition !== null) {
+      const initial = await run([]);
+      if (initial.kind === "abandoned") return { kind: "abandoned" };
+      if (initial.kind === "unavailable")
+        return { kind: "failed", failure: { outcome: "failed", code: "flow_unavailable" } };
+      if (initial.result.status === "failed")
+        return { kind: "failed", failure: initial.result.failure };
+      const value = evaluateFlowFormula(
+        condition,
+        pageFlowScope(initial.state, program([]), members, resolveForm),
+      );
+      if (value?.type !== "yes_no" || typeof value.value !== "boolean")
+        throw new Error("FLOW_BINDING_CONDITION_INVALID");
+      if (!value.value) return { kind: "skipped" };
+    }
     const main = pageSegments.filter((segment) => segment.section === "tasks");
     for (const segment of main.length === 0 ? [{ tasks: [] }] : main) {
       const result = await run(segment.tasks);
@@ -137,6 +157,7 @@ export async function startBrowserFlow(
     timeZone: string;
     host: FlowIntentHost;
     readFormValue: (formId: string, fieldKey: string) => unknown;
+    condition?: FlowFormula | null;
     signal?: AbortSignal;
   }>,
 ): Promise<BrowserFlowResult> {
@@ -162,6 +183,7 @@ export async function startBrowserFlow(
       start: { runId: input.runId, flowId: input.plan.flowId, inputs, ...clock },
       host: input.host,
       resolveForm,
+      ...(input.condition === undefined ? {} : { condition: input.condition }),
       ...(input.signal === undefined ? {} : { signal: input.signal }),
     });
   } catch (error) {

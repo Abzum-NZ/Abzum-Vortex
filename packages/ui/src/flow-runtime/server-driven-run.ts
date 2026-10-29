@@ -13,6 +13,8 @@ import type {
 } from "./server-flow-client";
 
 export type ServerDrivenResult =
+  /** The binding condition did not hold, so its flow was not started. */
+  | Readonly<{ kind: "skipped" }>
   /** The server ended the run; `descriptor` is its safe result and outputs are as it released them. */
   | Readonly<{
       kind: "finished";

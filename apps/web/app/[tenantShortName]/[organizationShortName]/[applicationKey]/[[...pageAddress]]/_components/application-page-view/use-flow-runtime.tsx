@@ -370,7 +370,11 @@ export function useFlowRuntime({
   const bindingSettings = useMemo(() => {
     const bindings = new Map<
       string,
-      { controlId: string; concurrency: ComponentFlowBinding["settings"]["concurrency"] }
+      {
+        controlId: string;
+        concurrency: ComponentFlowBinding["settings"]["concurrency"];
+        condition: ComponentFlowBinding["settings"]["condition"];
+      }
     >(
       Object.values(model.bindings).flatMap((items) =>
         items.map(
@@ -380,6 +384,7 @@ export function useFlowRuntime({
               {
                 controlId: binding.controlId,
                 concurrency: binding.settings.concurrency,
+                condition: binding.settings.condition,
               },
             ] as const,
         ),

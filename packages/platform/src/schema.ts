@@ -18,6 +18,7 @@ export * from "./workflows/flow-result-descriptors";
 export * from "./rules/flow-interpreter-core";
 export type { BrowserFlowPlan } from "./workflows/flow-plan";
 export * from "./rules/flow-page-inputs";
+export { evaluateFlowFormula } from "./rules/flow-formula";
 export * from "./rules/flow-page-output-state";
 export * from "./definition/module-field-shape";
 export * from "./definition/application-uses";

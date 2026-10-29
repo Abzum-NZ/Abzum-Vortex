@@ -293,6 +293,7 @@ export function useApplyDispatch({
             });
           return outcome;
         }
+        if (server.kind === "skipped") return outcome;
         if (server.kind === "refused") {
           showResult(unavailableNotice);
           return outcome;

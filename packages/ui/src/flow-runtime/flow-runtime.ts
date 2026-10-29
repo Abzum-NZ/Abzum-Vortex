@@ -4,6 +4,7 @@ import {
   type FlowBindingInput,
   type ComponentFlowBinding,
   type FlowBindingConcurrency,
+  type FlowFormula,
 } from "@vortex/platform/schema";
 import type { FlowIntentHost } from "./intents";
 import type { ServerDrivenResult } from "./server-driven-run";
@@ -23,7 +24,13 @@ export type FlowRuntimeOptions = Readonly<{
   state: FlowRuntimeState;
   bindingSettings: (
     bindingId: string,
-  ) => Readonly<{ controlId: string; concurrency: FlowBindingConcurrency }> | undefined;
+  ) =>
+    | Readonly<{
+        controlId: string;
+        concurrency: FlowBindingConcurrency;
+        condition: FlowFormula | null;
+      }>
+    | undefined;
   /**
    * Told, with the binding's identity, when a server run of that binding committed and before its
    * closing messages are shown, so the page can re-read the placements the binding writes.
@@ -205,9 +212,11 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
               timeZone: options.timeZone,
               host: options.host,
               readFormValue: options.state.readFormValue,
+              condition: settings.condition,
               signal: runSignal,
             });
             if (result.kind === "abandoned") return { kind: "abandoned", unanswered: true };
+            if (result.kind === "skipped") return { kind: "skipped" };
             if (result.kind === "completed")
               return {
                 kind: "finished",
