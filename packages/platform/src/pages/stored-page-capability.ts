@@ -62,6 +62,7 @@ import {
 import { resolveInstalledPageIdentity } from "../definition/standard-page-resolution";
 import {
   projectAuthenticatedPageCapability,
+  projectAuthenticatedFormCapability,
   type PageCapabilityEvaluators,
   type FixedAuthenticatedPageCapability,
 } from "./authenticated-page-capability";
@@ -564,6 +565,7 @@ export const createStoredPageCapabilityService = (
   const evaluatorsFor = (
     stored: FixedAuthenticatedPageCapability,
     subjectRecordId: string | undefined,
+    rowSubjectType?: Readonly<{ moduleRootId: string; recordTypeId: string }>,
   ): PageCapabilityEvaluators => {
     // This cache belongs to one projection transaction, never another page, actor or release.
     let subjectRead:
@@ -654,19 +656,22 @@ export const createStoredPageCapabilityService = (
     const evaluators: PageCapabilityEvaluators = {
       evaluateActionAvailability: async (transaction, scope, page, placementId) => {
         const action = boundActions.get(placementId.toLowerCase());
+        const selectedType =
+          rowSubjectType ??
+          ((page.type === "detail" ||
+            page.type === "public" ||
+            page.type === "form" ||
+            page.type === "guided_form") &&
+          page.recordType?.state === "resolved"
+            ? page.recordType
+            : undefined);
         // Only the selected page's own subject is previewed; a list or another page has none.
         if (
           action === undefined ||
           subjectRecordId === undefined ||
           !sameId(page.pageId, selectedPageId) ||
-          !(
-            page.type === "detail" ||
-            page.type === "public" ||
-            page.type === "form" ||
-            page.type === "guided_form"
-          ) ||
-          page.recordType?.state !== "resolved" ||
-          !sameId(page.recordType.recordTypeId, action.subjectRecordTypeId) ||
+          selectedType === undefined ||
+          !sameId(selectedType.recordTypeId, action.subjectRecordTypeId) ||
           scope.applicationRootId === undefined ||
           !sameId(scope.organizationId, context.organizationId) ||
           !sameId(scope.applicationRootId, applicationRootId)
@@ -816,15 +821,16 @@ export const createStoredPageCapabilityService = (
             });
 
           // A different destination page cannot borrow the selected page's address subject.
-          const recordType =
-            sameId(page.pageId, selectedPageId) &&
-            (page.type === "detail" ||
-              page.type === "public" ||
-              page.type === "form" ||
-              page.type === "guided_form") &&
-            page.recordType?.state === "resolved"
-              ? page.recordType
-              : undefined;
+          const recordType = sameId(page.pageId, selectedPageId)
+            ? (rowSubjectType ??
+              ((page.type === "detail" ||
+                page.type === "public" ||
+                page.type === "form" ||
+                page.type === "guided_form") &&
+              page.recordType?.state === "resolved"
+                ? page.recordType
+                : undefined))
+            : undefined;
           if (recordType === undefined || subjectRecordId === undefined) return false;
           const modules = context.releaseSet.modules.filter((module) =>
             sameId(module.rootId, recordType.moduleRootId),
@@ -990,6 +996,39 @@ export const createStoredPageCapabilityService = (
       return fixed === undefined
         ? undefined
         : projectStoredInTransaction(transaction, scope, fixed);
+    },
+    /** The row type must come from a placement query whose membership was admitted in this transaction. */
+    projectFormInTransaction: async (
+      transaction: RequestDatabaseTransaction,
+      scope: SelectedOrganizationScope,
+      projectedPage: Readonly<Record<string, unknown>>,
+      formId: string,
+      subject: Readonly<{ moduleRootId: string; recordTypeId: string; recordId: string }>,
+    ): Promise<Readonly<Record<string, unknown>> | undefined> => {
+      if (
+        scope.applicationRootId === undefined ||
+        !sameId(scope.organizationId, context.organizationId) ||
+        !sameId(scope.applicationRootId, applicationRootId) ||
+        !context.releaseSet.modules.some(
+          (module) =>
+            sameId(module.rootId, subject.moduleRootId) &&
+            module.content.recordTypes.some((record) =>
+              sameId(record.recordTypeId, subject.recordTypeId),
+            ),
+        )
+      )
+        return undefined;
+      const fixed = await load(selectedPageId);
+      return fixed === undefined
+        ? undefined
+        : projectAuthenticatedFormCapability(
+            transaction,
+            scope,
+            fixed,
+            projectedPage,
+            formId,
+            evaluatorsFor(fixed, subject.recordId, subject),
+          );
     },
     /**
      * Re-checks one declared link target against the viewer's current access at navigation time.
