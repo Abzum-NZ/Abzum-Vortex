@@ -312,6 +312,10 @@ const seededTask = (
   if (definition.type === "interface.show_message")
     properties.title = text(flow.labels?.name ?? "");
   if (definition.type === "data.calculate") {
+    properties.formula = {
+      kind: "formula",
+      formula: { op: "literal", type: "decimal_number", value: "0" },
+    };
     properties.places = { kind: "literal", literal: { type: "whole_number", value: 2 } };
     properties.rounding = text("half_up");
   }

@@ -391,7 +391,9 @@ const bindControl = (
       ? blockRowAction.trim()
       : undefined;
   const eventId =
-    blockEventId ??
+    (blockEventId !== undefined && blockEventId.length > 40
+      ? keyFrom(blockEventId, aliases)
+      : blockEventId) ??
     shared ??
     keyFrom(
       rowActionMenu || recordType === undefined
