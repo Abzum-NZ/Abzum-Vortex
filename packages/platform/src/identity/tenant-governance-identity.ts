@@ -310,7 +310,7 @@ export const createTenantGovernanceService = (
         const value = command.data;
         const rows = await run(
           (tx) =>
-            tx.query<MutationRow>`select * from vortex_identity.grant_tenant_administrator(${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.identityId}::uuid, ${JSON.stringify(value.capabilities)}::jsonb, ${value.startsAt}::timestamptz, ${value.expiresAt ?? null}::timestamptz)`,
+            tx.query<MutationRow>`select * from vortex_identity.grant_tenant_administrator(${value.duplicateKey}::uuid, ${value.tenantId}::uuid, ${value.identityId}::uuid, ${JSON.stringify(value.capabilities)}::jsonb, ${value.startsAt}::timestamptz, ${value.expiresAt ?? null}::timestamptz)`,
         );
         return grantTenantAdministratorResultSchema.parse(
           mutationResult(rows.length === 1 ? rows[0] : undefined),
@@ -370,7 +370,7 @@ export const createTenantGovernanceService = (
         const value = command.data;
         const rows = await run(
           (tx) =>
-            tx.query<MutationRow>`select * from vortex_identity.change_tenant_administrator(${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.assignmentId}::uuid, ${value.expectedRevision}::bigint, ${JSON.stringify(value.capabilities)}::jsonb, ${value.startsAt}::timestamptz, ${value.expiresAt ?? null}::timestamptz)`,
+            tx.query<MutationRow>`select * from vortex_identity.change_tenant_administrator(${value.duplicateKey}::uuid, ${value.tenantId}::uuid, ${value.assignmentId}::uuid, ${value.expectedRevision}::bigint, ${JSON.stringify(value.capabilities)}::jsonb, ${value.startsAt}::timestamptz, ${value.expiresAt ?? null}::timestamptz)`,
         );
         return changeTenantAdministratorResultSchema.parse(
           mutationResult(rows.length === 1 ? rows[0] : undefined),
@@ -399,7 +399,7 @@ export const createTenantGovernanceService = (
         const value = command.data;
         const rows = await run(
           (tx) =>
-            tx.query<MutationRow>`select * from vortex_identity.revoke_tenant_administrator(${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.assignmentId}::uuid, ${value.expectedRevision}::bigint)`,
+            tx.query<MutationRow>`select * from vortex_identity.revoke_tenant_administrator(${value.duplicateKey}::uuid, ${value.tenantId}::uuid, ${value.assignmentId}::uuid, ${value.expectedRevision}::bigint)`,
         );
         return revokeTenantAdministratorResultSchema.parse(
           mutationResult(rows.length === 1 ? rows[0] : undefined),

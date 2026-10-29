@@ -1,6 +1,5 @@
 create or replace function vortex_identity.change_tenant_administrator(
   p_duplicate_key uuid,
-  p_command_fingerprint text,
   p_tenant_id uuid,
   p_assignment_id uuid,
   p_expected_revision bigint,
@@ -16,7 +15,6 @@ set search_path = ''
 as $function$
 declare
   capabilities text[];
-  computed_fingerprint text;
   expiry_cap timestamptz;
   evaluated_at timestamptz;
   actor_identity_id uuid;
@@ -33,7 +31,6 @@ begin
     or p_tenant_id is null or not vortex_platform.is_non_nil_uuid(p_tenant_id::text)
     or p_assignment_id is null or not vortex_platform.is_non_nil_uuid(p_assignment_id::text)
     or p_expected_revision is null or p_expected_revision not between 1 and 9007199254740991
-    or p_command_fingerprint is null or p_command_fingerprint !~ '^sha256:[0-9a-f]{64}$'
     or capabilities is null or p_starts_at is null
     or p_starts_at in ('-infinity'::timestamptz, 'infinity'::timestamptz)
     or (p_expires_at is not null and (p_expires_at <= p_starts_at
@@ -68,6 +65,24 @@ begin
     raise exception using errcode = 'V3152',
       message = 'Tenant governance requires multi-factor authentication';
   end if;
+  select a.revision, a.revoked_at into current_revision, current_revoked_at
+  from vortex_identity.tenant_administrator_assignments a
+  where a.assignment_id = p_assignment_id and a.tenant_id = p_tenant_id;
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'change_tenant_administrator', p_duplicate_key, null, p_tenant_id, actor_identity_id,
+    'Administration duplicate conflicts'
+  );
+  if claimed is not null then
+    select r.* into stored
+    from pg_catalog.jsonb_to_record(claimed) as r(
+      "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
+      "subjectRevisions" bigint[]
+    );
+    return query select 'replayed'::text, 'change_tenant_administrator'::text,
+      stored."subjectIds"[1], stored."subjectRevisions"[1], stored."receiptId",
+      stored."acceptedAt";
+    return;
+  end if;
   if target_identity_id is null or not exists (
       select 1 from vortex_identity.identity_projections p
       where p.identity_id = target_identity_id and p.state = 'active'
@@ -91,34 +106,6 @@ begin
   end if;
   if target_identity_id = actor_identity_id then
     raise exception using errcode = '42501', message = 'Tenant authority cannot be granted to yourself';
-  end if;
-  computed_fingerprint := 'sha256:' || pg_catalog.encode(extensions.digest(
-    pg_catalog.convert_to(pg_catalog.concat_ws(E'\x1f', 'change_tenant_administrator',
-      p_tenant_id::text, p_assignment_id::text, p_expected_revision::text,
-      pg_catalog.array_to_string(capabilities, ','),
-      vortex_platform.format_timestamp_utc(p_starts_at),
-      coalesce(vortex_platform.format_timestamp_utc(p_expires_at), '')),
-      'UTF8'), 'sha256'), 'hex');
-  select a.revision, a.revoked_at into current_revision, current_revoked_at
-  from vortex_identity.tenant_administrator_assignments a
-  where a.assignment_id = p_assignment_id and a.tenant_id = p_tenant_id;
-  claimed := vortex_record.claim_scoped_command_receipt_internal(
-    'change_tenant_administrator', p_duplicate_key, null, p_tenant_id, actor_identity_id,
-    'Administration duplicate conflicts'
-  );
-  if claimed is not null then
-    select r.* into stored
-    from pg_catalog.jsonb_to_record(claimed) as r(
-      "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
-      "subjectRevisions" bigint[], "fingerprint" text, "clusterId" uuid
-    );
-    if stored."fingerprint" <> computed_fingerprint then
-      raise exception using errcode = 'V3001', message = 'Administration duplicate conflicts';
-    end if;
-    return query select 'replayed'::text, 'change_tenant_administrator'::text,
-      p_assignment_id, stored."subjectRevisions"[1], stored."receiptId",
-      stored."acceptedAt";
-    return;
   end if;
   expiry_cap := vortex_identity.tenant_administrator_grant_expiry_cap(
     actor_identity_id, p_tenant_id, capabilities, evaluated_at
@@ -155,8 +142,7 @@ begin
     pg_catalog.jsonb_build_object(
       'receiptId', new_correlation_id, 'acceptedAt', evaluated_at,
       'subjectIds', pg_catalog.to_jsonb(array[p_assignment_id]),
-      'subjectRevisions', pg_catalog.to_jsonb(array[resulting_revision]),
-      'fingerprint', computed_fingerprint, 'clusterId', null::uuid
+      'subjectRevisions', pg_catalog.to_jsonb(array[resulting_revision])
     )
   );
   return query select 'accepted'::text, 'change_tenant_administrator'::text,
@@ -164,15 +150,15 @@ begin
 end
 $function$;
 
-revoke execute on function vortex_identity.change_tenant_administrator(uuid, text, uuid, uuid, bigint, jsonb, timestamptz, timestamptz)
+revoke execute on function vortex_identity.change_tenant_administrator(uuid, uuid, uuid, bigint, jsonb, timestamptz, timestamptz)
   from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
 
-grant execute on function vortex_identity.change_tenant_administrator(uuid, text, uuid, uuid, bigint, jsonb, timestamptz, timestamptz)
+grant execute on function vortex_identity.change_tenant_administrator(uuid, uuid, uuid, bigint, jsonb, timestamptz, timestamptz)
   to vortex_runtime;
 
-comment on function vortex_identity.change_tenant_administrator(uuid, text, uuid, uuid, bigint, jsonb, timestamptz, timestamptz) is
-  'Protected same-tenant tenant-administrator change under the bound request context person''s current structural authority, with database-computed command fingerprint, self-grant refusal, grantor-bounded expiry, exact revision and accepted replay.';
+comment on function vortex_identity.change_tenant_administrator(uuid, uuid, uuid, bigint, jsonb, timestamptz, timestamptz) is
+  'Protected same-tenant tenant-administrator change under the bound request context person''s current structural authority, with self-grant refusal, grantor-bounded expiry, exact revision and accepted replay.';
 
-alter function vortex_identity.change_tenant_administrator(p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_assignment_id uuid, p_expected_revision bigint, p_capabilities jsonb, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone) owner to vortex_owner;
+alter function vortex_identity.change_tenant_administrator(p_duplicate_key uuid, p_tenant_id uuid, p_assignment_id uuid, p_expected_revision bigint, p_capabilities jsonb, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone) owner to vortex_owner;
 
-grant execute on function vortex_identity.change_tenant_administrator(p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_assignment_id uuid, p_expected_revision bigint, p_capabilities jsonb, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone) to postgres;
+grant execute on function vortex_identity.change_tenant_administrator(p_duplicate_key uuid, p_tenant_id uuid, p_assignment_id uuid, p_expected_revision bigint, p_capabilities jsonb, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone) to postgres;
