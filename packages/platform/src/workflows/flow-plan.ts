@@ -70,7 +70,7 @@ export type FlowServerSegment = Readonly<{
   section: FlowPlanSection;
   guard: readonly FlowPathCondition[];
   tasks: readonly FlowTask[];
-  /** Address of the first task in the original flow definition. */
+  /** Address of the first task in the original definition; empty for a completion segment. */
   firstTaskPath: readonly (string | number)[];
   /** The values the segment reads from outside itself, and the outputs it produces. */
   inputs: FlowPlanValueTypes;

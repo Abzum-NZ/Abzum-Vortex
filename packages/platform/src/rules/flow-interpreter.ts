@@ -58,18 +58,8 @@ import {
  * a flow in the server orchestrator and in the page, and a run can stop at a task it cannot run
  * itself and resume later from nothing but its state.
  *
- * It performs no effect. Control tasks and pure tasks run here. A task that needs the world stops
- * the run with a step the host must answer:
- * - `protected_task`: a read, change or background-start task. The host runs it (the server
- *   orchestrator through the one protected-operation executor) and resumes with its safe outcome.
- *   The step carries the duplicate-protection key (task path and iteration) the host uses to make
- *   the effect happen once.
- * - `interface`: a Show form or Confirm task. The run is suspended with the typed intents so far,
- *   and the page or MCP client resumes it with the person's answer.
- *
- * It never reads a clock, a record or a session: `now`, the actor and every input come from the
- * host, and nothing in a flow is evaluated as text. Every refusal is a typed failure that names its
- * code, and no failure is ever swallowed or turned into success.
+ * It performs no effect. Protected tasks and interface intents suspend for the host to answer.
+ * The host supplies time, actor and inputs; every refusal is a typed failure.
  */
 
 export { flowRunStateVersion } from "./flow-interpreter-state";
@@ -1254,18 +1244,21 @@ export const startFlowSegment = (
       if (parts[0] === "vars") variables[parts[1]!] = value;
       else (outputs[parts[1]!] ??= {})[parts[2]!] = value;
     }
+    const completion = segment.tasks.length === 0;
+    if (completion && (expected.length !== 0 || segment.firstTaskPath.length !== 0))
+      failed("inputs_invalid", "refused", undefined, "completion segment has page inputs or tasks");
     const taskPath = segment.firstTaskPath;
     const index = taskPath.at(-1);
-    if (typeof index !== "number")
+    if (!completion && typeof index !== "number")
       return failedStep(machine, { outcome: "refused", code: "flow_unavailable" });
-    if (taskPath[0] !== segment.section || at(flow, taskPath) !== segment.tasks[0])
+    if (!completion && (taskPath[0] !== segment.section || at(flow, taskPath) !== segment.tasks[0]))
       failed("flow_unavailable", "refused", undefined, "segment location is invalid");
     const activation: Activation = {
       ...newActivation(flow, inputs, ""),
       variables,
       outputs,
       phase: segment.section,
-      frames: [{ path: taskPath.slice(0, -1), index }],
+      frames: completion ? [] : [{ path: taskPath.slice(0, -1), index: index as number }],
     };
     machine.state.activations = [activation];
     machine.segment = segment;
@@ -1298,7 +1291,13 @@ export const startFlowSegment = (
           failed("inputs_invalid", "refused", condition.taskId, "segment path does not match");
       }
     }
-    return drive(machine);
+    return completion
+      ? {
+          kind: "boundary",
+          state: snapshot(machine),
+          result: finishActivation(machine, activation),
+        }
+      : drive(machine);
   } catch (error) {
     if (error instanceof Failed) return failedStep(machine, error.failure);
     throw error;
