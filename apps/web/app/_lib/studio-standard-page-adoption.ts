@@ -25,7 +25,6 @@ import {
   readApplicationDefinitionDraft,
   createDatabaseDefinitionPublicationRepository,
   createDatabaseDefinitionPublicationService,
-  fingerprintCanonicalValue,
   readAuthenticatedApplicationPageAdoptionRelease,
   type StoredApplicationDefinitionDraft,
 } from "@vortex/platform/server";
@@ -434,9 +433,7 @@ export const saveStudioStandardPageAdoption = async (
               verifiedCandidate.currentReleaseRevision !==
                 lockedCommand.expectedPublicationAnchor ||
               canonicalJson(verifiedCandidate.compilation.canonical.content) !==
-                canonicalJson(plan.expectedCanonicalContent) ||
-              fingerprintCanonicalValue(verifiedCandidate.compilation.canonical.content) !==
-                fingerprintCanonicalValue(plan.expectedCanonicalContent)
+                canonicalJson(plan.expectedCanonicalContent)
             )
               throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
             const verifiedRelease = await readLatestPageAdoptionRelease(
