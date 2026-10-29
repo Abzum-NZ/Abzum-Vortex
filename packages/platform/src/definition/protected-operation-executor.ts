@@ -998,6 +998,7 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
       duplicateKey: duplicateKeyFor(effectKey, randomUUID),
       invitedEmail: inputs.invited_email,
       expiresAt: inputs.expires_at,
+      roleIds: inputs.role_ids,
     }),
     run: async (services, caller, command) => {
       const result = await services.accessAdministration.createOrganizationInvitation(
@@ -1012,6 +1013,12 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
           kind: "confirmed_failure",
           outcome: "refused",
           diagnostic: flowRefusalFeedbackSchema.parse({ code: "invitation_already_pending" }),
+        } as const;
+      if (value.outcome === "role_not_delegable")
+        return {
+          kind: "confirmed_failure",
+          outcome: "refused",
+          diagnostic: flowRefusalFeedbackSchema.parse({ code: "invitation_role_not_delegable" }),
         } as const;
       return {
         kind: "available",

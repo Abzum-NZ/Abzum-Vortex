@@ -6,6 +6,7 @@ import {
   organizationAccountIdSchema,
   organizationIdSchema,
   revisionSchema,
+  roleIdSchema,
   timestampSchema,
 } from "../catalogue/identifiers";
 import { invitationSchema } from "./identity-access";
@@ -131,6 +132,10 @@ export const createOrganizationInvitationForAdministrationCommandSchema = z
     duplicateKey: administrationDuplicateKeySchema,
     invitedEmail: z.string().trim().toLowerCase().pipe(z.email()),
     expiresAt: timestampSchema,
+    roleIds: z
+      .array(roleIdSchema)
+      .min(1)
+      .refine((ids) => new Set(ids.map((id) => id.toLowerCase())).size === ids.length),
   })
   .strict();
 
@@ -236,6 +241,12 @@ export const createOrganizationInvitationForAdministrationResultSchema = z.discr
         outcome: z.enum(["accepted", "replayed"]),
         operation: z.literal("create_organization_invitation"),
         ...organizationInvitationChangeFields,
+      })
+      .strict(),
+    z
+      .object({
+        outcome: z.literal("role_not_delegable"),
+        operation: z.literal("create_organization_invitation"),
       })
       .strict(),
     /** The email already has an invitation waiting to be accepted in this organisation. */
