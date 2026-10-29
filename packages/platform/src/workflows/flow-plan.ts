@@ -63,6 +63,7 @@ export type FlowSegmentStub = Readonly<{
   guard: readonly FlowPathCondition[];
   inputs: FlowPlanValueTypes;
   outputs: FlowPlanValueTypes;
+  fingerprint: `sha256:${string}`;
   labels: readonly string[];
 }>;
 
@@ -398,6 +399,7 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
               guard: segment.guard,
               inputs: segment.inputs,
               outputs: segment.outputs,
+              fingerprint: segment.fingerprint,
               labels: segment.labels,
             },
       ),
