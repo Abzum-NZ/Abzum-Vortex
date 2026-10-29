@@ -559,12 +559,11 @@ export const createStoredPageCapabilityService = (
     };
   };
 
-  // Projects one loaded page for the viewer's current authority over this exact scope only.
-  const projectStored = (
-    session: IdentitySession,
-    candidate: OrganizationSelectionCandidate,
+  // The same visibility, subject and availability decisions serve a full page or one form.
+  const evaluatorsFor = (
     stored: FixedAuthenticatedPageCapability,
-  ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> => {
+    subjectRecordId: string | undefined,
+  ): PageCapabilityEvaluators => {
     // This cache belongs to one projection transaction, never another page, actor or release.
     let subjectRead:
       | Readonly<{
@@ -654,7 +653,6 @@ export const createStoredPageCapabilityService = (
     const evaluators: PageCapabilityEvaluators = {
       evaluateActionAvailability: async (transaction, scope, page, placementId) => {
         const action = boundActions.get(placementId.toLowerCase());
-        const subjectRecordId = dependencies.selection.subjectRecordId;
         // Only the selected page's own subject is previewed; a list or another page has none.
         if (
           action === undefined ||
@@ -826,7 +824,6 @@ export const createStoredPageCapabilityService = (
             page.recordType?.state === "resolved"
               ? page.recordType
               : undefined;
-          const subjectRecordId = dependencies.selection.subjectRecordId;
           if (recordType === undefined || subjectRecordId === undefined) return false;
           const modules = context.releaseSet.modules.filter((module) =>
             sameId(module.rootId, recordType.moduleRootId),
@@ -883,6 +880,16 @@ export const createStoredPageCapabilityService = (
         }
       },
     };
+    return evaluators;
+  };
+
+  // Projects one loaded page for the viewer's current authority over this exact scope only.
+  const projectStored = (
+    session: IdentitySession,
+    candidate: OrganizationSelectionCandidate,
+    stored: FixedAuthenticatedPageCapability,
+  ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> => {
+    const evaluators = evaluatorsFor(stored, dependencies.selection.subjectRecordId);
     return requests.run(session, candidate, async (transaction, scope) => {
       if (
         scope.applicationRootId === undefined ||
