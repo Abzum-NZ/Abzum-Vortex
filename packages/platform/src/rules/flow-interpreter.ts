@@ -6,13 +6,8 @@ import type { JsonValue } from "../catalogue/common";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import { isRecordLinkValue } from "../records/value-predicates";
 import { platformOperationKey } from "../catalogue/platform-service-operation-catalogue";
-import {
-  flowReadFieldsProjectionSchema,
-  flowReadFieldsTypeMapSchema,
-  type FlowDefinition,
-  type FlowExecutionKind,
-  type FlowTask,
-} from "../workflows/flow-contracts";
+import type { FlowDefinition, FlowExecutionKind, FlowTask } from "../workflows/flow-contracts";
+import { isFlowReadFieldsProjection, isFlowReadFieldsTypeMap } from "../workflows/flow-read-fields";
 import { flowTaskChildLists } from "../workflows/flow-task-tree";
 import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
 import { refusalKeepsPlatformGuidance } from "../workflows/flow-refusal-guidance";
@@ -356,8 +351,10 @@ const declaredOutputFieldType = (
       return entry.descriptor.outputs[path[0]!]!.type;
   }
   if (task?.type === "record.read_fields" && path.length === 1) {
-    const types = flowReadFieldsTypeMapSchema.safeParse(task.readFieldTypes);
-    return types.success && Object.hasOwn(types.data, path[0]!) ? types.data[path[0]!] : undefined;
+    const types = task.readFieldTypes;
+    return isFlowReadFieldsTypeMap(types) && Object.hasOwn(types, path[0]!)
+      ? types[path[0]!]
+      : undefined;
   }
   // A show-form answer is one declared member, read as a whole (the validator refuses deeper paths).
   if (task?.type !== "interface.show_form" || path.length !== 1) return undefined;
@@ -626,16 +623,14 @@ const validReadFieldsResume = (
   };
   const fields = registered.properties.fields;
   const projection =
-    fields?.kind === "literal" && fields.literal.type === "json"
-      ? flowReadFieldsProjectionSchema.safeParse(fields.literal.value)
-      : undefined;
-  const types = flowReadFieldsTypeMapSchema.safeParse(registered.readFieldTypes);
-  if (!projection?.success || !types.success) return false;
-  const declaredAliases = projection.data.map((field) => field.alias);
-  const typeAliases = Object.keys(types.data);
+    fields?.kind === "literal" && fields.literal.type === "json" ? fields.literal.value : undefined;
+  const types = registered.readFieldTypes;
+  if (!isFlowReadFieldsProjection(projection) || !isFlowReadFieldsTypeMap(types)) return false;
+  const declaredAliases = projection.map((field) => field.alias);
+  const typeAliases = Object.keys(types);
   if (
     declaredAliases.length !== typeAliases.length ||
-    declaredAliases.some((alias) => !Object.hasOwn(types.data, alias))
+    declaredAliases.some((alias) => !Object.hasOwn(types, alias))
   )
     return false;
   if (
@@ -654,8 +649,7 @@ const validReadFieldsResume = (
     actualAliases.length === declaredAliases.length &&
     declaredAliases.every(
       (alias) =>
-        Object.hasOwn(actual, alias) &&
-        typedValueMatchesType(actual[alias], types.data[alias]!, "flow"),
+        Object.hasOwn(actual, alias) && typedValueMatchesType(actual[alias], types[alias]!, "flow"),
     )
   );
 };

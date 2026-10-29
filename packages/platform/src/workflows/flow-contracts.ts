@@ -8,6 +8,19 @@ import type { FlowId } from "../catalogue/identifiers";
 import { boundedRecord, flowFormulaSchema, flowLiteralSchema, flowFormulaValueSchema, flowLiteralValueSchema, flowReferenceValueSchema, flowValueSchema, shorthandReferenceValueSchema, templateFreeText } from "./flow-values";
 import { flowMaximumTaskCount, flowMaximumForEachItemsOther, flowMaximumRunFlowDepth } from "./flow-limits";
 import type { FlowFormula, FlowLiteral, FlowValue } from "./flow-values";
+import {
+  flowReadFieldsScalarTypeKeys,
+  isFlowReadFieldsProjection,
+  isFlowReadFieldsTypeMap,
+  type FlowReadFieldsProjectionEntry,
+  type FlowReadFieldsScalarType,
+  type FlowReadFieldsTypeMap,
+} from "./flow-read-fields";
+export {
+  flowMaximumRecordReadFields,
+  flowReadFieldsScalarTypeKeys,
+  type FlowReadFieldsScalarType,
+} from "./flow-read-fields";
 
 /**
  * The one flow definition every behaviour kind uses: interactive actions, named-action bodies,
@@ -35,75 +48,17 @@ import type { FlowFormula, FlowLiteral, FlowValue } from "./flow-values";
 export const flowExecutionKindSchema = z.enum(["interactive", "transaction", "background"]);
 export type FlowExecutionKind = z.infer<typeof flowExecutionKindSchema>;
 
-/** A selected-record read declares at most twenty output members and source field references. */
-export const flowMaximumRecordReadFields = 20;
-
-/** Scalar output types supported by Flow for selected-record field projections. */
-export const flowReadFieldsScalarTypeKeys = [
-  "text",
-  "formatted_text",
-  "whole_number",
-  "decimal_number",
-  "money",
-  "yes_no",
-  "date",
-  "date_time",
-  "choice",
-] as const satisfies readonly z.infer<typeof workflowValueTypeSchema>[];
 export const flowReadFieldsScalarTypeSchema = z.enum(flowReadFieldsScalarTypeKeys);
-export type FlowReadFieldsScalarType = z.infer<typeof flowReadFieldsScalarTypeSchema>;
 
 /** Compiler-owned scalar types keyed by the aliases in a selected-record projection. */
-export const flowReadFieldsTypeMapSchema = z
-  .record(builderKeySchema, flowReadFieldsScalarTypeSchema)
-  .superRefine((types, context) => {
-    const count = Object.keys(types).length;
-    if (count < 1)
-      context.addIssue({
-        code: "custom",
-        message: "A selected-record type map must contain at least one member",
-      });
-    if (count > flowMaximumRecordReadFields)
-      context.addIssue({
-        code: "custom",
-        message: `A selected-record type map can contain at most ${flowMaximumRecordReadFields} members`,
-      });
-  });
-
-/** One named output member of a selected-record field projection. */
-export const flowReadFieldsProjectionEntrySchema = z
-  .object({
-    alias: builderKeySchema,
-    // A source record type alias can use 240 characters, plus a dot and a 40-character field key.
-    field: z.string().min(1).max(281),
-  })
-  .strict();
+export const flowReadFieldsTypeMapSchema = z.custom<FlowReadFieldsTypeMap>(isFlowReadFieldsTypeMap, {
+  error: "A selected-record type map must contain 1 to 20 named scalar members",
+});
 
 /** The closed, ordered projection carried by `record.read_fields`. */
-export const flowReadFieldsProjectionSchema = z
-  .array(flowReadFieldsProjectionEntrySchema)
-  .min(1)
-  .max(flowMaximumRecordReadFields)
-  .superRefine((fields, context) => {
-    const aliases = new Set<string>();
-    const references = new Set<string>();
-    fields.forEach((field, index) => {
-      if (aliases.has(field.alias))
-        context.addIssue({
-          code: "custom",
-          path: [index, "alias"],
-          message: "Projection aliases must be unique",
-        });
-      aliases.add(field.alias);
-      if (references.has(field.field))
-        context.addIssue({
-          code: "custom",
-          path: [index, "field"],
-          message: "Projected field references must be unique",
-        });
-      references.add(field.field);
-    });
-  });
+export const flowReadFieldsProjectionSchema = z.custom<FlowReadFieldsProjectionEntry[]>(isFlowReadFieldsProjection, {
+  error: "Select 1 to 20 fields with unique aliases and field references",
+});
 
 /** The projection is authored as one JSON literal, never a runtime map or computed value. */
 export const flowReadFieldsProjectionValueSchema = flowValueSchema.superRefine((value, context) => {

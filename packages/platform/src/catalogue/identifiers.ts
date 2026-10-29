@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isPlatformIdentifier } from "./identifier-predicates";
+import { isBuilderKey, isPlatformIdentifier } from "./identifier-predicates";
 
 const nonNilUuidSchema = z.uuid().refine(isPlatformIdentifier, {
   message: "A platform-issued identifier cannot be the nil UUID",
@@ -69,9 +69,7 @@ export const meteringEventIdSchema = stableId<"MeteringEventId">();
 
 export const builderKeySchema = z
   .string()
-  .min(1)
-  .max(40)
-  .regex(/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/, "Use lowercase words separated by underscores");
+  .refine(isBuilderKey, "Use lowercase words separated by underscores, up to 40 characters");
 
 export const sourceQualifiedRecordTypeSchema = z
   .string()
