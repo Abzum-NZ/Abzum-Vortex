@@ -27,7 +27,8 @@ export async function proxy(request: NextRequest) {
       : undefined;
     policy = [
       "default-src 'self'",
-      `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+      // React uses eval for development debugging.
+      `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
       "style-src 'self' 'unsafe-inline'",
       `connect-src 'self'${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
       `frame-src 'self'${componentOrigin ? ` ${componentOrigin}` : ""}`,
