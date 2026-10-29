@@ -89,8 +89,13 @@ export const validateProjectedControlOption = async (
   projectedPage: Readonly<Record<string, unknown>>,
   placementId: string,
   value: string,
+  parsedValue: unknown,
   subject: Readonly<{ recordTypeId: string; recordId: string }> | undefined,
   held: Parameters<typeof applyChoiceOptionGates>[2],
+  validateLink: (
+    placementId: string,
+    selected: Readonly<{ recordTypeId: string; recordId: string }>,
+  ) => Promise<boolean>,
 ): Promise<boolean> => {
   const gate = requireProjectedPlacement(projectedPage, placementId);
   if (gate.kind !== "on_page") return false;
@@ -119,7 +124,15 @@ export const validateProjectedControlOption = async (
       typeof block.blockId === "string" &&
       sameId(block.blockId, LINK_INPUT_BLOCK_RELEASE.blockId))
   )
-    return false;
+    return (
+      isRecord(parsedValue) &&
+      typeof parsedValue.recordTypeId === "string" &&
+      typeof parsedValue.recordId === "string" &&
+      (await validateLink(placementId, {
+        recordTypeId: parsedValue.recordTypeId,
+        recordId: parsedValue.recordId,
+      }))
+    );
   if (
     isRecord(block) &&
     typeof block.blockId === "string" &&

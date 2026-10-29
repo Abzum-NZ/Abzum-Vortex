@@ -88,7 +88,7 @@ const firstValue = (value: string | readonly string[] | undefined): string | und
 export const bindInvocationControls = async (
   context: QueryBindingContext,
   candidates: Readonly<Record<string, string>>,
-  validateOption: (placementId: string, value: string) => Promise<boolean>,
+  validateOption: (placementId: string, value: string, parsed: JsonValue) => Promise<boolean>,
 ): Promise<QueryBindingContext | undefined> => {
   const supplied = new Map<string, string>();
   for (const [placement, value] of Object.entries(candidates)) {
@@ -105,12 +105,8 @@ export const bindInvocationControls = async (
     const raw = supplied.get(placement);
     if (raw === undefined || raw === "") continue;
     const declared = context.parameters.get(name);
-    if (
-      declared === undefined ||
-      parseQueryBindingText(raw, declared) === undefined ||
-      !(await validateOption(placement, raw))
-    )
-      return undefined;
+    const parsed = declared === undefined ? undefined : parseQueryBindingText(raw, declared);
+    if (parsed === undefined || !(await validateOption(placement, raw, parsed))) return undefined;
     address[name] = raw;
   }
   return { ...context, address };
