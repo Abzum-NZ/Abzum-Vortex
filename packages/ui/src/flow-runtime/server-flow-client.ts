@@ -279,6 +279,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
           ...context,
           bindingId: binding.bindingId,
           flowId: binding.flowId,
+          segment: binding.segment,
           clickId,
           callerInputs,
           ...((subject ?? options.subject) === undefined

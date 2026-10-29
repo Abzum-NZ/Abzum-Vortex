@@ -14,6 +14,15 @@ const bindingInvocationSchema = z
     releaseKey: releaseKeySchema,
     bindingId: containedComponentIdSchema,
     flowId: flowIdSchema,
+    segment: z.union([
+      z.object({ segmentId: z.null() }).strict(),
+      z
+        .object({
+          segmentId: z.string().min(1).max(200),
+          fingerprint: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+        })
+        .strict(),
+    ]),
     /** One identity per user gesture, so a repeated request for the same click is the same run. */
     clickId: z.uuid(),
     /** The values the surface itself supplies, by the name of the binding's `caller` input. */
