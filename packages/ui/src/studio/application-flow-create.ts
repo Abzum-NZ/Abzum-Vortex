@@ -601,7 +601,6 @@ export const applyStudioFlowCreate = (
             recordTypeId: command.recordTypeKey,
             inputs: {},
             operations: command.operations.map((kind) => ({ kind })),
-            priority: 100,
           },
         ],
         tasks: [
@@ -614,6 +613,10 @@ export const applyStudioFlowCreate = (
         ],
       };
       module.flows.push(flow);
+      // A new rule runs after the record type's existing rules.
+      module.record_types
+        .find((recordType) => recordType.key === command.recordTypeKey)!
+        .before_save_rules.push(flow.id);
       return created(candidate, flow, module.key, undefined);
     }
     if (command.kind === "action" && command.event === "card_moved" && command.recordType === null)

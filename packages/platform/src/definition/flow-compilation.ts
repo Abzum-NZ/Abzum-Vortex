@@ -221,19 +221,6 @@ const resolveTriggers = (ctx: Context, source: SourceFlow): unknown[] =>
         ...trigger,
         inputs,
         recordTypeId: resolveAt(ctx, recordType, [...path, "recordTypeId"]),
-        operations: trigger.operations.map((operation, operationIndex) =>
-          operation.kind === "transition"
-            ? {
-                ...operation,
-                actionId: resolveAt(ctx, ctx.resolver.action(operation.actionId), [
-                  ...path,
-                  "operations",
-                  operationIndex,
-                  "actionId",
-                ]),
-              }
-            : operation,
-        ),
       };
     }
     if (trigger.type === "Event")
@@ -767,13 +754,13 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
     });
   });
 
+  // BeforeSave flows first, in source order (each record type's rule list orders its own); every
+  // other flow in permanent identity order.
   compiled.sort((left, right) => {
-    const leftTrigger = left.flow.triggers.find((trigger) => trigger.type === "BeforeSave");
-    const rightTrigger = right.flow.triggers.find((trigger) => trigger.type === "BeforeSave");
-    if (leftTrigger?.type === "BeforeSave" && rightTrigger?.type === "BeforeSave")
-      return leftTrigger.priority - rightTrigger.priority || left.sourceIndex - right.sourceIndex;
-    if (leftTrigger !== undefined || rightTrigger !== undefined)
-      return leftTrigger === undefined ? 1 : -1;
+    const leftRule = left.flow.triggers.some((trigger) => trigger.type === "BeforeSave");
+    const rightRule = right.flow.triggers.some((trigger) => trigger.type === "BeforeSave");
+    if (leftRule && rightRule) return left.sourceIndex - right.sourceIndex;
+    if (leftRule || rightRule) return leftRule ? -1 : 1;
     return compareCanonicalStrings(left.flow.id, right.flow.id);
   });
   const compiledFlowsById = new Map<string, FlowDefinition>(

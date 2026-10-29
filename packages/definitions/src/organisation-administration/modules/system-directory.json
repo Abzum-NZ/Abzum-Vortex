@@ -127,7 +127,8 @@
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     },
     {
       "id": "rt_system_directory_organization_invitation",
@@ -256,7 +257,8 @@
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     },
     {
       "id": "rt_system_directory_group",
@@ -363,7 +365,8 @@
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     },
     {
       "id": "rt_system_directory_group_membership",
@@ -552,7 +555,8 @@
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     },
     {
       "id": "rt_system_directory_role",
@@ -773,7 +777,8 @@
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     },
     {
       "id": "rt_system_directory_role_assignment",
@@ -1059,7 +1064,8 @@
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     },
     {
       "id": "rt_system_directory_role_activation",
@@ -1300,7 +1306,8 @@
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     },
     {
       "id": "rt_system_directory_delegation",
@@ -1522,7 +1529,8 @@
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     },
     {
       "id": "rt_system_directory_organization",
@@ -1697,7 +1705,8 @@
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     },
     {
       "id": "rt_system_directory_tenant_administrator",
@@ -1893,7 +1902,8 @@
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     }
   ],
   "permissions": [

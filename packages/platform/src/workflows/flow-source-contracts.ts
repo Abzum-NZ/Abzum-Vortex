@@ -2,7 +2,7 @@ import { z } from "zod";
 import { workflowValueTypeSchema } from "../catalogue/catalogues";
 import { descriptionSchema, jsonValueSchema, retryPolicySchema } from "../catalogue/common";
 import { definitionProvenanceEntrySchema } from "../definition/definition-provenance";
-import { flowExecutionKindSchema, flowReadFieldsProjectionSchema, flowRegisteredTaskTypeSchema, flowScheduleRecurrenceSchema, flowSchema, flowStandardEventKindSchema, flowTaskTimeoutSchema } from "./flow-contracts";
+import { flowBeforeSaveOperationSchema, flowExecutionKindSchema, flowReadFieldsProjectionSchema, flowRegisteredTaskTypeSchema, flowScheduleRecurrenceSchema, flowSchema, flowStandardEventKindSchema, flowTaskTimeoutSchema } from "./flow-contracts";
 import { flowFormulaSchema, flowLiteralSchema, flowValueSchema } from "./flow-values";
 import type { FlowFormula, FlowLiteral, FlowValue } from "./flow-values";
 import {
@@ -75,11 +75,6 @@ const sourceTriggerCommonShape = {
   condition: flowFormulaSchema.optional(),
 };
 
-const sourceBeforeSaveOperationSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("create") }).strict(),
-  z.object({ kind: z.literal("update") }).strict(),
-  z.object({ kind: z.literal("transition"), actionId: flowAliasSchema }).strict(),
-]);
 
 export const sourceFlowTriggerSchema = z.discriminatedUnion("type", [
   z
@@ -87,8 +82,7 @@ export const sourceFlowTriggerSchema = z.discriminatedUnion("type", [
       ...sourceTriggerCommonShape,
       type: z.literal("BeforeSave"),
       recordTypeId: flowAliasSchema,
-      operations: z.array(sourceBeforeSaveOperationSchema).min(1).max(20),
-      priority: z.number().int().min(0).max(1_000),
+      operations: z.array(flowBeforeSaveOperationSchema).min(1).max(4),
     })
     .strict(),
   z
@@ -541,7 +535,7 @@ export type FlowDependencyManifestContribution = z.infer<
 
 export const compiledFlowSetSchema = z
   .object({
-    /** BeforeSave flows use priority and source order; other flows use permanent identity order. */
+    /** BeforeSave flows keep source order; other flows use permanent identity order. */
     flows: z.array(flowSchema).max(100),
     dependencyManifest: flowDependencyManifestContributionSchema,
     /** Paths begin with the flow's index in `flows` and, for the source path, in the source set. */

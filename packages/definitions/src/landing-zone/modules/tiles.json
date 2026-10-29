@@ -309,7 +309,8 @@
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": ["flow_tile_pin_create", "flow_tile_pin_update"]
     },
     {
       "id": "rt_landing_zone_application",
@@ -405,7 +406,8 @@
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     }
   ],
   "permissions": [
@@ -651,8 +653,7 @@
             {
               "kind": "create"
             }
-          ],
-          "priority": 100
+          ]
         }
       ],
       "tasks": [
@@ -1028,8 +1029,7 @@
             {
               "kind": "update"
             }
-          ],
-          "priority": 100
+          ]
         }
       ],
       "tasks": [

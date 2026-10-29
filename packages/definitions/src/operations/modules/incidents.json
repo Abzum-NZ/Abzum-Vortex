@@ -430,7 +430,8 @@
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     }
   ],
   "permissions": [

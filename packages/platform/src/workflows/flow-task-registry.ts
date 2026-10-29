@@ -919,6 +919,13 @@ export const validateFlowTaskPlacement = (
   // BeforeSave flow shares its run with the other rules and never places an action-flow task.
   const actionFlow = flow.execution === "transaction" && flow.triggers.length === 0;
   const beforeSave = flow.triggers.some((trigger) => trigger.type === "BeforeSave");
+  const lifecycleRule = flow.triggers.some(
+    (trigger) =>
+      trigger.type === "BeforeSave" &&
+      trigger.operations.some(
+        (operation) => operation.kind === "delete" || operation.kind === "restore",
+      ),
+  );
   const visit = (tasks: readonly FlowTask[], path: (string | number)[]) => {
     tasks.forEach((flowTask, index) => {
       const taskPath = [...path, index];
@@ -940,6 +947,13 @@ export const validateFlowTaskPlacement = (
             path: [...taskPath, "type"],
             code: "wrong_run_location",
             message: `${definition.title} cannot run before a save`,
+          });
+        // A rule before a delete or restore reads the stored record and has nothing to require.
+        else if (lifecycleRule && flowTask.type === "rule.require")
+          issues.push({
+            path: [...taskPath, "type"],
+            code: "wrong_run_location",
+            message: `${definition.title} cannot run before a record is deleted or restored`,
           });
         // Only a save reads the warnings and requirements a rule task reports; an action flow
         // would drop them, so it may only refuse.

@@ -53,7 +53,7 @@ import { permissionDeclarationSchema } from "../access/permissions";
 import { protectedOperationReferenceSchema } from "./application-flow-bindings";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import { protectedReadModelKeySchema } from "./application-composition/protected-read-models";
-import { flowSchema } from "../workflows/flow-contracts";
+import { flowIdSchema, flowSchema } from "../workflows/flow-contracts";
 import { recordOwnershipModeSchema } from "../records/record-ownership-mode";
 import {
   maximumRecordTypePipelines,
@@ -1009,6 +1009,8 @@ export const recordTypeDefinitionSchema = z
       .array(z.enum(["create", "read", "update", "soft_delete", "restore", "export"]))
       .min(1),
     customActionIds: z.array(actionIdSchema),
+    /** The record type's BeforeSave flows in the order they run inside its save. */
+    beforeSaveFlowIds: z.array(flowIdSchema).max(100),
     systemProjection: moduleSystemProjectionSchema.optional(),
     pipelines: z.array(recordTypePipelineSchema).max(maximumRecordTypePipelines),
   })
@@ -1335,6 +1337,29 @@ export const moduleDraftSchema = z
       if (flowKeys.has(flow.key)) invalid("Flow keys must be unique", ["flows", index, "key"]);
       flowIds.add(flow.id);
       flowKeys.add(flow.key);
+    });
+    // Each record type lists every BeforeSave flow that names it exactly once, and nothing else.
+    draft.content.recordTypes.forEach((recordType, index) => {
+      const covering = draft.content.flows
+        .filter((flow) =>
+          flow.triggers.some(
+            (trigger) =>
+              trigger.type === "BeforeSave" &&
+              trigger.recordTypeId.toLowerCase() === recordType.recordTypeId.toLowerCase(),
+          ),
+        )
+        .map((flow) => flow.id.toLowerCase());
+      const listed = recordType.beforeSaveFlowIds.map((flowId) => flowId.toLowerCase());
+      if (
+        new Set(listed).size !== listed.length ||
+        listed.length !== covering.length ||
+        covering.some((flowId) => !listed.includes(flowId))
+      )
+        invalid("A record type lists each of its save rules exactly once", [
+          "recordTypes",
+          index,
+          "beforeSaveFlowIds",
+        ]);
     });
     // Every named action on a system projection targets a registered protected operation, and no
     // other record type's action may target one; standard update is governed by the closed registry.

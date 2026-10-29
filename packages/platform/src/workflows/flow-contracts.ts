@@ -9,7 +9,6 @@ import {
 import {
   actorIdSchema,
   applicationRootIdSchema,
-  actionIdSchema,
   builderKeySchema,
   containedComponentIdSchema,
   namespacedKeySchema,
@@ -253,11 +252,17 @@ export const flowStandardEventKindSchema = z.enum([
   "state_changed",
 ]);
 
+/**
+ * The record writes a BeforeSave flow covers. A delete or restore rule reads the stored record and
+ * may only branch, stop, warn or refuse.
+ */
 export const flowBeforeSaveOperationSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("create") }).strict(),
   z.object({ kind: z.literal("update") }).strict(),
-  z.object({ kind: z.literal("transition"), actionId: actionIdSchema }).strict(),
+  z.object({ kind: z.literal("delete") }).strict(),
+  z.object({ kind: z.literal("restore") }).strict(),
 ]);
+export type FlowBeforeSaveOperation = z.infer<typeof flowBeforeSaveOperationSchema>["kind"];
 
 /** The closed recurrence value a Schedule trigger owns. */
 export const flowScheduleRecurrenceSchema = z
@@ -299,9 +304,8 @@ export const flowTriggerSchema = z.discriminatedUnion("type", [
       ...triggerCommonShape,
       type: z.literal("BeforeSave"),
       recordTypeId: recordTypeIdSchema,
-      operations: z.array(flowBeforeSaveOperationSchema).min(1).max(20),
-      /** Applicable flows run in ascending priority, then in their authored source order. */
-      priority: z.number().int().min(0).max(1_000),
+      /** Applicable flows run in the order of the record type's ordered rule list. */
+      operations: z.array(flowBeforeSaveOperationSchema).min(1).max(4),
     })
     .strict()
     .superRefine((trigger, context) => {

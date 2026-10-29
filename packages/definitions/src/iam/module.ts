@@ -193,6 +193,7 @@ export const iamModule: SourceApplicationModule = sourceApplicationModuleSchema.
       ownership_mode: "organization_account",
       standard_actions: [...standardActions],
       custom_actions: [],
+      before_save_rules: [],
       fields: [
         {
           ...fieldBase,
@@ -392,6 +393,7 @@ export const iamModule: SourceApplicationModule = sourceApplicationModuleSchema.
       ownership_relationship: "request",
       standard_actions: [...standardActions],
       custom_actions: [],
+      before_save_rules: [],
       fields: [
         {
           ...fieldBase,

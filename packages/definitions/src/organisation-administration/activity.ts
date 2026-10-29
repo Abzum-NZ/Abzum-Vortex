@@ -36,6 +36,7 @@ export const activityRecordType = {
   ownership_mode: "none",
   standard_actions: ["read"],
   custom_actions: [],
+  before_save_rules: [],
   system_projection: {
     protected_view: "activity_entry",
     organization_field: "organization_id",

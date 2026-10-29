@@ -411,6 +411,13 @@ const moduleSourceRecordTypeSchema = z
     custom_actions: sourceProvenanceUnchanged(
       z.array(sourceProvenanceTarget(sourceAliasSchema, ["customActionIds/#"])).max(100),
     ),
+    /**
+     * The record type's save rules in the order they run: each BeforeSave flow of this Module that
+     * names the record type, by its flow alias, exactly once. There is no hidden priority.
+     */
+    before_save_rules: sourceProvenanceUnchanged(
+      z.array(sourceProvenanceTarget(sourceAliasSchema, ["beforeSaveFlowIds/#"])).max(100),
+    ),
     fields: sourceProvenanceUnchanged(z.array(moduleSourceFieldSchema).min(1).max(500)),
     relationships: sourceProvenanceUnchanged(
       z
@@ -1000,6 +1007,30 @@ const moduleSourceBodyFields = {
 type ModuleSourceBodyFields = z.infer<z.ZodObject<typeof moduleSourceBodyFields>>;
 
 const refineModuleSourceBody = (value: ModuleSourceBodyFields, context: z.RefinementCtx): void => {
+  // Each record type lists every BeforeSave flow that names it exactly once, and nothing else.
+  for (const [recordTypeIndex, recordType] of value.record_types.entries()) {
+    const covering = value.flows
+      .filter((flow) =>
+        flow.triggers.some(
+          (trigger) =>
+            trigger.type === "BeforeSave" &&
+            (trigger.recordTypeId === recordType.key || trigger.recordTypeId === recordType.id),
+        ),
+      )
+      .map((flow) => flow.id);
+    const listed = recordType.before_save_rules;
+    if (
+      new Set(listed).size !== listed.length ||
+      listed.length !== covering.length ||
+      covering.some((flowId) => !listed.includes(flowId))
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["record_types", recordTypeIndex, "before_save_rules"],
+        message:
+          "List every save rule (BeforeSave flow) of this record type exactly once, in the order it runs",
+      });
+  }
   // Every named action on a system projection targets a registered protected operation, and no
   // other record type may target one; standard update is governed by the closed registry.
   const recordTypes = new Map(value.record_types.map((recordType) => [recordType.key, recordType]));

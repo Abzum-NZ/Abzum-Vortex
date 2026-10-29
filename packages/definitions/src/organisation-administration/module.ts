@@ -233,6 +233,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
         ownership_mode: "none",
         standard_actions: ["create", "read", "update", "soft_delete", "restore", "export"],
         custom_actions: ["act_record_notice", "act_withdraw_notice"],
+        before_save_rules: [],
         fields: [
           {
             id: "fld_notice_title",
@@ -313,6 +314,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
           "act_complete_privacy_request",
           "act_refuse_privacy_request",
         ],
+        before_save_rules: [],
         fields: [
           {
             id: "fld_case_subject",
@@ -423,6 +425,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
         ownership_mode: "none",
         standard_actions: ["read"],
         custom_actions: [],
+        before_save_rules: [],
         system_projection: {
           protected_view: "permissions",
           organization_field: "organization_id",
@@ -584,6 +587,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
         ownership_mode: "none",
         standard_actions: ["read", "update"],
         custom_actions: [],
+        before_save_rules: [],
         system_projection: {
           protected_view: "organization_runtime_settings",
           organization_field: "organization_id",
@@ -732,6 +736,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
         ownership_mode: "none",
         standard_actions: ["read"],
         custom_actions: [],
+        before_save_rules: [],
         system_projection: {
           protected_view: "installed_applications",
           organization_field: "organization_id",
@@ -821,6 +826,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
         ownership_mode: "none",
         standard_actions: ["read"],
         custom_actions: [],
+        before_save_rules: [],
         system_projection: {
           protected_view: "application_role_templates",
           organization_field: "organization_id",

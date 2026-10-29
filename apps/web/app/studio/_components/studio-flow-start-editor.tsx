@@ -106,7 +106,6 @@ function TriggerEditor({
   trigger,
   recordTypes,
   events,
-  actions,
   disabled,
   onChange,
 }: Readonly<{
@@ -114,7 +113,6 @@ function TriggerEditor({
   trigger: StudioFlowTriggerDraft;
   recordTypes: readonly Readonly<{ key: string; label: string }>[];
   events: readonly Readonly<{ key: string; label: string; recordType: string }>[];
-  actions: readonly Readonly<{ key: string; label: string; recordType: string }>[];
   disabled: boolean;
   onChange: (trigger: StudioFlowTriggerDraft, setting?: string) => true | string;
 }>) {
@@ -228,7 +226,7 @@ function TriggerEditor({
         value={trigger.recordType}
         options={recordTypes.map((entry) => ({ value: entry.key, label: entry.label }))}
         onChange={(next) =>
-          // An event or action belongs to one record type, so a new record type drops the old ones.
+          // An event belongs to one record type, so a new record type drops the old one.
           onChange(
             trigger.kind === "declared_event"
               ? {
@@ -236,15 +234,7 @@ function TriggerEditor({
                   recordType: next,
                   eventKey: events.find((event) => event.recordType === next)?.key ?? "",
                 }
-              : trigger.kind === "before_save"
-                ? {
-                    ...trigger,
-                    recordType: next,
-                    actions: trigger.actions.filter((key) =>
-                      actions.some((entry) => entry.key === key && entry.recordType === next),
-                    ),
-                  }
-                : { ...trigger, recordType: next },
+              : { ...trigger, recordType: next },
           )
         }
       />
@@ -285,34 +275,24 @@ function TriggerEditor({
         </div>
       </div>
     );
+  // Rules on delete and restore run once the record writer applies them, so Studio offers only
+  // create and change; the order among the record's rules is its Data tab list.
+  const covers = (operation: "create" | "update", checked: boolean) =>
+    onChange({
+      ...trigger,
+      operations: (["create", "update", "delete", "restore"] as const).filter((kind) =>
+        kind === operation ? checked : trigger.operations.includes(kind),
+      ),
+    });
   return (
     <div className="space-y-2">
       {recordType}
-      {trigger.actions.map((action, index) => (
-        <div key={index} className="space-y-1.5">
-          <Label htmlFor={`${id}-action-${index}`}>Before this action</Label>
-          <StudioReferencePicker
-            id={`${id}-action-${index}`}
-            disabled={disabled}
-            value={action}
-            options={actions
-              .filter((entry) => entry.recordType === trigger.recordType)
-              .map((entry) => ({ value: entry.key, label: entry.label }))}
-            onChange={(next) =>
-              onChange({
-                ...trigger,
-                actions: trigger.actions.map((entry, at) => (at === index ? next : entry)),
-              })
-            }
-          />
-        </div>
-      ))}
       <div className="flex items-center gap-2">
         <Checkbox
           id={`${id}-create`}
           disabled={disabled}
-          checked={trigger.create}
-          onCheckedChange={(checked) => onChange({ ...trigger, create: checked === true })}
+          checked={trigger.operations.includes("create")}
+          onCheckedChange={(checked) => covers("create", checked === true)}
         />
         <Label htmlFor={`${id}-create`}>Before it is created</Label>
       </div>
@@ -320,23 +300,11 @@ function TriggerEditor({
         <Checkbox
           id={`${id}-update`}
           disabled={disabled}
-          checked={trigger.update}
-          onCheckedChange={(checked) => onChange({ ...trigger, update: checked === true })}
+          checked={trigger.operations.includes("update")}
+          onCheckedChange={(checked) => covers("update", checked === true)}
         />
         <Label htmlFor={`${id}-update`}>Before it is changed</Label>
       </div>
-      <StartText
-        id={`${id}-priority`}
-        label="Order among the record's rules (0 to 1000, lower runs first)"
-        numeric
-        disabled={disabled}
-        value={String(trigger.priority)}
-        apply={(next) =>
-          /^\d+$/.test(next.trim())
-            ? onChange({ ...trigger, priority: Number(next.trim()) }, `${id}-priority`)
-            : "How it starts, order: use a whole number from 0 to 1000."
-        }
-      />
     </div>
   );
 }
@@ -520,7 +488,6 @@ export function StudioFlowStartEditor({
               trigger={trigger}
               recordTypes={recordTypes}
               events={projection.events}
-              actions={projection.actions}
               disabled={disabled}
               onChange={(next, setting) =>
                 change(
