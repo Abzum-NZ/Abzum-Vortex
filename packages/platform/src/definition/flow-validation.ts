@@ -1,4 +1,5 @@
 import { valueTypesCompatible, workflowValueTypeSchema } from "../catalogue/catalogues";
+import { isIsoCurrencyCode } from "../catalogue/currencies";
 import { checkFlowFormula } from "../rules/flow-formula";
 import { formatterCatalogue, unitCatalogue } from "../pages/value-format";
 import { recordTypeIdSchema } from "../catalogue/identifiers";
@@ -827,11 +828,11 @@ export function validateFlow(
       if (
         currency !== undefined &&
         (!isTextLiteral(currency) ||
-          !/^[A-Z]{3}$/.test(
+          !isIsoCurrencyCode(
             String((currency as Extract<FlowValue, { kind: "literal" }>).literal.value),
           ))
       )
-        rejectFormat("currency", "Use a literal uppercase three-letter currency code");
+        rejectFormat("currency", "Use a current ISO 4217 currency code");
       if (
         formatter === "unit" &&
         (!isTextLiteral(unit) ||

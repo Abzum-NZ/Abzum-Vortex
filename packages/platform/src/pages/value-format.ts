@@ -1,3 +1,5 @@
+import { isIsoCurrencyCode } from "../catalogue/currencies";
+
 /**
  * The one formatter for money and numbers that pages, boards, summaries and details display.
  * Stored amounts are exact decimal text; Intl formats that text without a float round trip.
@@ -87,7 +89,7 @@ export const formatPageValue = (
   const places = options.places ?? (formatter === "percent" ? 0 : undefined);
   if (formatter === "money") {
     const currency = money?.currency ?? options.currency;
-    if (currency === undefined || !/^[A-Z]{3}$/.test(currency)) return undefined;
+    if (currency === undefined || !isIsoCurrencyCode(currency)) return undefined;
     const minor =
       new Intl.NumberFormat(NUMBER_LOCALE, { style: "currency", currency }).resolvedOptions()
         .minimumFractionDigits ?? 0;
