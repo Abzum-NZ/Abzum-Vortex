@@ -164,6 +164,7 @@ export default async function StudioApplicationPage({
         peopleDirectory: view.peopleDirectory,
         slots: view.pageCompiledSlots,
         frames: view.canvasFrames,
+        flowPlacements: view.flowPlacements,
         failure: view.compileFailure,
       }}
     />

@@ -15,6 +15,7 @@ import {
   applyStudioFlowCreate,
   applyStudioFlowStart,
   describeStudioFlowStarts,
+  describeStudioFlowBehaviour,
   projectStudioFlowCreateChoices,
   projectStudioFlowDraftChoices,
   projectStudioFlowStart,
@@ -22,6 +23,7 @@ import {
   studioFlowConditionContext,
   studioFlowReferenceChoices,
   studioFlowFieldOptions,
+  studioFlowStepTypesAt,
   samePath,
   studioFlowOfSelection,
   studioFlowOutline,
@@ -356,10 +358,27 @@ export function useStudioFlowsTab({
         <StudioFlowCanvas
           lists={outline.lists}
           starts={starts}
+          behaviour={describeStudioFlowBehaviour(source, flowSelection, controlLabel)}
+          placement={
+            draft.updatingCanvas || draft.view.failure !== null
+              ? null
+              : (draft.view.flowPlacements?.[flowSelection.moduleKey ?? ""]?.[outline.flow.key] ??
+                null)
+          }
           selectedPath={stepPath}
           onSelect={selectStep}
           appearance={appearance}
-          types={stepTypes}
+          typesAt={(insertion) =>
+            studioFlowStepTypesAt(
+              stepTypes,
+              outline.entries,
+              insertion.listPath,
+              draft.updatingCanvas || draft.view.failure !== null
+                ? null
+                : (draft.view.flowPlacements?.[flowSelection.moduleKey ?? ""]?.[outline.flow.key]
+                    ?.tasks ?? null),
+            )
+          }
           disabled={disabled}
           title={labels.get(selectionKey) ?? "Flow"}
           choicesAt={(insertion) => ({

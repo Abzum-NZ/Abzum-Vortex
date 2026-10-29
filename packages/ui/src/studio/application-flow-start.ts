@@ -3,6 +3,9 @@ import {
   builderKeySchema,
   flowLiteralSchema,
   workflowValueTypeSchema,
+  sourceItemTree,
+  sourcePageSlotAddresses,
+  sourcePageSlotAt,
   type ApplicationSourceDocument,
   type FlowBeforeSaveOperation,
   type FlowLiteral,
@@ -185,6 +188,28 @@ const flowOf = (
   studioFlowCollection(source, selection.moduleKey)?.find(
     (candidate) => candidate.id === selection.flowAlias,
   );
+
+/** Components on authored pages whose events start this flow. */
+export const describeStudioFlowBehaviour = (
+  source: Readonly<ApplicationSourceDocument>,
+  selection: StudioFlowSelection,
+  controlLabel: (alias: string) => string,
+): string[] => {
+  const flow = flowOf(source, selection);
+  if (flow === undefined || selection.moduleKey !== null) return [];
+  const controls = new Set(
+    source.body.flow_bindings
+      .filter((binding) => binding.flow === flow.id || binding.flow === flow.key)
+      .map((binding) => binding.control),
+  );
+  return source.body.pages.flatMap((page) =>
+    sourcePageSlotAddresses(page).flatMap((address) =>
+      sourceItemTree(sourcePageSlotAt(page, address)?.items ?? [])
+        .filter((item) => controls.has(item.props.id))
+        .map((item) => `${page.name}: ${controlLabel(item.props.id)}`),
+    ),
+  );
+};
 
 /** The Start inspector's form for a flow. */
 /** A record type as a trigger of this flow names it: bare inside its own Module, else `module:record`. */

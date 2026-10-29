@@ -564,6 +564,30 @@ export const projectStudioFlowStepTypes = (
 ): readonly StudioFlowStepType[] =>
   projectStudioFlowStepActions(context, selection, null).stepTypes;
 
+/** A loop runs in one place: its body cannot mix page and server implementations. */
+export const studioFlowStepTypesAt = (
+  types: readonly StudioFlowStepType[],
+  entries: readonly Readonly<{ task: SourceFlowTask; path: StudioFlowPath }>[],
+  listPath: StudioFlowPath,
+  placements: Readonly<Record<string, "page" | "server" | "backend">> | null,
+): readonly StudioFlowStepType[] => {
+  const loop = entries.find(
+    (entry) =>
+      entry.task.type === "for_each" &&
+      listPath.length > entry.path.length &&
+      samePath(listPath.slice(0, entry.path.length), entry.path),
+  );
+  if (loop === undefined) return types;
+  const location = placements?.[loop.task.id];
+  if (location === undefined) return [];
+  return types.filter((entry) => {
+    const definition = studioFlowDefinitionOf(entry.type);
+    return (
+      definition !== undefined && (definition.category === "control" || definition.runs[location])
+    );
+  });
+};
+
 // ─── Removing ────────────────────────────────────────────────────────────────────────────────
 
 /** Refuse retained references; never turn deletion into an implicit reference repair. */

@@ -8,6 +8,7 @@ import {
   FIELD_INPUT_CONTROL_RELEASES,
   type BuilderTargetFactsReader,
   readBuilderApplicationOrigin,
+  compileFlowPlan,
 } from "@vortex/platform/server";
 import type { FieldInputControlReleaseMap, PlatformThemeTokens } from "@vortex/ui";
 import { studioThemeOptions } from "../studio/_lib/studio-theme-catalogue";
@@ -44,6 +45,9 @@ import {
   definitionValidationEntry,
   translateDefinitionRuleFailures,
   optionsSourceNarrowing,
+  flowTaskChildLists,
+  type FlowDefinition,
+  type FlowTask,
 } from "@vortex/platform/schema";
 import {
   BuilderAuthorityError,
@@ -80,6 +84,36 @@ import { studioCanvasFramesFor, type StudioApplicationCanvasFrames } from "./stu
 export type { StudioApplicationCanvasFrames } from "./studio-canvas-frames";
 
 type StoredApplicationDefinitionDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
+
+type FlowPlacement = Readonly<{
+  tasks: Readonly<Record<string, "page" | "server" | "backend">>;
+  bands: readonly Readonly<{ id: string; taskIds: readonly string[] }>[];
+}>;
+/** Compiled placements by owner key and flow key. */
+export type StudioFlowPlacements = Readonly<
+  Record<string, Readonly<Record<string, FlowPlacement>>>
+>;
+
+const flowPlacements = (flow: FlowDefinition): StudioFlowPlacements[string][string] => {
+  const tasks: Record<string, "page" | "server" | "backend"> = {};
+  const initialise = (task: FlowTask) => {
+    tasks[task.id] = "page";
+    for (const list of flowTaskChildLists(task)) for (const child of list.tasks) initialise(child);
+  };
+  for (const task of [...flow.tasks, ...flow.errors, ...flow.finally]) initialise(task);
+  const bands: { id: string; taskIds: string[] }[] = [];
+  for (const segment of compileFlowPlan(flow).segments) {
+    const ids = new Set(segment.guard.map((guard) => guard.taskId));
+    const visit = (task: FlowTask) => {
+      tasks[task.id] = task.type === "backend.run" ? "backend" : segment.kind;
+      ids.add(task.id);
+      for (const list of flowTaskChildLists(task)) for (const child of list.tasks) visit(child);
+    };
+    for (const task of segment.tasks) visit(task);
+    if (segment.kind === "server") bands.push({ id: segment.id, taskIds: [...ids] });
+  }
+  return { tasks, bands };
+};
 
 type StudioAuthorityResult<Value> =
   Readonly<{ kind: "available"; value: Value }> | Readonly<{ kind: "refused"; reason: string }>;
@@ -166,6 +200,7 @@ type StudioLoadedView = StudioViewResources &
     peopleDirectory: PeopleDirectoryOwner | null;
     pageCompiledSlots: StudioApplicationCompiledPageSlots | null;
     canvasFrames: StudioApplicationCanvasFrames | null;
+    flowPlacements: StudioFlowPlacements | null;
     compileFailure: StudioCompileFailure | null;
   }>;
 
@@ -558,6 +593,7 @@ export const loadStudioApplicationDraft = async (
           () => null,
         );
         let canvasFrames: (StudioApplicationCanvasFrames | null)[] = requests.map(() => null);
+        let placements: StudioFlowPlacements | null = null;
         let compileFailure: StudioCompileFailure | null = null;
         let borrowedChoices: StudioBorrowedChoices | null = null;
         let usedModules: StudioDataModule[] | null = null;
@@ -604,6 +640,21 @@ export const loadStudioApplicationDraft = async (
                   )
                 : null,
             );
+            if (requests.some((request) => request.kind === "flows")) {
+              const owners = [
+                ["", compiled.compilation.canonical.content.flows] as const,
+                ...compiled.moduleReleases.map(
+                  (release) =>
+                    [release.key, release.compilationOutput.canonical.content.flows] as const,
+                ),
+              ];
+              placements = Object.fromEntries(
+                owners.map(([key, flows]) => [
+                  key,
+                  Object.fromEntries(flows.map((flow) => [flow.key, flowPlacements(flow)])),
+                ]),
+              );
+            }
             const fieldsByRecord: Record<string, readonly ModuleField[]> = {};
             const borrowed: StudioQueryChoice[] = [];
             const resolvedRecordTypes: string[] = [];
@@ -945,6 +996,7 @@ export const loadStudioApplicationDraft = async (
             compiledFields = null;
             pageCompiledSlots = requests.map(() => null);
             canvasFrames = requests.map(() => null);
+            placements = null;
           }
         if (context !== null) {
           // Publication facts remain visible after a compile refusal, so they need the same
@@ -979,6 +1031,7 @@ export const loadStudioApplicationDraft = async (
               peopleDirectory: dataOf(request) ? peopleDirectory : null,
               pageCompiledSlots: pageCompiledSlots[index] ?? null,
               canvasFrames: canvasFrames[index] ?? null,
+              flowPlacements: request.kind === "flows" ? placements : null,
               compileFailure,
             })),
           },
