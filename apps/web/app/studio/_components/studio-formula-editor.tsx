@@ -240,6 +240,7 @@ const parseFormula = (text: string, references: readonly FormulaReferenceChoice[
     }
     if (token.text === "min" || token.text === "max" || token.text === "coalesce")
       return { op: token.text, args };
+    if (token.text === "join") return { op: "join", parts: args };
     throw new Error(`Unknown function ${token.text}.`);
   };
   const formula = expression();
@@ -311,6 +312,10 @@ const printFormula = (
       case "max":
       case "coalesce":
         return `${node.op}(${node.args.map(print).join(", ")})`;
+      case "join":
+        if (node.separator === undefined || node.separator === "")
+          return `join(${node.parts.map(print).join(", ")})`;
+        break;
     }
     return `tree(${JSON.stringify(JSON.stringify(node))})`;
   };
@@ -382,6 +387,7 @@ export function StudioFormulaEditor({
     "max(",
     "coalesce(",
     "percent(",
+    "join(",
   ]
     .filter((entry) => suffix !== "" && entry.startsWith(suffix) && entry !== suffix)
     .slice(0, 8);
