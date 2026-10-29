@@ -20,6 +20,7 @@ begin
   from vortex_platform.flow_continuations as continuation
   where continuation.token_hash = p_token_hash
     and continuation.organization_id = (context_value ->> 'organizationId')::uuid
+    and continuation.application_root_id = (context_value ->> 'applicationRootId')::uuid
     and continuation.identity_id = (context_value ->> 'identityId')::uuid
     and continuation.consumed_command_id = p_command_id
     and continuation.consumed_at is not null
@@ -27,14 +28,18 @@ begin
   for update;
   if not found then return pg_catalog.jsonb_build_object('status', 'unavailable'); end if;
   if parent.replay_payload is not null then
-    return pg_catalog.jsonb_build_object('status', 'replay', 'payload', parent.replay_payload);
+    return pg_catalog.jsonb_build_object(
+      'status', 'replay', 'payload', parent.replay_payload,
+      'expiresAt', (select child.expires_at from vortex_platform.flow_continuations as child
+        where child.token_hash = parent.child_token_hash)
+    );
   end if;
   expiry := vortex_platform.issue_flow_continuation(
-    p_child_token_hash, parent.run_id, parent.organization_id, parent.identity_id,
+    p_child_token_hash, parent.run_id, parent.organization_id, parent.application_root_id, parent.identity_id,
     parent.flow_id, parent.release_key, p_child_state, p_elapsed_milliseconds, p_lifetime_seconds
   );
   update vortex_platform.flow_continuations as continuation
-  set replay_payload = p_replay_payload
+  set replay_payload = p_replay_payload, child_token_hash = p_child_token_hash
   where continuation.token_hash = p_token_hash;
   return pg_catalog.jsonb_build_object('status', 'recorded', 'expiresAt', expiry);
 end

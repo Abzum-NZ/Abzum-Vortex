@@ -179,6 +179,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         unavailable: run.unavailable,
       };
     const { session, selection } = run.authority;
+    if (selection.applicationRootId === undefined) return refused;
     // The record the run reads is read again when it resumes, so its values are never stored.
     const state: FlowRunState = { ...step.state };
     delete (state as { triggerRecord?: unknown }).triggerRecord;
@@ -193,6 +194,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           tokenHash: sha256(token),
           runId: step.state.runId,
           organizationId: selection.organizationId,
+          applicationRootId: selection.applicationRootId,
           identityId: session.identityId,
           flowId: run.flowId,
           releaseKey: run.release.releaseKey,
@@ -422,6 +424,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         const parsed = resumeRequestSchema.safeParse(request);
         if (!parsed.success || !withinPayload(parsed.data.answer)) return refused;
         const { session, selection, flowId, continuation, answer } = parsed.data;
+        if (selection.applicationRootId === undefined) return refused;
         const prepared = await prepare(session, selection, flowId);
         if (prepared === undefined) return refused;
         // A different release is refused before the continuation is spent.
@@ -430,6 +433,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         const stored = await consumeFlowContinuation({
           tokenHash: sha256(continuation),
           organizationId: selection.organizationId,
+          applicationRootId: selection.applicationRootId,
           identityId: session.identityId,
           flowId,
           releaseKey: prepared.release.releaseKey,

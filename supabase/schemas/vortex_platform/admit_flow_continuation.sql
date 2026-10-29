@@ -15,11 +15,13 @@ begin
     or p_release_key is null then
     return pg_catalog.jsonb_build_object('status', 'unavailable');
   end if;
-  select continuation.consumed_at, continuation.consumed_command_id, continuation.replay_payload into held
+  select continuation.consumed_at, continuation.consumed_command_id, continuation.replay_payload,
+    continuation.child_token_hash into held
   from vortex_platform.flow_continuations as continuation
   where continuation.token_hash = p_token_hash
     and continuation.run_id = p_run_id
     and continuation.organization_id = (context_value ->> 'organizationId')::uuid
+    and continuation.application_root_id = (context_value ->> 'applicationRootId')::uuid
     and continuation.identity_id = (context_value ->> 'identityId')::uuid
     and continuation.flow_id = p_flow_id
     and continuation.release_key = p_release_key
@@ -28,7 +30,11 @@ begin
   if not found then return pg_catalog.jsonb_build_object('status', 'unavailable'); end if;
   if held.consumed_at is not null then
     return case when held.consumed_command_id = p_command_id
-      then pg_catalog.jsonb_build_object('status', 'replay', 'payload', held.replay_payload)
+      then pg_catalog.jsonb_build_object(
+        'status', 'replay', 'payload', held.replay_payload,
+        'expiresAt', (select child.expires_at from vortex_platform.flow_continuations as child
+          where child.token_hash = held.child_token_hash)
+      )
       else pg_catalog.jsonb_build_object('status', 'already_answered') end;
   end if;
   update vortex_platform.flow_continuations as continuation

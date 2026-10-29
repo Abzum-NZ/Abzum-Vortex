@@ -588,10 +588,177 @@ comment on function vortex_access.flow_run_evidence(text, uuid, uuid, uuid, uuid
   'Maintains expiring flow completion evidence under the verified caller and application scope.';
 
 alter table vortex_platform.flow_continuations
-  add column consumed_command_id uuid, add column replay_payload text;
+  add column application_root_id uuid,
+  add column consumed_command_id uuid,
+  add column replay_payload text,
+  add column child_token_hash text;
+
+-- Existing continuations do not identify an application and cannot be safely rebound.
+update vortex_platform.flow_continuations
+set consumed_at = coalesce(consumed_at, pg_catalog.statement_timestamp()),
+    expires_at = greatest(created_at + interval '1 microsecond',
+      least(expires_at, pg_catalog.statement_timestamp()));
+do $block$
+begin
+  raise notice 'FLOW_CONTINUATION_APPLICATION_UNAVAILABLE: pre-migration continuations were expired';
+end
+$block$;
+alter table vortex_platform.flow_continuations
+  add constraint flow_continuations_application_binding_check
+  check (application_root_id is not null or consumed_at is not null);
+
+drop function vortex_platform.issue_flow_continuation(text, uuid, uuid, uuid, uuid, text, jsonb, integer, integer);
+drop function vortex_platform.consume_flow_continuation(text, uuid, uuid, uuid, text);
+create or replace function vortex_platform.issue_flow_continuation(
+  p_token_hash text,
+  p_run_id uuid,
+  p_organization_id uuid,
+  p_application_root_id uuid,
+  p_identity_id uuid,
+  p_flow_id uuid,
+  p_release_key text,
+  p_state jsonb,
+  p_elapsed_milliseconds integer,
+  p_lifetime_seconds integer
+)
+returns timestamptz
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  expiry timestamptz;
+begin
+  if p_token_hash is null or p_token_hash !~ '^[a-f0-9]{64}$'
+    or not vortex_platform.is_non_nil_uuid(p_run_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_application_root_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_identity_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_flow_id::text)
+    or p_release_key is null
+    or pg_catalog.length(p_release_key) not between 1 and 200
+    or p_state is null
+    or pg_catalog.jsonb_typeof(p_state) <> 'object'
+    -- One bounded release, 500 independently retained historical roles and 256 KiB of flow state.
+    or pg_catalog.pg_column_size(p_state) > 100663296
+    or p_elapsed_milliseconds is null
+    or p_elapsed_milliseconds not between 0 and 3600000
+    or p_lifetime_seconds is null
+    or p_lifetime_seconds not between 60 and 3600 then
+    raise exception using errcode = '22023', message = 'Flow continuation is invalid';
+  end if;
+
+  -- Expired continuations are useless; remove a bounded few on every issue so the table never
+  -- needs a separate sweeper.
+  delete from vortex_platform.flow_continuations as stale
+  where stale.ctid in (
+    select candidate.ctid
+    from vortex_platform.flow_continuations as candidate
+    where candidate.expires_at < pg_catalog.statement_timestamp() - interval '1 day'
+    limit 100
+  );
+
+  expiry := pg_catalog.statement_timestamp() + pg_catalog.make_interval(secs => p_lifetime_seconds);
+
+  insert into vortex_platform.flow_continuations (
+    token_hash, run_id, organization_id, application_root_id, identity_id, flow_id, release_key, state,
+    elapsed_milliseconds, created_at, expires_at
+  ) values (
+    p_token_hash, p_run_id, p_organization_id, p_application_root_id, p_identity_id, p_flow_id, p_release_key, p_state,
+    p_elapsed_milliseconds, pg_catalog.statement_timestamp(), expiry
+  );
+
+  return expiry;
+end
+$function$;
+
+alter function vortex_platform.issue_flow_continuation(text,uuid,uuid,uuid,uuid,uuid,text,jsonb,integer,integer) owner to vortex_owner;
+
+revoke all on function vortex_platform.issue_flow_continuation(
+  text, uuid, uuid, uuid, uuid, uuid, text, jsonb, integer, integer
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_platform.issue_flow_continuation(
+  text, uuid, uuid, uuid, uuid, uuid, text, jsonb, integer, integer
+) to vortex_runtime;
+
+comment on function vortex_platform.issue_flow_continuation(
+  text, uuid, uuid, uuid, uuid, uuid, text, jsonb, integer, integer
+) is
+  'Private flow-continuation issue: stores the suspended state of one server-driven flow run bound to its run, initiator, organisation and exact flow release, expiring, under the hash of a server-generated token.';
+
+create or replace function vortex_platform.consume_flow_continuation(
+  p_token_hash text,
+  p_organization_id uuid,
+  p_application_root_id uuid,
+  p_identity_id uuid,
+  p_flow_id uuid,
+  p_release_key text
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  claimed record;
+begin
+  if p_token_hash is null or p_token_hash !~ '^[a-f0-9]{64}$'
+    or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_application_root_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_identity_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_flow_id::text)
+    or p_release_key is null then
+    return pg_catalog.jsonb_build_object('kind', 'unavailable');
+  end if;
+
+  -- One statement both checks every binding and marks the row used, so two concurrent resumes can
+  -- never both succeed, and an unknown, expired, replayed, foreign or wrong-release token is one
+  -- neutral result.
+  update vortex_platform.flow_continuations as continuation
+  set consumed_at = pg_catalog.statement_timestamp()
+  where continuation.token_hash = p_token_hash
+    and continuation.organization_id = p_organization_id
+    and continuation.application_root_id = p_application_root_id
+    and continuation.identity_id = p_identity_id
+    and continuation.flow_id = p_flow_id
+    and continuation.release_key = p_release_key
+    and continuation.consumed_at is null
+    and continuation.expires_at > pg_catalog.statement_timestamp()
+  returning continuation.run_id, continuation.state, continuation.elapsed_milliseconds
+  into claimed;
+
+  if not found then
+    return pg_catalog.jsonb_build_object('kind', 'unavailable');
+  end if;
+
+  return pg_catalog.jsonb_build_object(
+    'kind', 'available',
+    'runId', claimed.run_id,
+    'state', claimed.state,
+    'elapsedMilliseconds', claimed.elapsed_milliseconds
+  );
+end
+$function$;
+
+alter function vortex_platform.consume_flow_continuation(text,uuid,uuid,uuid,uuid,text) owner to vortex_owner;
+
+revoke all on function vortex_platform.consume_flow_continuation(
+  text, uuid, uuid, uuid, uuid, text
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_platform.consume_flow_continuation(
+  text, uuid, uuid, uuid, uuid, text
+) to vortex_runtime;
+
+comment on function vortex_platform.consume_flow_continuation(
+  text, uuid, uuid, uuid, uuid, text
+) is
+  'Private flow-continuation consume: returns the stored run state once, and only to the exact initiator, organisation and flow release it was issued for while it has not expired; every other case is one neutral unavailable result.';
 
 create or replace function vortex_platform.peek_flow_continuation(
-  p_token_hash text, p_organization_id uuid, p_identity_id uuid, p_flow_id uuid, p_release_key text
+  p_token_hash text, p_organization_id uuid, p_application_root_id uuid,
+  p_identity_id uuid, p_flow_id uuid, p_release_key text
 )
 returns jsonb
 language plpgsql stable security definer set search_path = ''
@@ -601,6 +768,7 @@ declare
 begin
   if p_token_hash is null or p_token_hash !~ '^[a-f0-9]{64}$'
     or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_application_root_id::text)
     or not vortex_platform.is_non_nil_uuid(p_identity_id::text)
     or not vortex_platform.is_non_nil_uuid(p_flow_id::text)
     or p_release_key is null then
@@ -610,6 +778,7 @@ begin
   from vortex_platform.flow_continuations as continuation
   where continuation.token_hash = p_token_hash
     and continuation.organization_id = p_organization_id
+    and continuation.application_root_id = p_application_root_id
     and continuation.identity_id = p_identity_id
     and continuation.flow_id = p_flow_id
     and continuation.release_key = p_release_key
@@ -622,12 +791,12 @@ begin
 end
 $function$;
 
-alter function vortex_platform.peek_flow_continuation(text, uuid, uuid, uuid, text) owner to vortex_owner;
-revoke all on function vortex_platform.peek_flow_continuation(text, uuid, uuid, uuid, text)
+alter function vortex_platform.peek_flow_continuation(text, uuid, uuid, uuid, uuid, text) owner to vortex_owner;
+revoke all on function vortex_platform.peek_flow_continuation(text, uuid, uuid, uuid, uuid, text)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_platform.peek_flow_continuation(text, uuid, uuid, uuid, text)
+grant execute on function vortex_platform.peek_flow_continuation(text, uuid, uuid, uuid, uuid, text)
   to vortex_runtime, postgres;
-comment on function vortex_platform.peek_flow_continuation(text, uuid, uuid, uuid, text) is
+comment on function vortex_platform.peek_flow_continuation(text, uuid, uuid, uuid, uuid, text) is
   'Reads the caller-bound continuation for path selection without consuming it.';
 
 create or replace function vortex_platform.admit_flow_continuation(
@@ -647,11 +816,13 @@ begin
     or p_release_key is null then
     return pg_catalog.jsonb_build_object('status', 'unavailable');
   end if;
-  select continuation.consumed_at, continuation.consumed_command_id, continuation.replay_payload into held
+  select continuation.consumed_at, continuation.consumed_command_id, continuation.replay_payload,
+    continuation.child_token_hash into held
   from vortex_platform.flow_continuations as continuation
   where continuation.token_hash = p_token_hash
     and continuation.run_id = p_run_id
     and continuation.organization_id = (context_value ->> 'organizationId')::uuid
+    and continuation.application_root_id = (context_value ->> 'applicationRootId')::uuid
     and continuation.identity_id = (context_value ->> 'identityId')::uuid
     and continuation.flow_id = p_flow_id
     and continuation.release_key = p_release_key
@@ -660,7 +831,11 @@ begin
   if not found then return pg_catalog.jsonb_build_object('status', 'unavailable'); end if;
   if held.consumed_at is not null then
     return case when held.consumed_command_id = p_command_id
-      then pg_catalog.jsonb_build_object('status', 'replay', 'payload', held.replay_payload)
+      then pg_catalog.jsonb_build_object(
+        'status', 'replay', 'payload', held.replay_payload,
+        'expiresAt', (select child.expires_at from vortex_platform.flow_continuations as child
+          where child.token_hash = held.child_token_hash)
+      )
       else pg_catalog.jsonb_build_object('status', 'already_answered') end;
   end if;
   update vortex_platform.flow_continuations as continuation
@@ -700,6 +875,7 @@ begin
   from vortex_platform.flow_continuations as continuation
   where continuation.token_hash = p_token_hash
     and continuation.organization_id = (context_value ->> 'organizationId')::uuid
+    and continuation.application_root_id = (context_value ->> 'applicationRootId')::uuid
     and continuation.identity_id = (context_value ->> 'identityId')::uuid
     and continuation.consumed_command_id = p_command_id
     and continuation.consumed_at is not null
@@ -707,14 +883,18 @@ begin
   for update;
   if not found then return pg_catalog.jsonb_build_object('status', 'unavailable'); end if;
   if parent.replay_payload is not null then
-    return pg_catalog.jsonb_build_object('status', 'replay', 'payload', parent.replay_payload);
+    return pg_catalog.jsonb_build_object(
+      'status', 'replay', 'payload', parent.replay_payload,
+      'expiresAt', (select child.expires_at from vortex_platform.flow_continuations as child
+        where child.token_hash = parent.child_token_hash)
+    );
   end if;
   expiry := vortex_platform.issue_flow_continuation(
-    p_child_token_hash, parent.run_id, parent.organization_id, parent.identity_id,
+    p_child_token_hash, parent.run_id, parent.organization_id, parent.application_root_id, parent.identity_id,
     parent.flow_id, parent.release_key, p_child_state, p_elapsed_milliseconds, p_lifetime_seconds
   );
   update vortex_platform.flow_continuations as continuation
-  set replay_payload = p_replay_payload
+  set replay_payload = p_replay_payload, child_token_hash = p_child_token_hash
   where continuation.token_hash = p_token_hash;
   return pg_catalog.jsonb_build_object('status', 'recorded', 'expiresAt', expiry);
 end

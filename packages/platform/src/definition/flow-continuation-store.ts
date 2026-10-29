@@ -18,6 +18,7 @@ import { z } from "zod";
 
 type FlowContinuationBinding = Readonly<{
   organizationId: string;
+  applicationRootId: string;
   identityId: string;
   flowId: string;
   /** The exact release of the flow set the run is bound to. */
@@ -89,6 +90,7 @@ export const issueFlowContinuation = async (
         ${input.tokenHash}::text,
         ${input.runId}::uuid,
         ${input.organizationId}::uuid,
+        ${input.applicationRootId}::uuid,
         ${input.identityId}::uuid,
         ${input.flowId}::uuid,
         ${input.releaseKey}::text,
@@ -120,6 +122,7 @@ export const consumeFlowContinuation = async (
       select vortex_platform.consume_flow_continuation(
         ${input.tokenHash}::text,
         ${input.organizationId}::uuid,
+        ${input.applicationRootId}::uuid,
         ${input.identityId}::uuid,
         ${input.flowId}::uuid,
         ${input.releaseKey}::text
@@ -146,6 +149,7 @@ export const peekFlowContinuation = async (
       select vortex_platform.peek_flow_continuation(
         ${input.tokenHash}::text,
         ${input.organizationId}::uuid,
+        ${input.applicationRootId}::uuid,
         ${input.identityId}::uuid,
         ${input.flowId}::uuid,
         ${input.releaseKey}::text
