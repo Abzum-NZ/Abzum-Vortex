@@ -24,6 +24,7 @@ export type FormBlockRuntime = Readonly<{
     selectedOwnerGroupId?: string,
     /** Names included in the whole-record patch; individual answers remain complete. */
     recordChanges?: readonly string[],
+    sourceTablePlacementId?: string,
   ) => Promise<ServerDrivenResult | undefined>;
   /** The form's mount event, when the placement binds it. */
   ready: (binding: PlacementFlowBinding) => Promise<ServerDrivenResult | undefined>;
@@ -55,6 +56,7 @@ export function createFormBlockRuntime(
     binding: PlacementFlowBinding,
     callerInputs: Readonly<Record<string, unknown>>,
     retryKey?: string,
+    sourceTablePlacementId?: string,
   ): Promise<ServerDrivenResult | undefined> => {
     if (inFlight.has(binding.bindingId)) return undefined;
     const gestureId =
@@ -62,7 +64,13 @@ export function createFormBlockRuntime(
     inFlight.add(binding.bindingId);
     let unknown = true;
     try {
-      const result = await runtime.dispatch(binding, callerInputs, gestureId);
+      const result = await runtime.dispatch(
+        binding,
+        callerInputs,
+        gestureId,
+        undefined,
+        sourceTablePlacementId,
+      );
       unknown = outcomeUnknown(result);
       return result;
     } finally {
@@ -75,7 +83,7 @@ export function createFormBlockRuntime(
   };
 
   return Object.freeze({
-    submit: (binding, values, selectedOwnerGroupId, recordChanges) => {
+    submit: (binding, values, selectedOwnerGroupId, recordChanges, sourceTablePlacementId) => {
       if (binding.event !== "form_submit") return Promise.resolve(undefined);
       const callerInputs = {
         values,
@@ -85,7 +93,8 @@ export function createFormBlockRuntime(
       return dispatchOnce(
         binding,
         callerInputs,
-        `${binding.bindingId}|${JSON.stringify(callerInputs)}`,
+        `${binding.bindingId}|${sourceTablePlacementId ?? ""}|${JSON.stringify(callerInputs)}`,
+        sourceTablePlacementId,
       );
     },
     ready: (binding) =>

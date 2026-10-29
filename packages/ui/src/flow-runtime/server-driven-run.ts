@@ -62,6 +62,7 @@ export async function driveServerFlow(
   host: FlowIntentHost,
   signal?: AbortSignal,
   committed?: () => void,
+  sourceTablePlacementId?: string,
 ): Promise<ServerDrivenResult> {
   let response = first;
   let awaitingSurface = false;
@@ -153,7 +154,14 @@ export async function driveServerFlow(
             awaitingSurface = false;
             if (signal?.aborted) return abandoned();
             answerSent = true;
-            response = await client.resume(flowId, continuation, answer, evidence, signal);
+            response = await client.resume(
+              flowId,
+              continuation,
+              answer,
+              evidence,
+              signal,
+              sourceTablePlacementId,
+            );
           } else {
             const confirmation = readConfirmIntent(waiting);
             if (confirmation === undefined)
@@ -169,6 +177,7 @@ export async function driveServerFlow(
               confirmAnswer(confirmation, answer),
               evidence,
               signal,
+              sourceTablePlacementId,
             );
           }
           break;

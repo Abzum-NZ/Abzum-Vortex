@@ -73,6 +73,7 @@ export type FlowInvokeClient = Readonly<{
     signal?: AbortSignal,
     /** The one record this gesture is about, when it is not the record the page was rendered for. */
     subject?: FlowSubjectContext,
+    sourceTablePlacementId?: string,
   ) => Promise<ServerFlowResponse>;
   resume: (
     flowId: string,
@@ -80,6 +81,7 @@ export type FlowInvokeClient = Readonly<{
     answer: FormContinuationAnswer,
     evidence?: FlowResumeEvidence,
     signal?: AbortSignal,
+    sourceTablePlacementId?: string,
   ) => Promise<ServerFlowResponse>;
 }>;
 
@@ -278,7 +280,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
     releaseKey: options.installation.releaseKey,
   };
   return Object.freeze({
-    startBinding: (binding, callerInputs, clickId, signal, subject) =>
+    startBinding: (binding, callerInputs, clickId, signal, subject, sourceTablePlacementId) =>
       send(
         {
           kind: "binding",
@@ -288,13 +290,14 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
           segment: binding.segment,
           clickId,
           callerInputs,
+          ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
           ...((subject ?? options.subject) === undefined
             ? {}
             : { subject: subject ?? options.subject }),
         },
         signal,
       ),
-    resume: (flowId, continuation, answer, evidence, signal) =>
+    resume: (flowId, continuation, answer, evidence, signal, sourceTablePlacementId) =>
       send(
         {
           kind: "continuation",
@@ -302,6 +305,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
           flowId,
           continuation,
           answer,
+          ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
           ...(evidence?.target === undefined ? {} : { target: evidence.target }),
           ...(evidence?.receipt === undefined ? {} : { receipt: evidence.receipt }),
         },

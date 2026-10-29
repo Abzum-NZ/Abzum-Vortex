@@ -138,6 +138,7 @@ export function useRuntimeInputs({
     afterAccepted?: () => Promise<Notice | undefined>,
     clickId?: string,
     reportOnControl?: ControlReport,
+    sourceTablePlacementId?: string,
   ) => Promise<DispatchOutcome>;
   readBoardColumns: (
     placementId: string,
@@ -371,6 +372,7 @@ export function useRuntimeInputs({
                   undefined,
                   undefined,
                   tableData !== undefined && event.event === "row_action" ? "transient" : undefined,
+                  tableData !== undefined && event.event === "row_action" ? placementId : undefined,
                 );
             };
         // An inline edit commits one stored value through the bound flow at the revision the row

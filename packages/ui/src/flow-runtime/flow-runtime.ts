@@ -43,6 +43,7 @@ export type FlowRuntime = Readonly<{
     callerInputs?: Readonly<Record<string, unknown>>,
     clickId?: string,
     subject?: FlowSubjectContext,
+    sourceTablePlacementId?: string,
   ) => Promise<ServerDrivenResult>;
   /** Starts one exact server binding and drives its normal intents and continuations. */
   dispatchReference: (
@@ -51,6 +52,7 @@ export type FlowRuntime = Readonly<{
     clickId?: string,
     signal?: AbortSignal,
     subject?: FlowSubjectContext,
+    sourceTablePlacementId?: string,
   ) => Promise<ServerDrivenResult>;
 }>;
 
@@ -61,6 +63,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
     clickId?: string,
     signal?: AbortSignal,
     subject?: FlowSubjectContext,
+    sourceTablePlacementId?: string,
   ): Promise<ServerDrivenResult> => {
     if (signal?.aborted) return { kind: "abandoned", unanswered: true };
     const first = await options.client.startBinding(
@@ -69,6 +72,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
       clickId ?? crypto.randomUUID(),
       signal,
       subject,
+      sourceTablePlacementId,
     );
     return driveServerFlow(
       options.client,
@@ -77,11 +81,12 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
       options.host,
       signal,
       options.committed === undefined ? undefined : () => options.committed?.(binding.bindingId),
+      sourceTablePlacementId,
     );
   };
   return Object.freeze({
     dispatchReference,
-    dispatch: (binding, callerInputs = {}, clickId, subject) =>
-      dispatchReference(binding, callerInputs, clickId, undefined, subject),
+    dispatch: (binding, callerInputs = {}, clickId, subject, sourceTablePlacementId) =>
+      dispatchReference(binding, callerInputs, clickId, undefined, subject, sourceTablePlacementId),
   });
 }

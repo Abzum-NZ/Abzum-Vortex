@@ -168,7 +168,14 @@ export function useFlowRuntime({
       }
     };
     const trackedClient = (client: FlowInvokeClient): FlowInvokeClient => ({
-      startBinding: async (binding, callerInputs, clickId, signal, gestureSubject) => {
+      startBinding: async (
+        binding,
+        callerInputs,
+        clickId,
+        signal,
+        gestureSubject,
+        sourceTablePlacementId,
+      ) => {
         const submission = submittedFormsRef.current.get(binding.bindingId);
         submittedFormsRef.current.delete(binding.bindingId);
         const inputs =
@@ -181,15 +188,23 @@ export function useFlowRuntime({
           clickId,
           signal,
           gestureSubject,
+          sourceTablePlacementId,
         );
         recordResponse(response, submission);
         return response;
       },
-      resume: async (flowId, continuation, answer, evidence, signal) => {
+      resume: async (flowId, continuation, answer, evidence, signal, sourceTablePlacementId) => {
         if (answer.kind === "cancel") formCancelledRef.current = true;
         const submission = continuingFormsRef.current.get(continuation);
         continuingFormsRef.current.delete(continuation);
-        const response = await client.resume(flowId, continuation, answer, evidence, signal);
+        const response = await client.resume(
+          flowId,
+          continuation,
+          answer,
+          evidence,
+          signal,
+          sourceTablePlacementId,
+        );
         recordResponse(response, submission);
         return response;
       },
