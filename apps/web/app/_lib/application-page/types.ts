@@ -13,29 +13,11 @@ import type {
   RecordsTablePageRequest,
 } from "@vortex/platform/schema";
 import type { PageWebMcpTool } from "./webmcp-projection";
+import type { PlacementFlowBinding } from "@vortex/ui";
 export type { PageWebMcpTool } from "./webmcp-projection";
+export type { PlacementFlowBinding } from "@vortex/ui";
 
 export type PageDataState = Readonly<Record<string, unknown>>;
-
-/** One flow binding a placement holds, described only by identities and the caller inputs it takes. */
-export type PlacementFlowBinding = Readonly<{
-  bindingId: string;
-  eventId: string;
-  event: string;
-  flowId: string;
-  segment: Readonly<{ segmentId: string; fingerprint: string }> | Readonly<{ segmentId: null }>;
-  /** The names of the caller inputs the bound flow declares; the surface may fill only these. */
-  callerInputs: readonly string[];
-  /** The whole values input feeds a record-save task in this bound flow. */
-  savesFormValues: boolean;
-  /** The installed record type of this placement's selected row or enclosing form context. */
-  recordTypeId?: string;
-  /** Caller inputs consumed by a declared `record.read_fields` task in this exact flow. */
-  selectedReadInputs?: readonly Readonly<{
-    callerInputName: string;
-    recordTypeId: string;
-  }>[];
-}>;
 
 /** What a read of selected placements returns: the page without the menu and the page tools. */
 export type PlacementReadModel = Readonly<{

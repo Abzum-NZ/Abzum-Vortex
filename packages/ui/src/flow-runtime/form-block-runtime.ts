@@ -1,5 +1,4 @@
-import type { ComponentFlowBinding } from "@vortex/platform/schema";
-import type { FlowRuntime } from "./flow-runtime";
+import type { FlowRuntime, PlacementFlowBinding } from "./flow-runtime";
 import type { ServerDrivenResult } from "./server-driven-run";
 
 /**
@@ -20,16 +19,16 @@ export type FormFieldAnswers = Readonly<Record<string, unknown>>;
 export type FormBlockRuntime = Readonly<{
   /** One form_submit gesture: dispatch the bound flow once, or nothing when already in flight. */
   submit: (
-    binding: ComponentFlowBinding,
+    binding: PlacementFlowBinding,
     values: FormFieldAnswers,
     selectedOwnerGroupId?: string,
     /** Names included in the whole-record patch; individual answers remain complete. */
     recordChanges?: readonly string[],
   ) => Promise<ServerDrivenResult | undefined>;
   /** The form's mount event, when the placement binds it. */
-  ready: (binding: ComponentFlowBinding) => Promise<ServerDrivenResult | undefined>;
+  ready: (binding: PlacementFlowBinding) => Promise<ServerDrivenResult | undefined>;
   /** The form's reset event, when the placement binds it. */
-  reset: (binding: ComponentFlowBinding) => Promise<ServerDrivenResult | undefined>;
+  reset: (binding: PlacementFlowBinding) => Promise<ServerDrivenResult | undefined>;
 }>;
 
 /**
@@ -53,7 +52,7 @@ export function createFormBlockRuntime(
   const unsettled = new Map<string, string>();
 
   const dispatchOnce = async (
-    binding: ComponentFlowBinding,
+    binding: PlacementFlowBinding,
     callerInputs: Readonly<Record<string, unknown>>,
     retryKey?: string,
   ): Promise<ServerDrivenResult | undefined> => {

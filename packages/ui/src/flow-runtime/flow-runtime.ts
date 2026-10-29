@@ -1,4 +1,3 @@
-import type { ComponentFlowBinding } from "@vortex/platform/schema";
 import type { FlowIntentHost } from "./intents";
 import { driveServerFlow, type ServerDrivenResult } from "./server-driven-run";
 import type { FlowInvokeClient, FlowSubjectContext } from "./server-flow-client";
@@ -13,12 +12,24 @@ export type FlowRuntimeOptions = Readonly<{
   committed?: (bindingId: string) => void;
 }>;
 
-/** The safe identity of a binding used by a surface that does not receive its input map. */
-export type FlowBindingReference = Readonly<{
+/** The installed binding projected to a page for one of its placements. */
+export type PlacementFlowBinding = Readonly<{
   bindingId: string;
+  eventId: string;
   flowId: string;
   event: string;
+  segment: Readonly<{ segmentId: string; fingerprint: string }> | Readonly<{ segmentId: null }>;
+  callerInputs: readonly string[];
+  savesFormValues: boolean;
+  recordTypeId?: string;
+  selectedReadInputs?: readonly Readonly<{ callerInputName: string; recordTypeId: string }>[];
 }>;
+
+/** The safe identity a tool receives for its projected binding. */
+export type FlowBindingReference = Pick<
+  PlacementFlowBinding,
+  "bindingId" | "flowId" | "event" | "segment"
+>;
 
 export type FlowRuntime = Readonly<{
   /**
@@ -28,7 +39,7 @@ export type FlowRuntime = Readonly<{
    * commits a second time.
    */
   dispatch: (
-    binding: ComponentFlowBinding,
+    binding: PlacementFlowBinding,
     callerInputs?: Readonly<Record<string, unknown>>,
     clickId?: string,
     subject?: FlowSubjectContext,
@@ -71,12 +82,6 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
   return Object.freeze({
     dispatchReference,
     dispatch: (binding, callerInputs = {}, clickId, subject) =>
-      dispatchReference(
-        { bindingId: binding.bindingId, flowId: binding.flow.flowId, event: binding.event },
-        callerInputs,
-        clickId,
-        undefined,
-        subject,
-      ),
+      dispatchReference(binding, callerInputs, clickId, undefined, subject),
   });
 }

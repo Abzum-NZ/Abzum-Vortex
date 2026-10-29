@@ -365,6 +365,7 @@ export {
   useFlowIntentHost,
   type FlowApplicationAddress,
   type FlowBindingReference,
+  type PlacementFlowBinding,
   type FlowConfirmAnswer,
   type FlowConfirmIntent,
   type FormBlockRuntime,

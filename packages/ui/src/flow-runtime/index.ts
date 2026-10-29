@@ -7,6 +7,7 @@ export {
 export {
   createFlowRuntime,
   type FlowBindingReference,
+  type PlacementFlowBinding,
   type FlowRuntime,
   type FlowRuntimeOptions,
 } from "./flow-runtime";
