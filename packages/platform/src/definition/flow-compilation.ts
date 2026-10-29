@@ -170,6 +170,51 @@ const resolveAt = (
   return identity.identifier;
 };
 
+/** Resolve form references in a validated value or formula without inspecting literal data. */
+export function resolveFlowFormReferences<Value>(
+  value: Value,
+  resolve: (form: string, path: Path) => string,
+  path: Path = [],
+): Value {
+  const walk = (candidate: unknown, current: Path): unknown => {
+    if (Array.isArray(candidate))
+      return candidate.map((entry, index) => walk(entry, [...current, index]));
+    if (typeof candidate !== "object" || candidate === null) return candidate;
+    const record = candidate as Record<string, unknown>;
+    if (record.kind === "literal" || record.op === "literal") return candidate;
+    if (
+      (record.kind === "reference" || record.op === "reference") &&
+      typeof record.reference === "object" &&
+      record.reference !== null &&
+      !Array.isArray(record.reference)
+    ) {
+      const reference = record.reference as Record<string, unknown>;
+      if (reference.source === "form" && typeof reference.form === "string")
+        return {
+          ...record,
+          reference: {
+            ...reference,
+            form: resolve(reference.form, [...current, "reference", "form"]),
+          },
+        };
+    }
+    return Object.fromEntries(
+      Object.entries(record).map(([key, entry]) => [
+        key,
+        key === "terminalStatusValues" ? entry : walk(entry, [...current, key]),
+      ]),
+    );
+  };
+  return walk(value, path) as Value;
+}
+
+const resolveFormReferences = <Value>(ctx: Context, value: Value, path: Path): Value =>
+  resolveFlowFormReferences(
+    value,
+    (form, referencePath) => resolveAt(ctx, ctx.resolver.form(form), referencePath),
+    path,
+  );
+
 /** `definition.key:record.member` or `record.member`; the member never contains a dot. */
 const splitMemberReference = (ctx: Context, text: string): { record: string; member: string } => {
   const dot = text.indexOf(".", text.indexOf(":") + 1);
@@ -364,11 +409,12 @@ const resolveReadFieldsTask = (
     "literal",
     "value",
   ]);
-  const record = resolveProperty(ctx, "record_reference", recordValue, node.properties, false, [
-    ...path,
-    "properties",
-    "record",
-  ]);
+  const recordPath = [...path, "properties", "record"];
+  const record = resolveFormReferences(
+    ctx,
+    resolveProperty(ctx, "record_reference", recordValue, node.properties, false, recordPath),
+    recordPath,
+  );
   if (fieldsValue.kind !== "literal" || fieldsValue.literal.type !== "json")
     throw refusal(ctx, "vortex.definition.workflow_node_values", "invalid_value");
   const projection = flowReadFieldsProjectionSchema.safeParse(fieldsValue.literal.value);
@@ -444,6 +490,7 @@ const resolveTask = (ctx: Context, task: SourceFlowTask, path: Path): unknown =>
       const node = task as Extract<SourceFlowTask, { type: "if" }>;
       return {
         ...node,
+        condition: resolveFormReferences(ctx, node.condition, [...path, "condition"]),
         then: resolveTaskList(ctx, node.then, [...path, "then"]),
         ...(node.else ? { else: resolveTaskList(ctx, node.else, [...path, "else"]) } : {}),
       };
@@ -452,6 +499,7 @@ const resolveTask = (ctx: Context, task: SourceFlowTask, path: Path): unknown =>
       const node = task as Extract<SourceFlowTask, { type: "switch" }>;
       return {
         ...node,
+        value: resolveFormReferences(ctx, node.value, [...path, "value"]),
         cases: node.cases.map((entry, index) => ({
           ...entry,
           tasks: resolveTaskList(ctx, entry.tasks, [...path, "cases", index, "tasks"]),
@@ -461,7 +509,14 @@ const resolveTask = (ctx: Context, task: SourceFlowTask, path: Path): unknown =>
           : {}),
       };
     }
-    case "for_each":
+    case "for_each": {
+      const node = task as Extract<SourceFlowTask, { type: "for_each" }>;
+      return {
+        ...node,
+        items: resolveFormReferences(ctx, node.items, [...path, "items"]),
+        tasks: resolveTaskList(ctx, node.tasks, [...path, "tasks"]),
+      };
+    }
     case "sequential": {
       const node = task as Extract<SourceFlowTask, { tasks: SourceFlowTask[] }>;
       return { ...node, tasks: resolveTaskList(ctx, node.tasks, [...path, "tasks"]) };
@@ -471,6 +526,12 @@ const resolveTask = (ctx: Context, task: SourceFlowTask, path: Path): unknown =>
       return {
         ...node,
         flowId: resolveAt(ctx, ctx.resolver.flow(node.flowId), [...path, "flowId"]),
+        inputs: Object.fromEntries(
+          Object.entries(node.inputs).map(([name, value]) => [
+            name,
+            resolveFormReferences(ctx, value, [...path, "inputs", name]),
+          ]),
+        ),
       };
     }
     case "stop":
@@ -490,13 +551,18 @@ const resolveTask = (ctx: Context, task: SourceFlowTask, path: Path): unknown =>
           : undefined;
         if (declared === undefined)
           throw refusal(ctx, "vortex.definition.workflow_node_values", "unknown_property");
-        properties[name] = resolveProperty(
+        const propertyPath = [...path, "properties", name];
+        properties[name] = resolveFormReferences(
           ctx,
-          declared.type,
-          value,
-          node.properties,
-          definition.transactionScope === "saved_record",
-          [...path, "properties", name],
+          resolveProperty(
+            ctx,
+            declared.type,
+            value,
+            node.properties,
+            definition.transactionScope === "saved_record",
+            propertyPath,
+          ),
+          propertyPath,
         );
       }
       return { ...node, properties };
@@ -673,7 +739,15 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
       variables: resolveDeclarations(ctx, source.variables, ["variables"]),
       triggers: resolveTriggers(ctx, source),
       tasks: resolveTaskList(ctx, source.tasks, ["tasks"]),
-      outputs: resolveDeclarations(ctx, source.outputs, ["outputs"]),
+      outputs: Object.fromEntries(
+        Object.entries(source.outputs).map(([name, declaration]) => [
+          name,
+          {
+            ...withRecordTypes(ctx, declaration, ["outputs", name]),
+            value: resolveFormReferences(ctx, declaration.value, ["outputs", name, "value"]),
+          },
+        ]),
+      ),
       errors: resolveTaskList(ctx, source.errors, ["errors"]),
       finally: resolveTaskList(ctx, source.finally, ["finally"]),
     };
