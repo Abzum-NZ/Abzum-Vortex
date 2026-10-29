@@ -5,6 +5,7 @@ import type { ConnectionTypeSourceDocument } from "../definition/definition-sour
 import {
   connectionTypeIdSchema,
   semanticVersionSchema,
+  stableDefinitionReleaseVersionSchema,
   type ConnectionTypeId,
   type SemanticVersion,
 } from "../catalogue/identifiers";
@@ -46,11 +47,16 @@ export const PLATFORM_CONNECTION_TYPE_RELEASES: readonly PlatformConnectionTypeC
 
 /** The latest stable release for each connection type, keyed by its stable source key. */
 export const CURRENT_CONNECTION_TYPE_RELEASES = deepFreeze(
-  [...PLATFORM_CONNECTION_TYPE_RELEASES]
+  PLATFORM_CONNECTION_TYPE_RELEASES.filter(
+    (release) => stableDefinitionReleaseVersionSchema.safeParse(release.releaseVersion).success,
+  )
     .sort((a, b) => {
-      const left = a.releaseVersion.split(".").map(Number);
-      const right = b.releaseVersion.split(".").map(Number);
-      return right[0]! - left[0]! || right[1]! - left[1]! || right[2]! - left[2]!;
+      const left = a.releaseVersion.split(".").map(BigInt);
+      const right = b.releaseVersion.split(".").map(BigInt);
+      for (let index = 0; index < 3; index++) {
+        if (left[index]! !== right[index]!) return left[index]! > right[index]! ? -1 : 1;
+      }
+      return 0;
     })
     .filter(
       (release, index, all) =>
