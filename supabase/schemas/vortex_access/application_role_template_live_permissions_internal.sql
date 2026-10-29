@@ -55,7 +55,7 @@ begin
   -- wildcard template also leaves out export permissions.
   with resolved as (
     select key.ordinal, entry.application_root_id, entry.owner_kind, entry.owner_id,
-      entry.permission_id, entry.meaning_fingerprint, entry.administrative, entry.action_kind
+      entry.permission_id, entry.administrative, entry.action_kind
     from pg_catalog.jsonb_array_elements_text(selected_template -> 'permissionKeys')
       with ordinality as key(permission_key, ordinal)
     join vortex_access.permission_catalogue_entries as entry
@@ -79,8 +79,7 @@ begin
         'applicationRootId', resolved.application_root_id,
         'ownerKind', resolved.owner_kind,
         'ownerId', resolved.owner_id,
-        'permissionId', resolved.permission_id,
-        'meaningFingerprint', resolved.meaning_fingerprint
+        'permissionId', resolved.permission_id
       )) order by resolved.ordinal) filter (
         where not wildcard or resolved.action_kind <> 'export'
       ), '[]'::jsonb)

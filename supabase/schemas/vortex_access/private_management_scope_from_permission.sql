@@ -21,7 +21,7 @@ begin
       pg_catalog.jsonb_typeof(item.value) = 'object'
       and item.value ?& array[
         'ownerKind', 'ownerId', 'permissionId',
-        'acceptedRegistrationRevision', 'meaningFingerprint'
+        'acceptedRegistrationRevision'
       ]
       and pg_catalog.jsonb_typeof(item.value -> 'ownerKind') = 'string'
       and item.value ->> 'ownerKind' in ('platform', 'application', 'module')
@@ -34,8 +34,6 @@ begin
         between 1 and 9007199254740991
       and (item.value ->> 'acceptedRegistrationRevision')::numeric =
         pg_catalog.trunc((item.value ->> 'acceptedRegistrationRevision')::numeric)
-      and pg_catalog.jsonb_typeof(item.value -> 'meaningFingerprint') = 'string'
-      and item.value ->> 'meaningFingerprint' ~ '^sha256:[a-f0-9]{64}$'
       and (
         (
           item.value ->> 'ownerKind' = 'platform'
@@ -63,8 +61,7 @@ begin
       'ownerKind', parsed.owner_kind,
       'ownerId', parsed.owner_id,
       'permissionId', parsed.permission_id,
-      'acceptedRegistrationRevision', parsed.accepted_registration_revision,
-      'meaningFingerprint', parsed.meaning_fingerprint
+      'acceptedRegistrationRevision', parsed.accepted_registration_revision
     )
   ) order by parsed.application_root_id nulls first,
     parsed.owner_kind collate "C", parsed.owner_id, parsed.permission_id)
@@ -76,8 +73,7 @@ begin
       item.value ->> 'ownerKind' as owner_kind,
       (item.value ->> 'ownerId')::uuid as owner_id,
       (item.value ->> 'permissionId')::uuid as permission_id,
-      (item.value ->> 'acceptedRegistrationRevision')::bigint as accepted_registration_revision,
-      item.value ->> 'meaningFingerprint' as meaning_fingerprint
+      (item.value ->> 'acceptedRegistrationRevision')::bigint as accepted_registration_revision
     from pg_catalog.jsonb_array_elements(p_permissions) as item(value)
   ) as parsed;
 

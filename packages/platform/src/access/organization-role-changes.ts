@@ -125,6 +125,7 @@ export const organizationRoleTemplateSourceSchema = z
   .object({
     applicationRootId: applicationRootIdSchema,
     registrationRevision: revisionSchema,
+    releaseRevision: revisionSchema,
     catalogueFingerprint: fingerprintSchema,
   })
   .strict();

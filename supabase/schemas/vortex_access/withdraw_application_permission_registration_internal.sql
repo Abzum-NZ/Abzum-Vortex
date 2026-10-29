@@ -62,7 +62,7 @@ begin
     application_root_id, owner_kind, owner_id, permission_id, permission_key,
     label, description, record_type_id, action_kind, named_action, administrative,
     source_kind, source_definition_key, source_root_id, source_version, source_revision,
-    source_validation_contract_version, source_catalogue_fingerprint, meaning_fingerprint,
+    source_validation_contract_version, source_catalogue_fingerprint,
     record_scope, field_policy
   )
   select entry.organization_id, entry.registration_kind, entry.registration_owner_id,
@@ -71,7 +71,7 @@ begin
     entry.record_type_id, entry.action_kind, entry.named_action, entry.administrative,
     entry.source_kind, entry.source_definition_key, entry.source_root_id,
     entry.source_version, entry.source_revision, entry.source_validation_contract_version,
-    entry.source_catalogue_fingerprint, entry.meaning_fingerprint, entry.record_scope,
+    entry.source_catalogue_fingerprint, entry.record_scope,
     entry.field_policy
   from vortex_access.permission_catalogue_entries as entry
   where entry.organization_id = p_organization_id

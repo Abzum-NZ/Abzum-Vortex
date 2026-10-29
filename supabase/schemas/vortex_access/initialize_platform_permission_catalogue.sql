@@ -95,15 +95,14 @@ begin
     record_scope, field_policy, action_kind, named_action, administrative,
     source_kind, source_definition_key, source_root_id, source_version,
     source_revision, source_validation_contract_version,
-    source_catalogue_fingerprint, meaning_fingerprint
+    source_catalogue_fingerprint
   )
   select p_organization_id, 'platform', platform_owner_id, 6,
     null, 'platform', platform_owner_id, declaration.permission_id,
     declaration.permission_key, declaration.label, declaration.description,
     null, null, null, declaration.action_kind, null, true,
     'platform_catalogue', null, null, declaration.source_version,
-    null, null, declaration.catalogue_fingerprint,
-    declaration.meaning_fingerprint
+    null, null, declaration.catalogue_fingerprint
   from vortex_access.read_platform_permission_declaration_catalogue_internal(6)
     as declaration;
 
@@ -121,12 +120,12 @@ begin
   insert into vortex_access.permission_continuities (
     organization_id, application_root_id, owner_kind, owner_id,
     permission_id, registration_kind, registration_owner_id, state,
-    continuity_revision, meaning_fingerprint,
+    continuity_revision,
     last_processed_registration_revision, changed_at
   )
   select p_organization_id, null, 'platform', platform_owner_id,
     declaration.permission_id, 'platform', platform_owner_id, 'available',
-    1, declaration.meaning_fingerprint, 6, operation_at
+    1, 6, operation_at
   from vortex_access.read_platform_permission_declaration_catalogue_internal(6)
     as declaration;
 

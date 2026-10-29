@@ -23,7 +23,6 @@ import {
 import type { PermissionDeclaration } from "./permissions";
 import { canonicalJson, compareCanonicalStrings } from "../definition/canonical-json";
 import { fingerprintCanonicalValue } from "../definition/canonical-json-definition";
-import { fingerprintPermissionMeaning } from "./permission-fingerprints";
 import { isLiveSystemContext } from "./private-system-context";
 
 export const permissionRegistryPreparationErrorCodes = [
@@ -90,7 +89,6 @@ const entriesFor = (
     ownerId,
     permission,
     sourceRelease,
-    meaningFingerprint: fingerprintPermissionMeaning(ownerKind, ownerId, permission),
   }));
 };
 
@@ -155,14 +153,7 @@ export const verifyPreparedApplicationPermissionRegistration = (
     throw new PermissionRegistryPreparationError("PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID");
   const candidate = parsed.data;
   const orderedEntries = [...candidate.entries].sort(comparePermissionEntries);
-  if (
-    orderedEntries.some((entry, index) => entry !== candidate.entries[index]) ||
-    candidate.entries.some(
-      (entry) =>
-        entry.meaningFingerprint !==
-        fingerprintPermissionMeaning(entry.ownerKind, entry.ownerId, entry.permission),
-    )
-  )
+  if (orderedEntries.some((entry, index) => entry !== candidate.entries[index]))
     throw new PermissionRegistryPreparationError("PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID");
 
   const applicationEntries = candidate.entries

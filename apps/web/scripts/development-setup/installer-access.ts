@@ -1,6 +1,5 @@
 import {
   createOrganizationAccessAdministrationService,
-  fingerprintPermissionMeaning,
   prepareOrganizationRoleChangeEvidence,
 } from "@vortex/platform/server";
 import { fingerprintCanonicalValue } from "@vortex/platform/server";
@@ -31,7 +30,7 @@ import type { SetupState } from "./state";
 const installPermissionKey = "platform.organization.applications.manage";
 /** The current shipped platform permission declaration set retains registration revision 6. */
 const currentPlatformRegistrationRevision = 6;
-const sourceMetadataKeys = new Set(["meaningFingerprint", "stewardMinimum"]);
+const sourceMetadataKeys = new Set(["stewardMinimum"]);
 const currentPlatformPermissionCatalogueFingerprint = fingerprintCanonicalValue({
   catalogueVersion: "1.4.0",
   ownerKind: "platform",
@@ -70,11 +69,6 @@ const createAndAssignPlatformRole = async (
       acceptedRegistrationRevision: currentPlatformRegistrationRevision,
       catalogueFingerprint: currentPlatformPermissionCatalogueFingerprint,
       continuityRevision: 1,
-      meaningFingerprint: fingerprintPermissionMeaning(
-        "platform",
-        platformPermissionOwnerId,
-        declaration,
-      ),
     };
   });
   const administration = createOrganizationAccessAdministrationService({

@@ -195,7 +195,6 @@ begin
           'source_revision', owned_release.release -> 'release_revision',
           'source_validation_contract_version',
             owned_release.release ->> 'validation_contract_version',
-          'meaning_fingerprint', owned_release.release ->> 'content_fingerprint',
           'record_scope', permission.value -> 'recordScope',
           'field_policy', permission.value -> 'fieldPolicy'
         )

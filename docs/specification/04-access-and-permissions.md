@@ -406,7 +406,7 @@ Export is an independent boolean approval, defaults to refused, and is included 
 
 An editable record or ordinary workflow cannot activate a cross-organisation grant. Every cross-organisation grant requires one authorised source consent and one authorised recipient consent for the same grant and proposal revision. The source side confirms the records, condition and parameters, actions, fields, export choice, recipient region, start, and expiry. The recipient side confirms the named application, roles, responsibility, region, start, and expiry.
 
-Changing any fingerprinted value withdraws the earlier decisions and requires both sides to review the new proposal. The Access service owns the grant and activates it only after verifying both immutable consent decisions. An ordinary editable record has no security effect on a grant.
+Changing any proposal value advances the proposal revision, withdraws the earlier decisions and requires both sides to review the new proposal. The Access service owns the grant and activates it only after verifying both immutable consent decisions. An ordinary editable record has no security effect on a grant.
 
 A consent decision is not later rewritten as revoked. Ending access revokes the grant through a new authorised source action, preserving both original decisions and recording the revocation separately.
 

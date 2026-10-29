@@ -74,8 +74,7 @@ as $function$
         entry.action_kind, entry.named_action, entry.administrative,
         entry.source_kind, entry.source_definition_key, entry.source_root_id,
         entry.source_version, entry.source_revision,
-        entry.source_validation_contract_version, entry.source_catalogue_fingerprint,
-        entry.meaning_fingerprint
+        entry.source_validation_contract_version, entry.source_catalogue_fingerprint
       from entries as entry
       except all
       select null::uuid, 'platform'::text,
@@ -84,7 +83,7 @@ as $function$
         expected.description, null::uuid, null::jsonb, null::jsonb,
         expected.action_kind, null::text, true, 'platform_catalogue'::text,
         null::text, null::uuid, expected.source_version, null::bigint,
-        null::text, expected.catalogue_fingerprint, expected.meaning_fingerprint
+        null::text, expected.catalogue_fingerprint
       from expected
     )
     and (select pg_catalog.count(*) from vortex_access.permission_continuities as continuity
@@ -102,7 +101,6 @@ as $function$
           and continuity.owner_kind = 'platform'
           and continuity.owner_id = continuity.registration_owner_id
           and continuity.permission_id = expected.permission_id
-          and continuity.meaning_fingerprint = expected.meaning_fingerprint
           and continuity.state = 'available'
           and continuity.continuity_revision > 0
           and continuity.last_processed_registration_revision = 6

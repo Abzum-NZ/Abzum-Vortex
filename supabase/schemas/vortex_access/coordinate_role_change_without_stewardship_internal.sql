@@ -381,12 +381,12 @@ begin
         or item.value - array[
           'kind', 'applicationRootId', 'ownerKind', 'ownerId', 'permissionId',
           'acceptedRegistrationRevision', 'catalogueFingerprint',
-          'continuityRevision', 'meaningFingerprint'
+          'continuityRevision'
         ]::text[] <> '{}'::jsonb
         or not (item.value ?& array[
           'kind', 'ownerKind', 'ownerId', 'permissionId',
           'acceptedRegistrationRevision', 'catalogueFingerprint',
-          'continuityRevision', 'meaningFingerprint'
+          'continuityRevision'
         ])
         or item.value ->> 'kind' is distinct from 'exact'
         or pg_catalog.jsonb_typeof(item.value -> 'ownerKind') is distinct from 'string'
@@ -399,10 +399,7 @@ begin
           is distinct from 'number'
         or pg_catalog.jsonb_typeof(item.value -> 'catalogueFingerprint')
           is distinct from 'string'
-        or pg_catalog.jsonb_typeof(item.value -> 'meaningFingerprint')
-          is distinct from 'string'
         or item.value ->> 'catalogueFingerprint' !~ '^sha256:[a-f0-9]{64}$'
-        or item.value ->> 'meaningFingerprint' !~ '^sha256:[a-f0-9]{64}$'
         or (item.value ->> 'acceptedRegistrationRevision')::numeric not between
           1 and 9007199254740991
         or (item.value ->> 'acceptedRegistrationRevision')::numeric <>
@@ -441,8 +438,7 @@ begin
           (item.value ->> 'acceptedRegistrationRevision')::numeric::bigint,
         'catalogueFingerprint', item.value ->> 'catalogueFingerprint',
         'continuityRevision',
-          (item.value ->> 'continuityRevision')::numeric::bigint,
-        'meaningFingerprint', item.value ->> 'meaningFingerprint'
+          (item.value ->> 'continuityRevision')::numeric::bigint
       )) order by
         case when item.value ? 'applicationRootId'
           then (item.value ->> 'applicationRootId')::uuid else null end nulls last,
@@ -473,10 +469,10 @@ begin
 
   if template_source is not null then
     if template_source - array[
-      'applicationRootId', 'registrationRevision', 'catalogueFingerprint'
+      'applicationRootId', 'registrationRevision', 'releaseRevision', 'catalogueFingerprint'
     ]::text[] <> '{}'::jsonb
       or not (template_source ?& array[
-        'applicationRootId', 'registrationRevision', 'catalogueFingerprint'
+        'applicationRootId', 'registrationRevision', 'releaseRevision', 'catalogueFingerprint'
       ])
       or pg_catalog.jsonb_typeof(template_source -> 'applicationRootId') <> 'string'
       or vortex_platform.is_non_nil_uuid(template_source ->> 'applicationRootId') is not true
@@ -484,6 +480,10 @@ begin
       or (template_source ->> 'registrationRevision')::numeric not between 1 and 9007199254740991
       or (template_source ->> 'registrationRevision')::numeric <>
         pg_catalog.trunc((template_source ->> 'registrationRevision')::numeric)
+      or pg_catalog.jsonb_typeof(template_source -> 'releaseRevision') <> 'number'
+      or (template_source ->> 'releaseRevision')::numeric not between 1 and 9007199254740991
+      or (template_source ->> 'releaseRevision')::numeric <>
+        pg_catalog.trunc((template_source ->> 'releaseRevision')::numeric)
       or pg_catalog.jsonb_typeof(template_source -> 'catalogueFingerprint') <> 'string'
       or target_source_role_id = '00000000-0000-0000-0000-000000000000'::uuid then
       raise exception using errcode = '22023',
@@ -505,6 +505,7 @@ begin
       and registration.registration_kind = 'application'
       and registration.registration_owner_id = target_application_root_id
       and registration.revision = target_accepted_registration_revision
+      and registration.source_revision = (template_source ->> 'releaseRevision')::bigint
       and registration.state = 'active'
       and registration.permission_catalogue_fingerprint =
         template_source ->> 'catalogueFingerprint';
@@ -590,7 +591,6 @@ begin
       and continuity.state = 'available'
       and continuity.continuity_revision =
         (item.value ->> 'continuityRevision')::numeric::bigint
-      and continuity.meaning_fingerprint = item.value ->> 'meaningFingerprint'
     join vortex_access.permission_registrations as registration
       on registration.organization_id = continuity.organization_id
       and registration.registration_kind = continuity.registration_kind
@@ -609,7 +609,7 @@ begin
       and catalogue.owner_id = continuity.owner_id
       and catalogue.permission_id = continuity.permission_id
       and catalogue.application_root_id is not distinct from continuity.application_root_id
-      and catalogue.meaning_fingerprint = continuity.meaning_fingerprint;
+      and continuity.last_processed_registration_revision = registration.revision;
     if permission_count <> pg_catalog.jsonb_array_length(candidate_permissions) then
       raise exception using errcode = '40001',
         message = 'Role permission evidence is stale or unavailable';
@@ -657,8 +657,6 @@ begin
           (permission.value ->> 'ownerId')::uuid
         and (live.value ->> 'permissionId')::uuid =
           (permission.value ->> 'permissionId')::uuid
-        and live.value ->> 'meaningFingerprint' =
-          permission.value ->> 'meaningFingerprint'
     );
     if permission_count <> pg_catalog.jsonb_array_length(candidate_permissions)
       or (
@@ -891,8 +889,7 @@ begin
           'permissionId', permission.permission_id,
           'acceptedRegistrationRevision', permission.accepted_registration_revision,
           'catalogueFingerprint', permission.catalogue_fingerprint,
-          'continuityRevision', permission.continuity_revision,
-          'meaningFingerprint', permission.meaning_fingerprint
+          'continuityRevision', permission.continuity_revision
         )) order by permission.entry_ordinal
       ),
       '[]'::jsonb
@@ -975,8 +972,6 @@ begin
           and existing.value ->> 'permissionId' = proposed.value ->> 'permissionId'
           and existing.value ->> 'continuityRevision' =
             proposed.value ->> 'continuityRevision'
-          and existing.value ->> 'meaningFingerprint' =
-            proposed.value ->> 'meaningFingerprint'
       )
     ) into authority_broadened;
 
@@ -1109,7 +1104,7 @@ begin
       role_application_root_id, application_root_id, owner_kind, owner_id,
       permission_id, registration_kind, registration_owner_id,
       accepted_registration_revision, catalogue_fingerprint,
-      continuity_revision, meaning_fingerprint
+      continuity_revision
     )
     select permission.organization_id, permission.role_id, target_role_revision,
       permission.entry_ordinal, permission.role_kind,
@@ -1117,7 +1112,7 @@ begin
       permission.owner_kind, permission.owner_id, permission.permission_id,
       permission.registration_kind, permission.registration_owner_id,
       permission.accepted_registration_revision, permission.catalogue_fingerprint,
-      permission.continuity_revision, permission.meaning_fingerprint
+      permission.continuity_revision
     from vortex_access.organization_role_permission_entries as permission
     where permission.organization_id = target_organization_id
       and permission.role_id = target_role_id
@@ -1129,7 +1124,7 @@ begin
       role_application_root_id, application_root_id, owner_kind, owner_id,
       permission_id, registration_kind, registration_owner_id,
       accepted_registration_revision, catalogue_fingerprint,
-      continuity_revision, meaning_fingerprint
+      continuity_revision
     )
     select target_organization_id, target_role_id, target_role_revision,
       item.ordinality, target_role_kind,
@@ -1139,8 +1134,7 @@ begin
       continuity.registration_kind, continuity.registration_owner_id,
       (item.value ->> 'acceptedRegistrationRevision')::numeric::bigint,
       item.value ->> 'catalogueFingerprint',
-      (item.value ->> 'continuityRevision')::numeric::bigint,
-      item.value ->> 'meaningFingerprint'
+      (item.value ->> 'continuityRevision')::numeric::bigint
     from pg_catalog.jsonb_array_elements(candidate_permissions) with ordinality
       as item(value, ordinality)
     join vortex_access.permission_continuities as continuity
@@ -1252,8 +1246,7 @@ begin
           'permissionId', permission.permission_id,
           'acceptedRegistrationRevision', permission.accepted_registration_revision,
           'catalogueFingerprint', permission.catalogue_fingerprint,
-          'continuityRevision', permission.continuity_revision,
-          'meaningFingerprint', permission.meaning_fingerprint
+          'continuityRevision', permission.continuity_revision
         )) order by permission.entry_ordinal
       )
       from vortex_access.organization_role_permission_entries as permission

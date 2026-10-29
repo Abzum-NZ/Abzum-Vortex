@@ -92,8 +92,7 @@ begin
       'ownerKind', permission.owner_kind,
       'ownerId', permission.owner_id,
       'permissionId', permission.permission_id,
-      'acceptedRegistrationRevision', permission.accepted_registration_revision,
-      'meaningFingerprint', permission.meaning_fingerprint
+      'acceptedRegistrationRevision', permission.accepted_registration_revision
     )) order by permission.application_root_id nulls first,
       permission.owner_kind collate "C", permission.owner_id,
       permission.permission_id
@@ -198,7 +197,7 @@ begin
     role_application_root_id, application_root_id, owner_kind, owner_id,
     permission_id, registration_kind, registration_owner_id,
     accepted_registration_revision, catalogue_fingerprint,
-    continuity_revision, meaning_fingerprint
+    continuity_revision
   )
   select permission.organization_id, permission.role_id,
     role_fact.live_revision + 1, permission.entry_ordinal, permission.role_kind,
@@ -206,7 +205,7 @@ begin
     permission.owner_kind, permission.owner_id, permission.permission_id,
     permission.registration_kind, permission.registration_owner_id,
     permission.accepted_registration_revision, permission.catalogue_fingerprint,
-    permission.continuity_revision, permission.meaning_fingerprint
+    permission.continuity_revision
   from vortex_access.organization_role_permission_entries as permission
   where permission.organization_id = context_organization_id
     and permission.role_id = p_role_id

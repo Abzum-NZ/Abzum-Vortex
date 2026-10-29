@@ -116,12 +116,11 @@ begin
     if pg_catalog.jsonb_typeof(entry_value) <> 'object'
       or entry_value - array[
         'applicationRootId', 'ownerKind', 'ownerId', 'permission',
-        'sourceRelease', 'meaningFingerprint'
+        'sourceRelease'
       ]::text[] <> '{}'::jsonb
       or (entry_value ->> 'applicationRootId')::uuid <> candidate_application_root_id
       or pg_catalog.jsonb_typeof(entry_value -> 'permission') <> 'object'
-      or pg_catalog.jsonb_typeof(entry_value -> 'sourceRelease') <> 'object'
-      or entry_value ->> 'meaningFingerprint' !~ '^sha256:[a-f0-9]{64}$' then
+      or pg_catalog.jsonb_typeof(entry_value -> 'sourceRelease') <> 'object' then
       raise exception using errcode = '22023', message = 'Application permission entry is invalid';
     end if;
     permission_value := entry_value -> 'permission';
@@ -331,7 +330,7 @@ begin
     application_root_id, owner_kind, owner_id, permission_id, permission_key,
     label, description, record_type_id, action_kind, named_action, administrative,
     source_kind, source_definition_key, source_root_id, source_version, source_revision,
-    source_validation_contract_version, source_catalogue_fingerprint, meaning_fingerprint,
+    source_validation_contract_version, source_catalogue_fingerprint,
     record_scope, field_policy
   )
   select candidate_organization_id, 'application', candidate_application_root_id,
@@ -348,7 +347,6 @@ begin
     (source.source_value ->> 'rootId')::uuid, source.source_value ->> 'releaseVersion',
     (source.source_value ->> 'releaseRevision')::bigint,
     source.source_value ->> 'validationContractVersion', null,
-    item.entry_value ->> 'meaningFingerprint',
     permission.permission_value -> 'recordScope',
     permission.permission_value -> 'fieldPolicy'
   from pg_catalog.jsonb_array_elements(p_candidate -> 'entries') as item(entry_value)

@@ -110,7 +110,6 @@ begin
       and continuity.registration_owner_id = catalogue.registration_owner_id
       and continuity.last_processed_registration_revision = registration.revision
       and continuity.state = 'available'
-      and continuity.meaning_fingerprint = catalogue.meaning_fingerprint
     where registration.organization_id = context_organization_value
       and registration.state = 'active'
       and (
@@ -122,12 +121,8 @@ begin
       and catalogue.owner_id = permission_owner_value
       and catalogue.permission_id = permission_value
   ), current_role_permission as materialized (
-    -- A role keeps exactly the meaning it was accepted under: the catalogue entry of the
-    -- registration revision named by its permission entry, whatever a later registration changed
-    -- in it (fields, scope, action or record type); only accepting the role revision moves it. The
-    -- permission must still be registered in the same continuity lineage it was accepted in: a
-    -- permission that was withdrawn and registered again starts a new lineage, so no role kind
-    -- regains it without acceptance.
+    -- The accepted registration remains historical evidence. A changed meaning
+    -- advances continuity, so a role cannot retain it without fresh acceptance.
     select role.role_id, role.live_revision,
       revision.assignment_policy, revision.authority_continuity_revision,
       revision.policy_continuity_revision, revision.activation_policy_id,
@@ -155,8 +150,7 @@ begin
     cross join lateral vortex_access.accepted_permission_meaning_internal(
       permission.organization_id, permission.application_root_id,
       permission.owner_kind, permission.owner_id, permission.permission_id,
-      permission.continuity_revision, permission.accepted_registration_revision,
-      permission.meaning_fingerprint
+      permission.continuity_revision, permission.accepted_registration_revision
     ) as accepted
     where role.organization_id = context_organization_value
       and revision.lifecycle in ('active', 'acceptance_required')

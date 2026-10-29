@@ -41,8 +41,7 @@ begin
           'ownerKind', permission.value -> 'ownerKind',
           'ownerId', permission.value -> 'ownerId',
           'permissionId', permission.value -> 'permissionId',
-          'acceptedRegistrationRevision', permission.value -> 'acceptedRegistrationRevision',
-          'meaningFingerprint', permission.value -> 'meaningFingerprint'))))
+          'acceptedRegistrationRevision', permission.value -> 'acceptedRegistrationRevision'))))
     into authority_before
     from pg_catalog.jsonb_array_elements(delegation_fact.bounded_permissions)
       as permission(value);

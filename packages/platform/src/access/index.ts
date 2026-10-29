@@ -74,7 +74,6 @@ export {
   createOrganizationAccessAdministrationService,
   type OrganizationAccessAdministrationDependencies,
 } from "./organization-access-administration-access";
-export { fingerprintPermissionMeaning } from "./permission-fingerprints";
 export {
   organizationRoleChangeEvidenceErrorCodes,
   OrganizationRoleChangeEvidenceError,

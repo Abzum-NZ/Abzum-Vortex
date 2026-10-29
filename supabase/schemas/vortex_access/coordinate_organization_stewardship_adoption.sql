@@ -223,7 +223,6 @@ begin
             and entry.owner_kind = continuity.owner_kind
             and entry.owner_id = continuity.owner_id
             and entry.permission_id = continuity.permission_id
-            and entry.meaning_fingerprint = continuity.meaning_fingerprint
             and continuity.application_root_id is null
             and continuity.state = 'available'
             and continuity.continuity_revision > 0
@@ -251,7 +250,6 @@ begin
             and continuity.permission_id = entry.permission_id
             and continuity.state = 'available'
             and continuity.continuity_revision > 0
-            and continuity.meaning_fingerprint = entry.meaning_fingerprint
             and continuity.last_processed_registration_revision =
               platform_registration.revision
         )
@@ -307,7 +305,7 @@ begin
     role_application_root_id, application_root_id, owner_kind, owner_id,
     permission_id, registration_kind, registration_owner_id,
     accepted_registration_revision, catalogue_fingerprint,
-    continuity_revision, meaning_fingerprint
+    continuity_revision
   )
   select p_organization_id, p_role_id, 1,
     pg_catalog.row_number() over (
@@ -318,7 +316,7 @@ begin
     entry.permission_id, 'platform', entry.registration_owner_id,
     entry.registration_revision,
     platform_registration.permission_catalogue_fingerprint,
-    continuity.continuity_revision, entry.meaning_fingerprint
+    continuity.continuity_revision
   from vortex_access.permission_catalogue_entries as entry
   join vortex_access.permission_continuities as continuity
     on continuity.organization_id = entry.organization_id
@@ -333,7 +331,6 @@ begin
     and continuity.continuity_revision > 0
     and continuity.last_processed_registration_revision =
       platform_registration.revision
-    and continuity.meaning_fingerprint = entry.meaning_fingerprint
   where entry.organization_id = p_organization_id
     and entry.application_root_id is null
     and entry.registration_kind = 'platform'

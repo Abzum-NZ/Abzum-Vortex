@@ -86,8 +86,7 @@ begin
       'ownerKind', reference.owner_kind,
       'ownerId', reference.owner_id,
       'permissionId', reference.permission_id,
-      'acceptedRegistrationRevision', reference.accepted_registration_revision,
-      'meaningFingerprint', reference.meaning_fingerprint
+      'acceptedRegistrationRevision', reference.accepted_registration_revision
     )) order by reference.application_root_id nulls first,
       reference.owner_kind collate "C", reference.owner_id,
       reference.permission_id
@@ -96,8 +95,7 @@ begin
   from (
     select permission.application_root_id, permission.owner_kind,
       permission.owner_id, permission.permission_id,
-      permission.accepted_registration_revision,
-      permission.meaning_fingerprint
+      permission.accepted_registration_revision
     from vortex_access.organization_role_assignments as assignment
     join vortex_access.organization_roles as role
       on role.organization_id = assignment.organization_id
@@ -116,8 +114,7 @@ begin
       permission.value ->> 'ownerKind',
       (permission.value ->> 'ownerId')::uuid,
       (permission.value ->> 'permissionId')::uuid,
-      (permission.value ->> 'acceptedRegistrationRevision')::bigint,
-      permission.value ->> 'meaningFingerprint'
+      (permission.value ->> 'acceptedRegistrationRevision')::bigint
     from vortex_access.organization_delegation_authorities as delegation
     cross join lateral pg_catalog.jsonb_array_elements(
       delegation.bounded_permissions

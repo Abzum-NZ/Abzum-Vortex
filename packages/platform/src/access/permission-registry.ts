@@ -79,7 +79,6 @@ export const permissionRegistryEntryCandidateSchema = z
     ownerId: platformIdSchema,
     permission: permissionDeclarationSchema,
     sourceRelease: permissionRegistryDefinitionReleaseSchema,
-    meaningFingerprint: fingerprintSchema,
   })
   .strict()
   .superRefine((value, context) => {

@@ -49,8 +49,7 @@ begin
       pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
         'applicationRootId', entry.application_root_id, 'ownerKind', entry.owner_kind,
         'ownerId', entry.owner_id, 'permissionId', entry.permission_id,
-        'acceptedRegistrationRevision', entry.accepted_registration_revision,
-        'meaningFingerprint', entry.meaning_fingerprint
+        'acceptedRegistrationRevision', entry.accepted_registration_revision
       )) as permission
     from vortex_access.organization_roles as role
     join vortex_access.organization_role_permission_entries as entry

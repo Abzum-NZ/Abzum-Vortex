@@ -105,8 +105,7 @@ begin
           'validationContractVersion', entry.source_validation_contract_version,
           'contentFingerprint', source_release.content_fingerprint,
           'resolutionFingerprint', source_release.resolution_fingerprint
-        ),
-        'meaningFingerprint', entry.meaning_fingerprint
+        )
       ) order by
         entry.owner_kind collate "C", entry.owner_id,
         entry.permission_key collate "C", entry.permission_id

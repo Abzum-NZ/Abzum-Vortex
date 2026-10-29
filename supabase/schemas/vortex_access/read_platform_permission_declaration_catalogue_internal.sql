@@ -11,7 +11,6 @@ returns table (
   action_kind text,
   label text,
   description text,
-  meaning_fingerprint text,
   steward_minimum boolean,
   first_revision bigint
 )
@@ -40,7 +39,7 @@ as $function$
     'sha256:60d2c42cab03723fda56198083a70e8703792587546379372334d99609b15538'::text,
     declaration.permission_id, declaration.permission_key,
     declaration.action_kind, declaration.label, declaration.description,
-    declaration.meaning_fingerprint, declaration.steward_minimum,
+    declaration.steward_minimum,
     declaration.first_revision
   from declarations as declaration
   cross join valid

@@ -164,7 +164,6 @@ begin
           and continuity.permission_id = permission.permission_id
           and continuity.state = 'available'
           and continuity.continuity_revision = permission.continuity_revision
-          and continuity.meaning_fingerprint = permission.meaning_fingerprint
         where permission.organization_id = p_organization_id
           and permission.role_id = p_role_id
           and permission.role_revision = p_expected_role_revision

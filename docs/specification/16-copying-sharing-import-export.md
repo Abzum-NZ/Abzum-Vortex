@@ -87,10 +87,10 @@ sequenceDiagram
     Source->>SourceAccess: Propose scope, audience, actions, fields, export, and expiry
     SourceAccess->>SourceAccess: Validate source definitions and policy
     SourceAccess->>Source: Request source consent
-    Source-->>SourceAccess: Approve or refuse exact fingerprint
+    Source-->>SourceAccess: Approve or refuse the exact proposal revision
     SourceAccess->>RecipientAccess: Send signed proposal
     RecipientAccess->>Recipient: Request recipient consent
-    Recipient-->>RecipientAccess: Approve or refuse exact fingerprint
+    Recipient-->>RecipientAccess: Approve or refuse the exact proposal revision
     RecipientAccess-->>SourceAccess: Send signed decision
     SourceAccess->>SourceAccess: Activate authoritative grant
     SourceAccess-->>RecipientAccess: Send signed activation receipt
@@ -127,7 +127,7 @@ When a source record changes, the database evaluates whether it still matches th
 
 ### Actions, fields, export, and re-sharing
 
-Cross-organisation grants use explicit action, readable-field, and changeable-field allowlists: anything not named is refused. Changeable fields are a subset of readable fields, and only actions published as shareable by the source definition may be selected. Sensitive fields are unavailable in the first release. Export is separately allowed or refused, defaults to refused, and is part of both organisations' approval fingerprint. Broad `collaborative` or `full_edit` levels are not grant data.
+Cross-organisation grants use explicit action, readable-field, and changeable-field allowlists: anything not named is refused. Changeable fields are a subset of readable fields, and only actions published as shareable by the source definition may be selected. Sensitive fields are unavailable in the first release. Export is separately allowed or refused, defaults to refused, and is part of the proposal revision both organisations approve. Broad `collaborative` or `full_edit` levels are not grant data.
 
 A recipient cannot grant the source record, its reference, a shared query, or a live result to a third organisation. A new live recipient requires a new direct grant from the original source. Vortex refuses a grant whose proposed source does not own the record and prevents shared records from entering public pages, interfaces, connections, workflows, or recipient-owned bulk work.
 
@@ -208,7 +208,7 @@ Under the one flow contract, definition copy, publication storage, consumer read
 - A source-cluster or network outage displays a temporary-unavailability state and never falls back to an older recipient-stored record.
 - Changing an approval display record directly cannot activate a grant.
 - A recipient cannot re-share a source record to a third organisation.
-- A proposal cannot activate until authorised administrators in both organisations approve the same fingerprint.
+- A proposal cannot activate until authorised administrators in both organisations approve the same grant and proposal revision.
 - A saved-condition revision or parameter change requires a new proposal and both consent decisions; it never widens an active grant silently.
 - Shared search and reports execute at the source and leave no recipient index or materialised result.
 - A shared export is refused by default, contains only approved fields when enabled, and warns that a completed download cannot be recalled by revocation.

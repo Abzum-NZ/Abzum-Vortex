@@ -179,11 +179,11 @@ begin
   -- safeguard. The original adoption role may have changed or another role may
   -- already qualify the target.
   with required_declaration as materialized (
-    select declaration.permission_id, declaration.meaning_fingerprint
+    select declaration.permission_id
     from vortex_access.read_guarded_platform_permission_minimum_internal() as declaration
   ), required_permission as (
     select entry.application_root_id, entry.owner_kind, entry.owner_id,
-      entry.permission_id, entry.meaning_fingerprint,
+      entry.permission_id,
       registration.revision as registration_revision
     from vortex_access.permission_registrations as registration
     join vortex_access.permission_catalogue_entries as entry
@@ -193,7 +193,6 @@ begin
       and entry.registration_revision = registration.revision
     join required_declaration as required
       on required.permission_id = entry.permission_id
-      and required.meaning_fingerprint = entry.meaning_fingerprint
     where registration.organization_id = context_organization_id
       and registration.registration_kind = 'platform'
       and registration.registration_owner_id =
@@ -235,7 +234,6 @@ begin
             and continuity.permission_id = permission.permission_id
             and continuity.state = 'available'
             and continuity.continuity_revision = permission.continuity_revision
-            and continuity.meaning_fingerprint = permission.meaning_fingerprint
             and continuity.last_processed_registration_revision = required.registration_revision
           where permission.organization_id = role.organization_id
             and permission.role_id = role.role_id
@@ -244,7 +242,6 @@ begin
             and permission.owner_kind = required.owner_kind
             and permission.owner_id = required.owner_id
             and permission.permission_id = required.permission_id
-            and permission.meaning_fingerprint = required.meaning_fingerprint
         )
       )
   ), current_steward as (
@@ -279,8 +276,7 @@ begin
     current_steward_result.delegation_authority_id,
     current_steward_result.role_id,
     (select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
-      'permissionId', declaration.permission_id,
-      'meaningFingerprint', declaration.meaning_fingerprint
+      'permissionId', declaration.permission_id
     ) order by declaration.permission_id) from required_declaration as declaration)
   into steward_role_is_qualified, existing_role_assignment_id,
     existing_delegation_authority_id, existing_steward_role_id, guarded_minimum
@@ -326,8 +322,7 @@ begin
         'applicationRootId', permission.application_root_id,
         'ownerKind', permission.owner_kind, 'ownerId', permission.owner_id,
         'permissionId', permission.permission_id,
-        'acceptedRegistrationRevision', permission.accepted_registration_revision,
-        'meaningFingerprint', permission.meaning_fingerprint
+        'acceptedRegistrationRevision', permission.accepted_registration_revision
       )) as permission
     from vortex_access.organization_role_permission_entries as permission
     where permission.organization_id = context_organization_id
@@ -393,8 +388,7 @@ begin
   end if;
 
   select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
-    'permissionId', declaration.permission_id,
-    'meaningFingerprint', declaration.meaning_fingerprint
+    'permissionId', declaration.permission_id
   ) order by declaration.permission_id)
   into current_guarded_minimum
   from vortex_access.read_guarded_platform_permission_minimum_internal() as declaration;
@@ -561,8 +555,7 @@ begin
               and continuity.permission_id = permission.permission_id
               and continuity.state = 'available'
               and continuity.continuity_revision = permission.continuity_revision
-              and continuity.meaning_fingerprint = permission.meaning_fingerprint
-            join vortex_access.permission_registrations as registration
+              join vortex_access.permission_registrations as registration
               on registration.organization_id = permission.organization_id
               and registration.registration_kind = 'platform'
               and registration.registration_owner_id =
@@ -578,7 +571,6 @@ begin
               and entry.owner_kind = 'platform'
               and entry.owner_id = platform_owner_id
               and entry.permission_id = permission.permission_id
-              and entry.meaning_fingerprint = permission.meaning_fingerprint
             where permission.organization_id = role.organization_id
               and permission.role_id = role.role_id
               and permission.role_revision = role.live_revision
@@ -586,7 +578,6 @@ begin
               and permission.owner_kind = 'platform'
               and permission.owner_id = platform_owner_id
               and permission.permission_id = (required.value ->> 'permissionId')::uuid
-              and permission.meaning_fingerprint = required.value ->> 'meaningFingerprint'
           )
         )
     ) then
@@ -598,8 +589,7 @@ begin
     context_organization_id
   );
   select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
-    'permissionId', declaration.permission_id,
-    'meaningFingerprint', declaration.meaning_fingerprint
+    'permissionId', declaration.permission_id
   ) order by declaration.permission_id)
   into current_guarded_minimum
   from vortex_access.read_guarded_platform_permission_minimum_internal() as declaration;
