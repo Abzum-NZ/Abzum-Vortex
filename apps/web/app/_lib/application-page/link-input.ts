@@ -203,6 +203,40 @@ const installedLinkField = (
   return undefined;
 };
 
+/** Finds the projected parent control of a dependent link input from the installed field. */
+export const projectedLinkParentControl = (
+  context: InstalledRuntimeContext,
+  page: Readonly<Record<string, unknown>>,
+  placementId: string,
+):
+  | Readonly<{ kind: "none" }>
+  | Readonly<{ kind: "parent"; placementId: string }>
+  | Readonly<{ kind: "unavailable" }> => {
+  const placements = collectPlacements(page);
+  const child = placements.find((placement) => sameId(placement.placementId, placementId));
+  if (child === undefined) return { kind: "unavailable" };
+  const field = isRecord(child.settings.field) ? child.settings.field.fieldId : undefined;
+  const dependency =
+    typeof field === "string" ? installedLinkField(context, field)?.dependency : undefined;
+  if (dependency === undefined) return { kind: "none" };
+  if (dependency.parentTarget === undefined) return { kind: "unavailable" };
+  const parents = placements.filter((placement) => {
+    const parentField = isRecord(placement.settings.field)
+      ? placement.settings.field.fieldId
+      : undefined;
+    return (
+      typeof parentField === "string" &&
+      sameId(parentField, dependency.parentFieldId) &&
+      (child.formId === undefined
+        ? placement.formId === undefined
+        : placement.formId !== undefined && sameId(placement.formId, child.formId))
+    );
+  });
+  return parents.length === 1
+    ? { kind: "parent", placementId: parents[0]!.placementId }
+    : { kind: "unavailable" };
+};
+
 /**
  * The record type a Records table's link picker on `fieldId` may offer, for one purpose. A filter
  * needs the field declared by the table's Column filters feature; an edit needs it declared by the
