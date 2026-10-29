@@ -99,6 +99,7 @@ export const createFlowInvocationHandler =
         body.organizationShortName,
         body.applicationKey,
         body.pageKey,
+        "addressed",
       );
       if (address.kind === "temporarily_unavailable")
         return privateResponse({ kind: "unavailable" }, 503);
