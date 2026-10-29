@@ -150,6 +150,8 @@ export type FlowRunState = Readonly<{
   version: typeof flowRunStateVersion;
   runId: string;
   now: string;
+  /** The date at this instant in the organisation's time zone, for date deadlines. */
+  organizationLocalDate?: string;
   actor?: string;
   /** The page record and revision the person saw; protected tasks still recheck access and revision. */
   subject?: FlowSubject;
@@ -272,6 +274,8 @@ export type FlowRunStart = Readonly<{
   flowId: string;
   inputs: Readonly<Record<string, unknown>>;
   now: string;
+  /** The date at this instant in the organisation's time zone, for date deadlines. */
+  organizationLocalDate?: string;
   actor?: string;
   /** Page record evidence retained with the run across form and confirmation pauses. */
   subject?: FlowSubject;
@@ -408,6 +412,9 @@ const scopeOf = (
   resolveForm?: FlowFormReferenceResolver,
 ): FlowFormulaScope => ({
   now: state.now,
+  ...(state.organizationLocalDate === undefined
+    ? {}
+    : { organizationLocalDate: state.organizationLocalDate }),
   reference: (reference: FlowReference) => {
     switch (reference.source) {
       case "input":
@@ -1239,6 +1246,9 @@ export const startFlowRun = (
     version: flowRunStateVersion,
     runId: start.runId,
     now: start.now,
+    ...(start.organizationLocalDate === undefined
+      ? {}
+      : { organizationLocalDate: start.organizationLocalDate }),
     ...(start.actor === undefined ? {} : { actor: start.actor }),
     ...(start.subject === undefined ? {} : { subject: start.subject }),
     activations: [],
