@@ -3,7 +3,6 @@ import "server-only";
 import type { SelectedOrganizationScope } from "../access/identity-access";
 import type { JsonValue } from "../catalogue/common";
 import type { ModuleField } from "../definition/module-contracts";
-import { sameId } from "../catalogue/runtime-primitives";
 import {
   applicationSearchSchema,
   type ApplicationSearch,
@@ -12,13 +11,8 @@ import {
   moduleFieldValueSchemas,
   type RecordRichTextDocument,
 } from "../records/module-field-values";
-import { matchLiteralSearch } from "./literal-search";
-import { matchesSearchFilters, prepareSearchFilters, splitSearchFilters } from "./search-filters";
-import { searchPriorityWeights, type SearchDocument } from "./document-store";
-import type {
-  PermittedSearchCurrentRead,
-  PermittedSearchCurrentReadRequest,
-} from "./permitted-search";
+import { literalSearchTerms } from "./literal-search";
+import { prepareSearchFilters, splitSearchFilters } from "./search-filters";
 
 export type ApplicationSearchRecord = Readonly<{
   concurrencyNumber: number;
@@ -33,10 +27,24 @@ export type ApplicationSearchMatch = Readonly<{
   subtitle?: string;
   rank: number;
 }>;
+export type SearchPosition = Readonly<{ score: number; id: string }>;
+export type SearchScanState = Readonly<{
+  scan: SearchPosition | null;
+  held: readonly SearchPosition[];
+  done: boolean;
+}>;
+export type SearchCursor = Readonly<{
+  after: SearchPosition | null;
+  types: Readonly<Record<string, SearchScanState>>;
+}>;
 export type ApplicationSearchResult =
   | Readonly<{ kind: "disabled" }>
   | Readonly<{ kind: "refused"; reason?: string }>
-  | Readonly<{ kind: "available"; matches: readonly ApplicationSearchMatch[] }>;
+  | Readonly<{
+      kind: "available";
+      matches: readonly ApplicationSearchMatch[];
+      cursor?: SearchCursor;
+    }>;
 
 const boundedDisplayText = (value: string): string | undefined => {
   const text = value
@@ -105,23 +113,40 @@ const displayValue = (value: JsonValue | undefined): string | undefined => {
   return boundedDisplayText(text.join(" "));
 };
 
-/**
- * The composition root supplies an installed release and one current human transaction.
- * Configuration is not a browser command. Matching, ranking and presentation all follow the
- * fixed Record read; a stale index revision contributes neither a match nor a page slot.
- */
+/** The database page performs matching and current record permission before ranking. */
 export const searchConfiguredApplication = async (
   input: Readonly<{
     scope: SelectedOrganizationScope;
     configuration: ApplicationSearch | undefined;
     expression: string;
     fieldsByRecordType: ReadonlyMap<string, readonly ModuleField[]>;
-    /** Index documents of one record type in bounded batches; the batch size is the permitted-search candidate bound. */
-    candidateBatches(recordTypeId: string): AsyncIterable<readonly SearchDocument[]>;
-    /** Keyed by lower-case record identity; a record that cannot be read now is absent. */
-    readCurrentRecords(
-      request: PermittedSearchCurrentReadRequest,
-    ): Promise<ReadonlyMap<string, ApplicationSearchRecord>>;
+    allowedRecordTypeIds: ReadonlySet<string>;
+    cursor?: SearchCursor;
+    limit: number;
+    readPage(
+      request: Readonly<{
+        recordTypeId: string;
+        fields: ApplicationSearch["recordTypes"][number]["fields"];
+        titleFieldId: string;
+        terms: NonNullable<ReturnType<typeof literalSearchTerms>>;
+        filters: NonNullable<ReturnType<typeof prepareSearchFilters>>;
+        after?: SearchPosition;
+        state?: SearchScanState;
+        limit: number;
+        maxVisits: number;
+      }>,
+    ): Promise<
+      Readonly<{
+        rows: readonly Readonly<{
+          recordId: string;
+          rank: number;
+          record: ApplicationSearchRecord;
+        }>[];
+        state: SearchScanState;
+        visits: number;
+        frontier?: SearchPosition;
+      }>
+    >;
   }>,
 ): Promise<ApplicationSearchResult> => {
   if (input.configuration === undefined || !input.configuration.enabled)
@@ -133,17 +158,40 @@ export const searchConfiguredApplication = async (
     );
     return { kind: "refused" };
   }
-  const matches: ApplicationSearchMatch[] = [];
   const expression = splitSearchFilters(input.expression);
   if (expression === undefined || (expression.literal === "" && expression.filters.length === 0))
     return { kind: "refused", reason: "Check the search expression." };
+  const terms = literalSearchTerms(expression.literal);
+  if (terms === undefined) return { kind: "refused", reason: "Check the search expression." };
+  const matches: ApplicationSearchMatch[] = [];
+  const states: Record<string, SearchScanState> = {};
+  let boundary: SearchPosition | undefined;
+  const eligibleTypes = parsed.data.recordTypes.filter(
+    (entry) =>
+      entry.recordType.state === "resolved" &&
+      input.allowedRecordTypeIds.has(String(entry.recordType.recordTypeId).toLowerCase()),
+  );
+  let remainingTypes = eligibleTypes.length;
+  let visits = 0;
+  let heldReads = 0;
+  let reservedHeld = eligibleTypes.reduce((total, entry) => {
+    if (entry.recordType.state !== "resolved") return total;
+    return (
+      total +
+      (input.cursor?.types[String(entry.recordType.recordTypeId).toLowerCase()]?.held.length ?? 0)
+    );
+  }, 0);
+  if (reservedHeld > 200)
+    return { kind: "refused", reason: "The search continuation is invalid. Run the search again." };
+  const before = (left: SearchPosition, right: SearchPosition): boolean =>
+    left.score > right.score || (left.score === right.score && left.id.localeCompare(right.id) < 0);
   for (const entry of parsed.data.recordTypes) {
     if (entry.recordType.state !== "resolved") {
       console.error("[search] refused SEARCH_RECORD_TYPE_NOT_RESOLVED");
       return { kind: "refused" };
     }
-    const recordTypeId = String(entry.recordType.recordTypeId);
-    const fields = input.fieldsByRecordType.get(recordTypeId.toLowerCase());
+    const recordTypeId = String(entry.recordType.recordTypeId).toLowerCase();
+    const fields = input.fieldsByRecordType.get(recordTypeId);
     if (fields === undefined) throw new Error("SEARCH_RECORD_TYPE_FIELDS_MISSING");
     const filters = prepareSearchFilters(
       expression.filters,
@@ -152,52 +200,37 @@ export const searchConfiguredApplication = async (
     );
     if (filters === undefined)
       return { kind: "refused", reason: "A filter field or value is not valid for this search." };
-    for await (const batch of input.candidateBatches(recordTypeId)) {
-      const current = new Map<string, ApplicationSearchRecord>();
-      const indexed = new Map(
-        batch.map((candidate) => [candidate.recordId.toLowerCase(), candidate]),
-      );
-      const result = await matchLiteralSearch(
-        {
-          expression: expression.literal,
-          ...(expression.literal === "" ? { matchAll: true } : {}),
-          search: {
-            access: input.scope,
-            request: {
-              applicationRootId: input.scope.applicationRootId,
-              recordTypeId,
-              requestedFieldIds: entry.fields.map((field) => String(field.fieldId)),
-            },
-            candidates: batch,
-          },
-        },
-        {
-          readCurrentRecords: async (request) => {
-            const records = await input.readCurrentRecords(request);
-            const reads = new Map<string, PermittedSearchCurrentRead>();
-            for (const [recordId, record] of records) {
-              if (record.concurrencyNumber !== indexed.get(recordId)?.sourceRecordVersion) continue;
-              current.set(recordId, record);
-              reads.set(recordId, {
-                outcome: "allowed",
-                concurrencyNumber: record.concurrencyNumber,
-                readableFieldIds: Object.keys(record.values),
-              });
-            }
-            return reads;
-          },
-        },
-      );
-      if (result.outcome === "refused") {
-        console.error("[search] refused SEARCH_PERMITTED_QUERY_REFUSED");
-        return { kind: "refused" };
-      }
-      for (const match of result.matches) {
-        const record = current.get(match.candidate.recordId.toLowerCase());
-        if (record === undefined) continue;
-        if (!matchesSearchFilters(filters, record.values)) continue;
+    if (!input.allowedRecordTypeIds.has(recordTypeId)) continue;
+    let state = input.cursor?.types[recordTypeId];
+    reservedHeld -= state?.held.length ?? 0;
+    const visitBudget = Math.floor((200 - visits) / remainingTypes);
+    remainingTypes -= 1;
+    let typeVisits = 0;
+    let after = input.cursor?.after ?? undefined;
+    let displayed = 0;
+    let frontier: SearchPosition | undefined;
+    while (displayed < input.limit + 1 && typeVisits < visitBudget) {
+      if (state?.done && state.held.length === 0) break;
+      if (heldReads + (state?.held.length ?? 0) + reservedHeld > 200) break;
+      heldReads += state?.held.length ?? 0;
+      const page = await input.readPage({
+        recordTypeId,
+        fields: entry.fields,
+        titleFieldId: String(entry.titleFieldId),
+        terms,
+        filters,
+        ...(after === undefined ? {} : { after }),
+        ...(state === undefined ? {} : { state }),
+        limit: Math.min(input.limit + 1 - displayed, 200),
+        maxVisits: visitBudget - typeVisits,
+      });
+      visits += page.visits;
+      typeVisits += page.visits;
+      state = page.state;
+      frontier = page.frontier;
+      for (const row of page.rows) {
         const values = new Map(
-          Object.entries(record.values).map(([fieldId, value]) => [fieldId.toLowerCase(), value]),
+          Object.entries(row.record.values).map(([id, value]) => [id.toLowerCase(), value]),
         );
         const title = displayValue(values.get(String(entry.titleFieldId).toLowerCase()));
         if (title === undefined) continue;
@@ -205,37 +238,69 @@ export const searchConfiguredApplication = async (
           entry.subtitleFieldId === undefined
             ? undefined
             : displayValue(values.get(String(entry.subtitleFieldId).toLowerCase()));
-        const rank = match.matchedFields.reduce((total, matched) => {
-          const selected = entry.fields.find((field) =>
-            sameId(String(field.fieldId), matched.fieldId),
-          );
-          return (
-            total +
-            (selected === undefined
-              ? 0
-              : searchPriorityWeights[selected.priority] * matched.termIndices.length)
-          );
-        }, 0);
         matches.push({
-          recordId: match.candidate.recordId,
+          recordId: row.recordId,
           recordTypeId,
           targetPageId: String(entry.targetPageId),
-          concurrencyNumber: record.concurrencyNumber,
+          concurrencyNumber: row.record.concurrencyNumber,
           title,
           ...(subtitle === undefined ? {} : { subtitle }),
-          rank,
+          rank: row.rank,
         });
+        displayed += 1;
       }
-      // Only the best 200 permitted results can be paged through. Keep memory bounded
-      // while still evaluating every candidate for the globally ranked result set.
-      matches.sort(
-        (left, right) => right.rank - left.rank || left.recordId.localeCompare(right.recordId),
-      );
-      matches.length = Math.min(matches.length, 200);
+      const last = page.rows[page.rows.length - 1];
+      if (last !== undefined) after = { score: last.rank, id: last.recordId };
+      if (page.visits === 0 && page.rows.length === 0) break;
     }
+    if (state === undefined) throw new Error("SEARCH_SCAN_STATE_MISSING");
+    states[recordTypeId] = state;
+    if (frontier !== undefined && (boundary === undefined || before(frontier, boundary)))
+      boundary = frontier;
   }
   matches.sort(
     (left, right) => right.rank - left.rank || left.recordId.localeCompare(right.recordId),
   );
-  return { kind: "available", matches };
+  const selected = matches
+    .filter(
+      (match) =>
+        boundary === undefined || before({ score: match.rank, id: match.recordId }, boundary),
+    )
+    .slice(0, input.limit);
+  const selectedIds = new Set(selected.map((match) => `${match.recordTypeId}:${match.recordId}`));
+  for (const match of matches) {
+    if (selectedIds.has(`${match.recordTypeId}:${match.recordId}`)) continue;
+    const state = states[match.recordTypeId];
+    if (state === undefined) throw new Error("SEARCH_SCAN_STATE_MISSING");
+    const held = [...state.held, { id: match.recordId, score: match.rank }]
+      .sort((left, right) => right.score - left.score || left.id.localeCompare(right.id))
+      .slice(0, 200);
+    states[match.recordTypeId] = { ...state, held };
+  }
+  // A group can return at most 200 rows, so lower held ranks cannot enter it.
+  const held = Object.entries(states)
+    .flatMap(([recordTypeId, state]) => state.held.map((position) => ({ recordTypeId, position })))
+    .sort(
+      (left, right) =>
+        right.position.score - left.position.score ||
+        left.position.id.localeCompare(right.position.id),
+    )
+    .slice(0, 200);
+  for (const [recordTypeId, state] of Object.entries(states)) {
+    states[recordTypeId] = {
+      ...state,
+      held: held.filter((item) => item.recordTypeId === recordTypeId).map((item) => item.position),
+    };
+  }
+  const last = selected[selected.length - 1];
+  const cursor = Object.values(states).some((state) => !state.done || state.held.length > 0)
+    ? {
+        after:
+          last === undefined
+            ? (input.cursor?.after ?? null)
+            : { score: last.rank, id: last.recordId },
+        types: states,
+      }
+    : undefined;
+  return { kind: "available", matches: selected, ...(cursor === undefined ? {} : { cursor }) };
 };
