@@ -50,7 +50,10 @@ const inlineSchemaAt = (depth: number, insideLink: boolean): z.ZodType<RichTextI
       .strict(),
     insideLink
       ? link.superRefine((_, context) => {
-          context.addIssue({ code: "custom", message: "A link cannot be placed inside another link" });
+          context.addIssue({
+            code: "custom",
+            message: "A link cannot be placed inside another link",
+          });
         })
       : link,
   ]);
@@ -79,6 +82,4 @@ export const richTextBlockSchema = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 
-export const richTextDocumentSchema = z
-  .object({ blocks: z.array(richTextBlockSchema) })
-  .strict();
+export const richTextDocumentSchema = z.object({ blocks: z.array(richTextBlockSchema) }).strict();

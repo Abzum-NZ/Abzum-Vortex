@@ -230,11 +230,17 @@ export async function saveStudioApplication(
     after(async () => {
       const resolved = await resolveIdentitySession();
       if (resolved.kind !== "active") {
-        console.error(`[studio] preview move skipped: STUDIO_PREVIEW_MOVE_SESSION_NOT_ACTIVE ${resolved.kind} revision=${draft.draftRevision}`);
+        console.error(
+          `[studio] preview move skipped: STUDIO_PREVIEW_MOVE_SESSION_NOT_ACTIVE ${resolved.kind} revision=${draft.draftRevision}`,
+        );
         return;
       }
-      await scheduleStudioPreviewMove(resolved.session, organizationIdSchema.parse(draft.organizationId),
-        applicationRootIdSchema.parse(draft.rootId), draft.draftRevision);
+      await scheduleStudioPreviewMove(
+        resolved.session,
+        organizationIdSchema.parse(draft.organizationId),
+        applicationRootIdSchema.parse(draft.rootId),
+        draft.draftRevision,
+      );
     });
     return saved;
   }

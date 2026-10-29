@@ -6,10 +6,7 @@ export const applicationPlatformCompatibilityVersionSchema = semanticVersionSche
 // Advance this trusted protocol version deliberately when Application package/runtime
 // compatibility changes. It is independent of the repository package and permission catalogue.
 const currentApplicationPlatformCompatibilityVersion = "1.0.0" as const;
-applicationPlatformCompatibilityVersionSchema.parse(
-  currentApplicationPlatformCompatibilityVersion,
-);
+applicationPlatformCompatibilityVersionSchema.parse(currentApplicationPlatformCompatibilityVersion);
 
 export const APPLICATION_PLATFORM_COMPATIBILITY_VERSION =
   currentApplicationPlatformCompatibilityVersion;
-

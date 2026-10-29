@@ -1,7 +1,10 @@
 import "server-only";
 
 import { logRefusal } from "@vortex/platform/schema";
-import { parseComponentBootstrapTarget, renderComponentBootstrapDocument } from "@vortex/platform/server";
+import {
+  parseComponentBootstrapTarget,
+  renderComponentBootstrapDocument,
+} from "@vortex/platform/server";
 import {
   configuredComponentOrigin,
   configuredSiteOrigin,

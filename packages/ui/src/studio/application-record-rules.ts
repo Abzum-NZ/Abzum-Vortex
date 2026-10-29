@@ -1,4 +1,9 @@
-import { flowTaskChildLists, type ApplicationSourceDocument, type FlowValue, type SourceFlow } from "@vortex/platform/schema";
+import {
+  flowTaskChildLists,
+  type ApplicationSourceDocument,
+  type FlowValue,
+  type SourceFlow,
+} from "@vortex/platform/schema";
 import { studioFlowLabel } from "./semantic-selection";
 
 /**
@@ -19,14 +24,21 @@ export type StudioRecordRule = Readonly<{
 }>;
 
 const textOf = (value: FlowValue | undefined): string | undefined =>
-  value?.kind === "literal" && typeof value.literal.value === "string" ? value.literal.value : undefined;
+  value?.kind === "literal" && typeof value.literal.value === "string"
+    ? value.literal.value
+    : undefined;
 
 const beforeSaveTrigger = (flow: SourceFlow, recordKey: string) =>
-  flow.triggers.find((trigger) => trigger.type === "BeforeSave" && trigger.recordTypeId === recordKey);
+  flow.triggers.find(
+    (trigger) => trigger.type === "BeforeSave" && trigger.recordTypeId === recordKey,
+  );
 
 /** The rules of one record type of an owned module, in the order the module holds them. */
-export const studioRecordRules = (source: Readonly<ApplicationSourceDocument>, moduleKey: string, recordKey: string):
-  readonly StudioRecordRule[] => {
+export const studioRecordRules = (
+  source: Readonly<ApplicationSourceDocument>,
+  moduleKey: string,
+  recordKey: string,
+): readonly StudioRecordRule[] => {
   const module = source.body.modules.find((entry) => entry.key === moduleKey);
   const record = module?.record_types.find((entry) => entry.key === recordKey);
   if (module === undefined || record === undefined) return [];
@@ -44,18 +56,32 @@ export const studioRecordRules = (source: Readonly<ApplicationSourceDocument>, m
       for (const task of tasks) {
         if ("properties" in task) {
           const message = textOf(task.properties.message);
-          if (task.type === "rule.refuse") effects.push(`Refuses the save: ${message ?? "with a reason"}`);
+          if (task.type === "rule.refuse")
+            effects.push(`Refuses the save: ${message ?? "with a reason"}`);
           else if (task.type === "rule.warn") effects.push(`Warns: ${message ?? "with a message"}`);
-          else if (task.type === "rule.require") effects.push(`Requires ${fieldLabel(textOf(task.properties.field))}`);
+          else if (task.type === "rule.require")
+            effects.push(`Requires ${fieldLabel(textOf(task.properties.field))}`);
         }
-        for (const child of flowTaskChildLists(task as never)) visit(child.tasks as unknown as readonly SourceTask[]);
+        for (const child of flowTaskChildLists(task as never))
+          visit(child.tasks as unknown as readonly SourceTask[]);
       }
     };
     visit(flow.tasks);
-    return [{ flowAlias: flow.id, name: studioFlowLabel(flow),
-      when: create && update ? "Before a record is created or changed" : create ? "Before a record is created"
-        : update ? "Before a record is changed" : "Before a named action moves a record on",
-      effects }];
+    return [
+      {
+        flowAlias: flow.id,
+        name: studioFlowLabel(flow),
+        when:
+          create && update
+            ? "Before a record is created or changed"
+            : create
+              ? "Before a record is created"
+              : update
+                ? "Before a record is changed"
+                : "Before a named action moves a record on",
+        effects,
+      },
+    ];
   });
 };
 
@@ -64,19 +90,33 @@ export type StudioRecordRuleDelete =
   | Readonly<{ kind: "refused"; reason: string }>;
 
 /** Deletes one rule from its module, refused while another flow of the draft runs it. */
-export const deleteStudioRecordRule = (source: Readonly<ApplicationSourceDocument>, moduleKey: string, flowAlias: string):
-  StudioRecordRuleDelete => {
+export const deleteStudioRecordRule = (
+  source: Readonly<ApplicationSourceDocument>,
+  moduleKey: string,
+  flowAlias: string,
+): StudioRecordRuleDelete => {
   const candidate: ApplicationSourceDocument = structuredClone(source);
   const module = candidate.body.modules.find((entry) => entry.key === moduleKey);
   const flow = module?.flows.find((entry) => entry.id === flowAlias);
-  if (module === undefined || flow === undefined) return { kind: "refused", reason: "This rule is no longer in the draft." };
-  const runs = (tasks: readonly SourceTask[]): boolean => tasks.some((task) =>
-    ("flowId" in task && (task.flowId === flow.id || task.flowId === flow.key)) ||
-    flowTaskChildLists(task as never).some((child) => runs(child.tasks as unknown as readonly SourceTask[])));
-  const caller = [...candidate.body.flows, ...candidate.body.modules.flatMap((entry) => entry.flows)]
-    .find((entry) => entry !== flow && runs([...entry.tasks, ...entry.errors, ...entry.finally]));
+  if (module === undefined || flow === undefined)
+    return { kind: "refused", reason: "This rule is no longer in the draft." };
+  const runs = (tasks: readonly SourceTask[]): boolean =>
+    tasks.some(
+      (task) =>
+        ("flowId" in task && (task.flowId === flow.id || task.flowId === flow.key)) ||
+        flowTaskChildLists(task as never).some((child) =>
+          runs(child.tasks as unknown as readonly SourceTask[]),
+        ),
+    );
+  const caller = [
+    ...candidate.body.flows,
+    ...candidate.body.modules.flatMap((entry) => entry.flows),
+  ].find((entry) => entry !== flow && runs([...entry.tasks, ...entry.errors, ...entry.finally]));
   if (caller !== undefined)
-    return { kind: "refused", reason: `${studioFlowLabel(caller)} runs this rule, so it cannot be deleted. Remove that step first.` };
+    return {
+      kind: "refused",
+      reason: `${studioFlowLabel(caller)} runs this rule, so it cannot be deleted. Remove that step first.`,
+    };
   module.flows = module.flows.filter((entry) => entry !== flow);
   return { kind: "deleted", source: candidate };
 };

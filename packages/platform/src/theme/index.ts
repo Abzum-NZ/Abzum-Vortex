@@ -20,11 +20,7 @@ export { validateApplicationTheme } from "./resolver";
 
 export { resolveThemeSelection, validateThemeSelectionOptions } from "./selection";
 
-export {
-  createLocatedFailure,
-  createThemeLocation,
-  THEME_DEFAULT_RULE_CODE,
-} from "./errors";
+export { createLocatedFailure, createThemeLocation, THEME_DEFAULT_RULE_CODE } from "./errors";
 
 export type {
   ApplicationTheme,

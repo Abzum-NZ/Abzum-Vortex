@@ -3,19 +3,11 @@
   "sqlFingerprint": "sha256:18247b3fd1c3182810be78c4138b0e52ae3211c2c0e0d7bc552337912748b09f",
   "vectors": [
     {
-      "parts": [
-        "owned_module_root",
-        "976237d6-a416-41d3-82b8-47c1c506743b",
-        "vortex.crm.people"
-      ],
+      "parts": ["owned_module_root", "976237d6-a416-41d3-82b8-47c1c506743b", "vortex.crm.people"],
       "id": "c80d2be6-67bb-362c-bf92-933e95905d13"
     },
     {
-      "parts": [
-        "owned_module_root",
-        "00000000-0000-4000-8000-000000000001",
-        "acme.sales.leads"
-      ],
+      "parts": ["owned_module_root", "00000000-0000-4000-8000-000000000001", "acme.sales.leads"],
       "id": "71ecd736-5fb7-337d-9745-9d164469bce2"
     },
     {
@@ -59,17 +51,11 @@
       "id": "526817bd-1be3-351b-8b19-3dc7287aed95"
     },
     {
-      "parts": [
-        "a"
-      ],
+      "parts": ["a"],
       "id": "0cc175b9-c0f1-36a8-b1c3-99e269772661"
     },
     {
-      "parts": [
-        "",
-        "",
-        ""
-      ],
+      "parts": ["", "", ""],
       "id": "2e6f2bd5-dba2-382b-b662-ac46923808ce"
     }
   ]

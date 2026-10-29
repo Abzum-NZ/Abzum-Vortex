@@ -1,6 +1,10 @@
 import {
-  collectNavigationPermissionKeys, projectNavigation,
-  type ApplicationSourceDocument, type NavigationItem, type NavigationPermissionDecisions, type ProjectedNavigation,
+  collectNavigationPermissionKeys,
+  projectNavigation,
+  type ApplicationSourceDocument,
+  type NavigationItem,
+  type NavigationPermissionDecisions,
+  type ProjectedNavigation,
 } from "@vortex/platform/schema";
 
 /**
@@ -23,15 +27,38 @@ export const studioDraftNavigation = (
   };
   const item = (entry: ApplicationSourceDocument["body"]["navigation"][number]): NavigationItem => {
     switch (entry.type) {
-      case "heading": return { type: "heading", id: entry.id, label: entry.label, icon: entry.icon,
-        children: entry.children.map(item) } as unknown as NavigationItem;
-      case "page": return { type: "page", id: entry.id, label: entry.label, icon: entry.icon,
-        pageId: pageIdOf(entry.page), permissionKey: entry.permission } as unknown as NavigationItem;
-      case "external": return { type: "external", id: entry.id, label: entry.label, icon: entry.icon,
-        address: entry.address, permissionKey: entry.permission } as unknown as NavigationItem;
+      case "heading":
+        return {
+          type: "heading",
+          id: entry.id,
+          label: entry.label,
+          icon: entry.icon,
+          children: entry.children.map(item),
+        } as unknown as NavigationItem;
+      case "page":
+        return {
+          type: "page",
+          id: entry.id,
+          label: entry.label,
+          icon: entry.icon,
+          pageId: pageIdOf(entry.page),
+          permissionKey: entry.permission,
+        } as unknown as NavigationItem;
+      case "external":
+        return {
+          type: "external",
+          id: entry.id,
+          label: entry.label,
+          icon: entry.icon,
+          address: entry.address,
+          permissionKey: entry.permission,
+        } as unknown as NavigationItem;
     }
   };
   const navigation = source.body.navigation.map(item);
-  return projectNavigation(navigation, decisions ??
-    Object.fromEntries(collectNavigationPermissionKeys(navigation).map((key) => [key, true])));
+  return projectNavigation(
+    navigation,
+    decisions ??
+      Object.fromEntries(collectNavigationPermissionKeys(navigation).map((key) => [key, true])),
+  );
 };

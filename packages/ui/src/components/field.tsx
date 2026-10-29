@@ -80,7 +80,10 @@ function FieldContent({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="field-content"
-      className={cn("cn-field-content group/field-content flex flex-1 flex-col leading-snug", className)}
+      className={cn(
+        "cn-field-content group/field-content flex flex-1 flex-col leading-snug",
+        className,
+      )}
       {...props}
     />
   );

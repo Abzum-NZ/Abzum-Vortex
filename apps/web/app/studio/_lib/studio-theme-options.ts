@@ -34,8 +34,10 @@ export type StudioThemeOptions = Readonly<{
 }>;
 
 /** Whether every setting of a selection is an option the Theme tab offers; the first one that is not is named. */
-export const studioThemeUnofferedSetting = (options: StudioThemeOptions, selection: SourceApplicationThemeSelection):
-  Readonly<{ dimension: StudioThemeDimension; value: string }> | undefined => {
+export const studioThemeUnofferedSetting = (
+  options: StudioThemeOptions,
+  selection: SourceApplicationThemeSelection,
+): Readonly<{ dimension: StudioThemeDimension; value: string }> | undefined => {
   for (const dimension of options.dimensions) {
     const value = selection[dimension.key];
     if (!dimension.options.some((option) => option.id === value)) return { dimension, value };
@@ -44,5 +46,11 @@ export const studioThemeUnofferedSetting = (options: StudioThemeOptions, selecti
 };
 
 /** A setting's option label, for messages. */
-export const studioThemeOptionLabel = (options: StudioThemeOptions, key: StudioThemeDimensionKey, id: string): string =>
-  options.dimensions.find((dimension) => dimension.key === key)?.options.find((option) => option.id === id)?.label ?? id;
+export const studioThemeOptionLabel = (
+  options: StudioThemeOptions,
+  key: StudioThemeDimensionKey,
+  id: string,
+): string =>
+  options.dimensions
+    .find((dimension) => dimension.key === key)
+    ?.options.find((option) => option.id === id)?.label ?? id;

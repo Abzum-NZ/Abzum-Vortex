@@ -17,7 +17,9 @@ const writeApplicationDraft = async (
   try {
     const resolved = await resolveIdentitySession();
     if (resolved.kind !== "active") {
-      console.error(`[studio] application draft ${mode} refused STUDIO_DRAFT_${mode.toUpperCase()}_SESSION_NOT_ACTIVE: ${resolved.kind}`);
+      console.error(
+        `[studio] application draft ${mode} refused STUDIO_DRAFT_${mode.toUpperCase()}_SESSION_NOT_ACTIVE: ${resolved.kind}`,
+      );
       return resolved.kind === "temporarily_unavailable"
         ? { kind: "temporarily_unavailable" }
         : { kind: "refused", reason: "session_ended" };

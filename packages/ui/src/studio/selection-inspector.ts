@@ -9,7 +9,11 @@ import {
   type SourcePageData,
   isRecord,
 } from "@vortex/platform/schema";
-import { studioFlowLabel, studioFlowTaskEntries, type StudioSemanticSelection } from "./semantic-selection";
+import {
+  studioFlowLabel,
+  studioFlowTaskEntries,
+  type StudioSemanticSelection,
+} from "./semantic-selection";
 
 /** The current Application draft, whether supplied by history or a direct source load. */
 export type StudioSelectionInspectorDraft = Readonly<{
@@ -61,7 +65,6 @@ const refused = (
   reason: Extract<StudioSelectionInspectorResolution, { status: "refused" }>["reason"],
 ): StudioSelectionInspectorResolution => result({ status: "refused", reason });
 
-
 const hasExactKeys = (value: Record<string, unknown>, expected: readonly string[]): boolean => {
   const actual = Reflect.ownKeys(value);
   return (
@@ -70,9 +73,7 @@ const hasExactKeys = (value: Record<string, unknown>, expected: readonly string[
   );
 };
 
-const parseSelection = (
-  selection: unknown,
-): ParsedSelection | null | undefined => {
+const parseSelection = (selection: unknown): ParsedSelection | null | undefined => {
   if (selection === null) return null;
   if (!isRecord(selection)) return undefined;
 
@@ -87,15 +88,25 @@ const parseSelection = (
     case "flow": {
       if (!hasExactKeys(selection, ["kind", "flowAlias", "moduleKey"])) return undefined;
       const { flowAlias, moduleKey } = selection;
-      if (typeof flowAlias !== "string" || flowAlias.length === 0 ||
-        (moduleKey !== null && typeof moduleKey !== "string")) return undefined;
+      if (
+        typeof flowAlias !== "string" ||
+        flowAlias.length === 0 ||
+        (moduleKey !== null && typeof moduleKey !== "string")
+      )
+        return undefined;
       return Object.freeze({ kind: "flow", alias: flowAlias, moduleKey });
     }
     case "flow_step": {
       if (!hasExactKeys(selection, ["kind", "flowAlias", "moduleKey", "taskId"])) return undefined;
       const { flowAlias, moduleKey, taskId } = selection;
-      if (typeof flowAlias !== "string" || flowAlias.length === 0 || typeof taskId !== "string" || taskId.length === 0 ||
-        (moduleKey !== null && typeof moduleKey !== "string")) return undefined;
+      if (
+        typeof flowAlias !== "string" ||
+        flowAlias.length === 0 ||
+        typeof taskId !== "string" ||
+        taskId.length === 0 ||
+        (moduleKey !== null && typeof moduleKey !== "string")
+      )
+        return undefined;
       return Object.freeze({ kind: "flow_step", alias: flowAlias, moduleKey, taskId });
     }
     case "page":
@@ -107,13 +118,14 @@ const parseSelection = (
         selection.kind === "navigation"
           ? "navigationItemAlias"
           : selection.kind === "placement"
-              ? "placementAlias"
-              : selection.kind === "shell"
-                ? "shellAlias"
-                : selection.kind === "role" ? "roleKey" : "pageAlias";
+            ? "placementAlias"
+            : selection.kind === "shell"
+              ? "shellAlias"
+              : selection.kind === "role"
+                ? "roleKey"
+                : "pageAlias";
       if (!hasExactKeys(selection, ["kind", aliasField])) return undefined;
-      const alias =
-        selection[aliasField];
+      const alias = selection[aliasField];
       if (typeof alias !== "string" || alias.length === 0) return undefined;
       return Object.freeze({ kind: selection.kind, alias }) as ParsedSelection;
     }
@@ -178,7 +190,10 @@ const placementCandidates = (
   };
   const visitData = (data: SourcePageData, path: SourcePath): void => {
     for (const [zone, items] of sourcePageZones(data))
-      visitItems(items, zone === "content" ? [...path, "content"] : [...path, "root", "props", zone]);
+      visitItems(
+        items,
+        zone === "content" ? [...path, "content"] : [...path, "root", "props", zone],
+      );
   };
 
   source.body.shells.forEach((shell, index) =>
@@ -231,22 +246,26 @@ export const resolveStudioSelectionInspectorContext = (
       case "page":
         candidates = source.body.pages.flatMap((page, index) =>
           page.id === parsedSelection.alias
-            ? [{
-                alias: page.id,
-                label: page.name,
-                sourcePath: ["body", "pages", index],
-              }]
+            ? [
+                {
+                  alias: page.id,
+                  label: page.name,
+                  sourcePath: ["body", "pages", index],
+                },
+              ]
             : [],
         );
         break;
       case "shell":
         candidates = source.body.shells.flatMap((shell, index) =>
           shell.id === parsedSelection.alias
-            ? [{
-                alias: shell.id,
-                label: shell.name,
-                sourcePath: ["body", "shells", index],
-              }]
+            ? [
+                {
+                  alias: shell.id,
+                  label: shell.name,
+                  sourcePath: ["body", "shells", index],
+                },
+              ]
             : [],
         );
         break;
@@ -260,8 +279,7 @@ export const resolveStudioSelectionInspectorContext = (
             const itemPath = [...path, index] as const;
             if (item.id === parsedSelection.alias)
               candidates.push({ alias: item.id, label: item.label, sourcePath: itemPath });
-            if (item.type === "heading")
-              visitNavigation(item.children, [...itemPath, "children"]);
+            if (item.type === "heading") visitNavigation(item.children, [...itemPath, "children"]);
           });
         };
         visitNavigation(source.body.navigation, ["body", "navigation"]);
@@ -269,18 +287,31 @@ export const resolveStudioSelectionInspectorContext = (
       }
       case "flow":
       case "flow_step": {
-        const moduleIndex = parsedSelection.moduleKey === null ? -1
-          : source.body.modules.findIndex((module) => module.key === parsedSelection.moduleKey);
-        const owner = parsedSelection.moduleKey === null ? source.body.flows : source.body.modules[moduleIndex]?.flows ?? [];
-        const ownerPath: SourcePath = parsedSelection.moduleKey === null ? ["body", "flows"]
-          : ["body", "modules", moduleIndex, "flows"];
+        const moduleIndex =
+          parsedSelection.moduleKey === null
+            ? -1
+            : source.body.modules.findIndex((module) => module.key === parsedSelection.moduleKey);
+        const owner =
+          parsedSelection.moduleKey === null
+            ? source.body.flows
+            : (source.body.modules[moduleIndex]?.flows ?? []);
+        const ownerPath: SourcePath =
+          parsedSelection.moduleKey === null
+            ? ["body", "flows"]
+            : ["body", "modules", moduleIndex, "flows"];
         candidates = owner.flatMap((flow, index): InspectorCandidate[] => {
           if (flow.id !== parsedSelection.alias) return [];
           if (parsedSelection.kind === "flow")
-            return [{ alias: flow.id, label: studioFlowLabel(flow), sourcePath: [...ownerPath, index] }];
-          return studioFlowTaskEntries(flow).filter(({ task }) => task.id === parsedSelection.taskId)
-            .map(({ task, path }) => ({ alias: task.id, label: `${studioFlowLabel(flow)}: ${readableKey(task.type, "Step")}`,
-              sourcePath: [...ownerPath, index, ...path] }));
+            return [
+              { alias: flow.id, label: studioFlowLabel(flow), sourcePath: [...ownerPath, index] },
+            ];
+          return studioFlowTaskEntries(flow)
+            .filter(({ task }) => task.id === parsedSelection.taskId)
+            .map(({ task, path }) => ({
+              alias: task.id,
+              label: `${studioFlowLabel(flow)}: ${readableKey(task.type, "Step")}`,
+              sourcePath: [...ownerPath, index, ...path],
+            }));
         });
         break;
       }
@@ -288,8 +319,11 @@ export const resolveStudioSelectionInspectorContext = (
         candidates = placementCandidates(source, parsedSelection.alias);
         break;
       case "role":
-        candidates = source.body.roles.flatMap((role, index) => role.key === parsedSelection.alias
-          ? [{ alias: role.key, label: role.name, sourcePath: ["body", "roles", index] }] : []);
+        candidates = source.body.roles.flatMap((role, index) =>
+          role.key === parsedSelection.alias
+            ? [{ alias: role.key, label: role.name, sourcePath: ["body", "roles", index] }]
+            : [],
+        );
         break;
     }
 

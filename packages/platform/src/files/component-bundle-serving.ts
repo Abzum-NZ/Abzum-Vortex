@@ -23,15 +23,16 @@ import { logRefusal } from "../catalogue/runtime-primitives";
  * store itself failed the integrity the address promised, and it is never
  * delivered.
  */
-export const componentBundleRefusalHttpStatus: Readonly<Record<ComponentBundleRefusalReason, number>> =
-  Object.freeze({
-    malformed_bundle: 400,
-    bundle_not_found: 404,
-    digest_mismatch: 409,
-    integrity_failure: 502,
-    bundle_conflict: 409,
-    storage_unavailable: 503,
-  });
+export const componentBundleRefusalHttpStatus: Readonly<
+  Record<ComponentBundleRefusalReason, number>
+> = Object.freeze({
+  malformed_bundle: 400,
+  bundle_not_found: 404,
+  digest_mismatch: 409,
+  integrity_failure: 502,
+  bundle_conflict: 409,
+  storage_unavailable: 503,
+});
 
 const REFUSAL_MESSAGES: Readonly<Record<ComponentBundleRefusalReason, string>> = Object.freeze({
   malformed_bundle: "The component bundle request is malformed",

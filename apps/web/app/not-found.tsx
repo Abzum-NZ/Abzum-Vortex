@@ -12,9 +12,7 @@ export default function NotFound() {
     <main className="mx-auto flex min-h-svh w-full max-w-xl flex-col justify-center gap-4 p-6">
       <Alert variant="info">
         <AlertTitle>Page not found</AlertTitle>
-        <AlertDescription>
-          This address does not lead to a page you can open.
-        </AlertDescription>
+        <AlertDescription>This address does not lead to a page you can open.</AlertDescription>
       </Alert>
       <div>
         <Button variant="outline" nativeButton={false} render={<Link href="/" />}>

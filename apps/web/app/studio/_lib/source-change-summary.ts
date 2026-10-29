@@ -1,16 +1,33 @@
 import { canonicalJson, type ApplicationSourceDocument, asRecord } from "@vortex/platform/schema";
 
-export type SourceChangeRow = Readonly<{ area: string; change: "Added" | "Removed" | "Changed"; item: string }>;
+export type SourceChangeRow = Readonly<{
+  area: string;
+  change: "Added" | "Removed" | "Changed";
+  item: string;
+}>;
 
 /** The areas of an application a builder knows by name; any other area is named from its key. */
 const areaLabels: Readonly<Record<string, string>> = {
-  name: "Name", description: "Description", icon: "Icon", home_page: "Home page", search: "Search",
-  modules: "Modules", uses: "Modules used", permissions: "Permissions", roles: "Access groups", navigation: "Menu",
-  shells: "Layouts", pages: "Pages", flows: "Flows", theme: "Appearance", actions: "Actions",
-  platform_block_dependencies: "Item types used", connections: "Connections",
+  name: "Name",
+  description: "Description",
+  icon: "Icon",
+  home_page: "Home page",
+  search: "Search",
+  modules: "Modules",
+  uses: "Modules used",
+  permissions: "Permissions",
+  roles: "Access groups",
+  navigation: "Menu",
+  shells: "Layouts",
+  pages: "Pages",
+  flows: "Flows",
+  theme: "Appearance",
+  actions: "Actions",
+  platform_block_dependencies: "Item types used",
+  connections: "Connections",
 };
-const areaLabel = (key: string): string => areaLabels[key] ??
-  (key.replaceAll("_", " ").replace(/^./, (first) => first.toUpperCase()));
+const areaLabel = (key: string): string =>
+  areaLabels[key] ?? key.replaceAll("_", " ").replace(/^./, (first) => first.toUpperCase());
 
 /** The name a person knows an entry by, from its own name or label; a key is the last resort. */
 const itemName = (entry: unknown, index: number): string => {
@@ -32,7 +49,8 @@ const identity = (entry: unknown, index: number): string => {
 
 /** What replacing one source with another would change, by area and item name, without showing any source. */
 export const summarizeSourceChange = (
-  current: ApplicationSourceDocument, next: ApplicationSourceDocument,
+  current: ApplicationSourceDocument,
+  next: ApplicationSourceDocument,
 ): readonly SourceChangeRow[] => {
   const rows: SourceChangeRow[] = [];
   const before = current.body as unknown as Record<string, unknown>;
@@ -43,12 +61,23 @@ export const summarizeSourceChange = (
     if (canonicalJson(from ?? null) === canonicalJson(to ?? null)) continue;
     const area = areaLabel(key);
     if (Array.isArray(from) || Array.isArray(to)) {
-      const was = new Map((Array.isArray(from) ? from : []).map((entry, index) => [identity(entry, index), { entry, index }]));
-      const now = new Map((Array.isArray(to) ? to : []).map((entry, index) => [identity(entry, index), { entry, index }]));
+      const was = new Map(
+        (Array.isArray(from) ? from : []).map((entry, index) => [
+          identity(entry, index),
+          { entry, index },
+        ]),
+      );
+      const now = new Map(
+        (Array.isArray(to) ? to : []).map((entry, index) => [
+          identity(entry, index),
+          { entry, index },
+        ]),
+      );
       for (const [id, { entry, index }] of now) {
         const old = was.get(id);
         if (old === undefined) rows.push({ area, change: "Added", item: itemName(entry, index) });
-        else if (canonicalJson(old.entry) !== canonicalJson(entry)) rows.push({ area, change: "Changed", item: itemName(entry, index) });
+        else if (canonicalJson(old.entry) !== canonicalJson(entry))
+          rows.push({ area, change: "Changed", item: itemName(entry, index) });
       }
       for (const [id, { entry, index }] of was)
         if (!now.has(id)) rows.push({ area, change: "Removed", item: itemName(entry, index) });

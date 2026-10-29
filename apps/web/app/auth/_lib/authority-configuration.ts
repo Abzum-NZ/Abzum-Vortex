@@ -10,7 +10,10 @@ import {
   type IdentityJourneyConfiguration,
   type LocalDevelopmentSignInConfiguration,
 } from "@vortex/platform/server";
-import { optionalEnvironmentValue, requiredEnvironmentValue } from "../../_lib/server-configuration";
+import {
+  optionalEnvironmentValue,
+  requiredEnvironmentValue,
+} from "../../_lib/server-configuration";
 
 export const getIdentityJourneyConfiguration = (): IdentityJourneyConfiguration => ({
   supabaseUrl: requiredEnvironmentValue("VORTEX_SUPABASE_URL"),
@@ -40,7 +43,8 @@ export const getIdentityAuthorityConfiguration = (): IdentityAuthority => {
   });
 };
 
-export const getLocalDevelopmentSignInConfiguration = (): LocalDevelopmentSignInConfiguration | undefined => {
+export const getLocalDevelopmentSignInConfiguration = ():
+  LocalDevelopmentSignInConfiguration | undefined => {
   if (optionalEnvironmentValue("VORTEX_LOCAL_DEVELOPMENT_SIGN_IN_ENABLED") !== "true")
     return undefined;
   try {

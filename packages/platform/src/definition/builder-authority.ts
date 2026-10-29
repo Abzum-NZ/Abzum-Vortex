@@ -23,7 +23,8 @@ export const builderPermissionKeys = {
   systemApplicationsManage: "platform.organization.system_applications.manage",
 } as const;
 
-export type BuilderPermissionKey = (typeof builderPermissionKeys)[keyof typeof builderPermissionKeys];
+export type BuilderPermissionKey =
+  (typeof builderPermissionKeys)[keyof typeof builderPermissionKeys];
 
 /**
  * One exact permission a role template would confer. It is derived from the immutable prepared

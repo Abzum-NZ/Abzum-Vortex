@@ -281,9 +281,7 @@ export type ContentSafetyCheckResult =
  *    `allowed_extensions`; when both are configured both must be satisfied.
  * 4. `max_file_size_mb`, `multiple` and `max_files` bound what the field accepts.
  */
-export const verifyContentSafety = (
-  input: ContentSafetyCheckInput,
-): ContentSafetyCheckResult => {
+export const verifyContentSafety = (input: ContentSafetyCheckInput): ContentSafetyCheckResult => {
   const detectedKind = detectContentKind(input.detectedMediaType);
   const normalizedExtension = normalizeFileExtension(input.extension);
 
