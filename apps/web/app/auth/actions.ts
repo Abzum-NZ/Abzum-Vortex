@@ -39,6 +39,7 @@ const failureStatus = (code: string): string => {
   if (code === "vortex.identity.privacy_notice_required") return "privacy_notice_required";
   if (code === "vortex.identity.privacy_notice_changed") return "privacy_notice_changed";
   if (code === "vortex.identity.registration_closed") return "registration_closed";
+  if (code === "vortex.identity.invalid_password") return "invalid_password";
   if (code === "vortex.identity.invalid_credentials") return "invalid_credentials";
   if (code === "vortex.identity.invalid_or_expired_link") return "invalid_link";
   if (code === "vortex.identity.authority_unavailable") return "unavailable";
@@ -207,5 +208,11 @@ export async function updatePassword(formData: FormData): Promise<never> {
     formValue(formData, "password", false),
   );
 
-  redirect(result.ok ? "/auth/success?state=password-updated" : "/auth/error?reason=invalid-link");
+  redirect(
+    result.ok
+      ? "/auth/success?state=password-updated"
+      : result.code === "vortex.identity.invalid_password"
+        ? "/auth/update-password?status=invalid_password"
+        : "/auth/error?reason=invalid-link",
+  );
 }

@@ -38,6 +38,7 @@ export type LocalDevelopmentSignInConfiguration = Readonly<{
 
 export type IdentityJourneyFailure =
   | "vortex.identity.invalid_input"
+  | "vortex.identity.invalid_password"
   | "vortex.identity.invalid_credentials"
   | "vortex.identity.invalid_or_expired_link"
   | "vortex.identity.privacy_notice_required"
@@ -108,11 +109,11 @@ const validEmail = (value: string): boolean => value.length <= 320 && EMAIL_PATT
 const validPasswordLength = (value: string): boolean =>
   value.length >= MINIMUM_PASSWORD_LENGTH && value.length <= 1_024;
 
+const newPasswordPattern = new RegExp(`^(?:${newPasswordPolicy.pattern})$`, "u");
 const validNewPassword = (value: string): boolean =>
   value.length >= newPasswordPolicy.minimumLength &&
   value.length <= newPasswordPolicy.maximumLength &&
-  /[A-Za-z]/u.test(value) &&
-  /\d/u.test(value);
+  newPasswordPattern.test(value);
 
 const validAccessToken = (value: string): boolean =>
   value.length >= 64 &&
@@ -292,9 +293,8 @@ export const requestRegistration = async (
   if (acknowledgment.acknowledged !== true) {
     return { ok: false, code: "vortex.identity.privacy_notice_required" };
   }
-  if (!validEmail(email) || !validNewPassword(password)) {
-    return { ok: false, code: "vortex.identity.invalid_input" };
-  }
+  if (!validEmail(email)) return { ok: false, code: "vortex.identity.invalid_input" };
+  if (!validNewPassword(password)) return { ok: false, code: "vortex.identity.invalid_password" };
 
   try {
     const notice = await readPrivacyNotice();
@@ -423,7 +423,7 @@ export const completePasswordRecovery = async (
     return { ok: false, code: "vortex.identity.invalid_or_expired_link" };
   }
   if (!validNewPassword(password)) {
-    return { ok: false, code: "vortex.identity.invalid_input" };
+    return { ok: false, code: "vortex.identity.invalid_password" };
   }
 
   try {

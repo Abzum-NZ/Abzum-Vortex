@@ -7,7 +7,10 @@ import { AuthShell } from "../_components/auth-shell";
 import { SubmitButton } from "../_components/submit-button";
 import { updatePassword } from "../actions";
 
-export default function UpdatePasswordPage() {
+export default async function UpdatePasswordPage({
+  searchParams,
+}: Readonly<{ searchParams: Promise<{ status?: string }> }>) {
+  const { status } = await searchParams;
   return (
     <AuthShell
       eyebrow="Password recovery"
@@ -24,6 +27,11 @@ export default function UpdatePasswordPage() {
         </div>
       }
     >
+      {status === "invalid_password" ? (
+        <p role="alert" className="text-sm text-destructive">
+          {newPasswordPolicy.description}
+        </p>
+      ) : null}
       <form className="flex flex-col gap-5" action={updatePassword}>
         <Field>
           <Label htmlFor="email">Email address</Label>
