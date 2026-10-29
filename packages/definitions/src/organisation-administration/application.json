@@ -3374,6 +3374,20 @@
                 }
               }
             }
+          },
+          {
+            "id": "refresh_revoke_connection",
+            "type": "interface.refresh",
+            "version": "1.0.0",
+            "properties": {
+              "component": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "connections_region"
+                }
+              }
+            }
           }
         ],
         "outputs": {
@@ -3427,6 +3441,20 @@
                 "literal": {
                   "type": "text",
                   "value": "platform.health_check_connection_instance"
+                }
+              }
+            }
+          },
+          {
+            "id": "refresh_health_connection",
+            "type": "interface.refresh",
+            "version": "1.0.0",
+            "properties": {
+              "component": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "connections_region"
                 }
               }
             }
@@ -3610,6 +3638,20 @@
             }
           },
           {
+            "id": "refresh_invitations",
+            "type": "interface.refresh",
+            "version": "1.0.0",
+            "properties": {
+              "component": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "connections_region"
+                }
+              }
+            }
+          },
+          {
             "id": "invitation_sent",
             "type": "interface.show_message",
             "version": "1.0.0",
@@ -3633,20 +3675,6 @@
                 "literal": {
                   "type": "text",
                   "value": "Edit connection"
-                }
-              }
-            }
-          },
-          {
-            "id": "refresh_invitations",
-            "type": "interface.refresh",
-            "version": "1.0.0",
-            "properties": {
-              "component": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "connections_region"
                 }
               }
             }

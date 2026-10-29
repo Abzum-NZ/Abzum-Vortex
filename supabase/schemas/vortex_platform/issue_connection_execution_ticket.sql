@@ -8,7 +8,7 @@ as $function$
 declare
   context_value jsonb;
   instance_row vortex_platform.connection_instances%rowtype;
-  ticket_id uuid := pg_catalog.gen_random_uuid();
+  ticket_value uuid := pg_catalog.gen_random_uuid();
   now_value timestamptz := pg_catalog.clock_timestamp();
   receipt jsonb;
 begin
@@ -34,7 +34,7 @@ begin
     return receipt;
   end if;
   now_value := pg_catalog.clock_timestamp();
-  delete from vortex_platform.connection_execution_tickets where ticket_id in (
+  delete from vortex_platform.connection_execution_tickets as expired where expired.ticket_id in (
     select ticket.ticket_id from vortex_platform.connection_execution_tickets as ticket
     where ticket.expires_at <= now_value order by ticket.expires_at limit 500
   );
@@ -42,11 +42,11 @@ begin
     ticket_id, organization_id, account_id, correlation_id, connection_instance_id, command_id,
     instance_revision, operation, expires_at
   ) values (
-    ticket_id, instance_row.organization_id, (context_value ->> 'organizationAccountId')::uuid,
+    ticket_value, instance_row.organization_id, (context_value ->> 'organizationAccountId')::uuid,
     (context_value ->> 'correlationId')::uuid, p_instance_id, p_command_id, p_expected_revision,
     p_operation, now_value + interval '60 seconds'
   );
-  return pg_catalog.jsonb_build_object('outcome', 'available', 'ticket', ticket_id,
+  return pg_catalog.jsonb_build_object('outcome', 'available', 'ticket', ticket_value,
     'connectionTypeId', instance_row.connection_type_id,
     'connectionTypeVersion', instance_row.connection_type_version);
 end
