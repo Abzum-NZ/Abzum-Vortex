@@ -28,7 +28,11 @@ import {
   type HumanOrganizationRequestResult,
 } from "../access/human-organization-request";
 import { readCurrentOrganizationRuntimeSettingsAfterAuthorization } from "../access/organization-runtime-settings-administration";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
+import {
+  requireRequestSavepoint,
+  type DatabaseRow,
+  type RequestDatabaseTransaction,
+} from "../db/request-transaction";
 import type { BeforeSaveRuleWarning } from "../rules/before-save-flow-run";
 import {
   beforeSaveRuleRefusedIssueCode,
@@ -1101,15 +1105,23 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
         return { kind: "temporarily_unavailable" };
       }
       const attempted: { rules?: BeforeSaveRuleExecution; prepared?: PreparedSave } = {};
-      const value = await saveWithinTransaction(
-        transaction,
-        issuedAt,
-        command.data,
-        selection.previewInstallationId !== undefined,
-        activityId,
-        { occurrenceId: undefined },
-        attempted,
-      );
+      const value = await requireRequestSavepoint(transaction)
+        .withSavepoint((child) =>
+          saveWithinTransaction(
+            child,
+            issuedAt,
+            command.data,
+            selection.previewInstallationId !== undefined,
+            activityId,
+            { occurrenceId: undefined },
+            attempted,
+          ),
+        )
+        .catch((error: unknown) => {
+          const correction = constraintCorrection(error, attempted.prepared, command.data);
+          if (correction !== undefined) return correction;
+          throw error;
+        });
       if (value === restartRelationshipTotalSave)
         throw new Error("RECORD_SAVE_RESTART_TRANSACTION");
       if (value === recordedRefusal) {
