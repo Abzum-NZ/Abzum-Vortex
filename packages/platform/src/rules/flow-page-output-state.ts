@@ -1,7 +1,29 @@
 import type { JsonValue } from "../catalogue/json-value";
-import { flowRunStateVersion, type FlowRunState } from "./flow-interpreter-core";
+import type { BrowserFlowPlan } from "../workflows/flow-plan";
+import {
+  flowRunStateVersion,
+  type FlowOutputMemberTypeResolver,
+  type FlowRunState,
+} from "./flow-interpreter-core";
 import type { FlowRuntimeValue } from "./flow-formula";
 import { flowValueMatchesType } from "./flow-value-shapes";
+
+/** Resolves only the compiler-declared member types of protected segment outputs. */
+export const browserFlowMemberTypeResolver = (
+  plan: BrowserFlowPlan,
+): FlowOutputMemberTypeResolver => {
+  const members = new Map<string, string>();
+  for (const segment of plan.segments) {
+    if (segment.kind !== "server") continue;
+    for (const [name, type] of Object.entries(segment.outputMembers)) {
+      const previous = members.get(name);
+      if (previous !== undefined && previous !== type)
+        throw new Error("FLOW_PAGE_OUTPUT_MEMBER_TYPE_CONFLICT");
+      members.set(name, type);
+    }
+  }
+  return (_task, taskId, outputKey, path) => members.get([taskId, outputKey, ...path].join("."));
+};
 
 /** Carries only declared server segment outputs into the page's typed interpreter activation. */
 export const addPageFlowOutputs = (

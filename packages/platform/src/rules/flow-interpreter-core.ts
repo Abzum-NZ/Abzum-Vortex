@@ -193,6 +193,8 @@ export type FlowProgram = Readonly<{
   tasks: readonly FlowTask[];
   errors: readonly FlowTask[];
   finally: readonly FlowTask[];
+  /** Page tasks from the whole plan, used only to resolve declared output member types. */
+  declaredTasks?: readonly FlowTask[];
 }>;
 
 /** How the server finds a compiled flow of the exact release the run is bound to. */
@@ -370,7 +372,10 @@ const declaredOutputFieldType = (
   resolveMember: FlowOutputMemberTypeResolver,
   resolveForm?: FlowFormReferenceResolver,
 ): string | undefined => {
-  const task = findTask([...flow.tasks, ...flow.errors, ...flow.finally], taskId);
+  const task = findTask(
+    flow.declaredTasks ?? [...flow.tasks, ...flow.errors, ...flow.finally],
+    taskId,
+  );
   const resolved = resolveMember(task, taskId, outputKey, path);
   if (resolved !== undefined) return resolved;
   if (task?.type === "record.read_fields" && path.length === 1) {
