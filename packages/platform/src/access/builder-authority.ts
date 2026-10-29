@@ -10,6 +10,7 @@ import {
 import {
   builderRecentAuthentication,
   deriveBuilderRequirements,
+  roleAcceptanceAuthentication,
   type BuilderAuthority,
   type BuilderAuthorityDecision,
   type BuilderConferredPermission,
@@ -101,7 +102,6 @@ const declarationForPermission = (
 const declarationForAcceptance = (
   catalogue: PlatformPermissionSource,
   permissions: readonly BuilderConferredPermission[],
-  recentAuthentication: boolean,
 ): OrganizationAccessDeclaration => {
   const applications = catalogue.declarations.find(
     (entry) => entry.key === "platform.organization.applications.manage",
@@ -116,7 +116,7 @@ const declarationForAcceptance = (
       ownerId: catalogue.ownerId,
       permissionId: applications.permissionId,
     },
-    recentAuthentication: recentAuthentication ? builderRecentAuthentication : { kind: "none" },
+    recentAuthentication: roleAcceptanceAuthentication,
     authority: {
       kind: "delegated_management",
       before: { kind: "none" },
@@ -190,13 +190,7 @@ export const createBuilderAuthority = (
     });
     const delegated = uniquePermissions(requirements.delegatedPermissions);
     if (delegated.length > 0)
-      declarations.push(
-        declarationForAcceptance(
-          dependencies.permissions,
-          delegated,
-          requirements.recentAuthentication,
-        ),
-      );
+      declarations.push(declarationForAcceptance(dependencies.permissions, delegated));
 
     for (const declaration of declarations) {
       const checked = await runOrganizationAccessOperation(
@@ -209,9 +203,11 @@ export const createBuilderAuthority = (
         return {
           outcome: "refused",
           reason:
-            checked.reasonCode === "authentication_required"
-              ? "authentication_required"
-              : "permission_refused",
+            checked.reasonCode === "multi_factor_required"
+              ? "multi_factor_required"
+              : checked.reasonCode === "authentication_required"
+                ? "authentication_required"
+                : "permission_refused",
           correlationId: checked.correlationId,
         };
       // An operation refused whatever the actor holds (uninstalling a system application) is

@@ -25,6 +25,8 @@ export const classifyInstallationFailure = (error: unknown): InstallationProblem
         return { kind: "refused" };
       case "APPLICATION_INSTALLATION_RECENT_AUTHENTICATION_REQUIRED":
         return { kind: "authentication_required" };
+      case "APPLICATION_INSTALLATION_MULTI_FACTOR_REQUIRED":
+        return { kind: "multi_factor_required" };
       case "APPLICATION_INSTALLATION_TEMPORARILY_UNAVAILABLE":
         return { kind: "temporarily_unavailable" };
       default:
