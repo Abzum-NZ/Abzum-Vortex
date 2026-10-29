@@ -22,6 +22,7 @@ import {
   flowBindingInvocationSchema,
   type FlowBindingInvocation,
 } from "../workflows/flow-invocation-contracts";
+import { flowEntrySegmentsMatch } from "../workflows/flow-plan";
 import {
   flowRefusalFeedbackSchema,
   unlocatedCorrectionsRefusal,
@@ -901,6 +902,11 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
               : "FLOW_INVOKE_BINDING_FLOW_MISMATCH",
           );
         const binding = matchingBindings[0]!;
+
+        const plan = installation.plans.get(String(binding.flow.flowId));
+        if (plan === undefined) return refuse("FLOW_INVOKE_PLAN_NOT_FOUND");
+        if (!flowEntrySegmentsMatch(plan, request.entrySegments))
+          return { kind: "reload", installationRevision: installation.installationRevision };
 
         let callerInputs: Readonly<Record<string, unknown>> = request.callerInputs;
         if (binding.event === "form_submit") {

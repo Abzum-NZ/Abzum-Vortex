@@ -869,6 +869,20 @@ export const flowEntrySegments = (plan: FlowPlan): readonly FlowServerSegment[] 
   );
 };
 
+/** All possible entry identities must match the installed plan, irrespective of order. */
+export const flowEntrySegmentsMatch = (
+  plan: FlowPlan,
+  supplied: readonly Readonly<{ segmentId: string; fingerprint: string }>[],
+): boolean => {
+  const expected = flowEntrySegments(plan);
+  if (supplied.length !== expected.length) return false;
+  const identities = new Map(supplied.map((entry) => [entry.segmentId, entry.fingerprint]));
+  return (
+    identities.size === supplied.length &&
+    expected.every((segment) => identities.get(segment.id) === segment.fingerprint)
+  );
+};
+
 /** Derive the literal form placements reachable from a row-action flow. */
 export const rowActionFormTargets = (
   flowId: string,
