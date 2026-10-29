@@ -27,7 +27,11 @@ import {
   developmentPublicationCatalogue,
   verifyRecordedShippedApplicationRoots,
 } from "./definitions";
-import { refreshShippedApplications, type InstallFacts } from "./install";
+import {
+  refreshShippedApplications,
+  refreshStudioApplications,
+  type InstallFacts,
+} from "./install";
 import { grantStewardDefinitionRole, grantStewardInstallerRole } from "./installer-access";
 import { grantFirstOwnerApplicationRoles } from "./first-owner-application-roles";
 import {
@@ -410,6 +414,11 @@ export const runDevelopmentSetup = async (
   // Hosted deployment needs the narrow platform-release authority from PR-H; local authority
   // remains confined to this setup command.
   const releases = await refreshShippedApplications(
+    { identityAuthorityId, system, manifest, stewardIdentityId, state },
+    log,
+  );
+  // 3. Applications built in Studio follow a definition contract change the same way.
+  await refreshStudioApplications(
     { identityAuthorityId, system, manifest, stewardIdentityId, state },
     log,
   );

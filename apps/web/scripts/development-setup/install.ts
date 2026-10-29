@@ -22,7 +22,12 @@ import {
   type TrustedApplicationRootOriginKind,
 } from "@vortex/platform/server";
 import { releaseSetContainsCustomComponents } from "../../app/_lib/definition-catalogue";
-import { developmentPublicationCatalogue, publishShippedDefinitions } from "./definitions";
+import {
+  developmentPublicationCatalogue,
+  listStudioApplicationRoots,
+  publishShippedDefinitions,
+  publishStudioApplicationDraft,
+} from "./definitions";
 import {
   developmentBuilderAuthority,
   inSystemTransaction,
@@ -213,10 +218,16 @@ export const upgradeOne = async (
     throw new Error(`Active release is newer than the publication for ${applicationKey}`);
 
   if (origin === "ordinary") {
+    // A release that no longer verifies is replaced: a dependency was superseded, or it was
+    // published under an earlier definition contract.
     const superseded = await readReleaseSet(facts.system, published.rootId, activeRevision).then(
       () => false,
       (error: unknown) => {
-        if (error instanceof DefinitionError && error.code === "DEFINITION_DEPENDENCY_SUPERSEDED")
+        if (
+          error instanceof DefinitionError &&
+          (error.code === "DEFINITION_DEPENDENCY_SUPERSEDED" ||
+            error.code === "RELEASE_CONTRACT_SUPERSEDED")
+        )
           return true;
         throw error;
       },
@@ -272,4 +283,39 @@ export const refreshShippedApplications = async (
   facts.state.setupCompleted = true;
   facts.state.save();
   return releases;
+};
+
+/**
+ * Moves every application built in Studio whose active release was published under an earlier
+ * definition contract to a release of its converted draft, through the same publication and
+ * upgrade the shipped applications use. An application not installed, or already on a current
+ * release, is left alone.
+ */
+export const refreshStudioApplications = async (
+  facts: Omit<InstallFacts, "releases">,
+  log: (message: string) => void,
+): Promise<void> => {
+  for (const root of await listStudioApplicationRoots(
+    facts.system,
+    facts.manifest.applicationKeys,
+  )) {
+    const activeRevision = await readActiveReleaseRevision(facts, root.key, root.rootId);
+    if (activeRevision === null) continue;
+    const superseded = await readReleaseSet(facts.system, root.rootId, activeRevision).then(
+      () => false,
+      (error: unknown) => {
+        if (error instanceof DefinitionError && error.code === "RELEASE_CONTRACT_SUPERSEDED")
+          return true;
+        throw error;
+      },
+    );
+    if (!superseded) continue;
+    const published = await publishStudioApplicationDraft(facts.system, root, log);
+    await upgradeOne(
+      { ...facts, releases: new Map([[root.key, published]]) },
+      root.key,
+      "ordinary",
+      log,
+    );
+  }
 };

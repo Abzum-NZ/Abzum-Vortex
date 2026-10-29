@@ -345,9 +345,11 @@ export const validateCandidate = (
     String(candidate.releaseHistory.rootId) !== String(candidate.draft.rootId)
   )
     refuse("DEFINITION_HISTORY_INVALID");
-  const latest = candidate.releaseHistory.latestRelease;
-  // validatedDraft already authenticated this source's fingerprint.
-  if (candidate.draft.publishedRevision !== latest?.publication.revision)
+  // validatedDraft already authenticated this source's fingerprint. The anchor is the latest
+  // release, or the release of an earlier definition contract that precedes this one.
+  if (
+    (candidate.draft.publishedRevision ?? null) !== candidate.releaseHistory.anchorReleaseRevision
+  )
     refuse("DEFINITION_HISTORY_INVALID");
   return candidate;
 };

@@ -13,7 +13,10 @@ import {
   semanticVersionSchema,
   timestampSchema,
 } from "../../catalogue/identifiers";
-import { selectApplicationContractPair } from "../application-contract-versions";
+import {
+  applicationSourceContractVersion,
+  selectApplicationContractPair,
+} from "../application-contract-versions";
 import {
   publishedApplicationDefinitionSchema,
   type ApplicationDraft,
@@ -169,6 +172,14 @@ const storedHistoryReleaseSchema = z
   })
   .strict();
 
+/** Whether a stored release evidence object was published under an earlier definition contract. */
+const supersededContract = (stored: unknown): boolean =>
+  stored !== null &&
+  typeof stored === "object" &&
+  typeof (stored as { sourceContractVersion?: unknown }).sourceContractVersion === "string" &&
+  (stored as { sourceContractVersion: string }).sourceContractVersion !==
+    applicationSourceContractVersion;
+
 const publicationStateSchema = z
   .object({
     root: publicationRootSchema,
@@ -176,6 +187,7 @@ const publicationStateSchema = z
     identities: z.array(sourceIdentityAssignmentSchema),
     historyLatestReleaseRevision: nullableRevisionSchema,
     historyLatestReleaseVersion: semanticVersionSchema.nullable(),
+    historyLatestReleaseContractVersion: z.string().nullable(),
   })
   .strict();
 const publicationHistoryPageSchema = z
@@ -529,8 +541,13 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     const state = await this.readPublicationState(rootId);
     if (state === undefined) return undefined;
     const anchor = state.root.currentReleaseRevision;
+    // A latest release published under an earlier definition contract is history only: it anchors
+    // the next release and its version, but its content is never decoded or compared.
+    const superseded =
+      anchor !== null &&
+      state.historyLatestReleaseContractVersion !== applicationSourceContractVersion;
     const latestApplication =
-      anchor === null || state.draft.kind === "module"
+      anchor === null || superseded || state.draft.kind === "module"
         ? undefined
         : await this.readLatestRelease(
             rootId,
@@ -540,7 +557,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
             String(state.draft.rootId),
           );
     const latest =
-      anchor === null
+      anchor === null || superseded
         ? undefined
         : state.draft.kind === "module"
           ? (
@@ -552,7 +569,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
             )?.published
           : latestApplication?.published;
     if (
-      (anchor !== null && latest === undefined) ||
+      (anchor !== null && !superseded && latest === undefined) ||
       (latest !== undefined &&
         latest.publication.releaseVersion !== state.historyLatestReleaseVersion)
     )
@@ -563,6 +580,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       rootId: String(state.draft.rootId),
       anchorReleaseRevision: anchor,
       latestRelease: latest ?? null,
+      supersededReleaseVersion: superseded ? state.historyLatestReleaseVersion : null,
     });
     if (!releaseHistory.success) return invalidStorage(releaseHistory.error);
     return {
@@ -631,6 +649,9 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     if (!parsed.success) return invalidStorage(parsed.error);
     return parsed.data;
   }
+
+  /** Module releases read under an earlier definition contract, by root and revision. */
+  private readonly supersededModuleReleases = new Set<string>();
 
   private pendingModulePages: {
     organizationId: SessionContext["organizationId"];
@@ -716,8 +737,16 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         rootId: page.rootId,
         anchorReleaseRevision: page.anchorReleaseRevision,
         nextAfterReleaseRevision: page.nextAfterReleaseRevision,
-        entries: page.entries.map((entry) => {
+        entries: page.entries.flatMap((entry) => {
           const release = releases[offset++];
+          // A release of an earlier definition contract is history: resolution never offers it.
+          if (
+            release === undefined &&
+            this.supersededModuleReleases.has(
+              JSON.stringify([String(page.rootId).toLowerCase(), entry.releaseRevision]),
+            )
+          )
+            return [];
           if (
             release === undefined ||
             release.organizationId !== this.context.organizationId ||
@@ -726,7 +755,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
             release.releaseRevision !== entry.releaseRevision
           )
             return invalidStorage("readModuleReleasePage found inconsistent stored evidence");
-          return { previousReleaseRevision: entry.previousReleaseRevision, release };
+          return [{ previousReleaseRevision: entry.previousReleaseRevision, release }];
         }),
       }));
       requests.forEach((request, index) => request.resolve(materialized[index]!));
@@ -794,6 +823,16 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       const row = moduleReleaseRowSchema.safeParse(raw);
       if (!row.success) return invalidStorage(row.error);
       if (row.data.module_release === null) return undefined;
+      // A release of an earlier definition contract is history: nothing resolves against it.
+      if (supersededContract(row.data.module_release)) {
+        this.supersededModuleReleases.add(
+          JSON.stringify([
+            String(locators[index]!.rootId).toLowerCase(),
+            locators[index]!.releaseRevision,
+          ]),
+        );
+        return undefined;
+      }
       const parsed = rawModuleReleaseSchema.safeParse(row.data.module_release);
       if (!parsed.success) return invalidStorage(parsed.error);
       const release = this.materializeModuleRelease(parsed.data);

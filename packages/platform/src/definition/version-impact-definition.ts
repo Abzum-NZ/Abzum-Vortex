@@ -17,6 +17,7 @@ import {
   type ApplicationVersionImpactRequest,
   type ModuleVersionImpactRequest,
   type VersionImpact,
+  definitionContractChangedReason,
 } from "./version-impact";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
@@ -160,7 +161,11 @@ const compareParsedDefinitionVersionImpact = (
   )
     refuseVersionImpact("unresolved_candidate");
   if (evidence === undefined) assertHistory(request);
-  else {
+  else if (latest === undefined && evidence.supersededReleaseVersion !== null) {
+    // The candidate follows a release of an earlier definition contract: it names that anchor.
+    if (request.candidate.envelope.publishedRevision !== evidence.anchorReleaseRevision)
+      refuseVersionImpact("invalid_history");
+  } else {
     assertEvidenceContractVersions(evidence);
     assertCandidateHistoryBinding(request, latest);
   }
@@ -173,6 +178,17 @@ const compareParsedDefinitionVersionImpact = (
     request.kind === "module"
       ? normaliseModuleContent(request.candidate.content)
       : normaliseApplicationContent(request.candidate.content);
+  if (latest === undefined && evidence?.supersededReleaseVersion != null) {
+    const reasons = [definitionContractChangedReason(request.kind)];
+    return definitionVersionImpactResultSchema.parse({
+      subject,
+      outcome: "release_required" as const,
+      currentVersion: evidence.supersededReleaseVersion,
+      impact: "major" as const,
+      assignedVersion: assignNextDefinitionVersion(evidence.supersededReleaseVersion, "major"),
+      reasons,
+    });
+  }
   if (latest === undefined) {
     const result = {
       subject,

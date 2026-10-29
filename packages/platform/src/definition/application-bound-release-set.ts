@@ -29,6 +29,7 @@ import {
 } from "./publication/read";
 import type { DefinitionPublicationCatalogue } from "./definition-publication-contracts";
 import { DefinitionError } from "./definition-error";
+import { applicationSourceContractVersion } from "./application-contract-versions";
 
 const storedSetSchema = z
   .object({
@@ -122,6 +123,15 @@ const projectBoundReleaseSet = async (
     expectation.allowEmptyModules ? storedSystemSetSchema : storedSetSchema
   ).safeParse(candidate);
   if (!storedSet.success) throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+  // A release published under an earlier definition contract is history: it is never read as a
+  // release set to run, and the setup refresh moves its installation to a current release.
+  const applicationEvidence = storedSet.data.application;
+  if (
+    isRecord(applicationEvidence) &&
+    typeof applicationEvidence.sourceContractVersion === "string" &&
+    applicationEvidence.sourceContractVersion !== applicationSourceContractVersion
+  )
+    throw new DefinitionError("RELEASE_CONTRACT_SUPERSEDED");
 
   const storedApplication = storedConsumerReleaseEvidenceSchema.safeParse(
     storedSet.data.application,

@@ -88,6 +88,7 @@ const publicationStateSchema = z
     draft: requiredJsonSchema,
     historyLatestReleaseRevision: revisionSchema.nullable(),
     historyLatestReleaseVersion: semanticVersionSchema.nullable(),
+    historyLatestReleaseContractVersion: z.string().nullable(),
     identities: z.array(requiredJsonSchema),
   })
   .strict();

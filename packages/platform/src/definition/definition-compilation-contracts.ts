@@ -41,6 +41,7 @@ import {
   flowIdSchema,
   semanticVersionSchema,
   timestampSchema,
+  stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
 import { applicationPlatformCompatibilityVersionSchema } from "./platform-compatibility";
 import { moduleVersionImpactHistoryEntrySchema } from "./version-impact";
@@ -436,6 +437,11 @@ export const publishedDefinitionHistorySchema = z.discriminatedUnion("kind", [
 const historyEvidenceCommon = {
   definitionKey: namespacedKeySchema,
   anchorReleaseRevision: revisionSchema.nullable(),
+  /**
+   * The version of the anchor release when it was published under an earlier definition contract:
+   * it is history only, so the next release follows its version but nothing compares its content.
+   */
+  supersededReleaseVersion: stableDefinitionReleaseVersionSchema.nullable(),
 };
 
 /** The latest immutable release of one definition, which the database anchors as current. */
@@ -459,7 +465,11 @@ export const definitionPublicationHistorySchema = z
       .strict(),
   ])
   .superRefine((value, context) => {
-    if ((value.anchorReleaseRevision === null) !== (value.latestRelease === null))
+    if (
+      (value.anchorReleaseRevision === null) !==
+        (value.latestRelease === null && value.supersededReleaseVersion === null) ||
+      (value.latestRelease !== null && value.supersededReleaseVersion !== null)
+    )
       context.addIssue({
         code: "custom",
         message: "History evidence anchor and latest release must agree",
