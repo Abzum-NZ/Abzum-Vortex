@@ -5,6 +5,9 @@ import {
   flowTaskOutputMembers,
   namespacedKeySchema,
   parseFlowReference,
+  sourceItemTree,
+  sourcePageItems,
+  sourcePageShell,
   type ApplicationSourceDocument,
   type FlowLiteral,
   type FlowReference,
@@ -45,6 +48,8 @@ export type StudioFlowReferenceChoice = Readonly<{
     | "Saved values"
     | "Earlier steps"
     | "The record"
+    | "Page values"
+    | "Form fields"
     | "The run";
   /** The declared type, when the flow declares one. */
   type: string | undefined;
@@ -429,6 +434,64 @@ export const studioFlowReferenceChoices = (
         );
   for (const [name, declaration] of Object.entries(flow.variables ?? {}))
     add({ source: "variable", name }, studioWords(name), "Saved values", declaration.type);
+  const controls = new Set(
+    source.body.flow_bindings
+      .filter((binding) => binding.flow === flow.id || binding.flow === flow.key)
+      .map((binding) => binding.control),
+  );
+  const boundPages = source.body.pages.filter((page) => {
+    const shell = source.body.shells.find(
+      (entry) => entry.id === sourcePageShell(page.composition),
+    );
+    return [
+      ...sourcePageItems(page.composition),
+      ...(shell === undefined ? [] : sourceItemTree(shell.layout.content)),
+    ].some((item) => controls.has(item.props.id));
+  });
+  if (boundPages.length > 0)
+    for (const [name, declaration] of Object.entries(boundPages[0]!.values ?? {}))
+      if (boundPages.every((page) => page.values?.[name]?.type === declaration.type))
+        add(
+          { source: "page", name },
+          `${declaration.label} (not yet runnable)`,
+          "Page values",
+          declaration.type,
+        );
+  for (const form of forms) {
+    const placed = boundPages.flatMap((page) => {
+      const shell = source.body.shells.find(
+        (entry) => entry.id === sourcePageShell(page.composition),
+      );
+      return [
+        ...sourcePageItems(page.composition),
+        ...(shell === undefined ? [] : sourceItemTree(shell.layout.content)),
+      ].filter((item) => item.props.id === form.alias);
+    });
+    const records = new Set(
+      placed.flatMap((item) =>
+        sourceItemTree([item]).flatMap((child) => {
+          const field = child.props.field;
+          if (typeof field !== "string") return [];
+          const dot = field.lastIndexOf(".");
+          return dot > 0 && studioDraftRecordType(source, field.slice(0, dot), null) !== undefined
+            ? [field.slice(0, dot)]
+            : [];
+        }),
+      ),
+    );
+    const reference = records.size === 1 ? [...records][0] : undefined;
+    const record =
+      reference === undefined ? undefined : studioDraftRecordType(source, reference, null);
+    for (const field of record?.record.fields ?? [])
+      add(
+        { source: "form", form: form.alias, field: field.key },
+        `${form.label}: ${field.label} (not yet runnable)`,
+        "Form fields",
+        field.type === "calculation" || field.type === "total"
+          ? field.settings.result_type
+          : studioFieldValueType(field.type),
+      );
+  }
   if (path !== null)
     for (const task of studioFlowTasksBefore(flow, path)) {
       const location = describeStudioFlowLocation(flow, studioFlowTaskPath(flow, task.id) ?? []);

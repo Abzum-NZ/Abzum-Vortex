@@ -56,6 +56,8 @@ const roles: Readonly<
   "Saved values": "variable",
   "Earlier steps": "step_output",
   "The record": "record_field",
+  "Page values": "host_context",
+  "Form fields": "host_context",
   "The run": "run_value",
 };
 

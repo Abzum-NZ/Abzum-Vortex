@@ -1,5 +1,9 @@
 import { sourceFlowCollectionSchema } from "../../workflows/flow-source-contracts";
-import { sourcePageItems } from "../application-composition/source-composition";
+import {
+  sourceItemTree,
+  sourcePageItems,
+  sourcePageShell,
+} from "../application-composition/source-composition";
 import type {
   ModuleCompilationOutput,
   DefinitionCompilationOutput,
@@ -147,6 +151,21 @@ function compileOwnedFlowSources(
     reference.includes(":") ? reference : `${ownKey}:${reference}`;
   const recordOwner = (reference: string) => qualifiedRecord(reference).split(":")[0]!;
   const formTitles = new Map<string, string>();
+  const recordsByReference = new Map<string, Readonly<Record<string, string>>>();
+  for (const output of dependencyOutputs) {
+    if (output.kind !== "module" || !declaredDefinitionKeySet.has(output.artifact.definitionKey))
+      continue;
+    for (const record of output.canonical.content.recordTypes as unknown as JsonObject[]) {
+      const fields: Record<string, string> = {};
+      for (const field of record.fields as JsonObject[]) {
+        const settings = asObject(field.settings);
+        fields[String(field.key)] = ["calculation", "total"].includes(String(field.type))
+          ? String(settings.resultType)
+          : String(field.type);
+      }
+      recordsByReference.set(`${output.artifact.definitionKey}:${String(record.key)}`, fields);
+    }
+  }
   if (source.kind === "application")
     for (const page of (body as unknown as ApplicationSourceDocument["body"]).pages)
       for (const item of sourcePageItems(page.composition))
@@ -160,6 +179,56 @@ function compileOwnedFlowSources(
           );
   return compileFlowSources({
     formTitle: source.kind === "application" ? (reference) => formTitles.get(reference) : undefined,
+    referenceEnvironments:
+      source.kind !== "application"
+        ? undefined
+        : (flow) => {
+            const application = body as unknown as ApplicationSourceDocument["body"];
+            const controls = new Set(
+              application.flow_bindings
+                .filter((binding) => binding.flow === flow.id || binding.flow === flow.key)
+                .map((binding) => binding.control),
+            );
+            return application.pages.flatMap((page) => {
+              const shellAlias = sourcePageShell(page.composition);
+              const shell = application.shells.find((candidate) => candidate.id === shellAlias);
+              const items = [
+                ...sourcePageItems(page.composition),
+                ...(shell === undefined ? [] : sourceItemTree(shell.layout.content)),
+              ];
+              if (!items.some((item) => controls.has(item.props.id))) return [];
+              const forms: Record<string, Readonly<Record<string, string>>> = {};
+              for (const form of items) {
+                if (
+                  form.props.vortex.block.block_id !== FORM_CONTAINER_BLOCK_RELEASE.blockId ||
+                  form.props.vortex.block.release_version !==
+                    FORM_CONTAINER_BLOCK_RELEASE.releaseVersion
+                )
+                  continue;
+                const records = new Set(
+                  sourceItemTree([form]).flatMap((item) => {
+                    const reference = item.props.field;
+                    if (typeof reference !== "string") return [];
+                    const dot = reference.lastIndexOf(".");
+                    return dot > 0 && recordsByReference.has(reference.slice(0, dot))
+                      ? [reference.slice(0, dot)]
+                      : [];
+                  }),
+                );
+                const record = records.size === 1 ? [...records][0] : undefined;
+                forms[form.props.id] = record === undefined ? {} : recordsByReference.get(record)!;
+              }
+              return [
+                {
+                  page: page.name,
+                  values: Object.fromEntries(
+                    Object.entries(page.values ?? {}).map(([key, value]) => [key, value.type]),
+                  ),
+                  forms,
+                },
+              ];
+            });
+          },
     flows: parsed.data,
     declaredDefinitionKeys,
     operationInputs: callableOperation,

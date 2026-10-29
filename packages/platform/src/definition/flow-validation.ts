@@ -84,6 +84,12 @@ export type FlowValidationIssue = Readonly<{
 
 export type FlowSetValidationIssue = FlowValidationIssue & Readonly<{ flowId: string }>;
 
+export type FlowReferenceEnvironment = Readonly<{
+  page: string;
+  values: Readonly<Record<string, string>>;
+  forms: Readonly<Record<string, Readonly<Record<string, string>>>>;
+}>;
+
 export type FlowValidationOptions = Readonly<{
   /**
    * The authored title of a form named by a Show form step, when validating an application: an
@@ -104,6 +110,7 @@ export type FlowValidationOptions = Readonly<{
   triggerRecordFieldExists?: (field: string) => boolean;
   /** The field's common declared type across the trigger's record types, when known. */
   triggerRecordFieldType?: (field: string) => string | undefined;
+  referenceEnvironments?: readonly FlowReferenceEnvironment[] | undefined;
   /**
    * The declared inputs, with their types, of the operation a Call protected operation task names
    * by its readable key. Without it, the inputs the task maps are not checked against the
@@ -231,6 +238,7 @@ export function validateFlow(
 ): FlowValidationIssue[] {
   const flow = flowInput as unknown as FlowSource;
   const issues: FlowValidationIssue[] = [];
+  const unreadableReferences: FlowValidationIssue[] = [];
   const add = (
     path: Path,
     ruleCode: DefinitionCompilerRefusalCode,
@@ -433,16 +441,42 @@ export function validateFlow(
         return "date_time";
       // Not yet runnable: the page runner reads page values and form fields in page segments.
       case "page":
-      case "form":
-        add(
+      case "form": {
+        const environments = options.referenceEnvironments ?? [];
+        const types = environments.map((environment) => {
+          const type =
+            reference.source === "page"
+              ? environment.values[reference.name]
+              : environment.forms[reference.form]?.[reference.field];
+          if (type === undefined)
+            add(
+              path,
+              "vortex.definition.workflow_node_references",
+              "broken_reference",
+              reference.source === "page"
+                ? `Page ${environment.page} declares no value ${reference.name}`
+                : `Page ${environment.page} has no form field ${reference.form}.${reference.field}`,
+            );
+          return type;
+        });
+        if (environments.length === 0)
+          add(
+            path,
+            "vortex.definition.workflow_node_references",
+            "broken_reference",
+            "Page and form references require a bound page",
+          );
+        unreadableReferences.push({
           path,
-          "vortex.definition.unsupported_workflow_node",
-          "unsupported_choice",
-          reference.source === "page"
-            ? `The page value ${reference.name} cannot be read yet`
-            : `The form field ${reference.form}.${reference.field} cannot be read yet`,
-        );
-        return undefined;
+          ruleCode: "vortex.definition.unsupported_workflow_node",
+          family: "unsupported_choice",
+          message:
+            reference.source === "page"
+              ? `The page value ${reference.name} cannot be read yet`
+              : `The form field ${reference.form}.${reference.field} cannot be read yet`,
+        });
+        return types.length > 0 && types.every((type) => type === types[0]) ? types[0] : undefined;
+      }
       case "task_output": {
         if (where.triggerOnly) {
           add(
@@ -1142,7 +1176,7 @@ export function validateFlow(
     );
   }
 
-  return issues.map((issue) => {
+  return [...issues, ...unreadableReferences].map((issue) => {
     const taskId = taskIdAtPath(flow, issue.path);
     return taskId === undefined ? issue : { ...issue, taskId };
   });
