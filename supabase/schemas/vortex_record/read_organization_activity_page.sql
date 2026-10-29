@@ -52,8 +52,8 @@ begin
       and p_outcome <> all (array['completed', 'refused', 'failed']))
     or (p_source is not null
       and p_source <> all (array[
-        'web', 'mcp', 'programmatic_interface', 'connection', 'federation',
-        'durable_workflow', 'system'
+        'web', 'webmcp', 'mcp', 'programmatic_interface', 'connection', 'federation',
+        'system'
       ]))
     or (p_after_occurred_at is null) <> (p_after_activity_id is null)
     or (p_after_occurred_at is not null

@@ -194,6 +194,13 @@ const selectRestoreContract = (candidate: unknown): void => {
     intrinsicSourceContractVersion === undefined
   )
     throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+  // A release published under an earlier definition contract stays as history; it is never
+  // restored into a draft, which holds only the current contract.
+  if (
+    sourceContractVersion === intrinsicSourceContractVersion &&
+    sourceContractVersion !== applicationSourceContractVersion
+  )
+    throw new DefinitionError("RELEASE_CONTRACT_SUPERSEDED");
   try {
     if (sourceContractVersion !== intrinsicSourceContractVersion)
       throw new TypeError("Stored source version mismatch");

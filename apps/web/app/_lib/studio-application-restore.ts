@@ -48,6 +48,7 @@ const failureKind = (error: unknown): FailureKind => {
   const kind = classifyDatabaseError(error);
   if (error instanceof DefinitionError) {
     if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING") return "conflict";
+    if (error.code === "RELEASE_CONTRACT_SUPERSEDED") return "superseded";
     if (
       [
         "DEFINITION_CONTEXT_REFUSED",

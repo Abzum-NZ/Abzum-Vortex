@@ -1,7 +1,9 @@
 -- Contract 4 (Epic 1 #3660, SF-C #3743): one definition contract version, 4.0.0, for applications,
--- modules and record types. Stored drafts are converted in place below; active installations move
--- to a contract-4 release through the setup refresh (publication and the installation coordinator);
--- old releases stay as sealed history. Privileges are unchanged.
+-- modules and record types; the old version is no longer accepted. Stored drafts are converted in
+-- place below; active installations move to a contract-4 release through the setup refresh
+-- (publication and the installation coordinator); old releases stay as sealed history and a draft
+-- can never hold another version. Runtime bundles move to format 3. Privileges are unchanged.
+
 set local role vortex_owner;
 
 create or replace function vortex_definition.accepted_contract_version(
@@ -26,6 +28,1804 @@ begin
   end case;
 end
 $function$;
+
+
+-- A draft holds only the accepted contract (restoring an older release is refused).
+
+CREATE OR REPLACE FUNCTION vortex_definition.validate_draft_write() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+declare
+  root_kind text;
+  root_key text;
+  root_created_at timestamptz;
+begin
+  if tg_op = 'UPDATE' then
+    if new.root_id is distinct from old.root_id then
+      raise exception using
+        errcode = '23514',
+        message = 'A definition draft cannot move to another root';
+    end if;
+
+    if new.draft_revision is distinct from old.draft_revision + 1 then
+      raise exception using
+        errcode = '23514',
+        message = 'A definition draft revision must increment exactly once';
+    end if;
+
+    if new.updated_at < old.updated_at then
+      raise exception using
+        errcode = '23514',
+        message = 'Definition draft update time cannot move backwards';
+    end if;
+  end if;
+
+  select root.kind, root.key, root.created_at
+  into root_kind, root_key, root_created_at
+  from vortex_definition.roots as root
+  where root.root_id = new.root_id;
+
+  if not found then
+    raise exception using
+      errcode = '23503',
+      message = 'A definition draft requires an existing root';
+  end if;
+
+  if pg_catalog.jsonb_typeof(new.draft_source) is distinct from 'object'
+    or new.draft_source ->> 'kind' is distinct from root_kind
+    or new.draft_source ->> 'key' is distinct from root_key
+    or new.draft_source ->> 'source_contract_version'
+      is distinct from new.source_contract_version then
+    raise exception using
+      errcode = '23514',
+      message = 'Definition draft metadata must match its permanent root and source contract';
+  end if;
+
+  -- A draft holds only the one accepted contract: an older release is history and is never
+  -- restored into a draft, and no writer can store a draft of another version.
+  if root_kind in ('application', 'module')
+    and new.source_contract_version <> all (vortex_definition.accepted_contract_version(root_kind)) then
+    raise exception using
+      errcode = '23514',
+      message = 'A definition draft must use the accepted definition contract version';
+  end if;
+
+  if new.updated_at < root_created_at then
+    raise exception using
+      errcode = '23514',
+      message = 'Definition draft update time cannot precede root creation';
+  end if;
+
+  return new;
+end
+$$;
+
+
+-- The channel set: an agent in the person's page (webmcp) arrives; the durable workflow channel goes.
+
+create or replace function vortex_platform.validated(candidate jsonb)
+returns jsonb
+language plpgsql
+stable
+security invoker
+set search_path = ''
+as $function$
+declare
+  caller_kind text;
+  authentication_strength text;
+  issued_at timestamptz;
+  expires_at timestamptz;
+  access_token_issued_at timestamptz;
+  primary_authenticated_at timestamptz;
+  multi_factor_authenticated_at timestamptz;
+  allowed_keys text[];
+  nested jsonb;
+begin
+  if candidate is null or pg_catalog.jsonb_typeof(candidate) <> 'object' then
+    raise exception using errcode = '22023', message = 'Vortex request context must be an object';
+  end if;
+
+  if not candidate ?& array[
+    'callerKind', 'tenantId', 'organizationId', 'sessionId', 'issuedAt',
+    'expiresAt', 'accessVersion', 'correlationId', 'authenticationStrength'
+  ] then
+    raise exception using errcode = '22023', message = 'Vortex request context is incomplete';
+  end if;
+
+  caller_kind := candidate ->> 'callerKind';
+  authentication_strength := candidate ->> 'authenticationStrength';
+
+  case caller_kind
+    when 'human' then
+      allowed_keys := array[
+        'callerKind', 'identityAuthorityId', 'tenantId', 'organizationId',
+        'applicationRootId', 'sessionId', 'issuedAt', 'expiresAt',
+        'accessVersion', 'correlationId', 'identityId', 'organizationAccountId',
+        'authenticationStrength', 'accessTokenIssuedAt', 'primaryAuthenticatedAt',
+        'multiFactorAuthenticatedAt', 'delegatedContext', 'supportContext',
+        'channel'
+      ];
+      if not candidate ? 'identityAuthorityId'
+        or not vortex_platform.is_non_nil_uuid(candidate ->> 'identityAuthorityId') then
+        raise exception using errcode = '22023', message = 'Authenticated request context requires an Identity Authority';
+      end if;
+      if not candidate ?& array['identityId', 'organizationAccountId']
+        or authentication_strength is null
+        or authentication_strength not in ('single_factor', 'multi_factor', 'recent_multi_factor') then
+        raise exception using errcode = '22023', message = 'Vortex human context has an invalid actor';
+      end if;
+    when 'federated' then
+      allowed_keys := array[
+        'callerKind', 'identityAuthorityId', 'tenantId', 'organizationId',
+        'applicationRootId', 'sessionId', 'issuedAt', 'expiresAt',
+        'accessVersion', 'correlationId', 'identityId', 'organizationAccountId',
+        'authenticationStrength', 'channel'
+      ];
+      if not candidate ? 'identityAuthorityId'
+        or not vortex_platform.is_non_nil_uuid(candidate ->> 'identityAuthorityId') then
+        raise exception using errcode = '22023', message = 'Authenticated request context requires an Identity Authority';
+      end if;
+      if not candidate ?& array['identityId', 'organizationAccountId']
+        or authentication_strength is null
+        or authentication_strength not in ('single_factor', 'multi_factor', 'recent_multi_factor') then
+        raise exception using errcode = '22023', message = 'Vortex federated context has an invalid actor';
+      end if;
+    when 'system' then
+      allowed_keys := array[
+        'callerKind', 'tenantId', 'organizationId', 'applicationRootId',
+        'sessionId', 'issuedAt', 'expiresAt', 'accessVersion', 'correlationId',
+        'systemActorId', 'authenticationStrength', 'supportContext', 'channel'
+      ];
+      if not candidate ? 'systemActorId' or authentication_strength is distinct from 'service' then
+        raise exception using errcode = '22023', message = 'Vortex system context has an invalid actor';
+      end if;
+    when 'public' then
+      allowed_keys := array[
+        'callerKind', 'tenantId', 'organizationId', 'applicationRootId',
+        'sessionId', 'issuedAt', 'expiresAt', 'accessVersion', 'correlationId',
+        'authenticationStrength', 'channel'
+      ];
+      if authentication_strength is distinct from 'anonymous' then
+        raise exception using errcode = '22023', message = 'Vortex public context has an invalid actor';
+      end if;
+    else
+      raise exception using errcode = '22023', message = 'Vortex request context has an unsupported caller kind';
+  end case;
+
+  if exists (
+    select 1
+    from pg_catalog.jsonb_object_keys(candidate) as supplied(key)
+    where not supplied.key = any (allowed_keys)
+  ) then
+    raise exception using errcode = '22023', message = 'Vortex request context has an unknown field';
+  end if;
+
+  if candidate ? 'channel'
+    and (
+      pg_catalog.jsonb_typeof(candidate -> 'channel') <> 'string'
+      or (candidate ->> 'channel') <> all (array[
+        'web', 'webmcp', 'mcp', 'programmatic_interface', 'connection', 'federation',
+        'system'
+      ])
+    ) then
+    raise exception using errcode = '22023', message = 'Vortex request context has an invalid channel';
+  end if;
+
+  if not vortex_platform.is_non_nil_uuid(candidate ->> 'tenantId')
+    or not vortex_platform.is_non_nil_uuid(candidate ->> 'organizationId')
+    or not vortex_platform.is_non_nil_uuid(candidate ->> 'sessionId')
+    or not vortex_platform.is_non_nil_uuid(candidate ->> 'correlationId')
+    or (candidate ? 'applicationRootId' and not vortex_platform.is_non_nil_uuid(candidate ->> 'applicationRootId'))
+    or (candidate ? 'identityId' and not vortex_platform.is_non_nil_uuid(candidate ->> 'identityId'))
+    or (candidate ? 'organizationAccountId' and not vortex_platform.is_non_nil_uuid(candidate ->> 'organizationAccountId'))
+    or (candidate ? 'systemActorId' and not vortex_platform.is_non_nil_uuid(candidate ->> 'systemActorId')) then
+    raise exception using errcode = '22023', message = 'Vortex request context has an invalid identifier';
+  end if;
+
+  if pg_catalog.jsonb_typeof(candidate -> 'accessVersion') <> 'number'
+    or (candidate ->> 'accessVersion') !~ '^[1-9][0-9]*$'
+    or (candidate ->> 'accessVersion')::numeric > 9007199254740991 then
+    raise exception using errcode = '22023', message = 'Vortex request context has an invalid access version';
+  end if;
+
+  if pg_catalog.jsonb_typeof(candidate -> 'issuedAt') <> 'string'
+    or pg_catalog.jsonb_typeof(candidate -> 'expiresAt') <> 'string'
+    or (candidate ->> 'issuedAt') !~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]+)?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$'
+    or (candidate ->> 'expiresAt') !~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]+)?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$' then
+    raise exception using errcode = '22023', message = 'Vortex request context has an invalid time';
+  end if;
+
+  begin
+    issued_at := (candidate ->> 'issuedAt')::timestamptz;
+    expires_at := (candidate ->> 'expiresAt')::timestamptz;
+  exception when others then
+    raise exception using errcode = '22023', message = 'Vortex request context has an invalid time';
+  end;
+
+  if not pg_catalog.isfinite(issued_at)
+    or not pg_catalog.isfinite(expires_at)
+    or expires_at <= issued_at
+    or expires_at <= pg_catalog.statement_timestamp() then
+    raise exception using errcode = '22023', message = 'Vortex request context is expired or inconsistent';
+  end if;
+
+  if caller_kind = 'human' then
+    if (candidate ? 'accessTokenIssuedAt')
+      <> (candidate ? 'primaryAuthenticatedAt' or candidate ? 'multiFactorAuthenticatedAt') then
+      raise exception using errcode = '22023', message = 'Vortex human authentication evidence is incomplete';
+    end if;
+
+    if candidate ? 'accessTokenIssuedAt' then
+      if pg_catalog.jsonb_typeof(candidate -> 'accessTokenIssuedAt') <> 'string'
+        or (candidate ->> 'accessTokenIssuedAt') !~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]+)?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$' then
+        raise exception using errcode = '22023', message = 'Vortex human authentication evidence has an invalid time';
+      end if;
+      begin
+        access_token_issued_at := (candidate ->> 'accessTokenIssuedAt')::timestamptz;
+      exception when others then
+        raise exception using errcode = '22023', message = 'Vortex human authentication evidence has an invalid time';
+      end;
+      if not pg_catalog.isfinite(access_token_issued_at)
+        or access_token_issued_at >= expires_at
+        or access_token_issued_at > issued_at + interval '60 seconds' then
+        raise exception using errcode = '22023', message = 'Vortex human authentication evidence is inconsistent';
+      end if;
+    end if;
+
+    if candidate ? 'primaryAuthenticatedAt' then
+      if pg_catalog.jsonb_typeof(candidate -> 'primaryAuthenticatedAt') <> 'string'
+        or (candidate ->> 'primaryAuthenticatedAt') !~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]+)?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$' then
+        raise exception using errcode = '22023', message = 'Vortex human authentication evidence has an invalid time';
+      end if;
+      begin
+        primary_authenticated_at := (candidate ->> 'primaryAuthenticatedAt')::timestamptz;
+      exception when others then
+        raise exception using errcode = '22023', message = 'Vortex human authentication evidence has an invalid time';
+      end;
+      if not pg_catalog.isfinite(primary_authenticated_at)
+        or primary_authenticated_at > access_token_issued_at
+        or primary_authenticated_at > pg_catalog.statement_timestamp() then
+        raise exception using errcode = '22023', message = 'Vortex human authentication evidence is inconsistent';
+      end if;
+    end if;
+
+    if candidate ? 'multiFactorAuthenticatedAt' then
+      if authentication_strength not in ('multi_factor', 'recent_multi_factor') then
+        raise exception using errcode = '22023', message = 'Vortex human multi-factor evidence conflicts with authentication strength';
+      end if;
+      if pg_catalog.jsonb_typeof(candidate -> 'multiFactorAuthenticatedAt') <> 'string'
+        or (candidate ->> 'multiFactorAuthenticatedAt') !~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]+)?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$' then
+        raise exception using errcode = '22023', message = 'Vortex human authentication evidence has an invalid time';
+      end if;
+      begin
+        multi_factor_authenticated_at := (candidate ->> 'multiFactorAuthenticatedAt')::timestamptz;
+      exception when others then
+        raise exception using errcode = '22023', message = 'Vortex human authentication evidence has an invalid time';
+      end;
+      if not pg_catalog.isfinite(multi_factor_authenticated_at)
+        or multi_factor_authenticated_at > access_token_issued_at
+        or multi_factor_authenticated_at > pg_catalog.statement_timestamp() then
+        raise exception using errcode = '22023', message = 'Vortex human authentication evidence is inconsistent';
+      end if;
+    end if;
+  end if;
+
+  if candidate ? 'delegatedContext' then
+    nested := candidate -> 'delegatedContext';
+    if pg_catalog.jsonb_typeof(nested) <> 'object'
+      or not nested ?& array['delegatedByOrganizationAccountId', 'reason', 'expiresAt']
+      or exists (
+        select 1 from pg_catalog.jsonb_object_keys(nested) as supplied(key)
+        where supplied.key <> all (array['delegatedByOrganizationAccountId', 'reason', 'expiresAt'])
+      )
+      or not vortex_platform.is_non_nil_uuid(nested ->> 'delegatedByOrganizationAccountId')
+      or pg_catalog.jsonb_typeof(nested -> 'reason') <> 'string'
+      or pg_catalog.length(nested ->> 'reason') not between 1 and 500 then
+      raise exception using errcode = '22023', message = 'Vortex delegated context is invalid';
+    end if;
+    if pg_catalog.jsonb_typeof(nested -> 'expiresAt') <> 'string'
+      or (nested ->> 'expiresAt') !~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]+)?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$' then
+      raise exception using errcode = '22023', message = 'Vortex delegated context has an invalid time';
+    end if;
+    begin
+      if not pg_catalog.isfinite((nested ->> 'expiresAt')::timestamptz)
+        or (nested ->> 'expiresAt')::timestamptz > expires_at
+        or (nested ->> 'expiresAt')::timestamptz <= pg_catalog.statement_timestamp() then
+        raise exception using errcode = '22023', message = 'Vortex delegated context is expired or inconsistent';
+      end if;
+    exception when invalid_datetime_format then
+      raise exception using errcode = '22023', message = 'Vortex delegated context has an invalid time';
+    end;
+  end if;
+
+  if candidate ? 'supportContext' then
+    nested := candidate -> 'supportContext';
+    if pg_catalog.jsonb_typeof(nested) <> 'object'
+      or not nested ?& array['supportActorId', 'approvedByOrganizationAccountId', 'reason', 'expiresAt']
+      or exists (
+        select 1 from pg_catalog.jsonb_object_keys(nested) as supplied(key)
+        where supplied.key <> all (array['supportActorId', 'approvedByOrganizationAccountId', 'reason', 'expiresAt'])
+      )
+      or not vortex_platform.is_non_nil_uuid(nested ->> 'supportActorId')
+      or not vortex_platform.is_non_nil_uuid(nested ->> 'approvedByOrganizationAccountId')
+      or pg_catalog.jsonb_typeof(nested -> 'reason') <> 'string'
+      or pg_catalog.length(nested ->> 'reason') not between 1 and 500 then
+      raise exception using errcode = '22023', message = 'Vortex support context is invalid';
+    end if;
+    if pg_catalog.jsonb_typeof(nested -> 'expiresAt') <> 'string'
+      or (nested ->> 'expiresAt') !~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]+)?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$' then
+      raise exception using errcode = '22023', message = 'Vortex support context has an invalid time';
+    end if;
+    begin
+      if not pg_catalog.isfinite((nested ->> 'expiresAt')::timestamptz)
+        or (nested ->> 'expiresAt')::timestamptz > expires_at
+        or (nested ->> 'expiresAt')::timestamptz <= pg_catalog.statement_timestamp() then
+        raise exception using errcode = '22023', message = 'Vortex support context is expired or inconsistent';
+      end if;
+    exception when invalid_datetime_format then
+      raise exception using errcode = '22023', message = 'Vortex support context has an invalid time';
+    end;
+  end if;
+
+  return candidate;
+end
+$function$;
+
+create or replace function vortex_record.append_organization_activity_entry(
+  p_organization_id uuid,
+  p_activity_id uuid,
+  p_occurred_at timestamptz,
+  p_actor_kind text,
+  p_actor_id uuid,
+  p_action text,
+  p_subject_ids uuid[],
+  p_changed_field_ids uuid[],
+  p_source text,
+  p_correlation_id uuid,
+  p_outcome text
+)
+returns text
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  inserted_activity_id uuid;
+  existing_entry vortex_record.organization_activity_entries%rowtype;
+begin
+  if p_source is null
+    or p_source <> all (array[
+      'web', 'webmcp', 'mcp', 'programmatic_interface', 'connection', 'federation',
+      'system'
+    ]) then
+    raise exception using errcode = '22023', message = 'Activity source channel is invalid';
+  end if;
+
+  insert into vortex_record.organization_activity_entries (
+    organization_id, activity_id, occurred_at, actor_kind, actor_id, action,
+    subject_ids, changed_field_ids, source, correlation_id, outcome
+  ) values (
+    p_organization_id, p_activity_id, p_occurred_at, p_actor_kind, p_actor_id,
+    p_action, p_subject_ids, p_changed_field_ids, p_source, p_correlation_id,
+    p_outcome
+  )
+  on conflict (organization_id, activity_id) do nothing
+  returning activity_id into inserted_activity_id;
+
+  if inserted_activity_id is not null then
+    return 'inserted';
+  end if;
+
+  select entry.*
+  into strict existing_entry
+  from vortex_record.organization_activity_entries as entry
+  where entry.organization_id = p_organization_id
+    and entry.activity_id = p_activity_id;
+
+  if existing_entry.occurred_at is distinct from p_occurred_at
+    or existing_entry.actor_kind is distinct from p_actor_kind
+    or existing_entry.actor_id is distinct from p_actor_id
+    or existing_entry.action is distinct from p_action
+    or existing_entry.subject_ids is distinct from p_subject_ids
+    or existing_entry.changed_field_ids is distinct from p_changed_field_ids
+    or existing_entry.source is distinct from p_source
+    or existing_entry.correlation_id is distinct from p_correlation_id
+    or existing_entry.outcome is distinct from p_outcome then
+    raise exception using
+      errcode = '22023',
+      message = 'Activity identity already records different evidence';
+  end if;
+
+  return 'already_recorded';
+end
+$function$;
+
+create or replace function vortex_record.read_organization_activity_aggregates(
+  p_occurred_from timestamptz,
+  p_occurred_to timestamptz,
+  p_actor_kind text,
+  p_actor_id uuid,
+  p_action text,
+  p_correlation_id uuid,
+  p_outcome text,
+  p_source text,
+  p_group_by text
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  checked_context jsonb;
+  context_organization_id uuid;
+  context_identity_id uuid;
+  context_account_id uuid;
+  decision_outcome text;
+  decision_organization_id uuid;
+  decision_account_id uuid;
+  audit_projection boolean := false;
+  groups jsonb;
+  total bigint;
+  truncated boolean;
+begin
+  if p_group_by is null
+    or p_group_by <> all (array['action', 'actorKind', 'source', 'outcome'])
+    or (p_occurred_from is not null
+      and p_occurred_from in ('-infinity'::timestamptz, 'infinity'::timestamptz))
+    or (p_occurred_to is not null
+      and p_occurred_to in ('-infinity'::timestamptz, 'infinity'::timestamptz))
+    or (p_occurred_from is not null and p_occurred_to is not null
+      and p_occurred_from > p_occurred_to)
+    or (p_actor_kind is not null
+      and p_actor_kind <> all (array['identity', 'organization_account', 'system', 'public_session']))
+    or (p_actor_id is not null
+      and p_actor_id = '00000000-0000-0000-0000-000000000000'::uuid)
+    or (p_action is not null and (
+      pg_catalog.char_length(p_action) not between 1 and 40
+      or p_action !~ '^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$'
+    ))
+    or (p_correlation_id is not null
+      and p_correlation_id = '00000000-0000-0000-0000-000000000000'::uuid)
+    or (p_outcome is not null
+      and p_outcome <> all (array['completed', 'refused', 'failed']))
+    or (p_source is not null
+      and p_source <> all (array[
+        'web', 'webmcp', 'mcp', 'programmatic_interface', 'connection', 'federation',
+        'system'
+      ])) then
+    raise exception using errcode = '22023',
+      message = 'Activity history aggregate selector is invalid';
+  end if;
+
+  checked_context := vortex_access.validated_human_request_context();
+  if checked_context ->> 'callerKind' is distinct from 'human' then
+    raise exception using errcode = '42501',
+      message = 'Activity history is unavailable';
+  end if;
+  context_organization_id := (checked_context ->> 'organizationId')::uuid;
+  context_identity_id := (checked_context ->> 'identityId')::uuid;
+  context_account_id := (checked_context ->> 'organizationAccountId')::uuid;
+
+  select evaluated.outcome, evaluated.organization_id, evaluated.organization_account_id
+  into decision_outcome, decision_organization_id, decision_account_id
+  from vortex_access.evaluate_organization_permission_eligibility(
+    pg_catalog.jsonb_build_object(
+      'operationKey', 'platform.organization.activity.read',
+      'action', pg_catalog.jsonb_build_object('actionKind', 'read'),
+      'target', pg_catalog.jsonb_build_object('kind', 'organization'),
+      'requiredPermission', pg_catalog.jsonb_build_object(
+        'ownerKind', 'platform',
+        'ownerId', vortex_access.platform_permission_owner_id(),
+        'permissionId', vortex_access.platform_permission_id('platform.organization.permissions.read')
+      ),
+      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'authority', pg_catalog.jsonb_build_object('kind', 'permission')
+    )
+  ) as evaluated;
+
+  audit_projection := coalesce(
+    decision_outcome = 'eligible'
+      and decision_organization_id = context_organization_id
+      and decision_account_id = context_account_id,
+    false
+  );
+
+  with filtered as (
+    select entry.*
+    from vortex_record.organization_activity_entries as entry
+    where entry.organization_id = context_organization_id
+      and (audit_projection
+        or (entry.actor_kind = 'organization_account' and entry.actor_id = context_account_id)
+        or (entry.actor_kind = 'identity' and entry.actor_id = context_identity_id))
+      and (p_occurred_from is null or entry.occurred_at >= p_occurred_from)
+      and (p_occurred_to is null or entry.occurred_at <= p_occurred_to)
+      and (p_actor_kind is null or entry.actor_kind = p_actor_kind)
+      and (p_actor_id is null or entry.actor_id = p_actor_id)
+      and (p_action is null or entry.action = p_action)
+      and (p_correlation_id is null or entry.correlation_id = p_correlation_id)
+      and (p_outcome is null or entry.outcome = p_outcome)
+      and (p_source is null or entry.source = p_source)
+  ),
+  grouped as (
+    select case p_group_by
+        when 'action' then filtered.action
+        when 'actorKind' then filtered.actor_kind
+        when 'source' then filtered.source
+        when 'outcome' then filtered.outcome
+      end as value,
+      pg_catalog.count(*)::bigint as entry_count
+    from filtered
+    group by 1
+  ),
+  ranked as (
+    select grouped.value, grouped.entry_count,
+      pg_catalog.row_number() over (
+        order by grouped.entry_count desc, grouped.value
+      ) as ordinal
+    from grouped
+  )
+  select
+    coalesce(
+      pg_catalog.jsonb_agg(
+        pg_catalog.jsonb_build_object('value', ranked.value, 'count', ranked.entry_count)
+        order by ranked.entry_count desc, ranked.value
+      ) filter (where ranked.ordinal <= 100),
+      '[]'::jsonb
+    ),
+    coalesce(pg_catalog.sum(ranked.entry_count), 0),
+    pg_catalog.count(*) > 100
+  into groups, total, truncated
+  from ranked;
+
+  return pg_catalog.jsonb_build_object(
+    'outcome', 'completed',
+    'projection', case when audit_projection then 'audit' else 'own' end,
+    'total', total,
+    'groups', groups,
+    'truncated', truncated
+  );
+end
+$function$;
+
+create or replace function vortex_record.read_organization_activity_page(
+  p_occurred_from timestamptz,
+  p_occurred_to timestamptz,
+  p_actor_kind text,
+  p_actor_id uuid,
+  p_action text,
+  p_correlation_id uuid,
+  p_outcome text,
+  p_source text,
+  p_page_size integer,
+  p_after_occurred_at timestamptz,
+  p_after_activity_id uuid
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  checked_context jsonb;
+  context_organization_id uuid;
+  context_identity_id uuid;
+  context_account_id uuid;
+  decision_outcome text;
+  decision_organization_id uuid;
+  decision_account_id uuid;
+  audit_projection boolean := false;
+  entries jsonb;
+  has_more boolean := false;
+  last_occurred_at timestamptz;
+  last_activity_id uuid;
+begin
+  if p_page_size is null or p_page_size not between 1 and 200
+    or (p_occurred_from is not null
+      and p_occurred_from in ('-infinity'::timestamptz, 'infinity'::timestamptz))
+    or (p_occurred_to is not null
+      and p_occurred_to in ('-infinity'::timestamptz, 'infinity'::timestamptz))
+    or (p_occurred_from is not null and p_occurred_to is not null
+      and p_occurred_from > p_occurred_to)
+    or (p_actor_kind is not null
+      and p_actor_kind <> all (array['identity', 'organization_account', 'system', 'public_session']))
+    or (p_actor_id is not null
+      and p_actor_id = '00000000-0000-0000-0000-000000000000'::uuid)
+    or (p_action is not null and (
+      pg_catalog.char_length(p_action) not between 1 and 40
+      or p_action !~ '^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$'
+    ))
+    or (p_correlation_id is not null
+      and p_correlation_id = '00000000-0000-0000-0000-000000000000'::uuid)
+    or (p_outcome is not null
+      and p_outcome <> all (array['completed', 'refused', 'failed']))
+    or (p_source is not null
+      and p_source <> all (array[
+        'web', 'webmcp', 'mcp', 'programmatic_interface', 'connection', 'federation',
+        'system'
+      ]))
+    or (p_after_occurred_at is null) <> (p_after_activity_id is null)
+    or (p_after_occurred_at is not null
+      and p_after_occurred_at in ('-infinity'::timestamptz, 'infinity'::timestamptz))
+    or (p_after_activity_id is not null
+      and p_after_activity_id = '00000000-0000-0000-0000-000000000000'::uuid) then
+    raise exception using errcode = '22023',
+      message = 'Activity history page selector is invalid';
+  end if;
+
+  checked_context := vortex_access.validated_human_request_context();
+  if checked_context ->> 'callerKind' is distinct from 'human' then
+    raise exception using errcode = '42501',
+      message = 'Activity history is unavailable';
+  end if;
+  context_organization_id := (checked_context ->> 'organizationId')::uuid;
+  context_identity_id := (checked_context ->> 'identityId')::uuid;
+  context_account_id := (checked_context ->> 'organizationAccountId')::uuid;
+
+  select evaluated.outcome, evaluated.organization_id, evaluated.organization_account_id
+  into decision_outcome, decision_organization_id, decision_account_id
+  from vortex_access.evaluate_organization_permission_eligibility(
+    pg_catalog.jsonb_build_object(
+      'operationKey', 'platform.organization.activity.read',
+      'action', pg_catalog.jsonb_build_object('actionKind', 'read'),
+      'target', pg_catalog.jsonb_build_object('kind', 'organization'),
+      'requiredPermission', pg_catalog.jsonb_build_object(
+        'ownerKind', 'platform',
+        'ownerId', vortex_access.platform_permission_owner_id(),
+        'permissionId', vortex_access.platform_permission_id('platform.organization.permissions.read')
+      ),
+      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'authority', pg_catalog.jsonb_build_object('kind', 'permission')
+    )
+  ) as evaluated;
+
+  audit_projection := coalesce(
+    decision_outcome = 'eligible'
+      and decision_organization_id = context_organization_id
+      and decision_account_id = context_account_id,
+    false
+  );
+
+  with filtered as (
+    select entry.*, authority.authority_kind,
+      authority.assignment_id as authority_assignment_id
+    from vortex_record.organization_activity_entries as entry
+    left join vortex_record.organization_activity_super_administrator_authority as authority
+      on authority.organization_id = entry.organization_id
+      and authority.activity_id = entry.activity_id
+    where entry.organization_id = context_organization_id
+      and (audit_projection
+        or (entry.actor_kind = 'organization_account' and entry.actor_id = context_account_id)
+        or (entry.actor_kind = 'identity' and entry.actor_id = context_identity_id))
+      and (p_occurred_from is null or entry.occurred_at >= p_occurred_from)
+      and (p_occurred_to is null or entry.occurred_at <= p_occurred_to)
+      and (p_actor_kind is null or entry.actor_kind = p_actor_kind)
+      and (p_actor_id is null or entry.actor_id = p_actor_id)
+      and (p_action is null or entry.action = p_action)
+      and (p_correlation_id is null or entry.correlation_id = p_correlation_id)
+      and (p_outcome is null or entry.outcome = p_outcome)
+      and (p_source is null or entry.source = p_source)
+  ),
+  ordered as (
+    select filtered.*
+    from filtered
+    where p_after_occurred_at is null
+      or (filtered.occurred_at, filtered.activity_id)
+        < (p_after_occurred_at, p_after_activity_id)
+    order by filtered.occurred_at desc, filtered.activity_id desc
+    limit p_page_size + 1
+  ),
+  numbered as (
+    select ordered.*,
+      pg_catalog.row_number() over (
+        order by ordered.occurred_at desc, ordered.activity_id desc
+      ) as ordinal
+    from ordered
+  )
+  select
+    coalesce(
+      pg_catalog.jsonb_agg(
+        pg_catalog.jsonb_build_object(
+          'activityId', numbered.activity_id,
+          'occurredAt', numbered.occurred_at,
+          'actorKind', numbered.actor_kind,
+          'actorId', numbered.actor_id,
+          'action', numbered.action,
+          'subjectIds', pg_catalog.to_jsonb(numbered.subject_ids),
+          'source', numbered.source,
+          'correlationId', numbered.correlation_id,
+          'outcome', numbered.outcome
+        ) || case
+          when numbered.authority_assignment_id is not null then pg_catalog.jsonb_build_object(
+            'authority', pg_catalog.jsonb_build_object(
+              'kind', numbered.authority_kind,
+              'assignmentId', numbered.authority_assignment_id
+            )
+          )
+          else '{}'::jsonb
+        end || case
+          when audit_projection then pg_catalog.jsonb_build_object(
+            'changedFieldIds', pg_catalog.to_jsonb(numbered.changed_field_ids)
+          )
+          else '{}'::jsonb
+        end
+        order by numbered.ordinal
+      ) filter (where numbered.ordinal <= p_page_size),
+      '[]'::jsonb
+    ),
+    coalesce(pg_catalog.max(numbered.ordinal) > p_page_size, false),
+    (pg_catalog.array_agg(numbered.occurred_at order by numbered.ordinal)
+      filter (where numbered.ordinal = p_page_size))[1],
+    (pg_catalog.array_agg(numbered.activity_id order by numbered.ordinal)
+      filter (where numbered.ordinal = p_page_size))[1]
+  into entries, has_more, last_occurred_at, last_activity_id
+  from numbered;
+
+  return pg_catalog.jsonb_build_object(
+    'outcome', 'completed',
+    'projection', case when audit_projection then 'audit' else 'own' end,
+    'entries', entries,
+    'next', case
+      when has_more then pg_catalog.jsonb_build_object(
+        'occurredAt', last_occurred_at,
+        'activityId', last_activity_id
+      )
+      else null
+    end
+  );
+end
+$function$;
+
+
+-- Runtime bundles move to format 3 (contract-4 compiled flows). Bundles are caches of an exact
+-- release; the format-2 ones belong to releases no installation will run again, so they go.
+delete from vortex_definition.installation_runtime_bundle_parts where bundle_format_version = 2;
+delete from vortex_definition.installation_runtime_bundles where bundle_format_version = 2;
+alter table vortex_definition.installation_runtime_bundles
+  drop constraint installation_runtime_bundles_source_manifest_valid;
+alter table vortex_definition.installation_runtime_bundles
+  add constraint installation_runtime_bundles_source_manifest_valid
+  check (source_manifest is not null and pg_catalog.jsonb_typeof(source_manifest) = 'object');
+
+create or replace function vortex_definition.write_installation_runtime_bundle(
+  p_application_root_id uuid,
+  p_application_release_revision bigint,
+  p_bundle_format_version integer,
+  p_pin_fingerprint text,
+  p_parts jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  expected_sections constant text[] := array[
+    'pages', 'navigation', 'flows', 'theme', 'component_registry',
+    'access_plan', 'tool_bundle'
+  ];
+  permission_decision record;
+  delegation_decision record;
+  checked_context jsonb;
+  selected_organization_id uuid;
+  part_item jsonb;
+  section_value text;
+  ordinal_value bigint;
+  byte_size_value bigint;
+  content_text text;
+  content_bytes bytea;
+  sha256_value text;
+  total_size_value bigint := 0;
+  parts_manifest jsonb;
+  inserted_rows bigint;
+  stored_bundle vortex_definition.installation_runtime_bundles%rowtype;
+  expected_module_bindings jsonb;
+  prepared_source jsonb;
+  source_manifest jsonb;
+  section_payloads jsonb := '{}'::jsonb;
+  section_text text;
+  application_content jsonb;
+  expected_modules jsonb;
+  expected_access_plan jsonb;
+begin
+  if p_application_root_id is null
+    or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_application_release_revision is null
+    or p_application_release_revision not between 1 and 9007199254740991
+    or p_bundle_format_version is distinct from 3
+    or p_pin_fingerprint is null or p_pin_fingerprint !~ '^sha256:[a-f0-9]{64}$'
+    or p_parts is null or pg_catalog.jsonb_typeof(p_parts) is distinct from 'array' then
+    raise exception using errcode = '22023',
+      message = 'Installation runtime bundle command is invalid';
+  end if;
+  if pg_catalog.jsonb_array_length(p_parts) < pg_catalog.cardinality(expected_sections) then
+    raise exception using errcode = '22023',
+      message = 'Installation runtime bundle command is invalid';
+  end if;
+
+  select evaluated.* into strict permission_decision
+  from vortex_access.evaluate_organization_permission_eligibility(
+    pg_catalog.jsonb_build_object(
+      'operationKey', 'platform.organization.applications.install',
+      'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
+      'target', pg_catalog.jsonb_build_object('kind', 'organization'),
+      'requiredPermission', pg_catalog.jsonb_build_object(
+        'ownerKind', 'platform',
+        'ownerId', vortex_access.platform_permission_owner_id(),
+        'permissionId', vortex_access.platform_permission_id('platform.organization.applications.manage')
+      ),
+      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'authority', pg_catalog.jsonb_build_object('kind', 'permission')
+    )
+  ) as evaluated;
+  if permission_decision.outcome is distinct from 'eligible' then
+    raise exception using errcode = '42501',
+      message = 'Module installation authority is unavailable';
+  end if;
+
+  select evaluated.* into strict delegation_decision
+  from vortex_access.evaluate_organization_permission_eligibility(
+    pg_catalog.jsonb_build_object(
+      'operationKey', 'platform.organization.applications.install_scope',
+      'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
+      'target', pg_catalog.jsonb_build_object('kind', 'organization'),
+      'requiredPermission', pg_catalog.jsonb_build_object(
+        'ownerKind', 'platform',
+        'ownerId', vortex_access.platform_permission_owner_id(),
+        'permissionId', vortex_access.platform_permission_id('platform.organization.applications.manage')
+      ),
+      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'authority', pg_catalog.jsonb_build_object(
+        'kind', 'delegated_management',
+        'before', pg_catalog.jsonb_build_object('kind', 'organization_catalogue'),
+        'after', pg_catalog.jsonb_build_object('kind', 'organization_catalogue')
+      )
+    )
+  ) as evaluated;
+  if delegation_decision.outcome is distinct from 'eligible'
+    or delegation_decision.organization_id <> permission_decision.organization_id
+    or delegation_decision.organization_account_id <> permission_decision.organization_account_id
+    or delegation_decision.access_version <> permission_decision.access_version
+    or delegation_decision.correlation_id <> permission_decision.correlation_id then
+    raise exception using errcode = '42501',
+      message = 'Module installation delegation is unavailable';
+  end if;
+
+  checked_context := vortex_access.validated_human_request_context();
+  if (checked_context ->> 'organizationId')::uuid <> permission_decision.organization_id
+    or (checked_context ->> 'organizationAccountId')::uuid <>
+      permission_decision.organization_account_id
+    or (checked_context ->> 'accessVersion')::bigint <> permission_decision.access_version
+    or (checked_context ->> 'correlationId')::uuid <> permission_decision.correlation_id then
+    raise exception using errcode = '40001',
+      message = 'Module installation context changed';
+  end if;
+  selected_organization_id := permission_decision.organization_id;
+
+  if not exists (
+    select 1
+    from vortex_definition.roots as root
+    join vortex_definition.releases as release
+      on release.root_id = root.root_id
+      and release.release_revision = p_application_release_revision
+    where root.root_id = p_application_root_id
+      and root.organization_id = selected_organization_id
+      and root.kind = 'application'
+      and release.validation_contract_version = any (
+        vortex_definition.accepted_contract_version('application')
+      )
+      and release.compilation_output #>> '{kind}' = 'application'
+      and release.compilation_output #>> '{canonical,envelope,rootId}' =
+        p_application_root_id::text
+      and release.compilation_output #>> '{validationContractVersion}' = any (
+        vortex_definition.accepted_contract_version('application')
+      )
+  ) then
+    raise exception using errcode = 'P0002',
+      message = 'Installation Application release is unavailable';
+  end if;
+
+  select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'moduleRootId', binding.module_root_id,
+      'moduleReleaseRevision', binding.module_release_revision,
+      'bindingRevision', binding.binding_revision,
+      'state', binding.state
+    ) order by binding.module_root_id), '[]'::jsonb)
+  into expected_module_bindings
+  from vortex_definition.installation_bindings as binding
+  where binding.organization_id = selected_organization_id
+    and binding.application_root_id = p_application_root_id
+    and binding.state = 'provisioned';
+  prepared_source := vortex_definition.read_prepared_installation_runtime_source(
+    p_application_root_id,
+    p_application_release_revision,
+    expected_module_bindings
+  );
+  if prepared_source is null
+    or (prepared_source ->> 'organizationId')::uuid is distinct from selected_organization_id
+    or (prepared_source ->> 'applicationRootId')::uuid is distinct from p_application_root_id
+    or (prepared_source ->> 'applicationReleaseRevision')::bigint is distinct from p_application_release_revision
+    or prepared_source ->> 'pinFingerprint' is distinct from p_pin_fingerprint then
+    raise exception using errcode = '40001',
+      message = 'Installation runtime bundle source changed';
+  end if;
+  source_manifest := pg_catalog.jsonb_build_object(
+    'bundleFormatVersion', 2,
+    'application', pg_catalog.jsonb_build_object(
+      'rootId', prepared_source #> '{application,rootId}',
+      'definitionKey', prepared_source #> '{application,key}',
+      'releaseRevision', prepared_source #> '{application,releaseRevision}',
+      'releaseVersion', prepared_source #> '{application,releaseVersion}',
+      'validationContractVersion', prepared_source #> '{application,validationContractVersion}',
+      'contentFingerprint', prepared_source #> '{application,contentFingerprint}',
+      'resolutionFingerprint', prepared_source #> '{application,resolutionFingerprint}'
+    ),
+    'modules', coalesce((
+      select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'rootId', module.value -> 'rootId',
+          'definitionKey', module.value -> 'key',
+          'releaseRevision', module.value -> 'releaseRevision',
+          'releaseVersion', module.value -> 'releaseVersion',
+          'validationContractVersion', module.value -> 'validationContractVersion',
+          'contentFingerprint', module.value -> 'contentFingerprint',
+          'resolutionFingerprint', module.value -> 'resolutionFingerprint'
+        ) order by (module.value ->> 'rootId') collate "C")
+      from pg_catalog.jsonb_array_elements(prepared_source -> 'modules') as module(value)
+    ), '[]'::jsonb),
+    'pinFingerprint', prepared_source -> 'pinFingerprint',
+    'preparedRecordAccessPlan', pg_catalog.jsonb_build_object(
+      'planKey', prepared_source #> '{preparedRecordAccessPlan,planKey}',
+      'mappingFingerprint', prepared_source #> '{preparedRecordAccessPlan,mappingFingerprint}'
+    )
+  );
+  for section_value in
+    select required.section
+    from pg_catalog.unnest(expected_sections) as required(section)
+  loop
+    select pg_catalog.string_agg(item.value ->> 'content', '' order by
+      (item.value ->> 'ordinal')::integer)
+    into section_text
+    from pg_catalog.jsonb_array_elements(p_parts) as item(value)
+    where item.value ->> 'section' = section_value;
+    if section_text is null then
+      raise exception using errcode = '22023',
+        message = 'Installation runtime bundle section is unavailable';
+    end if;
+    begin
+      section_payloads := section_payloads || pg_catalog.jsonb_build_object(
+        section_value, section_text::jsonb
+      );
+    exception when others then
+      raise exception using errcode = '22023',
+        message = 'Installation runtime bundle section is invalid';
+    end;
+  end loop;
+  application_content := prepared_source #> '{application,compilationOutput,canonical,content}';
+  if application_content is null then
+    raise exception using errcode = '55000',
+      message = 'Installation runtime bundle Application content is unavailable';
+  end if;
+  select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'identity', pg_catalog.jsonb_build_object(
+        'kind', module.value -> 'kind',
+        'organizationId', module.value -> 'organizationId',
+        'rootId', module.value -> 'rootId',
+        'definitionKey', module.value -> 'key',
+        'releaseRevision', module.value -> 'releaseRevision',
+        'releaseVersion', module.value -> 'releaseVersion',
+        'validationContractVersion', module.value -> 'validationContractVersion',
+        'contentFingerprint', module.value -> 'contentFingerprint',
+        'resolutionFingerprint', module.value -> 'resolutionFingerprint',
+        'dependencyManifest', module.value -> 'dependencyManifest'
+      ),
+      'content', module.value #> '{compilationOutput,canonical,content}'
+    ) order by (module.value ->> 'rootId') collate "C"), '[]'::jsonb)
+  into expected_modules
+  from pg_catalog.jsonb_array_elements(prepared_source -> 'modules') as module(value);
+  select pg_catalog.jsonb_build_object(
+    'preparedRecordAccessPlan', prepared_source -> 'preparedRecordAccessPlan',
+    'declaredPermissions', pg_catalog.jsonb_build_object(
+      'application', application_content -> 'permissions',
+      'modules', coalesce((
+        select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+            'rootId', module.value -> 'rootId',
+            'permissions', module.value #> '{compilationOutput,canonical,content,permissions}'
+          ) order by (module.value ->> 'rootId') collate "C")
+        from pg_catalog.jsonb_array_elements(prepared_source -> 'modules') as module(value)
+      ), '[]'::jsonb)
+    )
+  ) into expected_access_plan;
+  if section_payloads -> 'navigation' is distinct from application_content -> 'navigation'
+    or section_payloads -> 'flows' is distinct from pg_catalog.jsonb_build_object(
+      'flows', application_content -> 'flows',
+      'flowBindings', application_content -> 'flowBindings'
+    )
+    or section_payloads -> 'theme' is distinct from application_content -> 'theme'
+    or section_payloads -> 'component_registry' is distinct from application_content -> 'platformBlockDependencies'
+    or section_payloads -> 'tool_bundle' is distinct from prepared_source #> '{application,compilationOutput,toolBundle}'
+    or section_payloads -> 'access_plan' is distinct from expected_access_plan
+    or section_payloads #> '{pages,application,identity}' is distinct from (
+      pg_catalog.jsonb_build_object(
+        'kind', prepared_source #> '{application,kind}',
+        'organizationId', prepared_source #> '{application,organizationId}',
+        'rootId', prepared_source #> '{application,rootId}',
+        'definitionKey', prepared_source #> '{application,key}',
+        'releaseRevision', prepared_source #> '{application,releaseRevision}',
+        'releaseVersion', prepared_source #> '{application,releaseVersion}',
+        'validationContractVersion', prepared_source #> '{application,validationContractVersion}',
+        'contentFingerprint', prepared_source #> '{application,contentFingerprint}',
+        'resolutionFingerprint', prepared_source #> '{application,resolutionFingerprint}',
+        'dependencyManifest', prepared_source #> '{application,dependencyManifest}',
+        'platformCompatibilityVersion',
+          prepared_source #> '{application,compilationOutput,platformCompatibilityVersion}'
+      )
+    )
+    or section_payloads #> '{pages,application,content}' is distinct from
+      application_content - array[
+        'navigation', 'flows', 'flowBindings', 'theme',
+        'platformBlockDependencies', 'shells', 'pages'
+      ]::text[]
+    or section_payloads #> '{pages,application,shells}' is distinct from application_content -> 'shells'
+    or section_payloads #> '{pages,application,pages}' is distinct from application_content -> 'pages'
+    or section_payloads #> '{pages,modules}' is distinct from expected_modules
+    or pg_catalog.jsonb_typeof(section_payloads #> '{pages,resolvedCompositions}') is distinct from 'array'
+    or pg_catalog.jsonb_array_length(section_payloads #> '{pages,resolvedCompositions}') <>
+      pg_catalog.jsonb_array_length(application_content -> 'pages') then
+    raise exception using errcode = '23514',
+      message = 'Installation runtime bundle sections do not match current immutable source';
+  end if;
+  for part_item in
+    select item.value from pg_catalog.jsonb_array_elements(p_parts) as item(value)
+  loop
+    if pg_catalog.jsonb_typeof(part_item) is distinct from 'object' then
+      raise exception using errcode = '22023',
+        message = 'Installation runtime bundle part is invalid';
+    end if;
+    if not (part_item ?& array['section', 'ordinal', 'byteSize', 'sha256', 'content'])
+      or part_item - array['section', 'ordinal', 'byteSize', 'sha256', 'content'] <> '{}'::jsonb
+      or pg_catalog.jsonb_typeof(part_item -> 'section') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(part_item -> 'ordinal') is distinct from 'number'
+      or pg_catalog.jsonb_typeof(part_item -> 'byteSize') is distinct from 'number'
+      or pg_catalog.jsonb_typeof(part_item -> 'sha256') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(part_item -> 'content') is distinct from 'string' then
+      raise exception using errcode = '22023',
+        message = 'Installation runtime bundle part is invalid';
+    end if;
+
+    section_value := part_item ->> 'section';
+    if not (section_value = any (expected_sections))
+      or (part_item ->> 'ordinal') !~ '^(0|[1-9][0-9]*)$'
+      or pg_catalog.length(part_item ->> 'ordinal') > 10
+      or (part_item ->> 'byteSize') !~ '^[1-9][0-9]*$'
+      or pg_catalog.length(part_item ->> 'byteSize') > 7 then
+      raise exception using errcode = '22023',
+        message = 'Installation runtime bundle part is invalid';
+    end if;
+    ordinal_value := (part_item ->> 'ordinal')::bigint;
+    byte_size_value := (part_item ->> 'byteSize')::bigint;
+    content_text := part_item ->> 'content';
+    if ordinal_value > 2147483647 or byte_size_value > 1048575 then
+      raise exception using errcode = '22023',
+        message = 'Installation runtime bundle part exceeds its limit';
+    end if;
+
+    content_bytes := pg_catalog.convert_to(content_text, 'UTF8');
+    if pg_catalog.octet_length(content_bytes) <> byte_size_value then
+      raise exception using errcode = '22023',
+        message = 'Installation runtime bundle part size is invalid';
+    end if;
+    sha256_value := 'sha256:' || pg_catalog.encode(
+      extensions.digest(content_bytes, 'sha256'), 'hex'
+    );
+    if (part_item ->> 'sha256') !~ '^sha256:[a-f0-9]{64}$'
+      or sha256_value <> (part_item ->> 'sha256') then
+      raise exception using errcode = '22023',
+        message = 'Installation runtime bundle part fingerprint is invalid';
+    end if;
+    total_size_value := total_size_value + byte_size_value;
+    if total_size_value > 9007199254740991 then
+      raise exception using errcode = '22023',
+        message = 'Installation runtime bundle is too large';
+    end if;
+  end loop;
+
+  if exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(p_parts) as item(value)
+      group by item.value ->> 'section', (item.value ->> 'ordinal')::integer
+      having pg_catalog.count(*) > 1
+    )
+    or exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(p_parts) as item(value)
+      group by item.value ->> 'section'
+      having pg_catalog.min((item.value ->> 'ordinal')::integer) <> 0
+        or pg_catalog.max((item.value ->> 'ordinal')::integer) <>
+          pg_catalog.count(*) - 1
+    )
+    or exists (
+      select 1
+      from pg_catalog.unnest(expected_sections) as required(section)
+      where not exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(p_parts) as item(value)
+        where item.value ->> 'section' = required.section
+      )
+    ) then
+    raise exception using errcode = '22023',
+      message = 'Installation runtime bundle sections are incomplete';
+  end if;
+
+  select pg_catalog.jsonb_agg(
+    pg_catalog.jsonb_build_object(
+      'section', item.value ->> 'section',
+      'ordinal', (item.value ->> 'ordinal')::integer,
+      'byteSize', (item.value ->> 'byteSize')::bigint,
+      'sha256', item.value ->> 'sha256'
+    ) order by pg_catalog.array_position(
+      expected_sections, item.value ->> 'section'
+    ), (item.value ->> 'ordinal')::integer
+  )
+  into parts_manifest
+  from pg_catalog.jsonb_array_elements(p_parts) as item(value);
+
+  insert into vortex_definition.installation_runtime_bundles (
+    organization_id, application_root_id, application_release_revision,
+    bundle_format_version, pin_fingerprint, source_manifest, parts, total_size_bytes
+  ) values (
+    selected_organization_id, p_application_root_id, p_application_release_revision,
+    p_bundle_format_version, p_pin_fingerprint, source_manifest, parts_manifest, total_size_value
+  ) on conflict (
+    organization_id, application_root_id, application_release_revision, bundle_format_version
+  ) do nothing;
+  get diagnostics inserted_rows = row_count;
+
+  if inserted_rows = 0 then
+    select stored.* into stored_bundle
+    from vortex_definition.installation_runtime_bundles as stored
+    where stored.organization_id = selected_organization_id
+      and stored.application_root_id = p_application_root_id
+      and stored.application_release_revision = p_application_release_revision
+      and stored.bundle_format_version = p_bundle_format_version;
+    if not found then
+      raise exception using errcode = '40001',
+        message = 'Installation runtime bundle changed concurrently';
+    end if;
+    if stored_bundle.pin_fingerprint <> p_pin_fingerprint
+      or stored_bundle.source_manifest is distinct from source_manifest
+      or stored_bundle.parts is distinct from parts_manifest
+      or stored_bundle.total_size_bytes is distinct from total_size_value
+      or (select pg_catalog.count(*) from vortex_definition.installation_runtime_bundle_parts as part
+        where part.organization_id = selected_organization_id
+          and part.application_root_id = p_application_root_id
+          and part.application_release_revision = p_application_release_revision
+          and part.bundle_format_version = p_bundle_format_version)
+        <> pg_catalog.jsonb_array_length(p_parts)
+      or exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(p_parts) as item(value)
+        left join vortex_definition.installation_runtime_bundle_parts as part
+          on part.organization_id = selected_organization_id
+          and part.application_root_id = p_application_root_id
+          and part.application_release_revision = p_application_release_revision
+          and part.bundle_format_version = p_bundle_format_version
+          and part.section = item.value ->> 'section'
+          and part.ordinal = (item.value ->> 'ordinal')::integer
+        where part.content_bytes is distinct from pg_catalog.convert_to(item.value ->> 'content', 'UTF8')
+      ) then
+      raise exception using errcode = '23505',
+        message = 'Installation runtime bundle pin fingerprint differs';
+    end if;
+  else
+    for part_item in
+      select item.value from pg_catalog.jsonb_array_elements(p_parts) as item(value)
+    loop
+      insert into vortex_definition.installation_runtime_bundle_parts (
+        organization_id, application_root_id, application_release_revision,
+        bundle_format_version, section, ordinal, content_bytes
+      ) values (
+        selected_organization_id, p_application_root_id, p_application_release_revision,
+        p_bundle_format_version, part_item ->> 'section',
+        (part_item ->> 'ordinal')::integer,
+        pg_catalog.convert_to(part_item ->> 'content', 'UTF8')
+      );
+    end loop;
+
+    select stored.* into strict stored_bundle
+    from vortex_definition.installation_runtime_bundles as stored
+    where stored.organization_id = selected_organization_id
+      and stored.application_root_id = p_application_root_id
+      and stored.application_release_revision = p_application_release_revision
+      and stored.bundle_format_version = p_bundle_format_version;
+  end if;
+
+  return pg_catalog.jsonb_build_object(
+    'organizationId', stored_bundle.organization_id,
+    'applicationRootId', stored_bundle.application_root_id,
+    'applicationReleaseRevision', stored_bundle.application_release_revision,
+    'bundleFormatVersion', stored_bundle.bundle_format_version,
+    'pinFingerprint', stored_bundle.pin_fingerprint,
+    'sourceManifest', stored_bundle.source_manifest,
+    'parts', stored_bundle.parts,
+    'totalSizeBytes', stored_bundle.total_size_bytes,
+    'builtAt', stored_bundle.built_at
+  );
+exception
+  when no_data_found then
+    raise exception using errcode = 'P0002',
+      message = 'Installation runtime bundle evidence is unavailable';
+  when too_many_rows then
+    raise exception using errcode = '55000',
+      message = 'Installation runtime bundle evidence is ambiguous';
+end
+$function$;
+
+create or replace function vortex_definition.assert_prepared_installation_runtime_bundle(
+  p_application_root_id uuid,
+  p_application_release_revision bigint,
+  p_expected_module_bindings jsonb,
+  p_pin_fingerprint text
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  expected_sections constant text[] := array[
+    'pages', 'navigation', 'flows', 'theme', 'component_registry',
+    'access_plan', 'tool_bundle'
+  ];
+  checked_context jsonb;
+  selected_organization_id uuid;
+  prepared_source jsonb;
+  source_manifest jsonb;
+  application_content jsonb;
+  expected_access_plan jsonb;
+  access_plan_text text;
+  access_plan_value jsonb;
+  stored_bundle vortex_definition.installation_runtime_bundles%rowtype;
+  part_item record;
+  metadata_item jsonb;
+  metadata_count integer;
+  stored_part_count integer;
+  section_value text;
+  ordinal_value bigint;
+  byte_size_value bigint;
+  total_size_value bigint := 0;
+begin
+  if p_application_root_id is null
+    or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_application_release_revision is null
+    or p_application_release_revision not between 1 and 9007199254740991
+    or p_pin_fingerprint is null
+    or p_pin_fingerprint !~ '^sha256:[a-f0-9]{64}$'
+    or pg_catalog.jsonb_typeof(p_expected_module_bindings) is distinct from 'array'
+    or pg_catalog.jsonb_array_length(p_expected_module_bindings) < 1 then
+    raise exception using errcode = '22023',
+      message = 'Prepared runtime bundle assertion is invalid';
+  end if;
+  checked_context := vortex_access.validated_human_request_context();
+  selected_organization_id := (checked_context ->> 'organizationId')::uuid;
+  if selected_organization_id is null then
+    raise exception using errcode = '42501',
+      message = 'Prepared runtime bundle authority is unavailable';
+  end if;
+  prepared_source := vortex_definition.read_prepared_installation_runtime_source(
+    p_application_root_id,
+    p_application_release_revision,
+    p_expected_module_bindings
+  );
+  if prepared_source is null
+    or (prepared_source ->> 'organizationId')::uuid is distinct from selected_organization_id
+    or prepared_source ->> 'pinFingerprint' is distinct from p_pin_fingerprint then
+    raise exception using errcode = '40001',
+      message = 'Prepared runtime bundle source changed';
+  end if;
+  source_manifest := pg_catalog.jsonb_build_object(
+    'bundleFormatVersion', 2,
+    'application', pg_catalog.jsonb_build_object(
+      'rootId', prepared_source #> '{application,rootId}',
+      'definitionKey', prepared_source #> '{application,key}',
+      'releaseRevision', prepared_source #> '{application,releaseRevision}',
+      'releaseVersion', prepared_source #> '{application,releaseVersion}',
+      'validationContractVersion', prepared_source #> '{application,validationContractVersion}',
+      'contentFingerprint', prepared_source #> '{application,contentFingerprint}',
+      'resolutionFingerprint', prepared_source #> '{application,resolutionFingerprint}'
+    ),
+    'modules', coalesce((
+      select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'rootId', module.value -> 'rootId',
+          'definitionKey', module.value -> 'key',
+          'releaseRevision', module.value -> 'releaseRevision',
+          'releaseVersion', module.value -> 'releaseVersion',
+          'validationContractVersion', module.value -> 'validationContractVersion',
+          'contentFingerprint', module.value -> 'contentFingerprint',
+          'resolutionFingerprint', module.value -> 'resolutionFingerprint'
+        ) order by (module.value ->> 'rootId') collate "C")
+      from pg_catalog.jsonb_array_elements(prepared_source -> 'modules') as module(value)
+    ), '[]'::jsonb),
+    'pinFingerprint', prepared_source -> 'pinFingerprint',
+    'preparedRecordAccessPlan', pg_catalog.jsonb_build_object(
+      'planKey', prepared_source #> '{preparedRecordAccessPlan,planKey}',
+      'mappingFingerprint', prepared_source #> '{preparedRecordAccessPlan,mappingFingerprint}'
+    )
+  );
+  select stored.* into strict stored_bundle
+  from vortex_definition.installation_runtime_bundles as stored
+  where stored.organization_id = selected_organization_id
+    and stored.application_root_id = p_application_root_id
+    and stored.application_release_revision = p_application_release_revision
+    and stored.bundle_format_version = 3;
+  if stored_bundle.pin_fingerprint is distinct from p_pin_fingerprint
+    or stored_bundle.source_manifest is distinct from source_manifest then
+    raise exception using errcode = '23505',
+      message = 'Prepared runtime bundle identity differs';
+  end if;
+
+  if pg_catalog.jsonb_typeof(stored_bundle.parts) is distinct from 'array'
+    or pg_catalog.jsonb_array_length(stored_bundle.parts) < pg_catalog.cardinality(expected_sections)
+    or exists (
+      select 1
+      from pg_catalog.unnest(expected_sections) as required(section)
+      where not exists (
+        select 1 from pg_catalog.jsonb_array_elements(stored_bundle.parts) as item(value)
+        where item.value ->> 'section' = required.section
+      )
+    ) then
+    raise exception using errcode = '55000',
+      message = 'Prepared runtime bundle parts are incomplete';
+  end if;
+  select pg_catalog.count(*)::integer into metadata_count
+  from pg_catalog.jsonb_array_elements(stored_bundle.parts) as item(value);
+  select pg_catalog.count(*)::integer into stored_part_count
+  from vortex_definition.installation_runtime_bundle_parts as part
+  where part.organization_id = selected_organization_id
+    and part.application_root_id = p_application_root_id
+    and part.application_release_revision = p_application_release_revision
+    and part.bundle_format_version = 3;
+  if metadata_count is distinct from stored_part_count then
+    raise exception using errcode = '55000',
+      message = 'Prepared runtime bundle part count differs';
+  end if;
+  for metadata_item in
+    select item.value from pg_catalog.jsonb_array_elements(stored_bundle.parts) as item(value)
+  loop
+    if pg_catalog.jsonb_typeof(metadata_item) is distinct from 'object'
+      or not metadata_item ?& array['section','ordinal','byteSize','sha256']
+      or metadata_item - array['section','ordinal','byteSize','sha256'] <> '{}'::jsonb
+      or pg_catalog.jsonb_typeof(metadata_item -> 'section') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(metadata_item -> 'ordinal') is distinct from 'number'
+      or pg_catalog.jsonb_typeof(metadata_item -> 'byteSize') is distinct from 'number'
+      or pg_catalog.jsonb_typeof(metadata_item -> 'sha256') is distinct from 'string'
+      or not (metadata_item ->> 'section' = any (expected_sections))
+      or (metadata_item ->> 'ordinal') !~ '^(0|[1-9][0-9]*)$'
+      or pg_catalog.length(metadata_item ->> 'ordinal') > 10
+      or (metadata_item ->> 'byteSize') !~ '^[1-9][0-9]*$'
+      or pg_catalog.length(metadata_item ->> 'byteSize') > 7
+      or (metadata_item ->> 'sha256') !~ '^sha256:[a-f0-9]{64}$' then
+      raise exception using errcode = '55000',
+        message = 'Prepared runtime bundle part metadata is invalid';
+    end if;
+    section_value := metadata_item ->> 'section';
+    ordinal_value := (metadata_item ->> 'ordinal')::bigint;
+    byte_size_value := (metadata_item ->> 'byteSize')::bigint;
+    if ordinal_value > 2147483647 or byte_size_value > 1048575 then
+      raise exception using errcode = '55000',
+        message = 'Prepared runtime bundle part metadata exceeds its limit';
+    end if;
+    total_size_value := total_size_value + byte_size_value;
+    if total_size_value > 9007199254740991 then
+      raise exception using errcode = '55000',
+        message = 'Prepared runtime bundle total size exceeds its limit';
+    end if;
+    select part.* into strict part_item
+    from vortex_definition.installation_runtime_bundle_parts as part
+    where part.organization_id = selected_organization_id
+      and part.application_root_id = p_application_root_id
+      and part.application_release_revision = p_application_release_revision
+      and part.bundle_format_version = 3
+      and part.section = section_value
+      and part.ordinal = ordinal_value::integer;
+    if pg_catalog.octet_length(part_item.content_bytes) is distinct from byte_size_value
+      or ('sha256:' || pg_catalog.encode(
+        extensions.digest(part_item.content_bytes, 'sha256'), 'hex'
+      )) is distinct from metadata_item ->> 'sha256' then
+      raise exception using errcode = '55000',
+        message = 'Prepared runtime bundle bytes do not match their manifest';
+    end if;
+  end loop;
+  if total_size_value is distinct from stored_bundle.total_size_bytes
+    or exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(stored_bundle.parts) as item(value)
+      group by item.value ->> 'section', (item.value ->> 'ordinal')::integer
+      having pg_catalog.count(*) > 1
+    )
+    or exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(stored_bundle.parts) as item(value)
+      group by item.value ->> 'section'
+      having pg_catalog.min((item.value ->> 'ordinal')::integer) <> 0
+        or pg_catalog.max((item.value ->> 'ordinal')::integer) <>
+          pg_catalog.count(*) - 1
+    )
+    or exists (
+      select 1
+      from pg_catalog.unnest(expected_sections) as required(section)
+      where not exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(stored_bundle.parts) as item(value)
+        where item.value ->> 'section' = required.section
+      )
+    ) then
+    raise exception using errcode = '55000',
+      message = 'Prepared runtime bundle metadata is incomplete';
+  end if;
+
+  application_content := prepared_source #> '{application,compilationOutput,canonical,content}';
+  select pg_catalog.jsonb_build_object(
+    'preparedRecordAccessPlan', prepared_source -> 'preparedRecordAccessPlan',
+    'declaredPermissions', pg_catalog.jsonb_build_object(
+      'application', application_content -> 'permissions',
+      'modules', coalesce((
+        select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+            'rootId', module.value -> 'rootId',
+            'permissions', module.value #> '{compilationOutput,canonical,content,permissions}'
+          ) order by (module.value ->> 'rootId') collate "C")
+        from pg_catalog.jsonb_array_elements(prepared_source -> 'modules') as module(value)
+      ), '[]'::jsonb)
+    )
+  ) into expected_access_plan;
+  select pg_catalog.string_agg(pg_catalog.convert_from(part.content_bytes, 'UTF8'), ''
+    order by part.ordinal)
+  into access_plan_text
+  from vortex_definition.installation_runtime_bundle_parts as part
+  where part.organization_id = selected_organization_id
+    and part.application_root_id = p_application_root_id
+    and part.application_release_revision = p_application_release_revision
+    and part.bundle_format_version = 3
+    and part.section = 'access_plan';
+  begin
+    access_plan_value := access_plan_text::jsonb;
+  exception when others then
+    raise exception using errcode = '55000',
+      message = 'Prepared runtime bundle access plan is invalid';
+  end;
+  if access_plan_value is distinct from expected_access_plan then
+    raise exception using errcode = '23505',
+      message = 'Prepared runtime bundle Record plan differs from current source';
+  end if;
+  return pg_catalog.jsonb_build_object(
+    'outcome', 'verified',
+    'organizationId', selected_organization_id,
+    'applicationRootId', p_application_root_id,
+    'applicationReleaseRevision', p_application_release_revision,
+    'bundleFormatVersion', 2,
+    'pinFingerprint', stored_bundle.pin_fingerprint,
+    'sourceManifest', stored_bundle.source_manifest
+  );
+exception
+  when no_data_found then
+    raise exception using errcode = 'P0002',
+      message = 'Prepared runtime bundle is unavailable';
+  when too_many_rows then
+    raise exception using errcode = '55000',
+      message = 'Prepared runtime bundle evidence is ambiguous';
+end
+$function$;
+
+create or replace function vortex_definition.read_installation_runtime_bundle_index(
+  p_application_root_id uuid,
+  p_application_release_revision bigint,
+  p_bundle_format_version integer
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $function$
+declare
+  checked_context jsonb;
+  selected_organization_id uuid;
+  stored_bundle vortex_definition.installation_runtime_bundles%rowtype;
+begin
+  if p_application_root_id is null
+    or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_application_release_revision is null
+    or p_application_release_revision not between 1 and 9007199254740991
+    or p_bundle_format_version is distinct from 3 then
+    raise exception using errcode = '22023',
+      message = 'Installation runtime bundle key is invalid';
+  end if;
+
+  checked_context := vortex_access.validated_human_request_context();
+  selected_organization_id := (checked_context ->> 'organizationId')::uuid;
+  if selected_organization_id is null then
+    raise exception using errcode = '42501',
+      message = 'Installation runtime bundle organisation is unavailable';
+  end if;
+
+  select stored.* into stored_bundle
+  from vortex_definition.installation_runtime_bundles as stored
+  where stored.organization_id = selected_organization_id
+    and stored.application_root_id = p_application_root_id
+    and stored.application_release_revision = p_application_release_revision
+    and stored.bundle_format_version = p_bundle_format_version;
+  if not found then
+    raise exception using errcode = 'P0002',
+      message = 'Installation runtime bundle is unavailable';
+  end if;
+
+  return pg_catalog.jsonb_build_object(
+    'organizationId', stored_bundle.organization_id,
+    'applicationRootId', stored_bundle.application_root_id,
+    'applicationReleaseRevision', stored_bundle.application_release_revision,
+    'bundleFormatVersion', stored_bundle.bundle_format_version,
+    'pinFingerprint', stored_bundle.pin_fingerprint,
+    'sourceManifest', stored_bundle.source_manifest,
+    'parts', stored_bundle.parts,
+    'totalSizeBytes', stored_bundle.total_size_bytes,
+    'builtAt', stored_bundle.built_at
+  );
+exception
+  when no_data_found then
+    raise exception using errcode = 'P0002',
+      message = 'Installation runtime bundle is unavailable';
+end
+$function$;
+
+create or replace function vortex_definition.read_active_installation_bundle_identity()
+returns jsonb language plpgsql volatile security definer set search_path=''
+as $function$
+declare
+  checked_context jsonb;
+  selected_org uuid;
+  selected_app uuid;
+  selected_revision bigint;
+  active_count integer;
+  registered_app record;
+  registered_identity jsonb;
+  bindings jsonb;
+  pin_facts jsonb;
+  pin_hash text;
+  identity_value jsonb;
+  before_identity jsonb;
+  stored_bundle vortex_definition.installation_runtime_bundles%rowtype;
+  bundle_index jsonb;
+  current_manifest jsonb;
+  manifest_pins jsonb;
+  mapping jsonb;
+  stable_plan jsonb;
+  active_source jsonb;
+  source_manifest jsonb;
+begin
+  checked_context:=vortex_access.validated_human_request_context();
+  if checked_context ->> 'callerKind' is distinct from 'human'
+    or not checked_context ? 'applicationRootId'
+    or pg_catalog.clock_timestamp()>=(checked_context ->> 'expiresAt')::timestamptz
+    or (checked_context ? 'delegatedContext' and
+      pg_catalog.clock_timestamp()>=(checked_context #>> '{delegatedContext,expiresAt}')::timestamptz)
+    or (checked_context ? 'supportContext' and
+      pg_catalog.clock_timestamp()>=(checked_context #>> '{supportContext,expiresAt}')::timestamptz) then
+    raise exception using errcode='42501', message='Active Application context is unavailable';
+  end if;
+  selected_org:=(checked_context ->> 'organizationId')::uuid;
+  selected_app:=(checked_context ->> 'applicationRootId')::uuid;
+  select pg_catalog.min(binding.application_release_revision),pg_catalog.count(*)::integer
+  into selected_revision,active_count from vortex_definition.installation_bindings as binding
+  where binding.organization_id=selected_org and binding.application_root_id=selected_app
+    and binding.state='active';
+  if active_count not between 1 and 10000 or selected_revision is null or exists(
+    select 1 from vortex_definition.installation_bindings as binding
+    where binding.organization_id=selected_org and binding.application_root_id=selected_app
+      and binding.state<>'detached'
+      and (binding.state<>'active' or binding.application_release_revision<>selected_revision)) then
+    raise exception using errcode='P0002', message='Active Application installation is unavailable';
+  end if;
+  select snapshot.* into strict registered_app
+  from vortex_access.read_application_permission_snapshot(selected_org,selected_app) as snapshot;
+  if registered_app.release_revision is distinct from selected_revision then
+    raise exception using errcode='40001', message='Active Application registration changed';
+  end if;
+  registered_identity:=pg_catalog.jsonb_build_object(
+    'rootId',selected_app,'definitionKey',registered_app.definition_key,
+    'releaseRevision',selected_revision,'releaseVersion',registered_app.release_version,
+    'validationContractVersion',registered_app.validation_contract_version,
+    'contentFingerprint',registered_app.content_fingerprint,
+    'resolutionFingerprint',registered_app.resolution_fingerprint);
+  select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'moduleRootId',binding.module_root_id,'moduleReleaseRevision',binding.module_release_revision,
+      'bindingRevision',binding.binding_revision,'state',binding.state) order by binding.module_root_id),
+    pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'moduleRootId',binding.module_root_id,'moduleReleaseRevision',binding.module_release_revision,
+      'contentFingerprint',module_release.content_fingerprint,
+      'resolutionFingerprint',module_release.resolution_fingerprint) order by binding.module_root_id)
+  into bindings,pin_facts from vortex_definition.installation_bindings as binding
+  join vortex_definition.releases as module_release
+    on module_release.root_id=binding.module_root_id
+    and module_release.release_revision=binding.module_release_revision
+  where binding.organization_id=selected_org and binding.application_root_id=selected_app
+    and binding.state='active';
+  if exists(select 1 from pg_catalog.jsonb_array_elements(pin_facts) as pin(value)
+    where (pin.value ->> 'contentFingerprint') !~ '^sha256:[a-f0-9]{64}$'
+      or (pin.value ->> 'resolutionFingerprint') !~ '^sha256:[a-f0-9]{64}$'
+      or pin.value ->> 'contentFingerprint' is null
+      or pin.value ->> 'resolutionFingerprint' is null) then
+    raise exception using errcode='55000', message='Active Application pins are unavailable';
+  end if;
+  pin_hash:='sha256:' || pg_catalog.encode(
+    pg_catalog.sha256(pg_catalog.convert_to(pin_facts::text,'UTF8')),'hex');
+  identity_value:=pg_catalog.jsonb_build_object(
+    'tenantId',checked_context -> 'tenantId','organizationId',selected_org,
+    'organizationAccountId',checked_context -> 'organizationAccountId',
+    'identityId',checked_context -> 'identityId','sessionId',checked_context -> 'sessionId',
+    'accessVersion',checked_context -> 'accessVersion','correlationId',checked_context -> 'correlationId',
+    'applicationRootId',selected_app,'applicationReleaseRevision',selected_revision,
+    'registeredApplication',registered_identity,'moduleBindings',bindings,
+    'pinFacts',pin_facts,'pinFingerprint',pin_hash);
+  before_identity:=identity_value;
+  select stored.* into stored_bundle from vortex_definition.installation_runtime_bundles as stored
+  where stored.organization_id=selected_org and stored.application_root_id=selected_app
+    and stored.application_release_revision=selected_revision and stored.bundle_format_version=3;
+  if found then
+    current_manifest:=stored_bundle.source_manifest;
+    select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'moduleRootId',module.value -> 'rootId','moduleReleaseRevision',module.value -> 'releaseRevision',
+      'contentFingerprint',module.value -> 'contentFingerprint',
+      'resolutionFingerprint',module.value -> 'resolutionFingerprint')
+      order by (module.value ->> 'rootId')::uuid)
+    into manifest_pins from pg_catalog.jsonb_array_elements(current_manifest -> 'modules') as module(value);
+    if current_manifest ->> 'bundleFormatVersion' is distinct from '2'
+      or current_manifest -> 'application' is distinct from registered_identity
+      or current_manifest ->> 'pinFingerprint' is distinct from pin_hash
+      or stored_bundle.pin_fingerprint is distinct from pin_hash
+      or manifest_pins is distinct from pin_facts
+      or pg_catalog.jsonb_typeof(current_manifest -> 'preparedRecordAccessPlan') is distinct from 'object'
+      or current_manifest #>> '{preparedRecordAccessPlan,planKey}' is distinct from (
+        'sha256:' || pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(
+          'vortex.installation-runtime-bundle.prepared-record-access-plan|' ||
+            selected_org::text || '|' || selected_app::text || '|' ||
+            selected_revision::text || '|2|' || pin_hash,'UTF8')),'hex'))
+      or current_manifest #>> '{preparedRecordAccessPlan,mappingFingerprint}' is null
+      or (current_manifest #>> '{preparedRecordAccessPlan,planKey}') !~ '^sha256:[a-f0-9]{64}$'
+      or (current_manifest #>> '{preparedRecordAccessPlan,mappingFingerprint}') !~ '^sha256:[a-f0-9]{64}$' then
+      raise exception using errcode='23514', message='Active runtime bundle manifest differs';
+    end if;
+    bundle_index:=vortex_definition.read_installation_runtime_bundle_index(selected_app,selected_revision,2);
+  else
+    -- Missing format2 takes a genuine locked active-only cold source path.
+    -- The mapping locker derives identity inline and cannot recurse into this reader.
+    mapping:=vortex_definition.lock_active_installation_runtime_mapping_internal(before_identity);
+    stable_plan:=vortex_record.resolve_active_bundle_record_access_plan_internal(before_identity);
+    active_source:=pg_catalog.jsonb_build_object(
+      'organizationId',mapping #> '{identity,organizationId}',
+      'applicationRootId',mapping #> '{identity,applicationRootId}',
+      'applicationReleaseRevision',mapping #> '{identity,applicationReleaseRevision}',
+      'accessVersion',mapping #> '{identity,accessVersion}',
+      'correlationId',mapping #> '{identity,correlationId}',
+      'pinFingerprint',mapping #> '{identity,pinFingerprint}',
+      'mappingFingerprint',stable_plan -> 'mappingFingerprint',
+      'moduleBindings',mapping #> '{identity,moduleBindings}',
+      'application',mapping -> 'application','modules',mapping -> 'modules',
+      'preparedRecordAccessPlan',stable_plan);
+  source_manifest := pg_catalog.jsonb_build_object(
+    'bundleFormatVersion', 2,
+    'application', pg_catalog.jsonb_build_object(
+      'rootId', active_source #> '{application,rootId}',
+      'definitionKey', active_source #> '{application,key}',
+      'releaseRevision', active_source #> '{application,releaseRevision}',
+      'releaseVersion', active_source #> '{application,releaseVersion}',
+      'validationContractVersion', active_source #> '{application,validationContractVersion}',
+      'contentFingerprint', active_source #> '{application,contentFingerprint}',
+      'resolutionFingerprint', active_source #> '{application,resolutionFingerprint}'
+    ),
+    'modules', coalesce((
+      select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'rootId', module.value -> 'rootId',
+          'definitionKey', module.value -> 'key',
+          'releaseRevision', module.value -> 'releaseRevision',
+          'releaseVersion', module.value -> 'releaseVersion',
+          'validationContractVersion', module.value -> 'validationContractVersion',
+          'contentFingerprint', module.value -> 'contentFingerprint',
+          'resolutionFingerprint', module.value -> 'resolutionFingerprint'
+        ) order by (module.value ->> 'rootId') collate "C")
+      from pg_catalog.jsonb_array_elements(active_source -> 'modules') as module(value)
+    ), '[]'::jsonb),
+    'pinFingerprint', active_source -> 'pinFingerprint',
+    'preparedRecordAccessPlan', pg_catalog.jsonb_build_object(
+      'planKey', active_source #> '{preparedRecordAccessPlan,planKey}',
+      'mappingFingerprint', active_source #> '{preparedRecordAccessPlan,mappingFingerprint}'
+    )
+  );
+
+    active_source:=active_source || pg_catalog.jsonb_build_object('sourceManifest',source_manifest);
+  end if;
+  checked_context:=vortex_access.validated_human_request_context();
+  if checked_context ->> 'callerKind' is distinct from 'human'
+    or not checked_context ? 'applicationRootId'
+    or pg_catalog.clock_timestamp()>=(checked_context ->> 'expiresAt')::timestamptz
+    or (checked_context ? 'delegatedContext' and
+      pg_catalog.clock_timestamp()>=(checked_context #>> '{delegatedContext,expiresAt}')::timestamptz)
+    or (checked_context ? 'supportContext' and
+      pg_catalog.clock_timestamp()>=(checked_context #>> '{supportContext,expiresAt}')::timestamptz) then
+    raise exception using errcode='42501', message='Active Application context is unavailable';
+  end if;
+  selected_org:=(checked_context ->> 'organizationId')::uuid;
+  selected_app:=(checked_context ->> 'applicationRootId')::uuid;
+  select pg_catalog.min(binding.application_release_revision),pg_catalog.count(*)::integer
+  into selected_revision,active_count from vortex_definition.installation_bindings as binding
+  where binding.organization_id=selected_org and binding.application_root_id=selected_app
+    and binding.state='active';
+  if active_count not between 1 and 10000 or selected_revision is null or exists(
+    select 1 from vortex_definition.installation_bindings as binding
+    where binding.organization_id=selected_org and binding.application_root_id=selected_app
+      and binding.state<>'detached'
+      and (binding.state<>'active' or binding.application_release_revision<>selected_revision)) then
+    raise exception using errcode='P0002', message='Active Application installation is unavailable';
+  end if;
+  select snapshot.* into strict registered_app
+  from vortex_access.read_application_permission_snapshot(selected_org,selected_app) as snapshot;
+  if registered_app.release_revision is distinct from selected_revision then
+    raise exception using errcode='40001', message='Active Application registration changed';
+  end if;
+  registered_identity:=pg_catalog.jsonb_build_object(
+    'rootId',selected_app,'definitionKey',registered_app.definition_key,
+    'releaseRevision',selected_revision,'releaseVersion',registered_app.release_version,
+    'validationContractVersion',registered_app.validation_contract_version,
+    'contentFingerprint',registered_app.content_fingerprint,
+    'resolutionFingerprint',registered_app.resolution_fingerprint);
+  select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'moduleRootId',binding.module_root_id,'moduleReleaseRevision',binding.module_release_revision,
+      'bindingRevision',binding.binding_revision,'state',binding.state) order by binding.module_root_id),
+    pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'moduleRootId',binding.module_root_id,'moduleReleaseRevision',binding.module_release_revision,
+      'contentFingerprint',module_release.content_fingerprint,
+      'resolutionFingerprint',module_release.resolution_fingerprint) order by binding.module_root_id)
+  into bindings,pin_facts from vortex_definition.installation_bindings as binding
+  join vortex_definition.releases as module_release
+    on module_release.root_id=binding.module_root_id
+    and module_release.release_revision=binding.module_release_revision
+  where binding.organization_id=selected_org and binding.application_root_id=selected_app
+    and binding.state='active';
+  if exists(select 1 from pg_catalog.jsonb_array_elements(pin_facts) as pin(value)
+    where (pin.value ->> 'contentFingerprint') !~ '^sha256:[a-f0-9]{64}$'
+      or (pin.value ->> 'resolutionFingerprint') !~ '^sha256:[a-f0-9]{64}$'
+      or pin.value ->> 'contentFingerprint' is null
+      or pin.value ->> 'resolutionFingerprint' is null) then
+    raise exception using errcode='55000', message='Active Application pins are unavailable';
+  end if;
+  pin_hash:='sha256:' || pg_catalog.encode(
+    pg_catalog.sha256(pg_catalog.convert_to(pin_facts::text,'UTF8')),'hex');
+  identity_value:=pg_catalog.jsonb_build_object(
+    'tenantId',checked_context -> 'tenantId','organizationId',selected_org,
+    'organizationAccountId',checked_context -> 'organizationAccountId',
+    'identityId',checked_context -> 'identityId','sessionId',checked_context -> 'sessionId',
+    'accessVersion',checked_context -> 'accessVersion','correlationId',checked_context -> 'correlationId',
+    'applicationRootId',selected_app,'applicationReleaseRevision',selected_revision,
+    'registeredApplication',registered_identity,'moduleBindings',bindings,
+    'pinFacts',pin_facts,'pinFingerprint',pin_hash);
+  if identity_value is distinct from before_identity then
+    raise exception using errcode='40001', message='Active runtime bundle identity changed';
+  end if;
+  return pg_catalog.jsonb_build_object('identity',identity_value,
+    'bundleIndex',bundle_index,'repairNeeded',bundle_index is null,'coldSource',active_source);
+exception when no_data_found or too_many_rows then
+  raise exception using errcode='P0002', message='Active runtime bundle identity is unavailable';
+end
+$function$;
+
+
+-- Preview copies are rebuilt from the converted draft when Studio next opens them; their isolated
+-- storage is retired with them and dropped in the background.
+delete from vortex_definition.preview_installations;
 
 reset role;
 
@@ -90,7 +1890,460 @@ begin
 end
 $$;
 
+
 comment on function vortex_record.before_save_flows_for_record_type_internal(uuid, bigint, uuid) is
   'Private save step: returns the exact Module release identity and every BeforeSave flow of that release that names the given record type, in the record type''s ordered rule list, read from the immutable release row the save already resolved.';
+
+reset role;
+
+-- Stored drafts move to contract 4 in place (decision D1). Each draft's source is converted by the
+-- temporary functions below, which are dropped at the end of this migration. Before any draft is
+-- rewritten, every stored fingerprint is recomputed here and must equal the stored one, so the SQL
+-- canonical form provably matches the TypeScript one (canonical-json.ts) and no draft is left
+-- unreadable. A draft that uses a step, kind, trigger or run-as that contract 4 removed is refused
+-- by name: it is never silently dropped.
+set local role vortex_owner;
+
+create function pg_temp.contract_4_canonical_json(p_value jsonb)
+returns text
+language plpgsql
+immutable
+set search_path = ''
+as $function$
+declare
+  result text;
+  member text;
+  first boolean := true;
+begin
+  case pg_catalog.jsonb_typeof(p_value)
+    when 'object' then
+      result := '{';
+      for member in
+        select item.key from pg_catalog.jsonb_object_keys(p_value) as item(key)
+        order by item.key collate "C"
+      loop
+        result := result || case when first then '' else ',' end
+          || pg_catalog.to_json(member)::text || ':'
+          || pg_temp.contract_4_canonical_json(p_value -> member);
+        first := false;
+      end loop;
+      return result || '}';
+    when 'array' then
+      return '[' || coalesce((
+        select pg_catalog.string_agg(pg_temp.contract_4_canonical_json(item.value), ',' order by item.ordinality)
+        from pg_catalog.jsonb_array_elements(p_value) with ordinality as item(value, ordinality)
+      ), '') || ']';
+    when 'string' then
+      return pg_catalog.to_json(p_value #>> '{}')::text;
+    else
+      return p_value::text;
+  end case;
+end
+$function$;
+
+create function pg_temp.contract_4_fingerprint(p_value jsonb)
+returns text
+language sql
+immutable
+set search_path = ''
+as $function$
+  select 'sha256:' || pg_catalog.encode(
+    pg_catalog.sha256(pg_catalog.convert_to(pg_temp.contract_4_canonical_json(p_value), 'UTF8')),
+    'hex'
+  )
+$function$;
+
+-- Refuses a draft that holds anything contract 4 removed, naming the root and where it is.
+create function pg_temp.contract_4_refuse(p_root text, p_where text, p_what text)
+returns void
+language plpgsql
+set search_path = ''
+as $function$
+begin
+  raise exception using errcode = '22023',
+    message = pg_catalog.format(
+      'Contract 4 cannot convert draft %s: %s uses %s, which contract 4 removed; remove it and publish, then run this migration',
+      p_root, p_where, p_what);
+end
+$function$;
+
+-- One task list, converted: show_message gains its target and severity; removed steps refuse.
+create function pg_temp.contract_4_tasks(p_tasks jsonb, p_root text, p_flow text)
+returns jsonb
+language plpgsql
+set search_path = ''
+as $function$
+declare
+  task jsonb;
+  converted jsonb := '[]'::jsonb;
+  tone text;
+  branch jsonb;
+  cases jsonb;
+begin
+  if p_tasks is null or pg_catalog.jsonb_typeof(p_tasks) <> 'array' then
+    return p_tasks;
+  end if;
+  for task in select item.value from pg_catalog.jsonb_array_elements(p_tasks) with ordinality as item(value, ordinality) order by item.ordinality
+  loop
+    if task ->> 'type' in (
+      'parallel', 'wait_until', 'wait_for_person', 'flow.run_background', 'connection.call',
+      'message.acknowledge', 'file.export', 'file.attach', 'file.move'
+    ) then
+      perform pg_temp.contract_4_refuse(p_root, pg_catalog.format('flow %s step %s', p_flow, task ->> 'id'), task ->> 'type');
+    end if;
+    if task ? 'retry' then
+      perform pg_temp.contract_4_refuse(p_root, pg_catalog.format('flow %s step %s', p_flow, task ->> 'id'), 'a retry policy');
+    end if;
+    if task ->> 'type' = 'interface.show_message' and task ? 'properties' then
+      tone := task #>> '{properties,tone,literal,value}';
+      task := pg_catalog.jsonb_set(task, '{properties}',
+        (task -> 'properties') - 'tone'
+        || pg_catalog.jsonb_build_object(
+          'target', coalesce(task #> '{properties,target}',
+            '{"kind":"literal","literal":{"type":"text","value":"dialog"}}'::jsonb),
+          'severity', coalesce(task #> '{properties,severity}',
+            pg_catalog.jsonb_build_object('kind', 'literal', 'literal', pg_catalog.jsonb_build_object(
+              'type', 'text',
+              'value', case tone when 'success' then 'success' when 'warning' then 'warning'
+                when 'critical' then 'error' else 'info' end)))));
+    end if;
+    if task ? 'then' then
+      task := pg_catalog.jsonb_set(task, '{then}', pg_temp.contract_4_tasks(task -> 'then', p_root, p_flow));
+    end if;
+    if task ? 'else' then
+      task := pg_catalog.jsonb_set(task, '{else}', pg_temp.contract_4_tasks(task -> 'else', p_root, p_flow));
+    end if;
+    if task ? 'default' then
+      task := pg_catalog.jsonb_set(task, '{default}', pg_temp.contract_4_tasks(task -> 'default', p_root, p_flow));
+    end if;
+    if task ? 'tasks' then
+      task := pg_catalog.jsonb_set(task, '{tasks}', pg_temp.contract_4_tasks(task -> 'tasks', p_root, p_flow));
+    end if;
+    if task ? 'cases' then
+      cases := '[]'::jsonb;
+      for branch in select item.value from pg_catalog.jsonb_array_elements(task -> 'cases') with ordinality as item(value, ordinality) order by item.ordinality
+      loop
+        cases := cases || pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_set(branch, '{tasks}', pg_temp.contract_4_tasks(branch -> 'tasks', p_root, p_flow)));
+      end loop;
+      task := pg_catalog.jsonb_set(task, '{cases}', cases);
+    end if;
+    converted := converted || pg_catalog.jsonb_build_array(task);
+  end loop;
+  return converted;
+end
+$function$;
+
+-- One flow, converted: no version of its own, no BeforeSave priority; removed kinds refuse.
+create function pg_temp.contract_4_flow(p_flow jsonb, p_root text)
+returns jsonb
+language plpgsql
+set search_path = ''
+as $function$
+declare
+  flow jsonb := p_flow - 'contractVersion';
+  name text := coalesce(p_flow ->> 'key', p_flow ->> 'id');
+  triggers jsonb := '[]'::jsonb;
+  trigger_value jsonb;
+begin
+  if flow ->> 'execution' = 'durable' then
+    perform pg_temp.contract_4_refuse(p_root, pg_catalog.format('flow %s', name), 'the durable execution kind');
+  end if;
+  if flow #>> '{runAs,kind}' in ('specified_account', 'system') then
+    perform pg_temp.contract_4_refuse(p_root, pg_catalog.format('flow %s', name), pg_catalog.format('run as %s', flow #>> '{runAs,kind}'));
+  end if;
+  if flow ? 'retry' then
+    perform pg_temp.contract_4_refuse(p_root, pg_catalog.format('flow %s', name), 'a retry policy');
+  end if;
+  for trigger_value in select item.value from pg_catalog.jsonb_array_elements(coalesce(flow -> 'triggers', '[]'::jsonb)) with ordinality as item(value, ordinality) order by item.ordinality
+  loop
+    if trigger_value ->> 'type' not in ('BeforeSave', 'Event') then
+      perform pg_temp.contract_4_refuse(p_root, pg_catalog.format('flow %s', name), pg_catalog.format('the %s trigger', trigger_value ->> 'type'));
+    end if;
+    if exists (
+      select 1 from pg_catalog.jsonb_array_elements(coalesce(trigger_value -> 'operations', '[]'::jsonb)) as operation(value)
+      where operation.value ->> 'kind' = 'transition'
+    ) then
+      perform pg_temp.contract_4_refuse(p_root, pg_catalog.format('flow %s', name), 'a BeforeSave transition operation');
+    end if;
+    triggers := triggers || pg_catalog.jsonb_build_array(trigger_value - 'priority');
+  end loop;
+  if flow ? 'triggers' then
+    flow := pg_catalog.jsonb_set(flow, '{triggers}', triggers);
+  end if;
+  flow := pg_catalog.jsonb_set(flow, '{tasks}', pg_temp.contract_4_tasks(flow -> 'tasks', p_root, name));
+  if flow ? 'errors' then
+    flow := pg_catalog.jsonb_set(flow, '{errors}', pg_temp.contract_4_tasks(flow -> 'errors', p_root, name));
+  end if;
+  if flow ? 'finally' then
+    flow := pg_catalog.jsonb_set(flow, '{finally}', pg_temp.contract_4_tasks(flow -> 'finally', p_root, name));
+  end if;
+  return flow;
+end
+$function$;
+
+-- One choice or link field's settings: one options source absorbing depends_on and parent_values.
+create function pg_temp.contract_4_field(p_field jsonb)
+returns jsonb
+language plpgsql
+immutable
+set search_path = ''
+as $function$
+declare
+  settings jsonb := p_field -> 'settings';
+  depends jsonb;
+  source jsonb;
+begin
+  if p_field ->> 'type' not in ('choice', 'several_choices', 'link', 'link_to_one_of_several')
+    or pg_catalog.jsonb_typeof(settings) <> 'object' or settings ? 'options_source' then
+    return p_field;
+  end if;
+  depends := settings -> 'depends_on';
+  if p_field ->> 'type' in ('choice', 'several_choices') then
+    source := '{"kind":"fixed"}'::jsonb;
+    if depends is not null then
+      source := source || pg_catalog.jsonb_build_object(
+        'parent_field', depends -> 'parent_field',
+        'option_parents', coalesce((
+          select pg_catalog.jsonb_object_agg(option.value ->> 'value', coalesce(option.value -> 'parent_values', '[]'::jsonb))
+          from pg_catalog.jsonb_array_elements(coalesce(settings -> 'options', '[]'::jsonb)) as option(value)
+        ), '{}'::jsonb));
+    end if;
+    settings := pg_catalog.jsonb_set(settings, '{options}', coalesce((
+      select pg_catalog.jsonb_agg(option.value - 'parent_values' order by option.ordinality)
+      from pg_catalog.jsonb_array_elements(coalesce(settings -> 'options', '[]'::jsonb)) with ordinality as option(value, ordinality)
+    ), '[]'::jsonb));
+  else
+    source := '{"kind":"query"}'::jsonb;
+    if depends is not null then
+      source := source || pg_catalog.jsonb_build_object(
+        'parent_field', depends -> 'parent_field', 'filter_field', depends -> 'filter_field');
+    end if;
+  end if;
+  return pg_catalog.jsonb_set(p_field, '{settings}', (settings - 'depends_on') || pg_catalog.jsonb_build_object('options_source', source));
+end
+$function$;
+
+-- One module body: converted flows, each record type's ordered rule list and its fields.
+create function pg_temp.contract_4_module(p_module jsonb, p_root text)
+returns jsonb
+language plpgsql
+set search_path = ''
+as $function$
+declare
+  module jsonb := p_module;
+  record_types jsonb := '[]'::jsonb;
+  record_type jsonb;
+begin
+  if pg_catalog.jsonb_typeof(module -> 'record_types') = 'array' then
+    for record_type in select item.value from pg_catalog.jsonb_array_elements(module -> 'record_types') with ordinality as item(value, ordinality) order by item.ordinality
+    loop
+      if not record_type ? 'before_save_rules' then
+        -- The rules ran by ascending priority, then in source order; that order is now the list.
+        record_type := record_type || pg_catalog.jsonb_build_object('before_save_rules', coalesce((
+          select pg_catalog.jsonb_agg(ruled.flow_id order by ruled.priority, ruled.position)
+          from (
+            select flow.value ->> 'id' as flow_id,
+              coalesce((trigger.value ->> 'priority')::integer, 0) as priority,
+              flow.ordinality as position
+            from pg_catalog.jsonb_array_elements(coalesce(module -> 'flows', '[]'::jsonb)) with ordinality as flow(value, ordinality)
+            cross join lateral pg_catalog.jsonb_array_elements(coalesce(flow.value -> 'triggers', '[]'::jsonb)) as trigger(value)
+            where trigger.value ->> 'type' = 'BeforeSave'
+              and trigger.value ->> 'recordTypeId' in (record_type ->> 'key', record_type ->> 'id')
+          ) as ruled
+        ), '[]'::jsonb));
+      end if;
+      if pg_catalog.jsonb_typeof(record_type -> 'fields') = 'array' then
+        record_type := pg_catalog.jsonb_set(record_type, '{fields}', (
+          select pg_catalog.jsonb_agg(pg_temp.contract_4_field(field.value) order by field.ordinality)
+          from pg_catalog.jsonb_array_elements(record_type -> 'fields') with ordinality as field(value, ordinality)
+        ));
+      end if;
+      record_types := record_types || pg_catalog.jsonb_build_array(record_type);
+    end loop;
+    module := pg_catalog.jsonb_set(module, '{record_types}', record_types);
+  end if;
+  if pg_catalog.jsonb_typeof(module -> 'flows') = 'array' then
+    module := pg_catalog.jsonb_set(module, '{flows}', coalesce((
+      select pg_catalog.jsonb_agg(pg_temp.contract_4_flow(flow.value, p_root) order by flow.ordinality)
+      from pg_catalog.jsonb_array_elements(module -> 'flows') with ordinality as flow(value, ordinality)
+    ), '[]'::jsonb));
+  end if;
+  return module;
+end
+$function$;
+
+-- A page composition: a Notice block's critical severity becomes error.
+create function pg_temp.contract_4_composition(p_value jsonb)
+returns jsonb
+language plpgsql
+immutable
+set search_path = ''
+as $function$
+declare
+  result jsonb;
+begin
+  case pg_catalog.jsonb_typeof(p_value)
+    when 'object' then
+      select pg_catalog.jsonb_object_agg(item.key, pg_temp.contract_4_composition(item.value))
+      into result
+      from pg_catalog.jsonb_each(p_value) as item(key, value);
+      result := coalesce(result, '{}'::jsonb);
+      if result ->> 'type' in ('platform.renderer.notice', 'platform.renderer.query_notice')
+        and result #>> '{props,severity}' = 'critical' then
+        result := pg_catalog.jsonb_set(result, '{props,severity}', '"error"'::jsonb);
+      end if;
+      return result;
+    when 'array' then
+      return coalesce((
+        select pg_catalog.jsonb_agg(pg_temp.contract_4_composition(item.value) order by item.ordinality)
+        from pg_catalog.jsonb_array_elements(p_value) with ordinality as item(value, ordinality)
+      ), '[]'::jsonb);
+    else
+      return p_value;
+  end case;
+end
+$function$;
+
+-- A whole draft source, application or module.
+create function pg_temp.contract_4_source(p_source jsonb, p_root text)
+returns jsonb
+language plpgsql
+set search_path = ''
+as $function$
+declare
+  source jsonb := pg_catalog.jsonb_set(p_source, '{source_contract_version}', '"4.0.0"'::jsonb);
+  body jsonb := p_source -> 'body';
+  defaults constant jsonb := '{
+    "action": ["ignore_while_running", 0, "none", null],
+    "row_clicked": ["ignore_while_running", 0, "none", null],
+    "row_action": ["ignore_while_running", 0, "none", null],
+    "bulk_action": ["ignore_while_running", 0, "page", 10000],
+    "inline_edit": ["queue", 0, "none", null],
+    "row_edit": ["queue", 0, "none", null],
+    "batch_edit": ["queue", 0, "none", null],
+    "card_moved": ["queue", 0, "none", null],
+    "card_added": ["ignore_while_running", 0, "none", null],
+    "load": ["latest_wins", 0, "none", null],
+    "refresh": ["latest_wins", 0, "none", null],
+    "record_loaded": ["latest_wins", 0, "none", null],
+    "filter_changed": ["latest_wins", 0, "none", null],
+    "search_changed": ["latest_wins", 250, "none", null],
+    "sort_changed": ["latest_wins", 0, "none", null],
+    "columns_changed": ["latest_wins", 0, "none", null],
+    "row_expanded": ["latest_wins", 0, "none", null],
+    "page_changed": ["latest_wins", 0, "none", null],
+    "selection_changed": ["latest_wins", 0, "none", null],
+    "field_changed": ["latest_wins", 250, "none", null],
+    "field_focus_lost": ["latest_wins", 0, "none", null],
+    "options_requested": ["latest_wins", 250, "none", null],
+    "form_ready": ["ignore_while_running", 0, "none", null],
+    "form_reset": ["ignore_while_running", 0, "none", null],
+    "form_submit": ["ignore_while_running", 0, "form", 10000],
+    "form_cancel": ["ignore_while_running", 0, "none", null],
+    "tab_changed": ["latest_wins", 0, "none", null],
+    "guided_step_changed": ["ignore_while_running", 0, "none", null]
+  }'::jsonb;
+  binding jsonb;
+  bindings jsonb := '[]'::jsonb;
+  setting jsonb;
+begin
+  if pg_catalog.jsonb_typeof(body) <> 'object' then
+    return source;
+  end if;
+  if p_source ->> 'kind' = 'module' then
+    return pg_catalog.jsonb_set(source, '{body}', pg_temp.contract_4_module(body, p_root));
+  end if;
+  if pg_catalog.jsonb_typeof(body -> 'flows') = 'array' then
+    body := pg_catalog.jsonb_set(body, '{flows}', coalesce((
+      select pg_catalog.jsonb_agg(pg_temp.contract_4_flow(flow.value, p_root) order by flow.ordinality)
+      from pg_catalog.jsonb_array_elements(body -> 'flows') with ordinality as flow(value, ordinality)
+    ), '[]'::jsonb));
+  end if;
+  if pg_catalog.jsonb_typeof(body -> 'modules') = 'array' then
+    body := pg_catalog.jsonb_set(body, '{modules}', coalesce((
+      select pg_catalog.jsonb_agg(pg_temp.contract_4_module(module.value, p_root) order by module.ordinality)
+      from pg_catalog.jsonb_array_elements(body -> 'modules') with ordinality as module(value, ordinality)
+    ), '[]'::jsonb));
+  end if;
+  if pg_catalog.jsonb_typeof(body -> 'flow_bindings') = 'array' then
+    for binding in select item.value from pg_catalog.jsonb_array_elements(body -> 'flow_bindings') with ordinality as item(value, ordinality) order by item.ordinality
+    loop
+      setting := defaults -> (binding ->> 'event');
+      if setting is null then
+        perform pg_temp.contract_4_refuse(p_root, pg_catalog.format('binding %s', binding ->> 'id'), pg_catalog.format('the unknown event %s', binding ->> 'event'));
+      end if;
+      if not binding ? 'settings' then
+        binding := binding || pg_catalog.jsonb_build_object('settings', pg_catalog.jsonb_build_object(
+          'condition', null,
+          'debounceMs', setting -> 1,
+          'concurrency', setting -> 0,
+          'exclusive', setting -> 2,
+          'timeoutMs', setting -> 3));
+      end if;
+      bindings := bindings || pg_catalog.jsonb_build_array(binding);
+    end loop;
+    body := pg_catalog.jsonb_set(body, '{flow_bindings}', bindings);
+  end if;
+  if body ? 'pages' then
+    body := pg_catalog.jsonb_set(body, '{pages}', pg_temp.contract_4_composition(body -> 'pages'));
+  end if;
+  if body ? 'shells' then
+    body := pg_catalog.jsonb_set(body, '{shells}', pg_temp.contract_4_composition(body -> 'shells'));
+  end if;
+  return pg_catalog.jsonb_set(source, '{body}', body);
+end
+$function$;
+
+do $convert$
+declare
+  draft record;
+  converted jsonb;
+begin
+  -- Prove the SQL canonical form first: every stored fingerprint must recompute exactly.
+  for draft in
+    select d.root_id, r.key, d.draft_source, d.source_fingerprint
+    from vortex_definition.drafts as d
+    join vortex_definition.roots as r on r.root_id = d.root_id
+  loop
+    if pg_temp.contract_4_fingerprint(draft.draft_source) <> draft.source_fingerprint then
+      raise exception using errcode = '22023',
+        message = pg_catalog.format('Contract 4 cannot verify the stored fingerprint of draft %s (%s)', draft.key, draft.root_id);
+    end if;
+  end loop;
+
+  for draft in
+    select d.root_id, r.key, d.draft_source
+    from vortex_definition.drafts as d
+    join vortex_definition.roots as r on r.root_id = d.root_id
+    where d.source_contract_version <> '4.0.0'
+    order by d.root_id
+  loop
+    converted := pg_temp.contract_4_source(draft.draft_source, draft.key);
+    update vortex_definition.drafts as d
+    set draft_source = converted,
+      source_contract_version = '4.0.0',
+      source_fingerprint = pg_temp.contract_4_fingerprint(converted),
+      draft_revision = d.draft_revision + 1,
+      updated_at = greatest(pg_catalog.statement_timestamp(), d.updated_at),
+      restored_from_release_revision = null,
+      restored_from_source_fingerprint = null,
+      restored_by = null,
+      restored_at = null,
+      restore_correlation_id = null
+    where d.root_id = draft.root_id;
+  end loop;
+end
+$convert$;
+
+drop function pg_temp.contract_4_source(jsonb, text);
+drop function pg_temp.contract_4_composition(jsonb);
+drop function pg_temp.contract_4_module(jsonb, text);
+drop function pg_temp.contract_4_field(jsonb);
+drop function pg_temp.contract_4_flow(jsonb, text);
+drop function pg_temp.contract_4_tasks(jsonb, text, text);
+drop function pg_temp.contract_4_refuse(text, text, text);
+drop function pg_temp.contract_4_fingerprint(jsonb);
+drop function pg_temp.contract_4_canonical_json(jsonb);
 
 reset role;

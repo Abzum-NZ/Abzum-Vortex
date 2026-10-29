@@ -341,7 +341,7 @@ export const applicationToolSchema = z
  */
 export const applicationToolBundleSchema = z
   .object({
-    contractVersion: z.literal("1.0.0"),
+    contractVersion: z.literal("4.0.0"),
     applicationKey: namespacedKeySchema,
     tools: z.array(applicationToolSchema).max(10_000),
   })

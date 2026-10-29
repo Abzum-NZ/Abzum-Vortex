@@ -350,7 +350,7 @@ export function compileApplicationToolBundle(
   addNavigation(content.navigation);
 
   return applicationToolBundleSchema.parse({
-    contractVersion: "1.0.0",
+    contractVersion: "4.0.0",
     applicationKey,
     tools: [...tools.values()].sort((left, right) =>
       compareCanonicalStrings(left.name, right.name),

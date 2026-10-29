@@ -99,8 +99,8 @@ begin
     and (
       pg_catalog.jsonb_typeof(candidate -> 'channel') <> 'string'
       or (candidate ->> 'channel') <> all (array[
-        'web', 'mcp', 'programmatic_interface', 'connection', 'federation',
-        'durable_workflow', 'system'
+        'web', 'webmcp', 'mcp', 'programmatic_interface', 'connection', 'federation',
+        'system'
       ])
     ) then
     raise exception using errcode = '22023', message = 'Vortex request context has an invalid channel';

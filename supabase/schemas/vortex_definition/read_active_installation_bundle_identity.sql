@@ -90,7 +90,7 @@ begin
   before_identity:=identity_value;
   select stored.* into stored_bundle from vortex_definition.installation_runtime_bundles as stored
   where stored.organization_id=selected_org and stored.application_root_id=selected_app
-    and stored.application_release_revision=selected_revision and stored.bundle_format_version=2;
+    and stored.application_release_revision=selected_revision and stored.bundle_format_version=3;
   if found then
     current_manifest:=stored_bundle.source_manifest;
     select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(

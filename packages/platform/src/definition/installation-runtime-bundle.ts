@@ -37,7 +37,7 @@ export {
   resolvePageComposition,
   type ResolvedPageComposition,
 } from "../pages/page-composition-resolution";
-export const installationRuntimeBundleFormatVersion = 2 as const;
+export const installationRuntimeBundleFormatVersion = 3 as const;
 export const installationRuntimeBundleMaximumPartBytes = 1_048_575;
 
 export const installationRuntimeBundleSections = [
