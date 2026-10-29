@@ -1,10 +1,12 @@
-import { describeFailure } from "../catalogue/runtime-primitives";
 import {
   at,
   failed,
   Failed,
+  flowRunStateVersion,
+  initialState,
   iterationKey,
   pathKey,
+  observe,
   type PathSegment,
 } from "./flow-interpreter-state";
 import { typedValueMatchesType } from "./condition-types";
@@ -68,7 +70,7 @@ import {
  * code, and no failure is ever swallowed or turned into success.
  */
 
-export const flowRunStateVersion = "1" as const;
+export { flowRunStateVersion } from "./flow-interpreter-state";
 
 /** The safe outcomes a failed run reports; the default error handler shows each of them. */
 export type FlowFailureOutcome = "refused" | "conflict" | "validation" | "uncertain" | "failed";
@@ -222,6 +224,7 @@ export type FlowRunResult =
 
 export type FlowRunStep =
   | Readonly<{ kind: "protected_task"; state: FlowRunState; call: FlowProtectedTaskCall }>
+  | Readonly<{ kind: "boundary"; state: FlowRunState; result?: FlowRunResult; nextTaskId?: string }>
   | Readonly<{
       kind: "interface";
       state: FlowRunState;
@@ -289,7 +292,6 @@ export type FlowSegmentReplay = Readonly<
 >;
 
 const maximumSteps = 10_000;
-
 const typed = (type: string, value: JsonValue): FlowRuntimeValue => ({ type, value });
 const text = (value: string): FlowRuntimeValue => typed("text", value);
 
@@ -510,11 +512,10 @@ type Machine = {
   library: FlowLibrary;
   segment?: FlowServerSegment;
   replay?: FlowSegmentReplay;
+  boundaryBefore?: ReadonlySet<string>;
 };
-
 const topOf = (machine: Machine) =>
   machine.state.activations[machine.state.activations.length - 1]!;
-
 const replaceTop = (machine: Machine, next: Activation): void => {
   machine.state.activations = [...machine.state.activations.slice(0, -1), next];
 };
@@ -998,24 +999,9 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
     },
   };
 };
-
 const snapshot = (machine: Machine): FlowRunState => clone(machine.state) as FlowRunState;
 
 /** Runs the machine until it needs the host or the run is finished. */
-const observe = (
-  observer: FlowTaskTraceObserver | undefined,
-  observation: FlowTaskTraceObservation,
-): void => {
-  try {
-    observer?.(observation);
-  } catch (error) {
-    console.error(
-      `[flows] trace observer failed FLOW_TRACE_OBSERVER_FAILED: ${describeFailure(error)}`,
-    );
-    // Diagnostics must never change a flow result.
-  }
-};
-
 const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep => {
   for (;;) {
     machine.state.steps += 1;
@@ -1067,6 +1053,16 @@ const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep =>
 
     const list = at(flowOf(machine, activation), frame.path) as readonly FlowTask[] | undefined;
     if (list === undefined || frame.index >= list.length) {
+      if (
+        machine.segment !== undefined &&
+        machine.state.activations.length === 1 &&
+        activation.frames.length === 1
+      )
+        return {
+          kind: "boundary",
+          state: snapshot(machine),
+          result: finishActivation(machine, activation),
+        };
       // The list is done. A For each body starts its next iteration; everything else pops.
       if (frame.loop !== undefined && frame.loop.iteration + 1 < frame.loop.count)
         replaceTop(
@@ -1083,6 +1079,12 @@ const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep =>
     const taskPath = [...frame.path, frame.index];
     const task = list[frame.index]!;
     if (
+      machine.segment === undefined &&
+      machine.state.activations.length === 1 &&
+      machine.boundaryBefore?.has(task.id)
+    )
+      return { kind: "boundary", state: snapshot(machine), nextTaskId: task.id };
+    if (
       machine.segment !== undefined &&
       machine.state.activations.length === 1 &&
       !machine.segment.tasks.some(
@@ -1094,8 +1096,12 @@ const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep =>
           ) !== undefined,
       )
     ) {
-      replaceTop(machine, withFrames(activation, []));
-      continue;
+      return {
+        kind: "boundary",
+        state: snapshot(machine),
+        result: finishActivation(machine, activation),
+        nextTaskId: task.id,
+      };
     }
     const observation = {
       flowId: activation.flowId,
@@ -1159,7 +1165,6 @@ const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep =>
     }
   }
 };
-
 const failedStep = (machine: Machine, failure: FlowFailure): FlowRunStep => {
   const intents = machine.state.pendingIntents;
   machine.state.pendingIntents = [];
@@ -1171,7 +1176,6 @@ const failedStep = (machine: Machine, failure: FlowFailure): FlowRunStep => {
     result: { status: "failed", failure },
   };
 };
-
 const drive = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep => {
   try {
     return run(machine, observer);
@@ -1186,28 +1190,18 @@ const drive = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep 
  * inputs the binding supplied and are checked against the flow's declarations; the host supplies
  * the run id, the instant and the actor from its own trusted context.
  */
-const initialState = (start: FlowRunStart): FlowRunState => ({
-  version: flowRunStateVersion,
-  runId: start.runId,
-  now: start.now,
-  ...(start.actor === undefined ? {} : { actor: start.actor }),
-  ...(start.subject === undefined ? {} : { subject: start.subject }),
-  activations: [],
-  protectedOperations: 0,
-  committedEffects: 0,
-  steps: 0,
-  pendingIntents: [],
-  ...(start.triggerRecord === undefined ? {} : { triggerRecord: start.triggerRecord }),
-  ...(start.previousRecord === undefined ? {} : { previousRecord: start.previousRecord }),
-});
-
 export const startFlowRun = (
   start: FlowRunStart,
   library: FlowLibrary,
   observer?: FlowTaskTraceObserver,
+  boundaryBefore?: ReadonlySet<string>,
 ): FlowRunStep => {
   const state = initialState(start);
-  const machine: Machine = { state: { ...state }, library };
+  const machine: Machine = {
+    state: { ...state },
+    library,
+    ...(boundaryBefore === undefined ? {} : { boundaryBefore }),
+  };
   const flow = library(start.flowId);
   if (flow === undefined)
     return failedStep(machine, { outcome: "failed", code: "flow_unavailable" });
@@ -1327,6 +1321,25 @@ export const startFlowSegment = (
     throw error;
   }
 };
+/** Continues a preserved boundary without answering a suspended task or page intent. */
+export const continueFlowRun = (
+  previous: FlowRunState,
+  library: FlowLibrary,
+  segment?: FlowServerSegment,
+  replay?: FlowSegmentReplay,
+  boundaryBefore?: ReadonlySet<string>,
+): FlowRunStep => {
+  const machine: Machine = {
+    state: clone(previous),
+    library,
+    ...(segment === undefined ? {} : { segment }),
+    ...(replay === undefined ? {} : { replay }),
+    ...(boundaryBefore === undefined ? {} : { boundaryBefore }),
+  };
+  if (previous.awaiting !== undefined || previous.version !== flowRunStateVersion)
+    return failedStep(machine, { outcome: "failed", code: "resume_mismatch" });
+  return drive(machine);
+};
 
 /**
  * Resumes a suspended run with what the host obtained: the safe outcome of the protected task it
@@ -1340,12 +1353,14 @@ export const resumeFlowRun = (
   observer?: FlowTaskTraceObserver,
   segment?: FlowServerSegment,
   replay?: FlowSegmentReplay,
+  boundaryBefore?: ReadonlySet<string>,
 ): FlowRunStep => {
   const machine: Machine = {
     state: clone(previous),
     library,
     ...(segment === undefined ? {} : { segment }),
     ...(replay === undefined ? {} : { replay }),
+    ...(boundaryBefore === undefined ? {} : { boundaryBefore }),
   };
   const awaiting = machine.state.awaiting;
   const mismatch = () => failedStep(machine, { outcome: "failed", code: "resume_mismatch" });

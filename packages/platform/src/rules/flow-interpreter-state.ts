@@ -1,9 +1,30 @@
+import { describeFailure } from "../catalogue/runtime-primitives";
 import type {
   FlowFailure,
   FlowFailureCode,
   FlowFailureOutcome,
   FlowRunState,
+  FlowRunStart,
+  FlowTaskTraceObservation,
+  FlowTaskTraceObserver,
 } from "./flow-interpreter";
+
+export const flowRunStateVersion = "1" as const;
+
+export const initialState = (start: FlowRunStart): FlowRunState => ({
+  version: flowRunStateVersion,
+  runId: start.runId,
+  now: start.now,
+  ...(start.actor === undefined ? {} : { actor: start.actor }),
+  ...(start.subject === undefined ? {} : { subject: start.subject }),
+  activations: [],
+  protectedOperations: 0,
+  committedEffects: 0,
+  steps: 0,
+  pendingIntents: [],
+  ...(start.triggerRecord === undefined ? {} : { triggerRecord: start.triggerRecord }),
+  ...(start.previousRecord === undefined ? {} : { previousRecord: start.previousRecord }),
+});
 
 export type PathSegment = string | number;
 
@@ -44,6 +65,20 @@ export const failed = (
     ...(taskId === undefined ? {} : { taskId }),
     ...(reason === undefined ? {} : { reason }),
   });
+};
+
+/** An observer cannot change execution, even when its diagnostic callback fails. */
+export const observe = (
+  observer: FlowTaskTraceObserver | undefined,
+  observation: FlowTaskTraceObservation,
+): void => {
+  try {
+    observer?.(observation);
+  } catch (error) {
+    console.error(
+      `[flows] trace observer failed FLOW_TRACE_OBSERVER_FAILED: ${describeFailure(error)}`,
+    );
+  }
 };
 
 // ─── Values ───────────────────────────────────────────────────────────────────────────────────

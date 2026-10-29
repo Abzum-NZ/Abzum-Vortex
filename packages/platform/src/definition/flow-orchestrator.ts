@@ -233,6 +233,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     let step = first;
     for (;;) {
       if (step.kind === "finished") return finished(run, step);
+      if (step.kind === "boundary") return refused;
       // The limit stops a run before more server work. A run that already committed a change and
       // now waits for the person still shows them what it did; any later task is refused.
       const answersCommitted = step.kind === "interface" && step.state.committedEffects > 0;

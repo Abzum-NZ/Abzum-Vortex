@@ -126,6 +126,8 @@ export type FlowPlan = Readonly<{
   /** The validated flow the server interpreter runs. */
   definition: FlowDefinition;
   segments: readonly FlowPlanSegment[];
+  /** Segment owning each original task, including tasks nested in a control step. */
+  taskSegmentIds: ReadonlyMap<string, string>;
   /** Whether any server segment changes data or starts back-end work. */
   changes: boolean;
   /** Whether any step runs in the page. */
@@ -577,10 +579,14 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
   });
   const declared = (record: Readonly<Record<string, { type: string }>>) =>
     Object.fromEntries(Object.entries(record).map(([name, value]) => [name, value.type]));
+  const taskSegmentIds = new Map<string, string>();
+  for (const segment of segments)
+    for (const task of allSteps(segment.tasks)) taskSegmentIds.set(task.id, segment.id);
   return {
     flowId: flow.id,
     definition: flow,
     segments,
+    taskSegmentIds,
     changes: segments.some((segment) => segment.kind === "server" && segment.changes),
     pageSteps: segments.some((segment) => segment.kind === "page"),
     browser: {
