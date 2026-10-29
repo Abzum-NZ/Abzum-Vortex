@@ -25,7 +25,6 @@ declare
   evaluated_at timestamptz;
   revoked_at_value timestamptz;
   resulting_revision bigint;
-  computed_fingerprint text;
   new_correlation_id uuid := pg_catalog.gen_random_uuid();
 begin
   if p_duplicate_key is null
@@ -63,16 +62,6 @@ begin
       message = 'Super-administrator authority is unavailable';
   end if;
 
-  select assignment.* into assignment_fact
-  from vortex_identity.vortex_super_administrator_assignments as assignment
-  where assignment.assignment_id = p_assignment_id
-  for update;
-  if not found then
-    raise exception using errcode = 'V3141',
-      message = 'Super-administrator assignment is unavailable';
-  end if;
-  target_identity_id := assignment_fact.identity_id;
-
   evaluated_at := pg_catalog.clock_timestamp();
   if vortex_access.recent_authentication_deadline_internal(
     context_value, evaluated_at,
@@ -82,25 +71,27 @@ begin
       message = 'Multi-factor authentication is required for super-administrator changes';
   end if;
 
-  computed_fingerprint := 'sha256:' || pg_catalog.encode(extensions.digest(
-    pg_catalog.convert_to(pg_catalog.concat_ws(E'\x1f', 'revoke',
-      p_assignment_id::text, p_expected_revision::text), 'UTF8'), 'sha256'
-  ), 'hex');
 
   claimed := vortex_record.claim_scoped_command_receipt_internal(
     'vortex_super_administrator_revoke', p_duplicate_key, null, null, actor_identity_id,
     'Super-administrator revocation duplicate conflicts', 'V3143'
   );
   if claimed is not null then
-    if claimed ->> 'fingerprint' <> computed_fingerprint then
-      raise exception using errcode = 'V3143',
-        message = 'Super-administrator revocation duplicate conflicts';
-    end if;
     return query select 'replayed'::text, (claimed ->> 'assignmentId')::uuid,
-      target_identity_id, (claimed ->> 'revision')::bigint,
+      (claimed ->> 'identityId')::uuid, (claimed ->> 'revision')::bigint,
       (claimed ->> 'correlationId')::uuid, (claimed ->> 'acceptedAt')::timestamptz;
     return;
   end if;
+
+  select assignment.* into assignment_fact
+  from vortex_identity.vortex_super_administrator_assignments as assignment
+  where assignment.assignment_id = p_assignment_id
+  for update;
+  if not found then
+    raise exception using errcode = 'V3141',
+      message = 'Super-administrator assignment is unavailable';
+  end if;
+  target_identity_id := assignment_fact.identity_id;
 
   if assignment_fact.revoked_at is not null then
     raise exception using errcode = 'V3141',
@@ -142,7 +133,7 @@ begin
 
   perform vortex_record.complete_scoped_command_receipt_internal(
     p_duplicate_key, pg_catalog.jsonb_build_object(
-      'fingerprint', computed_fingerprint, 'assignmentId', p_assignment_id, 'revision', resulting_revision,
+      'identityId', target_identity_id, 'assignmentId', p_assignment_id, 'revision', resulting_revision,
       'correlationId', new_correlation_id, 'acceptedAt', revoked_at_value
     )
   );

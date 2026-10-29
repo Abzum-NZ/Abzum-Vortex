@@ -2725,4 +2725,450 @@ comment on function vortex_identity.begin_identity_disablement(uuid, uuid, uuid,
 revoke all on function vortex_identity.begin_identity_disablement(uuid, uuid, uuid, uuid) from public;
 grant execute on function vortex_identity.begin_identity_disablement(uuid, uuid, uuid, uuid) to vortex_runtime, postgres;
 
+-- Preserve the original subject in existing super-administrator command results.
+create temporary table super_administrator_assignment_carry on commit drop as
+select assignment_id, identity_id from vortex_identity.vortex_super_administrator_assignments;
+grant select on super_administrator_assignment_carry to vortex_record_adapter;
+reset role;
+set local role vortex_record_adapter;
+do $super_receipts$
+begin
+  if exists (
+    select 1 from vortex_record.command_receipts as receipt
+    where receipt.command_kind in (
+      'vortex_super_administrator_bootstrap', 'vortex_super_administrator_grant',
+      'vortex_super_administrator_revoke'
+    ) and not exists (
+      select 1 from super_administrator_assignment_carry as assignment
+      where assignment.assignment_id::text = receipt.result ->> 'assignmentId'
+    )
+  ) then
+    raise exception 'A super-administrator receipt has no assignment to preserve its identity';
+  end if;
+end
+$super_receipts$;
+update vortex_record.command_receipts as receipt
+set result = (receipt.result - 'fingerprint') || pg_catalog.jsonb_build_object('identityId', assignment.identity_id)
+from super_administrator_assignment_carry as assignment
+where receipt.command_kind in (
+    'vortex_super_administrator_bootstrap', 'vortex_super_administrator_grant',
+    'vortex_super_administrator_revoke'
+  ) and assignment.assignment_id::text = receipt.result ->> 'assignmentId';
+reset role;
+set local role vortex_owner;
+
+create or replace function vortex_identity.bootstrap_vortex_super_administrator(
+  p_operator_actor_id uuid,
+  p_duplicate_key uuid,
+  p_identity_id uuid
+)
+returns table (
+  outcome text,
+  assignment_id uuid,
+  identity_id uuid,
+  revision bigint,
+  correlation_id uuid,
+  accepted_at timestamptz
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  claimed jsonb;
+  new_assignment_id uuid := pg_catalog.gen_random_uuid();
+  new_correlation_id uuid := pg_catalog.gen_random_uuid();
+  evaluated_at timestamptz;
+begin
+  if p_duplicate_key is null
+    or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
+    or p_identity_id is null
+    or not vortex_platform.is_non_nil_uuid(p_identity_id::text) then
+    raise exception using errcode = '22023',
+      message = 'Super-administrator bootstrap command is invalid';
+  end if;
+
+  perform vortex_access.require_platform_operator_internal(p_operator_actor_id);
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('vortex.super_administrator.assignments', 0)
+  );
+
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'vortex_super_administrator_bootstrap', p_duplicate_key, null, null, p_operator_actor_id,
+    'Super-administrator bootstrap duplicate conflicts', 'V3143'
+  );
+  if claimed is not null then
+    return query select 'replayed'::text, (claimed ->> 'assignmentId')::uuid,
+      (claimed ->> 'identityId')::uuid, (claimed ->> 'revision')::bigint,
+      (claimed ->> 'correlationId')::uuid, (claimed ->> 'acceptedAt')::timestamptz;
+    return;
+  end if;
+
+  perform 1
+  from vortex_identity.identity_projections as identity
+  where identity.identity_id = p_identity_id
+    and identity.state = 'active'
+  for share;
+  if not found then
+    raise exception using errcode = 'V3141',
+      message = 'Super-administrator identity is unavailable';
+  end if;
+
+  perform 1
+  from vortex_identity.vortex_super_administrator_assignments as assignment
+  for update;
+  if found then
+    raise exception using errcode = 'V3141',
+      message = 'Super-administrator bootstrap is available only for the first assignment';
+  end if;
+
+  evaluated_at := pg_catalog.clock_timestamp();
+  insert into vortex_identity.vortex_super_administrator_assignments (
+    assignment_id, identity_id, revision, granted_at, granted_by_kind,
+    granted_by_id, grant_correlation_id, changed_at, changed_by_kind,
+    changed_by_id, change_correlation_id
+  ) values (
+    new_assignment_id, p_identity_id, 1, evaluated_at,
+    'configured_system_operator', p_operator_actor_id, new_correlation_id,
+    evaluated_at, 'configured_system_operator', p_operator_actor_id,
+    new_correlation_id
+  );
+
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key, pg_catalog.jsonb_build_object(
+      'identityId', p_identity_id, 'assignmentId', new_assignment_id, 'revision', 1,
+      'correlationId', new_correlation_id, 'acceptedAt', evaluated_at
+    )
+  );
+
+  return query select 'accepted'::text, new_assignment_id, p_identity_id,
+    1::bigint, new_correlation_id, evaluated_at;
+end
+$function$;
+
+revoke all on function vortex_identity.bootstrap_vortex_super_administrator(uuid, uuid, uuid)
+  from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
+
+grant execute on function vortex_identity.bootstrap_vortex_super_administrator(uuid, uuid, uuid)
+  to vortex_runtime;
+
+comment on function vortex_identity.bootstrap_vortex_super_administrator(uuid, uuid, uuid) is
+  'Bootstraps the first named super-administrator assignment through the existing configured system operator.';
+
+alter function vortex_identity.bootstrap_vortex_super_administrator(p_operator_actor_id uuid, p_duplicate_key uuid, p_identity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_identity.bootstrap_vortex_super_administrator(p_operator_actor_id uuid, p_duplicate_key uuid, p_identity_id uuid) to postgres;
+
+
+create or replace function vortex_identity.grant_vortex_super_administrator(
+  p_duplicate_key uuid,
+  p_identity_id uuid
+)
+returns table (
+  outcome text,
+  assignment_id uuid,
+  identity_id uuid,
+  revision bigint,
+  correlation_id uuid,
+  accepted_at timestamptz
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  actor_identity_id uuid;
+  claimed jsonb;
+  active_assignment_id uuid;
+  new_assignment_id uuid := pg_catalog.gen_random_uuid();
+  new_correlation_id uuid := pg_catalog.gen_random_uuid();
+  evaluated_at timestamptz;
+begin
+  if p_duplicate_key is null
+    or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
+    or p_identity_id is null
+    or not vortex_platform.is_non_nil_uuid(p_identity_id::text) then
+    raise exception using errcode = '22023',
+      message = 'Super-administrator grant command is invalid';
+  end if;
+
+  context_value := vortex_access.validated_human_request_context();
+  actor_identity_id := (context_value ->> 'identityId')::uuid;
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('vortex.super_administrator.assignments', 0)
+  );
+  perform 1
+  from vortex_identity.identity_projections as identity
+  where identity.identity_id = actor_identity_id
+    and identity.state = 'active'
+  for share;
+  if not found then
+    raise exception using errcode = '42501',
+      message = 'Super-administrator authority is unavailable';
+  end if;
+
+  select assignment.assignment_id into active_assignment_id
+  from vortex_identity.vortex_super_administrator_assignments as assignment
+  join vortex_identity.identity_projections as identity
+    on identity.identity_id = assignment.identity_id
+    and identity.state = 'active'
+  where assignment.identity_id = actor_identity_id
+    and assignment.revoked_at is null
+  for share of assignment;
+  if not found then
+    raise exception using errcode = '42501',
+      message = 'Super-administrator authority is unavailable';
+  end if;
+
+  evaluated_at := pg_catalog.clock_timestamp();
+  if vortex_access.recent_authentication_deadline_internal(
+    context_value, evaluated_at,
+    '{"kind":"multi_factor","maximumAgeSeconds":3600}'::jsonb
+  ) is null then
+    raise exception using errcode = 'V3152',
+      message = 'Multi-factor authentication is required for super-administrator changes';
+  end if;
+
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'vortex_super_administrator_grant', p_duplicate_key, null, null, actor_identity_id,
+    'Super-administrator grant duplicate conflicts', 'V3143'
+  );
+  if claimed is not null then
+    return query select 'replayed'::text, (claimed ->> 'assignmentId')::uuid,
+      (claimed ->> 'identityId')::uuid, (claimed ->> 'revision')::bigint,
+      (claimed ->> 'correlationId')::uuid, (claimed ->> 'acceptedAt')::timestamptz;
+    return;
+  end if;
+
+  perform 1
+  from vortex_identity.identity_projections as identity
+  where identity.identity_id = p_identity_id
+    and identity.state = 'active'
+  for share;
+  if not found then
+    raise exception using errcode = 'V3141',
+      message = 'Super-administrator identity is unavailable';
+  end if;
+
+  if exists (
+    select 1
+    from vortex_identity.vortex_super_administrator_assignments as assignment
+    where assignment.identity_id = p_identity_id
+      and assignment.revoked_at is null
+  ) then
+    raise exception using errcode = 'V3141',
+      message = 'Identity already has an active super-administrator assignment';
+  end if;
+
+  insert into vortex_identity.vortex_super_administrator_assignments (
+    assignment_id, identity_id, revision, granted_at, granted_by_kind,
+    granted_by_id, grant_correlation_id, changed_at, changed_by_kind,
+    changed_by_id, change_correlation_id
+  ) values (
+    new_assignment_id, p_identity_id, 1, evaluated_at, 'identity',
+    actor_identity_id, new_correlation_id, evaluated_at, 'identity',
+    actor_identity_id, new_correlation_id
+  );
+
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key, pg_catalog.jsonb_build_object(
+      'identityId', p_identity_id, 'assignmentId', new_assignment_id, 'revision', 1,
+      'correlationId', new_correlation_id, 'acceptedAt', evaluated_at
+    )
+  );
+
+  perform vortex_record.append_organization_activity_entry(
+    (context_value ->> 'organizationId')::uuid, pg_catalog.gen_random_uuid(),
+    evaluated_at, 'organization_account',
+    (context_value ->> 'organizationAccountId')::uuid,
+    'super_administrator_assignment_granted',
+    array(
+      select subject_id
+      from pg_catalog.unnest(array[p_identity_id, new_assignment_id]) as subject(subject_id)
+      order by subject_id
+    ), '{}'::uuid[], coalesce(context_value ->> 'channel', 'web'),
+    new_correlation_id, 'completed'
+  );
+
+  return query select 'accepted'::text, new_assignment_id, p_identity_id,
+    1::bigint, new_correlation_id, evaluated_at;
+end
+$function$;
+
+revoke all on function vortex_identity.grant_vortex_super_administrator(uuid, uuid)
+  from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
+
+grant execute on function vortex_identity.grant_vortex_super_administrator(uuid, uuid)
+  to vortex_runtime;
+
+comment on function vortex_identity.grant_vortex_super_administrator(uuid, uuid) is
+  'Grants a named super-administrator assignment through the live account-bound super-administrator context, with recent sign-in and immutable attribution.';
+
+alter function vortex_identity.grant_vortex_super_administrator(p_duplicate_key uuid, p_identity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_identity.grant_vortex_super_administrator(p_duplicate_key uuid, p_identity_id uuid) to postgres;
+
+
+create or replace function vortex_identity.revoke_vortex_super_administrator(
+  p_duplicate_key uuid,
+  p_assignment_id uuid,
+  p_expected_revision bigint
+)
+returns table (
+  outcome text,
+  assignment_id uuid,
+  identity_id uuid,
+  revision bigint,
+  correlation_id uuid,
+  accepted_at timestamptz
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  actor_identity_id uuid;
+  target_identity_id uuid;
+  claimed jsonb;
+  assignment_fact vortex_identity.vortex_super_administrator_assignments%rowtype;
+  evaluated_at timestamptz;
+  revoked_at_value timestamptz;
+  resulting_revision bigint;
+  new_correlation_id uuid := pg_catalog.gen_random_uuid();
+begin
+  if p_duplicate_key is null
+    or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
+    or p_assignment_id is null
+    or not vortex_platform.is_non_nil_uuid(p_assignment_id::text)
+    or p_expected_revision is null
+    or p_expected_revision not between 1 and 9007199254740991 then
+    raise exception using errcode = '22023',
+      message = 'Super-administrator revocation command is invalid';
+  end if;
+
+  context_value := vortex_access.validated_human_request_context();
+  actor_identity_id := (context_value ->> 'identityId')::uuid;
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('vortex.super_administrator.assignments', 0)
+  );
+  perform 1
+  from vortex_identity.identity_projections as identity
+  where identity.identity_id = actor_identity_id
+    and identity.state = 'active'
+  for share;
+  if not found then
+    raise exception using errcode = '42501',
+      message = 'Super-administrator authority is unavailable';
+  end if;
+
+  perform 1
+  from vortex_identity.vortex_super_administrator_assignments as assignment
+  where assignment.identity_id = actor_identity_id
+    and assignment.revoked_at is null
+  for share;
+  if not found then
+    raise exception using errcode = '42501',
+      message = 'Super-administrator authority is unavailable';
+  end if;
+
+  evaluated_at := pg_catalog.clock_timestamp();
+  if vortex_access.recent_authentication_deadline_internal(
+    context_value, evaluated_at,
+    '{"kind":"multi_factor","maximumAgeSeconds":3600}'::jsonb
+  ) is null then
+    raise exception using errcode = 'V3152',
+      message = 'Multi-factor authentication is required for super-administrator changes';
+  end if;
+
+
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'vortex_super_administrator_revoke', p_duplicate_key, null, null, actor_identity_id,
+    'Super-administrator revocation duplicate conflicts', 'V3143'
+  );
+  if claimed is not null then
+    return query select 'replayed'::text, (claimed ->> 'assignmentId')::uuid,
+      (claimed ->> 'identityId')::uuid, (claimed ->> 'revision')::bigint,
+      (claimed ->> 'correlationId')::uuid, (claimed ->> 'acceptedAt')::timestamptz;
+    return;
+  end if;
+
+  select assignment.* into assignment_fact
+  from vortex_identity.vortex_super_administrator_assignments as assignment
+  where assignment.assignment_id = p_assignment_id
+  for update;
+  if not found then
+    raise exception using errcode = 'V3141',
+      message = 'Super-administrator assignment is unavailable';
+  end if;
+  target_identity_id := assignment_fact.identity_id;
+
+  if assignment_fact.revoked_at is not null then
+    raise exception using errcode = 'V3141',
+      message = 'Super-administrator assignment is already revoked';
+  end if;
+  if assignment_fact.revision <> p_expected_revision
+    or assignment_fact.revision = 9007199254740991 then
+    raise exception using errcode = 'V3102',
+      message = 'Super-administrator assignment revision is stale';
+  end if;
+
+  revoked_at_value := evaluated_at;
+  resulting_revision := assignment_fact.revision + 1;
+
+  perform vortex_record.append_organization_activity_entry(
+    (context_value ->> 'organizationId')::uuid, pg_catalog.gen_random_uuid(),
+    evaluated_at, 'organization_account',
+    (context_value ->> 'organizationAccountId')::uuid,
+    'super_administrator_assignment_revoked',
+    array(
+      select subject_id
+      from pg_catalog.unnest(array[target_identity_id, p_assignment_id]) as subject(subject_id)
+      order by subject_id
+    ), '{}'::uuid[], coalesce(context_value ->> 'channel', 'web'),
+    new_correlation_id, 'completed'
+  );
+
+  update vortex_identity.vortex_super_administrator_assignments as assignment
+  set revision = resulting_revision,
+    changed_at = revoked_at_value,
+    changed_by_kind = 'identity',
+    changed_by_id = actor_identity_id,
+    change_correlation_id = new_correlation_id,
+    revoked_at = revoked_at_value,
+    revoked_by_kind = 'identity',
+    revoked_by_id = actor_identity_id,
+    revocation_correlation_id = new_correlation_id
+  where assignment.assignment_id = p_assignment_id;
+
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key, pg_catalog.jsonb_build_object(
+      'identityId', target_identity_id, 'assignmentId', p_assignment_id, 'revision', resulting_revision,
+      'correlationId', new_correlation_id, 'acceptedAt', revoked_at_value
+    )
+  );
+
+  return query select 'accepted'::text, p_assignment_id, target_identity_id,
+    resulting_revision, new_correlation_id, revoked_at_value;
+end
+$function$;
+
+revoke all on function vortex_identity.revoke_vortex_super_administrator(uuid, uuid, bigint)
+  from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
+
+grant execute on function vortex_identity.revoke_vortex_super_administrator(uuid, uuid, bigint)
+  to vortex_runtime;
+
+comment on function vortex_identity.revoke_vortex_super_administrator(uuid, uuid, bigint) is
+  'Revokes a named super-administrator assignment through the live account-bound super-administrator context, with recent sign-in and exact revision evidence.';
+
+alter function vortex_identity.revoke_vortex_super_administrator(p_duplicate_key uuid, p_assignment_id uuid, p_expected_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_identity.revoke_vortex_super_administrator(p_duplicate_key uuid, p_assignment_id uuid, p_expected_revision bigint) to postgres;
+
+
 reset role;
