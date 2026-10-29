@@ -1,5 +1,5 @@
 import { fingerprintCanonicalValue } from "../definition/canonical-json-definition";
-import { prepareFlowFormulas } from "../rules/flow-formula";
+import { prepareFlowFormulas } from "../rules/flow-formula-preparation";
 import type { FlowDefinition, FlowTask } from "./flow-contracts";
 import { flowTaskChildLists, isFlowControlTask } from "./flow-contracts";
 import { flowTaskRegistry, type FlowTaskTypeKey } from "./flow-task-registry";

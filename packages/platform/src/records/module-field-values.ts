@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { isMoneyValue, isRecordLinkValue } from "./module-field-value-predicates";
+import type { RecordId, RecordTypeId } from "../catalogue/identifiers";
 import type { fieldTypeKeys } from "../catalogue/catalogues";
 import { safeHttpsUrlSchema } from "../catalogue/common";
 import {
@@ -12,7 +14,6 @@ import {
   builderKeySchema,
   fileIdSchema,
   recordIdSchema,
-  recordTypeIdSchema,
   sourceQualifiedRecordTypeSchema,
 } from "../catalogue/identifiers";
 import { richTextBlockSchema, richTextInlineSchema, type RichTextInline } from "./rich-text";
@@ -37,17 +38,15 @@ export const sourceMoneyValueSchema = z
   .object({ amount: sourceExactDecimalTextSchema, currency: currencyCodeSchema })
   .strict();
 
-export const moneyValueSchema = z
-  .object({ amount: exactDecimalTextSchema, currency: currencyCodeSchema })
-  .strict();
+export const moneyValueSchema = z.custom<{ amount: string; currency: string }>(isMoneyValue);
 
 export const sourceRecordLinkValueSchema = z
   .object({ record_type: sourceQualifiedRecordTypeSchema, record_id: recordIdSchema })
   .strict();
 
-export const recordLinkValueSchema = z
-  .object({ recordTypeId: recordTypeIdSchema, recordId: recordIdSchema })
-  .strict();
+export const recordLinkValueSchema = z.custom<{ recordTypeId: RecordTypeId; recordId: RecordId }>(
+  isRecordLinkValue,
+);
 
 /** Attachment order is meaningful for both single-file and multiple-file fields. */
 export const attachmentValueSchema = z.array(fileIdSchema);

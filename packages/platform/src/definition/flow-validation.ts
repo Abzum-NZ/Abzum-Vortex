@@ -1,6 +1,6 @@
 import { valueTypesCompatible, workflowValueTypeSchema } from "../catalogue/catalogues";
 import { isIsoCurrencyCode } from "../catalogue/currencies";
-import { checkFlowFormula } from "../rules/flow-formula";
+import { checkFlowFormula } from "../rules/flow-formula-check";
 import { formatterCatalogue, unitCatalogue } from "../pages/value-format";
 import { recordTypeIdSchema } from "../catalogue/identifiers";
 import type {

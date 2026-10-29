@@ -1,5 +1,5 @@
 import { flowRuntimeValueOf } from "../rules/flow-runtime-value";
-import { checkFlowFormula } from "../rules/flow-formula";
+import { checkFlowFormula } from "../rules/flow-formula-check";
 import { flowFormulaChildren, type FlowFormula } from "../workflows/flow-values";
 
 /** Local record references are named while authored and resolved to permanent IDs by compilation. */
