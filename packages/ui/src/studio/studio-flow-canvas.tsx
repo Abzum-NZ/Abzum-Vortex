@@ -1,7 +1,7 @@
 "use client";
 import "@xyflow/react/dist/style.css";
 import type { FlowTaskTypeKey } from "@vortex/platform/schema";
-import { createContext, useContext, useId, useMemo, useState } from "react";
+import { createContext, memo, useContext, useId, useMemo, useRef, useState } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -78,8 +78,21 @@ import {
 } from "./studio-flow-step-picker";
 
 /** The graph is a view of the authored lists; no canvas positions or graph state are stored. */
-type NodeKind = "start" | "step" | "group" | "end";
-type FlowNodeData = Readonly<{ title: string; caption: string; kind: NodeKind; taskType?: string }>;
+type NodeKind = "start" | "step" | "group" | "end" | "insert";
+type FlowNodeData = Readonly<{
+  title: string;
+  caption: string;
+  kind: NodeKind;
+  taskType?: string;
+  taskId?: string;
+  location?: "page" | "server" | "backend";
+  behaviour?: readonly string[];
+  insertion?: Insertion;
+}>;
+type FlowPlacement = Readonly<{
+  tasks: Readonly<Record<string, "page" | "server" | "backend">>;
+  bands: readonly Readonly<{ id: string; taskIds: readonly string[] }>[];
+}>;
 type Insertion = Readonly<{ listPath: StudioFlowPath; index: number }>;
 type FlowEdge = Edge<Readonly<{ insertion: Insertion; label: string }>, "studio">;
 type AddStep = (
@@ -88,7 +101,7 @@ type AddStep = (
   settings: StudioFlowNewStepSettings,
 ) => true | string;
 type CanvasActions = Readonly<{
-  types: readonly StudioFlowStepChoice[];
+  typesAt: (insertion: Insertion) => readonly StudioFlowStepChoice[];
   disabled: boolean;
   onAdd: AddStep;
   choicesAt: (insertion: Insertion) => StudioFlowStepPickerContext;
@@ -141,7 +154,10 @@ const taskIcons: Readonly<Record<string, LucideIcon>> = {
   "interface.set_filter": Filter,
 } satisfies Record<FlowTaskTypeKey, LucideIcon>;
 
-function StudioFlowNode({ data, selected }: NodeProps<Node<FlowNodeData>>) {
+const StudioFlowNode = memo(function StudioFlowNode({
+  data,
+  selected,
+}: NodeProps<Node<FlowNodeData>>) {
   const Icon =
     data.kind === "start"
       ? Play
@@ -153,7 +169,8 @@ function StudioFlowNode({ data, selected }: NodeProps<Node<FlowNodeData>>) {
   return (
     <Card
       className={cn(
-        "group/node h-24 w-64 gap-2 rounded-xl border bg-card px-3 py-2.5 text-card-foreground shadow-xs hover:border-foreground/20 group-focus-visible/flow-node:ring-2 group-focus-visible/flow-node:ring-primary",
+        "group/node relative min-h-24 w-64 gap-2 rounded-xl border bg-card px-3 py-2.5 text-card-foreground shadow-xs hover:border-foreground/20 group-focus-visible/flow-node:ring-2 group-focus-visible/flow-node:ring-primary",
+        data.kind !== "start" && "h-24",
         selected && "ring-2 ring-primary shadow-lg",
       )}
     >
@@ -177,104 +194,123 @@ function StudioFlowNode({ data, selected }: NodeProps<Node<FlowNodeData>>) {
       <p className="line-clamp-2 text-xs text-muted-foreground" title={data.caption}>
         {data.caption}
       </p>
+      {data.kind === "start" && (
+        <div className="text-xs text-muted-foreground">
+          <span className="font-medium">Behaviour</span>
+          {data.behaviour?.length ? (
+            <ul className="m-0 list-none p-0">
+              {data.behaviour.map((entry) => (
+                <li key={entry}>{entry}</li>
+              ))}
+            </ul>
+          ) : (
+            <p>No components bound</p>
+          )}
+        </div>
+      )}
+      {data.location === undefined ? null : (
+        <Badge variant="secondary" className="absolute right-2 bottom-1 text-xs">
+          {data.location === "page"
+            ? "Page"
+            : data.location === "server"
+              ? "Server"
+              : "Back end (simulated)"}
+        </Badge>
+      )}
       {data.kind !== "end" && (
         <Handle type="source" position={Position.Bottom} isConnectable={false} className={handle} />
       )}
     </Card>
   );
-}
-const nodeTypes = { studio: StudioFlowNode };
-
-function StudioFlowEdge(props: EdgeProps<FlowEdge>) {
+});
+const StudioFlowInsertion = memo(function StudioFlowInsertion({
+  data,
+}: NodeProps<Node<FlowNodeData>>) {
   const actions = useContext(ActionsContext);
   const id = useId();
-  const [hovered, setHovered] = useState(false);
-  // Hold the command's snapshot while the picker is open; a changed draft must refuse a stale insertion.
   const [request, setRequest] = useState<CanvasActions | null>(null);
   const [problem, setProblem] = useState("");
+  if (actions === null || data.insertion === undefined)
+    throw new Error("Flow insertion requires canvas actions and a position.");
+  const insertion = data.insertion;
+  return (
+    <Popover
+      open={request !== null}
+      onOpenChange={(open) => {
+        setRequest(open ? actions : null);
+        setProblem("");
+      }}
+    >
+      <PopoverTrigger
+        render={
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-xs"
+            aria-label={data.title}
+            title={actions.disabled ? "This draft is read-only" : data.title}
+            disabled={actions.disabled}
+            className="rounded-full bg-card focus-visible:ring-2 focus-visible:ring-primary"
+          />
+        }
+      >
+        <Plus aria-hidden="true" className="size-3" />
+      </PopoverTrigger>
+      <PopoverContent className="w-80" onKeyDown={(event) => event.stopPropagation()}>
+        <PopoverTitle>Add a step</PopoverTitle>
+        <StudioFlowStepPicker
+          context={(request ?? actions).choicesAt(insertion)}
+          id={id}
+          label="Kind of step"
+          types={(request ?? actions).typesAt(insertion)}
+          disabled={actions.disabled}
+          action="Add step"
+          onAdd={(taskType, settings) => {
+            if (request === null) return false;
+            const result = request.onAdd(insertion, taskType, settings);
+            if (result === true) {
+              setRequest(null);
+              setProblem("");
+            } else setProblem(result);
+            return result === true;
+          }}
+        />
+        {problem === "" ? null : (
+          <p role="alert" className="mt-2 text-sm text-destructive">
+            {problem}
+          </p>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+});
+const nodeTypes = { studio: StudioFlowNode, insertion: StudioFlowInsertion };
+
+const StudioFlowEdge = memo(function StudioFlowEdge(props: EdgeProps<FlowEdge>) {
   const [path, x, y] = getSmoothStepPath(props);
-  if (actions === null || props.data === undefined)
-    throw new Error("Flow edges require canvas actions and an insertion position.");
-  const { insertion, label } = props.data;
   return (
     <>
-      <g onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)}>
-        <BaseEdge
-          id={props.id}
-          path={path}
-          interactionWidth={24}
-          style={{ stroke: "var(--muted-foreground)", strokeWidth: 1.5 }}
-        />
-      </g>
-      <EdgeLabelRenderer>
-        <div
-          className="nodrag nopan pointer-events-auto absolute flex items-center gap-2"
-          style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}
-          onPointerEnter={() => setHovered(true)}
-          onPointerLeave={() => setHovered(false)}
-          onKeyDown={(event) => event.stopPropagation()}
-        >
-          {props.label === undefined ? null : (
+      <BaseEdge
+        id={props.id}
+        path={path}
+        interactionWidth={24}
+        style={{ stroke: "var(--muted-foreground)", strokeWidth: 1.5 }}
+      />
+      {props.label === undefined ? null : (
+        <EdgeLabelRenderer>
+          <div
+            className="nodrag nopan pointer-events-none absolute"
+            style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}
+          >
             <Badge variant="secondary" className="rounded-full">
               {props.label}
             </Badge>
-          )}
-          <Popover
-            open={request !== null}
-            onOpenChange={(open) => {
-              setRequest(open ? actions : null);
-              setProblem("");
-            }}
-          >
-            <PopoverTrigger
-              render={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={label}
-                  title={actions.disabled ? "This draft is read-only" : label}
-                  disabled={actions.disabled}
-                  className={cn(
-                    "rounded-full bg-card opacity-0 focus:opacity-100",
-                    (hovered || request !== null) && "opacity-100",
-                  )}
-                />
-              }
-            >
-              <Plus aria-hidden="true" className="size-3" />
-            </PopoverTrigger>
-            <PopoverContent className="w-80" onKeyDown={(event) => event.stopPropagation()}>
-              <PopoverTitle>Add a step</PopoverTitle>
-              <StudioFlowStepPicker
-                context={(request ?? actions).choicesAt(insertion)}
-                id={id}
-                label="Kind of step"
-                types={request?.types ?? actions.types}
-                disabled={actions.disabled}
-                action="Add step"
-                onAdd={(taskType, settings) => {
-                  if (request === null) return false;
-                  const result = request.onAdd(insertion, taskType, settings);
-                  if (result === true) {
-                    setRequest(null);
-                    setProblem("");
-                  } else setProblem(result);
-                  return result === true;
-                }}
-              />
-              {problem === "" ? null : (
-                <p role="alert" className="mt-2 text-sm text-destructive">
-                  {problem}
-                </p>
-              )}
-            </PopoverContent>
-          </Popover>
-        </div>
-      </EdgeLabelRenderer>
+          </div>
+        </EdgeLabelRenderer>
+      )}
     </>
   );
-}
+});
 const edgeTypes = { studio: StudioFlowEdge };
 
 function StudioFlowControls() {
@@ -340,7 +376,7 @@ const node = (id: string, x: number, y: number, data: FlowNodeData): Node<FlowNo
   draggable: false,
   connectable: false,
   selectable: data.kind === "step" || data.kind === "start",
-  focusable: data.kind === "step" || data.kind === "start",
+  focusable: true,
   ariaRole: data.kind === "step" || data.kind === "start" ? "button" : "group",
   position: { x, y },
   data,
@@ -392,6 +428,7 @@ function layoutList(
         caption: task.caption,
         kind: "step",
         taskType: task.type,
+        taskId: task.id,
       }),
     );
     for (const { child, branch } of branches)
@@ -429,10 +466,15 @@ const groupCaptions: Readonly<Record<string, Readonly<{ caption: string; edge: s
   "At the end": { caption: "Runs after the flow ends, however it ended", edge: "always" },
 };
 
-function buildGraph(lists: readonly StudioFlowTaskListOutline[], starts: readonly string[]) {
+function buildGraph(
+  lists: readonly StudioFlowTaskListOutline[],
+  starts: readonly string[],
+  behaviour: readonly string[],
+) {
   const nodes: Node<FlowNodeData>[] = [];
   const edges: FlowEdge[] = [];
   let left = 0;
+  const startHeight = nodeHeight + 32 + Math.max(1, behaviour.length) * 20;
   lists.forEach((list, index) => {
     if (index > 0 && list.tasks.length === 0) return;
     const headers: string[] = [];
@@ -446,6 +488,7 @@ function buildGraph(lists: readonly StudioFlowTaskListOutline[], starts: readonl
               title: "Start",
               caption: start,
               kind: "start",
+              behaviour,
             }),
           );
         },
@@ -461,7 +504,7 @@ function buildGraph(lists: readonly StudioFlowTaskListOutline[], starts: readonl
         }),
       );
     }
-    const layout = layoutList(list, left, nodeHeight + rowGap, nodes, edges);
+    const layout = layoutList(list, left, startHeight + rowGap, nodes, edges);
     for (const header of headers)
       for (const first of layout.firstIds)
         edges.push(
@@ -476,7 +519,7 @@ function buildGraph(lists: readonly StudioFlowTaskListOutline[], starts: readonl
     if (index === 0) {
       const end = "end";
       nodes.push(
-        node(end, left + (layout.width - nodeWidth) / 2, nodeHeight + rowGap + layout.height, {
+        node(end, left + (layout.width - nodeWidth) / 2, startHeight + rowGap + layout.height, {
           title: "End",
           caption: "The flow is done",
           kind: "end",
@@ -491,39 +534,128 @@ function buildGraph(lists: readonly StudioFlowTaskListOutline[], starts: readonl
     left +=
       Math.max(layout.width, headers.length * (nodeWidth + columnGap) - columnGap) + columnGap * 2;
   });
-  return { nodes, edges };
+  const byId = new Map(nodes.map((entry) => [entry.id, entry]));
+  const insertions: Node<FlowNodeData>[] = edges.flatMap((entry) => {
+    const from = byId.get(entry.source);
+    const to = byId.get(entry.target);
+    if (from === undefined || to === undefined || entry.data === undefined) return [];
+    const fromHeight = from.data.kind === "start" ? startHeight : nodeHeight;
+    return [
+      {
+        id: `insert:${entry.id}`,
+        type: "insertion",
+        position: {
+          x: (from.position.x + to.position.x) / 2 + nodeWidth / 2 - 12,
+          y: (from.position.y + fromHeight + to.position.y) / 2 - 12,
+        },
+        data: {
+          title: entry.data.label,
+          caption: "",
+          kind: "insert",
+          insertion: entry.data.insertion,
+        },
+        selectable: false,
+        focusable: false,
+        draggable: false,
+        connectable: false,
+      },
+    ];
+  });
+  return {
+    nodes: [...nodes, ...insertions].sort(
+      (a, b) => a.position.y - b.position.y || a.position.x - b.position.x,
+    ),
+    edges,
+  };
 }
 
 export function StudioFlowCanvas({
   lists,
   starts,
+  behaviour,
   selectedPath,
   onSelect,
   label,
   title,
   appearance,
-  types,
+  typesAt,
   disabled,
   onAdd,
   choicesAt,
+  placement,
 }: Readonly<{
   lists: readonly StudioFlowTaskListOutline[];
   starts: readonly string[];
+  behaviour: readonly string[];
   selectedPath: StudioFlowPath | null;
   /** null selects the flow's start settings. */
   onSelect: (path: StudioFlowPath | null) => void;
   label: string;
   title: string;
   appearance: ThemeMode;
-  types: readonly StudioFlowStepChoice[];
+  typesAt: (insertion: Insertion) => readonly StudioFlowStepChoice[];
   disabled: boolean;
   onAdd: AddStep;
   choicesAt: (insertion: Insertion) => StudioFlowStepPickerContext;
+  placement: FlowPlacement | null;
 }>) {
-  const graph = useMemo(() => buildGraph(lists, starts), [lists, starts]);
+  const previousData = useRef(new Map<string, FlowNodeData>());
+  const graph = useMemo(() => {
+    const next = buildGraph(lists, starts, behaviour);
+    const data = new Map<string, FlowNodeData>();
+    const nodes = next.nodes.map((entry) => {
+      const previous = previousData.current.get(entry.id);
+      const location =
+        entry.data.taskId === undefined ? undefined : placement?.tasks[entry.data.taskId];
+      const current = {
+        ...entry.data,
+        ...(location === undefined ? {} : { location }),
+      };
+      const stable =
+        previous !== undefined &&
+        previous.title === current.title &&
+        previous.caption === current.caption &&
+        previous.kind === current.kind &&
+        previous.taskType === current.taskType &&
+        previous.taskId === current.taskId &&
+        previous.location === current.location &&
+        JSON.stringify(previous.behaviour) === JSON.stringify(current.behaviour) &&
+        JSON.stringify(previous.insertion) === JSON.stringify(current.insertion)
+          ? previous
+          : current;
+      data.set(entry.id, stable);
+      return { ...entry, data: stable };
+    });
+    previousData.current = data;
+    const bands: Node<FlowNodeData>[] = (placement?.bands ?? []).flatMap((band) => {
+      const members = nodes.filter(
+        (entry) => entry.data.taskId !== undefined && band.taskIds.includes(entry.data.taskId),
+      );
+      if (members.length === 0) return [];
+      const left = Math.min(...members.map((entry) => entry.position.x)) - 24;
+      const top = Math.min(...members.map((entry) => entry.position.y)) - 24;
+      const right = Math.max(...members.map((entry) => entry.position.x + nodeWidth)) + 24;
+      const bottom = Math.max(...members.map((entry) => entry.position.y + nodeHeight)) + 24;
+      return [
+        {
+          id: `band:${band.id}`,
+          type: "default",
+          position: { x: left, y: top },
+          data: { title: "Server segment", caption: "", kind: "group" },
+          style: { width: right - left, height: bottom - top, zIndex: -1, pointerEvents: "none" },
+          className: "border border-primary/20 bg-primary/5! rounded-2xl!",
+          selectable: false,
+          focusable: false,
+          draggable: false,
+          connectable: false,
+        },
+      ];
+    });
+    return { ...next, nodes: [...bands, ...nodes] };
+  }, [lists, starts, behaviour, placement]);
   const actions = useMemo(
-    () => ({ types, disabled, onAdd, choicesAt }),
-    [types, disabled, onAdd, choicesAt],
+    () => ({ typesAt, disabled, onAdd, choicesAt }),
+    [typesAt, disabled, onAdd, choicesAt],
   );
   const selectedKey = selectedPath === null ? null : pathKey(selectedPath);
   const selectNode = (clicked: Node<FlowNodeData>) => {
