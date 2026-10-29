@@ -1,7 +1,13 @@
 import { z } from "zod";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
-import type { JsonValue } from "../catalogue/common";
-import { groupIdSchema, recordIdSchema, recordTypeIdSchema } from "../catalogue/identifiers";
+import { jsonValueSchema, type JsonValue } from "../catalogue/common";
+import {
+  builderKeySchema,
+  groupIdSchema,
+  queryIdSchema,
+  recordIdSchema,
+  recordTypeIdSchema,
+} from "../catalogue/identifiers";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import { describeFailure, isRecord, sameId } from "../catalogue/runtime-primitives";
 import {
@@ -737,6 +743,39 @@ export const createFlowTaskRunner = (
       return { outcome: "refused" };
     if (call.taskType === "record.read_fields") return runSelectedRecordRead(run, state, call);
 
+    if (call.taskType === "record.query") {
+      if (run.authority.kind !== "person" || dependencies.queryRecords === undefined)
+        return notAvailable(
+          run,
+          call,
+          "This workflow can't read records here.",
+          "the current initiator's protected query reader",
+        );
+      const queryId = queryIdSchema.safeParse(call.properties.query?.value);
+      const parameters = z
+        .record(builderKeySchema, jsonValueSchema)
+        .safeParse(call.properties.parameters?.value ?? {});
+      if (
+        !queryId.success ||
+        !parameters.success ||
+        carriesSensitive(parameters.data, run.sensitive)
+      )
+        return { outcome: "validation" };
+      try {
+        const result = await dependencies.queryRecords.read(
+          run.authority.session,
+          run.authority.selection,
+          { queryId: queryId.data, parameters: parameters.data },
+        );
+        if (result.kind !== "available") return { outcome: requestOutcome(result.kind) };
+        if (result.value.outcome !== "read") return { outcome: "refused" };
+        return { outcome: "completed", outputs: { records: [...result.value.recordIds] } };
+      } catch (error) {
+        reportUnexpectedFailure("record query task", error);
+        return { outcome: "failed" };
+      }
+    }
+
     // Identity acquisition is a fresh protected read, never an effect-ledger replay. The tuple
     // selects a later read; it contains no title/address and does not confer target authority.
     if (call.taskType === "record.pin_identity") {
@@ -922,7 +961,11 @@ export const createFlowTaskRunner = (
       warnings: readonly BeforeSaveRuleWarning[];
     }>
   > => {
-    if (call.taskType === "record.read_fields" || call.taskType === "record.pin_identity")
+    if (
+      call.taskType === "record.read_fields" ||
+      call.taskType === "record.pin_identity" ||
+      call.taskType === "record.query"
+    )
       return { result: await runProtectedTask(run, state, call), replay: undefined, warnings: [] };
     if (run.selectedRecordReadSeen && call.taskType !== "record.save")
       return {

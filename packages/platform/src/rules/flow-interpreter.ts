@@ -643,6 +643,7 @@ export const serverStepRunners = {
   "rule.warn": "interpreter",
   "rule.refuse": "interpreter",
   "record.save": "protected_task",
+  "record.query": "protected_task",
   "record.read_fields": "protected_task",
   "record.pin_identity": "protected_task",
   "operation.call": "protected_task",

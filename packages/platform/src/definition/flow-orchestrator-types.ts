@@ -214,6 +214,19 @@ export type FlowOrchestratorDependencies = Readonly<{
   subjects?: FlowSubjectReadPort;
   /** Reads selected fields afresh; its result is never entered into the protected effect ledger. */
   selectedRecordReads?: FlowSelectedRecordReadPort;
+  /** Reads a declared query's bounded identity list afresh, without replaying read results. */
+  queryRecords?: Readonly<{
+    read(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      target: Readonly<{ queryId: string; parameters: Readonly<Record<string, JsonValue>> }>,
+    ): Promise<
+      HumanOrganizationRequestResult<
+        | Readonly<{ outcome: "read"; recordIds: readonly string[] }>
+        | Readonly<{ outcome: "unavailable" }>
+      >
+    >;
+  }>;
   /**
    * Reads the record a flow with a record input runs for, at its start and again at every resume,
    * so a stored run never holds record values. Without it such a flow cannot start.

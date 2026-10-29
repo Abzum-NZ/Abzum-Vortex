@@ -47,6 +47,7 @@ import { createRecordSaveService } from "../records/save-record";
 import type { createDatabaseApplicationBoundReleaseSetService } from "./application-bound-release-set";
 import { readPermittedApplicationsAtAddress } from "./application-address";
 import { createFlowCurrentRecordReader } from "./flow-current-record";
+import { createFlowQueryReader } from "./flow-query-reader";
 import { createFlowOrchestrator } from "./flow-orchestrator";
 import type {
   FlowNamedAction,
@@ -536,6 +537,10 @@ export async function invokeInstalledFlow(
           (await subjectReader.read(session, selection, subject)).kind,
       },
       selectedRecordReads: selectedRecordReadsFor(installation, requests),
+      queryRecords: createFlowQueryReader(
+        { ...scopedDependencies, continuationKey: dependencies.continuationKey },
+        installation,
+      ),
       currentRecords: createFlowCurrentRecordReader({
         requests,
         reader: selectedRecordReader,
