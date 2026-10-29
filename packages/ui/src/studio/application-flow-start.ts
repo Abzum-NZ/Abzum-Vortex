@@ -2,7 +2,6 @@ import { recordsTableInlineEditEvent, recordsTableRowEditEvent } from "@vortex/p
 import {
   builderKeySchema,
   flowLiteralSchema,
-  flowScheduleRecurrenceSchema,
   workflowValueTypeSchema,
   type ApplicationSourceDocument,
   type FlowBeforeSaveOperation,
@@ -59,12 +58,7 @@ export type StudioFlowTriggerDraft =
       operations: readonly FlowBeforeSaveOperation[];
     }>
   | Readonly<{ kind: "event"; recordType: string; eventKind: string }>
-  | Readonly<{ kind: "declared_event"; recordType: string; eventKey: string }>
-  | Readonly<{
-      kind: "schedule";
-      recurrence: Extract<FlowTrigger, { type: "Schedule" }>["recurrence"];
-    }>
-  | Readonly<{ kind: "incoming_message"; messageName: string }>;
+  | Readonly<{ kind: "declared_event"; recordType: string; eventKey: string }>;
 
 /** A control that starts the flow; `inputs` is keyed by the input's form identity (`StudioFlowInputDraft.id`). */
 export type StudioFlowBindingDraft = Readonly<{
@@ -153,9 +147,6 @@ const triggerDraft = (trigger: FlowTrigger): StudioFlowTriggerDraft => {
       recordType: trigger.recordTypeId,
       eventKey: trigger.event.eventKey,
     };
-  if (trigger.type === "Schedule") return { kind: "schedule", recurrence: trigger.recurrence };
-  if (trigger.type === "IncomingMessage")
-    return { kind: "incoming_message", messageName: studioWords(trigger.messageKey) };
   throw new TypeError("The flow contains an unknown start type.");
 };
 
@@ -374,14 +365,6 @@ export const applyStudioFlowStart = (
   if (draft.triggers.length !== (flow.triggers ?? []).length)
     return { kind: "stale", reason: "The triggers of this flow changed. Open the flow again." };
   for (const trigger of draft.triggers) {
-    if (
-      trigger.kind === "schedule" &&
-      !flowScheduleRecurrenceSchema.safeParse(trigger.recurrence).success
-    )
-      return {
-        kind: "invalid",
-        reason: "How it starts: choose a complete schedule with a valid time and repeat interval.",
-      };
     if (trigger.kind === "declared_event" && trigger.eventKey === "")
       return {
         kind: "invalid",
@@ -408,8 +391,6 @@ export const applyStudioFlowStart = (
         recordTypeId: edited.recordType,
         event: { kind: "declared", eventKey: edited.eventKey },
       };
-    if (edited.kind === "schedule" && trigger.type === "Schedule")
-      return { ...trigger, recurrence: edited.recurrence };
     return trigger;
   });
   for (const [index, trigger] of (flow.triggers ?? []).entries())

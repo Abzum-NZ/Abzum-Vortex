@@ -508,16 +508,9 @@ export const studioFlowTaskPath = (
                 ),
                 [task.default, [...here, "default"]],
               ]
-            : "branches" in task
-              ? task.branches.map(
-                  (branch, branchIndex): [readonly SourceFlowTask[], StudioFlowPath] => [
-                    branch,
-                    [...here, "branches", branchIndex],
-                  ],
-                )
-              : "tasks" in task
-                ? [[task.tasks, [...here, "tasks"]]]
-                : [];
+            : "tasks" in task
+              ? [[task.tasks, [...here, "tasks"]]]
+              : [];
       for (const [list, listPath] of lists) {
         const found = walk(list, listPath);
         if (found !== undefined) return found;

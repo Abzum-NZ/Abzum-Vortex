@@ -232,7 +232,7 @@ const resolveTriggers = (ctx: Context, source: SourceFlow): unknown[] =>
           "recordTypeId",
         ]),
       };
-    return { ...trigger, inputs };
+    throw refusal(ctx, "vortex.definition.unsupported_workflow_trigger", "unsupported_choice");
   });
 
 /**
@@ -491,15 +491,6 @@ const resolveTask = (ctx: Context, task: SourceFlowTask, path: Path): unknown =>
       const node = task as Extract<SourceFlowTask, { tasks: SourceFlowTask[] }>;
       return { ...node, tasks: resolveTaskList(ctx, node.tasks, [...path, "tasks"]) };
     }
-    case "parallel": {
-      const node = task as Extract<SourceFlowTask, { type: "parallel" }>;
-      return {
-        ...node,
-        branches: node.branches.map((branch, index) =>
-          resolveTaskList(ctx, branch, [...path, "branches", index]),
-        ),
-      };
-    }
     case "run_flow": {
       const node = task as Extract<SourceFlowTask, { type: "run_flow" }>;
       return {
@@ -507,15 +498,7 @@ const resolveTask = (ctx: Context, task: SourceFlowTask, path: Path): unknown =>
         flowId: resolveAt(ctx, ctx.resolver.flow(node.flowId), [...path, "flowId"]),
       };
     }
-    case "wait_for_person": {
-      const node = task as Extract<SourceFlowTask, { type: "wait_for_person" }>;
-      return {
-        ...node,
-        formId: resolveAt(ctx, ctx.resolver.form(node.formId), [...path, "formId"]),
-      };
-    }
     case "stop":
-    case "wait_until":
       return task;
     default: {
       const node = task as Extract<SourceFlowTask, { properties: unknown }>;
@@ -716,17 +699,7 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
       ...source,
       id: flowIdentity.identifier,
       namespace: resolver.definitionKey,
-      runAs:
-        source.runAs.kind === "specified_account" || source.runAs.kind === "system"
-          ? {
-              ...source.runAs,
-              executionBindingId: resolveAt(
-                ctx,
-                resolver.executionBinding(source.runAs.executionBindingId),
-                ["runAs", "executionBindingId"],
-              ),
-            }
-          : source.runAs,
+      runAs: source.runAs,
       ...(source.invocationPermissionId !== undefined
         ? {
             invocationPermissionId: resolveAt(

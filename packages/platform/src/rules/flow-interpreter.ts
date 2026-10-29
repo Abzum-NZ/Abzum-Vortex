@@ -74,7 +74,6 @@ export type FlowFailureCode =
   | "value_unresolved"
   | "task_not_available"
   | "task_unknown"
-  | "durable_only_task"
   | "for_each_limit"
   | "protected_operation_limit"
   | "run_flow_depth"
@@ -825,10 +824,6 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
       ];
       return { kind: "continue" };
     }
-    case "parallel":
-    case "wait_until":
-    case "wait_for_person":
-      return failed("durable_only_task", "failed", taskId);
     default:
       break;
   }

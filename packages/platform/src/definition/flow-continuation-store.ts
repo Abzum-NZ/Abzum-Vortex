@@ -24,10 +24,7 @@ type FlowContinuationBinding = Readonly<{
   releaseKey: string;
 }>;
 
-export type FlowEffectPrincipal =
-  | Readonly<{ kind: "person"; id: string }>
-  | Readonly<{ kind: "specified_account"; id: string }>
-  | Readonly<{ kind: "system"; id: string }>;
+export type FlowEffectPrincipal = Readonly<{ kind: "person"; id: string }>;
 
 type FlowEffectKey = Readonly<{
   runId: string;
@@ -44,7 +41,6 @@ type FlowEffectClaim =
   | Readonly<{ kind: "completed"; outcome: string; outputs: Readonly<Record<string, unknown>> }>
   | Readonly<{ kind: "in_progress" }>
   | Readonly<{ kind: "unavailable" }>;
-
 
 const expiryRowSchema = z.object({ expires_at: z.union([z.date(), z.string()]) });
 const consumeRowSchema = z.object({ result: z.unknown() });

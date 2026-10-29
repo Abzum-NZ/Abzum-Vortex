@@ -16,12 +16,10 @@ import type {
   ViewerSafeRecordPinSelector,
 } from "../records/record-links";
 import type { SaveRecordCommand } from "../records/records";
-import {
-  flowIdSchema,
-  type ExecutionAuthorityContext,
-  type FlowDefinition,
-  type FlowReadFieldsScalarType,
-  type FlowTriggerOrigin,
+import type {
+  FlowDefinition,
+  FlowReadFieldsScalarType,
+  FlowTriggerOrigin,
 } from "../workflows/flow-contracts";
 import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
 import type { FlowWarningNotice } from "../workflows/form-continuation-contracts";
@@ -38,6 +36,7 @@ import type {
   FlowRuntimeValues,
 } from "../rules/flow-interpreter";
 import type { ProtectedOperationExecutor } from "./protected-operation-executor";
+import { flowIdSchema } from "../catalogue/identifiers";
 
 /**
  * The exact set of compiled flows one run is bound to. `releaseKey` identifies that exact release
@@ -321,17 +320,11 @@ export type FlowOrchestratorResponse =
     }>
   | Readonly<{ kind: "refused" }>;
 
-type RunAuthority =
-  | Readonly<{
-      kind: "person";
-      session: IdentitySession;
-      selection: OrganizationSelectionCandidate;
-    }>
-  | Readonly<{
-      kind: "execution_authority";
-      context: ExecutionAuthorityContext;
-      organizationId: string;
-    }>;
+type RunAuthority = Readonly<{
+  kind: "person";
+  session: IdentitySession;
+  selection: OrganizationSelectionCandidate;
+}>;
 
 export type PreparedPersonRun = Readonly<{
   session: IdentitySession;

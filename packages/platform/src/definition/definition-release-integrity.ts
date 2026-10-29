@@ -61,21 +61,15 @@ const manifestSubject = (dependency: ExactDefinitionDependency): string =>
             ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.queryId}`
             : dependency.kind === "module_query"
               ? `${dependency.kind}:${dependency.moduleRootId}:${dependency.queryId}`
-              : dependency.kind === "application_form"
-                ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.formId}`
-                : dependency.kind === "application_workflow"
-                  ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.workflowId}`
-                  : dependency.kind === "application_action"
-                    ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.actionId}`
-                    : dependency.kind === "protected_operation"
-                      ? `${dependency.kind}:${dependency.operation.owner.kind}:${
-                          dependency.operation.owner.kind === "application"
-                            ? dependency.operation.owner.applicationRootId
-                            : dependency.operation.owner.kind === "module"
-                              ? dependency.operation.owner.moduleRootId
-                              : dependency.operation.owner.serviceId
-                        }:${dependency.operation.operationId}`
-                      : `${dependency.kind}:${dependency.key}`;
+              : dependency.kind === "protected_operation"
+                ? `${dependency.kind}:${dependency.operation.owner.kind}:${
+                    dependency.operation.owner.kind === "application"
+                      ? dependency.operation.owner.applicationRootId
+                      : dependency.operation.owner.kind === "module"
+                        ? dependency.operation.owner.moduleRootId
+                        : dependency.operation.owner.serviceId
+                  }:${dependency.operation.operationId}`
+                : `${dependency.kind}:${dependency.key}`;
 
 const sameStringSet = (left: readonly string[], right: readonly string[]): boolean => {
   const leftSet = new Set(left);
@@ -98,12 +92,6 @@ const flowManifestSubject = (dependency: ExactDefinitionDependency): string => {
       return `${dependency.kind}:${dependency.applicationRootId}:${dependency.queryId}`;
     case "module_query":
       return `${dependency.kind}:${dependency.moduleRootId}:${dependency.queryId}`;
-    case "application_form":
-      return `${dependency.kind}:${dependency.applicationRootId}:${dependency.formId}`;
-    case "application_workflow":
-      return `${dependency.kind}:${dependency.applicationRootId}:${dependency.workflowId}`;
-    case "application_action":
-      return `${dependency.kind}:${dependency.applicationRootId}:${dependency.actionId}`;
     case "protected_operation":
       return `${dependency.kind}:${dependency.operation.owner.kind}:${
         dependency.operation.owner.kind === "application"

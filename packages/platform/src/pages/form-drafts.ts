@@ -27,7 +27,7 @@ import {
   platformIdSchema,
   recordIdSchema,
   revisionSchema,
-  ruleIdSchema,
+  flowIdSchema,
   timestampSchema,
   workflowNodeIdSchema,
 } from "../catalogue/identifiers";
@@ -115,7 +115,7 @@ export const privateFormDraftValidationSchema = z
 /** The exact identity of one unfinished form, before any value is stored. */
 const privateFormDraftScopeShape = {
   formId: containedComponentIdSchema,
-  flowId: ruleIdSchema.optional(),
+  flowId: flowIdSchema.optional(),
   nodeId: workflowNodeIdSchema.optional(),
   subjectRecordId: recordIdSchema.optional(),
 };

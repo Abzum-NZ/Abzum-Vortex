@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { builderKeySchema, fieldIdSchema, queryIdSchema } from "../catalogue/identifiers";
-import { flowIdSchema } from "../workflows/flow-contracts";
+import { flowIdSchema } from "../catalogue/identifiers";
 
 /** The fields of the same record type an options source reads, by input name. */
 const optionsSourceInputsSchema = z

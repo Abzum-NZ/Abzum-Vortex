@@ -405,13 +405,6 @@ export type StudioFlowControlDraft =
       value: StudioFlowValueSource;
       cases: readonly Readonly<{ key: string; when: FlowLiteral }>[];
     }>
-  | Readonly<{ kind: "wait_until"; until: StudioFlowValueSource }>
-  | Readonly<{
-      kind: "wait_for_person";
-      form: string;
-      assignee: StudioFlowValueSource;
-      inputs: readonly Readonly<{ name: string; source: StudioFlowValueSource }>[];
-    }>
   | Readonly<{ kind: "none" }>;
 
 /** The whole edited form of one step: its description, its settings and, for a control step, its shape. */
@@ -711,21 +704,7 @@ const controlDraft = (task: SourceFlowTask): StudioFlowControlDraft | null | und
             cases: task.cases.map((entry) => ({ key: entry.key, when: entry.when })),
           }
         : undefined;
-    case "wait_until":
-      return "until" in task
-        ? { kind: "wait_until", until: studioFlowValueSourceOf(task.until) }
-        : undefined;
-    case "wait_for_person":
-      return "formId" in task
-        ? {
-            kind: "wait_for_person",
-            form: task.formId,
-            assignee: studioFlowValueSourceOf(task.assignee),
-            inputs: entries(task.inputs),
-          }
-        : undefined;
     case "sequential":
-    case "parallel":
       return { kind: "none" };
     default:
       return undefined;
@@ -764,9 +743,7 @@ export const projectStudioFlowStepForm = (
             type: declaration.type,
             required: declaration.required,
           }))
-        : control.kind === "wait_for_person"
-          ? choices.forms.find((form) => form.alias === control.form)?.fields
-          : undefined;
+        : undefined;
     return {
       kind: "available",
       fields: [],
@@ -946,10 +923,7 @@ export const applyStudioFlowStepDraft = (
   else base.description = description;
   if (!("properties" in task)) {
     const control = draft.control;
-    if (
-      control === null ||
-      control.kind !== (task.type === "sequential" || task.type === "parallel" ? "none" : task.type)
-    )
+    if (control === null || control.kind !== (task.type === "sequential" ? "none" : task.type))
       return { ok: false, reason: `${where}: this step changed kind. Select it again.` };
     const next = base as Record<string, unknown>;
     switch (control.kind) {
@@ -998,17 +972,6 @@ export const applyStudioFlowStepDraft = (
           key: control.cases[index]!.key,
           when: control.cases[index]!.when,
         }));
-        break;
-      }
-      case "wait_until":
-        next.until = valueOrKept(control.until);
-        break;
-      case "wait_for_person": {
-        const inputs = entryMap(control.inputs, `${where}, Inputs`);
-        if (!inputs.ok) return inputs;
-        next.formId = control.form;
-        next.assignee = valueOrKept(control.assignee);
-        next.inputs = inputs.value;
         break;
       }
       case "none":

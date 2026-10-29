@@ -186,9 +186,6 @@ export const verifyDefinitionCatalogueDependencies = async (
       dependency.kind === "application_flow_node" ||
       dependency.kind === "application_query" ||
       dependency.kind === "module_query" ||
-      dependency.kind === "application_form" ||
-      dependency.kind === "application_workflow" ||
-      dependency.kind === "application_action" ||
       dependency.kind === "protected_operation"
     )
       continue;

@@ -15,7 +15,6 @@ import {
   recordTypeDefinitionSchema,
   isWritableSystemProjection,
 } from "../definition/module-contracts";
-import type { ExecutionAuthorityContext } from "../workflows/flow-contracts";
 import {
   saveRecordCommandSchema,
   saveRecordResultSchema,
@@ -922,15 +921,10 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
 
   return Object.freeze({
     async save(
-      caller: IdentitySession | ExecutionAuthorityContext,
+      caller: IdentitySession,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
     ): Promise<RecordSaveServiceResult> {
-      // Do not turn a non-person authority into a person session on this adapter.
-      if (caller !== null && typeof caller === "object" && "kind" in caller) {
-        console.error("[record] save refused RECORD_SAVE_CALLER_NOT_A_PERSON");
-        return { kind: "unavailable" };
-      }
       const command = saveRecordCommandSchema.safeParse(commandCandidate);
       if (!command.success || selection.applicationRootId === undefined) {
         console.error(

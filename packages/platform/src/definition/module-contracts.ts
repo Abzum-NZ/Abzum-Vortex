@@ -53,7 +53,7 @@ import { permissionDeclarationSchema } from "../access/permissions";
 import { protectedOperationReferenceSchema } from "./application-flow-bindings";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import { protectedReadModelKeySchema } from "./application-composition/protected-read-models";
-import { flowIdSchema, flowSchema } from "../workflows/flow-contracts";
+import { flowSchema } from "../workflows/flow-contracts";
 import { choiceOptionsSourceSchema, linkOptionsSourceSchema } from "./field-options-source";
 import { recordOwnershipModeSchema } from "../records/record-ownership-mode";
 import {
@@ -61,6 +61,7 @@ import {
   pipelineShapeProblems,
   recordTypePipelineSchema,
 } from "./record-type-pipelines";
+import { flowIdSchema } from "../catalogue/identifiers";
 
 export const moduleValidationContractVersion = "4.0.0" as const;
 

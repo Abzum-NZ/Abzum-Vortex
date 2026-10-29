@@ -2,7 +2,6 @@
 export const flowMaximumTaskCount = 100;
 export const flowMaximumTaskNestingDepth = 5;
 
-export const flowMaximumForEachItemsDurable = 1_000;
 export const flowMaximumForEachItemsOther = 100;
 export const flowMaximumRunFlowDepth = 3;
 /** Runtime budgets for one interactive or background run; enforced by the orchestrator. */

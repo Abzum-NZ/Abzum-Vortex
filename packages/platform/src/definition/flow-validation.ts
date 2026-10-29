@@ -339,8 +339,6 @@ export function validateFlow(
         ? { known: false as const }
         : { known: true as const, type: declared.type as StaticType };
     }
-    // The person's answers have no declared shape until the form contract types them.
-    if (task.type === "wait_for_person") return { known: true as const, type: undefined };
     if (isFlowControlTask(task)) return { known: false as const };
     const registered = task as Extract<FlowTask, { properties: unknown }>;
     if (key === "outcome" && registered.allowRefusal === true)
@@ -1179,20 +1177,7 @@ export function validateFlow(
         checkInputMap(node.inputs, target, where, [...path, "inputs"]);
         return;
       }
-      case "wait_until": {
-        const node = task as Extract<FlowTask, { type: "wait_until" }>;
-        checkValue(node.until, ["date_time", "date"], where, [...path, "until"]);
-        return;
-      }
-      case "wait_for_person": {
-        const node = task as Extract<FlowTask, { type: "wait_for_person" }>;
-        checkValue(node.assignee, ["organization_account_reference"], where, [...path, "assignee"]);
-        for (const [name, value] of Object.entries(node.inputs))
-          valueType(value, where, [...path, "inputs", name]);
-        return;
-      }
       case "sequential":
-      case "parallel":
       case "stop":
         return;
       default: {

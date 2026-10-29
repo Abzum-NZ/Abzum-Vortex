@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { workflowValueTypeSchema } from "../catalogue/catalogues";
-import { descriptionSchema, jsonValueSchema, retryPolicySchema } from "../catalogue/common";
+import { descriptionSchema, jsonValueSchema } from "../catalogue/common";
 import { definitionProvenanceEntrySchema } from "../definition/definition-provenance";
-import { flowBeforeSaveOperationSchema, flowExecutionKindSchema, flowReadFieldsProjectionSchema, flowRegisteredTaskTypeSchema, flowScheduleRecurrenceSchema, flowSchema, flowStandardEventKindSchema, flowTaskTimeoutSchema } from "./flow-contracts";
+import { flowBeforeSaveOperationSchema, flowExecutionKindSchema, flowReadFieldsProjectionSchema, flowRegisteredTaskTypeSchema, flowSchema, flowStandardEventKindSchema, flowTaskTimeoutSchema } from "./flow-contracts";
 import { flowFormulaSchema, flowLiteralSchema, flowValueSchema } from "./flow-values";
 import type { FlowFormula, FlowLiteral, FlowValue } from "./flow-values";
 import {
@@ -97,30 +97,12 @@ export const sourceFlowTriggerSchema = z.discriminatedUnion("type", [
       duplicateProtection: z.literal("committed_occurrence"),
     })
     .strict(),
-  z
-    .object({
-      ...sourceTriggerCommonShape,
-      type: z.literal("Schedule"),
-      recurrence: flowScheduleRecurrenceSchema,
-      duplicateProtection: z.literal("scheduled_instant"),
-    })
-    .strict(),
-  z
-    .object({
-      ...sourceTriggerCommonShape,
-      type: z.literal("IncomingMessage"),
-      messageKey: builderKeySchema,
-      duplicateProtection: z.literal("verified_message"),
-    })
-    .strict(),
 ]);
 export type SourceFlowTrigger = z.infer<typeof sourceFlowTriggerSchema>;
 
 export const sourceFlowRunAsSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("initiator") }).strict(),
   z.object({ kind: z.literal("saver") }).strict(),
-  z.object({ kind: z.literal("specified_account"), executionBindingId: flowAliasSchema }).strict(),
-  z.object({ kind: z.literal("system"), executionBindingId: flowAliasSchema }).strict(),
 ]);
 
 // ─── Tasks ───────────────────────────────────────────────────────────────────────────────────
@@ -128,7 +110,6 @@ export const sourceFlowRunAsSchema = z.discriminatedUnion("kind", [
 type SourceFlowTaskCommon = {
   id: string;
   description?: string | undefined;
-  retry?: z.infer<typeof retryPolicySchema> | undefined;
   timeout?: z.infer<typeof flowTaskTimeoutSchema> | undefined;
 };
 export type SourceFlowTask = SourceFlowTaskCommon &
@@ -149,14 +130,6 @@ export type SourceFlowTask = SourceFlowTaskCommon &
     | { type: "sequential"; tasks: SourceFlowTask[] }
     | { type: "run_flow"; flowId: string; inputs: Record<string, FlowValue> }
     | { type: "stop"; outcome: string }
-    | { type: "parallel"; branches: SourceFlowTask[][] }
-    | { type: "wait_until"; until: FlowValue }
-    | {
-        type: "wait_for_person";
-        formId: string;
-        assignee: FlowValue;
-        inputs: Record<string, FlowValue>;
-      }
     | {
         type: string;
         version: string;
@@ -168,7 +141,6 @@ export type SourceFlowTask = SourceFlowTaskCommon &
 const sourceTaskCommonShape = {
   id: builderKeySchema,
   description: descriptionSchema.optional(),
-  retry: retryPolicySchema.optional(),
   timeout: flowTaskTimeoutSchema.optional(),
 };
 
@@ -216,25 +188,6 @@ export const sourceFlowTaskSchema: z.ZodType<SourceFlowTask> = z.lazy(() => {
       .strict(),
     z
       .object({ ...sourceTaskCommonShape, type: z.literal("stop"), outcome: builderKeySchema })
-      .strict(),
-    z
-      .object({
-        ...sourceTaskCommonShape,
-        type: z.literal("parallel"),
-        branches: z.array(list).min(2).max(10),
-      })
-      .strict(),
-    z
-      .object({ ...sourceTaskCommonShape, type: z.literal("wait_until"), until: flowValueSchema })
-      .strict(),
-    z
-      .object({
-        ...sourceTaskCommonShape,
-        type: z.literal("wait_for_person"),
-        formId: flowAliasSchema,
-        assignee: flowValueSchema,
-        inputs: boundedRecord(flowValueSchema, 50),
-      })
       .strict(),
   ]);
   const registered = z
@@ -425,7 +378,6 @@ const refineSourceTaskContracts = (
     tasks?: SourceFlowTask[];
     cases?: { tasks: SourceFlowTask[] }[];
     default?: SourceFlowTask[];
-    branches?: SourceFlowTask[][];
   };
   const visit = (tasks: readonly SourceFlowTask[], path: (string | number)[]) => {
     tasks.forEach((task, index) => {
@@ -440,9 +392,6 @@ const refineSourceTaskContracts = (
         visit(entry.tasks, [...taskPath, "cases", caseIndex, "tasks"]),
       );
       if (node.default) visit(node.default, [...taskPath, "default"]);
-      node.branches?.forEach((branch, branchIndex) =>
-        visit(branch, [...taskPath, "branches", branchIndex]),
-      );
     });
   };
   visit(flow.tasks, ["tasks"]);
@@ -471,7 +420,6 @@ export const sourceFlowSchema = z
     outputs: boundedRecord(sourceOutputDeclarationSchema, 50).default({}),
     errors: z.array(sourceFlowTaskSchema).max(flowMaximumTaskCount).default([]),
     finally: z.array(sourceFlowTaskSchema).max(flowMaximumTaskCount).default([]),
-    retry: retryPolicySchema.optional(),
     timeout: flowTaskTimeoutSchema.optional(),
     concurrency: z
       .object({

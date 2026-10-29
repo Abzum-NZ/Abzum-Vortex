@@ -8,7 +8,6 @@ import {
 import { flowLiteralSchema } from "../workflows/flow-values";
 import type { DefinitionCompilerRefusalCode } from "./compilation-error";
 import {
-  flowMaximumForEachItemsDurable,
   flowMaximumForEachItemsOther,
   flowMaximumServerSeconds,
   flowMaximumTaskCount,
@@ -112,7 +111,6 @@ export const checkDeclaration = (declaration: DeclarationView, path: Path, add: 
 // ─── Structure and limits ──────────────────────────────────────────────────────────────────────
 
 export const validateStructure = (flow: FlowSource, add: Add) => {
-  const durable = flow.execution === "durable";
   const source = "vortex.definition.source_shape" as const;
 
   for (const name of Object.keys(flow.variables))
@@ -172,19 +170,10 @@ export const validateStructure = (flow: FlowSource, add: Add) => {
       );
   }
 
-  // Run as follows from the execution kind and how the flow starts.
-  const systemStarted = flow.triggers.some(
-    (trigger) => trigger.type === "Schedule" || trigger.type === "IncomingMessage",
-  );
-  const allowedRunAs: readonly string[] =
-    flow.execution === "interactive"
-      ? ["initiator"]
-      : flow.execution === "transaction"
-        ? ["saver"]
-        : flow.execution === "background" || systemStarted
-          ? ["specified_account", "system"]
-          : ["initiator"];
-  if (!allowedRunAs.includes(flow.runAs.kind))
+  // Run as follows from the execution kind: a save's flows run as the saver, every other flow as
+  // the person whose action or save started it.
+  const allowedRunAs = flow.execution === "transaction" ? "saver" : "initiator";
+  if (flow.runAs.kind !== allowedRunAs)
     add(
       ["runAs", "kind"],
       "vortex.definition.workflow_permission",
@@ -192,32 +181,26 @@ export const validateStructure = (flow: FlowSource, add: Add) => {
       `A ${flow.execution} flow cannot run as ${flow.runAs.kind}`,
     );
 
-  // Policies: retries and long timeouts belong to durable flows.
-  if (!durable && flow.retry !== undefined)
-    add(["retry"], source, "invalid_value", "Retries are allowed only in durable flows");
-  if (!durable && flow.timeout !== undefined && flow.timeout.seconds > flowMaximumServerSeconds)
+  // Policies: a run finishes within the server's time limit; concurrency limits a back-end flow.
+  if (flow.timeout !== undefined && flow.timeout.seconds > flowMaximumServerSeconds)
     add(
       ["timeout", "seconds"],
       source,
       "invalid_value",
-      `Only durable flows may time out after more than ${flowMaximumServerSeconds} seconds`,
+      `A flow times out within ${flowMaximumServerSeconds} seconds`,
     );
-  if (
-    flow.concurrency !== undefined &&
-    flow.execution !== "durable" &&
-    flow.execution !== "background"
-  )
+  if (flow.concurrency !== undefined && flow.execution !== "background")
     add(
       ["concurrency"],
       source,
       "invalid_value",
-      "Concurrency limits apply only to background and durable flows",
+      "Concurrency limits apply only to back-end flows",
     );
 
   // Tasks: identity, count, nesting and per-task limits.
   const seen = new Set<string>();
   let count = 0;
-  const forEachMaximum = durable ? flowMaximumForEachItemsDurable : flowMaximumForEachItemsOther;
+  const forEachMaximum = flowMaximumForEachItemsOther;
   const visit = (tasks: readonly FlowTask[], path: Path, depth: number) => {
     tasks.forEach((task, index) => {
       const taskPath = [...path, index];
@@ -232,19 +215,12 @@ export const validateStructure = (flow: FlowSource, add: Add) => {
       if (seen.has(task.id))
         add([...taskPath, "id"], source, "duplicate_key", "Task ids must be unique in a flow");
       seen.add(task.id);
-      if (!durable && task.retry !== undefined)
-        add(
-          [...taskPath, "retry"],
-          source,
-          "invalid_value",
-          "Retries are allowed only in durable flows",
-        );
-      if (!durable && task.timeout !== undefined && task.timeout.seconds > flowMaximumServerSeconds)
+      if (task.timeout !== undefined && task.timeout.seconds > flowMaximumServerSeconds)
         add(
           [...taskPath, "timeout", "seconds"],
           source,
           "invalid_value",
-          `Only durable flows may time out after more than ${flowMaximumServerSeconds} seconds`,
+          `A step times out within ${flowMaximumServerSeconds} seconds`,
         );
       if (
         task.type === "for_each" &&
@@ -254,7 +230,7 @@ export const validateStructure = (flow: FlowSource, add: Add) => {
           [...taskPath, "maximumItems"],
           source,
           "too_many_items",
-          `For each allows at most ${forEachMaximum.toLocaleString("en-NZ")} items in ${durable ? "durable" : "non-durable"} flows`,
+          `For each allows at most ${forEachMaximum.toLocaleString("en-NZ")} items`,
         );
       for (const child of flowTaskChildLists(task))
         visit(child.tasks, [...taskPath, ...child.path], depth + 1);

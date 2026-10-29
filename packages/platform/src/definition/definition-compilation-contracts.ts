@@ -38,7 +38,7 @@ import {
   queryIdSchema,
   recordTypeIdSchema,
   revisionSchema,
-  ruleIdSchema,
+  flowIdSchema,
   semanticVersionSchema,
   timestampSchema,
 } from "../catalogue/identifiers";
@@ -262,7 +262,7 @@ export const applicationToolOperationReferenceSchema = z.discriminatedUnion("kin
       standardAction: z.enum(["create", "read", "update", "soft_delete", "restore", "export"]),
     })
     .strict(),
-  z.object({ kind: z.literal("flow"), key: builderKeySchema, flowId: ruleIdSchema }).strict(),
+  z.object({ kind: z.literal("flow"), key: builderKeySchema, flowId: flowIdSchema }).strict(),
   z
     .object({
       kind: z.literal("query"),

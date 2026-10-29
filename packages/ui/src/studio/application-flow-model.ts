@@ -150,8 +150,6 @@ const taskCaption = (
       return `Chooses one of ${"cases" in task ? task.cases.length : 0} cases`;
     case "for_each":
       return "Repeats its steps for each item";
-    case "parallel":
-      return "Runs its branches side by side";
     case "stop":
       return "Stops the flow";
     case "operation.call": {
@@ -231,19 +229,6 @@ export const studioFlowOutline = (
         case "sequential":
           if (!("tasks" in task)) return invalidOutline("a grouping task has no steps");
           children.push(list("Steps", task.tasks, [...taskPath, "tasks"], depth + 1));
-          break;
-        case "parallel":
-          if (!("branches" in task)) return invalidOutline("a Parallel task has no branches");
-          task.branches.forEach((branch, branchIndex) =>
-            children.push(
-              list(
-                `Branch ${branchIndex + 1}`,
-                branch,
-                [...taskPath, "branches", branchIndex],
-                depth + 1,
-              ),
-            ),
-          );
           break;
       }
       const definition = studioFlowDefinitionOf(task.type);
@@ -500,10 +485,6 @@ export const describeStudioFlowStarts = (
             ? studioWords(trigger.event.eventKind).toLowerCase()
             : studioWords(trigger.event.eventKey.split(".").pop() ?? "").toLowerCase()
         }`;
-      case "Schedule":
-        return "On a schedule";
-      case "IncomingMessage":
-        return "When a message arrives";
     }
   });
   const bindings =

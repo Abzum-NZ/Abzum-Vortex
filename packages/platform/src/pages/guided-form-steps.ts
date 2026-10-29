@@ -32,7 +32,7 @@ import {
   builderKeySchema,
   containedComponentIdSchema,
   recordIdSchema,
-  ruleIdSchema,
+  flowIdSchema,
   timestampSchema,
   type PlatformId,
 } from "../catalogue/identifiers";
@@ -706,7 +706,7 @@ export const guidedFormDraftScope = (
   subjectRecordId?: string,
 ): PrivateFormDraftScope => ({
   formId: containedComponentIdSchema.parse(pageId),
-  flowId: ruleIdSchema.parse(flowId),
+  flowId: flowIdSchema.parse(flowId),
   ...(subjectRecordId === undefined
     ? {}
     : { subjectRecordId: recordIdSchema.parse(subjectRecordId) }),

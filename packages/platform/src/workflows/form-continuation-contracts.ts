@@ -2,7 +2,6 @@ import { z } from "zod";
 import { safeFlowResultDescriptorSchema } from "../definition/application-flow-bindings";
 import { jsonValueSchema } from "../catalogue/common";
 import { formContinuationAnswerSchema } from "./form-continuation-answer";
-import { flowIdSchema } from "./flow-contracts";
 import { flowRefusalFeedbackSchema } from "./flow-refusal-feedback";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
 import {
@@ -13,6 +12,7 @@ import {
   revisionSchema,
 } from "../catalogue/identifiers";
 import { safeFlowResultKindSchema } from "./flow-effects";
+import { flowIdSchema } from "../catalogue/identifiers";
 
 /**
  * The web-independent form request and continuation contract of an interactive flow.
