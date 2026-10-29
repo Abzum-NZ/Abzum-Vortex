@@ -12,7 +12,7 @@ type FormField = Readonly<{
 }>;
 
 /** Evaluated presentation reactions for one field or button placement. */
-export type FormPlacementReactions = Readonly<{
+type FormPlacementReactions = Readonly<{
   visible?: boolean;
   required?: boolean;
   readOnly?: boolean;
