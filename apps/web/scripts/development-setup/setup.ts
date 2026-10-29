@@ -37,7 +37,7 @@ import {
 } from "./development-authority";
 import { loadSetupState } from "./state";
 import { loadLocalWebEnvironment } from "../demo-setup/local-environment";
-import { createLocalEventDispatcher } from "../../app/_lib/local-event-dispatch";
+import { createInProcessEventDispatcher } from "../../app/_lib/event-dispatch";
 
 /**
  * The development-only setup provisions the disposable organisation, publishes and installs the
@@ -444,7 +444,9 @@ export const runDevelopmentSetup = async (
   await initializeLandingZoneDefault(installFacts(releases), landingZoneRelease.rootId);
   await initializeAppStoreAddress(installFacts(releases));
   // Index every record committed so far (the outbox holds each record's history) before the first sign-in.
-  log(`delivered ${await createLocalEventDispatcher().drain()} event occurrences to the consumers`);
+  log(
+    `delivered ${await createInProcessEventDispatcher().drain()} event occurrences to the consumers`,
+  );
   log("done. Sign in with the nominated account and open the organisation.");
   return { organizationId: provisioned.rootOrganizationId, stewardIdentityId };
 };
