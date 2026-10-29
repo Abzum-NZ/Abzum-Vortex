@@ -33,7 +33,7 @@ export const runFlowSegment = async (
 ): Promise<
   Readonly<{
     step: FlowRunStep;
-  refused: boolean;
+    refused: boolean;
     effects: Readonly<
       Record<
         string,
