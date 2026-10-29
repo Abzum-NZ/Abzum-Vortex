@@ -33,6 +33,7 @@ import {
   readApplicationSwitcherAction,
   readReleaseAdoptionAction,
   searchApplicationAction,
+  searchLauncherAction,
 } from "../frame-actions";
 import {
   ApplicationFrameStateProvider,
@@ -386,12 +387,23 @@ export function ApplicationFrame({
             locale={model.locale}
             timeZone={model.timeZone}
             applicationShellRuntime={applicationShellRuntime}
-            applicationSwitcherSource={() =>
-              readApplicationSwitcherAction(
-                application.tenantShortName,
-                application.organizationShortName,
-              )
-            }
+            applicationSwitcherSource={Object.assign(
+              () =>
+                readApplicationSwitcherAction(
+                  application.tenantShortName,
+                  application.organizationShortName,
+                ),
+              {
+                search: (expression: string, groupKey?: string, cursor?: string) =>
+                  searchLauncherAction(
+                    application.tenantShortName,
+                    application.organizationShortName,
+                    expression,
+                    groupKey,
+                    cursor,
+                  ),
+              },
+            )}
             applicationSearch={applicationSearch}
             applicationSearchPageSubject={applicationSearchPageSubject}
             projectedNavigation={navigation}

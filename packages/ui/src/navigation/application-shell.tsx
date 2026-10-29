@@ -39,6 +39,10 @@ import { Icon } from "../icons/icon";
 import { resolveVortexIconName } from "../icons/icon-names";
 import { AppearanceToggle } from "./appearance-toggle";
 import { ApplicationAccountMenu, useApplicationAccountActions } from "./account-actions";
+import {
+  ApplicationSearchControl,
+  type ApplicationSearchRuntime,
+} from "./application-search-control";
 
 export type ApplicationWebMcpRuntime = Readonly<{
   status: "registering" | "active" | "off" | "error";
@@ -54,7 +58,23 @@ export type ApplicationSwitcherData = Readonly<{
   applications: readonly Readonly<{ key: string; name: string; href: string; icon?: string }>[];
 }>;
 
-export type ApplicationSwitcherSource = () => Promise<ApplicationSwitcherData>;
+type LauncherGroup = Readonly<{
+  key: string;
+  title: string;
+  results: readonly Readonly<{ href: string; title: string; subtitle?: string }>[];
+  cursor?: string;
+}>;
+type LauncherSearchResult =
+  | Readonly<{ kind: "unavailable" }>
+  | Readonly<{ kind: "refused"; reason: string }>
+  | Readonly<{ kind: "available"; groups: readonly LauncherGroup[] }>;
+export type ApplicationSwitcherSource = (() => Promise<ApplicationSwitcherData>) & {
+  search?: (
+    expression: string,
+    groupKey?: string,
+    cursor?: string,
+  ) => Promise<LauncherSearchResult>;
+};
 
 /** The switcher's on-demand read travels outside Puck's copied metadata. */
 export const ApplicationSwitcherContext = createContext<ApplicationSwitcherSource | undefined>(
@@ -229,6 +249,9 @@ function ApplicationSwitcher({
   const actions = useApplicationAccountActions();
   const source = useContext(ApplicationSwitcherContext);
   const [switcher, setSwitcher] = useState<ApplicationSwitcherData>();
+  const [searchExpression, setSearchExpression] = useState("");
+  const [search, setSearch] = useState<LauncherSearchResult>({ kind: "available", groups: [] });
+  const searchToken = useRef(0);
   const requestToken = useRef(0);
   const intentStarted = useRef(false);
   const intentRead = useRef<Promise<void> | undefined>(undefined);
@@ -285,6 +308,9 @@ function ApplicationSwitcher({
           requestToken.current += 1;
           intentRead.current = undefined;
           setSwitcher(undefined);
+          searchToken.current += 1;
+          setSearchExpression("");
+          setSearch({ kind: "available", groups: [] });
         }
       }}
     >
@@ -302,6 +328,86 @@ function ApplicationSwitcher({
         <SwitcherButton icon="grid" label={applicationName} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-56" aria-busy={switcher === undefined}>
+        {source?.search === undefined ? null : (
+          <div className="w-96 max-w-[90vw] p-2" onKeyDown={(event) => event.stopPropagation()}>
+            <ApplicationSearchControl
+              placementId="application-switcher-search"
+              settings={{
+                placeholder: { kind: "text", value: "Search applications and records" },
+                submit_label: { kind: "text", value: "Search" },
+              }}
+              applicationSearch={
+                (search.kind === "available"
+                  ? {
+                      kind: "available",
+                      expression: searchExpression,
+                      results: [],
+                      more: false,
+                      groups: search.groups.map((group) => ({
+                        ...group,
+                        ...(group.cursor === undefined
+                          ? {}
+                          : {
+                              showMore: () => {
+                                const token = searchToken.current;
+                                void source.search!(searchExpression, group.key, group.cursor)
+                                  .then((next) => {
+                                    if (
+                                      token !== searchToken.current ||
+                                      next.kind !== "available" ||
+                                      next.groups[0] === undefined
+                                    )
+                                      return;
+                                    const addition = next.groups[0];
+                                    setSearch((previous) =>
+                                      previous.kind !== "available"
+                                        ? previous
+                                        : {
+                                            kind: "available",
+                                            groups: previous.groups.map((old) =>
+                                              old.key === group.key && old.cursor === group.cursor
+                                                ? {
+                                                    ...addition,
+                                                    results: [...old.results, ...addition.results],
+                                                  }
+                                                : old,
+                                            ),
+                                          },
+                                    );
+                                  })
+                                  .catch((error: unknown) =>
+                                    console.error(
+                                      "[application-shell] search continuation failed",
+                                      error,
+                                    ),
+                                  );
+                              },
+                            }),
+                      })),
+                    }
+                  : search.kind === "refused"
+                    ? { kind: "refused", expression: searchExpression, reason: search.reason }
+                    : { kind: "unavailable" }) as ApplicationSearchRuntime
+              }
+              onSearch={(expression) => {
+                const token = ++searchToken.current;
+                setSearchExpression(expression);
+                if (expression.trim() === "") {
+                  setSearch({ kind: "available", groups: [] });
+                  return;
+                }
+                void source.search!(expression)
+                  .then((result) => {
+                    if (token === searchToken.current) setSearch(result);
+                  })
+                  .catch((error: unknown) => {
+                    console.error("[application-shell] search failed", error);
+                    if (token === searchToken.current) setSearch({ kind: "unavailable" });
+                  });
+              }}
+            />
+          </div>
+        )}
         <DropdownMenuGroup>
           <DropdownMenuLabel>Applications</DropdownMenuLabel>
         </DropdownMenuGroup>
