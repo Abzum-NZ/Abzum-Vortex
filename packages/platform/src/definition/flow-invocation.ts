@@ -964,6 +964,13 @@ export async function invokeInstalledFlow(
   };
 
   const invocation = body.invocation;
+  let admittedProjection:
+    | Readonly<{
+        accessVersion: BoundHumanOrganizationRequest["scope"]["accessVersion"];
+        installationRevision: number;
+        page: Readonly<Record<string, unknown>>;
+      }>
+    | undefined;
   /**
    * Projects the addressed page for this person and requires the control on it, once and usable.
    * The client only learns that the invocation is refused; the cause is logged.
@@ -991,17 +998,34 @@ export async function invokeInstalledFlow(
         ...(body.pageRecordId === undefined ? {} : { subjectRecordId: body.pageRecordId }),
       },
     });
+    if (
+      bound !== undefined &&
+      admittedProjection !== undefined &&
+      (admittedProjection.accessVersion !== bound.scope.accessVersion ||
+        admittedProjection.installationRevision !== context.applicationReleaseRevision)
+    ) {
+      logFlowRefusal("BINDING_PROJECTION_CONTEXT_CHANGED");
+      return false;
+    }
     const projected =
       bound === undefined
         ? await capability.project(identity.session, runtimeContextSelection(context))
         : {
             kind: "available" as const,
-            value: await capability.projectInTransaction(bound.transaction, bound.scope),
+            value:
+              admittedProjection?.page ??
+              (await capability.projectInTransaction(bound.transaction, bound.scope)),
           };
     if (projected.kind !== "available" || projected.value === undefined) {
       logFlowRefusal(`BINDING_CONTROL_NOT_ON_PAGE page_projection_${projected.kind}`);
       return false;
     }
+    if (bound !== undefined && admittedProjection === undefined)
+      admittedProjection = {
+        accessVersion: bound.scope.accessVersion,
+        installationRevision: context.applicationReleaseRevision,
+        page: projected.value,
+      };
     const gate = requireProjectedPlacement(projected.value, controlId);
     if (gate.kind === "refused") {
       logFlowRefusal(`BINDING_CONTROL_NOT_ON_PAGE ${gate.reason}`);
