@@ -6,13 +6,11 @@ import { flowIdSchema } from "../catalogue/identifiers";
 import { jsonValueSchema } from "../catalogue/common";
 
 const installationRevisionSchema = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
-const releaseKeySchema = z.string().min(1).max(200);
 
 const runStartInvocationSchema = z
   .object({
     kind: z.literal("run_start"),
     installationRevision: installationRevisionSchema,
-    releaseKey: releaseKeySchema,
     bindingId: containedComponentIdSchema,
     flowId: flowIdSchema,
     clickId: z.uuid(),
@@ -24,7 +22,6 @@ const bindingInvocationSchema = z
   .object({
     kind: z.literal("binding"),
     installationRevision: installationRevisionSchema,
-    releaseKey: releaseKeySchema,
     bindingId: containedComponentIdSchema,
     flowId: flowIdSchema,
     /** A row form's source table; the gate revalidates it and the subject against that table. */
@@ -59,7 +56,6 @@ const continuationInvocationSchema = z
   .object({
     kind: z.literal("continuation"),
     installationRevision: installationRevisionSchema,
-    releaseKey: releaseKeySchema,
     flowId: flowIdSchema,
     /** The row form's source table, supplied by the page and revalidated by the gate. */
     sourceTablePlacementId: containedComponentIdSchema.optional(),

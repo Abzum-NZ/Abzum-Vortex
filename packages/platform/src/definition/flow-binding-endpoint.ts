@@ -149,7 +149,7 @@ type FlowBindingEndpointDependencies = Readonly<{
     release: FlowRelease,
     runId: string | undefined,
     installation: InstalledFlowBindings,
-  ) => Pick<FlowOrchestrator, "start" | "resume">;
+  ) => Pick<FlowOrchestrator, "invokeBinding" | "continueAnswer">;
   /**
    * THE SEAM for the form request's submit adapter (`adaptPrivateFormSubmit`): turns what a form
    * submission supplies, and the record the form was rendered for, into the caller inputs of a
@@ -213,7 +213,7 @@ export type FlowBindingEndpointResult =
       unavailable: readonly FlowUnavailableNotice[];
     }>
   /** Unknown, not installed, foreign, expired or not permitted: one neutral result. */
-  | Readonly<{ kind: "refused" }>;
+  | Readonly<{ kind: "refused"; reason?: "this step was already answered" }>;
 
 const refused: FlowBindingEndpointResult = Object.freeze({ kind: "refused" });
 
@@ -682,6 +682,8 @@ const toResult = (
       return { kind: "reload", installationRevision: context.installationRevision };
     case "rate_limited":
       return response;
+    case "already_answered":
+      return { kind: "refused", reason: "this step was already answered" };
     case "finished":
       return finishedResult(response, context);
     case "suspended": {
@@ -762,9 +764,11 @@ const continuationResult = (
         unavailable: outcome.unavailable,
       };
     default:
-      return outcome.reason === "stale_installation"
-        ? { kind: "reload", installationRevision }
-        : refused;
+      return outcome.reason === "already_answered"
+        ? { kind: "refused", reason: "this step was already answered" }
+        : outcome.reason === "stale_installation"
+          ? { kind: "reload", installationRevision }
+          : refused;
   }
 };
 
@@ -806,9 +810,6 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           );
         if (request.installationRevision !== installation.installationRevision)
           return { kind: "reload", installationRevision: installation.installationRevision };
-        if (request.releaseKey !== installation.releaseKey)
-          return refuse("FLOW_INVOKE_RELEASE_MISMATCH");
-
         if (request.kind === "run_start") {
           const matches = installation.bindings.filter((entry) =>
             sameId(entry.bindingId, request.bindingId),
@@ -871,7 +872,7 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           };
           const response = await dependencies
             .orchestratorFor(release, undefined, installation)
-            .resume(
+            .continueAnswer(
               {
                 session: session.data,
                 selection: selection.data,
@@ -933,17 +934,19 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           installation.installationRevision,
           request.clickId,
         );
-        const response = await dependencies.orchestratorFor(release, runId, installation).start(
-          {
-            session: session.data,
-            selection: selection.data,
-            bindingId: binding.bindingId,
-            gestureId: request.clickId,
-            binding: { flowId: binding.flow.flowId, inputs },
-            ...(request.subject === undefined ? {} : { subject: request.subject }),
-          },
-          { releaseKey: installation.releaseKey, entrySegments: request.entrySegments },
-        );
+        const response = await dependencies
+          .orchestratorFor(release, runId, installation)
+          .invokeBinding(
+            {
+              session: session.data,
+              selection: selection.data,
+              bindingId: binding.bindingId,
+              gestureId: request.clickId,
+              binding: { flowId: binding.flow.flowId, inputs },
+              ...(request.subject === undefined ? {} : { subject: request.subject }),
+            },
+            { releaseKey: installation.releaseKey, entrySegments: request.entrySegments },
+          );
         return toResult(response, {
           applicationRootId: installation.applicationRootId,
           installationRevision: installation.installationRevision,

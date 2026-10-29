@@ -61,7 +61,12 @@ import {
 } from "./flow-selected-record-context";
 import { flowPlansOf } from "../workflows/flow-plan";
 import { openFlowAdmissionRun } from "../workflows/start";
-import { admitFlowContinuation, admitFlowSegment, type AdmissionHost } from "./flow-admission";
+import {
+  admitFlowContinuation,
+  admitFlowPageStart,
+  admitFlowSegment,
+  type AdmissionHost,
+} from "./flow-admission";
 import { admitPageGesture } from "./flow-admission-page";
 import { admitRowForm } from "./flow-row-form-admission";
 import { sealFlowCarriedValues } from "../workflows/flow-carried-values";
@@ -485,10 +490,12 @@ export async function invokeInstalledFlow(
       portsFor: dependenciesFor,
     };
     return {
+      continuationKey: dependencies.continuationKey,
       admitSegment: (run, state, segment, execute) =>
         admitFlowSegment(admissionHost, installation, run, state, segment, execute),
       admitContinuation: (run, state, execute, openReplay) =>
         admitFlowContinuation(admissionHost, installation, run, state, execute, openReplay),
+      admitPageStart: (run, state) => admitFlowPageStart(admissionHost, installation, run, state),
       executor: executorFor(boundRequest),
       records:
         boundRequest === undefined
@@ -965,10 +972,6 @@ export async function invokeInstalledFlow(
           logFlowRefusal("FORM_CONTINUATION_FOREIGN_APPLICATION");
           return { kind: "unavailable" };
         }
-        if (installation.installationReleaseRevision !== installed.installationRevision) {
-          logFlowRefusal("FORM_CONTINUATION_STALE_INSTALLATION");
-          return { kind: "stale" };
-        }
         const flow = installed.flows.get(flowId);
         if (flow === undefined) {
           logFlowRefusal("FORM_CONTINUATION_FLOW_NOT_INSTALLED");
@@ -991,10 +994,8 @@ export async function invokeInstalledFlow(
     const trustedFormId = request.target.formId;
     if (
       trustedFormId === undefined ||
-      request.target.releaseKey !== installed.releaseKey ||
       request.target.installation.applicationRootId.toLowerCase() !==
         installed.applicationRootId.toLowerCase() ||
-      request.target.installation.installationReleaseRevision !== installed.installationRevision ||
       !declaresPausedNode(installed.flows.get(request.target.flowId), {
         nodeId: request.target.nodeId,
         formId: trustedFormId,
@@ -1402,7 +1403,6 @@ export async function invokeInstalledFlow(
         String(model.pageId).toLowerCase() !== guided.pageId.toLowerCase() ||
         draft.computedStepId !== summary.id ||
         model.invocation.installationRevision !== body.invocation.installationRevision ||
-        model.invocation.releaseKey !== body.invocation.releaseKey ||
         draft.draftId.toLowerCase() !== reference.draftId.toLowerCase() ||
         draft.revision !== reference.revision ||
         draft.flowId.toLowerCase() !== guided.flowId.toLowerCase() ||

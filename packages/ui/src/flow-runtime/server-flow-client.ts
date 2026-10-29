@@ -26,7 +26,6 @@ export type FlowApplicationAddress = Readonly<{
 /** What the surface was rendered from, so the server can refuse a stale or foreign request. */
 export type FlowInstallationContext = Readonly<{
   installationRevision: number;
-  releaseKey: string;
 }>;
 
 /**
@@ -65,7 +64,7 @@ export type ServerFlowResponse =
       target?: FormContinuationTarget;
       receipt?: FormContinuationReceipt;
     }>
-  | Readonly<{ kind: "refused" }>
+  | Readonly<{ kind: "refused"; reason?: "this step was already answered" }>
   | Readonly<{ kind: "unavailable" }>;
 
 export type FlowInvokeClient = Readonly<{
@@ -157,7 +156,9 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         ? { kind: "run_opened", carriedValues: candidate.carriedValues }
         : invalidServerResponse();
     case "refused":
-      return refused;
+      return candidate.reason === "this step was already answered"
+        ? { kind: "refused", reason: candidate.reason }
+        : refused;
     case "unavailable":
       return unavailable;
     case "reload":
@@ -308,7 +309,6 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
   };
   const context = {
     installationRevision: options.installation.installationRevision,
-    releaseKey: options.installation.releaseKey,
   };
   return Object.freeze({
     openRun: (binding, clickId, signal, sourceTablePlacementId) =>

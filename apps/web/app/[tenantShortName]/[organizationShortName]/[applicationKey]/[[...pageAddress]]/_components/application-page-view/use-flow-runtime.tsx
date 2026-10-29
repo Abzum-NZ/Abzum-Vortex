@@ -123,7 +123,6 @@ export function useFlowRuntime({
       },
       installation: {
         installationRevision: application.installationRevision,
-        releaseKey: application.releaseKey,
       },
       pageInputs: () => {
         const search = new URLSearchParams(window.location.search);

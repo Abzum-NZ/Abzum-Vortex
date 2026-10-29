@@ -45,15 +45,6 @@ type FlowEffectClaim =
 
 const expiryRowSchema = z.object({ expires_at: z.union([z.date(), z.string()]) });
 const consumeRowSchema = z.object({ result: z.unknown() });
-const consumeResultSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("unavailable") }),
-  z.object({
-    kind: z.literal("available"),
-    runId: z.uuid(),
-    state: z.record(z.string(), z.unknown()),
-    elapsedMilliseconds: z.number().int().min(0),
-  }),
-]);
 const peekResultSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("unavailable") }),
   z.object({
@@ -115,39 +106,6 @@ export const issueFlowContinuation = async (
   const expiresAt =
     row.data.expires_at instanceof Date ? row.data.expires_at.toISOString() : row.data.expires_at;
   return { expiresAt };
-};
-
-/**
- * Returns the stored run once. Unknown, expired, already used, foreign and wrong-release tokens
- * are all `undefined`.
- */
-export const consumeFlowContinuation = async (
-  input: FlowContinuationBinding & Readonly<{ tokenHash: string }>,
-): Promise<
-  Readonly<{ runId: string; state: unknown; elapsedMilliseconds: number }> | undefined
-> => {
-  const rows = await withRuntimeTransaction(
-    (transaction) =>
-      transaction.query`
-      select vortex_platform.consume_flow_continuation(
-        ${input.tokenHash}::text,
-        ${input.organizationId}::uuid,
-        ${input.applicationRootId}::uuid,
-        ${input.identityId}::uuid,
-        ${input.flowId}::uuid,
-        ${input.releaseKey}::text
-      ) as result
-    `,
-  );
-  const row = consumeRowSchema.safeParse(rows[0]);
-  if (rows.length !== 1 || !row.success) return undefined;
-  const result = consumeResultSchema.safeParse(row.data.result);
-  if (!result.success || result.data.kind !== "available") return undefined;
-  return {
-    runId: result.data.runId,
-    state: result.data.state,
-    elapsedMilliseconds: result.data.elapsedMilliseconds,
-  };
 };
 
 /** Reads a bound continuation for path selection without spending it on a refused admission. */

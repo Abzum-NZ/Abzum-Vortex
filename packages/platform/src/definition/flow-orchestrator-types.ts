@@ -37,6 +37,7 @@ import type { FlowWarningNotice } from "../workflows/form-continuation-contracts
 import { formContinuationAnswerSchema } from "../workflows/form-continuation-answer";
 import type { RecordSaveServiceResult } from "../records/save-record";
 import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
+import type { QueryContinuationKey } from "../queries/continuation-token";
 import type { ActionFlowRunner } from "../rules/action-flow-run";
 import type { BeforeSaveRuleWarning } from "../rules/before-save-flow-run";
 import type {
@@ -185,6 +186,7 @@ type NamedActionRecordPort = Readonly<{
 export type NamedActionExecutionResult = Awaited<ReturnType<NamedActionRecordPort["execute"]>>;
 
 export type FlowOrchestratorDependencies = Readonly<{
+  continuationKey: QueryContinuationKey;
   /** Admits exactly one planned server segment and supplies its transaction-bound ports. */
   admitSegment: (
     run: Run,
@@ -202,6 +204,7 @@ export type FlowOrchestratorDependencies = Readonly<{
     execute: () => Promise<FlowContinuationExecution<FlowOrchestratorResponse>>,
     openReplay: (payload: string, expiresAt: string) => FlowOrchestratorResponse,
   ) => Promise<StartFlowResult<FlowOrchestratorResponse>>;
+  admitPageStart: (run: Run, state: FlowRunState) => Promise<StartFlowResult<null>>;
   executor: Pick<ProtectedOperationExecutor, "execute">;
   /** Runs named-action flows; without it an action is unavailable. */
   actionRecords?: NamedActionRecordPort;
@@ -358,6 +361,7 @@ export type FlowOrchestratorResponse =
     }>
   | Readonly<{ kind: "reload" }>
   | Readonly<{ kind: "rate_limited"; retryAfterSeconds: number }>
+  | Readonly<{ kind: "already_answered" }>
   | Readonly<{ kind: "refused" }>;
 
 type RunAuthority = Readonly<{
@@ -388,6 +392,7 @@ export type Run = {
   }>;
   /** A peeked answer is spent only in the first transaction that admits its next segment. */
   pendingContinuation?: Readonly<{ tokenHash: string; releaseKey: string; answerHash: string }>;
+  continuationSegments?: Readonly<Record<string, string>>;
   release: FlowRelease;
   library: FlowLibrary;
   /** Server milliseconds already spent by earlier segments of this run. */

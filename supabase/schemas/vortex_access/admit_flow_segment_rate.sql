@@ -55,7 +55,7 @@ begin
     v_refusal_id := pg_catalog.gen_random_uuid();
     perform vortex_access.record_metering_event(
       v_tenant_id, v_organization_id, 'local', v_refusal_id, 'flow.rate_limit_refused',
-      1, 'segment', 'web', pg_catalog.jsonb_build_object('kind', v_kind), v_evaluated_at,
+      1, 'segment', 'web', pg_catalog.jsonb_build_object('kind', v_kind, 'channel', vortex_platform.channel()), v_evaluated_at,
       null, 'flow-rate:' || v_refusal_id::text, v_correlation_id, null, null
     );
     return query select false,

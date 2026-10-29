@@ -234,7 +234,8 @@ export const createFlowInvocationHandler =
           return page.kind === "available" ? page.model : undefined;
         },
       });
-      if (result.kind === "refused") return refusedResponse();
+      if (result.kind === "refused")
+        return result.reason === undefined ? refusedResponse() : privateResponse(result, 409);
       if (result.kind === "rate_limited") {
         const response = privateResponse({ kind: "refused", code: "flow_rate_limited" }, 429);
         response.headers.set("Retry-After", String(result.retryAfterSeconds));

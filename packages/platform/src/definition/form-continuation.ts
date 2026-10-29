@@ -48,7 +48,7 @@ type FormContinuationInstallationResolver = (
 ) => Promise<FormContinuationInstalledRelease>;
 
 type FormContinuationServiceDependencies = Readonly<{
-  orchestrator: Pick<FlowOrchestrator, "resume">;
+  orchestrator: Pick<FlowOrchestrator, "continueAnswer">;
   /**
    * Resolves, from the trusted active installation, the exact release of the flow set for the
    * application revision the caller names. It answers `current` only when that installation is the
@@ -101,6 +101,7 @@ export const createFormContinuationService = (
     }>,
   ): FormContinuationOutcome => {
     if (response.kind === "refused") return refuse("not_resumable");
+    if (response.kind === "already_answered") return refuse("already_answered");
     if (response.kind === "reload" || response.kind === "rate_limited") return response;
 
     if (response.kind === "suspended") {
@@ -177,10 +178,8 @@ export const createFormContinuationService = (
         });
         if (installed.kind === "stale") return refuse("stale_installation");
         if (installed.kind !== "current") return refuse("unavailable");
-        if (installed.releaseKey !== target.releaseKey) return refuse("stale_installation");
-
         const answer = request.answer;
-        const response = await dependencies.orchestrator.resume(
+        const response = await dependencies.orchestrator.continueAnswer(
           {
             session,
             selection,

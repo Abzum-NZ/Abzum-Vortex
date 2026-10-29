@@ -144,6 +144,7 @@ export const formContinuationRefusalReasonSchema = z.enum([
    * or receipt no longer matches. One neutral reason, so a replay or forgery learns nothing.
    */
   "not_resumable",
+  "already_answered",
 ]);
 
 /**

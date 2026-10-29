@@ -32,7 +32,7 @@ export type AdmissionHost = Readonly<{
     release: FlowRelease,
     runId: string,
     installation: InstalledFlowBindings,
-    bound: BoundHumanOrganizationRequest,
+    bound?: BoundHumanOrganizationRequest,
   ) => FlowOrchestratorDependencies;
 }>;
 
@@ -104,7 +104,7 @@ const prepareAdmission = (
           .authorizeInvocation?.(run.authority.session, selection, flow)) === true
       );
     },
-    ports: (bound: BoundHumanOrganizationRequest) => {
+    ports: (bound?: BoundHumanOrganizationRequest) => {
       if (currentRelease === undefined || currentInstallation === undefined)
         throw new Error("FLOW_ADMISSION_CONTEXT_UNAVAILABLE");
       return host.portsFor(currentRelease, state.runId, currentInstallation, bound);
@@ -156,6 +156,40 @@ export const admitFlowContinuation = async (
   );
 };
 
+/** Admits a start that reaches a page intent or completion before a server segment. */
+export const admitFlowPageStart = async (
+  host: AdmissionHost,
+  installation: InstalledFlowBindings,
+  run: Run,
+  state: FlowRunState,
+) => {
+  const admission = prepareAdmission(host, installation, run, state);
+  const plan = run.release.plans.get(run.flowId);
+  if (admission === undefined || plan === undefined || host.invocation.kind !== "binding")
+    return { kind: "refused" } as const;
+  return startFlow(
+    {
+      requests: host.requests,
+      authorizeBinding: admission.authorizeBinding,
+      currentPlan: admission.currentPlan,
+      authorizeInvocation: admission.authorizeInvocation,
+      execute: async () => ({ value: null, outcome: "succeeded", effects: {}, warnings: {} }),
+    },
+    {
+      session: run.authority.session,
+      selection: run.authority.selection,
+      plan,
+      expected: null,
+      entrySegments: host.invocation.entrySegments,
+      gestureId: run.gestureId,
+      runId: state.runId,
+      bindingId: run.bindingId,
+      iteration: iterationKey(state),
+      channel: "page",
+    },
+  );
+};
+
 /** Resolves the current binding and plan inside the transaction admitting this segment. */
 export const admitFlowSegment = async (
   host: AdmissionHost,
@@ -178,6 +212,11 @@ export const admitFlowSegment = async (
       : undefined;
   const plan = run.release.plans.get(run.flowId);
   if (plan === undefined) return { kind: "refused" };
+  const expectedFingerprint =
+    run.pendingContinuation === undefined
+      ? segment.fingerprint
+      : run.continuationSegments?.[segment.id];
+  if (expectedFingerprint === undefined) return { kind: "reload" };
   return startFlow(
     {
       requests: host.requests,
@@ -187,12 +226,13 @@ export const admitFlowSegment = async (
       execute: async (bound, _part, replay) => {
         return execute(admission.ports(bound), replay);
       },
+      executeWorkflow: async (replay) => execute(admission.ports(), replay),
     },
     {
       session: run.authority.session,
       selection,
       plan,
-      expected: { segmentId: segment.id, fingerprint: segment.fingerprint },
+      expected: { segmentId: segment.id, fingerprint: expectedFingerprint },
       ...(host.invocation.kind === "binding"
         ? { entrySegments: host.invocation.entrySegments }
         : {}),

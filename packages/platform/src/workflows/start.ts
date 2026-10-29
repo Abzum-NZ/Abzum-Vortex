@@ -84,6 +84,12 @@ const commandIdOf = (
 
 type SegmentIdentity = Readonly<{ segmentId: string; fingerprint: string }> | null;
 type SegmentContext = BoundHumanOrganizationRequest;
+type WorkflowPending = Readonly<{
+  kind: "workflow_pending";
+  commandId: string;
+  runId: string;
+  replay?: FlowSegmentReceipt;
+}>;
 export type FlowSegmentReceipt = Readonly<{
   effects: FlowSegmentReplay;
   warnings: Readonly<Record<string, readonly z.infer<typeof storedFlowWarningSchema>[]>>;
@@ -108,6 +114,7 @@ export type StartFlowResult<Value> =
   | Readonly<{ kind: "completed"; value: Value; runId: string }>
   | Readonly<{ kind: "reload" }>
   | Readonly<{ kind: "rate_limited"; retryAfterSeconds: number }>
+  | Readonly<{ kind: "already_answered" }>
   | Readonly<{ kind: "refused" }>;
 
 export type FlowContinuationExecution<Value> =
@@ -145,6 +152,8 @@ type StartFlowDependencies<Value> = Readonly<{
     replay: FlowSegmentReceipt | undefined,
     runId: string,
   ) => Promise<SegmentExecution<Value>>;
+  /** Multi-transaction workflows run only after the admitted pending receipt commits. */
+  executeWorkflow?: (replay: FlowSegmentReceipt | undefined) => Promise<SegmentExecution<Value>>;
 }>;
 
 /** Opens completion evidence only for a flow that can reach another server segment first. */
@@ -261,7 +270,7 @@ export const startFlow = async <Value>(
     transaction: SegmentContext["transaction"],
     scope: SegmentContext["scope"],
     issuedAt: string,
-  ): Promise<StartFlowResult<Value>> => {
+  ): Promise<StartFlowResult<Value> | WorkflowPending> => {
     const context: SegmentContext = {
       transaction,
       scope,
@@ -333,8 +342,7 @@ export const startFlow = async <Value>(
         const retryAfterSeconds = await rateLimit("read");
         if (retryAfterSeconds !== undefined) return { kind: "rate_limited", retryAfterSeconds };
         const consumed = await consumeContinuation(suppliedRunId.data, commandId);
-        if (consumed.status === "already_answered")
-          console.error("[flows] this step was already answered");
+        if (consumed.status === "already_answered") return { kind: "already_answered" };
         if (consumed.status !== "admitted" && consumed.status !== "replay")
           return { kind: "refused" };
         if (consumed.status === "replay" && consumed.payload != null) {
@@ -360,7 +368,11 @@ export const startFlow = async <Value>(
         };
       }
       if (request.continuationPlan !== undefined) return { kind: "refused" };
-      if (currentPlan.segments.some((part) => part.kind === "server")) return { kind: "reload" };
+      if (
+        request.entrySegments === undefined &&
+        currentPlan.segments.some((part) => part.kind === "server")
+      )
+        return { kind: "reload" };
       return {
         kind: "completed",
         value: (await dependencies.execute(context, null, undefined, suppliedRunId.data!)).value,
@@ -386,7 +398,8 @@ export const startFlow = async <Value>(
       (currentServerSegments.length === 1 && hasCompletion) !== completionOnly
     )
       return { kind: "reload" };
-    if (segment.multiTransaction) return { kind: "refused" };
+    if (segment.multiTransaction && dependencies.executeWorkflow === undefined)
+      return { kind: "refused" };
     const commandId = commandIdOf(
       request.session,
       request.selection,
@@ -450,6 +463,7 @@ export const startFlow = async <Value>(
         .parse(updated[0]?.result);
     };
     let replay: FlowSegmentReceipt | undefined;
+    let workflowPending = false;
     if (segment.changes) {
       await transaction.query`select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(${`${scope.organizationId}:flow_segment:${commandId}`}, 818))`;
       const rows =
@@ -472,16 +486,30 @@ export const startFlow = async <Value>(
           ),
           warnings: found.result.warnings,
         };
+      else if (found.status === "pending" && segment.multiTransaction) workflowPending = true;
       else if (found.status !== "none") return { kind: "refused" };
     }
-    if (replay === undefined) {
+    if (replay === undefined && !workflowPending) {
       const retryAfterSeconds = await rateLimit(segment.changes ? "change" : "read");
       if (retryAfterSeconds !== undefined) return { kind: "rate_limited", retryAfterSeconds };
     }
     const consumed = await consumeContinuation(runId, commandId);
-    if (consumed.status === "already_answered")
-      console.error("[flows] this step was already answered");
+    if (consumed.status === "already_answered") return { kind: "already_answered" };
     if (consumed.status !== "admitted" && consumed.status !== "replay") return { kind: "refused" };
+    if (segment.multiTransaction) {
+      if (!workflowPending && replay === undefined) {
+        const rows =
+          await transaction.query`select vortex_record.flow_segment_receipt(${commandId}::uuid, false) as result`;
+        if (claimSchema.parse(rows[0]?.result).status !== "claimed")
+          throw new Error("FLOW_SEGMENT_CLAIM_INVALID");
+      }
+      return {
+        kind: "workflow_pending",
+        commandId,
+        runId,
+        ...(replay === undefined ? {} : { replay }),
+      };
+    }
     if (!segment.changes || replay !== undefined) {
       let executed: SegmentExecution<Value>;
       try {
@@ -569,7 +597,37 @@ export const startFlow = async <Value>(
           : mode === "access_change"
             ? await requests.runAccessChange(request.session, request.selection, operation)
             : await requests.run(request.session, request.selection, operation);
-      return result.kind === "available" ? result.value : { kind: "refused" };
+      if (result.kind !== "available") return { kind: "refused" };
+      if (result.value.kind !== "workflow_pending") return result.value;
+      const pending = result.value;
+      const executed = await dependencies.executeWorkflow!(pending.replay);
+      if (executed.outcome === "succeeded" && pending.replay === undefined) {
+        const completion = await requests.run(request.session, request.selection, async (transaction) => {
+          await transaction.query`select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(${`${request.selection.organizationId}:flow_segment:${pending.commandId}`}, 818))`;
+          const rows = await transaction.query`select vortex_record.flow_segment_receipt(${pending.commandId}::uuid, true) as result`;
+          const claim = claimSchema.parse(rows[0]?.result);
+          if (claim.status === "completed") return true;
+          if (claim.status !== "pending") return false;
+          const safeEffects: Record<string, FlowSegmentReplay[string]> = {};
+          for (const [key, effect] of Object.entries(executed.effects)) {
+            const [taskPath, iteration] = z
+              .tuple([z.string().min(1).max(1000), z.string().min(1).max(200)])
+              .parse(JSON.parse(key));
+            if (effect.replay !== null && effect.replay.outcome !== effect.outcome)
+              throw new Error("FLOW_SEGMENT_EFFECT_OUTCOME_MISMATCH");
+            safeEffects[key] = effect.replay;
+            await transaction.query`select vortex_platform.record_flow_segment_effect(${pending.runId}::uuid, ${taskPath}::text, ${iteration}::text, ${effect.outcome}::text, ${JSON.stringify(effect.replay?.outputs ?? {})}::text::jsonb)`;
+          }
+          const warnings = Object.fromEntries(
+            Object.entries(executed.warnings).map(([key, entries]) => [key, entries.map(storeFlowWarning)]),
+          );
+          const receipt = receiptSchema.parse({ effects: safeEffects, warnings });
+          await transaction.query`select vortex_record.complete_flow_segment_receipt(${pending.commandId}::uuid, ${JSON.stringify(receipt)}::text::jsonb)`;
+          return true;
+        });
+        if (completion.kind !== "available" || !completion.value) return { kind: "refused" };
+      }
+      return { kind: "completed", value: executed.value, runId: pending.runId };
     } catch (error) {
       if (!(error instanceof HumanOrganizationRequestRestart)) throw error;
     }
