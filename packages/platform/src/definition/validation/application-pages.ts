@@ -357,12 +357,23 @@ export function applicationPageRules(scope: ApplicationScope): void {
         .filter((binding) => placementById.has(String(binding.controlId).toLowerCase()))
         .map((binding) => String(object(binding.flow).flowId)),
     );
-    for (const flow of array(content.flows)) {
-      if (!pageFlowIds.has(String(flow.id))) continue;
+    const flowsById = new Map(array(content.flows).map((flow) => [String(flow.id), flow]));
+    const pendingFlows = [...pageFlowIds];
+    const visitedFlows = new Set<string>();
+    while (pendingFlows.length > 0) {
+      const flowId = pendingFlows.pop()!;
+      if (visitedFlows.has(flowId)) continue;
+      visitedFlows.add(flowId);
+      const flow = flowsById.get(flowId);
+      if (flow === undefined) continue;
       walkValues(flow, (step) => {
+        if (step.type === "run_flow" && typeof step.flowId === "string")
+          pendingFlows.push(step.flowId);
         if (step.type !== "interface.show_message" && step.type !== "interface.clear_message")
           return;
         const properties = object(step.properties ?? {});
+        const actionFlow = object(object(properties.action_flow ?? {}).literal ?? {}).value;
+        if (typeof actionFlow === "string") pendingFlows.push(actionFlow);
         const target = object(object(properties.target ?? {}).literal ?? {}).value;
         if (target !== "inline" && target !== "slot") return;
         const component = object(object(properties.component ?? {}).literal ?? {}).value;
@@ -521,12 +532,26 @@ export function applicationPageRules(scope: ApplicationScope): void {
       ]) {
         let stored = false;
         let live = false;
+        let parameter = false;
         walkValues(condition, (entry) => {
           if (entry.source === "field") stored = true;
           if (entry.source === "page" || entry.source === "form") live = true;
+          if (entry.source === "parameter") parameter = true;
         });
+        if (parameter)
+          failures.push(
+            placementFailure(
+              output,
+              "vortex.definition.application_block_settings",
+              "invalid_value",
+              undefined,
+              undefined,
+              `Placement ${alias ?? String(placement.props.id)} on page ${String(page.key)} cannot use a parameter in a condition`,
+            ),
+          );
         if (
           live &&
+          !parameter &&
           (stored ||
             !typedConditionTypesValid(condition, new Map(), new Map(), "canonical", {
               values: pageValues,
@@ -572,12 +597,15 @@ export function applicationPageRules(scope: ApplicationScope): void {
           const source = object(object(sourceValue).properties);
           const kind = object(source.source).value;
           const format = object(source.format).value;
-          if (
-            blockKey === "platform.display.summary_values" &&
-            kind === "projection" &&
-            source.projection_key === undefined
-          )
-            invalid = true;
+          if (blockKey === "platform.display.summary_values" && kind === "projection") {
+            const projectionKey =
+              source.projection_key === undefined ? undefined : object(source.projection_key).value;
+            if (
+              projectionKey === undefined ||
+              !array(bound?.aggregates ?? []).some((aggregate) => aggregate.alias === projectionKey)
+            )
+              invalid = true;
+          }
           if (
             format === "money" &&
             (source.currency === undefined ||
