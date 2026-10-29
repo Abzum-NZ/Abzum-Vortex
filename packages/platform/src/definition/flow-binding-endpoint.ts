@@ -133,6 +133,14 @@ type FlowBindingEndpointDependencies = Readonly<{
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
   ) => Promise<InstalledFlowBindings | undefined>;
+  openRun?: (
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    binding: ComponentFlowBinding,
+    installation: InstalledFlowBindings,
+  ) => Promise<
+    Readonly<{ kind: "run_opened"; carriedValues: string }> | Readonly<{ kind: "refused" }>
+  >;
   /**
    * The orchestrator bound to exactly this release. `runId` is set for a binding start so a
    * repeated click reuses one run identity; it is absent for a continuation.
@@ -169,6 +177,7 @@ type FlowBindingEndpointDependencies = Readonly<{
 type SafeIntents = Extract<FlowOrchestratorResponse, { intents: unknown }>["intents"];
 
 export type FlowBindingEndpointResult =
+  | Readonly<{ kind: "run_opened"; carriedValues: string }>
   /** The request named a stale installation revision: reload the page, nothing was run. */
   | Readonly<{ kind: "reload"; installationRevision: number }>
   | Readonly<{ kind: "rate_limited"; retryAfterSeconds: number }>
@@ -771,7 +780,10 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
         if (!selection.success) return refuse("FLOW_INVOKE_SELECTION_INVALID", selection.error);
         if (!invocation.success) return refuse("FLOW_INVOKE_REQUEST_INVALID", invocation.error);
         const request = invocation.data;
-        if (!withinSupplied(request.kind === "binding" ? request.callerInputs : request.answer))
+        if (
+          request.kind !== "run_start" &&
+          !withinSupplied(request.kind === "binding" ? request.callerInputs : request.answer)
+        )
           return refuse("FLOW_INVOKE_INPUT_TOO_LARGE");
 
         const installation = await dependencies.readInstallation(session.data, selection.data);
@@ -788,6 +800,17 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           return { kind: "reload", installationRevision: installation.installationRevision };
         if (request.releaseKey !== installation.releaseKey)
           return refuse("FLOW_INVOKE_RELEASE_MISMATCH");
+
+        if (request.kind === "run_start") {
+          const matches = installation.bindings.filter((entry) =>
+            sameId(entry.bindingId, request.bindingId),
+          );
+          if (matches.length !== 1 || !sameId(matches[0]!.flow.flowId, request.flowId))
+            return refuse("FLOW_INVOKE_BINDING_FLOW_MISMATCH");
+          return dependencies.openRun === undefined
+            ? refuse("FLOW_INVOKE_RUN_START_UNAVAILABLE")
+            : await dependencies.openRun(session.data, selection.data, matches[0]!, installation);
+        }
 
         const release: FlowRelease = {
           releaseKey: installation.releaseKey,

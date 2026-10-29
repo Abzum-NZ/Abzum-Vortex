@@ -75,6 +75,8 @@ export async function driveServerFlow(
     for (let round = 0; round < maximumRounds; round += 1) {
       if (signal?.aborted) return abandoned();
       switch (response.kind) {
+        case "run_opened":
+          return refuseInvalidServerFlowState("unexpected_run_start");
         case "reload":
         case "refused":
         case "unavailable":

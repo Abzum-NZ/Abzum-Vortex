@@ -42,6 +42,7 @@ export type FlowResumeEvidence = Readonly<{
 }>;
 
 export type ServerFlowResponse =
+  | Readonly<{ kind: "run_opened"; carriedValues: string }>
   | Readonly<{ kind: "reload"; installationRevision: number }>
   | Readonly<{
       kind: "result";
@@ -68,6 +69,12 @@ export type ServerFlowResponse =
   | Readonly<{ kind: "unavailable" }>;
 
 export type FlowInvokeClient = Readonly<{
+  openRun: (
+    binding: Pick<PlacementFlowBinding, "bindingId" | "flowId">,
+    clickId: string,
+    signal?: AbortSignal,
+    sourceTablePlacementId?: string,
+  ) => Promise<ServerFlowResponse>;
   startBinding: (
     binding: Pick<PlacementFlowBinding, "bindingId" | "flowId" | "segment">,
     callerInputs: Readonly<Record<string, unknown>>,
@@ -141,6 +148,10 @@ const isCarriedValues = (candidate: unknown): candidate is string | undefined =>
 export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse => {
   if (!isRecord(candidate)) return invalidServerResponse();
   switch (candidate.kind) {
+    case "run_opened":
+      return isCarriedValues(candidate.carriedValues) && candidate.carriedValues !== undefined
+        ? { kind: "run_opened", carriedValues: candidate.carriedValues }
+        : invalidServerResponse();
     case "refused":
       return refused;
     case "unavailable":
@@ -296,6 +307,18 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
     releaseKey: options.installation.releaseKey,
   };
   return Object.freeze({
+    openRun: (binding, clickId, signal, sourceTablePlacementId) =>
+      send(
+        {
+          kind: "run_start",
+          ...context,
+          bindingId: binding.bindingId,
+          flowId: binding.flowId,
+          clickId,
+          ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
+        },
+        signal,
+      ),
     startBinding: (
       binding,
       callerInputs,

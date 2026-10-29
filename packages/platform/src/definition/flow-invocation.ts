@@ -60,6 +60,8 @@ import {
   installedSelectedRecordReadContext,
 } from "./flow-selected-record-context";
 import { flowPlansOf } from "../workflows/flow-plan";
+import { openFlowAdmissionRun } from "../workflows/start";
+import { sealFlowCarriedValues } from "../workflows/flow-carried-values";
 import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
 import { installedNamedActionDescriptors, installedNamedActions } from "./installed-named-actions";
@@ -969,6 +971,7 @@ export async function invokeInstalledFlow(
   const gateBindingToAddressedPage = async (
     context: InstalledRuntimeContext,
     controlId: string,
+    bound?: BoundHumanOrganizationRequest,
   ): Promise<boolean> => {
     const page = context.releaseSet.application.content.pages.find(
       (candidate) => candidate.key === body.pageKey,
@@ -977,7 +980,7 @@ export async function invokeInstalledFlow(
       logFlowRefusal("BINDING_CONTROL_NOT_ON_PAGE page_not_installed");
       return false;
     }
-    const projected = await createStoredPageCapabilityService({
+    const capability = createStoredPageCapabilityService({
       ...requestDependencies,
       context,
       permissions: dependencies.releaseCatalogue.permissions,
@@ -987,7 +990,14 @@ export async function invokeInstalledFlow(
         pageId: String(page.pageId),
         ...(body.pageRecordId === undefined ? {} : { subjectRecordId: body.pageRecordId }),
       },
-    }).project(identity.session, runtimeContextSelection(context));
+    });
+    const projected =
+      bound === undefined
+        ? await capability.project(identity.session, runtimeContextSelection(context))
+        : {
+            kind: "available" as const,
+            value: await capability.projectInTransaction(bound.transaction, bound.scope),
+          };
     if (projected.kind !== "available" || projected.value === undefined) {
       logFlowRefusal(`BINDING_CONTROL_NOT_ON_PAGE page_projection_${projected.kind}`);
       return false;
@@ -1009,7 +1019,7 @@ export async function invokeInstalledFlow(
   // Use the same installed snapshot for this gate and the endpoint. A crafted action on a
   // guided page must not start a flow before its final form submit is confirmed.
   const bindingContext =
-    invocation.kind === "binding"
+    invocation.kind !== "continuation"
       ? await readInstalledContext(identity.session, selection)
       : undefined;
   const bindingInstallation =
@@ -1059,7 +1069,71 @@ export async function invokeInstalledFlow(
 
   const endpoint = createFlowBindingEndpoint({
     readInstallation:
-      invocation.kind === "binding" ? async () => bindingInstallation : readInstalled,
+      invocation.kind !== "continuation" ? async () => bindingInstallation : readInstalled,
+    openRun: async (session, selection, binding, installation) => {
+      const plan = installation.plans?.get(String(binding.flow.flowId));
+      if (plan === undefined) return { kind: "refused" };
+      const release: FlowRelease = {
+        releaseKey: installation.releaseKey,
+        flows: installation.flows,
+        plans: installation.plans!,
+      };
+      const opened = await openFlowAdmissionRun(
+        {
+          requests: requestDependencies,
+          authorizeBinding: async (bound) => {
+            if (bound.scope.applicationRootId === undefined) return false;
+            const current = await createHumanInstalledPageBundleContextLoader({
+              transaction: bound.transaction,
+              scope: {
+                organizationId: bound.scope.organizationId,
+                organizationAccountId: bound.scope.organizationAccountId,
+                applicationRootId: bound.scope.applicationRootId,
+                ...(bound.scope.previewInstallationId === undefined
+                  ? {}
+                  : { previewInstallationId: bound.scope.previewInstallationId }),
+              },
+            }).load();
+            const currentBinding = current.releaseSet.application.content.flowBindings.filter(
+              (entry) => sameId(entry.bindingId, binding.bindingId),
+            );
+            if (
+              current.applicationReleaseRevision !== installation.installationRevision ||
+              currentBinding.length !== 1 ||
+              canonicalJson(currentBinding[0]) !== canonicalJson(binding)
+            )
+              return false;
+            return gateBindingToAddressedPage(current, binding.controlId, bound);
+          },
+          authorizeInvocation: async (bound) =>
+            (await dependenciesFor(release, undefined, installation, bound).authorizeInvocation?.(
+              session,
+              selection,
+              plan.definition,
+            )) === true,
+        },
+        { session, selection, plan, bindingId: String(binding.bindingId) },
+      );
+      if (opened.kind !== "opened" || selection.applicationRootId === undefined)
+        return { kind: "refused" };
+      const carriedValues = sealFlowCarriedValues(
+        {},
+        {},
+        dependencies.continuationKey,
+        {
+          flowId: String(binding.flow.flowId),
+          bindingId: String(binding.bindingId),
+          runId: opened.runId,
+          identityId: session.identityId,
+          organizationId: selection.organizationId,
+          applicationRootId: selection.applicationRootId,
+        },
+        undefined,
+        true,
+      );
+      if (carriedValues === undefined) throw new Error("FLOW_RUN_TOKEN_UNAVAILABLE");
+      return { kind: "run_opened", carriedValues };
+    },
     adaptFormSubmit: async (binding, callerInputs, subject, installation) => {
       const resolveValues = async (values: unknown) => {
         if (installation.applicationContent === undefined || installation.modules === undefined)

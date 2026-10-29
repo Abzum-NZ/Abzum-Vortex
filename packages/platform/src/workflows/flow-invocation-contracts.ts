@@ -8,6 +8,18 @@ import { jsonValueSchema } from "../catalogue/common";
 const installationRevisionSchema = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
 const releaseKeySchema = z.string().min(1).max(200);
 
+const runStartInvocationSchema = z
+  .object({
+    kind: z.literal("run_start"),
+    installationRevision: installationRevisionSchema,
+    releaseKey: releaseKeySchema,
+    bindingId: containedComponentIdSchema,
+    flowId: flowIdSchema,
+    clickId: z.uuid(),
+    sourceTablePlacementId: containedComponentIdSchema.optional(),
+  })
+  .strict();
+
 const bindingInvocationSchema = z
   .object({
     kind: z.literal("binding"),
@@ -66,6 +78,7 @@ const continuationInvocationSchema = z
 
 /** The one request contract shared by the flow client, endpoint and route. */
 export const flowBindingInvocationSchema = z.discriminatedUnion("kind", [
+  runStartInvocationSchema,
   bindingInvocationSchema,
   continuationInvocationSchema,
 ]);

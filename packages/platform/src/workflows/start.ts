@@ -118,8 +118,8 @@ type StartFlowDependencies<Value> = Readonly<{
 }>;
 
 /** Opens completion evidence only for a flow that can reach another server segment first. */
-export const openFlowAdmissionRun = async <Value>(
-  dependencies: StartFlowDependencies<Value>,
+export const openFlowAdmissionRun = async (
+  dependencies: Pick<StartFlowDependencies<never>, "requests" | "authorizeBinding" | "authorizeInvocation">,
   request: Readonly<{
     session: IdentitySession;
     selection: OrganizationSelectionCandidate;
