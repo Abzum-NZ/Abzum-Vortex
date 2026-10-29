@@ -157,8 +157,10 @@ export function applicationPageRules(scope: ApplicationScope): void {
             field.type !== "link" ||
             object(object(field.settings ?? {}).target).state === "resolved",
           ...((field.type === "link" || field.type === "choice") &&
-          object(field.settings ?? {}).dependsOn !== undefined
-            ? { dependsOn: String(object(object(field.settings).dependsOn).parentFieldId) }
+          object(object(field.settings ?? {}).optionsSource ?? {}).parentFieldId !== undefined
+            ? {
+                dependsOn: String(object(object(field.settings).optionsSource).parentFieldId),
+              }
             : {}),
           // A one-record link from the record type to itself names each record's parent.
           parentLink:

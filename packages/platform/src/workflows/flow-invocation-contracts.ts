@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { formContinuationReceiptSchema, formContinuationTargetSchema } from "./form-continuation-contracts";
 import { formContinuationAnswerSchema } from "./form-continuation-answer";
-import { flowIdSchema } from "./flow-contracts";
 import { containedComponentIdSchema, recordIdSchema, revisionSchema } from "../catalogue/identifiers";
+import { flowIdSchema } from "../catalogue/identifiers";
 
 const installationRevisionSchema = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
 const releaseKeySchema = z.string().min(1).max(200);

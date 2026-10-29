@@ -929,7 +929,7 @@ const withoutMessageWording = (value: unknown): unknown => {
   if (node.type === "interface.show_message" && typeof copied.properties === "object")
     copied.properties = Object.fromEntries(
       Object.entries(copied.properties as Record<string, unknown>).filter(
-        ([key]) => key !== "message" && key !== "title" && key !== "tone",
+        ([key]) => key !== "message" && key !== "title",
       ),
     );
   return copied;

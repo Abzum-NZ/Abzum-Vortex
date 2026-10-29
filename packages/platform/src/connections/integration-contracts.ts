@@ -13,7 +13,7 @@ import {
   organizationIdSchema,
   platformIdSchema,
   revisionSchema,
-  ruleIdSchema,
+  flowIdSchema,
   semanticVersionSchema,
   timestampSchema,
   workflowRunIdSchema,
@@ -304,7 +304,7 @@ export const interfaceOperationSchema = z
      * Definition validation resolves the flow and checks the shape against the work it commits.
      */
     target: z.discriminatedUnion("kind", [
-      z.object({ kind: z.literal("flow"), flowId: ruleIdSchema }).strict(),
+      z.object({ kind: z.literal("flow"), flowId: flowIdSchema }).strict(),
       z.object({ kind: z.literal("query"), key: builderKeySchema }).strict(),
     ]),
     errorCodes: z.array(builderKeySchema),

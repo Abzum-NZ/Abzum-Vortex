@@ -16,6 +16,7 @@ import {
   createDatabaseDefinitionPublicationService,
   createDatabaseDefinitionPublicationRepository,
   createDefinitionStore,
+  type OrganizationBuilderRoot,
   type ImmutableDefinitionPublicationCatalogueDefinition,
   type TrustedApplicationRootOriginKind,
 } from "@vortex/platform/server";
@@ -313,4 +314,49 @@ export const publishShippedDefinitions = async (
     published.set(descriptor.source.key, release);
   }
   return published;
+};
+
+/**
+ * Publishes one Studio-built application's current draft through the ordinary publication service,
+ * as the setup's definition actor: the draft the contract-4 migration converted becomes the
+ * release its installation then upgrades to. Any unpublished work in the draft is published with it.
+ */
+export const publishStudioApplicationDraft = async (
+  facts: SystemContextFacts,
+  root: OrganizationBuilderRoot,
+  log: (message: string) => void,
+): Promise<PublishedRelease> => {
+  const authority = developmentBuilderAuthority(facts.organizationId);
+  const context: SessionContext = mintSystemContext(facts);
+  const current = await inSystemTransaction(context, (transaction) =>
+    createDatabaseDefinitionPublicationRepository(transaction).read(context, (reader) =>
+      reader.readDraftCandidate(root.rootId),
+    ),
+  );
+  if (current === undefined) throw new Error(`Studio draft is missing for ${root.key}`);
+  const prepared = await inSystemTransaction(context, (transaction) =>
+    createDatabaseDefinitionPublicationService(
+      developmentPublicationCatalogue,
+      transaction,
+      authority,
+    ).prepare(context, { rootId: root.rootId, expectedDraftRevision: current.draft.draftRevision }),
+  );
+  const published = await inSystemTransaction(context, (transaction) =>
+    createDatabaseDefinitionPublicationService(
+      developmentPublicationCatalogue,
+      transaction,
+      authority,
+    ).publish(context, {
+      confirmation: prepared.confirmation,
+      releaseNote: "Republished under the current definition contract by the setup refresh",
+    }),
+  );
+  log(
+    `published Studio application ${root.key} ${published.releaseVersion} (revision ${published.releaseRevision}) from its converted draft, including any unpublished work in it`,
+  );
+  return {
+    rootId: published.rootId,
+    releaseRevision: published.releaseRevision,
+    releaseVersion: published.releaseVersion,
+  };
 };

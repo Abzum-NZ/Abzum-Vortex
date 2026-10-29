@@ -53,9 +53,11 @@ const restoreFailureMessage = (
     ? "Whether the version was restored could not be confirmed. Reload Studio to load the saved draft, then check it."
     : result.kind === "conflict"
       ? "The draft changed since this list was loaded, so nothing was restored. Reload the versions and try again."
-      : result.kind === "refused"
-        ? "Restoring was refused for your account or this version, so nothing was restored."
-        : "Restoring is temporarily unavailable, so nothing was restored. Try again in a moment.";
+      : result.kind === "superseded"
+        ? "This version was published in an earlier definition format and can't be restored. Its history stays here; change the current draft instead."
+        : result.kind === "refused"
+          ? "Restoring was refused for your account or this version, so nothing was restored."
+          : "Restoring is temporarily unavailable, so nothing was restored. Try again in a moment.";
 
 /**
  * The Releases tab's published versions, oldest first: each with when and by whom it was published
@@ -221,7 +223,8 @@ export function ApplicationReleaseHistory({
         onRestored(`Restored version ${entry.releaseVersion} into the draft`);
         return;
       }
-      setFailure(result.kind);
+      // A superseded version leaves the list usable; only its own restore is refused.
+      setFailure(result.kind === "superseded" ? null : result.kind);
       setMessage(restoreFailureMessage(result));
       studioNotice(restoreFailureMessage(result), "error");
     } catch (error) {

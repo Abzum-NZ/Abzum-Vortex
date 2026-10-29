@@ -1,5 +1,5 @@
 import { descriptionSchema } from "../../catalogue/common";
-import { ruleIdSchema } from "../../catalogue/identifiers";
+import { flowIdSchema } from "../../catalogue/identifiers";
 import type { BlockPropertyValueContract } from "../application-composition/block-property-values";
 import { compiledItemSettings } from "../application-composition/page-composition";
 import { compiledPageItems } from "../application-composition/compiled-item-tree";
@@ -245,7 +245,7 @@ export function compileApplicationToolBundle(
           ]),
         ),
       },
-      operation: { kind: "flow", key: flow.key, flowId: ruleIdSchema.parse(String(flow.id)) },
+      operation: { kind: "flow", key: flow.key, flowId: flowIdSchema.parse(String(flow.id)) },
       permission: { discover: "page_access", use: "delegated_operations" },
     });
 
@@ -350,7 +350,7 @@ export function compileApplicationToolBundle(
   addNavigation(content.navigation);
 
   return applicationToolBundleSchema.parse({
-    contractVersion: "1.0.0",
+    contractVersion: "4.0.0",
     applicationKey,
     tools: [...tools.values()].sort((left, right) =>
       compareCanonicalStrings(left.name, right.name),

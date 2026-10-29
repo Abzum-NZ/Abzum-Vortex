@@ -21,6 +21,7 @@ import {
   type BlockPropertyValueContract,
   type IdentitySession,
   recordChoicePageSchema,
+  optionsSourceNarrowing,
 } from "@vortex/platform/schema";
 import { getQueryContinuationKey } from "../query-continuation-key";
 import {
@@ -166,7 +167,7 @@ const installedLinkField = (
       for (const field of recordType.fields)
         if (sameId(String(field.fieldId), fieldId)) {
           if (field.type !== "link" || field.settings.target.state !== "resolved") return undefined;
-          const declared = field.settings.dependsOn;
+          const declared = optionsSourceNarrowing(field.settings.optionsSource);
           const parent =
             declared === undefined
               ? undefined

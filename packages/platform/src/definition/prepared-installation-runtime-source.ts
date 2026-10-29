@@ -16,6 +16,7 @@ import { canonicalJson } from "./canonical-json";
 import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
 import {
   installationPreparedRecordAccessPlanSchema,
+  installationRuntimeBundleFormatVersion,
   installationRuntimeBundleSourceManifestSchema,
   type InstallationRuntimeBundleSourceManifest,
   type PreparedInstallationRuntimeSource,
@@ -368,7 +369,7 @@ export const createDatabasePreparedInstallationRuntimeSourceService = (
       );
 
       const sourceManifest = installationRuntimeBundleSourceManifestSchema.parse({
-        bundleFormatVersion: 2,
+        bundleFormatVersion: installationRuntimeBundleFormatVersion,
         application: {
           rootId: application.rootId,
           definitionKey: application.definitionKey,

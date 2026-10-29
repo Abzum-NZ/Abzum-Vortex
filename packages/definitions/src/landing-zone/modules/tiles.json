@@ -46,7 +46,10 @@
                 "value": "external",
                 "label": "External address"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -273,7 +276,10 @@
                 "value": "new_page",
                 "label": "Open in a new page"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           },
           "default": "replace"
         },
@@ -309,7 +315,8 @@
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": ["flow_tile_pin_create", "flow_tile_pin_update"]
     },
     {
       "id": "rt_landing_zone_application",
@@ -405,7 +412,8 @@
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     }
   ],
   "permissions": [
@@ -636,7 +644,6 @@
   "events": [],
   "flows": [
     {
-      "contractVersion": "1.0.0",
       "id": "flow_tile_pin_create",
       "key": "tile_pin_create",
       "execution": "transaction",
@@ -652,8 +659,7 @@
             {
               "kind": "create"
             }
-          ],
-          "priority": 100
+          ]
         }
       ],
       "tasks": [
@@ -1014,7 +1020,6 @@
       ]
     },
     {
-      "contractVersion": "1.0.0",
       "id": "flow_tile_pin_update",
       "key": "tile_pin_update",
       "execution": "transaction",
@@ -1030,8 +1035,7 @@
             {
               "kind": "update"
             }
-          ],
-          "priority": 100
+          ]
         }
       ],
       "tasks": [

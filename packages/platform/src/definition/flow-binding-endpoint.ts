@@ -14,7 +14,6 @@ import { recordIdSchema, recordTypeIdSchema } from "../catalogue/identifiers";
 import { describeFailure, isRecord, sameId } from "../catalogue/runtime-primitives";
 import { walkPageComposition, type PlacementVisitor } from "../pages/placement-walk";
 import {
-  flowSchema,
   flowTaskChildLists,
   type FlowDefinition,
   type FlowTask,
@@ -107,7 +106,8 @@ export type InstalledFlowBindings = Readonly<{
   /** Identifies the exact release, so a continuation only resumes against the flows it started with. */
   releaseKey: string;
   bindings: readonly ComponentFlowBinding[];
-  flows: ReadonlyMap<string, unknown>;
+  /** The release's planned flows (`flowPlansOf`). */
+  flows: ReadonlyMap<string, FlowDefinition>;
   /** The release's record types, for the values of a Save record task. */
   recordTypes?: ReadonlyMap<string, FlowRecordType>;
   /** The release's named actions by key, for a Call protected operation task that names one. */
@@ -356,10 +356,9 @@ const submittedFieldForDiagnostic = (
     !sameId(binding.flow.flowId, flowId)
   )
     return undefined;
-  const rawFlow = installation.flows.get(flowId);
-  const parsedFlow = flowSchema.safeParse(rawFlow);
-  if (!parsedFlow.success) return undefined;
-  const flowInputName = operationInputFlowInput(parsedFlow.data, taskId, operationInput);
+  const flow = installation.flows.get(flowId);
+  if (flow === undefined) return undefined;
+  const flowInputName = operationInputFlowInput(flow, taskId, operationInput);
   if (flowInputName === undefined) return undefined;
   const bindingInput = binding.flow.inputs[flowInputName];
   if (
@@ -386,13 +385,12 @@ const saveValuesComeFromForm = (
   installation: InstalledFlowBindings,
 ): boolean => {
   if (!sameId(binding.flow.flowId, flowId)) return false;
-  const parsedFlow = flowSchema.safeParse(installation.flows.get(flowId));
-  if (!parsedFlow.success) return false;
-  const task = uniqueFlowTask(parsedFlow.data, taskId);
+  const flow = installation.flows.get(flowId);
+  if (flow === undefined) return false;
+  const task = uniqueFlowTask(flow, taskId);
   if (task === undefined || task.type !== "record.save" || !isRecord(task.properties)) return false;
   const flowInputName = directFlowInputName(task.properties.values);
-  if (flowInputName === undefined || !Object.hasOwn(parsedFlow.data.inputs, flowInputName))
-    return false;
+  if (flowInputName === undefined || !Object.hasOwn(flow.inputs, flowInputName)) return false;
   const bindingInput = binding.flow.inputs[flowInputName];
   return isRecord(bindingInput) && bindingInput.kind === "caller" && bindingInput.name === "values";
 };
@@ -549,16 +547,15 @@ const bindingInputs = (
  * declares for that input and reduced to its record ID. `undefined` refuses the click.
  */
 const referenceInputsAsRecordIds = (
-  rawFlow: unknown,
+  flow: FlowDefinition | undefined,
   inputs: Readonly<Record<string, unknown>>,
 ): Record<string, unknown> | undefined => {
-  const parsedFlow = flowSchema.safeParse(rawFlow);
-  if (!parsedFlow.success) {
-    console.error("[flows] installed flow input contract mismatch", parsedFlow.error.issues);
+  if (flow === undefined) {
+    console.error("[flows] installed flow is not planned");
     return undefined;
   }
   const result: Record<string, unknown> = { ...inputs };
-  for (const [name, declaration] of Object.entries(parsedFlow.data.inputs)) {
+  for (const [name, declaration] of Object.entries(flow.inputs)) {
     const value = result[name];
     if (declaration.type !== "record_reference" || !isRecord(value)) continue;
     const reference = selectedRecordInputSchema.safeParse(value);

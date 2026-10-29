@@ -95,7 +95,7 @@ export async function driveServerFlow(
               {
                 title: "Saved, with a warning",
                 text: response.warnings.map((warning) => warning.message).join(" "),
-                tone: "warning",
+                severity: "warning",
               },
               signal,
             );
@@ -108,7 +108,7 @@ export async function driveServerFlow(
             if (
               response.failure !== undefined &&
               intent.kind === "show_message" &&
-              readMessageIntent(intent)?.tone === "success"
+              readMessageIntent(intent)?.severity === "success"
             )
               continue;
             await performPresentationIntent(intent, host, signal);

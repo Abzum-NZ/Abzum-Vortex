@@ -311,6 +311,7 @@ export const createInlineRecordType = (
     ownership_mode: creation.ownershipMode,
     standard_actions: standardActions.map((entry) => entry.action),
     custom_actions: [],
+    before_save_rules: [],
     fields,
     pipelines: [],
     relationships: [],

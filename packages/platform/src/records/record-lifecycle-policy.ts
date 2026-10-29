@@ -7,7 +7,7 @@ import {
   revisionSchema,
   storageContractIdSchema,
   timestampSchema,
-  workflowIdSchema,
+  flowIdSchema,
 } from "../catalogue/identifiers";
 
 const nonNilUuidSchema = z
@@ -243,7 +243,7 @@ export const archiveWorkflowRecordLifecyclePolicySchema = z
   .object({
     ...policyBaseFields,
     action: z.literal("archive_workflow"),
-    archiveWorkflowId: workflowIdSchema,
+    archiveWorkflowId: flowIdSchema,
     expectedWorkflowRevision: revisionSchema,
     archiveConnectionInstanceId: connectionInstanceIdSchema,
     archiveDestination: archiveDestinationReferenceSchema,
@@ -274,7 +274,7 @@ export type RecordTypeLifecyclePolicy = z.infer<typeof recordTypeLifecyclePolicy
  */
 export const registeredWorkflowEvidenceSchema = z
   .object({
-    workflowId: workflowIdSchema,
+    workflowId: flowIdSchema,
     workflowRevision: revisionSchema,
     organizationId: organizationIdSchema,
     authorizedApplicationIds: z.array(applicationRootIdSchema).default([]),

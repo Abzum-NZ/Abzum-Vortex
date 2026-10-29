@@ -188,7 +188,10 @@
                 "value": "update_available",
                 "label": "Update available"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -228,7 +231,10 @@
                 "value": "up_to_date",
                 "label": "Up to date"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -248,7 +254,8 @@
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     }
   ],
   "permissions": [

@@ -52,7 +52,7 @@ export type PreparedNamedAction = Readonly<{
    * The sole current Module validation contract the subject Record's owning Module release was
    * published under. It is checked, never branched on.
    */
-  validationContractVersion: "3.0.0";
+  validationContractVersion: "4.0.0";
   action: NamedActionDefinition;
   recordType: RecordTypeDefinition;
   recordId: string;

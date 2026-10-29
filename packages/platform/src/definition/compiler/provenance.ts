@@ -150,7 +150,7 @@ export function sourceResolvesIdentity(
     path === "body/pages/#/replaces_page" ||
     /^body\/search\/record_types\/#\/(?:title_field|subtitle_field|target_page)$/.test(path) ||
     (typeof last === "string" && ID_FIELDS.has(last)) ||
-    /\/(?:custom_actions|carries|declared_fields|filterable_fields|sortable_fields|public_fields|select|group_by|component_order|relationships|record_types|allowed_child_blocks)\/#$/.test(
+    /\/(?:custom_actions|before_save_rules|carries|declared_fields|filterable_fields|sortable_fields|public_fields|select|group_by|component_order|relationships|record_types|allowed_child_blocks)\/#$/.test(
       path,
     ) ||
     /\/(?:record_type|source_record_type|to_record_type|target|field|page|query|block|home_page|module|connection_type|workflow|node|relationship|required_permission|sets_choice_field|dependency|extension_point|contributed_action)$/.test(

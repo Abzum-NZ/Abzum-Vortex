@@ -26,6 +26,7 @@ import { Textarea } from "@vortex/ui/components/textarea";
 import {
   applyStudioFlowCreate,
   deleteStudioRecordRule,
+  moveStudioRecordRule,
   studioRecordRules,
 } from "@vortex/ui/studio";
 import { useStudioPlaceOpener } from "./studio-used-in";
@@ -37,7 +38,7 @@ import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-mode
  * rule makes one with a single Warn step and opens it on the Flows tab, where its steps (If,
  * Refuse save, Warn, Require field) are edited like any flow's. The rule then runs inside every
  * save of the record, whichever way it is saved: a form, a board move, a named action or a Save
- * record step.
+ * record step. The list is the order the rules run in; Earlier and Later move a rule in it.
  */
 export function StudioRecordRules({
   source,
@@ -128,6 +129,16 @@ export function StudioRecordRules({
     });
     if (result.kind !== "changed") setProblem(studioEditProblem(result) ?? "");
   };
+  const move = (flowAlias: string, direction: "earlier" | "later") => {
+    setProblem("");
+    const result = edit((current) => {
+      const moved = moveStudioRecordRule(current, moduleKey, recordKey, flowAlias, direction);
+      return moved.kind === "refused"
+        ? { kind: "refused" as const, message: moved.reason }
+        : { kind: "changed" as const, source: moved.source };
+    });
+    if (result.kind !== "changed") setProblem(studioEditProblem(result) ?? "");
+  };
   return (
     <section className="space-y-6" aria-label={`Rules of ${record.plural_name}`}>
       <div className="flex items-center justify-between gap-2">
@@ -147,7 +158,8 @@ export function StudioRecordRules({
         </Button>
       </div>
       <p className="text-sm text-muted-foreground">
-        Check every save of {record.plural_name.toLowerCase()}, wherever it starts.
+        Check every save of {record.plural_name.toLowerCase()}, wherever it starts. Rules run in
+        this order; any refusal stops the save.
       </p>
       {adding && (
         <form className="space-y-2" onSubmit={add} aria-label="New rule">
@@ -222,12 +234,34 @@ export function StudioRecordRules({
           </EmptyHeader>
         </Empty>
       )}
-      <ul className="space-y-2">
-        {rules.map((rule) => (
+      <ol className="space-y-2">
+        {rules.map((rule, index) => (
           <Item key={rule.flowAlias} render={<li />} variant="outline" size="sm">
             <ItemHeader className="flex-wrap gap-2">
-              <ItemTitle>{rule.name}</ItemTitle>
+              <ItemTitle>
+                {index + 1}. {rule.name}
+              </ItemTitle>
               <ItemActions className="gap-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={disabled || index === 0}
+                  aria-label={`Run ${rule.name} earlier`}
+                  onClick={() => move(rule.flowAlias, "earlier")}
+                >
+                  Earlier
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={disabled || index === rules.length - 1}
+                  aria-label={`Run ${rule.name} later`}
+                  onClick={() => move(rule.flowAlias, "later")}
+                >
+                  Later
+                </Button>
                 <Button
                   type="button"
                   size="sm"
@@ -263,7 +297,7 @@ export function StudioRecordRules({
             </ItemContent>
           </Item>
         ))}
-      </ul>
+      </ol>
       {problem === "" ? null : (
         <p role="alert" className="text-sm text-destructive">
           {problem}

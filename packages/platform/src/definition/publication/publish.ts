@@ -13,7 +13,10 @@ import {
   semanticVersionSchema,
   timestampSchema,
 } from "../../catalogue/identifiers";
-import { selectApplicationContractPair } from "../application-contract-versions";
+import {
+  applicationSourceContractVersion,
+  selectApplicationContractPair,
+} from "../application-contract-versions";
 import {
   publishedApplicationDefinitionSchema,
   type ApplicationDraft,
@@ -111,21 +114,15 @@ const exactManifestSchema = z
                 ? `${entry.kind}:${entry.applicationRootId}:${entry.queryId}`
                 : entry.kind === "module_query"
                   ? `${entry.kind}:${entry.moduleRootId}:${entry.queryId}`
-                  : entry.kind === "application_form"
-                    ? `${entry.kind}:${entry.applicationRootId}:${entry.formId}`
-                    : entry.kind === "application_workflow"
-                      ? `${entry.kind}:${entry.applicationRootId}:${entry.workflowId}`
-                      : entry.kind === "application_action"
-                        ? `${entry.kind}:${entry.applicationRootId}:${entry.actionId}`
-                        : entry.kind === "protected_operation"
-                          ? `${entry.kind}:${entry.operation.owner.kind}:${
-                              entry.operation.owner.kind === "application"
-                                ? entry.operation.owner.applicationRootId
-                                : entry.operation.owner.kind === "module"
-                                  ? entry.operation.owner.moduleRootId
-                                  : entry.operation.owner.serviceId
-                            }:${entry.operation.operationId}`
-                          : `${entry.kind}:${entry.key}`,
+                  : entry.kind === "protected_operation"
+                    ? `${entry.kind}:${entry.operation.owner.kind}:${
+                        entry.operation.owner.kind === "application"
+                          ? entry.operation.owner.applicationRootId
+                          : entry.operation.owner.kind === "module"
+                            ? entry.operation.owner.moduleRootId
+                            : entry.operation.owner.serviceId
+                      }:${entry.operation.operationId}`
+                    : `${entry.kind}:${entry.key}`,
     );
     if (new Set(subjects).size !== subjects.length)
       context.addIssue({ code: "custom", message: "Dependency subjects must be unique" });
@@ -175,6 +172,14 @@ const storedHistoryReleaseSchema = z
   })
   .strict();
 
+/** Whether a stored release evidence object was published under an earlier definition contract. */
+const supersededContract = (stored: unknown): boolean =>
+  stored !== null &&
+  typeof stored === "object" &&
+  typeof (stored as { sourceContractVersion?: unknown }).sourceContractVersion === "string" &&
+  (stored as { sourceContractVersion: string }).sourceContractVersion !==
+    applicationSourceContractVersion;
+
 const publicationStateSchema = z
   .object({
     root: publicationRootSchema,
@@ -182,6 +187,7 @@ const publicationStateSchema = z
     identities: z.array(sourceIdentityAssignmentSchema),
     historyLatestReleaseRevision: nullableRevisionSchema,
     historyLatestReleaseVersion: semanticVersionSchema.nullable(),
+    historyLatestReleaseContractVersion: z.string().nullable(),
   })
   .strict();
 const publicationHistoryPageSchema = z
@@ -535,8 +541,13 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     const state = await this.readPublicationState(rootId);
     if (state === undefined) return undefined;
     const anchor = state.root.currentReleaseRevision;
+    // A latest release published under an earlier definition contract is history only: it anchors
+    // the next release and its version, but its content is never decoded or compared.
+    const superseded =
+      anchor !== null &&
+      state.historyLatestReleaseContractVersion !== applicationSourceContractVersion;
     const latestApplication =
-      anchor === null || state.draft.kind === "module"
+      anchor === null || superseded || state.draft.kind === "module"
         ? undefined
         : await this.readLatestRelease(
             rootId,
@@ -546,7 +557,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
             String(state.draft.rootId),
           );
     const latest =
-      anchor === null
+      anchor === null || superseded
         ? undefined
         : state.draft.kind === "module"
           ? (
@@ -558,7 +569,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
             )?.published
           : latestApplication?.published;
     if (
-      (anchor !== null && latest === undefined) ||
+      (anchor !== null && !superseded && latest === undefined) ||
       (latest !== undefined &&
         latest.publication.releaseVersion !== state.historyLatestReleaseVersion)
     )
@@ -569,6 +580,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       rootId: String(state.draft.rootId),
       anchorReleaseRevision: anchor,
       latestRelease: latest ?? null,
+      supersededReleaseVersion: superseded ? state.historyLatestReleaseVersion : null,
     });
     if (!releaseHistory.success) return invalidStorage(releaseHistory.error);
     return {
@@ -637,6 +649,9 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     if (!parsed.success) return invalidStorage(parsed.error);
     return parsed.data;
   }
+
+  /** Module releases read under an earlier definition contract, by root and revision. */
+  private readonly supersededModuleReleases = new Set<string>();
 
   private pendingModulePages: {
     organizationId: SessionContext["organizationId"];
@@ -722,8 +737,16 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         rootId: page.rootId,
         anchorReleaseRevision: page.anchorReleaseRevision,
         nextAfterReleaseRevision: page.nextAfterReleaseRevision,
-        entries: page.entries.map((entry) => {
+        entries: page.entries.flatMap((entry) => {
           const release = releases[offset++];
+          // A release of an earlier definition contract is history: resolution never offers it.
+          if (
+            release === undefined &&
+            this.supersededModuleReleases.has(
+              JSON.stringify([String(page.rootId).toLowerCase(), entry.releaseRevision]),
+            )
+          )
+            return [];
           if (
             release === undefined ||
             release.organizationId !== this.context.organizationId ||
@@ -732,7 +755,19 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
             release.releaseRevision !== entry.releaseRevision
           )
             return invalidStorage("readModuleReleasePage found inconsistent stored evidence");
-          return { previousReleaseRevision: entry.previousReleaseRevision, release };
+          // Contracts only move forward, so every release before the first current one is
+          // superseded: that first release starts the history resolution sees.
+          const previousSuperseded =
+            entry.previousReleaseRevision !== null &&
+            this.supersededModuleReleases.has(
+              JSON.stringify([String(page.rootId).toLowerCase(), entry.previousReleaseRevision]),
+            );
+          return [
+            {
+              previousReleaseRevision: previousSuperseded ? null : entry.previousReleaseRevision,
+              release,
+            },
+          ];
         }),
       }));
       requests.forEach((request, index) => request.resolve(materialized[index]!));
@@ -800,6 +835,16 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       const row = moduleReleaseRowSchema.safeParse(raw);
       if (!row.success) return invalidStorage(row.error);
       if (row.data.module_release === null) return undefined;
+      // A release of an earlier definition contract is history: nothing resolves against it.
+      if (supersededContract(row.data.module_release)) {
+        this.supersededModuleReleases.add(
+          JSON.stringify([
+            String(locators[index]!.rootId).toLowerCase(),
+            locators[index]!.releaseRevision,
+          ]),
+        );
+        return undefined;
+      }
       const parsed = rawModuleReleaseSchema.safeParse(row.data.module_release);
       if (!parsed.success) return invalidStorage(parsed.error);
       const release = this.materializeModuleRelease(parsed.data);
@@ -848,7 +893,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     if (
       evidence.authoredSource.kind !== "application" ||
       evidence.compilationOutput.kind !== "application" ||
-      evidence.resolutionSnapshot.contractVersion !== "3.0.0"
+      evidence.resolutionSnapshot.contractVersion !== "4.0.0"
     )
       return invalidStorage(
         "readApplicationPageAdoptionRelease found inconsistent stored evidence",
@@ -901,7 +946,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         } catch (error) {
           return invalidStorage("materializeHistory found inconsistent stored evidence", error);
         }
-        if (output.validationContractVersion !== "3.0.0" || resolution.contractVersion !== "3.0.0")
+        if (output.validationContractVersion !== "4.0.0" || resolution.contractVersion !== "4.0.0")
           return invalidStorage("materializeHistory found inconsistent stored evidence");
       }
       if (kind === "module") {
@@ -919,7 +964,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         } catch (error) {
           return invalidStorage("materializeHistory found inconsistent stored evidence", error);
         }
-        if (output.validationContractVersion !== "3.0.0" || resolution.contractVersion !== "3.0.0")
+        if (output.validationContractVersion !== "4.0.0" || resolution.contractVersion !== "4.0.0")
           return invalidStorage("materializeHistory found inconsistent stored evidence");
       }
       const ownResolution = resolution.definitions.filter(

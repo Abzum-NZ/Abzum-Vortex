@@ -2,9 +2,10 @@ import "server-only";
 import { z } from "zod";
 
 import type { JsonValue } from "../catalogue/common";
-import { describeFailure } from "../catalogue/runtime-primitives";
+import { describeFailure, isRecord } from "../catalogue/runtime-primitives";
 import type { RecordTypeDefinition } from "../definition/module-contracts";
 import { flowSchema, type FlowDefinition } from "../workflows/flow-contracts";
+import { compileFlowPlans, FlowPlanError } from "../workflows/flow-plan";
 import {
   BeforeSaveFlowEvaluationError,
   evaluateBeforeSaveFlows,
@@ -67,10 +68,9 @@ type BeforeSaveRuleApplication =
   | Readonly<{ success: false; reason: "unavailable" }>;
 
 /**
- * Parses the `beforeSaveFlows` a preparation returned. Anything that is not the
- * exact closed shape for this record type, including a flow that is not a
- * compiled BeforeSave flow of it, is unreachable and yields `undefined`; the
- * caller must then refuse the save rather than run it without its flows.
+ * The exact closed shape of the `beforeSaveFlows` a preparation returns. Anything else, including
+ * a flow that is not a compiled BeforeSave flow of the saved record type, is unreachable: the
+ * caller refuses the save rather than run it without its flows.
  */
 const beforeSaveFlowSetSchema = z
   .object({
@@ -80,7 +80,17 @@ const beforeSaveFlowSetSchema = z
   })
   .strict();
 
-export const parseBeforeSaveFlowSet = (
+/**
+ * The BeforeSave flows of one immutable Module release for one record type, compiled once: the
+ * preparation reads them from the release row the save resolved, and a release row never changes,
+ * so (Module root, release revision, record type) names one flow set forever. A new release
+ * revision is a new key; nothing is replaced in place. The cache is bounded; the oldest entry
+ * leaves first.
+ */
+const beforeSaveFlowSetLimit = 1_000;
+const beforeSaveFlowSets = new Map<string, BeforeSaveFlowSet>();
+
+const compileBeforeSaveFlowSet = (
   candidate: unknown,
   recordTypeId: string,
 ): BeforeSaveFlowSet | undefined => {
@@ -108,7 +118,52 @@ export const parseBeforeSaveFlowSet = (
       return undefined;
     }
   }
-  return parsed.data;
+  try {
+    const { plans } = compileFlowPlans(parsed.data.flows);
+    return {
+      ...parsed.data,
+      flows: parsed.data.flows.map((flow) => plans.get(String(flow.id))!.definition),
+    };
+  } catch (error) {
+    if (!(error instanceof FlowPlanError)) throw error;
+    console.error("[before-save-flow] flow cannot be planned", {
+      cause: { part: error.flowId, reason: error.reason },
+    });
+    return undefined;
+  }
+};
+
+/** The compiled BeforeSave flow set a preparation names; `undefined` refuses the save. */
+export const beforeSaveFlowSetOf = (
+  candidate: unknown,
+  recordTypeId: string,
+): BeforeSaveFlowSet | undefined => {
+  const header = candidate as Partial<
+    Record<"moduleRootId" | "releaseRevision" | "flows", unknown>
+  >;
+  const key =
+    isRecord(candidate) &&
+    typeof header.moduleRootId === "string" &&
+    Number.isSafeInteger(header.releaseRevision) &&
+    Array.isArray(header.flows)
+      ? JSON.stringify([
+          header.moduleRootId.toLowerCase(),
+          header.releaseRevision,
+          recordTypeId.toLowerCase(),
+        ])
+      : undefined;
+  const known = key === undefined ? undefined : beforeSaveFlowSets.get(key);
+  if (known !== undefined && known.flows.length === (header.flows as unknown[]).length) {
+    beforeSaveFlowSets.delete(key!);
+    beforeSaveFlowSets.set(key!, known);
+    return known;
+  }
+  const compiled = compileBeforeSaveFlowSet(candidate, recordTypeId);
+  if (compiled === undefined || key === undefined) return compiled;
+  beforeSaveFlowSets.set(key, compiled);
+  if (beforeSaveFlowSets.size > beforeSaveFlowSetLimit)
+    beforeSaveFlowSets.delete(beforeSaveFlowSets.keys().next().value!);
+  return compiled;
 };
 
 /**

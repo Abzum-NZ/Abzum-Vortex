@@ -1,80 +1,48 @@
 import { z } from "zod";
-import { safeFlowResultKindSchema } from "../definition/application-flow-bindings";
+import { flowTaskEffectClassSchema, safeFlowResultKindSchema } from "./flow-effects";
+import type { FlowTaskEffectClass } from "./flow-effects";
 import { workflowValueTypeSchema } from "../catalogue/catalogues";
-import { retryPolicySchema } from "../catalogue/common";
-import {
-  flowControlTaskTypeKeys,
-  flowDurableOnlyTaskTypeKeys,
-  flowMaximumServerSeconds,
-  flowTaskChildLists,
-  isFlowControlTask,
-} from "./flow-contracts";
+import { flowControlTaskTypeKeys, flowTaskChildLists, isFlowControlTask } from "./flow-contracts";
 import type { FlowDefinition, FlowExecutionKind, FlowSource, FlowTask } from "./flow-contracts";
 import {
   builderKeySchema,
   namespacedKeySchema,
   stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
+import { flowMaximumServerSeconds } from "./flow-limits";
 
 /*
  * The one registry of task types (architecture decision 1, "The task registry"). Every building
- * block of every flow is registered once, with where it may run, what it does to the world, its
- * typed properties, outputs and outcomes, its default policy and how it compiles for Kestra.
+ * block of every flow is registered once, with where it may be placed, where it runs today, what it
+ * does to the world, its typed properties, outputs and outcomes and its default policy.
  *
  * This contract owns the catalogue and the publication placement check. Execution belongs to the
- * shared flow interpreter, the server orchestrator, the browser runner and the Kestra compiler,
- * which read these declarations and never redeclare them. Control tasks are registered here too,
- * so publication can check the run location of every task in a flow; their shapes stay in
- * `flow-contracts.ts`.
+ * shared flow interpreter and the server runners, which read these declarations and never
+ * redeclare them. Control tasks are registered here too, so publication can check where every task
+ * of a flow is placed; their shapes stay in `flow-contracts.ts`.
  */
 /**
  * Where a task may run.
  * - `browser`: in the page; interface and pure tasks only.
  * - `server`: a protected operation in its own short transaction.
  * - `transaction`: inside the owning record save, for every writer.
- * - `durable`: on Kestra.
  */
-export const flowTaskRunLocationSchema = z.enum(["browser", "server", "transaction", "durable"]);
+export const flowTaskRunLocationSchema = z.enum(["browser", "server", "transaction"]);
 export type FlowTaskRunLocation = z.infer<typeof flowTaskRunLocationSchema>;
 
 /**
- * What a task does. `pure` computes from its inputs, `read` reads under the run's authority,
- * `change` changes data through a protected operation, `background_start` commits the start of a
- * durable run, and `interface` talks to the person through the page.
+ * Where a step has an implementation: the page (the page performs it), the server (the server
+ * interpreter or a server runner executes it) and the back end (a back-end adapter runs it). The
+ * contract's `runLocations` say where a step may be placed; these flags say where it runs today.
+ * Publication refuses a step placed where it does not run, naming it, and Studio's palette offers
+ * a step only where it runs. The page and server implementation maps are typed from these flags
+ * (`PageStepType`, `ServerStepType`), so a flag without an implementation fails the type check.
  */
-export const flowTaskEffectClassSchema = z.enum([
-  "pure",
-  "read",
-  "change",
-  "background_start",
-  "interface",
-]);
-export type FlowTaskEffectClass = z.infer<typeof flowTaskEffectClassSchema>;
+export const flowStepRunsSchema = z
+  .object({ page: z.boolean(), server: z.boolean(), backend: z.boolean() })
+  .strict();
+export type FlowStepRuns = z.infer<typeof flowStepRunsSchema>;
 
-/**
- * How a task compiles to a Kestra flow when it is placed in a durable flow. Customer text is never
- * emitted as template text in any mode (the compiler's rules in decision 1).
- * - `native_control`: the Kestra control task with the same meaning. Its condition, switch value
- *   or item list is computed by the Vortex evaluator through the protected callback, and Kestra
- *   branches only on that result.
- * - `evaluator_callback`: a pure task; the Vortex evaluator computes it through the protected
- *   callback, and Kestra branches only on the result.
- * - `protected_callback`: a read, change or background-start task; Kestra calls the signed
- *   protected callback once, with the duplicate-protection key.
- * - `native_wait`: waits for a moment computed by the Vortex evaluator.
- * - `human_task`: pauses the run, creates the person's task through the callback and resumes on
- *   the person's answer.
- * - `not_compiled`: never runs on Kestra. Publication refuses it in a durable flow.
- */
-export const flowTaskKestraCompileModeSchema = z.enum([
-  "native_control",
-  "evaluator_callback",
-  "protected_callback",
-  "native_wait",
-  "human_task",
-  "not_compiled",
-]);
-export type FlowTaskKestraCompileMode = z.infer<typeof flowTaskKestraCompileModeSchema>;
 
 /** The declared type of one task property. */
 export const flowTaskPropertyTypeSchema = z.enum([
@@ -111,8 +79,7 @@ export const flowTaskOutputDeclarationSchema = z
 /** The default policy a task starts with; a builder may tighten it within the flow's limits. */
 export const flowTaskDefaultPolicySchema = z
   .object({
-    timeoutSeconds: z.number().int().min(1).max(7_776_000),
-    retry: retryPolicySchema.optional(),
+    timeoutSeconds: z.number().int().min(1).max(flowMaximumServerSeconds),
     duplicateProtection: z.enum(["not_applicable", "required"]),
     redaction: z.enum(["identifiers_only", "safe_fields", "no_payload"]),
   })
@@ -133,6 +100,8 @@ export const flowTaskTypeDefinitionSchema = z
     title: z.string().min(1).max(60),
     summary: z.string().min(1).max(300),
     runLocations: z.array(flowTaskRunLocationSchema).min(1).max(4),
+    /** Where an implementation exists today (`flowTaskRuns`); the contract allows `runLocations`. */
+    runs: flowStepRunsSchema,
     effect: flowTaskEffectClassSchema,
     /**
      * When the effect is declared by the protected operation the task calls, `effect` is the widest
@@ -159,7 +128,6 @@ export const flowTaskTypeDefinitionSchema = z
     /** The results the task can report; the first is its confirmed result. */
     outcomes: z.array(safeFlowResultKindSchema).min(1),
     defaultPolicy: flowTaskDefaultPolicySchema,
-    kestra: z.object({ mode: flowTaskKestraCompileModeSchema }).strict(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -175,11 +143,6 @@ export const flowTaskTypeDefinitionSchema = z
       issue(["type"], "A registered task type uses a dotted key such as record.save");
     if (value.category === "control" && Object.keys(value.properties).length > 0)
       issue(["properties"], "A control task's shape is declared by the flow contract");
-    if (
-      (flowDurableOnlyTaskTypeKeys as readonly string[]).includes(value.type) &&
-      (locations.size !== 1 || !locations.has("durable"))
-    )
-      issue(["runLocations"], "Wait and parallel tasks run only in durable flows");
     if (value.effect === "interface") {
       if (locations.size !== 1 || !locations.has("browser"))
         issue(["runLocations"], "An interface task is browser-only");
@@ -221,46 +184,11 @@ export const flowTaskTypeDefinitionSchema = z
             "A saved-record task's target is optional, named only outside transactions",
           );
     }
-    const durableCompiled = value.kestra.mode !== "not_compiled";
-    if (durableCompiled !== locations.has("durable"))
-      issue(
-        ["kestra", "mode"],
-        "A task compiles for Kestra exactly when it can run in a durable flow",
-      );
-    const expectedModes: Partial<
-      Record<FlowTaskEffectClass, readonly FlowTaskKestraCompileMode[]>
-    > = {
-      pure: ["native_control", "evaluator_callback", "native_wait", "not_compiled"],
-      read: ["protected_callback", "not_compiled"],
-      change: ["protected_callback"],
-      background_start: ["protected_callback"],
-      interface: ["not_compiled"],
-    };
-    if (
-      value.category === "registered" &&
-      !expectedModes[value.effect]?.includes(value.kestra.mode)
-    )
-      issue(["kestra", "mode"], "The Kestra compile mode does not fit the task's effect");
-    if (value.category === "registered" && value.kestra.mode === "native_control")
-      issue(["kestra", "mode"], "Only control tasks compile to native Kestra control tasks");
     const protectedEffect = value.effect === "change" || value.effect === "background_start";
     if (protectedEffect !== (value.defaultPolicy.duplicateProtection === "required"))
       issue(
         ["defaultPolicy", "duplicateProtection"],
         "Duplicate protection is required exactly for changes and background starts",
-      );
-    if (value.defaultPolicy.retry !== undefined && !locations.has("durable"))
-      issue(
-        ["defaultPolicy", "retry"],
-        "Retries are allowed only for tasks that run in durable flows",
-      );
-    if (
-      (locations.size > 1 || !locations.has("durable")) &&
-      value.defaultPolicy.timeoutSeconds > flowMaximumServerSeconds
-    )
-      issue(
-        ["defaultPolicy", "timeoutSeconds"],
-        `A task that can run outside durable flows times out within ${flowMaximumServerSeconds} seconds`,
       );
     if (new Set(value.outputs.map((output) => output.key)).size !== value.outputs.length)
       issue(["outputs"], "Output keys must be unique");
@@ -283,13 +211,8 @@ export const flowRegisteredTaskTypeKeys = [
   "record.read_fields",
   "record.pin_identity",
   "operation.call",
-  "flow.run_background",
+  "backend.run",
   "event.announce",
-  "connection.call",
-  "message.acknowledge",
-  "file.export",
-  "file.attach",
-  "file.move",
   "data.calculate",
   "data.record_link",
   "data.set_values",
@@ -299,6 +222,9 @@ export const flowRegisteredTaskTypeKeys = [
   "rule.warn",
   "rule.refuse",
   "interface.show_message",
+  "interface.clear_message",
+  "interface.set_value",
+  "interface.validate_form",
   "interface.show_form",
   "interface.confirm",
   "interface.navigate",
@@ -309,6 +235,59 @@ export const flowRegisteredTaskTypeKeys = [
 export type FlowRegisteredTaskTypeKey = (typeof flowRegisteredTaskTypeKeys)[number];
 export type FlowControlTaskTypeKey = (typeof flowControlTaskTypeKeys)[number];
 export type FlowTaskTypeKey = FlowControlTaskTypeKey | FlowRegisteredTaskTypeKey;
+
+const page = { page: true, server: false, backend: false } as const;
+const server = { page: false, server: true, backend: false } as const;
+const nowhere = { page: false, server: false, backend: false } as const;
+
+/** Where each step runs today; each later batch flips a flag when it lands the implementation. */
+export const flowTaskRuns = Object.freeze({
+  if: server,
+  switch: server,
+  for_each: server,
+  sequential: server,
+  run_flow: server,
+  stop: server,
+  "record.save": server,
+  "record.create": server,
+  "record.set_fields": server,
+  "record.link": nowhere,
+  "record.delete": server,
+  "record.restore": nowhere,
+  "record.changes": server,
+  "record.query": nowhere,
+  "record.read_fields": server,
+  "record.pin_identity": server,
+  "operation.call": server,
+  "backend.run": nowhere,
+  "event.announce": server,
+  "data.calculate": server,
+  "data.record_link": server,
+  "data.set_values": nowhere,
+  "data.set_variable": server,
+  "data.format": nowhere,
+  "rule.require": server,
+  "rule.warn": server,
+  "rule.refuse": server,
+  "interface.show_message": page,
+  "interface.clear_message": nowhere,
+  "interface.set_value": nowhere,
+  "interface.validate_form": nowhere,
+  "interface.show_form": page,
+  "interface.confirm": page,
+  "interface.navigate": page,
+  "interface.refresh": page,
+  "interface.set_panel": page,
+  "interface.set_filter": page,
+} as const satisfies Record<FlowTaskTypeKey, FlowStepRuns>);
+
+type StepsRunning<Where extends keyof FlowStepRuns> = {
+  [Type in FlowTaskTypeKey]: (typeof flowTaskRuns)[Type][Where] extends true ? Type : never;
+}[FlowTaskTypeKey];
+/** The steps with a page implementation; the page's implementation map covers exactly these. */
+export type PageStepType = StepsRunning<"page">;
+/** The steps with a server implementation; the server's implementation map covers exactly these. */
+export type ServerStepType = StepsRunning<"server">;
 
 type SafeResult = z.infer<typeof safeFlowResultKindSchema>;
 const outcomesByEffect = {
@@ -343,20 +322,11 @@ type DefinitionInput = {
   protectedOperationKey?: string;
   properties?: Record<string, Property>;
   outputs?: readonly Output[];
-  kestra: FlowTaskKestraCompileMode;
-  timeoutSeconds?: number;
-  retry?: z.infer<typeof retryPolicySchema>;
   redaction?: "identifiers_only" | "safe_fields" | "no_payload";
 };
 
-const allLocations = ["browser", "server", "transaction", "durable"] as const;
-const protectedLocations = ["server", "durable"] as const;
-const durableRetry = {
-  maximumAttempts: 3,
-  initialDelaySeconds: 5,
-  maximumDelaySeconds: 60,
-  backoff: "exponential",
-} as const;
+const allLocations = ["browser", "server", "transaction"] as const;
+const protectedLocations = ["server"] as const;
 const applyRecordChanges = "record.apply_changes";
 
 const controlDefinitions: Record<FlowControlTaskTypeKey, DefinitionInput> = {
@@ -365,65 +335,36 @@ const controlDefinitions: Record<FlowControlTaskTypeKey, DefinitionInput> = {
     summary: "Runs one list of tasks when a condition holds, otherwise another.",
     runLocations: allLocations,
     effect: "pure",
-    kestra: "native_control",
   },
   switch: {
     title: "Switch",
     summary: "Runs the list of tasks whose case matches a value.",
     runLocations: allLocations,
     effect: "pure",
-    kestra: "native_control",
   },
   for_each: {
     title: "For each",
     summary: "Runs a list of tasks for every item, within the flow's item limit.",
     runLocations: allLocations,
     effect: "pure",
-    kestra: "native_control",
   },
   sequential: {
     title: "Sequential",
     summary: "Groups tasks that run one after another.",
     runLocations: allLocations,
     effect: "pure",
-    kestra: "native_control",
   },
   run_flow: {
     title: "Run flow",
     summary: "Runs another flow of the same execution kind and waits for its result.",
     runLocations: allLocations,
     effect: "pure",
-    kestra: "native_control",
   },
   stop: {
     title: "Stop",
     summary: "Ends the flow with a named outcome.",
     runLocations: allLocations,
     effect: "pure",
-    kestra: "native_control",
-  },
-  parallel: {
-    title: "Parallel",
-    summary: "Runs several branches at the same time.",
-    runLocations: ["durable"],
-    effect: "pure",
-    kestra: "native_control",
-  },
-  wait_until: {
-    title: "Wait until",
-    summary: "Pauses a durable run until a date and time.",
-    runLocations: ["durable"],
-    effect: "pure",
-    kestra: "native_wait",
-    timeoutSeconds: 7_776_000,
-  },
-  wait_for_person: {
-    title: "Wait for a person",
-    summary: "Pauses a durable run until a person answers a form.",
-    runLocations: ["durable"],
-    effect: "pure",
-    kestra: "human_task",
-    timeoutSeconds: 7_776_000,
   },
 };
 
@@ -449,8 +390,6 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       action_inputs: optional("input_map"),
     },
     outputs: [output("record", "record_reference")],
-    kestra: "protected_callback",
-    retry: durableRetry,
   },
   "record.create": {
     title: "Create record",
@@ -461,13 +400,11 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     protectedOperationKey: applyRecordChanges,
     properties: { record_type: required("record_type_id"), values: required("field_values") },
     outputs: [output("record", "record_reference")],
-    kestra: "protected_callback",
-    retry: durableRetry,
   },
   "record.set_fields": {
     title: "Set fields",
     summary: "Sets fields of a record; in a save transaction, only of the record being saved.",
-    runLocations: ["server", "transaction", "durable"],
+    runLocations: ["server", "transaction"],
     effect: "change",
     transactionScope: "saved_record",
     protectedOperationKey: applyRecordChanges,
@@ -477,8 +414,6 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       values: required("field_values"),
     },
     outputs: [output("record", "record_reference")],
-    kestra: "protected_callback",
-    retry: durableRetry,
   },
   "record.link": {
     title: "Link records",
@@ -492,8 +427,6 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       target: required("record_reference"),
     },
     outputs: [output("relationship", "relationship_reference")],
-    kestra: "protected_callback",
-    retry: durableRetry,
   },
   "record.delete": {
     title: "Delete record",
@@ -503,8 +436,6 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     actionFlowTransaction: true,
     protectedOperationKey: applyRecordChanges,
     properties: recordProperties,
-    kestra: "protected_callback",
-    retry: durableRetry,
   },
   "record.restore": {
     title: "Restore record",
@@ -514,8 +445,6 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     protectedOperationKey: applyRecordChanges,
     properties: recordProperties,
     outputs: [output("record", "record_reference")],
-    kestra: "protected_callback",
-    retry: durableRetry,
   },
   "record.changes": {
     title: "Apply record changes",
@@ -527,18 +456,14 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     protectedOperationKey: applyRecordChanges,
     properties: { changes: required("record_change_list") },
     outputs: [output("records", "record_reference_list")],
-    kestra: "protected_callback",
-    retry: durableRetry,
   },
   "record.query": {
     title: "Query records",
     summary: "Reads records through a declared query under the run's authority.",
-    runLocations: ["server", "transaction", "durable"],
+    runLocations: ["server", "transaction"],
     effect: "read",
     properties: { query: required("query_id"), parameters: optional("input_map") },
     outputs: [output("records", "record_reference_list")],
-    kestra: "protected_callback",
-    retry: durableRetry,
     redaction: "safe_fields",
   },
   "record.read_fields": {
@@ -552,7 +477,6 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       fields: required("json"),
     },
     outputs: [output("values", "json")],
-    kestra: "not_compiled",
     redaction: "safe_fields",
   },
   "record.pin_identity": {
@@ -575,7 +499,6 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       output("storage_contract_id", "text"),
       output("record_id", "text"),
     ],
-    kestra: "not_compiled",
     redaction: "no_payload",
   },
   "operation.call": {
@@ -590,114 +513,38 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       refusal_feedback: optional("input_map"),
     },
     outputs: [output("result", "json")],
-    kestra: "protected_callback",
-    retry: durableRetry,
   },
-  "flow.run_background": {
-    title: "Run background flow",
-    summary: "Commits the start of a background or durable flow and continues without waiting.",
-    runLocations: protectedLocations,
+  "backend.run": {
+    title: "Run on back end",
+    summary:
+      "Runs a flow on the back end after this step's changes commit: await returns its outputs, start returns a run reference at once.",
+    runLocations: ["server"],
     effect: "background_start",
-    properties: { flow: required("flow_id"), inputs: optional("input_map") },
-    outputs: [output("run", "workflow_run_reference")],
-    kestra: "protected_callback",
-    retry: durableRetry,
+    properties: {
+      flow: required("flow_id"),
+      mode: required("builder_key"),
+      inputs: optional("input_map"),
+    },
+    outputs: [output("run", "workflow_run_reference"), output("outputs", "json")],
   },
   "event.announce": {
     title: "Announce event",
     summary: "Announces a named event about a record through the one event writer.",
-    runLocations: ["server", "transaction", "durable"],
+    runLocations: ["server", "transaction"],
     effect: "change",
     transactionScope: "saved_record",
     properties: { event: required("namespaced_key"), record: optional("record_reference") },
-    kestra: "protected_callback",
-    retry: durableRetry,
-  },
-  // External calls run on Kestra (decision 1, "One start path"), never inside a request.
-  "connection.call": {
-    title: "Call connection",
-    summary: "Calls an operation of a bound external connection from a durable flow.",
-    runLocations: ["durable"],
-    effect: "change",
-    properties: {
-      connection: required("connection_binding_id"),
-      operation: required("builder_key"),
-      inputs: optional("input_map"),
-    },
-    outputs: [output("response", "json")],
-    kestra: "protected_callback",
-    retry: durableRetry,
-  },
-  "message.acknowledge": {
-    title: "Acknowledge message",
-    summary: "Acknowledges the incoming message that started the run.",
-    runLocations: protectedLocations,
-    effect: "change",
-    properties: { message: required("builder_key") },
-    kestra: "protected_callback",
-    retry: durableRetry,
-  },
-  "file.export": {
-    title: "Export to file",
-    summary: "Generates a file from a query, within a row limit.",
-    runLocations: protectedLocations,
-    effect: "change",
-    properties: { query: required("query_id"), maximum_rows: required("whole_number") },
-    outputs: [output("file", "file_reference")],
-    kestra: "protected_callback",
-    retry: durableRetry,
-  },
-  "file.attach": {
-    title: "Attach file",
-    summary:
-      "Adds an existing active file to a target record attachment field in its organisation.",
-    runLocations: protectedLocations,
-    effect: "change",
-    properties: {
-      file: required("file_reference"),
-      target_record_type: required("record_type_id"),
-      target_record: required("record_reference"),
-      target_attachment_field: required("field_id"),
-      expected_target_revision: required("whole_number"),
-    },
-    outputs: [output("file", "file_reference"), output("target_record", "record_reference")],
-    kestra: "protected_callback",
-    retry: durableRetry,
-  },
-  "file.move": {
-    title: "Move file",
-    summary: "Moves one active file attachment between record fields in its organisation.",
-    runLocations: protectedLocations,
-    effect: "change",
-    properties: {
-      file: required("file_reference"),
-      source_record_type: required("record_type_id"),
-      source_record: required("record_reference"),
-      source_attachment_field: required("field_id"),
-      expected_source_revision: required("whole_number"),
-      target_record_type: required("record_type_id"),
-      target_record: required("record_reference"),
-      target_attachment_field: required("field_id"),
-      expected_target_revision: required("whole_number"),
-    },
-    outputs: [
-      output("file", "file_reference"),
-      output("source_record", "record_reference"),
-      output("target_record", "record_reference"),
-    ],
-    kestra: "protected_callback",
-    retry: durableRetry,
   },
 
   // Pure tasks: computed from their inputs, so they may run anywhere.
   "data.calculate": {
     title: "Calculate",
-    summary: "Evaluates a typed formula and returns its result.",
+    summary: "Evaluates a typed formula and returns its result, of the declared result type.",
     runLocations: allLocations,
     effect: "pure",
-    properties: { formula: required("formula") },
+    // `result_type` names a value type; the formula's type must match it and `value` takes it.
+    properties: { formula: required("formula"), result_type: required("builder_key") },
     outputs: [output("value", "json")],
-    kestra: "evaluator_callback",
   },
   "data.record_link": {
     title: "Build record link value",
@@ -709,7 +556,6 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       record: required("record_reference"),
     },
     outputs: [output("value", "json")],
-    kestra: "not_compiled",
   },
   "data.set_values": {
     title: "Set values",
@@ -718,7 +564,6 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     effect: "pure",
     properties: { record: required("record_reference"), values: required("field_values") },
     outputs: [output("record", "record_reference")],
-    kestra: "evaluator_callback",
   },
   "data.set_variable": {
     title: "Set variable",
@@ -726,7 +571,6 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     runLocations: allLocations,
     effect: "pure",
     properties: { variable: required("builder_key"), value: required("any_value") },
-    kestra: "evaluator_callback",
   },
   "data.format": {
     title: "Format value",
@@ -735,7 +579,6 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     effect: "pure",
     properties: { formatter: required("builder_key"), input: required("any_value") },
     outputs: [output("value", "json")],
-    kestra: "evaluator_callback",
   },
   // Save rules give feedback in the browser and are authoritative in the save transaction.
   "rule.require": {
@@ -744,7 +587,6 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     runLocations: ["browser", "transaction"],
     effect: "pure",
     properties: { field: required("field_id"), message: required("message_text") },
-    kestra: "not_compiled",
   },
   "rule.warn": {
     title: "Warn",
@@ -752,7 +594,6 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     runLocations: ["browser", "transaction"],
     effect: "pure",
     properties: { message: required("message_text") },
-    kestra: "not_compiled",
   },
   "rule.refuse": {
     title: "Refuse save",
@@ -764,22 +605,51 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       message: required("message_text"),
       field: optional("field_id"),
     },
-    kestra: "not_compiled",
   },
 
   // Interface tasks: browser-only. A server-driven flow returns a typed intent and a continuation.
   "interface.show_message": {
     title: "Show message",
-    summary: "Shows a safe message to the person.",
+    summary:
+      "Shows a safe message: in a dialog, a toast, the page banner, under a component or in a message slot.",
     runLocations: ["browser"],
     effect: "interface",
     properties: {
       message: required("message_text"),
-      tone: optional("builder_key"),
-      /** The dialog's heading: what the person was doing ("Install or upgrade"). */
-      title: required("message_text"),
+      /** dialog, toast, banner, inline (under `component`) or slot (the message slot `component`). */
+      target: required("builder_key"),
+      /** The placement an inline message sits under, or the message slot it fills. */
+      component: optional("placement_id"),
+      /** info, success, warning or error. */
+      severity: required("builder_key"),
+      /** A dialog's heading: what the person was doing ("Install or upgrade"). */
+      title: optional("message_text"),
+      /** One action the message offers, bound to a flow ("Undo"). */
+      action_label: optional("message_text"),
+      action_flow: optional("flow_id"),
     },
-    kestra: "not_compiled",
+  },
+  "interface.clear_message": {
+    title: "Clear message",
+    summary: "Removes the message a target shows.",
+    runLocations: ["browser"],
+    effect: "interface",
+    properties: { target: required("builder_key"), component: optional("placement_id") },
+  },
+  "interface.set_value": {
+    title: "Set page value",
+    summary: "Sets a declared page value; the page shows and reads it, the server never trusts it.",
+    runLocations: ["browser"],
+    effect: "interface",
+    properties: { value: required("builder_key"), to: required("any_value") },
+  },
+  "interface.validate_form": {
+    title: "Validate form",
+    summary: "Checks a form's fields and stops the flow with the problems shown when one is invalid.",
+    runLocations: ["browser"],
+    effect: "interface",
+    properties: { form: required("form_id") },
+    outputs: [output("valid", "yes_no")],
   },
   "interface.show_form": {
     title: "Show form",
@@ -788,7 +658,6 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     effect: "interface",
     properties: { form: required("form_id"), inputs: optional("input_map") },
     outputs: [output("submitted", "yes_no"), output("values", "json")],
-    kestra: "not_compiled",
   },
   "interface.confirm": {
     title: "Confirm",
@@ -807,7 +676,6 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       destructive: optional("yes_no"),
     },
     outputs: [output("confirmed", "yes_no"), output("choice", "yes_no")],
-    kestra: "not_compiled",
   },
   "interface.navigate": {
     title: "Navigate",
@@ -815,7 +683,6 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     runLocations: ["browser"],
     effect: "interface",
     properties: { page: required("page_id"), parameters: optional("input_map") },
-    kestra: "not_compiled",
   },
   "interface.refresh": {
     title: "Refresh",
@@ -823,7 +690,6 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     runLocations: ["browser"],
     effect: "interface",
     properties: { component: optional("builder_key") },
-    kestra: "not_compiled",
   },
   "interface.set_panel": {
     title: "Open or close panel",
@@ -831,7 +697,6 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     runLocations: ["browser"],
     effect: "interface",
     properties: { panel: required("placement_id"), state: required("builder_key") },
-    kestra: "not_compiled",
   },
   "interface.set_filter": {
     title: "Set filter",
@@ -843,7 +708,6 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       field: required("field_id"),
       value: optional("any_value"),
     },
-    kestra: "not_compiled",
   },
 };
 
@@ -852,7 +716,6 @@ const buildDefinition = (type: string, input: DefinitionInput): FlowTaskTypeDefi
     ? "control"
     : "registered";
   const protectedEffect = input.effect === "change" || input.effect === "background_start";
-  const durableOnly = input.runLocations.length === 1 && input.runLocations[0] === "durable";
   return {
     type,
     category,
@@ -860,6 +723,7 @@ const buildDefinition = (type: string, input: DefinitionInput): FlowTaskTypeDefi
     title: input.title,
     summary: input.summary,
     runLocations: [...input.runLocations],
+    runs: { ...flowTaskRuns[type as FlowTaskTypeKey] },
     effect: input.effect,
     effectDeclaredBy: input.effectDeclaredBy ?? "task",
     ...(input.transactionScope ? { transactionScope: input.transactionScope } : {}),
@@ -869,12 +733,10 @@ const buildDefinition = (type: string, input: DefinitionInput): FlowTaskTypeDefi
     outputs: [...(input.outputs ?? [])],
     outcomes: [...outcomesByEffect[input.effect]],
     defaultPolicy: {
-      timeoutSeconds: input.timeoutSeconds ?? (durableOnly ? 300 : flowMaximumServerSeconds),
-      ...(input.retry ? { retry: input.retry } : {}),
+      timeoutSeconds: flowMaximumServerSeconds,
       duplicateProtection: protectedEffect ? "required" : "not_applicable",
       redaction: input.redaction ?? (protectedEffect ? "identifiers_only" : "no_payload"),
     },
-    kestra: { mode: input.kestra },
   };
 };
 
@@ -891,12 +753,18 @@ export const flowTaskRegistry: Readonly<Record<FlowTaskTypeKey, FlowTaskTypeDefi
 
 // ─── Publication: every task's run location ──────────────────────────────────────────────────
 
+/** Where each execution kind runs its steps today: the page and the server, or the back end. */
+const flowExecutionImplementations = {
+  interactive: ["page", "server"],
+  transaction: ["server"],
+  background: ["backend"],
+} as const satisfies Record<FlowExecutionKind, readonly (keyof FlowStepRuns)[]>;
+
 /** Where each execution kind runs its tasks. A task may be placed only where it can run. */
 export const flowExecutionRunLocations = {
   interactive: ["browser", "server"],
   transaction: ["transaction"],
   background: ["server"],
-  durable: ["durable"],
 } as const satisfies Record<FlowExecutionKind, readonly FlowTaskRunLocation[]>;
 
 export type FlowTaskPlacementIssue = {
@@ -908,7 +776,8 @@ export type FlowTaskPlacementIssue = {
     | "unknown_property"
     | "missing_property"
     | "saved_record_target"
-    | "refusal_not_possible";
+    | "refusal_not_possible"
+    | "not_yet_runnable";
   message: string;
 };
 
@@ -916,7 +785,6 @@ const locationLabels: Record<FlowTaskRunLocation, string> = {
   browser: "the browser",
   server: "the server",
   transaction: "a save transaction",
-  durable: "a durable flow",
 };
 
 /**
@@ -936,6 +804,13 @@ export const validateFlowTaskPlacement = (
   // BeforeSave flow shares its run with the other rules and never places an action-flow task.
   const actionFlow = flow.execution === "transaction" && flow.triggers.length === 0;
   const beforeSave = flow.triggers.some((trigger) => trigger.type === "BeforeSave");
+  const lifecycleRule = flow.triggers.some(
+    (trigger) =>
+      trigger.type === "BeforeSave" &&
+      trigger.operations.some(
+        (operation) => operation.kind === "delete" || operation.kind === "restore",
+      ),
+  );
   const visit = (tasks: readonly FlowTask[], path: (string | number)[]) => {
     tasks.forEach((flowTask, index) => {
       const taskPath = [...path, index];
@@ -957,6 +832,13 @@ export const validateFlowTaskPlacement = (
             path: [...taskPath, "type"],
             code: "wrong_run_location",
             message: `${definition.title} cannot run before a save`,
+          });
+        // A rule before a delete or restore reads the stored record and has nothing to require.
+        else if (lifecycleRule && flowTask.type === "rule.require")
+          issues.push({
+            path: [...taskPath, "type"],
+            code: "wrong_run_location",
+            message: `${definition.title} cannot run before a record is deleted or restored`,
           });
         // Only a save reads the warnings and requirements a rule task reports; an action flow
         // would drop them, so it may only refuse.
@@ -980,6 +862,16 @@ export const validateFlowTaskPlacement = (
             message: `${definition.title} runs only in ${definition.runLocations
               .map((location) => locationLabels[location])
               .join(" or ")}, so it cannot be placed in a ${flow.execution} flow`,
+          });
+        if (
+          !(flowExecutionImplementations[flow.execution] as readonly (keyof FlowStepRuns)[]).some(
+            (where) => definition.runs[where],
+          )
+        )
+          issues.push({
+            path: [...taskPath, "type"],
+            code: "not_yet_runnable",
+            message: `${definition.title} cannot run in a ${flow.execution} flow yet`,
           });
         if (!isFlowControlTask(flowTask)) {
           const registered = flowTask as Extract<FlowTask, { properties: unknown }>;

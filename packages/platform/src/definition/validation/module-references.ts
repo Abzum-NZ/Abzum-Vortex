@@ -41,7 +41,8 @@ import { linkDependencyProblem, type LinkDependencyField } from "../module-link-
 const linkDependencyViews = (fields: readonly JsonObject[]): LinkDependencyField[] =>
   fields.map((field) => {
     const settings = object(field.settings);
-    const dependsOn = settings.dependsOn === undefined ? undefined : object(settings.dependsOn);
+    const source = object(settings.optionsSource ?? {});
+    const optionParents = object(source.optionParents ?? {});
     return {
       id: String(field.fieldId),
       label: String(field.label),
@@ -52,20 +53,22 @@ const linkDependencyViews = (fields: readonly JsonObject[]): LinkDependencyField
         ? {
             options: array(settings.options).map((option) => ({
               value: String(option.value),
-              ...(option.parentValues === undefined
+              ...(optionParents[String(option.value)] === undefined
                 ? {}
-                : { parentValues: (option.parentValues as unknown[]).map(String) }),
+                : {
+                    parentValues: (optionParents[String(option.value)] as unknown[]).map(String),
+                  }),
             })),
           }
         : {}),
-      ...(dependsOn === undefined
+      ...(source.parentFieldId === undefined
         ? {}
         : {
             dependsOn: {
-              parent: String(dependsOn.parentFieldId),
-              ...(dependsOn.filterFieldId === undefined
+              parent: String(source.parentFieldId),
+              ...(source.filterFieldId === undefined
                 ? {}
-                : { filter: String(dependsOn.filterFieldId) }),
+                : { filter: String(source.filterFieldId) }),
             },
           }),
     };
@@ -386,7 +389,8 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
             array(settings.columns).some((column) => column.settings === undefined))
         )
           valid = false;
-        if (field.type === "choice" && settings.dependsOn !== undefined)
+        const narrowed = object(settings.optionsSource ?? {}).parentFieldId !== undefined;
+        if (field.type === "choice" && narrowed)
           valid =
             valid &&
             linkDependencyProblem(
@@ -397,7 +401,7 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
         if (field.type === "link") {
           const target = recordReference(settings.target, allowedModuleRoots);
           valid = target !== undefined;
-          if (valid && settings.dependsOn !== undefined)
+          if (valid && narrowed)
             valid =
               linkDependencyProblem(
                 linkDependencyViews(array(record.fields)),

@@ -617,7 +617,6 @@ function ControlForm({
   entries,
   references,
   condition,
-  choices,
   flows,
   disabled,
   onChange,
@@ -791,51 +790,6 @@ function ControlForm({
                 ),
               };
             })}
-          />
-        </div>
-      );
-    case "wait_until":
-      return (
-        <StudioFlowValueControl
-          id={id}
-          label="Until"
-          valueType="date_time"
-          references={references}
-          value={control.until}
-          disabled={disabled}
-          onChange={(source) => keep(source, (until) => ({ ...control, until }))}
-        />
-      );
-    case "wait_for_person":
-      return (
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor={id}>Form</Label>
-            <StudioReferencePicker
-              id={id}
-              disabled={disabled}
-              value={control.form}
-              options={choices.forms.map((form) => ({ value: form.alias, label: form.label }))}
-              onChange={(form) => onChange({ ...control, form }, null)}
-            />
-          </div>
-          <StudioFlowValueControl
-            id={`${id}-assignee`}
-            label="Who answers"
-            valueType="organization_account_reference"
-            references={references}
-            value={control.assignee}
-            disabled={disabled}
-            onChange={(source) => keep(source, (assignee) => ({ ...control, assignee }))}
-          />
-          <EntryRows
-            id={`${id}-inputs`}
-            label="Starting answers"
-            entries={control.inputs}
-            expected={entries}
-            references={references}
-            disabled={disabled}
-            onChange={(inputs) => onChange({ ...control, inputs }, null)}
           />
         </div>
       );

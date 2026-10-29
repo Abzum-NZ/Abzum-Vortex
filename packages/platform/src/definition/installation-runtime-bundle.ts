@@ -37,7 +37,7 @@ export {
   resolvePageComposition,
   type ResolvedPageComposition,
 } from "../pages/page-composition-resolution";
-export const installationRuntimeBundleFormatVersion = 2 as const;
+export const installationRuntimeBundleFormatVersion = 3 as const;
 export const installationRuntimeBundleMaximumPartBytes = 1_048_575;
 
 export const installationRuntimeBundleSections = [
@@ -362,7 +362,7 @@ export const installationRuntimeBundleAccessPlanSectionSchema = z
   })
   .strict();
 
-/** Exact protected source identities and immutable prepared Record plan for format 2. */
+/** Exact protected source identities and immutable prepared Record plan of a runtime bundle. */
 export const installationRuntimeBundleSourceManifestSchema = z
   .object({
     bundleFormatVersion: z.literal(installationRuntimeBundleFormatVersion),

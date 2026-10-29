@@ -1,4 +1,4 @@
-import { valueTypesCompatible } from "../catalogue/catalogues";
+import { valueTypesCompatible, workflowValueTypeSchema } from "../catalogue/catalogues";
 import { recordTypeIdSchema } from "../catalogue/identifiers";
 import type {
   DefinitionRuleFailureFamily,
@@ -27,6 +27,7 @@ import {
 } from "../workflows/flow-values";
 import type { DefinitionCompilerRefusalCode } from "./compilation-error";
 import { flowTaskOutputMembers } from "./flow-output-members";
+import { flowStepSettingIssues } from "./flow-step-settings";
 import {
   allTasksIn,
   checkDeclaration,
@@ -87,7 +88,7 @@ export type FlowValidationOptions = Readonly<{
   formTitle?: ((reference: string) => string | undefined) | undefined;
   /**
    * Finds a flow compiled together with this one, in either shape, from the reference a `run_flow`
-   * or `flow.run_background` task names. A target it does not return has no declared inputs,
+   * or `backend.run` task names. A target it does not return has no declared inputs,
    * outputs or execution kind here, so the call is refused rather than left untyped.
    */
   targetFlow?: (reference: string) => FlowDefinition | FlowSource | SourceFlow | undefined;
@@ -130,6 +131,7 @@ const placementCodes: Readonly<
   missing_property: ["vortex.definition.workflow_node_values", "required_value"],
   saved_record_target: ["vortex.definition.workflow_node_values", "invalid_value"],
   refusal_not_possible: ["vortex.definition.workflow_node_values", "invalid_value"],
+  not_yet_runnable: ["vortex.definition.unsupported_workflow_node", "unsupported_choice"],
 };
 
 const callCodes = {
@@ -205,6 +207,16 @@ const isTextLiteral = (value: FlowValue | undefined): boolean =>
   value.literal.type === "text" &&
   typeof value.literal.value === "string";
 
+/** The value type a Calculate step declares as its result, when it names a known one. */
+const calculationResultType = (task: FlowTask): StaticType | undefined => {
+  const value = (task as { properties?: Record<string, FlowValue> }).properties?.result_type;
+  return value?.kind === "literal" &&
+    typeof value.literal.value === "string" &&
+    workflowValueTypeSchema.safeParse(value.literal.value).success
+    ? (value.literal.value as StaticType)
+    : undefined;
+};
+
 // ─── The validator ─────────────────────────────────────────────────────────────────────────────
 
 type Scope = Map<string, FlowTask>;
@@ -230,6 +242,17 @@ export function validateFlow(
     add(placement.path, ruleCode, family, placement.message);
   }
 
+  // ── Contract 4 step settings: closed values, and settings that do not run yet. ──
+  for (const issue of flowStepSettingIssues(flow))
+    if (issue.notYetRunnable)
+      add(
+        issue.path,
+        "vortex.definition.unsupported_workflow_node",
+        "unsupported_choice",
+        issue.message,
+      );
+    else add(issue.path, "vortex.definition.workflow_node_values", "invalid_value", issue.message);
+
   // ── Structure and limits. ──
   validateStructure(flow, add);
 
@@ -254,12 +277,13 @@ export function validateFlow(
     flow.triggers.forEach((trigger, index) => {
       if (Object.keys(trigger.inputs).length > 0)
         unsupported(["triggers", index, "inputs"], "A save trigger supplies only its record");
+      // Not yet runnable: the one record writer applies rules to deletes and restores later.
       if (trigger.type === "BeforeSave")
         trigger.operations.forEach((operation, operationIndex) => {
-          if (operation.kind === "transition")
+          if (operation.kind === "delete" || operation.kind === "restore")
             unsupported(
               ["triggers", index, "operations", operationIndex],
-              "A flow before a save runs on create or update; a transition runs through its action",
+              `A rule before a record is ${operation.kind === "delete" ? "deleted" : "restored"} cannot run yet; cover create or update`,
             );
         });
     });
@@ -315,8 +339,6 @@ export function validateFlow(
         ? { known: false as const }
         : { known: true as const, type: declared.type as StaticType };
     }
-    // The person's answers have no declared shape until the form contract types them.
-    if (task.type === "wait_for_person") return { known: true as const, type: undefined };
     if (isFlowControlTask(task)) return { known: false as const };
     const registered = task as Extract<FlowTask, { properties: unknown }>;
     if (key === "outcome" && registered.allowRefusal === true)
@@ -329,6 +351,8 @@ export function validateFlow(
       : undefined;
     // An unregistered type is already refused by the placement check.
     if (definition === undefined) return { known: true as const, type: undefined };
+    if (task.type === "data.calculate" && key === "value")
+      return { known: true as const, type: calculationResultType(task) };
     const declared = definition.outputs.find((output) => output.key === key);
     return declared === undefined
       ? { known: false as const }
@@ -404,6 +428,18 @@ export function validateFlow(
         return "organization_account_reference";
       case "execution_now":
         return "date_time";
+      // Not yet runnable: the page runner reads page values and form fields in page segments.
+      case "page":
+      case "form":
+        add(
+          path,
+          "vortex.definition.unsupported_workflow_node",
+          "unsupported_choice",
+          reference.source === "page"
+            ? `The page value ${reference.name} cannot be read yet`
+            : `The form field ${reference.form}.${reference.field} cannot be read yet`,
+        );
+        return undefined;
       case "task_output": {
         if (where.triggerOnly) {
           add(
@@ -925,7 +961,23 @@ export function validateFlow(
           "invalid_value",
           `${name} must be a formula`,
         );
-      else formulaType(value.formula, where, [...path, "formula"]);
+      else {
+        const type = formulaType(value.formula, where, [...path, "formula"]);
+        // A calculation declares its result type, and its formula must produce it.
+        const declaredResult = calculationResultType(task);
+        if (
+          task.type === "data.calculate" &&
+          type !== undefined &&
+          declaredResult !== undefined &&
+          !valueTypesCompatible(type, declaredResult, "flow")
+        )
+          add(
+            path,
+            "vortex.definition.workflow_node_values",
+            "invalid_value",
+            `This calculation produces ${type}, not its declared result type ${declaredResult}`,
+          );
+      }
       return;
     }
     if (literalOnlyPropertyTypes.has(declared.type)) {
@@ -939,16 +991,12 @@ export function validateFlow(
       else if (declared.type === "flow_id") {
         const target = findFlow(String((value as { literal: { value: unknown } }).literal.value));
         if (target === undefined) refuseUnknownTarget(path);
-        else if (
-          task.type === "flow.run_background" &&
-          target.execution !== "background" &&
-          target.execution !== "durable"
-        )
+        else if (task.type === "backend.run" && target.execution !== "background")
           add(
             path,
             "vortex.definition.workflow_child_reference",
             "invalid_value",
-            "Run background flow starts only a background or durable flow",
+            "Run on back end runs only a back-end (background) flow",
           );
       }
       return;
@@ -1129,20 +1177,7 @@ export function validateFlow(
         checkInputMap(node.inputs, target, where, [...path, "inputs"]);
         return;
       }
-      case "wait_until": {
-        const node = task as Extract<FlowTask, { type: "wait_until" }>;
-        checkValue(node.until, ["date_time", "date"], where, [...path, "until"]);
-        return;
-      }
-      case "wait_for_person": {
-        const node = task as Extract<FlowTask, { type: "wait_for_person" }>;
-        checkValue(node.assignee, ["organization_account_reference"], where, [...path, "assignee"]);
-        for (const [name, value] of Object.entries(node.inputs))
-          valueType(value, where, [...path, "inputs", name]);
-        return;
-      }
       case "sequential":
-      case "parallel":
       case "stop":
         return;
       default: {

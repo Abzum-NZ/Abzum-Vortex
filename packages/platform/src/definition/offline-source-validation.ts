@@ -126,10 +126,10 @@ const compileModule = (
       ]),
     ).values(),
   ];
-  const evidence = { contractVersion: "3.0.0" as const, definitions, identities };
+  const evidence = { contractVersion: "4.0.0" as const, definitions, identities };
   const parsedRequest = moduleCompilationRequestSchema.safeParse({
-    sourceContractVersion: "3.0.0",
-    validationContractVersion: "3.0.0",
+    sourceContractVersion: "4.0.0",
+    validationContractVersion: "4.0.0",
     source,
     resolution: { ...evidence, fingerprint: fingerprintCanonicalValue(evidence) },
     draftMetadata: {

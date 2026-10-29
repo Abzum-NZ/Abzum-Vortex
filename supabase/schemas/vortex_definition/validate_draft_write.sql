@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_definition.validate_draft_write() RETURNS trigger
+CREATE OR REPLACE FUNCTION vortex_definition.validate_draft_write() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
@@ -46,6 +46,15 @@ begin
     raise exception using
       errcode = '23514',
       message = 'Definition draft metadata must match its permanent root and source contract';
+  end if;
+
+  -- A draft holds only the one accepted contract: an older release is history and is never
+  -- restored into a draft, and no writer can store a draft of another version.
+  if root_kind in ('application', 'module')
+    and new.source_contract_version <> all (vortex_definition.accepted_contract_version(root_kind)) then
+    raise exception using
+      errcode = '23514',
+      message = 'A definition draft must use the accepted definition contract version';
   end if;
 
   if new.updated_at < root_created_at then
