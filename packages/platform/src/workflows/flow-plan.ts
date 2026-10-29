@@ -158,12 +158,10 @@ const setBasedSteps = new Set([
 const leafLocation = (flow: FlowDefinition, task: FlowTask): UnitLocation => {
   if (task.type === "stop") return "neutral";
   const definition = registered(task);
-  if (definition === undefined)
-    throw new FlowPlanError(flow.id, task.id, "unknown step");
+  if (definition === undefined) throw new FlowPlanError(flow.id, task.id, "unknown step");
   // A save transaction and a back-end flow run every step in one place.
   if (flow.execution !== "interactive") return "server";
-  if (definition.runs.page && definition.runLocations.includes("browser"))
-    return "page";
+  if (definition.runs.page && definition.runLocations.includes("browser")) return "page";
   if (definition.runs.server) return "server";
   throw new FlowPlanError(
     flow.id,
@@ -177,8 +175,7 @@ const containsBackendRun = (task: FlowTask): boolean =>
   flowTaskChildLists(task).some((list) => list.tasks.some(containsBackendRun));
 
 const unitLocation = (flow: FlowDefinition, task: FlowTask): UnitLocation => {
-  if (!isFlowControlTask(task) || task.type === "stop")
-    return leafLocation(flow, task);
+  if (!isFlowControlTask(task) || task.type === "stop") return leafLocation(flow, task);
   // A Run flow step and a control step run where their children run; Run flow runs its child on
   // the server today.
   if (task.type === "run_flow") return "server";
@@ -201,10 +198,7 @@ const allSteps = (tasks: readonly FlowTask[]): FlowTask[] =>
   ]);
 
 /** Every reference a task's values and conditions read. */
-const referencesIn = (
-  value: unknown,
-  found: FlowReference[] = [],
-): FlowReference[] => {
+const referencesIn = (value: unknown, found: FlowReference[] = []): FlowReference[] => {
   if (typeof value === "string") {
     const reference = parseFlowReference(value);
     if (reference !== undefined) found.push(reference);
@@ -228,10 +222,7 @@ const referencesIn = (
 const outputTypes = (steps: readonly FlowTask[]): Record<string, string> =>
   Object.fromEntries(
     steps.flatMap((step) =>
-      (registered(step)?.outputs ?? []).map((output) => [
-        `${step.id}.${output.key}`,
-        output.type,
-      ]),
+      (registered(step)?.outputs ?? []).map((output) => [`${step.id}.${output.key}`, output.type]),
     ),
   );
 
@@ -245,24 +236,19 @@ const inputTypes = (
   for (const reference of referencesIn(steps)) {
     switch (reference.source) {
       case "input":
-        types[`inputs.${reference.name}`] =
-          flow.inputs[reference.name]?.type ?? "json";
+        types[`inputs.${reference.name}`] = flow.inputs[reference.name]?.type ?? "json";
         break;
       case "variable":
-        types[`vars.${reference.name}`] =
-          flow.variables[reference.name]?.type ?? "json";
+        types[`vars.${reference.name}`] = flow.variables[reference.name]?.type ?? "json";
         break;
       case "task_output": {
         const key = `${reference.task}.${reference.key}`;
         if (produced.has(reference.task)) break;
-        const producer = allSteps([
-          ...flow.tasks,
-          ...flow.errors,
-          ...flow.finally,
-        ]).find((step) => step.id === reference.task);
+        const producer = allSteps([...flow.tasks, ...flow.errors, ...flow.finally]).find(
+          (step) => step.id === reference.task,
+        );
         types[`outputs.${key}`] =
-          (producer === undefined ? undefined : outputTypes([producer])[key]) ??
-          "json";
+          (producer === undefined ? undefined : outputTypes([producer])[key]) ?? "json";
         break;
       }
       case "trigger_record":
@@ -289,11 +275,10 @@ const inputTypes = (
 const setBasedChanges = (steps: readonly FlowTask[]) =>
   steps.flatMap((step) => {
     if (step.type !== "for_each") return [];
-    const body = allSteps(
-      flowTaskChildLists(step).flatMap((list) => list.tasks),
-    ).filter((child) => !isFlowControlTask(child));
-    return body.length > 0 &&
-      body.every((child) => setBasedSteps.has(child.type))
+    const body = allSteps(flowTaskChildLists(step).flatMap((list) => list.tasks)).filter(
+      (child) => !isFlowControlTask(child),
+    );
+    return body.length > 0 && body.every((child) => setBasedSteps.has(child.type))
       ? [{ taskId: step.id, steps: body.map((child) => child.id) }]
       : [];
   });
@@ -309,22 +294,14 @@ type Draft = {
   closed: boolean;
 };
 
-const sameGuard = (
-  left: readonly FlowPathCondition[],
-  right: readonly FlowPathCondition[],
-) =>
+const sameGuard = (left: readonly FlowPathCondition[], right: readonly FlowPathCondition[]) =>
   left.length === right.length &&
   left.every(
     (condition, index) =>
-      condition.taskId === right[index]!.taskId &&
-      condition.branch === right[index]!.branch,
+      condition.taskId === right[index]!.taskId && condition.branch === right[index]!.branch,
   );
 
-const cut = (
-  flow: FlowDefinition,
-  section: FlowPlanSection,
-  tasks: readonly FlowTask[],
-) => {
+const cut = (flow: FlowDefinition, section: FlowPlanSection, tasks: readonly FlowTask[]) => {
   const drafts: Draft[] = [];
   const emit = (
     task: FlowTask,
@@ -335,9 +312,7 @@ const cut = (
   ) => {
     const current = drafts.at(-1);
     const kind =
-      location === "neutral"
-        ? (current?.kind ?? "server")
-        : (location as "page" | "server");
+      location === "neutral" ? (current?.kind ?? "server") : (location as "page" | "server");
     if (
       current !== undefined &&
       !current.closed &&
@@ -440,11 +415,11 @@ const cut = (
           break;
         }
         case "sequential":
-          walk(
-            (task as Extract<FlowTask, { type: "sequential" }>).tasks,
-            guard,
-            [...listPath, index, "tasks"],
-          );
+          walk((task as Extract<FlowTask, { type: "sequential" }>).tasks, guard, [
+            ...listPath,
+            index,
+            "tasks",
+          ]);
           break;
         default:
           // A For each whose body mixes page and server steps would make one request per item.
@@ -462,11 +437,7 @@ const cut = (
 
 /** Compiles one validated flow into its plan. Throws `FlowPlanError` naming the step it refuses. */
 export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
-  for (const step of allSteps([
-    ...flow.tasks,
-    ...flow.errors,
-    ...flow.finally,
-  ])) {
+  for (const step of allSteps([...flow.tasks, ...flow.errors, ...flow.finally])) {
     if (step.type !== "switch") continue;
     const cases = (step as Extract<FlowTask, { type: "switch" }>).cases;
     for (let index = 0; index < cases.length; index += 1) {
@@ -498,12 +469,7 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
       };
     const steps = allSteps(draft.tasks);
     const produced = new Set(steps.map((step) => step.id));
-    const inputs = inputTypes(
-      flow,
-      [...draft.tasks, ...draft.guard],
-      produced,
-      id,
-    );
+    const inputs = inputTypes(flow, [...draft.tasks, ...draft.guard], produced, id);
     const outputs = outputTypes(steps);
     return {
       kind: "server",
@@ -532,16 +498,12 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
     };
   });
   const declared = (record: Readonly<Record<string, { type: string }>>) =>
-    Object.fromEntries(
-      Object.entries(record).map(([name, value]) => [name, value.type]),
-    );
+    Object.fromEntries(Object.entries(record).map(([name, value]) => [name, value.type]));
   return {
     flowId: flow.id,
     definition: flow,
     segments,
-    changes: segments.some(
-      (segment) => segment.kind === "server" && segment.changes,
-    ),
+    changes: segments.some((segment) => segment.kind === "server" && segment.changes),
     pageSteps: segments.some((segment) => segment.kind === "page"),
     browser: {
       flowId: flow.id,
@@ -565,18 +527,81 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
   };
 };
 
+/** Links a server segment to every child plan it can run. */
+const linkFlowPlans = (plans: ReadonlyMap<string, FlowPlan>) => {
+  const linked = new Map<string, FlowPlan>();
+  const visit = (id: string, active: ReadonlySet<string>): FlowPlan => {
+    const known = linked.get(id);
+    if (known !== undefined) return known;
+    const plan = plans.get(id);
+    if (plan === undefined) throw new FlowPlanError(id, undefined, `Flow ${id} is unavailable`);
+    if (active.has(id)) throw new FlowPlanError(id, undefined, `Flow ${id} calls itself`);
+    const next = new Set(active).add(id);
+    const segments = plan.segments.map((segment): FlowPlanSegment => {
+      if (segment.kind !== "server") return segment;
+      const children = allSteps(segment.tasks).filter(
+        (step): step is Extract<FlowTask, { type: "run_flow" }> => step.type === "run_flow",
+      );
+      if (children.length === 0) return segment;
+      const fingerprints = children.map((step) => {
+        const childId = String(step.flowId);
+        if (!plans.has(childId))
+          throw new FlowPlanError(id, step.id, `Flow ${id} cannot run unavailable flow ${childId}`);
+        const child = visit(childId, next);
+        if (child.pageSteps)
+          throw new FlowPlanError(
+            id,
+            step.id,
+            `Flow ${id} cannot run flow ${childId} with page steps on the server`,
+          );
+        return {
+          flowId: childId,
+          segments: child.segments.flatMap((part) =>
+            part.kind === "server" ? [part.fingerprint] : [],
+          ),
+        };
+      });
+      return {
+        ...segment,
+        fingerprint: fingerprintCanonicalValue({
+          segment: segment.fingerprint,
+          children: fingerprints,
+        }),
+      };
+    });
+    const fingerprints = new Map(
+      segments.flatMap((segment) =>
+        segment.kind === "server" ? [[segment.id, segment.fingerprint] as const] : [],
+      ),
+    );
+    const result: FlowPlan = {
+      ...plan,
+      segments,
+      browser: {
+        ...plan.browser,
+        segments: plan.browser.segments.map((segment) =>
+          segment.kind === "server"
+            ? { ...segment, fingerprint: fingerprints.get(segment.id)! }
+            : segment,
+        ),
+      },
+    };
+    linked.set(id, result);
+    return result;
+  };
+  return (id: string) => visit(id, new Set());
+};
+
 /** Compiles every flow of one release. One flow per identity; an ambiguous release is refused. */
-export const compileFlowPlans = (
-  flows: readonly FlowDefinition[],
-): FlowPlanSet => {
+export const compileFlowPlans = (flows: readonly FlowDefinition[]): FlowPlanSet => {
   const plans = new Map<string, FlowPlan>();
   for (const flow of flows) {
     const id = String(flow.id);
-    if (plans.has(id))
-      throw new FlowPlanError(id, undefined, "two flows share one identity");
+    if (plans.has(id)) throw new FlowPlanError(id, undefined, "two flows share one identity");
     plans.set(id, compileFlowPlan(flow));
   }
-  return planSet(plans);
+  const link = linkFlowPlans(plans);
+  return planSet(new Map([...plans.keys()].map((id) => [id, link(id)])));
 };
 
 /** Why a binding's plan cannot run as bound, or undefined. Publication refuses it by name. */
@@ -647,7 +672,17 @@ export const flowPlansOf = (releaseSet: PlannedReleaseSet): FlowPlanSet => {
     }
   }
   if (ambiguous.size > 0) throw new Error("FLOW_IDENTITY_AMBIGUOUS");
-  const set = planSet(plans);
+  const link = linkFlowPlans(plans);
+  const available = new Map<string, FlowPlan>();
+  for (const id of plans.keys()) {
+    try {
+      available.set(id, link(id));
+    } catch (error) {
+      if (!(error instanceof FlowPlanError)) throw error;
+      console.error(`[flows] flow ${id} cannot be planned: ${error.reason}`);
+    }
+  }
+  const set = planSet(available);
   releasePlans.set(releaseSet.application.content, { modules, set });
   return set;
 };
