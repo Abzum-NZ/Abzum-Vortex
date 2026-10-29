@@ -2,6 +2,15 @@ set role vortex_owner;
 
 grant create on schema vortex_record to vortex_record_adapter;
 
+grant update on vortex_record.relationship_edges to vortex_record_adapter;
+create policy relationship_edges_adapter_update on vortex_record.relationship_edges
+  for update to vortex_record_adapter
+  using (from_organisation_id = (select vortex_platform.organization_id()))
+  with check (
+    from_organisation_id = (select vortex_platform.organization_id())
+    and to_organisation_id = (select vortex_platform.organization_id())
+  );
+
 alter table vortex_record.organization_activity_entries
   add column agent_channel text,
   add constraint organization_activity_entries_agent_channel_valid check (agent_channel in ('webmcp', 'mcp'));
