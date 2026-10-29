@@ -58,9 +58,10 @@ const tokenize = (text: string): Token[] => {
       position += space.length;
       continue;
     }
-    const token = /^(?:"(?:[^"\\]|\\.)*"|\d+(?:\.\d+)?|[A-Za-z_][A-Za-z0-9_.]*|[()+,*/-])/.exec(
-      rest,
-    )?.[0];
+    const token =
+      /^(?:"(?:[^"\\]|\\.)*"|\d+(?:\.\d+)?|[A-Za-z_][A-Za-z0-9_.]*|<=|>=|==|!=|[<>()+,*/-])/.exec(
+        rest,
+      )?.[0];
     if (token === undefined) throw new Error(`Unexpected character at position ${position + 1}.`);
     tokens.push({
       kind:
@@ -95,10 +96,44 @@ const parseFormula = (text: string, references: readonly FormulaReferenceChoice[
     while (true) {
       const operator = peek();
       const precedence =
-        operator === "+" || operator === "-" ? 1 : operator === "*" || operator === "/" ? 2 : 0;
+        operator === "==" ||
+        operator === "!=" ||
+        operator === "<" ||
+        operator === "<=" ||
+        operator === ">" ||
+        operator === ">="
+          ? 1
+          : operator === "+" || operator === "-"
+            ? 2
+            : operator === "*" || operator === "/"
+              ? 3
+              : 0;
       if (precedence < minimum || precedence === 0) break;
       index += 1;
       const right = expression(precedence + 1);
+      if (
+        operator === "==" ||
+        operator === "!=" ||
+        operator === "<" ||
+        operator === "<=" ||
+        operator === ">" ||
+        operator === ">="
+      ) {
+        const op =
+          operator === "=="
+            ? "eq"
+            : operator === "!="
+              ? "neq"
+              : operator === "<"
+                ? "lt"
+                : operator === "<="
+                  ? "lte"
+                  : operator === ">"
+                    ? "gt"
+                    : "gte";
+        left = { op, left, right };
+        continue;
+      }
       left =
         operator === "+"
           ? { op: "add", args: [left, right] }
@@ -247,6 +282,26 @@ const printFormula = (
                 ? "*"
                 : "/";
         return `(${node.args.map(print).join(` ${symbol} `)})`;
+      }
+      case "eq":
+      case "neq":
+      case "lt":
+      case "lte":
+      case "gt":
+      case "gte": {
+        const symbol =
+          node.op === "eq"
+            ? "=="
+            : node.op === "neq"
+              ? "!="
+              : node.op === "lt"
+                ? "<"
+                : node.op === "lte"
+                  ? "<="
+                  : node.op === "gt"
+                    ? ">"
+                    : ">=";
+        return `(${print(node.left)} ${symbol} ${print(node.right)})`;
       }
       case "round":
         return `round(${print(node.arg)}, ${node.scale}, ${JSON.stringify(node.rounding)})`;

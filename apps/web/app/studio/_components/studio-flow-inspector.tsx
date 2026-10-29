@@ -4,7 +4,7 @@ import { Icon } from "@vortex/ui";
 
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { Button } from "@vortex/ui/components/button";
-import { describeFailure, type SourceFlow } from "@vortex/platform/schema";
+import { checkFlowFormula, describeFailure, type SourceFlow } from "@vortex/platform/schema";
 import {
   StudioField,
   StudioReferencePicker,
@@ -184,6 +184,27 @@ export function StudioFlowInspector({
     [context.source, outline, selection.moduleKey, step, choices.forms],
   );
   const condition = useMemo(() => studioFlowConditionContext(references), [references]);
+  const formula =
+    task?.type === "data.calculate" &&
+    "properties" in task &&
+    task.properties.formula?.kind === "formula"
+      ? task.properties.formula.formula
+      : undefined;
+  let formulaHasErrors = false;
+  const formulaType =
+    formula === undefined
+      ? undefined
+      : checkFlowFormula(formula, {
+          nowAllowed: true,
+          reference: (reference) =>
+            references.find(
+              (choice) => JSON.stringify(choice.reference) === JSON.stringify(reference),
+            )?.type,
+          issue: () => {
+            formulaHasErrors = true;
+          },
+        });
+  const canEnforceFormula = formulaType === "yes_no" && !formulaHasErrors;
   /**
    * The settings as typed, on the draft snapshot they stand on: what the draft took (which it may
    * hold trimmed, so the typing is shown as typed), or input it refused, shown with its problem and
@@ -502,7 +523,12 @@ export function StudioFlowInspector({
                   <Button
                     type="button"
                     size="sm"
-                    disabled={disabled || saveRecordType === "" || local?.problem != null}
+                    disabled={
+                      disabled ||
+                      saveRecordType === "" ||
+                      local?.problem != null ||
+                      !canEnforceFormula
+                    }
                     onClick={() => {
                       const formula = task.properties.formula;
                       if (formula?.kind !== "formula") return;
@@ -530,6 +556,11 @@ export function StudioFlowInspector({
                   >
                     Also enforce on save
                   </Button>
+                  {canEnforceFormula ? null : (
+                    <p className="text-sm text-muted-foreground">
+                      Only a yes/no formula can be enforced on save.
+                    </p>
+                  )}
                 </div>
               )}
             {local?.problem == null ? null : (
