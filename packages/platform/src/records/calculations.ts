@@ -147,6 +147,26 @@ const formulaFailure = (
       const failure = formulaFailure(child, scope);
       if (failure !== undefined) return failure;
     }
+  } else if (formula.op === "percent") {
+    const part = evaluate(formula.args[0]);
+    const whole = evaluate(formula.args[1]);
+    if (part !== undefined && whole !== undefined) {
+      if (zeroValue(whole.value)) return "division_by_zero";
+      if (
+        (part.type === "money") !== (whole.type === "money") ||
+        (part.type === "money" && currencyOf(part.value) !== currencyOf(whole.value))
+      )
+        return "money_dimension_mismatch";
+    }
+    for (const child of formula.args) {
+      const failure = formulaFailure(child, scope);
+      if (failure !== undefined) return failure;
+    }
+  } else if (formula.op === "min" || formula.op === "max" || formula.op === "coalesce") {
+    for (const child of formula.args) {
+      const failure = formulaFailure(child, scope);
+      if (failure !== undefined) return failure;
+    }
   } else if (formula.op === "round") return formulaFailure(formula.arg, scope);
   else if (formula.op === "date_add") {
     const amount = evaluate(formula.amount);
@@ -273,15 +293,13 @@ export const evaluateRecordCalculations = (
       },
     };
     const evaluated = evaluateFlowFormula(formula, scope, {
-      preserveExactArithmetic: true,
       ...(field.settings.decimalPlaces === undefined
         ? {}
-        : { resultScale: field.settings.decimalPlaces }),
+        : { resultScale: field.settings.decimalPlaces, resultRounding: field.settings.rounding! }),
     });
     const exactWhole =
       field.settings.resultType === "whole_number" && evaluated !== undefined
         ? evaluateFlowFormula(formula, scope, {
-            preserveExactArithmetic: true,
             requireExactInteger: true,
           })
         : evaluated;

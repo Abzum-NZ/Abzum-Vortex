@@ -191,9 +191,11 @@ export type FlowFormula =
       terminalStatusValues: JsonValue[];
     }
   | { op: "record_id"; arg: FlowFormula }
-  | ({ op: "add" | "multiply"; args: FlowFormula[] } & ArithmeticPrecision)
-  | ({ op: "subtract" | "divide"; args: [FlowFormula, FlowFormula] } & ArithmeticPrecision)
+  | { op: "add" | "multiply"; args: FlowFormula[] }
+  | { op: "subtract" | "divide"; args: [FlowFormula, FlowFormula] }
   | ({ op: "round"; arg: FlowFormula } & ArithmeticPrecision)
+  | { op: "min" | "max" | "coalesce"; args: FlowFormula[] }
+  | ({ op: "percent"; args: [FlowFormula, FlowFormula] } & ArithmeticPrecision)
   | {
       op: "eq" | "neq" | "lt" | "lte" | "gt" | "gte" | "contains" | "starts_with" | "ends_with";
       left: FlowFormula;
@@ -251,31 +253,31 @@ const flowFormulaTreeSchema: z.ZodType<FlowFormula> = z.lazy(() =>
       .object({
         op: z.literal("add"),
         args: z.array(flowFormulaTreeSchema).min(2).max(10),
-        ...precisionShape,
       })
       .strict(),
     z
       .object({
         op: z.literal("multiply"),
         args: z.array(flowFormulaTreeSchema).min(2).max(10),
-        ...precisionShape,
       })
       .strict(),
     z
       .object({
         op: z.literal("subtract"),
         args: z.tuple([flowFormulaTreeSchema, flowFormulaTreeSchema]),
-        ...precisionShape,
       })
       .strict(),
     z
       .object({
         op: z.literal("divide"),
         args: z.tuple([flowFormulaTreeSchema, flowFormulaTreeSchema]),
-        ...precisionShape,
       })
       .strict(),
     z.object({ op: z.literal("round"), arg: flowFormulaTreeSchema, ...precisionShape }).strict(),
+    z.object({ op: z.literal("min"), args: z.array(flowFormulaTreeSchema).min(1).max(20) }).strict(),
+    z.object({ op: z.literal("max"), args: z.array(flowFormulaTreeSchema).min(1).max(20) }).strict(),
+    z.object({ op: z.literal("coalesce"), args: z.array(flowFormulaTreeSchema).min(1).max(20) }).strict(),
+    z.object({ op: z.literal("percent"), args: z.tuple([flowFormulaTreeSchema, flowFormulaTreeSchema]), ...precisionShape }).strict(),
     z
       .object({
         op: z.enum(["eq", "neq", "lt", "lte", "gt", "gte", "contains", "starts_with", "ends_with"]),
@@ -341,6 +343,10 @@ export const flowFormulaChildren = (formula: FlowFormula): readonly FlowFormula[
     case "multiply":
     case "subtract":
     case "divide":
+    case "min":
+    case "max":
+    case "coalesce":
+    case "percent":
     case "and":
     case "or":
       return formula.args;
@@ -385,6 +391,11 @@ const inspectFormula = (
 /** True when the formula reads the current time through the `now` operator. */
 export const flowFormulaUsesNow = (formula: FlowFormula): boolean =>
   inspectFormula(formula).usesNow;
+
+/** A divide at a numeric escape must be protected by an explicit rounding operation. */
+export const flowFormulaHasUnroundedDivide = (formula: FlowFormula): boolean =>
+  formula.op !== "round" &&
+  (formula.op === "divide" || flowFormulaChildren(formula).some(flowFormulaHasUnroundedDivide));
 
 /**
  * A formula bounded in depth and size. Whether `now` may appear depends on where the formula

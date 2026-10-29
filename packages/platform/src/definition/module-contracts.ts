@@ -1,4 +1,8 @@
-import { flowFormulaSchema, flowFormulaUsesNow } from "../workflows/flow-values";
+import {
+  flowFormulaSchema,
+  flowFormulaUsesNow,
+  flowRoundingModeSchema,
+} from "../workflows/flow-values";
 import { z } from "zod";
 import { recordTitleFieldEligible } from "./record-title-field";
 import { moduleQueryExposureSchema } from "./module-query-exposure";
@@ -337,6 +341,7 @@ const calculationSettingsSchema = z
     ]),
     evaluation: moduleCalculationEvaluationSchema.optional(),
     decimalPlaces: z.number().int().min(0).max(12).optional(),
+    rounding: flowRoundingModeSchema.optional(),
     expression: flowFormulaSchema,
     dependencyFieldIds: z.array(fieldIdSchema).min(1),
   })
@@ -349,7 +354,7 @@ const calculationSettingsSchema = z
         message: "A deadline-passed calculation uses the current time and is read-time",
       });
     if (
-      value.decimalPlaces !== undefined &&
+      (value.decimalPlaces !== undefined || value.rounding !== undefined) &&
       value.resultType !== "decimal_number" &&
       value.resultType !== "money"
     )
@@ -357,6 +362,12 @@ const calculationSettingsSchema = z
         code: "custom",
         path: ["decimalPlaces"],
         message: "Only decimal and money calculations declare result precision",
+      });
+    if ((value.decimalPlaces === undefined) !== (value.rounding === undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["rounding"],
+        message: "Calculation places and rounding must be declared together",
       });
   });
 const totalSettingsSchema = z

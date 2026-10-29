@@ -468,7 +468,6 @@ export function StudioFlowInspector({
               fields={fields}
               draft={draft}
               controlEntries={form.controlEntries}
-              calculationReferences={form.calculationReferences}
               references={references}
               condition={condition}
               choices={choices}

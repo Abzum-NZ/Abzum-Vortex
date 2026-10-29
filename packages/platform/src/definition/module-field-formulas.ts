@@ -1,4 +1,8 @@
-import { flowFormulaSchema, flowFormulaUsesNow } from "../workflows/flow-values";
+import {
+  flowFormulaHasUnroundedDivide,
+  flowFormulaSchema,
+  flowFormulaUsesNow,
+} from "../workflows/flow-values";
 import {
   calculationFormulaDependencies,
   checkCalculationFormula,
@@ -131,14 +135,16 @@ export const settledCalculation = (
       ? settings.result_type
       : choices[0]!;
   const precise = result_type === "decimal_number" || result_type === "money";
-  const { decimal_places: places, evaluation, ...rest } = settings;
+  const { decimal_places: places, rounding, evaluation, ...rest } = settings;
   return {
     ...rest,
     result_type,
     evaluation: calculationForcedReadTime(settings.expression, fields)
       ? "read_time"
       : (evaluation ?? "stored"),
-    ...(precise ? { decimal_places: places ?? 2 } : {}),
+    ...(precise && places !== undefined
+      ? { decimal_places: places, rounding: rounding ?? "half_even" }
+      : {}),
   } as CalculationSettings;
 };
 
@@ -207,9 +213,10 @@ export const calculationProblems = (
     problems.push("Formula: these calculations read each other in a circle.");
   if (
     ["decimal_number", "money"].includes(settings.result_type) &&
-    settings.decimal_places === undefined
+    settings.decimal_places === undefined &&
+    flowFormulaHasUnroundedDivide(parsed.data)
   )
-    problems.push("Decimal places: enter the result precision.");
+    problems.push("Formula: round every division when the result has no decimal places.");
   if (!decimalPlacesValid(settings.decimal_places))
     problems.push("Decimal places: enter a whole number from 0 to 12.");
   if (settings.evaluation === "stored" && calculationForcedReadTime(parsed.data, fields))

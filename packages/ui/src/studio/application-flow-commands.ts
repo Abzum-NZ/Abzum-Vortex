@@ -219,8 +219,6 @@ const seedValue = (
             { op: "literal", type: "whole_number", value: 0 },
             { op: "literal", type: "whole_number", value: 0 },
           ],
-          scale: 0,
-          rounding: "half_up",
         },
       };
     case "record_type_id":
@@ -313,6 +311,10 @@ const seededTask = (
   // A dialog is headed by what the person was doing: the flow's name.
   if (definition.type === "interface.show_message")
     properties.title = text(flow.labels?.name ?? "");
+  if (definition.type === "data.calculate") {
+    properties.places = { kind: "literal", literal: { type: "whole_number", value: 2 } };
+    properties.rounding = text("half_up");
+  }
   return { id, type: definition.type, version: definition.version, properties };
 };
 

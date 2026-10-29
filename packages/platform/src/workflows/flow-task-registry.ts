@@ -543,7 +543,12 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     runLocations: allLocations,
     effect: "pure",
     // `result_type` names a value type; the formula's type must match it and `value` takes it.
-    properties: { formula: required("formula"), result_type: required("builder_key") },
+    properties: {
+      formula: required("formula"),
+      result_type: required("builder_key"),
+      places: optional("whole_number"),
+      rounding: optional("builder_key"),
+    },
     outputs: [output("value", "json")],
   },
   "data.record_link": {

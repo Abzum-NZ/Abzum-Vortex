@@ -23,6 +23,8 @@ import {
 } from "../workflows/flow-task-registry";
 import {
   flowMaximumTaskOutputPathDepth,
+  flowFormulaChildren,
+  flowRoundingModeSchema,
   type FlowFormula,
   type FlowReference,
   type FlowValue,
@@ -572,8 +574,23 @@ export function validateFlow(
         return value.literal.type;
       case "reference":
         return resolveReference(value.reference, where, [...path, "reference"]);
-      case "formula":
-        return checkFormulaAt(value.formula, where, [...path, "formula"]);
+      case "formula": {
+        const type = checkFormulaAt(value.formula, where, [...path, "formula"]);
+        const hasDivide = (formula: FlowFormula): boolean =>
+          formula.op !== "round" &&
+          (formula.op === "divide" || flowFormulaChildren(formula).some(hasDivide));
+        if (
+          (type === "whole_number" || type === "decimal_number" || type === "money") &&
+          hasDivide(value.formula)
+        )
+          add(
+            path,
+            "vortex.definition.workflow_node_values",
+            "invalid_value",
+            "A numeric formula containing division must round its result",
+          );
+        return type;
+      }
       // A map is a JSON object of values. Every entry is checked as a value of its own, so a
       // reference inside it resolves or is refused exactly as one outside it would be.
       case "map":
@@ -716,6 +733,47 @@ export function validateFlow(
     where: Where,
     path: Path,
   ) => {
+    if (task.type === "data.calculate" && name === "result_type" && isTextLiteral(value)) {
+      const resultType = (value as Extract<FlowValue, { kind: "literal" }>).literal.value;
+      const precise = resultType === "decimal_number" || resultType === "money";
+      const places = task.properties.places;
+      const rounding = task.properties.rounding;
+      if (
+        precise &&
+        (places?.kind !== "literal" ||
+          places.literal.type !== "whole_number" ||
+          typeof places.literal.value !== "number" ||
+          !Number.isInteger(places.literal.value) ||
+          places.literal.value < 0 ||
+          places.literal.value > 18)
+      )
+        add(
+          [...path.slice(0, -1), "places"],
+          "vortex.definition.workflow_node_values",
+          "invalid_value",
+          "A decimal or money calculation declares places from 0 to 18",
+        );
+      if (
+        precise &&
+        (!isTextLiteral(rounding) ||
+          !flowRoundingModeSchema.safeParse(
+            (rounding as Extract<FlowValue, { kind: "literal" }>).literal.value,
+          ).success)
+      )
+        add(
+          [...path.slice(0, -1), "rounding"],
+          "vortex.definition.workflow_node_values",
+          "invalid_value",
+          "A decimal or money calculation declares its rounding mode",
+        );
+      if (!precise && (places !== undefined || rounding !== undefined))
+        add(
+          path,
+          "vortex.definition.workflow_node_values",
+          "invalid_value",
+          "Only decimal or money calculations declare places and rounding",
+        );
+    }
     if (task.type === "data.format" && name === "formatter" && isTextLiteral(value)) {
       const formatter = (value as Extract<FlowValue, { kind: "literal" }>).literal.value;
       const rejectFormat = (property: string, message: string) =>

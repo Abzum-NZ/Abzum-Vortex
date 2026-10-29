@@ -14,6 +14,7 @@ import type {
   FlowReference,
   FlowRoundingMode,
 } from "../workflows/flow-values";
+import { flowFormulaChildren } from "../workflows/flow-values";
 import { flowInstantMicros } from "./flow-instant";
 
 /**
@@ -221,10 +222,16 @@ const arithmetic = (
       exact = combined;
     }
     const scaled = roundedQuotient(exact.numerator * powerOfTen(scale), exact.denominator, mode);
-    if (absolute(scaled) >= powerOfTen(maximumDecimalDigits)) return undefined;
-    const amount = formatExactDecimal(
-      parseExactDecimal(formatExactDecimal({ coefficient: scaled, scale } as ExactDecimal))!,
-    );
+    if (absolute(scaled) >= powerOfTen(maximumDecimalDigits) && !preserveExactArithmetic)
+      return undefined;
+    // Intermediate values carry their exact rational separately. A large intermediate can be
+    // brought back into range by a later operation, so its display placeholder is not a limit.
+    const amount =
+      absolute(scaled) >= powerOfTen(maximumDecimalDigits)
+        ? "0"
+        : formatExactDecimal(
+            parseExactDecimal(formatExactDecimal({ coefficient: scaled, scale } as ExactDecimal))!,
+          );
     if (commonCurrency !== undefined) {
       const result = value("money", { amount, currency: commonCurrency });
       if (preserveExactArithmetic) exactValues.set(result, exact);
@@ -471,13 +478,44 @@ export const evaluateFlowFormula = (
   formula: FlowFormula,
   scope: FlowFormulaScope,
   options: Readonly<{
-    preserveExactArithmetic?: boolean;
     requireExactInteger?: boolean;
     /** Rounds a decimal or money result once, from its exact value, to this many places. */
     resultScale?: number;
+    resultRounding?: FlowRoundingMode;
   }> = {},
 ): FlowRuntimeValue | undefined => {
   const exactValues = new WeakMap<FlowRuntimeValue, ExactRational>();
+  const exactText = (exact: ExactRational): string | undefined => {
+    let denominator = exact.denominator;
+    let twos = 0;
+    let fives = 0;
+    while (denominator % 2n === 0n) {
+      denominator /= 2n;
+      twos += 1;
+    }
+    while (denominator % 5n === 0n) {
+      denominator /= 5n;
+      fives += 1;
+    }
+    const scale = Math.max(twos, fives);
+    if (denominator !== 1n || scale > maximumDecimalDigits) return undefined;
+    const coefficient = exact.numerator * 2n ** BigInt(scale - twos) * 5n ** BigInt(scale - fives);
+    if (absolute(coefficient).toString().length > maximumDecimalDigits) return undefined;
+    return formatExactDecimal({ coefficient, scale } as ExactDecimal);
+  };
+  const compareValues = (left: FlowRuntimeValue, right: FlowRuntimeValue) => {
+    const ordinary = compare(left, right);
+    if (typeof ordinary !== "number") return ordinary;
+    const leftDecimal = decimalOf(left);
+    const rightDecimal = decimalOf(right);
+    const first =
+      exactValues.get(left) ?? (leftDecimal === undefined ? undefined : rationalOf(leftDecimal));
+    const second =
+      exactValues.get(right) ?? (rightDecimal === undefined ? undefined : rationalOf(rightDecimal));
+    if (first === undefined || second === undefined) return ordinary;
+    const difference = first.numerator * second.denominator - second.numerator * first.denominator;
+    return difference < 0n ? -1 : difference > 0n ? 1 : 0;
+  };
   const evaluate = (node: FlowFormula): FlowRuntimeValue | undefined => {
     switch (node.op) {
       case "literal":
@@ -511,29 +549,82 @@ export const evaluateFlowFormula = (
           : arithmetic(
               node.op,
               operands as FlowRuntimeValue[],
-              node.scale,
-              node.rounding,
+              node.op !== "divide" && operands.every((operand) => operand?.type === "whole_number")
+                ? 0
+                : 18,
+              "half_even",
               exactValues,
-              options.preserveExactArithmetic === true,
+              true,
             );
       }
       case "round": {
         const operand = evaluate(node.arg);
         if (operand === undefined) return undefined;
-        const rounded = arithmetic(
-          "add",
-          [{ type: operand.type, value: operand.value }],
-          node.scale,
-          node.rounding,
-          exactValues,
-          false,
-        );
+        const rounded = arithmetic("add", [operand], node.scale, node.rounding, exactValues, false);
         if (rounded === undefined) return undefined;
         if (operand.type === "whole_number") {
           const whole = Number(rounded.value);
           return Number.isSafeInteger(whole) ? value("whole_number", whole) : undefined;
         }
         return value(operand.type, rounded.value);
+      }
+      case "coalesce": {
+        let last: FlowRuntimeValue | undefined;
+        for (const arg of node.args) {
+          last = evaluate(arg);
+          if (last === undefined) return undefined;
+          if (last.value !== null) return last;
+        }
+        return last;
+      }
+      case "min":
+      case "max": {
+        let chosen = evaluate(node.args[0]!);
+        if (chosen === undefined) return undefined;
+        for (const arg of node.args.slice(1)) {
+          const next = evaluate(arg);
+          if (next === undefined) return undefined;
+          const order = compareValues(chosen, next);
+          if (typeof order !== "number") return undefined;
+          if ((node.op === "min" && order > 0) || (node.op === "max" && order < 0)) chosen = next;
+        }
+        return chosen;
+      }
+      case "percent": {
+        const part = evaluate(node.args[0]);
+        const whole = evaluate(node.args[1]);
+        if (part === undefined || whole === undefined) return undefined;
+        if ((part.type === "money") !== (whole.type === "money")) return undefined;
+        if (part.type === "money" && currencyOf(part) !== currencyOf(whole)) return undefined;
+        const asDecimal = (operand: FlowRuntimeValue): FlowRuntimeValue | undefined => {
+          const decimal = decimalOf(operand);
+          if (decimal === undefined) return undefined;
+          const result = value("decimal_number", formatExactDecimal(decimal));
+          const exact = exactValues.get(operand);
+          if (exact !== undefined) exactValues.set(result, exact);
+          return result;
+        };
+        const numerator = asDecimal(part);
+        const denominator = asDecimal(whole);
+        if (numerator === undefined || denominator === undefined) return undefined;
+        const ratio = arithmetic(
+          "divide",
+          [numerator, denominator],
+          node.scale,
+          node.rounding,
+          exactValues,
+          true,
+        );
+        return ratio === undefined
+          ? undefined
+          : arithmetic(
+              "multiply",
+              [ratio, value("whole_number", 100)],
+              node.scale,
+              node.rounding,
+              exactValues,
+              false,
+            );
       }
       case "eq":
       case "neq":
@@ -544,7 +635,7 @@ export const evaluateFlowFormula = (
         const left = evaluate(node.left);
         const right = evaluate(node.right);
         if (left === undefined || right === undefined) return undefined;
-        const order = compare(left, right);
+        const order = compareValues(left, right);
         if (order === undefined) return undefined;
         if (node.op === "eq" || node.op === "neq") {
           const equal = order === 0 || order === "equal_only_same";
@@ -594,7 +685,7 @@ export const evaluateFlowFormula = (
         for (const option of node.options) {
           const candidate = evaluate(option);
           if (candidate === undefined) return undefined;
-          const order = compare(target, candidate);
+          const order = compareValues(target, candidate);
           if (order === undefined) return undefined;
           if (order === 0 || order === "equal_only_same") found = true;
         }
@@ -618,7 +709,11 @@ export const evaluateFlowFormula = (
       }
       case "join": {
         const parts = node.parts.map(evaluate);
-        const texts = parts.map((part) => (part === undefined ? undefined : joined(part)));
+        const texts = parts.map((part) => {
+          if (part === undefined) return undefined;
+          const exact = exactValues.get(part);
+          return exact === undefined ? joined(part) : exactText(exact);
+        });
         if (texts.some((text) => text === undefined)) return undefined;
         const result = (texts as string[]).join(node.separator ?? "");
         return result.length > maximumTextCharacters ? undefined : value("text", result);
@@ -661,25 +756,53 @@ export const evaluateFlowFormula = (
   };
   const evaluated = evaluate(formula);
   if (evaluated === undefined) return undefined;
+  if (
+    options.resultScale !== undefined &&
+    (options.resultRounding === undefined ||
+      !Number.isInteger(options.resultScale) ||
+      options.resultScale < 0 ||
+      options.resultScale > 18)
+  )
+    return undefined;
+  const exact = exactValues.get(evaluated);
+  if (
+    options.requireExactInteger &&
+    (exact !== undefined
+      ? exact.numerator % exact.denominator !== 0n
+      : decimalOf(evaluated)?.scale !== 0)
+  )
+    return undefined;
   const result =
     options.resultScale !== undefined &&
-    (evaluated.type === "decimal_number" || evaluated.type === "money")
+    (evaluated.type === "whole_number" ||
+      evaluated.type === "decimal_number" ||
+      evaluated.type === "money")
       ? arithmetic(
           "add",
           [evaluated],
           options.resultScale,
-          "rounding" in formula ? formula.rounding : "half_even",
+          options.resultRounding!,
           exactValues,
           false,
         )
       : evaluated;
   if (result === undefined) return undefined;
-  if (options.requireExactInteger) {
-    const exact = exactValues.get(result);
-    if (exact !== undefined) {
-      if (exact.numerator % exact.denominator !== 0n) return undefined;
-    } else if (decimalOf(result)?.scale !== 0) return undefined;
+  if (options.resultScale !== undefined || exact === undefined) return result;
+  const amount = exactText(exact);
+  if (amount === undefined) return undefined;
+  if (result.type === "whole_number") {
+    const whole = Number(amount);
+    return Number.isSafeInteger(whole) ? value("whole_number", whole) : undefined;
   }
+  if (
+    result.type === "money" &&
+    typeof result.value === "object" &&
+    result.value !== null &&
+    !Array.isArray(result.value)
+  )
+    return value("money", { ...result.value, amount });
+  if (result.type === "money" || result.type === "decimal_number")
+    return value(result.type, amount);
   return result;
 };
 
@@ -837,8 +960,7 @@ export const checkFlowFormula = (
     case "add":
     case "multiply":
     case "subtract": {
-      const type = numericArgs(formula.args, "args", formula.op);
-      return type === "whole_number" && formula.scale > 0 ? "decimal_number" : type;
+      return numericArgs(formula.args, "args", formula.op);
     }
     case "divide": {
       const type = numericArgs(formula.args, "args", formula.op);
@@ -848,6 +970,60 @@ export const checkFlowFormula = (
       const type = child(formula.arg, "arg");
       expect(type, (candidate) => numericTypes.has(candidate), [...path, "arg"], "a number");
       return type;
+    }
+    case "min":
+    case "max":
+    case "coalesce": {
+      const types = formula.args.map((arg, index) => child(arg, "args", index));
+      const known = types.filter((type): type is string => type !== undefined && type !== "json");
+      if (formula.op !== "coalesce")
+        types.forEach((type, index) =>
+          expect(
+            type,
+            (candidate) => numericTypes.has(candidate),
+            [...path, "args", index],
+            "a number",
+          ),
+        );
+      const first = known[0];
+      if (
+        first !== undefined &&
+        known.some(
+          (type) =>
+            !valueTypesCompatible(type, first, "condition") &&
+            !valueTypesCompatible(first, type, "condition"),
+        )
+      ) {
+        add(
+          path,
+          "vortex.definition.source_type_compatibility",
+          "invalid_value",
+          "All arguments must have compatible types",
+        );
+        return undefined;
+      }
+      if (types.some((type) => type === undefined || type === "json")) return undefined;
+      return known.includes("decimal_number") && known.includes("whole_number")
+        ? "decimal_number"
+        : first;
+    }
+    case "percent": {
+      const part = child(formula.args[0], "args", 0);
+      const whole = child(formula.args[1], "args", 1);
+      expect(part, (candidate) => numericTypes.has(candidate), [...path, "args", 0], "a number");
+      expect(whole, (candidate) => numericTypes.has(candidate), [...path, "args", 1], "a number");
+      if (part !== undefined && whole !== undefined && (part === "money") !== (whole === "money")) {
+        add(
+          path,
+          "vortex.definition.source_type_compatibility",
+          "invalid_value",
+          "Percent operands must have the same units",
+        );
+        return undefined;
+      }
+      return part === undefined || whole === undefined || part === "json" || whole === "json"
+        ? undefined
+        : "decimal_number";
     }
     case "eq":
     case "neq":
@@ -945,7 +1121,19 @@ export const checkFlowFormula = (
       return undefined;
     }
     case "join":
-      formula.parts.forEach((part, index) => child(part, "parts", index));
+      formula.parts.forEach((part, index) => {
+        const type = child(part, "parts", index);
+        const unroundedDivide = (node: FlowFormula): boolean =>
+          node.op !== "round" &&
+          (node.op === "divide" || flowFormulaChildren(node).some(unroundedDivide));
+        if (type !== undefined && numericTypes.has(type) && unroundedDivide(part))
+          add(
+            [...path, "parts", index],
+            "vortex.definition.source_type_compatibility",
+            "invalid_value",
+            "Round a division before converting it to text",
+          );
+      });
       return "text";
     case "date_add": {
       const date = child(formula.date, "date");

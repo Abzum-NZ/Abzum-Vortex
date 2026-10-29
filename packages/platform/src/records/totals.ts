@@ -169,24 +169,23 @@ const relationshipReaches = (
   );
 };
 
-const evaluateFormula = (formula: FlowFormula) =>
+const evaluateFormula = (formula: FlowFormula, resultScale?: number) =>
   evaluateFlowFormula(
     formula,
     {
       now: "1970-01-01T00:00:00.000Z",
       reference: () => undefined,
     },
-    { preserveExactArithmetic: true },
+    resultScale === undefined ? {} : { resultScale, resultRounding: "half_even" },
   );
 
-const sumFormula = (operands: readonly FlowFormula[], scale: number): FlowFormula => {
+const sumFormula = (operands: readonly FlowFormula[]): FlowFormula => {
   if (operands.length === 1) return operands[0]!;
-  if (operands.length <= 10)
-    return { op: "add", args: [...operands], scale, rounding: "half_even" };
+  if (operands.length <= 10) return { op: "add", args: [...operands] };
   const groups: FlowFormula[] = [];
   for (let index = 0; index < operands.length; index += 10)
-    groups.push(sumFormula(operands.slice(index, index + 10), scale));
-  return sumFormula(groups, scale);
+    groups.push(sumFormula(operands.slice(index, index + 10)));
+  return sumFormula(groups);
 };
 
 /**
@@ -286,33 +285,28 @@ const totalResult = (
     return { value: selected };
   }
 
-  const sumScale = resultType === "whole_number" ? 0 : 18;
   const sum =
     operation === "sum" && operands.length === 1
-      ? sumFormula(
-          [
-            operands[0]!,
-            literal(
-              sourceType,
-              sourceType === "money"
-                ? { amount: "0", currency: currencies[0]! }
-                : sourceType === "whole_number"
-                  ? 0
-                  : "0",
-            ),
-          ],
-          sumScale,
-        )
-      : sumFormula(operands, sumScale);
+      ? sumFormula([
+          operands[0]!,
+          literal(
+            sourceType,
+            sourceType === "money"
+              ? { amount: "0", currency: currencies[0]! }
+              : sourceType === "whole_number"
+                ? 0
+                : "0",
+          ),
+        ])
+      : sumFormula(operands);
   const evaluated = evaluateFormula(
     operation === "average"
       ? {
           op: "divide",
           args: [sum, literal("whole_number", values.length)],
-          scale: field.settings.decimalPlaces!,
-          rounding: "half_even",
         }
       : sum,
+    operation === "average" ? field.settings.decimalPlaces : undefined,
   );
   if (evaluated === undefined) {
     return {
