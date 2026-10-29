@@ -14,6 +14,7 @@ import { jsonValueSchema, labelSchema, safeHttpsUrlSchema } from "../catalogue/c
 import {
   sourceAliasSchema,
   sourceConditionSchema,
+  sourceQualifiedQueryReferenceSchema,
   sourceQualifiedRelationshipSchema,
   sourceProvenanceTarget,
   sourceProvenanceUnchanged,
@@ -44,14 +45,55 @@ const sourceOptionSchema = z
     ]),
   })
   .strict();
-/** An option of a choice field that depends on a parent choice field: the parent options it belongs to. */
-const sourceDependentOptionSchema = sourceOptionSchema.extend({
-  parent_values: sourceProvenanceTarget(
-    z.array(z.string().min(1).max(120)).min(1).max(200).optional(),
-    ["parentValues/**"],
-    true,
-  ),
-});
+/** The fields of the same record type an options source reads, by input name (field keys). */
+const sourceOptionsSourceInputsSchema = z
+  .record(builderKeySchema, builderKeySchema)
+  .refine((inputs) => Object.keys(inputs).length <= 10, {
+    message: "An options source reads at most 10 fields",
+  });
+const sourceOptionValueSchema = z.string().min(1).max(120);
+/**
+ * Where a choice or link field's options come from, as authored (canonical
+ * `choiceOptionsSourceSchema` / `linkOptionsSourceSchema`): a choice field's fixed list, narrowed
+ * by a parent choice field (`parent_field`, with each option's parent options); a link field's
+ * target records, narrowed by a parent link field (`parent_field`, `filter_field` on the target) or
+ * a declared query (`query`, `inputs`); or an options flow (`flow`, `inputs`).
+ */
+const sourceFixedOptionsSourceSchema = z
+  .object({
+    kind: z.literal("fixed"),
+    parent_field: builderKeySchema.optional(),
+    option_parents: z
+      .record(sourceOptionValueSchema, z.array(sourceOptionValueSchema).min(1).max(200))
+      .optional(),
+  })
+  .strict();
+const sourceQueryOptionsSourceSchema = z
+  .object({
+    kind: z.literal("query"),
+    query: sourceQualifiedQueryReferenceSchema.optional(),
+    inputs: sourceOptionsSourceInputsSchema.optional(),
+    parent_field: builderKeySchema.optional(),
+    filter_field: builderKeySchema.optional(),
+  })
+  .strict();
+const sourceFlowOptionsSourceSchema = z
+  .object({
+    kind: z.literal("flow"),
+    flow: sourceAliasSchema,
+    inputs: sourceOptionsSourceInputsSchema,
+  })
+  .strict();
+const sourceChoiceOptionsSourceSchema = sourceProvenanceTarget(
+  z.discriminatedUnion("kind", [sourceFixedOptionsSourceSchema, sourceFlowOptionsSourceSchema]),
+  ["optionsSource/**"],
+  true,
+);
+const sourceLinkOptionsSourceSchema = sourceProvenanceTarget(
+  z.discriminatedUnion("kind", [sourceQueryOptionsSourceSchema, sourceFlowOptionsSourceSchema]),
+  ["optionsSource/**"],
+  true,
+);
 const emptySettingsSchema = z.object({}).strict();
 const sourceTextFormatSchema = z.enum(["uuid"]);
 const sourceTextSettingsSchema = z
@@ -160,40 +202,36 @@ const sourceDateTimeSettingsSchema = z
 const sourceChoiceSettingsSchema = z
   .object({ options: sourceProvenanceUnchanged(z.array(sourceOptionSchema).min(1).max(200)) })
   .strict();
-/**
- * The declared dependency of a choice field on another choice field of the same record type: the
- * options offered are those whose `parent_values` list the parent's chosen option. Both the parent
- * and the values are exact keys and stored values.
- */
-const sourceChoiceDependencySchema = z
-  .object({ parent_field: sourceProvenanceUnchanged(builderKeySchema) })
-  .strict();
 const sourceChoiceFieldSettingsSchema = z
   .object({
-    options: sourceProvenanceUnchanged(z.array(sourceDependentOptionSchema).min(1).max(200)),
-    depends_on: sourceProvenanceTarget(
-      sourceChoiceDependencySchema.optional(),
-      ["dependsOn/**"],
-      true,
-    ),
+    options: sourceProvenanceUnchanged(z.array(sourceOptionSchema).min(1).max(200)),
+    options_source: sourceChoiceOptionsSourceSchema,
   })
   .strict()
   .superRefine((value, context) => {
-    // Parent values exist exactly with a declared dependency; the parents are judged with the fields.
+    // A narrowed list names its parent field and gives every option its parent options; the parent
+    // itself is judged with the record type's fields.
+    const source = value.options_source;
+    if (source.kind !== "fixed") return;
+    const listed = Object.keys(source.option_parents ?? {});
     if (
-      value.options.some((option) => option.parent_values !== undefined) !==
-      (value.depends_on !== undefined)
+      (source.parent_field === undefined) !== (source.option_parents === undefined) ||
+      (source.option_parents !== undefined &&
+        (listed.length !== value.options.length ||
+          value.options.some((option) => !listed.includes(option.value))))
     )
       context.addIssue({
         code: "custom",
-        path: ["depends_on"],
-        message: "Options list parent values exactly when the field depends on a parent choice",
+        path: ["options_source"],
+        message:
+          "A list narrowed by a parent choice names that field and gives every option its parent options",
       });
   });
 const sourceSeveralChoicesSettingsSchema = z
   .object({
     options: sourceProvenanceUnchanged(z.array(sourceOptionSchema).min(1).max(200)),
     maximum_selections: sourceProvenanceUnchanged(z.number().int().min(1).max(200).optional()),
+    options_source: sourceChoiceOptionsSourceSchema,
   })
   .strict();
 const sourceReferenceNumberSettingsSchema = z
@@ -297,17 +335,6 @@ const sourceTableSettingsSchema = z
         message: "Table column keys must be unique",
       });
   });
-/**
- * The declared dependency of a link field on another link field of the same record type: this
- * field's choices are the target records whose `filter_field` link points at the parent's chosen
- * record (Country -> Region -> City). Both are field keys.
- */
-const sourceLinkDependencySchema = z
-  .object({
-    parent_field: sourceProvenanceUnchanged(builderKeySchema),
-    filter_field: sourceProvenanceUnchanged(builderKeySchema),
-  })
-  .strict();
 const sourceLinkSettingsSchema = z
   .object({
     target: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["target/**"]),
@@ -319,11 +346,7 @@ const sourceLinkSettingsSchema = z
     application_root_required: sourceProvenanceTarget(z.boolean().optional(), [
       "applicationRootIdRequired",
     ]),
-    depends_on: sourceProvenanceTarget(
-      sourceLinkDependencySchema.optional(),
-      ["dependsOn/**"],
-      true,
-    ),
+    options_source: sourceLinkOptionsSourceSchema,
   })
   .strict();
 const sourceMultiLinkSettingsSchema = z
@@ -337,6 +360,7 @@ const sourceMultiLinkSettingsSchema = z
     on_parent_delete: sourceProvenanceUnchanged(
       z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
     ),
+    options_source: sourceLinkOptionsSourceSchema,
   })
   .strict();
 /** Calculation expressions share the FlowFormula contract. */

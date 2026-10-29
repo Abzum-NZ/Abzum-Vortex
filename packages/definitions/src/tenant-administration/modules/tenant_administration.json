@@ -112,7 +112,10 @@
                 "value": "removal_pending",
                 "label": "Removal pending"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {

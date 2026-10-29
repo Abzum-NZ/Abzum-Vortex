@@ -13,6 +13,7 @@ const fields = [
     label: "Actor",
     type: "link",
     settings: {
+      options_source: { kind: "query" },
       target: "vortex.system_directory:person",
       reverse_key: "activity_entries",
       reverse_name: "Activity entries",

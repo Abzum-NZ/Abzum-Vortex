@@ -193,7 +193,7 @@ const optionItem = (
     ...(dependent
       ? [
           list(
-            "parent_values",
+            "parent_options",
             "Belongs to these options of the field it depends on",
             false,
             1,
@@ -277,7 +277,7 @@ const linkDependencyDeclaration = (context: ModuleFieldSettingsContext): Declara
   const filters = candidates.filtersByParent[field.dependsOn?.parent ?? ""] ?? [];
   return [
     group(
-      "depends_on",
+      "narrowed_by",
       "Choices depend on another link",
       [
         choice(
@@ -310,7 +310,7 @@ const choiceDependencyDeclaration = (context: ModuleFieldSettingsContext): Decla
   if (parents.length === 0) return [];
   return [
     group(
-      "depends_on",
+      "narrowed_by",
       "Options depend on another choice",
       [
         choice(
@@ -583,9 +583,10 @@ export type ModuleFieldSettingsReading = Readonly<{
 /** The field's plain settings as the typed values its declarations edit; a kept setting is left out. */
 export const readModuleFieldSettings = (
   type: ModuleFieldType,
-  settings: Readonly<Record<string, unknown>>,
+  stored: Readonly<Record<string, unknown>>,
   declarations: readonly Declaration[],
 ): ModuleFieldSettingsReading => {
+  const settings = optionsSourceFormView(type, stored);
   const failures: ComponentSettingFailure[] = [];
   const values: Record<string, Typed> = {};
   for (const declaration of declarations) {
@@ -621,7 +622,84 @@ export const writeModuleFieldSettings = (
       plain = (plain as Record<string, unknown>[]).map(storedColumn);
     settings[key] = plain;
   }
-  return settings;
+  return storedOptionsSource(type, settings, current);
+};
+
+type Plain = Record<string, unknown>;
+const optionsSourceTypes: ReadonlySet<string> = new Set([
+  "choice",
+  "several_choices",
+  "link",
+  "link_to_one_of_several",
+]);
+
+/**
+ * A choice or link field's settings as its form edits them: the field that narrows its options
+ * (`narrowed_by`) and, for a choice field, each option's parent options (`parent_options`). The
+ * stored settings hold both in the field's one options source.
+ */
+const optionsSourceFormView = (type: string, stored: Readonly<Plain>): Readonly<Plain> => {
+  if (!optionsSourceTypes.has(type)) return stored;
+  const { options_source: authored, ...rest } = stored;
+  const source = (authored ?? {}) as Plain;
+  const parents = (source.option_parents ?? {}) as Readonly<Record<string, unknown>>;
+  return {
+    ...rest,
+    ...(Array.isArray(rest.options)
+      ? {
+          options: (rest.options as Plain[]).map((option) =>
+            parents[String(option.value)] === undefined
+              ? option
+              : { ...option, parent_options: parents[String(option.value)] },
+          ),
+        }
+      : {}),
+    ...(source.parent_field === undefined
+      ? {}
+      : {
+          narrowed_by: {
+            parent_field: source.parent_field,
+            ...(source.filter_field === undefined ? {} : { filter_field: source.filter_field }),
+          },
+        }),
+  };
+};
+
+/** The form's view written back as the field's one options source. */
+const storedOptionsSource = (type: string, edited: Plain, current: Readonly<Plain>): Plain => {
+  if (!optionsSourceTypes.has(type)) return edited;
+  const { narrowed_by: narrowedBy, options_source: _carried, ...rest } = edited;
+  const authored = current.options_source as Plain | undefined;
+  // An options flow or a declared query is edited where it is authored; the form keeps it.
+  if (authored !== undefined && (authored.kind === "flow" || authored.query !== undefined))
+    return { ...rest, options_source: authored };
+  const narrowing = narrowedBy as Plain | undefined;
+  const options = Array.isArray(rest.options) ? (rest.options as Plain[]) : undefined;
+  const choiceList = type === "choice" || type === "several_choices";
+  return {
+    ...rest,
+    ...(options === undefined
+      ? {}
+      : { options: options.map(({ parent_options: _parents, ...option }) => option) }),
+    options_source: choiceList
+      ? {
+          kind: "fixed",
+          ...(narrowing === undefined || type !== "choice"
+            ? {}
+            : {
+                parent_field: narrowing.parent_field,
+                option_parents: Object.fromEntries(
+                  (options ?? []).map((option) => [option.value, option.parent_options ?? []]),
+                ),
+              }),
+        }
+      : {
+          kind: "query",
+          ...(narrowing === undefined || type !== "link"
+            ? {}
+            : { parent_field: narrowing.parent_field, filter_field: narrowing.filter_field }),
+        },
+  };
 };
 
 /** The settings a field of a type starts with when it is added or its type changes. */
@@ -653,9 +731,9 @@ export const starterModuleFieldSettings = (
     case "date_time":
       return { display_time_zone: "person" };
     case "choice":
-      return { options: [] };
+      return { options: [], options_source: { kind: "fixed" } };
     case "several_choices":
-      return { options: [] };
+      return { options: [], options_source: { kind: "fixed" } };
     case "reference_number":
       return { digits: 6 };
     case "table":
@@ -669,9 +747,14 @@ export const starterModuleFieldSettings = (
         ...(start.recordTypes[0] === undefined ? {} : { target: start.recordTypes[0] }),
         reverse_name: "Related records",
         on_parent_delete: "empty_optional",
+        options_source: { kind: "query" },
       };
     case "link_to_one_of_several":
-      return { targets: start.recordTypes.slice(0, 2), on_parent_delete: "empty_optional" };
+      return {
+        targets: start.recordTypes.slice(0, 2),
+        on_parent_delete: "empty_optional",
+        options_source: { kind: "query" },
+      };
     case "calculation":
       return {
         result_type: "text",

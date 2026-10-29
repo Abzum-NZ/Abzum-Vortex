@@ -87,7 +87,10 @@
                 "value": "critical",
                 "label": "Critical"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           },
           "default": "error"
         },
@@ -373,7 +376,10 @@
                 "value": "closed",
                 "label": "Closed"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           },
           "default": "open"
         },

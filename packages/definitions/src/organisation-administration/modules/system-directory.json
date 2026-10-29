@@ -92,7 +92,10 @@
                 "value": "closed",
                 "label": "Closed"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -222,7 +225,10 @@
                 "value": "expired",
                 "label": "Expired"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -360,7 +366,10 @@
                 "value": "retired",
                 "label": "Retired"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         }
       ],
@@ -518,7 +527,10 @@
                 "value": "revoked",
                 "label": "Revoked"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -550,7 +562,10 @@
                 "value": "revoked",
                 "label": "Revoked"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         }
       ],
@@ -687,7 +702,10 @@
                 "value": "retired",
                 "label": "Retired"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -711,7 +729,10 @@
                 "value": "custom",
                 "label": "Custom"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -735,7 +756,10 @@
                 "value": "privileged",
                 "label": "Privileged"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -759,7 +783,10 @@
                 "value": "activation_required",
                 "label": "Activation required"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -919,7 +946,10 @@
                 "value": "group",
                 "label": "Group"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -973,7 +1003,10 @@
                 "value": "eligible",
                 "label": "Eligible"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -1027,7 +1060,10 @@
                 "value": "revoked",
                 "label": "Revoked"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -1059,7 +1095,10 @@
                 "value": "revoked",
                 "label": "Revoked"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         }
       ],
@@ -1219,7 +1258,10 @@
                 "value": "group",
                 "label": "Group"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -1273,7 +1315,10 @@
                 "value": "revoked",
                 "label": "Revoked"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -1301,7 +1346,10 @@
                 "value": "revoked",
                 "label": "Revoked"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         }
       ],
@@ -1384,7 +1432,10 @@
                 "value": "group",
                 "label": "Group"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -1438,7 +1489,10 @@
                 "value": "bounded",
                 "label": "Bounded"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -1492,7 +1546,10 @@
                 "value": "revoked",
                 "label": "Revoked"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -1524,7 +1581,10 @@
                 "value": "revoked",
                 "label": "Revoked"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         }
       ],
@@ -1670,7 +1730,10 @@
                 "value": "removal_pending",
                 "label": "Removal pending"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -1835,7 +1898,10 @@
                 "value": "platform.tenant.organizations.reparent",
                 "label": "Move organisations"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -1897,7 +1963,10 @@
                 "value": "revoked",
                 "label": "Revoked"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         }
       ],

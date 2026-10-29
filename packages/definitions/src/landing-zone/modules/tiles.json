@@ -46,7 +46,10 @@
                 "value": "external",
                 "label": "External address"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -273,7 +276,10 @@
                 "value": "new_page",
                 "label": "Open in a new page"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           },
           "default": "replace"
         },

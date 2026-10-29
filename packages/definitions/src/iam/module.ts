@@ -229,7 +229,7 @@ export const iamModule: SourceApplicationModule = sourceApplicationModuleSchema.
           filterable: true,
           sortable: true,
           type: "choice",
-          settings: { options: [...requestTypeOptions] },
+          settings: { options_source: { kind: "fixed" }, options: [...requestTypeOptions] },
         },
         {
           ...fieldBase,
@@ -241,6 +241,7 @@ export const iamModule: SourceApplicationModule = sourceApplicationModuleSchema.
           sortable: true,
           type: "choice",
           settings: {
+            options_source: { kind: "fixed" },
             options: [
               { value: "draft", label: "Draft" },
               { value: "submitted", label: "Submitted" },
@@ -262,6 +263,7 @@ export const iamModule: SourceApplicationModule = sourceApplicationModuleSchema.
           personal_data: "personal",
           type: "link",
           settings: {
+            options_source: { kind: "query" },
             target: "vortex.system_directory:person",
             reverse_key: "beneficiary_references",
             reverse_name: "Beneficiary references",
@@ -295,6 +297,7 @@ export const iamModule: SourceApplicationModule = sourceApplicationModuleSchema.
           filterable: true,
           type: "link",
           settings: {
+            options_source: { kind: "query" },
             target: "vortex.system_directory:group",
             reverse_key: "access_requests",
             reverse_name: "Access requests",
@@ -404,6 +407,7 @@ export const iamModule: SourceApplicationModule = sourceApplicationModuleSchema.
           filterable: true,
           type: "link",
           settings: {
+            options_source: { kind: "query" },
             target: "vortex.iam.core:access_request",
             reverse_key: "items",
             reverse_name: "Items",
@@ -419,6 +423,7 @@ export const iamModule: SourceApplicationModule = sourceApplicationModuleSchema.
           filterable: true,
           type: "choice",
           settings: {
+            options_source: { kind: "fixed" },
             options: [
               { value: "role", label: "Role" },
               { value: "permission", label: "Permission" },
@@ -447,6 +452,7 @@ export const iamModule: SourceApplicationModule = sourceApplicationModuleSchema.
           filterable: true,
           type: "choice",
           settings: {
+            options_source: { kind: "fixed" },
             options: [
               { value: "add", label: "Add" },
               { value: "remove", label: "Remove" },

@@ -54,6 +54,7 @@ import { protectedOperationReferenceSchema } from "./application-flow-bindings";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import { protectedReadModelKeySchema } from "./application-composition/protected-read-models";
 import { flowIdSchema, flowSchema } from "../workflows/flow-contracts";
+import { choiceOptionsSourceSchema, linkOptionsSourceSchema } from "./field-options-source";
 import { recordOwnershipModeSchema } from "../records/record-ownership-mode";
 import {
   maximumRecordTypePipelines,
@@ -174,27 +175,47 @@ const dateTimeSettingsSchema = z
   .object({ displayTimeZone: z.enum(["person", "organization", "utc"]).optional() })
   .strict();
 const choiceSettingsSchema = z.object({ options: z.array(optionSchema).min(1).max(200) }).strict();
-/** A choice field's settings: options may belong to the parent choice option(s) it depends on. */
+
+/** A choice field's settings: its option list and where the options offered come from. */
 const choiceFieldSettingsSchema = z
   .object({
-    options: z
-      .array(
-        optionSchema
-          .extend({ parentValues: z.array(z.string().min(1).max(120)).min(1).max(200).optional() })
-          .strict(),
-      )
-      .min(1)
-      .max(200),
-    /** The choice field of this record type whose chosen option narrows this field's options. */
-    dependsOn: z.object({ parentFieldId: fieldIdSchema }).strict().optional(),
+    options: z.array(optionSchema).min(1).max(200),
+    optionsSource: choiceOptionsSourceSchema,
   })
-  .strict();
+  .strict()
+  .superRefine((settings, context) => {
+    const values = settings.options.map((option) => option.value);
+    const listed = Object.keys(
+      settings.optionsSource.kind === "fixed" ? (settings.optionsSource.optionParents ?? {}) : {},
+    );
+    if (
+      listed.length > 0 &&
+      (listed.length !== values.length || values.some((value) => !listed.includes(value)))
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["optionsSource", "optionParents"],
+        message: "A narrowed option list gives every option of the field its parent options",
+      });
+  });
 const severalChoicesSettingsSchema = z
   .object({
     options: z.array(optionSchema).min(1).max(200),
     maximumSelections: z.number().int().min(1).max(200).optional(),
+    optionsSource: choiceOptionsSourceSchema,
   })
-  .strict();
+  .strict()
+  .superRefine((settings, context) => {
+    if (
+      settings.optionsSource.kind === "fixed" &&
+      settings.optionsSource.parentFieldId !== undefined
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["optionsSource", "parentFieldId"],
+        message: "A several-choices field's options are not narrowed by a parent field",
+      });
+  });
 const referenceNumberSettingsSchema = z
   .object({
     prefix: z.string().max(20).optional(),
@@ -272,19 +293,28 @@ const linkSettingsSchema = z
     reverseName: labelSchema,
     onParentDelete: z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
     applicationRootIdRequired: z.boolean().optional(),
-    /** The link field of this record type whose chosen record narrows this field's choices. */
-    dependsOn: z
-      .object({ parentFieldId: fieldIdSchema, filterFieldId: fieldIdSchema })
-      .strict()
-      .optional(),
+    optionsSource: linkOptionsSourceSchema,
   })
   .strict();
 const multiLinkSettingsSchema = z
   .object({
     targets: z.array(recordTypeReferenceSchema).min(2).max(20),
     onParentDelete: z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
+    optionsSource: linkOptionsSourceSchema,
   })
-  .strict();
+  .strict()
+  .superRefine((settings, context) => {
+    if (
+      settings.optionsSource.kind === "query" &&
+      (settings.optionsSource.queryId !== undefined ||
+        settings.optionsSource.parentFieldId !== undefined)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["optionsSource"],
+        message: "A link to one of several record types offers the records of its targets",
+      });
+  });
 /**
  * Whether a calculated field is worked out when the record is read (`read_time`) or stored and
  * refreshed by the owning save (`stored`). The deadline-passed form uses the current time and is

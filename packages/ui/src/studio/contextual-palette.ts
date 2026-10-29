@@ -495,9 +495,10 @@ const ownQuery = (
         })(),
       ...(isParentLink(module.key, recordType, record, field) ? { parentLink: true } : {}),
       ...((field.type === "link" || field.type === "choice") &&
-      (field.settings as { depends_on?: { parent_field: string } }).depends_on !== undefined
+      (field.settings as { options_source?: { parent_field?: string } }).options_source
+        ?.parent_field !== undefined
         ? {
-            dependsOn: `${recordType}.${(field.settings as { depends_on: { parent_field: string } }).depends_on.parent_field}`,
+            dependsOn: `${recordType}.${(field.settings as { options_source: { parent_field: string } }).options_source.parent_field}`,
           }
         : {}),
     }),
