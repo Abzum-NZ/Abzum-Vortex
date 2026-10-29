@@ -30,7 +30,7 @@ export type OperandInfo = Readonly<{
   literal?: JsonValue;
   source: "reference" | "value";
   field?: Record<string, unknown>;
-  dialect?: "source" | "canonical";
+  dialect?: ValueDialect;
 }>;
 const object = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value)
@@ -70,7 +70,7 @@ export function conditionValueType(type: unknown): ConditionValueType | undefine
     return "text";
   if (["link", "link_to_one_of_several"].includes(type)) return "record_reference";
   if (type === "several_choices") return "text_collection";
-  if (["table", "attachment", "formatted_text"].includes(type)) return "opaque_json";
+  if (["table", "attachment", "formatted_text", "json"].includes(type)) return "opaque_json";
   return undefined;
 }
 export function conditionFieldType(
@@ -269,8 +269,15 @@ export const collectionElementType = (
 const literalMatchesOperand = (value: JsonValue, reference: OperandInfo): boolean =>
   value === null ||
   (reference.field !== undefined
-    ? fieldValueMatches(value, reference.field, reference.dialect ?? "canonical")
-    : reference.semanticType !== undefined && literalMatchesType(value, reference.semanticType));
+    ? fieldValueMatches(
+        value,
+        reference.field,
+        reference.dialect === "source" ? "source" : "canonical",
+      )
+    : reference.semanticType !== undefined &&
+      (literalMatchesType(value, reference.semanticType) ||
+        (reference.dialect === "flow" &&
+          typedValueMatchesType(value, reference.semanticType, "flow"))));
 
 const knownReferenceType = (operand: OperandInfo): ConditionValueType | undefined =>
   operand.source === "reference" ? operand.semanticType : undefined;
@@ -288,24 +295,14 @@ export const operatorAcceptsOperands = (
   if (operator === "equals" || operator === "not_equals")
     return conditionSharedType(left, right) !== undefined;
   if (operator === "contains" || operator === "not_contains") {
-    if (
-      right.source === "reference" &&
-      right.field &&
-      left.source === "value" &&
-      Array.isArray(left.literal)
-    )
+    if (right.source === "reference" && left.source === "value" && Array.isArray(left.literal))
       return left.literal.every((value) => literalMatchesOperand(value, right));
     const textOperands = canBeType(left, "text") && canBeType(right, "text");
     const elementType = collectionElementType(left, knownReferenceType(right));
     return textOperands || (elementType !== undefined && canBeType(right, elementType));
   }
   if (operator === "in" || operator === "not_in") {
-    if (
-      left.source === "reference" &&
-      left.field &&
-      right.source === "value" &&
-      Array.isArray(right.literal)
-    )
+    if (left.source === "reference" && right.source === "value" && Array.isArray(right.literal))
       return (
         isCollectionElementType(left.semanticType) &&
         right.literal.every((value) => literalMatchesOperand(value, left))

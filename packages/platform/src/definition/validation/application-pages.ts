@@ -444,6 +444,16 @@ export function applicationPageRules(scope: ApplicationScope): void {
         ),
       ]),
     );
+    if (page.type === "guided_form") {
+      const fields = formFields.get("page");
+      if (fields !== undefined)
+        for (const [id, placement] of placementEntries)
+          if (
+            String(object(placement.vortex.block).blockId) ===
+            String(FORM_CONTAINER_BLOCK_RELEASE.blockId)
+          )
+            formFields.set(id.toLowerCase(), fields);
+    }
     // A Records table or Record detail may map only fields its bound Module query selects, and
     // may order only by fields the query can order (a grouped or aggregating query orders by its
     // grouping fields). The default sort must be the query's leading sort, the order the Query

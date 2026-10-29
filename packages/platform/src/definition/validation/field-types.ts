@@ -146,7 +146,7 @@ export function typedConditionTypesValid(
         source: "reference",
         semanticType: conditionValueType(declared.type),
         ...(declared.field ? { field: declared.field } : {}),
-        dialect,
+        dialect: object(operand).source === "page" ? "flow" : dialect,
       };
     const candidate = literal(operand);
     if (!jsonValueSchema.safeParse(candidate).success) return undefined;
