@@ -8,15 +8,14 @@ import {
 import type { JsonValue } from "../catalogue/common";
 import { typedValueMatchesType } from "../rules/condition-types";
 import { builderKeySchema, fieldIdSchema } from "../catalogue/identifiers";
+import { flowMaximumTaskOutputPathDepth } from "./flow-limits";
+export { flowMaximumTaskOutputPathDepth } from "./flow-limits";
 
 /**
  * The value language of a flow: closed references, typed literals, formulas and constructed
  * map and array values. `flow-contracts.ts` composes these into declarations, triggers, tasks
  * and the flow itself.
  */
-
-/** A task output may select a bounded sequence of named fields from a JSON output. */
-export const flowMaximumTaskOutputPathDepth = 5;
 
 const templateDelimiterPattern = /\{\{|\{%/;
 const hasTemplateDelimiter = (value: string) => templateDelimiterPattern.test(value);
