@@ -55,7 +55,7 @@ export const conditionalFormatStylesSchema = z
  * page (keyed by rule identity, the style key the rows carry) and the numeric columns drawn as bars
  * or scales. Nothing else of a rule travels: never its condition, never a value it read.
  */
-export const conditionalFormattingProjectionSchema = z
+const conditionalFormattingProjectionSchema = z
   .object({
     styles: conditionalFormatStylesSchema,
     columns: z.record(fieldKeySchema, columnFormatSchema).readonly(),

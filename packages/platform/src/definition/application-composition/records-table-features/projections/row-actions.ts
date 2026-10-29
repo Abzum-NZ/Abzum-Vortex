@@ -18,7 +18,7 @@ const rowActionSchema = z
   .strict()
   .readonly();
 
-export const rowActionsProjectionSchema = z
+const rowActionsProjectionSchema = z
   .object({
     actions: z
       .array(rowActionSchema)

@@ -39,7 +39,7 @@ export const recordsTableFilterFieldsSchema = z
   )
   .readonly();
 
-export const columnFiltersProjectionSchema = recordsTableFilterFieldsSchema;
+const columnFiltersProjectionSchema = recordsTableFilterFieldsSchema;
 
 /** This feature's viewer projection: its definition's property and the strict schema under it. */
 export const columnFiltersProjection = {
