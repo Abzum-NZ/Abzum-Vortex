@@ -48,7 +48,12 @@ import type { createDatabaseApplicationBoundReleaseSetService } from "./applicat
 import { readPermittedApplicationsAtAddress } from "./application-address";
 import { createFlowCurrentRecordReader } from "./flow-current-record";
 import { createFlowOrchestrator } from "./flow-orchestrator";
-import type { FlowNamedAction, FlowRecordType, FlowRelease } from "./flow-orchestrator-types";
+import type {
+  FlowNamedAction,
+  FlowOrchestratorDependencies,
+  FlowRecordType,
+  FlowRelease,
+} from "./flow-orchestrator-types";
 import { createFormContinuationService } from "./form-continuation";
 import {
   installedModuleClosure,
@@ -322,9 +327,11 @@ export async function invokeInstalledFlow(
   // Save record tasks and named actions run through the record service's own
   // protected paths, under the initiator's verified request and in their own transactions.
   const records = createRecordSaveService(requestDependencies);
-  const subjectReader = createPageSubjectReader(requestDependencies);
   const actionRecords = createNamedActionRecordPort(requestDependencies);
-  const selectedRecordReadsFor = (installation: InstalledFlowBindings) => ({
+  const selectedRecordReadsFor = (
+    installation: InstalledFlowBindings,
+    requests: ReturnType<typeof createHumanOrganizationRequestService>,
+  ) => ({
     readFields: async (
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
@@ -380,20 +387,58 @@ export async function invokeInstalledFlow(
       }),
   });
 
-  const orchestratorFor = (
+  const dependenciesFor = (
     release: FlowRelease,
     runId: string | undefined,
     installation: InstalledFlowBindings,
-  ) =>
-    createFlowOrchestrator({
-      executor: executorFor(),
-      records,
-      actionRecords,
+    boundRequest?: BoundHumanOrganizationRequest,
+  ): FlowOrchestratorDependencies => {
+    const scopedDependencies = {
+      ...requestDependencies,
+      ...(boundRequest === undefined ? {} : { boundRequest }),
+    };
+    const requests = createHumanOrganizationRequestService(scopedDependencies);
+    const subjectReader = createPageSubjectReader(scopedDependencies);
+    const matchesBound = (session: IdentitySession, selection: OrganizationSelectionCandidate) =>
+      boundRequest !== undefined &&
+      canonicalJson(session) === canonicalJson(boundRequest.session) &&
+      canonicalJson(selection) === canonicalJson(boundRequest.selection);
+    return {
+      executor: executorFor(boundRequest),
+      records:
+        boundRequest === undefined
+          ? records
+          : {
+              save: async (session, selection, command) =>
+                matchesBound(session, selection)
+                  ? records.saveInTransaction(
+                      boundRequest.transaction,
+                      boundRequest.issuedAt,
+                      selection,
+                      command,
+                    )
+                  : { kind: "unavailable" },
+            },
+      actionRecords:
+        boundRequest === undefined
+          ? actionRecords
+          : {
+              execute: async (session, selection, command, run) =>
+                matchesBound(session, selection)
+                  ? actionRecords.executeInTransaction(
+                      boundRequest.transaction,
+                      boundRequest.issuedAt,
+                      selection,
+                      command,
+                      run,
+                    )
+                  : { kind: "unavailable" },
+            },
       subjects: {
         read: async (session, selection, subject) =>
           (await subjectReader.read(session, selection, subject)).kind,
       },
-      selectedRecordReads: selectedRecordReadsFor(installation),
+      selectedRecordReads: selectedRecordReadsFor(installation, requests),
       currentRecords: createFlowCurrentRecordReader({
         requests,
         reader: selectedRecordReader,
@@ -458,7 +503,7 @@ export async function invokeInstalledFlow(
               })
             );
           });
-          return checked.kind === "available" && checked.value
+          return boundRequest === undefined && checked.kind === "available" && checked.value
             ? recordPinService.acquireIdentity(session, selection, selector)
             : { outcome: "unavailable" };
         },
@@ -637,7 +682,13 @@ export async function invokeInstalledFlow(
       // The release was read from the trusted installation for this exact request.
       resolveRelease: async () => release,
       ...(runId === undefined ? {} : { newRunId: () => runId }),
-    });
+    };
+  };
+  const orchestratorFor = (
+    release: FlowRelease,
+    runId: string | undefined,
+    installation: InstalledFlowBindings,
+  ) => createFlowOrchestrator(dependenciesFor(release, runId, installation));
 
   const guidedControls = new Map<
     string,
