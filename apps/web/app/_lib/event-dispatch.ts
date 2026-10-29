@@ -9,11 +9,9 @@ import {
 } from "@vortex/platform/server";
 
 /**
- * Runs the bounded dispatcher when the deployment explicitly selects in-process event delivery.
- * The process-local credential authenticates this trigger through the same dispatcher used by the
- * protected dispatch route. Credential presence never selects the deployment delivery mode.
+ * Runs the bounded dispatcher with a process-local credential and the dispatcher system grant.
  */
-type LocalEventDispatcher = Readonly<{
+type InProcessEventDispatcher = Readonly<{
   /** One bounded dispatch; throws with the refusal reason or the failed delivery counts. */
   dispatchOnce: () => Promise<number>;
   /** Dispatches until the outbox has nothing left to claim. */
@@ -22,7 +20,7 @@ type LocalEventDispatcher = Readonly<{
 
 const maximumDrainDispatches = 500;
 
-export const createLocalEventDispatcher = (): LocalEventDispatcher => {
+export const createInProcessEventDispatcher = (): InProcessEventDispatcher => {
   const credential = randomBytes(32).toString("hex");
   const wakeup = createEventDispatcherWakeup({
     consumers: [
@@ -64,31 +62,4 @@ export const createLocalEventDispatcher = (): LocalEventDispatcher => {
   };
 
   return Object.freeze({ dispatchOnce, drain });
-};
-
-const localDispatchIntervalMs = 2_000;
-
-/** Delivers committed occurrences every few seconds in a deployment configured for in-process delivery; a failure is logged with its cause. */
-export const startLocalEventDispatch = (): void => {
-  const dispatcher = createLocalEventDispatcher();
-  let running = false;
-  let lastFailure: string | undefined;
-  const timer = setInterval(() => {
-    if (running) return;
-    running = true;
-    dispatcher
-      .dispatchOnce()
-      .then(() => {
-        lastFailure = undefined;
-      })
-      .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error);
-        if (message !== lastFailure) console.error("[local event dispatch]", error);
-        lastFailure = message;
-      })
-      .finally(() => {
-        running = false;
-      });
-  }, localDispatchIntervalMs);
-  timer.unref();
 };
