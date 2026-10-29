@@ -25,6 +25,36 @@ export const browserFlowMemberTypeResolver = (
   return (_task, taskId, outputKey, path) => members.get([taskId, outputKey, ...path].join("."));
 };
 
+/** Builds exactly the page-held variable and task-output seed the server segment declares. */
+export const pageFlowSegmentSeed = (
+  state: FlowRunState,
+  declarations: Readonly<Record<string, string>>,
+): Readonly<Record<string, JsonValue>> => {
+  const activation = state.activations[0];
+  if (
+    state.version !== flowRunStateVersion ||
+    state.activations.length !== 1 ||
+    state.awaiting !== undefined ||
+    activation === undefined ||
+    activation.frames.length !== 0
+  )
+    throw new Error("FLOW_PAGE_SEED_STATE_INVALID");
+  const entries: [string, JsonValue][] = [];
+  for (const [name, type] of Object.entries(declarations)) {
+    const parts = name.split(".");
+    const value =
+      parts[0] === "vars" && parts.length === 2
+        ? activation.variables[parts[1]!]
+        : parts[0] === "outputs" && parts.length === 3
+          ? activation.outputs[parts[1]!]?.[parts[2]!]
+          : undefined;
+    if (parts[0] !== "vars" && parts[0] !== "outputs") continue;
+    if (value === undefined || value.type !== type) throw new Error("FLOW_PAGE_SEED_VALUE_INVALID");
+    entries.push([name, value.value]);
+  }
+  return Object.fromEntries(entries);
+};
+
 /** Carries only declared server segment outputs into the page's typed interpreter activation. */
 export const addPageFlowOutputs = (
   state: FlowRunState,
