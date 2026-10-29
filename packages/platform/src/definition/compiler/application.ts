@@ -1,3 +1,4 @@
+import type { FlowFormTypes } from "../../workflows/flow-form-types";
 import type { PlatformPermissionSource } from "../../access/platform-permissions";
 import type { applicationCompilationRequestSchema } from "../definition-compilation-contracts";
 import { inspectApplicationPageReplacements } from "../../pages/application-page-replacement";
@@ -204,6 +205,7 @@ function compileApplication(
   composition: MaterialisedApplicationComposition,
   valueIndex: ApplicationModuleValueIndex,
   flows: readonly FlowDefinition[],
+  formTypes: ReadonlyMap<string, FlowFormTypes>,
   platformPermissions: PlatformPermissionSource,
 ) {
   const body = asObject(source.body);
@@ -557,7 +559,7 @@ function compileApplication(
       homePageId: pageId(String(body.home_page)),
       ...(search === undefined ? {} : { search }),
       flows,
-      flowBindings: compileApplicationFlowBindings(source, resolution, flows),
+      flowBindings: compileApplicationFlowBindings(source, resolution, flows, formTypes),
     },
   });
   return canonical;
@@ -574,6 +576,7 @@ function compileApplicationFlowBindings(
   source: JsonObject,
   resolution: Resolution,
   flows: readonly FlowDefinition[],
+  formTypes: ReadonlyMap<string, FlowFormTypes>,
 ): JsonObject[] {
   const body = asObject(source.body);
   const definitionKey = String(source.key);
@@ -585,17 +588,20 @@ function compileApplicationFlowBindings(
   >();
   for (const binding of sourceBindings) {
     const flowId = resolution.id(definitionKey, "flow", String(binding.flow), "content");
-    const inputs = Object.fromEntries(
-      Object.entries(asObject(binding.inputs ?? {})).map(([name, value]) => [
-        name,
-        flowBindingInputSchema.parse(value),
-      ]),
+    const inputs = resolveFlowFormReferences(
+      Object.fromEntries(
+        Object.entries(asObject(binding.inputs ?? {})).map(([name, value]) => [
+          name,
+          flowBindingInputSchema.parse(value),
+        ]),
+      ),
+      (form) => resolution.id(definitionKey, "block_placement", form),
     );
     const held = inputsByFlow.get(flowId) ?? [];
     held.push(inputs);
     inputsByFlow.set(flowId, held);
   }
-  const plans = compileFlowPlans(flows, inputsByFlow).plans;
+  const plans = compileFlowPlans(flows, inputsByFlow, formTypes).plans;
   return sourceBindings.map((binding) => {
     const flowId = resolution.id(definitionKey, "flow", String(binding.flow), "content");
     const flow = flowsById.get(flowId);
@@ -746,6 +752,7 @@ export function compileParsedApplicationRequest(
       composition,
       valueIndex,
       flowSet.flows,
+      flowSet.formTypes,
       platformPermissions,
     );
     const ownDefinition = resolution.definition(source.key, "application");

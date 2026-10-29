@@ -17,6 +17,7 @@ import {
 import { flowTaskRegistry, type FlowTaskTypeKey } from "../workflows/flow-task-registry";
 import type { FlowValue } from "../workflows/flow-values";
 import { compileFlowPlans, FlowPlanError } from "../workflows/flow-plan";
+import type { FlowFormTypes } from "../workflows/flow-form-types";
 import type { DefinitionProvenanceEntry } from "./definition-provenance";
 import { canonicalJson, compareCanonicalStrings } from "./canonical-json-definition";
 import {
@@ -667,7 +668,9 @@ const triggerRecordType = (source: SourceFlow): string | undefined => {
   return aliases.size === 1 ? [...aliases][0] : undefined;
 };
 
-export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet {
+export function compileFlowSources(
+  input: FlowCompilationInput,
+): CompiledFlowSet & { formTypes: ReadonlyMap<string, FlowFormTypes> } {
   const { resolver } = input;
   const declared = new Set(input.declaredDefinitionKeys);
   const reached = new Set<string>();
@@ -862,8 +865,9 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
   }
   // Publication compiles the plan the runtime builds, and refuses a flow it cannot plan, naming
   // the step. The plan itself is never stored.
+  let formTypes: ReadonlyMap<string, FlowFormTypes>;
   try {
-    const formTypes = new Map(
+    formTypes = new Map(
       compiled.map(({ flow, sourceIndex }) => {
         const forms: Record<string, Record<string, string>> = {};
         for (const environment of input.referenceEnvironments?.(input.flows[sourceIndex]!) ?? []) {
@@ -919,5 +923,5 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
       "vortex.definition.invalid_compilation_output",
       "invalid_value",
     );
-  return result.data;
+  return { ...result.data, formTypes };
 }
