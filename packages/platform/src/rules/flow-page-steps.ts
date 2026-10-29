@@ -1,5 +1,5 @@
 import type { PageStepType } from "../workflows/flow-task-registry-data";
-import type { FlowInterfaceIntent } from "./flow-interpreter";
+import type { FlowInterfaceIntent } from "./flow-interpreter-core";
 
 /**
  * The intent the page performs for each registered page step. Adding a page implementation flag

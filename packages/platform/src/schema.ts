@@ -14,7 +14,7 @@ export * from "./events/schema";
 
 export * from "./events/client";
 export * from "./definition/component-request-generation";
-export * from "./rules/flow-interpreter";
+export * from "./rules/flow-interpreter-core";
 export * from "./definition/module-field-shape";
 export * from "./definition/application-uses";
 export * from "./definition/module-record-type-shape";
