@@ -196,7 +196,11 @@ export const requireOne = <Row>(rows: readonly Row[]): Row => {
 };
 
 const recordedRefusalMarker = Symbol("recordedAccessAdministrationRefusal");
-export const recordedRefusal = (row: Readonly<{ refusal_reason: unknown }>) => {
+type RecordedRefusal = Readonly<{
+  marker: typeof recordedRefusalMarker;
+  reason: "recent_authentication_required" | "multi_factor_required" | null;
+}>;
+export const recordedRefusal = (row: Readonly<{ refusal_reason: unknown }>): RecordedRefusal => {
   const reason = row.refusal_reason;
   if (
     reason !== null &&
@@ -206,7 +210,6 @@ export const recordedRefusal = (row: Readonly<{ refusal_reason: unknown }>) => {
     throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
   return { marker: recordedRefusalMarker, reason };
 };
-type RecordedRefusal = ReturnType<typeof recordedRefusal>;
 
 export const isRecordedRefusal = (
   row: Readonly<{
