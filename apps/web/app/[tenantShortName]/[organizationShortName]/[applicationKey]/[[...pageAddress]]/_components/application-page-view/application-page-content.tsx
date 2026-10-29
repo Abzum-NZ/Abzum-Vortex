@@ -54,6 +54,7 @@ import { useNavigationScope } from "./use-navigation-scope";
 import { usePlacementRefresh } from "./use-placement-refresh";
 import { useReferenceChoices } from "./use-reference-choices";
 import { useFlowRuntime } from "./use-flow-runtime";
+import { useFieldFlowEvents } from "./use-field-flow-events";
 import { useApplyDispatch } from "./use-apply-dispatch";
 import { useGuidedFormSteps } from "./use-guided-form-steps";
 import { usePlacementActions } from "./use-placement-actions";
@@ -494,6 +495,7 @@ export function ApplicationPageViewContent({
     changeTableQuery,
   });
 
+  const fieldFlowEvents = useFieldFlowEvents(navigationKey, runtimeState, runBinding);
   const { runtimeInputs } = useRuntimeInputs({
     currentData: tableData,
     model,
@@ -508,6 +510,7 @@ export function ApplicationPageViewContent({
     unsavedWork,
     onOpenApplication,
     runBinding,
+    fieldFlowEvents,
     readBoardColumns,
     continueTablePage,
     refreshPlacements,

@@ -613,7 +613,7 @@
       "accessibleName": "required",
       "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": ["field_changed"],
+    "supportedEvents": ["field_changed", "field_focus_lost"],
     "supportedStateOperations": []
   },
   "NUMBER_INPUT_BLOCK_RELEASE": {
@@ -728,7 +728,7 @@
       "accessibleName": "required",
       "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": ["field_changed"],
+    "supportedEvents": ["field_changed", "field_focus_lost"],
     "supportedStateOperations": []
   },
   "BOOLEAN_INPUT_BLOCK_RELEASE": {
@@ -812,7 +812,7 @@
       "accessibleName": "required",
       "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": ["field_changed"],
+    "supportedEvents": ["field_changed", "field_focus_lost"],
     "supportedStateOperations": []
   },
   "DATE_INPUT_BLOCK_RELEASE": {
@@ -895,7 +895,7 @@
       "accessibleName": "required",
       "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": ["field_changed"],
+    "supportedEvents": ["field_changed", "field_focus_lost"],
     "supportedStateOperations": []
   },
   "CHOICE_INPUT_BLOCK_RELEASE": {
@@ -1059,7 +1059,7 @@
       "accessibleName": "required",
       "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": ["field_changed"],
+    "supportedEvents": ["field_changed", "field_focus_lost"],
     "supportedStateOperations": []
   },
   "VALIDATION_MESSAGE_BLOCK_RELEASE": {
@@ -1805,7 +1805,7 @@
       "accessibleName": "required",
       "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": ["field_changed"],
+    "supportedEvents": ["field_changed", "field_focus_lost"],
     "supportedStateOperations": []
   },
   "RICH_TEXT_INPUT_BLOCK_RELEASE": {
@@ -1894,7 +1894,7 @@
       "accessibleName": "required",
       "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": ["field_changed"],
+    "supportedEvents": ["field_changed", "field_focus_lost"],
     "supportedStateOperations": []
   },
   "FIELD_INPUT_BLOCK_RELEASE": {
@@ -2384,7 +2384,7 @@
       "accessibleName": "optional",
       "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": ["field_changed"],
+    "supportedEvents": ["field_changed", "field_focus_lost"],
     "supportedStateOperations": []
   },
   "APPLICATION_LAUNCHER_BLOCK_RELEASE": {
@@ -4459,7 +4459,7 @@
       "accessibleName": "required",
       "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": ["field_changed"],
+    "supportedEvents": ["field_changed", "field_focus_lost"],
     "supportedStateOperations": []
   },
   "ATTACHMENT_INPUT_BLOCK_RELEASE": {
@@ -4575,7 +4575,7 @@
       "accessibleName": "required",
       "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": ["field_changed"],
+    "supportedEvents": ["field_changed", "field_focus_lost"],
     "supportedStateOperations": []
   }
 }

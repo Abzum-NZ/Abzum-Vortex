@@ -54,6 +54,7 @@ export {
 export const CONTROL_EVENT_NAMES = Object.freeze([
   "action",
   "field_changed",
+  "field_focus_lost",
   "form_ready",
   "form_reset",
   "form_submit",
@@ -80,7 +81,16 @@ export type ControlSemanticEvent =
       /** An action button inside a form reports the form's current typed field values. */
       values?: Readonly<Record<string, TypedFieldValue>>;
     }>
-  | Readonly<{ event: "field_changed"; fieldKey: string; value: TypedFieldValue }>
+  | Readonly<{
+      event: "field_changed";
+      fieldKey: string;
+      value: TypedFieldValue;
+      origin: "user" | "flow";
+      depth: number;
+      /** Choices, checkboxes and link selections settle as soon as they change. */
+      immediate: boolean;
+    }>
+  | Readonly<{ event: "field_focus_lost"; fieldKey: string; value: TypedFieldValue }>
   | Readonly<{
       event: "choices_requested";
       search?: string;

@@ -36,6 +36,12 @@ export function createFlowRuntimeState() {
   const abandoned: ServerDrivenResult = { kind: "abandoned", unanswered: true };
   return {
     isRunning: (controlId: string) => (running.get(controlId) ?? 0) > 0,
+    cancel: (bindingId: string) => {
+      const entry = entries.get(bindingId);
+      if (entry === undefined) return;
+      entry.sequence += 1;
+      entry.controller?.abort();
+    },
     subscribe: (controlId: string, listener: () => void) => {
       const current = listeners.get(controlId) ?? new Set<() => void>();
       current.add(listener);

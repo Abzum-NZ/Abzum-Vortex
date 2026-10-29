@@ -27,6 +27,7 @@ import {
   useFieldFeedback,
   useFieldIds,
   useSeededState,
+  fieldFocusLost,
 } from "./field-parts";
 import { useFormFieldValue, useRequiredFormField } from "./form-context";
 import { labelInSentence, waitingForParent } from "./dependent-field";
@@ -63,6 +64,7 @@ const seededPick = (values: LinkInputPayload | undefined): Picked | null =>
 export function LinkInput(props: LinkInputProps): ReactElement {
   const context = resolveControlContext<LinkInputPayload>(props, [
     "field_changed",
+    "field_focus_lost",
     "records_requested",
   ]);
   const settings = readControlSettings(props, context.location);
@@ -196,7 +198,14 @@ export function LinkInput(props: LinkInputProps): ReactElement {
     setNext(undefined);
     if (picked !== null) {
       setPicked(null);
-      context.events?.field_changed?.({ event: "field_changed", fieldKey, value: null });
+      context.events?.field_changed?.({
+        event: "field_changed",
+        origin: "user",
+        depth: 0,
+        immediate: true,
+        fieldKey,
+        value: null,
+      });
     }
   }, [parentRecordId]);
 
@@ -211,7 +220,14 @@ export function LinkInput(props: LinkInputProps): ReactElement {
         ? null
         : { reference, title: item.title, typeLabel: item.typeLabel },
     );
-    context.events?.field_changed?.({ event: "field_changed", fieldKey, value: reference });
+    context.events?.field_changed?.({
+      event: "field_changed",
+      origin: "user",
+      depth: 0,
+      immediate: true,
+      fieldKey,
+      value: reference,
+    });
   };
 
   const described = describedBy(ids, help, error, note, draftFeedback);
@@ -221,6 +237,15 @@ export function LinkInput(props: LinkInputProps): ReactElement {
 
   return (
     <Field
+      onBlur={(event) => {
+        if (!disabled && !readOnly)
+          fieldFocusLost(
+            event,
+            context.events?.field_focus_lost,
+            fieldKey,
+            permitted?.reference ?? null,
+          );
+      }}
       data-vortex-control="link-input"
       hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}

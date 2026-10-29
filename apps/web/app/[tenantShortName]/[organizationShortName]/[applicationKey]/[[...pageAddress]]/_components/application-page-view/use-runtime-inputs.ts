@@ -57,6 +57,7 @@ import { useBatchUndo } from "./use-batch-undo";
 import { useRangeSummary } from "./use-range-summary";
 import { useRecordsExport } from "./use-records-export";
 import { requestRecordChoices } from "./record-choices";
+import type { useFieldFlowEvents } from "./use-field-flow-events";
 
 export function useRuntimeInputs({
   currentData,
@@ -72,6 +73,7 @@ export function useRuntimeInputs({
   unsavedWork,
   onOpenApplication,
   runBinding,
+  fieldFlowEvents,
   readBoardColumns,
   continueTablePage,
   refreshPlacements,
@@ -136,6 +138,7 @@ export function useRuntimeInputs({
     clickId?: string,
     reportOnControl?: ControlReport,
   ) => Promise<DispatchOutcome>;
+  fieldFlowEvents: ReturnType<typeof useFieldFlowEvents>;
   readBoardColumns: (
     placementId: string,
     event: DisplaySemanticEvent,
@@ -656,6 +659,11 @@ export function useRuntimeInputs({
           );
         };
       const publishedParameter = model.pageParameters.controls[placementId];
+      const fieldFlows = fieldFlowEvents(placementId, bindings);
+      if (fieldFlows.changed !== undefined && supportsEvent("field_changed"))
+        events.field_changed = fieldFlows.changed;
+      if (fieldFlows.focusLost !== undefined && supportsEvent("field_focus_lost"))
+        events.field_focus_lost = fieldFlows.focusLost;
       if (publishedParameter !== undefined && supportsEvent("field_changed")) {
         const fieldChanged = events.field_changed as
           ((event: ControlSemanticEvent) => void) | undefined;
@@ -980,6 +988,7 @@ export function useRuntimeInputs({
     return inputs;
   }, [
     applyDispatch,
+    fieldFlowEvents,
     formBlock,
     formCancelledRef,
     formFeedback,

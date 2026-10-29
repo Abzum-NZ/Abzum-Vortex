@@ -37,6 +37,7 @@ import {
   useFieldFeedback,
   useFieldIds,
   useSeededState,
+  fieldFocusLost,
 } from "./field-parts";
 import { useFormFieldValue, useRequiredFormField } from "./form-context";
 import { waitingForParent } from "./dependent-field";
@@ -53,6 +54,7 @@ const SEARCHABLE_OPTION_THRESHOLD = 7;
 export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const context = resolveControlContext<ChoiceInputPayload>(props, [
     "field_changed",
+    "field_focus_lost",
     "choices_requested",
   ]);
   const settings = readControlSettings(props, context.location);
@@ -136,7 +138,14 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
     if (before === undefined || before === parentKey) return;
     if (selected !== null) {
       setSelected(null);
-      context.events?.field_changed?.({ event: "field_changed", fieldKey, value: null });
+      context.events?.field_changed?.({
+        event: "field_changed",
+        origin: "user",
+        depth: 0,
+        immediate: true,
+        fieldKey,
+        value: null,
+      });
     }
   }, [parentKey]);
 
@@ -144,7 +153,14 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
     if (disabled) return;
     const value = next !== null && options.some((option) => option.key === next) ? next : null;
     setSelected(value);
-    context.events?.field_changed?.({ event: "field_changed", fieldKey, value });
+    context.events?.field_changed?.({
+      event: "field_changed",
+      origin: "user",
+      depth: 0,
+      immediate: true,
+      fieldKey,
+      value,
+    });
   };
 
   const referenceChoices = context.values?.options !== undefined;
@@ -197,6 +213,10 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
 
   return (
     <Field
+      onBlur={(event) => {
+        if (!disabled)
+          fieldFocusLost(event, context.events?.field_focus_lost, fieldKey, permittedSelected);
+      }}
       data-vortex-control="choice-input"
       hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}
