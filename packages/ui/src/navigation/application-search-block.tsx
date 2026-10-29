@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import type { BlockPropertyValueContract } from "@vortex/platform/schema";
 import type { ReactElement } from "react";

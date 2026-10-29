@@ -100,6 +100,7 @@ function OrganizationShellPage({
 
 /** The organisation launcher: one tile per application the signed-in person may open. */
 export function OrganizationLauncherPage({
+  tenantShortName,
   placementId,
   values,
   openApplication,
@@ -108,6 +109,7 @@ export function OrganizationLauncherPage({
   ...shellPage
 }: OrganizationShellPageProps &
   Readonly<{
+    tenantShortName: string;
     placementId: string;
     values: ReturnType<typeof permittedApplicationsToListValues>;
     openApplication: (event: DisplaySemanticEvent) => Promise<void>;
@@ -123,13 +125,7 @@ export function OrganizationLauncherPage({
   useEffect(() => {
     if (expression === "") return;
     let active = true;
-    void searchLauncherAction(
-      shellPage.organizationShortName === ""
-        ? ""
-        : decodeURIComponent(shellPage.launcherHref.split("/")[1] ?? ""),
-      shellPage.organizationShortName,
-      expression,
-    )
+    void searchLauncherAction(tenantShortName, shellPage.organizationShortName, expression)
       .then((result) => {
         if (active) setSearched({ expression, result });
       })
@@ -140,8 +136,7 @@ export function OrganizationLauncherPage({
     return () => {
       active = false;
     };
-  }, [expression, shellPage.launcherHref, shellPage.organizationShortName]);
-  const tenant = decodeURIComponent(shellPage.launcherHref.split("/")[1] ?? "");
+  }, [expression, tenantShortName, shellPage.organizationShortName]);
   const search = searched.result;
   const applicationSearch: PagePuckRendererProps["applicationSearch"] =
     expression === ""
@@ -161,7 +156,7 @@ export function OrganizationLauncherPage({
                   : {
                       showMore: () => {
                         void searchLauncherAction(
-                          tenant,
+                          tenantShortName,
                           shellPage.organizationShortName,
                           expression,
                           group.key,

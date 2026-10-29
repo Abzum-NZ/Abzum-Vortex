@@ -225,13 +225,13 @@ export const searchConfiguredApplication = async (
           ...(subtitle === undefined ? {} : { subtitle }),
           rank,
         });
-        // Only the best 200 permitted results can be paged through. Keep memory bounded
-        // while still evaluating every candidate for the globally ranked result set.
-        matches.sort(
-          (left, right) => right.rank - left.rank || left.recordId.localeCompare(right.recordId),
-        );
-        if (matches.length > 200) matches.pop();
       }
+      // Only the best 200 permitted results can be paged through. Keep memory bounded
+      // while still evaluating every candidate for the globally ranked result set.
+      matches.sort(
+        (left, right) => right.rank - left.rank || left.recordId.localeCompare(right.recordId),
+      );
+      matches.length = Math.min(matches.length, 200);
     }
   }
   matches.sort(

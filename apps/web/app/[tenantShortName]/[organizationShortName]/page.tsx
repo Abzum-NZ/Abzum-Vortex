@@ -143,6 +143,7 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
 
   return (
     <OrganizationLauncherPage
+      tenantShortName={tenantShortName}
       openEventId={applicationLauncherOpenEventId}
       page={page}
       shell={organizationLauncherShell}
