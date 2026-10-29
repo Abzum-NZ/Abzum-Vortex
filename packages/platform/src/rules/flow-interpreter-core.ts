@@ -208,6 +208,11 @@ export type FlowOutputMemberTypeResolver = (
   path: readonly string[],
 ) => string | undefined;
 
+/** The page supplies a form field from its existing form registry and compiled field type. */
+export type FlowFormReferenceResolver = (
+  reference: Extract<FlowReference, { source: "form" }>,
+) => FlowRuntimeValue | undefined;
+
 export type FlowProtectedTaskCall = Readonly<{
   taskId: string;
   taskType: string;
@@ -363,6 +368,7 @@ const declaredOutputFieldType = (
   outputKey: string,
   path: readonly string[],
   resolveMember: FlowOutputMemberTypeResolver,
+  resolveForm?: FlowFormReferenceResolver,
 ): string | undefined => {
   const task = findTask([...flow.tasks, ...flow.errors, ...flow.finally], taskId);
   const resolved = resolveMember(task, taskId, outputKey, path);
@@ -378,8 +384,15 @@ const declaredOutputFieldType = (
   const inputs = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>).properties
     .inputs;
   if (inputs?.kind !== "map" || !Object.hasOwn(inputs.entries, path[0]!)) return undefined;
-  return evaluateValue(inputs.entries[path[0]!]!, state, activation, flow, taskId, resolveMember)
-    .type;
+  return evaluateValue(
+    inputs.entries[path[0]!]!,
+    state,
+    activation,
+    flow,
+    taskId,
+    resolveMember,
+    resolveForm,
+  ).type;
 };
 
 const scopeOf = (
@@ -387,6 +400,7 @@ const scopeOf = (
   activation: Activation,
   flow: FlowProgram,
   resolveMember: FlowOutputMemberTypeResolver,
+  resolveForm?: FlowFormReferenceResolver,
 ): FlowFormulaScope => ({
   now: state.now,
   reference: (reference: FlowReference) => {
@@ -424,6 +438,7 @@ const scopeOf = (
           reference.key,
           reference.path,
           resolveMember,
+          resolveForm,
         );
         if (type === undefined) return undefined;
         // A declared member that is present but empty (a form field left blank) is its typed null.
@@ -444,6 +459,8 @@ const scopeOf = (
         return activation.prefix === "" ? state.triggerRecord?.[reference.field] : undefined;
       case "trigger_previous":
         return activation.prefix === "" ? state.previousRecord?.[reference.field] : undefined;
+      case "form":
+        return resolveForm?.(reference);
       default:
         return undefined;
     }
@@ -455,6 +472,7 @@ export const pageFlowScope = (
   state: FlowRunState,
   program: FlowProgram,
   resolveMember: FlowOutputMemberTypeResolver,
+  resolveForm?: FlowFormReferenceResolver,
 ): FlowFormulaScope => {
   const activation = state.activations[0];
   if (
@@ -464,7 +482,7 @@ export const pageFlowScope = (
     activation.flowId !== program.id
   )
     throw new Error("FLOW_PAGE_SCOPE_INVALID");
-  return scopeOf(state, activation, program, resolveMember);
+  return scopeOf(state, activation, program, resolveMember, resolveForm);
 };
 
 const evaluateValue = (
@@ -474,9 +492,10 @@ const evaluateValue = (
   flow: FlowProgram,
   taskId: string,
   resolveMember: FlowOutputMemberTypeResolver,
+  resolveForm?: FlowFormReferenceResolver,
 ): FlowRuntimeValue => {
   return (
-    resolveFlowValue(value, scopeOf(state, activation, flow, resolveMember)) ??
+    resolveFlowValue(value, scopeOf(state, activation, flow, resolveMember, resolveForm)) ??
     failed("value_unresolved", "failed", taskId)
   );
 };
@@ -488,11 +507,12 @@ const evaluateProperties = (
   flow: FlowProgram,
   taskId: string,
   resolveMember: FlowOutputMemberTypeResolver,
+  resolveForm?: FlowFormReferenceResolver,
 ): FlowRuntimeValues =>
   Object.fromEntries(
     Object.entries(properties).map(([name, value]) => [
       name,
-      evaluateValue(value, state, activation, flow, taskId, resolveMember),
+      evaluateValue(value, state, activation, flow, taskId, resolveMember, resolveForm),
     ]),
   );
 
@@ -554,6 +574,7 @@ type Machine = {
   };
   library: FlowProgramLibrary;
   resolveMember: FlowOutputMemberTypeResolver;
+  resolveForm?: FlowFormReferenceResolver;
 };
 
 const topOf = (machine: Machine) =>
@@ -618,6 +639,7 @@ const finishActivation = (machine: Machine, activation: Activation): FlowRunResu
       flow,
       name,
       machine.resolveMember,
+      machine.resolveForm,
     );
   return {
     status: "completed",
@@ -760,7 +782,7 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
       const node = task as Extract<FlowTask, { type: "if" }>;
       const condition = evaluateFlowFormula(
         node.condition,
-        scopeOf(state, activation, flow, machine.resolveMember),
+        scopeOf(state, activation, flow, machine.resolveMember, machine.resolveForm),
       );
       if (condition?.type !== "yes_no") failed("value_unresolved", "failed", taskId);
       next =
@@ -779,6 +801,7 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
         flow,
         taskId,
         machine.resolveMember,
+        machine.resolveForm,
       );
       let chosen = -1;
       node.cases.forEach((entry, index) => {
@@ -808,6 +831,7 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
         flow,
         taskId,
         machine.resolveMember,
+        machine.resolveForm,
       );
       if (!Array.isArray(items.value)) return failed("value_unresolved", "failed", taskId);
       if (items.value.length > Math.min(node.maximumItems, flowMaximumForEachItemsOther))
@@ -839,7 +863,15 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
       const supplied = Object.fromEntries(
         Object.entries(node.inputs).map(([name, value]) => [
           name,
-          evaluateValue(value, state, activation, flow, taskId, machine.resolveMember).value,
+          evaluateValue(
+            value,
+            state,
+            activation,
+            flow,
+            taskId,
+            machine.resolveMember,
+            machine.resolveForm,
+          ).value,
         ]),
       );
       const inputs = buildInputs(child, supplied, taskId);
@@ -865,6 +897,7 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
     flow,
     taskId,
     machine.resolveMember,
+    machine.resolveForm,
   );
 
   if (definition.effect === "pure") {
@@ -985,7 +1018,15 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
         ? Object.fromEntries(
             Object.entries(inputs.entries).map(([name, entry]) => [
               name,
-              evaluateValue(entry, state, activation, flow, taskId, machine.resolveMember).type,
+              evaluateValue(
+                entry,
+                state,
+                activation,
+                flow,
+                taskId,
+                machine.resolveMember,
+                machine.resolveForm,
+              ).type,
             ]),
           )
         : undefined;
@@ -1187,6 +1228,7 @@ export const startFlowRun = (
   library: FlowProgramLibrary,
   resolveMember: FlowOutputMemberTypeResolver,
   observer?: FlowTaskTraceObserver,
+  resolveForm?: FlowFormReferenceResolver,
 ): FlowRunStep => {
   const state: FlowRunState = {
     version: flowRunStateVersion,
@@ -1202,7 +1244,12 @@ export const startFlowRun = (
     ...(start.triggerRecord === undefined ? {} : { triggerRecord: start.triggerRecord }),
     ...(start.previousRecord === undefined ? {} : { previousRecord: start.previousRecord }),
   };
-  const machine: Machine = { state: { ...state }, library, resolveMember };
+  const machine: Machine = {
+    state: { ...state },
+    library,
+    resolveMember,
+    ...(resolveForm === undefined ? {} : { resolveForm }),
+  };
   const flow = library(start.flowId);
   if (flow === undefined)
     return failedStep(machine, { outcome: "failed", code: "flow_unavailable" });
@@ -1229,6 +1276,7 @@ export const startPageFlowSegment = (
   start: FlowRunStart,
   resolveMember: FlowOutputMemberTypeResolver,
   previous?: FlowRunState,
+  resolveForm?: FlowFormReferenceResolver,
 ): FlowRunStep => {
   const library: FlowProgramLibrary = (id) => (id === program.id ? program : undefined);
   if (
@@ -1238,8 +1286,14 @@ export const startPageFlowSegment = (
     Object.keys(program.outputs).length !== 0
   )
     throw new Error("FLOW_PAGE_SEGMENT_PROGRAM_INVALID");
-  if (previous === undefined) return startFlowRun(start, library, resolveMember);
-  const machine: Machine = { state: clone(previous), library, resolveMember };
+  if (previous === undefined)
+    return startFlowRun(start, library, resolveMember, undefined, resolveForm);
+  const machine: Machine = {
+    state: clone(previous),
+    library,
+    resolveMember,
+    ...(resolveForm === undefined ? {} : { resolveForm }),
+  };
   const activation = machine.state.activations[0];
   if (
     previous.version !== flowRunStateVersion ||
@@ -1271,8 +1325,14 @@ export const resumeFlowRun = (
   library: FlowProgramLibrary,
   resolveMember: FlowOutputMemberTypeResolver,
   observer?: FlowTaskTraceObserver,
+  resolveForm?: FlowFormReferenceResolver,
 ): FlowRunStep => {
-  const machine: Machine = { state: clone(previous), library, resolveMember };
+  const machine: Machine = {
+    state: clone(previous),
+    library,
+    resolveMember,
+    ...(resolveForm === undefined ? {} : { resolveForm }),
+  };
   const awaiting = machine.state.awaiting;
   const mismatch = () => failedStep(machine, { outcome: "failed", code: "resume_mismatch" });
   if (awaiting === undefined || previous.version !== flowRunStateVersion) return mismatch();
