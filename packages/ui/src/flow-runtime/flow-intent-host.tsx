@@ -1,13 +1,13 @@
 "use client";
 
 import {
-  useCallback,
   useEffect,
   useId,
   useMemo,
   useRef,
-  useState,
+  useSyncExternalStore,
   type ReactElement,
+  type RefObject,
   type ReactNode,
 } from "react";
 import { Button } from "../components/button";
@@ -174,40 +174,40 @@ function ConfirmSurface({
   return dialog;
 }
 
-/**
- * Presents the interface intents of a flow: messages, confirmations and the shell's form body in
- * modal dialogs, and navigation through the one Navigate task implementation. Render `element`
- * once inside the shell and pass `host` to `createFlowRuntime`. Message text is rendered as text,
- * never as markup.
- */
-export function useFlowIntentHost(
-  options: FlowIntentHostOptions,
-): Readonly<{ host: FlowIntentHost; element: ReactElement | null }> {
-  const [surfaces, setSurfaces] = useState<readonly Surface[]>([]);
-  const nextId = useRef(0);
-  const optionsRef = useRef(options);
-  optionsRef.current = options;
-  // Rejects every unanswered surface, so a run whose host went away is abandoned, never left waiting.
-  const abandon = useRef(new Map<number, () => void>());
-  useEffect(() => {
-    const pending = abandon.current;
-    return () => {
-      for (const reject of pending.values()) reject();
+/** The modal queue notifies only its own surface, keeping the page renderer independent. */
+function createSurfaceQueue() {
+  let surfaces: readonly Surface[] = [];
+  let nextId = 0;
+  const listeners = new Set<() => void>();
+  const pending = new Map<number, () => void>();
+  const notify = () => listeners.forEach((listener) => listener());
+  const remove = (id: number): void => {
+    const before = surfaces[0];
+    surfaces = surfaces.filter((entry) => entry.id !== id);
+    if (before !== surfaces[0]) notify();
+  };
+  return {
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    snapshot: () => surfaces[0] ?? null,
+    abandon: () => {
+      for (const cancel of [...pending.values()]) cancel();
       pending.clear();
-    };
-  }, []);
-
-  const enqueue = useCallback(
-    <Result,>(
+    },
+    enqueue: <Result,>(
       build: (id: number, settle: (result: Result) => void) => Surface,
       signal?: AbortSignal,
-    ) =>
+    ): Promise<Result> =>
       new Promise<Result>((resolve, reject) => {
-        const id = (nextId.current += 1);
-        const cancel = (reason: unknown, removeSurface = true): void => {
-          if (!abandon.current.delete(id)) return;
+        const id = (nextId += 1);
+        const cancel = (reason: unknown): void => {
+          if (!pending.delete(id)) return;
           signal?.removeEventListener("abort", abort);
-          if (removeSurface) setSurfaces((current) => current.filter((entry) => entry.id !== id));
+          remove(id);
           reject(reason);
         };
         const abort = (): void => cancel(signal?.reason ?? surfaceCancellationError());
@@ -215,48 +215,41 @@ export function useFlowIntentHost(
           reject(signal.reason ?? surfaceCancellationError());
           return;
         }
-        abandon.current.set(id, () => cancel(surfaceCancellationError(), false));
+        pending.set(id, () => cancel(surfaceCancellationError()));
         signal?.addEventListener("abort", abort, { once: true });
         if (signal?.aborted) {
           abort();
           return;
         }
         const surface = build(id, (result) => {
-          if (!abandon.current.delete(id)) return;
+          if (!pending.delete(id)) return;
           signal?.removeEventListener("abort", abort);
-          setSurfaces((current) => current.filter((entry) => entry.id !== id));
+          remove(id);
           resolve(result);
         });
-        if (abandon.current.has(id)) setSurfaces((current) => [...current, surface]);
+        if (pending.has(id)) {
+          const wasEmpty = surfaces.length === 0;
+          surfaces = [...surfaces, surface];
+          if (wasEmpty) notify();
+        }
       }),
-    [],
-  );
+  };
+}
 
-  const host = useMemo<FlowIntentHost>(
-    () => ({
-      showMessage: (message, signal) =>
-        enqueue<void>((id, settle) => ({ id, kind: "message", message, settle }), signal),
-      showForm: (form, signal) =>
-        enqueue<FlowFormAnswer>((id, settle) => ({ id, kind: "form", form, settle }), signal),
-      confirm: (confirmation, signal) =>
-        enqueue<FlowConfirmAnswer>(
-          (id, settle) => ({ id, kind: "confirm", confirmation, settle }),
-          signal,
-        ),
-      navigate: (intent) => performNavigateTask(intent, optionsRef.current.navigation),
-      refresh: (component) => optionsRef.current.refresh?.(component),
-      setPanel: (panel, state) => optionsRef.current.setPanel?.(panel, state),
-      setFilter: (component, field, value) =>
-        optionsRef.current.setFilter?.(component, field, value),
-    }),
-    [enqueue],
-  );
+type SurfaceQueue = ReturnType<typeof createSurfaceQueue>;
 
-  const current = surfaces[0];
-  let element: ReactElement | null = null;
+/** Only this subtree re-renders when a flow opens or closes a surface. */
+function FlowSurfaceHost({
+  queue,
+  optionsRef,
+}: Readonly<{
+  queue: SurfaceQueue;
+  optionsRef: RefObject<FlowIntentHostOptions>;
+}>): ReactElement | null {
+  const current = useSyncExternalStore(queue.subscribe, queue.snapshot, () => null);
   if (current?.kind === "message") {
     const { message, settle } = current;
-    element = (
+    return (
       <FlowDialog
         key={current.id}
         title={message.title}
@@ -270,17 +263,18 @@ export function useFlowIntentHost(
         <p role="status">{message.text}</p>
       </FlowDialog>
     );
-  } else if (current?.kind === "confirm") {
-    element = (
+  }
+  if (current?.kind === "confirm")
+    return (
       <ConfirmSurface
         key={current.id}
         confirmation={current.confirmation}
         settle={current.settle}
       />
     );
-  } else if (current?.kind === "form") {
+  if (current?.kind === "form") {
     const { form, settle } = current;
-    const rendered = options.renderForm(form, {
+    const rendered = optionsRef.current.renderForm(form, {
       submit: (values, choiceEvidence) =>
         settle({
           kind: "submit",
@@ -289,7 +283,7 @@ export function useFlowIntentHost(
         }),
       cancel: () => settle({ kind: "cancel" }),
     });
-    element = (
+    return (
       <FlowDialog
         key={current.id}
         title={rendered.title}
@@ -299,5 +293,36 @@ export function useFlowIntentHost(
       </FlowDialog>
     );
   }
+  return null;
+}
+
+/** Presents flow intents without re-rendering the page when a surface changes. */
+export function useFlowIntentHost(
+  options: FlowIntentHostOptions,
+): Readonly<{ host: FlowIntentHost; element: ReactElement }> {
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+  const queue = useMemo(() => createSurfaceQueue(), []);
+  useEffect(() => () => queue.abandon(), [queue]);
+  const host = useMemo<FlowIntentHost>(
+    () => ({
+      showMessage: (message, signal) =>
+        queue.enqueue<void>((id, settle) => ({ id, kind: "message", message, settle }), signal),
+      showForm: (form, signal) =>
+        queue.enqueue<FlowFormAnswer>((id, settle) => ({ id, kind: "form", form, settle }), signal),
+      confirm: (confirmation, signal) =>
+        queue.enqueue<FlowConfirmAnswer>(
+          (id, settle) => ({ id, kind: "confirm", confirmation, settle }),
+          signal,
+        ),
+      navigate: (intent) => performNavigateTask(intent, optionsRef.current.navigation),
+      refresh: (component) => optionsRef.current.refresh?.(component),
+      setPanel: (panel, state) => optionsRef.current.setPanel?.(panel, state),
+      setFilter: (component, field, value) =>
+        optionsRef.current.setFilter?.(component, field, value),
+    }),
+    [queue],
+  );
+  const element = useMemo(() => <FlowSurfaceHost queue={queue} optionsRef={optionsRef} />, [queue]);
   return { host, element };
 }
