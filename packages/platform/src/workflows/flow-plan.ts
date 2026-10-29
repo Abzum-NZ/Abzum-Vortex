@@ -1,4 +1,10 @@
 import { fingerprintCanonicalValue } from "../definition/canonical-json-definition";
+import {
+  PLATFORM_SERVICE_OPERATIONS,
+  platformOperationKey,
+  type PlatformServiceOperationKey,
+} from "../catalogue/platform-service-operation-catalogue";
+import { protectedOperationMetadata } from "../definition/protected-operation-metadata";
 import { flowRuntimeValuesEqual } from "../rules/flow-formula";
 import type { FlowDefinition, FlowTask } from "./flow-contracts";
 import { flowTaskChildLists, isFlowControlTask } from "./flow-contracts";
@@ -71,6 +77,10 @@ export type FlowServerSegment = Readonly<{
   outputs: FlowPlanValueTypes;
   /** Whether a step of the segment changes data or starts back-end work. */
   changes: boolean;
+  /** Whether this segment needs an exclusive Access version lock. */
+  accessChange: boolean;
+  /** Whether an effect in this segment runs a multi-transaction workflow. */
+  multiTransaction: boolean;
   /** Each For each over record steps, which runs as one set-based change. */
   setBasedChanges: readonly Readonly<{
     taskId: string;
@@ -146,6 +156,24 @@ const registered = (task: FlowTask) =>
   Object.hasOwn(flowTaskRegistry, task.type)
     ? flowTaskRegistry[task.type as FlowTaskTypeKey]
     : undefined;
+
+const operationOf = (flow: FlowDefinition, task: FlowTask) => {
+  if (task.type !== "operation.call") return undefined;
+  const operation = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>)
+    .properties.operation;
+  if (operation?.kind !== "literal" || typeof operation.literal.value !== "string")
+    throw new FlowPlanError(
+      flow.id,
+      task.id,
+      `Call protected operation (${task.id}) needs a literal operation key`,
+    );
+  const entry = Object.entries(PLATFORM_SERVICE_OPERATIONS).find(
+    ([key]) => platformOperationKey(key) === operation.literal.value,
+  );
+  if (entry === undefined) return undefined;
+  const key = entry[0] as PlatformServiceOperationKey;
+  return { key, effect: entry[1].descriptor.effect, ...protectedOperationMetadata[key] };
+};
 
 /** Record steps a named action collects into one change; a For each over them is set-based. */
 const setBasedSteps = new Set([
@@ -473,6 +501,27 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
     const produced = new Set(steps.map((step) => step.id));
     const inputs = inputTypes(flow, [...draft.tasks, ...draft.guard], produced, id);
     const outputs = outputTypes(steps);
+    const operations = new Map(steps.map((step) => [step.id, operationOf(flow, step)]));
+    const effects = steps.filter((step) => {
+      const effect =
+        step.type === "run_flow"
+          ? "change"
+          : (operations.get(step.id)?.effect ?? registered(step)?.effect);
+      return effect === "change" || effect === "background_start";
+    });
+    const multi = steps.find((step) => operations.get(step.id)?.workflow === "multi_transaction");
+    if (multi !== undefined && effects.length > 1) {
+      const other = effects.find((step) => step.id !== multi.id)!;
+      throw new FlowPlanError(
+        flow.id,
+        multi.id,
+        `Multi-transaction step ${multi.id} cannot share a segment with effect ${other.id}`,
+      );
+    }
+    const accessChange = steps.some(
+      (step) => operations.get(step.id)?.transaction === "access_change",
+    );
+    const multiTransaction = multi !== undefined;
     return {
       kind: "server",
       id,
@@ -482,16 +531,19 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
       firstTaskPath: draft.firstTaskPath,
       inputs,
       outputs,
-      changes: steps.some((step) => {
-        const effect = registered(step)?.effect;
-        return effect === "change" || effect === "background_start";
-      }),
+      changes: effects.length > 0,
+      accessChange,
+      multiTransaction,
       setBasedChanges: setBasedChanges(steps),
       endsWithBackendRun: draft.tasks.at(-1)?.type === "backend.run",
       fingerprint: fingerprintCanonicalValue({
         tasks: draft.tasks,
         inputs,
         outputs,
+        operations: steps.flatMap((step) => {
+          const operation = operations.get(step.id);
+          return operation === undefined ? [] : [operation];
+        }),
       }),
       labels: steps.flatMap((step) => {
         const title = registered(step)?.title;
@@ -545,6 +597,8 @@ const linkFlowPlans = (plans: ReadonlyMap<string, FlowPlan>) => {
         (step): step is Extract<FlowTask, { type: "run_flow" }> => step.type === "run_flow",
       );
       if (children.length === 0) return segment;
+      let childAccessChange = false;
+      let childMultiTransaction = false;
       const fingerprints = children.map((step) => {
         const childId = String(step.flowId);
         if (!plans.has(childId))
@@ -556,6 +610,34 @@ const linkFlowPlans = (plans: ReadonlyMap<string, FlowPlan>) => {
             step.id,
             `Flow ${id} cannot run flow ${childId} with page steps on the server`,
           );
+        const childMulti = child.segments.find(
+          (part) => part.kind === "server" && part.multiTransaction,
+        );
+        if (childMulti !== undefined) {
+          const otherChild = child.segments.find(
+            (part) => part.kind === "server" && part.changes && part.id !== childMulti.id,
+          );
+          const otherParent = allSteps(segment.tasks).find((part) => {
+            if (part.id === step.id) return false;
+            const effect =
+              part.type === "run_flow"
+                ? "change"
+                : (operationOf(plan.definition, part)?.effect ?? registered(part)?.effect);
+            return effect === "change" || effect === "background_start";
+          });
+          if (otherChild !== undefined || otherParent !== undefined)
+            throw new FlowPlanError(
+              id,
+              step.id,
+              `Multi-transaction flow ${childId} cannot share an admitted segment with effect ${otherParent?.id ?? otherChild!.id}`,
+            );
+        }
+        childAccessChange ||= child.segments.some(
+          (part) => part.kind === "server" && part.accessChange,
+        );
+        childMultiTransaction ||= child.segments.some(
+          (part) => part.kind === "server" && part.multiTransaction,
+        );
         return {
           flowId: childId,
           segments: child.segments.flatMap((part) =>
@@ -565,6 +647,8 @@ const linkFlowPlans = (plans: ReadonlyMap<string, FlowPlan>) => {
       });
       return {
         ...segment,
+        accessChange: segment.accessChange || childAccessChange,
+        multiTransaction: segment.multiTransaction || childMultiTransaction,
         fingerprint: fingerprintCanonicalValue({
           segment: segment.fingerprint,
           children: fingerprints,

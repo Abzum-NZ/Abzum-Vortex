@@ -67,6 +67,7 @@ import type { createOrganizationAccessAdministrationService } from "../access/or
 import type { ApplicationStoreService } from "./installation-application-store";
 import { z } from "zod";
 import { assignRoleAssignment, prepareRoleAssignment } from "./role-assignment-operation";
+import { protectedOperationMetadata } from "./protected-operation-metadata";
 
 /**
  * One server executor for the registered platform-service protected operations. The caller (the
@@ -234,7 +235,6 @@ type OperationRunner = (
   inputs: Inputs,
 ) => Promise<OperationResult>;
 type Operation = Readonly<{
-  authorityKind: ProtectedOperationDescriptor["requiredAuthority"]["kind"];
   execute: OperationRunner;
 }>;
 
@@ -264,25 +264,21 @@ const duplicateKeyFor = (
  * typed inputs onto that command's fields and the schema rejects anything it does not accept, so an
  * invalid value is a validation result and never reaches the protected wrapper.
  */
-const operation = <Schema extends z.ZodType>(
-  definition: {
-    schema: Schema;
-    inputAliases?: Readonly<Record<string, string>>;
-    command: (
-      inputs: Inputs,
-      selection: OrganizationSelectionCandidate,
-      effectKey: ProtectedOperationEffectKey | undefined,
-    ) => unknown;
-    run: (
-      services: ProtectedOperationExecutorDependencies,
-      caller: ProtectedOperationCaller,
-      command: z.output<Schema>,
-    ) => Promise<OperationResult>;
-  },
-  authorityKind: Operation["authorityKind"] = "permission",
-): Operation =>
+const operation = <Schema extends z.ZodType>(definition: {
+  schema: Schema;
+  inputAliases?: Readonly<Record<string, string>>;
+  command: (
+    inputs: Inputs,
+    selection: OrganizationSelectionCandidate,
+    effectKey: ProtectedOperationEffectKey | undefined,
+  ) => unknown;
+  run: (
+    services: ProtectedOperationExecutorDependencies,
+    caller: ProtectedOperationCaller,
+    command: z.output<Schema>,
+  ) => Promise<OperationResult>;
+}): Operation =>
   Object.freeze({
-    authorityKind,
     execute: async (services, caller, inputs) => {
       const command = definition.schema.safeParse(
         definition.command(inputs, caller.selection, caller.effectKey),
@@ -318,7 +314,6 @@ const operation = <Schema extends z.ZodType>(
 /** One application catalogue journey, run by the installation service under the person's own authority. */
 const applicationStoreOperation = (journey: keyof ApplicationStoreService): Operation =>
   Object.freeze({
-    authorityKind: "permission",
     execute: async (services, caller, inputs) => {
       const store = services.applicationStore;
       if (store === undefined) return { kind: "unavailable" };
@@ -501,28 +496,25 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         }),
       ),
   }),
-  create_tenant_organization: operation(
-    {
-      schema: createTenantOrganizationOperationCommandSchema,
-      command: (inputs, _selection, effectKey) => ({
-        duplicateKey: duplicateKeyFor(effectKey, randomUUID),
-        parentOrganizationId: inputs.parent_organization_id,
-        shortName: inputs.short_name,
-        displayName: inputs.display_name,
-        stewardDisplayName: inputs.steward_display_name,
-        runtimeSettings: {
-          language: inputs.language,
-          timeZone: inputs.time_zone,
-          currency: inputs.currency,
-          dateFormat: inputs.date_format,
-          numberFormat: inputs.number_format,
-        },
-      }),
-      run: async (services, caller, command) =>
-        runTenantOrganizationCreation(services, caller, command),
-    },
-    "tenant_capability",
-  ),
+  create_tenant_organization: operation({
+    schema: createTenantOrganizationOperationCommandSchema,
+    command: (inputs, _selection, effectKey) => ({
+      duplicateKey: duplicateKeyFor(effectKey, randomUUID),
+      parentOrganizationId: inputs.parent_organization_id,
+      shortName: inputs.short_name,
+      displayName: inputs.display_name,
+      stewardDisplayName: inputs.steward_display_name,
+      runtimeSettings: {
+        language: inputs.language,
+        timeZone: inputs.time_zone,
+        currency: inputs.currency,
+        dateFormat: inputs.date_format,
+        numberFormat: inputs.number_format,
+      },
+    }),
+    run: async (services, caller, command) =>
+      runTenantOrganizationCreation(services, caller, command),
+  }),
   rename_group: operation({
     schema: renameOrganizationAdministrationGroupCommandSchema,
     command: (inputs) => ({
@@ -799,87 +791,75 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         }),
       ),
   }),
-  rename_tenant_organization: operation(
-    {
-      schema: renameTenantOrganizationCommandSchema.omit({ tenantId: true, operation: true }),
-      command: (inputs, _selection, effectKey) => ({
-        duplicateKey: duplicateKeyFor(effectKey, randomUUID),
-        organizationId: inputs.organization_id,
-        expectedRevision: inputs.expected_revision,
-        displayName: inputs.display_name,
-      }),
-      run: async (services, caller, command) =>
-        runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
-          operations.renameOrganization(caller.session, {
-            ...command,
-            operation: "rename_tenant_organization",
-            tenantId,
-          }),
-        ),
-    },
-    "tenant_capability",
-  ),
-  reparent_tenant_organization: operation(
-    {
-      schema: reparentTenantOrganizationCommandSchema
-        .omit({ tenantId: true, operation: true })
-        .extend({ parentOrganizationId: organizationIdSchema }),
-      inputAliases: { parentOrganizationId: "parent_organization_id" },
-      command: (inputs, _selection, effectKey) => ({
-        duplicateKey: duplicateKeyFor(effectKey, randomUUID),
-        organizationId: inputs.organization_id,
-        expectedRevision: inputs.expected_revision,
-        parentOrganizationId: inputs.parent_organization_id,
-      }),
-      run: async (services, caller, command) =>
-        runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
-          operations.reparentOrganization(caller.session, {
-            ...command,
-            operation: "reparent_tenant_organization",
-            tenantId,
-          }),
-        ),
-    },
-    "tenant_capability",
-  ),
-  suspend_tenant_organization: operation(
-    {
-      schema: suspendTenantOrganizationCommandSchema.omit({ tenantId: true, operation: true }),
-      command: (inputs, _selection, effectKey) => ({
-        duplicateKey: duplicateKeyFor(effectKey, randomUUID),
-        organizationId: inputs.organization_id,
-        expectedRevision: inputs.expected_revision,
-      }),
-      run: async (services, caller, command) =>
-        runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
-          operations.suspendOrganization(caller.session, {
-            ...command,
-            operation: "suspend_tenant_organization",
-            tenantId,
-          }),
-        ),
-    },
-    "tenant_capability",
-  ),
-  reactivate_tenant_organization: operation(
-    {
-      schema: reactivateTenantOrganizationCommandSchema.omit({ tenantId: true, operation: true }),
-      command: (inputs, _selection, effectKey) => ({
-        duplicateKey: duplicateKeyFor(effectKey, randomUUID),
-        organizationId: inputs.organization_id,
-        expectedRevision: inputs.expected_revision,
-      }),
-      run: async (services, caller, command) =>
-        runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
-          operations.reactivateOrganization(caller.session, {
-            ...command,
-            operation: "reactivate_tenant_organization",
-            tenantId,
-          }),
-        ),
-    },
-    "tenant_capability",
-  ),
+  rename_tenant_organization: operation({
+    schema: renameTenantOrganizationCommandSchema.omit({ tenantId: true, operation: true }),
+    command: (inputs, _selection, effectKey) => ({
+      duplicateKey: duplicateKeyFor(effectKey, randomUUID),
+      organizationId: inputs.organization_id,
+      expectedRevision: inputs.expected_revision,
+      displayName: inputs.display_name,
+    }),
+    run: async (services, caller, command) =>
+      runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
+        operations.renameOrganization(caller.session, {
+          ...command,
+          operation: "rename_tenant_organization",
+          tenantId,
+        }),
+      ),
+  }),
+  reparent_tenant_organization: operation({
+    schema: reparentTenantOrganizationCommandSchema
+      .omit({ tenantId: true, operation: true })
+      .extend({ parentOrganizationId: organizationIdSchema }),
+    inputAliases: { parentOrganizationId: "parent_organization_id" },
+    command: (inputs, _selection, effectKey) => ({
+      duplicateKey: duplicateKeyFor(effectKey, randomUUID),
+      organizationId: inputs.organization_id,
+      expectedRevision: inputs.expected_revision,
+      parentOrganizationId: inputs.parent_organization_id,
+    }),
+    run: async (services, caller, command) =>
+      runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
+        operations.reparentOrganization(caller.session, {
+          ...command,
+          operation: "reparent_tenant_organization",
+          tenantId,
+        }),
+      ),
+  }),
+  suspend_tenant_organization: operation({
+    schema: suspendTenantOrganizationCommandSchema.omit({ tenantId: true, operation: true }),
+    command: (inputs, _selection, effectKey) => ({
+      duplicateKey: duplicateKeyFor(effectKey, randomUUID),
+      organizationId: inputs.organization_id,
+      expectedRevision: inputs.expected_revision,
+    }),
+    run: async (services, caller, command) =>
+      runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
+        operations.suspendOrganization(caller.session, {
+          ...command,
+          operation: "suspend_tenant_organization",
+          tenantId,
+        }),
+      ),
+  }),
+  reactivate_tenant_organization: operation({
+    schema: reactivateTenantOrganizationCommandSchema.omit({ tenantId: true, operation: true }),
+    command: (inputs, _selection, effectKey) => ({
+      duplicateKey: duplicateKeyFor(effectKey, randomUUID),
+      organizationId: inputs.organization_id,
+      expectedRevision: inputs.expected_revision,
+    }),
+    run: async (services, caller, command) =>
+      runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
+        operations.reactivateOrganization(caller.session, {
+          ...command,
+          operation: "reactivate_tenant_organization",
+          tenantId,
+        }),
+      ),
+  }),
   suspend_organization_account: operation({
     schema: suspendOrganizationAccountCommandSchema,
     command: (inputs, _selection, effectKey) => ({
@@ -1180,7 +1160,8 @@ export const createProtectedOperationExecutor = (
       const registeredOperation = operations[registered.key as PlatformServiceOperationKey];
       if (
         registeredOperation === undefined ||
-        registeredOperation.authorityKind !== registered.descriptor.requiredAuthority.kind
+        protectedOperationMetadata[registered.key as PlatformServiceOperationKey].authorityKind !==
+          registered.descriptor.requiredAuthority.kind
       )
         return refuse("operation_authority_mismatch");
       if (
