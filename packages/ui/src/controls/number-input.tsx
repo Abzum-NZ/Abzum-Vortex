@@ -1,6 +1,12 @@
 "use client";
 
 import type { ChangeEvent, ReactElement } from "react";
+import {
+  compareExactDecimals,
+  formatExactDecimal,
+  parseExactDecimal,
+  powerOfTen,
+} from "@vortex/platform/schema";
 import { Field, FieldLabel } from "../components/field";
 import { Input } from "../components/input";
 import { DefinitionRenderError } from "../definition-error";
@@ -19,9 +25,28 @@ import {
   useFieldIds,
   useSeededState,
 } from "./field-parts";
-import { useRequiredFormField } from "./form-context";
+import { useFormField, useFormFieldError } from "./form-context";
 
 export type NumberInputProps = ControlRenderProps<NumberInputPayload>;
+
+// Settings are numbers in the existing control contract and may stringify in exponent notation.
+const settingDecimal = (setting: number) => {
+  const [mantissa, exponentText] = String(setting).split("e");
+  if (exponentText === undefined) return parseExactDecimal(mantissa);
+  const negative = mantissa!.startsWith("-");
+  const digits = mantissa!.replace("-", "").replace(".", "");
+  const point =
+    (mantissa!.replace("-", "").indexOf(".") < 0
+      ? digits.length
+      : mantissa!.replace("-", "").indexOf(".")) + Number(exponentText);
+  const magnitude =
+    point <= 0
+      ? `0.${"0".repeat(-point)}${digits}`
+      : point >= digits.length
+        ? digits + "0".repeat(point - digits.length)
+        : `${digits.slice(0, point)}.${digits.slice(point)}`;
+  return parseExactDecimal(`${negative ? "-" : ""}${magnitude}`);
+};
 
 /**
  * Number input. Decimal fields retain their exact entered text through submit; integer fields
@@ -62,19 +87,45 @@ export function NumberInput(props: NumberInputProps): ReactElement {
   const [raw, setRaw] = useSeededState(
     projected === undefined || projected === null ? "" : String(projected),
   );
+  const decimalSeparator =
+    new Intl.NumberFormat().formatToParts(1.1).find((part) => part.type === "decimal")?.value ??
+    ".";
   const toTyped = (text: string): string | number | null => {
-    if (text.trim().length === 0) return null;
-    const parsed = Number(text);
-    if (!Number.isFinite(parsed)) return null;
-    if (integer) return Number.isSafeInteger(parsed) ? parsed : null;
-    return text;
+    const canonical = decimalSeparator === "." ? text : text.replace(decimalSeparator, ".");
+    const parsed = parseExactDecimal(canonical);
+    if (parsed === undefined) return null;
+    if (integer) {
+      if (parsed.scale !== 0) return null;
+      const whole = Number(parsed.coefficient);
+      return Number.isSafeInteger(whole) ? whole : null;
+    }
+    return formatExactDecimal(parsed);
   };
   const typed = toTyped(raw);
-  const validationError = useRequiredFormField(fieldKey, props.placementId, typed, {
-    label,
-    missing: required && !disabled && !readOnly && raw.trim() === "",
-  });
-  const error = projectedError ?? validationError;
+  const validate = (): string | undefined => {
+    if (disabled || readOnly) return undefined;
+    if (raw.trim() === "") return required ? `${label} is required.` : undefined;
+    if (typed === null) return `${label}: enter a valid ${integer ? "whole number" : "number"}.`;
+    const exact = parseExactDecimal(String(typed))!;
+    const minimumExact = minimum === undefined ? undefined : settingDecimal(minimum);
+    const maximumExact = maximum === undefined ? undefined : settingDecimal(maximum);
+    if (minimumExact !== undefined && compareExactDecimals(exact, minimumExact) < 0)
+      return `${label}: enter a value of at least ${minimum}.`;
+    if (maximumExact !== undefined && compareExactDecimals(exact, maximumExact) > 0)
+      return `${label}: enter a value of at most ${maximum}.`;
+    const stepExact = step === undefined ? undefined : settingDecimal(step);
+    if (stepExact !== undefined) {
+      const base = minimumExact ?? parseExactDecimal("0")!;
+      const scale = Math.max(exact.scale, base.scale, stepExact.scale);
+      const scaled = (value: typeof exact) => value.coefficient * powerOfTen(scale - value.scale);
+      if ((scaled(exact) - scaled(base)) % scaled(stepExact) !== 0n)
+        return `${label}: enter a value in increments of ${step}.`;
+    }
+    return undefined;
+  };
+  useFormField(fieldKey, props.placementId, typed, validate);
+  const validationError = useFormFieldError(fieldKey);
+  const error = projectedError ?? validationError ?? (raw.trim() === "" ? undefined : validate());
 
   const onChange = (event: ChangeEvent<HTMLInputElement>): void => {
     if (disabled || readOnly) return;
@@ -95,7 +146,7 @@ export function NumberInput(props: NumberInputProps): ReactElement {
       </FieldLabel>
       <Input
         id={ids.control}
-        type="number"
+        type="text"
         inputMode={integer ? "numeric" : "decimal"}
         name={fieldKey}
         value={raw}
