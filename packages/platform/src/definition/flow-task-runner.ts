@@ -13,7 +13,7 @@ import {
   viewerSafeRecordPinSelectorSchema,
 } from "../records/record-links";
 import { saveRecordCommandSchema, type SaveRecordCommand } from "../records/records";
-import { platformOperationKey } from "../workflows/default-flow-sources";
+import { platformOperationKey } from "../catalogue/platform-service-operation-catalogue";
 import {
   flowRefusalFeedbackSchema,
   flowRefusalGuidanceByCodeSchema,

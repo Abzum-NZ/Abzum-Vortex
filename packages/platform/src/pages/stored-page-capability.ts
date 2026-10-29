@@ -27,7 +27,7 @@ import type { CompiledLayout } from "../definition/application-composition/page-
 import { compiledItemTree } from "../definition/application-composition/compiled-item-tree";
 import { conditionNodeSchema, type ConditionNode } from "../definition/module-foundation-contracts";
 import { installedNamedActionReferenceSchema } from "../records/named-actions";
-import { platformOperationKey } from "../workflows/default-flow-sources";
+import { platformOperationKey } from "../catalogue/platform-service-operation-catalogue";
 import {
   flowTaskChildLists,
   type FlowDefinition,

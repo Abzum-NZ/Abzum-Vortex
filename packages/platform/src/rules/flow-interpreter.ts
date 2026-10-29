@@ -3,7 +3,7 @@ import { typedValueMatchesType } from "./condition-types";
 import type { JsonValue } from "../catalogue/common";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import { recordLinkValueSchema } from "../records/module-field-values";
-import { platformOperationKey } from "../workflows/default-flow-sources";
+import { platformOperationKey } from "../catalogue/platform-service-operation-catalogue";
 import {
   flowReadFieldsProjectionSchema,
   flowReadFieldsTypeMapSchema,
