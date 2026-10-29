@@ -34,7 +34,21 @@ begin
     p_requested_field_ids, p_requested_system_field_keys, p_filter, p_filterable_field_ids,
     p_sort, p_search, p_sortable_field_ids, p_searchable_field_ids,
     pg_catalog.cardinality(p_record_ids), 'forward', p_record_ids);
-  if opened ->> 'outcome' <> 'opened' then return opened; end if;
+  if opened ->> 'outcome' <> 'opened' then
+    -- System projection exact reads remain unavailable to the general exact-row API. Membership
+    -- uses the same bounded projection reader with the already validated identity list.
+    if opened ->> 'reasonCode' <> 'descriptor_invalid' then return opened; end if;
+    opened := vortex_record.module_query_open_internal(
+      p_module_root_id, p_query_id, p_expected_release_revision, p_input_values,
+      p_requested_field_ids, p_requested_system_field_keys, p_filter, p_filterable_field_ids,
+      p_sort, p_search, p_sortable_field_ids, p_searchable_field_ids,
+      pg_catalog.cardinality(p_record_ids), 'forward', null);
+    if opened ->> 'outcome' <> 'opened' then return opened; end if;
+    if not (opened -> 'recordType' ? 'systemProjection') then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+    end if;
+    opened := pg_catalog.jsonb_set(opened, '{exactRecordIds}', pg_catalog.to_jsonb(p_record_ids));
+  end if;
   -- An aggregate without groups has no row gestures. Grouped shapes retain their underlying rows.
   if pg_catalog.jsonb_typeof(opened #> '{query,aggregates}') = 'array'
     and pg_catalog.jsonb_array_length(opened #> '{query,aggregates}') > 0

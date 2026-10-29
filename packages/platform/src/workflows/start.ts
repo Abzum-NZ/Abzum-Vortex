@@ -306,10 +306,14 @@ export const startFlow = async <Value>(
         .parse(rows[0]);
       return rate.admitted ? undefined : rate.retry_after_seconds;
     };
-    const consumeContinuation = async (runId: string, commandId: string) => {
+    const consumeContinuation = async (
+      runId: string,
+      commandId: string,
+      target: SegmentContext["transaction"] = transaction,
+    ) => {
       if (request.continuation === undefined) return { status: "admitted" } as const;
       const rows =
-        await transaction.query`select vortex_platform.admit_flow_continuation(${request.continuation.tokenHash}::text, ${runId}::uuid, ${currentPlan.flowId}::uuid, ${request.continuation.releaseKey}::text, ${commandId}::uuid) as result`;
+        await target.query`select vortex_platform.admit_flow_continuation(${request.continuation.tokenHash}::text, ${runId}::uuid, ${currentPlan.flowId}::uuid, ${request.continuation.releaseKey}::text, ${commandId}::uuid) as result`;
       return z
         .object({
           status: z.enum(["admitted", "replay", "already_answered", "unavailable"]),
@@ -318,8 +322,32 @@ export const startFlow = async <Value>(
         })
         .parse(z.object({ result: z.unknown() }).parse(rows[0]).result);
     };
+    const consumeAndProject = async (runId: string, commandId: string, replay: boolean) => {
+      if (request.continuation === undefined) return consumeContinuation(runId, commandId);
+      const refused = new Error("FLOW_GESTURE_REFUSED_ROLLBACK");
+      try {
+        return await requireRequestSavepoint(transaction).withSavepoint(async (child) => {
+          const consumed = await consumeContinuation(runId, commandId, child);
+          if (
+            consumed.status === "admitted" &&
+            !replay &&
+            request.channel === "page" &&
+            !(await dependencies.authorizeGesture({ ...context, transaction: child }))
+          )
+            throw refused;
+          return consumed;
+        });
+      } catch (error) {
+        if (error === refused) return { status: "gesture_refused" } as const;
+        throw error;
+      }
+    };
     if (request.expected === null) {
-      if (request.channel === "page" && !(await dependencies.authorizeGesture(context)))
+      if (
+        request.continuation === undefined &&
+        request.channel === "page" &&
+        !(await dependencies.authorizeGesture(context))
+      )
         return { kind: "refused" };
       if (request.continuation !== undefined) {
         if (
@@ -345,7 +373,7 @@ export const startFlow = async <Value>(
         );
         const retryAfterSeconds = await rateLimit("read");
         if (retryAfterSeconds !== undefined) return { kind: "rate_limited", retryAfterSeconds };
-        const consumed = await consumeContinuation(suppliedRunId.data, commandId);
+        const consumed = await consumeAndProject(suppliedRunId.data, commandId, false);
         if (consumed.status === "already_answered") return { kind: "already_answered" };
         if (consumed.status !== "admitted" && consumed.status !== "replay")
           return { kind: "refused" };
@@ -495,6 +523,7 @@ export const startFlow = async <Value>(
     }
     if (
       request.channel === "page" &&
+      request.continuation === undefined &&
       replay === undefined &&
       !(await dependencies.authorizeGesture(context))
     )
@@ -503,7 +532,7 @@ export const startFlow = async <Value>(
       const retryAfterSeconds = await rateLimit(segment.changes ? "change" : "read");
       if (retryAfterSeconds !== undefined) return { kind: "rate_limited", retryAfterSeconds };
     }
-    const consumed = await consumeContinuation(runId, commandId);
+    const consumed = await consumeAndProject(runId, commandId, replay !== undefined);
     if (consumed.status === "already_answered") return { kind: "already_answered" };
     if (consumed.status !== "admitted" && consumed.status !== "replay") return { kind: "refused" };
     if (segment.multiTransaction) {
