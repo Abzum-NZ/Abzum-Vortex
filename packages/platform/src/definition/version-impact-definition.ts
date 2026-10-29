@@ -140,7 +140,7 @@ const parseVersionImpactRequest = (input: unknown): SupportedVersionImpactReques
 };
 
 const assertEvidenceContractVersions = (evidence: DefinitionPublicationHistory): void => {
-  const allowed = "4.0.0";
+  const allowed = "4.1.0";
   if (
     evidence.latestRelease !== null &&
     evidence.latestRelease.publication.validationContractVersion !== allowed
@@ -257,7 +257,7 @@ export const compareDefinitionVersionImpact = (input: unknown): DefinitionVersio
 export const compareDefinitionVersionImpactWithEvidence = (
   input: Readonly<{
     kind: "module" | "application";
-    validationContractVersion: "4.0.0";
+    validationContractVersion: "4.1.0";
     releaseHistory: DefinitionPublicationHistory;
     candidate: unknown;
   }>,

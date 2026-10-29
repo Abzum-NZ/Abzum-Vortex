@@ -267,7 +267,7 @@ const releaseInlineModules = async (
     const output = compiled.output;
     const impact = compareDefinitionVersionImpactWithEvidence({
       kind: "module",
-      validationContractVersion: "4.0.0",
+      validationContractVersion: "4.1.0",
       releaseHistory: module.releaseHistory,
       candidate: output.canonical,
     });
@@ -300,7 +300,7 @@ const releaseInlineModules = async (
       reasons,
       dependencyManifest: manifestFor(dependencies, output, resolution),
       resolutionSnapshot: resolution,
-      validationContractVersion: "4.0.0",
+      validationContractVersion: "4.1.0",
       releaseNote,
     };
     if (released) await transaction.appendModuleRelease(append);

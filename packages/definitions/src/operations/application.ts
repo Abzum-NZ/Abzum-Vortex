@@ -495,7 +495,7 @@ const theme = {
  */
 export const operationsApplication: ApplicationSourceDocument =
   applicationSourceDocumentSchema.parse({
-    source_contract_version: "4.0.0",
+    source_contract_version: "4.1.0",
     root_alias: "app_operations",
     key: "vortex.app.operations",
     kind: "application",

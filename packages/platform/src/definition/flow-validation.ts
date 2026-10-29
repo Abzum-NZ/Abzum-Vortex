@@ -1,4 +1,7 @@
 import { valueTypesCompatible, workflowValueTypeSchema } from "../catalogue/catalogues";
+import { isIsoCurrencyCode } from "../catalogue/currencies";
+import { checkFlowFormula } from "../rules/flow-formula-check";
+import { formatterCatalogue, unitCatalogue } from "../pages/value-format";
 import { recordTypeIdSchema } from "../catalogue/identifiers";
 import type {
   DefinitionRuleFailureFamily,
@@ -21,6 +24,8 @@ import {
 } from "../workflows/flow-task-registry";
 import {
   flowMaximumTaskOutputPathDepth,
+  flowFormulaHasUnroundedDivide,
+  flowRoundingModeSchema,
   type FlowFormula,
   type FlowReference,
   type FlowValue,
@@ -80,6 +85,12 @@ export type FlowValidationIssue = Readonly<{
 
 export type FlowSetValidationIssue = FlowValidationIssue & Readonly<{ flowId: string }>;
 
+export type FlowReferenceEnvironment = Readonly<{
+  page: string;
+  values: Readonly<Record<string, string>>;
+  forms: Readonly<Record<string, Readonly<Record<string, string>>>>;
+}>;
+
 export type FlowValidationOptions = Readonly<{
   /**
    * The authored title of a form named by a Show form step, when validating an application: an
@@ -98,6 +109,9 @@ export type FlowValidationOptions = Readonly<{
    * checked; its value type belongs to the record type and is checked by the evaluator.
    */
   triggerRecordFieldExists?: (field: string) => boolean;
+  /** The field's common declared type across the trigger's record types, when known. */
+  triggerRecordFieldType?: (field: string) => string | undefined;
+  referenceEnvironments?: readonly FlowReferenceEnvironment[] | undefined;
   /**
    * The declared inputs, with their types, of the operation a Call protected operation task names
    * by its readable key. Without it, the inputs the task maps are not checked against the
@@ -151,8 +165,6 @@ const callCodes = {
 /** The static type of a value, or `undefined` when only the runtime evaluator can know it. */
 type StaticType = string | undefined;
 
-const numericTypes: ReadonlySet<string> = new Set(["whole_number", "decimal_number", "money"]);
-const dateTypes: ReadonlySet<string> = new Set(["date", "date_time"]);
 const listTypes: ReadonlySet<string> = new Set([
   "record_reference_list",
   "relationship_reference_list",
@@ -227,6 +239,7 @@ export function validateFlow(
 ): FlowValidationIssue[] {
   const flow = flowInput as unknown as FlowSource;
   const issues: FlowValidationIssue[] = [];
+  const unreadableReferences: FlowValidationIssue[] = [];
   const add = (
     path: Path,
     ruleCode: DefinitionCompilerRefusalCode,
@@ -422,24 +435,49 @@ export function validateFlow(
             "broken_reference",
             `The trigger record has no field ${reference.field}`,
           );
-        // A record field's type belongs to the record type, which the flow does not carry.
-        return undefined;
+        return options.triggerRecordFieldType?.(reference.field);
       case "execution_actor":
         return "organization_account_reference";
       case "execution_now":
         return "date_time";
       // Not yet runnable: the page runner reads page values and form fields in page segments.
       case "page":
-      case "form":
-        add(
+      case "form": {
+        const environments = options.referenceEnvironments ?? [];
+        const types = environments.map((environment) => {
+          const type =
+            reference.source === "page"
+              ? environment.values[reference.name]
+              : environment.forms[reference.form]?.[reference.field];
+          if (type === undefined)
+            add(
+              path,
+              "vortex.definition.workflow_node_references",
+              "broken_reference",
+              reference.source === "page"
+                ? `Page ${environment.page} declares no value ${reference.name}`
+                : `Page ${environment.page} has no form field ${reference.form}.${reference.field}`,
+            );
+          return type;
+        });
+        if (environments.length === 0)
+          add(
+            path,
+            "vortex.definition.workflow_node_references",
+            "broken_reference",
+            "Page and form references require a bound page",
+          );
+        unreadableReferences.push({
           path,
-          "vortex.definition.unsupported_workflow_node",
-          "unsupported_choice",
-          reference.source === "page"
-            ? `The page value ${reference.name} cannot be read yet`
-            : `The form field ${reference.form}.${reference.field} cannot be read yet`,
-        );
-        return undefined;
+          ruleCode: "vortex.definition.unsupported_workflow_node",
+          family: "unsupported_choice",
+          message:
+            reference.source === "page"
+              ? `The page value ${reference.name} cannot be read yet`
+              : `The form field ${reference.form}.${reference.field} cannot be read yet`,
+        });
+        return types.length > 0 && types.every((type) => type === types[0]) ? types[0] : undefined;
+      }
       case "task_output": {
         if (where.triggerOnly) {
           add(
@@ -555,231 +593,16 @@ export function validateFlow(
     }
   };
 
-  const formulaType = (formula: FlowFormula, where: Where, path: Path): StaticType => {
-    const child = (value: FlowFormula, ...segments: (string | number)[]) =>
-      formulaType(value, where, [...path, ...segments]);
-    const expect = (
-      actual: StaticType,
-      accepted: (type: string) => boolean,
-      childPath: Path,
-      wanted: string,
-    ) => {
-      if (actual === undefined || actual === "json" || accepted(actual)) return;
-      add(
-        childPath,
-        "vortex.definition.source_type_compatibility",
-        "invalid_value",
-        `Expected ${wanted}, found ${actual}`,
-      );
-    };
-    const numericArgs = (args: readonly FlowFormula[], segment: string): StaticType => {
-      const types = args.map((arg, index) => {
-        const type = child(arg, segment, index);
-        expect(
-          type,
-          (candidate) => numericTypes.has(candidate),
-          [...path, segment, index],
-          "a number",
-        );
-        return type;
-      });
-      return types.includes("money")
-        ? "money"
-        : types.some((type) => type === undefined || type === "json")
-          ? undefined
-          : types.includes("decimal_number")
-            ? "decimal_number"
-            : "whole_number";
-    };
-    switch (formula.op) {
-      case "literal":
-        return formula.type;
-      case "reference":
-        return resolveReference(formula.reference, where, [...path, "reference"]);
-      case "record_id": {
-        const type = child(formula.arg, "arg");
-        if (type !== "json") {
-          add(
-            [...path, "arg"],
-            "vortex.definition.source_type_compatibility",
-            "invalid_value",
-            `The record_id operand must have a declared JSON type, found ${type ?? "an unknown type"}`,
-          );
-          return undefined;
-        }
-        return "text";
-      }
-      case "deadline_passed":
-        if (!where.nowAllowed)
-          add(
-            path,
-            "vortex.definition.workflow_node_values",
-            "invalid_value",
-            "A deadline uses the current time",
-          );
-        expect(
-          child(formula.due, "due"),
-          (type) => type === "date_time",
-          [...path, "due"],
-          "a date-time deadline",
-        );
-        if (formula.status !== undefined)
-          expect(
-            child(formula.status, "status"),
-            (type) => type === "text" || type === "choice",
-            [...path, "status"],
-            "a status",
-          );
-        return "yes_no";
-      case "now":
-        if (!where.nowAllowed)
-          add(
-            path,
-            "vortex.definition.workflow_node_values",
-            "invalid_value",
-            "The now operator is allowed only in interactive and background flows, and never in a trigger",
-          );
-        return "date_time";
-      case "add":
-      case "multiply":
-      case "subtract":
-        return numericArgs(formula.args, "args");
-      case "divide": {
-        const type = numericArgs(formula.args, "args");
-        return type === "money" ? "money" : type === undefined ? undefined : "decimal_number";
-      }
-      case "round": {
-        const type = child(formula.arg, "arg");
-        expect(type, (candidate) => numericTypes.has(candidate), [...path, "arg"], "a number");
-        return type;
-      }
-      case "eq":
-      case "neq":
-      case "lt":
-      case "lte":
-      case "gt":
-      case "gte":
-      case "contains":
-      case "starts_with":
-      case "ends_with": {
-        const left = child(formula.left, "left");
-        const right = child(formula.right, "right");
-        if (
-          left !== undefined &&
-          right !== undefined &&
-          left !== "json" &&
-          right !== "json" &&
-          !valueTypesCompatible(left, right, "condition") &&
-          !valueTypesCompatible(right, left, "condition")
-        )
-          add(
-            path,
-            "vortex.definition.source_type_compatibility",
-            "invalid_value",
-            `Cannot compare ${left} with ${right}`,
-          );
-        return "yes_no";
-      }
-      case "is_empty":
-      case "is_not_empty":
-        child(formula.arg, "arg");
-        return "yes_no";
-      case "in": {
-        const value = child(formula.value, "value");
-        formula.options.forEach((option, index) => {
-          const type = child(option, "options", index);
-          if (
-            value !== undefined &&
-            type !== undefined &&
-            value !== "json" &&
-            type !== "json" &&
-            !valueTypesCompatible(type, value, "condition")
-          )
-            add(
-              [...path, "options", index],
-              "vortex.definition.source_type_compatibility",
-              "invalid_value",
-              `An option of type ${type} cannot be compared with ${value}`,
-            );
-        });
-        return "yes_no";
-      }
-      case "and":
-      case "or":
-        formula.args.forEach((arg, index) =>
-          expect(
-            child(arg, "args", index),
-            (type) => type === "yes_no",
-            [...path, "args", index],
-            "a yes/no value",
-          ),
-        );
-        return "yes_no";
-      case "not":
-        expect(
-          child(formula.arg, "arg"),
-          (type) => type === "yes_no",
-          [...path, "arg"],
-          "a yes/no value",
-        );
-        return "yes_no";
-      case "if": {
-        expect(
-          child(formula.condition, "condition"),
-          (type) => type === "yes_no",
-          [...path, "condition"],
-          "a yes/no value",
-        );
-        const then = child(formula.then, "then");
-        const otherwise = child(formula.else, "else");
-        if (
-          then === undefined ||
-          otherwise === undefined ||
-          then === "json" ||
-          otherwise === "json"
-        )
-          return undefined;
-        if (then === otherwise) return then;
-        if (numericTypes.has(then) && numericTypes.has(otherwise))
-          return then === "money" || otherwise === "money" ? "money" : "decimal_number";
-        add(
-          [...path, "else"],
-          "vortex.definition.source_type_compatibility",
-          "invalid_value",
-          `Both results of if must have one type, found ${then} and ${otherwise}`,
-        );
-        return undefined;
-      }
-      case "join":
-        formula.parts.forEach((part, index) => child(part, "parts", index));
-        return "text";
-      case "date_add": {
-        const date = child(formula.date, "date");
-        expect(date, (type) => dateTypes.has(type), [...path, "date"], "a date or date and time");
-        expect(
-          child(formula.amount, "amount"),
-          (type) => type === "whole_number",
-          [...path, "amount"],
-          "a whole number",
-        );
-        return date;
-      }
-      case "date_diff":
-        expect(
-          child(formula.from, "from"),
-          (type) => dateTypes.has(type),
-          [...path, "from"],
-          "a date or date and time",
-        );
-        expect(
-          child(formula.to, "to"),
-          (type) => dateTypes.has(type),
-          [...path, "to"],
-          "a date or date and time",
-        );
-        return "whole_number";
-    }
-  };
+  const checkFormulaAt = (formula: FlowFormula, where: Where, path: Path): StaticType =>
+    checkFlowFormula(
+      formula,
+      {
+        nowAllowed: where.nowAllowed,
+        reference: (reference, referencePath) => resolveReference(reference, where, referencePath),
+        issue: add,
+      },
+      path,
+    );
 
   const valueType = (value: FlowValue, where: Where, path: Path): StaticType => {
     switch (value.kind) {
@@ -787,8 +610,20 @@ export function validateFlow(
         return value.literal.type;
       case "reference":
         return resolveReference(value.reference, where, [...path, "reference"]);
-      case "formula":
-        return formulaType(value.formula, where, [...path, "formula"]);
+      case "formula": {
+        const type = checkFormulaAt(value.formula, where, [...path, "formula"]);
+        if (
+          (type === "whole_number" || type === "decimal_number" || type === "money") &&
+          flowFormulaHasUnroundedDivide(value.formula)
+        )
+          add(
+            path,
+            "vortex.definition.workflow_node_values",
+            "invalid_value",
+            "A numeric formula containing division must round its result",
+          );
+        return type;
+      }
       // A map is a JSON object of values. Every entry is checked as a value of its own, so a
       // reference inside it resolves or is refused exactly as one outside it would be.
       case "map":
@@ -931,6 +766,103 @@ export function validateFlow(
     where: Where,
     path: Path,
   ) => {
+    if (task.type === "data.calculate" && name === "result_type" && value.kind !== "literal")
+      add(
+        path,
+        "vortex.definition.workflow_node_values",
+        "invalid_value",
+        "A calculation declares its result type as a literal",
+      );
+    if (task.type === "data.calculate" && name === "result_type" && isTextLiteral(value)) {
+      const resultType = (value as Extract<FlowValue, { kind: "literal" }>).literal.value;
+      const precise = resultType === "decimal_number" || resultType === "money";
+      const places = task.properties.places;
+      const rounding = task.properties.rounding;
+      if (
+        precise &&
+        (places?.kind !== "literal" ||
+          places.literal.type !== "whole_number" ||
+          typeof places.literal.value !== "number" ||
+          !Number.isInteger(places.literal.value) ||
+          places.literal.value < 0 ||
+          places.literal.value > 18)
+      )
+        add(
+          [...path.slice(0, -1), "places"],
+          "vortex.definition.workflow_node_values",
+          "invalid_value",
+          "A decimal or money calculation declares places from 0 to 18",
+        );
+      if (
+        precise &&
+        (!isTextLiteral(rounding) ||
+          !flowRoundingModeSchema.safeParse(
+            (rounding as Extract<FlowValue, { kind: "literal" }>).literal.value,
+          ).success)
+      )
+        add(
+          [...path.slice(0, -1), "rounding"],
+          "vortex.definition.workflow_node_values",
+          "invalid_value",
+          "A decimal or money calculation declares its rounding mode",
+        );
+      if (!precise && (places !== undefined || rounding !== undefined))
+        add(
+          path,
+          "vortex.definition.workflow_node_values",
+          "invalid_value",
+          "Only decimal or money calculations declare places and rounding",
+        );
+    }
+    if (task.type === "data.format" && name === "formatter" && isTextLiteral(value)) {
+      const formatter = (value as Extract<FlowValue, { kind: "literal" }>).literal.value;
+      const rejectFormat = (property: string, message: string) =>
+        add(
+          [...path.slice(0, -1), property],
+          "vortex.definition.workflow_node_values",
+          "invalid_value",
+          message,
+        );
+      if (typeof formatter !== "string" || !formatterCatalogue.some((entry) => entry === formatter))
+        rejectFormat("formatter", "Choose a registered formatter");
+      const currency = task.properties.currency;
+      const unit = task.properties.unit;
+      const input = task.properties.input;
+      // The input property is checked on its own; typing it here must not report its issues twice.
+      const reported = [issues.length, unreadableReferences.length] as const;
+      const inputType =
+        input === undefined ? undefined : valueType(input, where, [...path.slice(0, -1), "input"]);
+      issues.length = reported[0];
+      unreadableReferences.length = reported[1];
+      if (formatter === "money" && inputType !== "money" && currency === undefined)
+        rejectFormat("currency", "Money formatting needs a currency unless its input carries one");
+      if (
+        currency !== undefined &&
+        (!isTextLiteral(currency) ||
+          !isIsoCurrencyCode(
+            String((currency as Extract<FlowValue, { kind: "literal" }>).literal.value),
+          ))
+      )
+        rejectFormat("currency", "Use a current ISO 4217 currency code");
+      if (
+        formatter === "unit" &&
+        (!isTextLiteral(unit) ||
+          !Object.hasOwn(
+            unitCatalogue,
+            String((unit as Extract<FlowValue, { kind: "literal" }>).literal.value),
+          ))
+      )
+        rejectFormat("unit", "Choose a registered unit");
+      const places = task.properties.places;
+      if (
+        places?.kind === "literal" &&
+        (typeof places.literal.value !== "number" ||
+          !Number.isInteger(places.literal.value) ||
+          places.literal.value < 0 ||
+          places.literal.value > 18)
+      )
+        rejectFormat("places", "Decimal places must be a whole number from 0 to 18");
+    }
     if (
       task.type === "interface.show_form" &&
       name === "form" &&
@@ -962,7 +894,18 @@ export function validateFlow(
           `${name} must be a formula`,
         );
       else {
-        const type = formulaType(value.formula, where, [...path, "formula"]);
+        const type = checkFormulaAt(value.formula, where, [...path, "formula"]);
+        if (
+          task.type !== "data.calculate" &&
+          (type === "whole_number" || type === "decimal_number" || type === "money") &&
+          flowFormulaHasUnroundedDivide(value.formula)
+        )
+          add(
+            path,
+            "vortex.definition.workflow_node_values",
+            "invalid_value",
+            "A numeric formula containing division must round its result",
+          );
         // A calculation declares its result type, and its formula must produce it.
         const declaredResult = calculationResultType(task);
         if (
@@ -1116,7 +1059,7 @@ export function validateFlow(
     switch (task.type) {
       case "if": {
         const node = task as Extract<FlowTask, { type: "if" }>;
-        const type = formulaType(node.condition, where, [...path, "condition"]);
+        const type = checkFormulaAt(node.condition, where, [...path, "condition"]);
         if (type !== undefined && type !== "json" && type !== "yes_no")
           add(
             [...path, "condition"],
@@ -1229,7 +1172,7 @@ export function validateFlow(
   // Triggers: an entry condition reads only the trigger's own values and the record.
   flow.triggers.forEach((trigger, index) => {
     if (trigger.condition === undefined) return;
-    const type = formulaType(
+    const type = checkFormulaAt(
       trigger.condition,
       { nowAllowed: false, scope: new Map(), triggerOnly: true },
       ["triggers", index, "condition"],
@@ -1253,7 +1196,7 @@ export function validateFlow(
     );
   }
 
-  return issues.map((issue) => {
+  return [...issues, ...unreadableReferences].map((issue) => {
     const taskId = taskIdAtPath(flow, issue.path);
     return taskId === undefined ? issue : { ...issue, taskId };
   });

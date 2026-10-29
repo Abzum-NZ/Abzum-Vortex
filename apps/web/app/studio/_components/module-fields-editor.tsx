@@ -761,7 +761,9 @@ export function ModuleFieldsEditor({
   const shapeLocked = published;
   const isTitleField = existing !== undefined && existing.key === record.title_field;
   const shapeHint = shapeLocked
-    ? "Published shape is fixed. Labels, help, defaults, privacy and link-back names can change."
+    ? form.type === "calculation"
+      ? "Published storage settings are fixed. The formula and rounding can change."
+      : "Published shape is fixed. Labels, help, defaults, privacy and link-back names can change."
     : undefined;
   const flag = (
     key: "required" | "unique" | "filterable" | "sortable",
@@ -981,7 +983,8 @@ export function ModuleFieldsEditor({
             settings={form.computed as CalculationSettings}
             fields={formulaFields}
             compiled={compiledOf(`${moduleKey}:${recordKey}`)}
-            disabled={disabled || shapeLocked}
+            disabled={disabled}
+            shapeLocked={shapeLocked}
             onChange={changeComputed}
           />
         ) : form.type === "total" ? (

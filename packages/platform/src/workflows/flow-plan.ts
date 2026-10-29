@@ -6,6 +6,7 @@ import {
 } from "../catalogue/platform-service-operation-catalogue";
 import { protectedOperationMetadata } from "../definition/protected-operation-metadata";
 import { flowRuntimeValuesEqual } from "../rules/flow-formula";
+import { prepareFlowFormulas } from "../rules/flow-formula-preparation";
 import type { FlowDefinition, FlowTask } from "./flow-contracts";
 import { flowTaskChildLists, isFlowControlTask } from "./flow-contracts";
 import { flowTaskRegistry, type FlowTaskTypeKey } from "./flow-task-registry";
@@ -515,6 +516,7 @@ const isCrossApplicationPin = (step: FlowTask, applicationKey: string | undefine
 
 /** Compiles one validated flow into its plan. Throws `FlowPlanError` naming the step it refuses. */
 export const compileFlowPlan = (flow: FlowDefinition, applicationKey?: string): FlowPlan => {
+  prepareFlowFormulas(flow);
   for (const step of allSteps([...flow.tasks, ...flow.errors, ...flow.finally])) {
     if (step.type === "for_each") {
       const pin = allSteps(flowTaskChildLists(step).flatMap((list) => list.tasks)).find((child) =>

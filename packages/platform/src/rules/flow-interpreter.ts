@@ -15,7 +15,7 @@ import { flowPathGuardMatches } from "./flow-path-guard";
 import { flowSegmentValues, parseFlowSegmentSeed } from "./flow-segment-seed";
 import type { JsonValue } from "../catalogue/common";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
-import { recordLinkValueSchema } from "../records/module-field-values";
+import { moneyValueSchema, recordLinkValueSchema } from "../records/module-field-values";
 import { platformOperationKey } from "../catalogue/platform-service-operation-catalogue";
 import {
   flowReadFieldsProjectionSchema,
@@ -36,6 +36,7 @@ import {
 } from "../workflows/flow-task-registry";
 import {
   flowMaximumTaskOutputPathDepth,
+  flowRoundingModeSchema,
   type FlowReference,
   type FlowValue,
 } from "../workflows/flow-values";
@@ -72,6 +73,7 @@ export type FlowFailureCode =
   | "flow_not_runnable"
   | "inputs_invalid"
   | "value_unresolved"
+  | "non_integral_whole_number"
   | "task_not_available"
   | "task_unknown"
   | "for_each_limit"
@@ -821,7 +823,17 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
   const registered = task as Extract<FlowTask, { properties: unknown }>;
   const definition = flowTaskRegistry[registered.type as keyof typeof flowTaskRegistry];
   if (definition === undefined) return failed("task_unknown", "failed", taskId);
-  const properties = evaluateProperties(registered.properties, state, activation, flow, taskId);
+  const properties = evaluateProperties(
+    registered.type === "data.calculate"
+      ? Object.fromEntries(
+          Object.entries(registered.properties).filter(([name]) => name !== "formula"),
+        )
+      : registered.properties,
+    state,
+    activation,
+    flow,
+    taskId,
+  );
 
   if (definition.effect === "pure") {
     if (!serverRuns(registered.type, "interpreter")) failed("task_not_available", "failed", taskId);
@@ -866,8 +878,48 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
       return { kind: "continue" };
     }
     if (registered.type === "data.calculate") {
-      if (properties.formula === undefined) return failed("value_unresolved", "failed", taskId);
-      replaceTop(machine, storeTaskOutputs(next, taskId, { value: properties.formula }));
+      const formula = registered.properties.formula;
+      const resultType = properties.result_type?.value;
+      if (formula?.kind !== "formula" || typeof resultType !== "string")
+        return failed("value_unresolved", "failed", taskId);
+      const precise = resultType === "decimal_number" || resultType === "money";
+      const places = properties.places?.value;
+      const rounding = flowRoundingModeSchema.safeParse(properties.rounding?.value);
+      if (precise && (typeof places !== "number" || !rounding.success))
+        return failed("value_unresolved", "failed", taskId);
+      const formulaScope = scopeOf(state, activation, flow);
+      const evaluated = evaluateFlowFormula(
+        formula.formula,
+        formulaScope,
+        precise
+          ? { resultScale: places as number, resultRounding: rounding.data! }
+          : { requireExactInteger: resultType === "whole_number" },
+      );
+      if (evaluated === undefined) {
+        if (
+          resultType === "whole_number" &&
+          evaluateFlowFormula(formula.formula, formulaScope, {
+            resultScale: 18,
+            resultRounding: "half_even",
+          }) !== undefined
+        )
+          return failed("non_integral_whole_number", "validation", taskId);
+        return failed("value_unresolved", "failed", taskId);
+      }
+      const outputValue =
+        resultType === "decimal_number" && evaluated.type === "whole_number"
+          ? typed("decimal_number", String(evaluated.value))
+          : resultType === "whole_number" && evaluated.type === "decimal_number"
+            ? typed("whole_number", Number(evaluated.value))
+            : evaluated;
+      if (
+        outputValue.type !== resultType ||
+        (outputValue.value !== null &&
+          !typedValueMatchesType(outputValue.value, resultType, "flow") &&
+          !(resultType === "money" && moneyValueSchema.safeParse(outputValue.value).success))
+      )
+        return failed("value_unresolved", "failed", taskId);
+      replaceTop(machine, storeTaskOutputs(next, taskId, { value: outputValue }));
       return { kind: "continue" };
     }
     if (registered.type === "data.set_variable") {

@@ -332,7 +332,7 @@ const linkDependencyRefusal = (
 /**
  * The Application source with one field of one owned inline Module added or changed. Every property
  * a person sets is written as given, and the result is checked by the source schema. A field that is
- * in a published version keeps its stored shape: a change to its type, settings, required, unique,
+ * in a published version keeps its stored shape: a change to its type, storage settings, required, unique,
  * filter or sort choice is refused with the reason. A type may change only while the field is not
  * published; its settings are then the new type's, and no stored value is converted.
  */
@@ -455,7 +455,11 @@ export const changeInlineModuleField = (
       // The display name is editable even after publication; stored relationship settings are fixed.
       const storedSettings = (value: Readonly<Record<string, unknown>>) =>
         Object.fromEntries(
-          Object.entries(value).filter(([key]) => change.type !== "link" || key !== "reverse_name"),
+          Object.entries(value).filter(([key]) =>
+            change.type === "calculation"
+              ? ["result_type", "decimal_places", "evaluation"].includes(key)
+              : change.type !== "link" || key !== "reverse_name",
+          ),
         );
       const fixed = [
         ...(field.type === change.type ? [] : ["type"]),

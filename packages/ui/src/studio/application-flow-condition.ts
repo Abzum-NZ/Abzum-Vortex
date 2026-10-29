@@ -1,4 +1,10 @@
-import type { ConditionNode, FlowFormula, FlowLiteral, JsonValue } from "@vortex/platform/schema";
+import {
+  checkFlowFormula,
+  type ConditionNode,
+  type FlowFormula,
+  type FlowLiteral,
+  type JsonValue,
+} from "@vortex/platform/schema";
 import type {
   StudioConditionControlsContext,
   StudioConditionOperandRole,
@@ -56,6 +62,8 @@ const roles: Readonly<
   "Saved values": "variable",
   "Earlier steps": "step_output",
   "The record": "record_field",
+  "Page values": "host_context",
+  "Form fields": "host_context",
   "The run": "run_value",
 };
 
@@ -267,5 +275,18 @@ export const studioFlowConditionFormula = (
     const op = Object.entries(operators).find(([, value]) => value === node.operator)?.[0];
     return op === undefined ? undefined : ({ op, left, right } as FlowFormula);
   };
-  return formula(condition);
+  const converted = formula(condition);
+  if (converted === undefined) return undefined;
+  let invalid = false;
+  const type = checkFlowFormula(converted, {
+    nowAllowed: true,
+    reference: (reference) => {
+      const key = context.keys.get(studioFlowReferenceToken(reference));
+      return key === undefined ? undefined : context.choices.get(key)?.type;
+    },
+    issue: () => {
+      invalid = true;
+    },
+  });
+  return invalid || (type !== undefined && type !== "yes_no") ? undefined : converted;
 };

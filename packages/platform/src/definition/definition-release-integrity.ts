@@ -353,7 +353,7 @@ export const hasAuthenticStoredCustomerDefinitionRelease = (
   release: StoredCustomerDefinitionReleaseEvidence,
 ): boolean => {
   const { compilationOutput: output, resolutionSnapshot: snapshot } = release;
-  const expectedVersion = "4.0.0";
+  const expectedVersion = "4.1.0";
   try {
     if (release.kind === "application")
       selectApplicationContractPair(
@@ -367,7 +367,7 @@ export const hasAuthenticStoredCustomerDefinitionRelease = (
   }
   if (
     output.validationContractVersion !== expectedVersion ||
-    snapshot.contractVersion !== "4.0.0" ||
+    snapshot.contractVersion !== "4.1.0" ||
     output.validationContractVersion !== release.validationContractVersion
   )
     return false;

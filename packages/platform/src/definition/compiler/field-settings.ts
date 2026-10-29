@@ -310,6 +310,7 @@ export function fieldSettings(
         ...(settings.decimal_places !== undefined
           ? { decimalPlaces: settings.decimal_places }
           : {}),
+        ...(settings.rounding !== undefined ? { rounding: settings.rounding } : {}),
         expression: compiled,
         dependencyFieldIds: dependencies,
       };

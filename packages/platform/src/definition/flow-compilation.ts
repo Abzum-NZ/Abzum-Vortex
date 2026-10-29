@@ -1,3 +1,4 @@
+import { flowRuntimeValueOf } from "../rules/flow-runtime-value";
 import type { JsonValue } from "../catalogue/common";
 import type { DefinitionValidationLocation } from "../catalogue/validation-errors";
 import {
@@ -61,6 +62,7 @@ export type ResolvedFlowFieldMetadata = Readonly<{
   identifier: string;
   recordTypeId: string;
   type: string;
+  valueType?: string;
 }>;
 
 /** Maps canonical Module field discriminators to the scalar types a Flow may expose. */
@@ -124,6 +126,8 @@ export type FlowCompilationInput = Readonly<{
   /** The declared inputs of each operation a Call protected operation task may name, by its key. */
   operationInputs: NonNullable<FlowValidationOptions["operationInputs"]>;
   formTitle?: FlowValidationOptions["formTitle"];
+  referenceEnvironments?:
+    ((flow: SourceFlow) => FlowValidationOptions["referenceEnvironments"]) | undefined;
 }>;
 
 type Refusal = ConstructorParameters<typeof DefinitionCompilationError>[1];
@@ -622,21 +626,49 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
     // flow is checked against its target's declared inputs and outputs, and a trigger record
     // field must exist on every record type the flow's record triggers name.
     const recordTypes = flowRecordTypes(source);
-    const invalid = validateFlow(source, {
-      targetFlow,
-      formTitle: input.formTitle,
-      operationInputs: input.operationInputs,
-      triggerRecordFieldExists: (field) =>
-        recordTypes.every((recordType) => {
-          try {
-            resolver.field(recordType, field);
-            return true;
-          } catch (error) {
-            if (error instanceof DefinitionCompilationError) return false;
-            throw error;
-          }
-        }),
-    })[0];
+    const bindings = input.referenceEnvironments?.(source);
+    const contexts =
+      bindings !== undefined && bindings.length > 0
+        ? bindings.map((binding) => [binding])
+        : [bindings];
+    const issues = contexts.flatMap((referenceEnvironments) =>
+      validateFlow(source, {
+        targetFlow,
+        formTitle: input.formTitle,
+        referenceEnvironments,
+        operationInputs: input.operationInputs,
+        triggerRecordFieldExists: (field) =>
+          recordTypes.every((recordType) => {
+            try {
+              resolver.field(recordType, field);
+              return true;
+            } catch (error) {
+              if (error instanceof DefinitionCompilationError) return false;
+              throw error;
+            }
+          }),
+        triggerRecordFieldType: (field) => {
+          const types = recordTypes.map((recordType) => {
+            try {
+              const identity = resolver.field(recordType, field);
+              const matches = resolver.fieldMetadata(identity.identifier);
+              return matches.length === 1
+                ? flowRuntimeValueOf(matches[0]!.type, null, matches[0]!.valueType).type
+                : undefined;
+            } catch (error) {
+              if (error instanceof DefinitionCompilationError) return undefined;
+              throw error;
+            }
+          });
+          return types.length > 0 && types.every((type) => type === types[0])
+            ? types[0]
+            : undefined;
+        },
+      }),
+    );
+    const invalid =
+      issues.find((issue) => issue.ruleCode !== "vortex.definition.unsupported_workflow_node") ??
+      issues[0];
     if (invalid !== undefined)
       throw new DefinitionCompilationError(
         invalid.ruleCode,
@@ -702,10 +734,18 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
   for (const entry of compiled) {
     // Source validation sees readable projection aliases. Revalidate the canonical task map so
     // output paths acquire the compiler-resolved member types before publication.
-    const invalid = validateFlow(entry.flow, {
-      targetFlow: (reference) => compiledFlowsById.get(reference),
-      operationInputs: input.operationInputs,
-    })[0];
+    const bindings = input.referenceEnvironments?.(input.flows[entry.sourceIndex]!);
+    const contexts =
+      bindings !== undefined && bindings.length > 0
+        ? bindings.map((binding) => [binding])
+        : [bindings];
+    const invalid = contexts.flatMap((referenceEnvironments) =>
+      validateFlow(entry.flow, {
+        targetFlow: (reference) => compiledFlowsById.get(reference),
+        operationInputs: input.operationInputs,
+        referenceEnvironments,
+      }),
+    )[0];
     if (invalid !== undefined)
       throw new DefinitionCompilationError(
         invalid.ruleCode,
