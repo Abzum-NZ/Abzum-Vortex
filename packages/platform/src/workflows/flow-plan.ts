@@ -223,22 +223,6 @@ const referencesIn = (value: unknown, found: FlowReference[] = []): FlowReferenc
   return found;
 };
 
-/** Clock-dependent formulas are server-resolved, including operators without a reference node. */
-const readsServerTime = (value: unknown): boolean => {
-  if (Array.isArray(value)) return value.some(readsServerTime);
-  if (typeof value !== "object" || value === null) return false;
-  const record = value as Record<string, unknown>;
-  if (record.kind === "literal" || record.op === "literal") return false;
-  if (record.op === "now" || record.op === "deadline_passed") return true;
-  return Object.entries(record).some(
-    ([key, child]) =>
-      key !== "terminalStatusValues" &&
-      key !== "when" &&
-      !(record.kind === "switch" && key === "cases") &&
-      readsServerTime(child),
-  );
-};
-
 type FlowBindingInputs = Readonly<Record<string, FlowBindingInput>>;
 
 /** Any binding that resolves an input on the server makes it server-only in the shared plan. */
@@ -248,8 +232,10 @@ const serverResolvedInputs = (bindings: readonly FlowBindingInputs[]): ReadonlyS
     for (const [name, input] of Object.entries(inputs)) {
       if (input.kind === "caller" || input.kind === "literal") continue;
       if (
-        readsServerTime(input) ||
-        referencesIn(input).some((item) => item.source !== "page" && item.source !== "form")
+        referencesIn(input).some(
+          (item) =>
+            item.source !== "page" && item.source !== "form" && item.source !== "execution_now",
+        )
       )
         names.add(name);
     }
@@ -582,7 +568,6 @@ export const flowBindingPlanIssue = (
   const serverOnly = (reference: FlowReference): boolean => {
     switch (reference.source) {
       case "execution_actor":
-      case "execution_now":
       case "trigger_record":
       case "trigger_previous":
       case "module_field":
