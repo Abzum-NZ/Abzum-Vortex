@@ -22,9 +22,7 @@ export type FlowRuntimeOptions = Readonly<{
   timeZone?: string;
   host: FlowIntentHost;
   state: FlowRuntimeState;
-  bindingSettings: (
-    bindingId: string,
-  ) =>
+  bindingSettings: (bindingId: string) =>
     | Readonly<{
         controlId: string;
         concurrency: FlowBindingConcurrency;
