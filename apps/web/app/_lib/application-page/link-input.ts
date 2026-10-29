@@ -24,6 +24,7 @@ import {
   optionsSourceNarrowing,
 } from "@vortex/platform/schema";
 import { getQueryContinuationKey } from "../query-continuation-key";
+import { requestDependencies } from "./installed-context";
 import {
   prepareRuntimePreviewChoices,
   type RuntimePreviewDemandResult,
@@ -270,8 +271,8 @@ type ProjectedChoicePage = Extract<
 /** Derives the same installed targets and dependent narrowing for a picker or its exact recheck. */
 export const prepareLinkChoiceDescriptor = async (
   session: IdentitySession,
-  projected: ProjectedChoicePage,
-  request: RecordChoicePageRequest,
+  projected: Pick<ProjectedChoicePage, "context" | "selection" | "page">,
+  request: Pick<RecordChoicePageRequest, "placementId" | "fieldId" | "purpose" | "parentRecordId">,
   requests: ReturnType<typeof createHumanOrganizationRequestService>,
   queries: ReturnType<typeof createProtectedQueryService>,
   prepareDemand: typeof prepareRuntimePreviewChoices = prepareRuntimePreviewChoices,
@@ -435,6 +436,52 @@ export const prepareLinkChoiceDescriptor = async (
     } as RecordChoiceCommand["narrowedBy"];
   }
   return { kind: "ready", targets, ...(narrowedBy === undefined ? {} : { narrowedBy }) };
+};
+
+/** Rechecks a selected link using the same picker descriptor and the gate's transaction. */
+export const validateProjectedLinkChoice = async (
+  bound: Parameters<ReturnType<typeof createRecordChoiceReader>["resolveExactInTransaction"]>[0],
+  context: InstalledRuntimeContext,
+  page: Readonly<Record<string, unknown>>,
+  request: Readonly<{
+    placementId: string;
+    selected: Readonly<{ recordTypeId: string; recordId: string }>;
+    parentRecordId?: string;
+  }>,
+  prepareDemand: typeof prepareRuntimePreviewChoices,
+): Promise<boolean> => {
+  const dependencies = { ...requestDependencies(), boundRequest: bound };
+  const queries = createProtectedQueryService({
+    ...dependencies,
+    continuationKey: getQueryContinuationKey(),
+  });
+  const descriptor = await prepareLinkChoiceDescriptor(
+    bound.session,
+    { context, selection: bound.selection, page },
+    request,
+    createHumanOrganizationRequestService(dependencies),
+    queries,
+    prepareDemand,
+  );
+  if (descriptor.kind !== "ready") return false;
+  const result = await createRecordChoiceReader(queries).resolveExactInTransaction(
+    bound,
+    {
+      targets: descriptor.targets,
+      pageSize: 1,
+      ...(descriptor.narrowedBy === undefined ? {} : { narrowedBy: descriptor.narrowedBy }),
+    },
+    request.selected,
+  );
+  return (
+    result.kind === "available" &&
+    result.value.outcome === "completed" &&
+    result.value.choices.some(
+      (choice) =>
+        sameId(choice.recordTypeId, request.selected.recordTypeId) &&
+        sameId(choice.recordId, request.selected.recordId),
+    )
+  );
 };
 
 /**
