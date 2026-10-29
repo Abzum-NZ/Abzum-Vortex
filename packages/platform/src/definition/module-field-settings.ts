@@ -668,7 +668,10 @@ const optionsSourceFormView = (type: string, stored: Readonly<Plain>): Readonly<
 /** The form's view written back as the field's one options source. */
 const storedOptionsSource = (type: string, edited: Plain, current: Readonly<Plain>): Plain => {
   if (!optionsSourceTypes.has(type)) return edited;
-  const { narrowed_by: narrowedBy, options_source: _carried, ...rest } = edited;
+  const rest: Plain = Object.fromEntries(
+    Object.entries(edited).filter(([key]) => key !== "narrowed_by" && key !== "options_source"),
+  );
+  const narrowedBy = edited.narrowed_by;
   const authored = current.options_source as Plain | undefined;
   // An options flow or a declared query is edited where it is authored; the form keeps it.
   if (authored !== undefined && (authored.kind === "flow" || authored.query !== undefined))
@@ -680,7 +683,11 @@ const storedOptionsSource = (type: string, edited: Plain, current: Readonly<Plai
     ...rest,
     ...(options === undefined
       ? {}
-      : { options: options.map(({ parent_options: _parents, ...option }) => option) }),
+      : {
+          options: options.map((option) =>
+            Object.fromEntries(Object.entries(option).filter(([key]) => key !== "parent_options")),
+          ),
+        }),
     options_source: choiceList
       ? {
           kind: "fixed",
