@@ -3,8 +3,10 @@ import "server-only";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
 import type { ExecuteNamedActionCommand } from "../records/named-actions";
 import {
+  continueFlowRun,
   resumeFlowRun,
   type FlowRunResume,
+  type FlowRunState,
   type FlowRunStep,
   type FlowTaskOutcome,
 } from "../rules/flow-interpreter";
@@ -90,4 +92,37 @@ export const runFlowSegment = async (
         ? "failed"
         : "refused";
   return { step, outcome, effects, warnings };
+};
+
+/** Rebuilds transient run state for each transaction attempt before entering its boundary. */
+export const runFlowSegmentFromBoundary = async (
+  dependencies: FlowOrchestratorDependencies,
+  runNamedAction: Parameters<typeof runFlowSegment>[1],
+  run: Run,
+  state: FlowRunState,
+  segment: FlowServerSegment,
+  receipt?: FlowSegmentReceipt,
+) => {
+  const attempt: Run = {
+    ...run,
+    unavailable: [...run.unavailable],
+    warnings: [...run.warnings],
+    refusalLoggedTaskIds: [...run.refusalLoggedTaskIds],
+    sensitive: [...run.sensitive],
+  };
+  const first = continueFlowRun(state, attempt.library, segment, receipt?.effects);
+  const executed = await runFlowSegment(
+    dependencies,
+    runNamedAction,
+    attempt,
+    segment,
+    first,
+    receipt,
+  );
+  return {
+    value: { step: executed.step, run: attempt },
+    outcome: executed.outcome,
+    effects: executed.effects,
+    warnings: executed.warnings,
+  };
 };
