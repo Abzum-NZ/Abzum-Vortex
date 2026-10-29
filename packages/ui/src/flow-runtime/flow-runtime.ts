@@ -2,6 +2,7 @@ import type { ComponentFlowBinding, FlowBindingConcurrency } from "@vortex/platf
 import type { FlowIntentHost } from "./intents";
 import type { ServerDrivenResult } from "./server-driven-run";
 import type { FlowInvokeClient, FlowSubjectContext } from "./server-flow-client";
+import { startFlowEventCycle, type FlowEventCycle } from "./flow-cycle";
 
 export type FlowRuntimeOptions = Readonly<{
   client: FlowInvokeClient;
@@ -24,6 +25,7 @@ export function createFlowRuntimeState() {
     { sequence: number; controller?: AbortController; tail?: Promise<void> }
   >();
   const running = new Map<string, number>();
+  const cycles = new Map<string, Readonly<{ cycle: FlowEventCycle }>>();
   const listeners = new Map<string, Set<() => void>>();
   const notify = (controlId: string) => listeners.get(controlId)?.forEach((listener) => listener());
   const changeRunning = (controlId: string, amount: number) => {
@@ -36,6 +38,14 @@ export function createFlowRuntimeState() {
   const abandoned: ServerDrivenResult = { kind: "abandoned", unanswered: true };
   return {
     isRunning: (controlId: string) => (running.get(controlId) ?? 0) > 0,
+    cycleFor: (gestureId: string) => cycles.get(gestureId)?.cycle,
+    trackCycle: (gestureId: string, cycle: FlowEventCycle) => {
+      const held = { cycle };
+      cycles.set(gestureId, held);
+      return () => {
+        if (cycles.get(gestureId) === held) cycles.delete(gestureId);
+      };
+    },
     cancel: (bindingId: string) => {
       const entry = entries.get(bindingId);
       if (entry === undefined) return;
@@ -120,6 +130,7 @@ export type FlowRuntime = Readonly<{
     callerInputs: Readonly<Record<string, unknown>> | undefined,
     clickId: string,
     subject?: FlowSubjectContext,
+    cycle?: FlowEventCycle,
   ) => Promise<ServerDrivenResult>;
   /** Starts one exact server binding and drives its normal intents and continuations. */
   dispatchReference: (
@@ -128,6 +139,7 @@ export type FlowRuntime = Readonly<{
     clickId: string,
     signal?: AbortSignal,
     subject?: FlowSubjectContext,
+    cycle?: FlowEventCycle,
   ) => Promise<ServerDrivenResult>;
 }>;
 
@@ -138,6 +150,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
     clickId: string,
     signal?: AbortSignal,
     subject?: FlowSubjectContext,
+    cycle?: FlowEventCycle,
   ): Promise<ServerDrivenResult> => {
     const settings = options.bindingSettings(binding.bindingId);
     if (settings === undefined) {
@@ -150,38 +163,47 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
       settings.concurrency,
       signal,
       async (runSignal) => {
-        const [first, { driveServerFlow }] = await Promise.all([
-          options.client.startBinding(
-            { bindingId: binding.bindingId, flowId: binding.flowId },
-            callerInputs ?? {},
-            clickId,
-            runSignal,
-            subject,
-          ),
-          import("./server-driven-run"),
-        ]);
-        return driveServerFlow(
-          options.client,
-          binding.flowId,
-          first,
-          options.host,
-          runSignal,
-          options.committed === undefined
-            ? undefined
-            : () => options.committed?.(binding.bindingId),
+        const releaseCycle = options.state.trackCycle(
+          clickId,
+          cycle ?? startFlowEventCycle(binding.flowId, settings.controlId),
         );
+        try {
+          const [first, { driveServerFlow }] = await Promise.all([
+            options.client.startBinding(
+              { bindingId: binding.bindingId, flowId: binding.flowId },
+              callerInputs ?? {},
+              clickId,
+              runSignal,
+              subject,
+            ),
+            import("./server-driven-run"),
+          ]);
+          return await driveServerFlow(
+            options.client,
+            binding.flowId,
+            first,
+            options.host,
+            runSignal,
+            options.committed === undefined
+              ? undefined
+              : () => options.committed?.(binding.bindingId),
+          );
+        } finally {
+          releaseCycle();
+        }
       },
     );
   };
   return Object.freeze({
     dispatchReference,
-    dispatch: (binding, callerInputs = {}, clickId, subject) =>
+    dispatch: (binding, callerInputs = {}, clickId, subject, cycle) =>
       dispatchReference(
         { bindingId: binding.bindingId, flowId: binding.flow.flowId, event: binding.event },
         callerInputs,
         clickId,
         undefined,
         subject,
+        cycle,
       ),
   });
 }

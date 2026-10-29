@@ -1,6 +1,6 @@
 import { useCallback, type Dispatch, type SetStateAction, type RefObject } from "react";
 import type { useRouter } from "next/navigation";
-import type { createFlowRuntime, DisplayTablePayload } from "@vortex/ui";
+import type { createFlowRuntime, DisplayTablePayload, FlowEventCycle } from "@vortex/ui";
 import type { DisplaySemanticEvent, ServerDrivenResult } from "@vortex/ui";
 import {
   type ComponentRequestGeneration,
@@ -88,6 +88,8 @@ export function usePlacementActions({
       clickId?: string,
       /** The gesture is shown on its own control, which tells the person its outcome. */
       reportOnControl?: ControlReport,
+      /** A field change initiated by another flow continues that same cycle. */
+      cycle?: FlowEventCycle,
     ) => {
       const callerInputs = { ...supplied };
       for (const selectedReadInput of binding.selectedReadInputs ?? []) {
@@ -112,6 +114,7 @@ export function usePlacementActions({
           ),
           clickId ?? crypto.randomUUID(),
           gestureSubject,
+          cycle,
         ),
         formOwners[placementId],
         afterAccepted,

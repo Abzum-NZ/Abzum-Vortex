@@ -21,6 +21,7 @@ import {
   type ValidationPayload,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
+import type { FlowEventCycle } from "../flow-runtime/flow-cycle";
 
 export {
   isIsoCalendarDate,
@@ -70,8 +71,8 @@ export type ControlSemanticEventName = (typeof CONTROL_EVENT_NAMES)[number];
 export type TypedRichTextDocument = NonNullable<RichTextInputPayload["value"]>;
 
 /**
- * One declared semantic event. Events are emitted only by a real user interaction, except
- * `form_ready`, which a form emits once when it mounts. The bound flow, not the component,
+ * One declared semantic event. Fields also emit a marked change when a flow sets their value;
+ * `form_ready` is emitted once when a form mounts. The bound flow, not the component,
  * decides what an event does; no component saves, queries or calls an application service.
  */
 export type ControlSemanticEvent =
@@ -87,6 +88,8 @@ export type ControlSemanticEvent =
       value: TypedFieldValue;
       origin: "user" | "flow";
       depth: number;
+      /** Present for a flow-set change, so its next binding can enforce the cycle bound. */
+      cycle?: FlowEventCycle;
       /** Choices, checkboxes and link selections settle as soon as they change. */
       immediate: boolean;
     }>

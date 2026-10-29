@@ -1,8 +1,13 @@
-import { useCallback, useEffect, useRef } from "react";
-import type { ControlSemanticEvent, FlowRuntimeState } from "@vortex/ui";
+import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
+import {
+  continueFlowEventCycle,
+  type ControlSemanticEvent,
+  type FlowRuntimeState,
+} from "@vortex/ui";
 import type { PlacementFlowBinding } from "../../../../../../_lib/application-page";
 import { bindingOfEvent } from "./event-values";
 import type { usePlacementActions } from "./use-placement-actions";
+import type { Notice } from "./types";
 
 type RunBinding = ReturnType<typeof usePlacementActions>["runBinding"];
 type Pending = { timer: ReturnType<typeof setTimeout>; fire: () => void };
@@ -12,6 +17,7 @@ export function useFieldFlowEvents(
   navigationKey: string,
   state: FlowRuntimeState,
   runBinding: RunBinding,
+  setNotice: Dispatch<SetStateAction<Notice | undefined>>,
 ) {
   const pending = useRef(new Map<string, Pending>());
   const latest = useRef(
@@ -46,17 +52,50 @@ export function useFieldFlowEvents(
                 if (event.event !== "field_changed") return;
                 latest.current.set(placementId, event);
                 if (changed === undefined) return;
+                const nextCycle =
+                  event.origin === "flow" &&
+                  event.cycle !== undefined &&
+                  event.depth === event.cycle.depth + 1
+                    ? continueFlowEventCycle(event.cycle, changed.flowId, changed.controlId)
+                    : undefined;
+                if (event.origin === "flow" && (nextCycle === undefined || "reason" in nextCycle)) {
+                  const previous = pending.current.get(changed.bindingId);
+                  if (previous !== undefined) clearTimeout(previous.timer);
+                  pending.current.delete(changed.bindingId);
+                  if (changed.settings.concurrency === "latest_wins")
+                    state.cancel(changed.bindingId);
+                  setNotice({
+                    tone: "problem",
+                    text:
+                      nextCycle === undefined
+                        ? "The field action stopped because its flow cycle was missing."
+                        : nextCycle.reason === "flow_reentry"
+                          ? "The field action stopped because it would repeat the same flow on this component."
+                          : "The field action stopped after three flow-set changes.",
+                  });
+                  return;
+                }
                 const previous = pending.current.get(changed.bindingId);
                 if (previous !== undefined) clearTimeout(previous.timer);
                 pending.current.delete(changed.bindingId);
                 if (changed.settings.concurrency === "latest_wins") state.cancel(changed.bindingId);
                 const fire = () => {
-                  void runBinding(placementId, changed, {
-                    field_key: event.fieldKey,
-                    value: event.value,
-                    origin: event.origin,
-                    depth: event.depth,
-                  });
+                  void runBinding(
+                    placementId,
+                    changed,
+                    {
+                      field_key: event.fieldKey,
+                      value: event.value,
+                      origin: event.origin,
+                      depth: event.depth,
+                    },
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    nextCycle !== undefined && "cycle" in nextCycle ? nextCycle.cycle : undefined,
+                  );
                 };
                 const delay = event.immediate ? 0 : changed.settings.debounceMs;
                 if (delay === 0) fire();
@@ -86,6 +125,6 @@ export function useFieldFlowEvents(
             }),
       };
     },
-    [runBinding, state],
+    [runBinding, setNotice, state],
   );
 }

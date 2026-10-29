@@ -1,5 +1,12 @@
 export { useFlowIntentHost, type FlowIntentHostOptions } from "./flow-intent-host";
 export {
+  continueFlowEventCycle,
+  flowSetFieldChange,
+  startFlowEventCycle,
+  type FlowCycleRefusal,
+  type FlowEventCycle,
+} from "./flow-cycle";
+export {
   createFormBlockRuntime,
   type FormBlockRuntime,
   type FormFieldAnswers,
