@@ -14,7 +14,11 @@ import {
   platformIdSchema,
   stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
-import { moduleContentSchema, moduleDraftSchema } from "./module-contracts";
+import {
+  moduleContentSchema,
+  moduleDraftSchema,
+  moduleValidationContractVersion,
+} from "./module-contracts";
 
 export const versionImpactSchema = z.enum(["patch", "minor", "major"]);
 export const moduleVersionImpactPolicyVersion = "4.0.0" as const;
@@ -210,7 +214,7 @@ export const moduleVersionImpactHistoryEntrySchema = z
 export const moduleVersionImpactRequestSchema = z
   .object({
     kind: z.literal("module"),
-    validationContractVersion: z.literal(moduleVersionImpactPolicyVersion),
+    validationContractVersion: z.literal(moduleValidationContractVersion),
     history: z.array(moduleVersionImpactHistoryEntrySchema).max(historyLimit),
     candidate: moduleDraftSchema,
   })
