@@ -1129,9 +1129,9 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
       connectionInstanceId: inputs.connection_instance_id,
       expectedRevision: inputs.expected_revision,
       destinationKey: inputs.destination_key,
-      ...(inputs.secret_reference_id === undefined
+      ...(optionalText(inputs.secret_reference_id) === undefined
         ? {}
-        : { secretReferenceId: inputs.secret_reference_id }),
+        : { secretReferenceId: optionalText(inputs.secret_reference_id) }),
     }),
     run: async (services, caller, command) => {
       const result = await services.connectionAdministration(caller.session, caller.selection, {

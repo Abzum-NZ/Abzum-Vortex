@@ -120,6 +120,10 @@ begin
         'connection_type_id', conn.connection_type_id,
         'connection_type_version', conn.connection_type_version,
         'state', conn.state,
+        'secret_set', exists (select 1 from vortex_platform.connection_secret_references as reference
+          where reference.organization_id = conn.organization_id
+            and reference.connection_instance_id = conn.connection_instance_id
+            and reference.vault_secret_id is not null),
         'last_health_outcome', conn.last_health_outcome,
         'token_expires_at', conn.token_expires_at
       )
