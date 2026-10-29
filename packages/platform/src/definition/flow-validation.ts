@@ -1,4 +1,5 @@
 import { valueTypesCompatible, workflowValueTypeSchema } from "../catalogue/catalogues";
+import { checkFlowFormula } from "../rules/flow-formula";
 import { recordTypeIdSchema } from "../catalogue/identifiers";
 import type {
   DefinitionRuleFailureFamily,
@@ -151,8 +152,6 @@ const callCodes = {
 /** The static type of a value, or `undefined` when only the runtime evaluator can know it. */
 type StaticType = string | undefined;
 
-const numericTypes: ReadonlySet<string> = new Set(["whole_number", "decimal_number", "money"]);
-const dateTypes: ReadonlySet<string> = new Set(["date", "date_time"]);
 const listTypes: ReadonlySet<string> = new Set([
   "record_reference_list",
   "relationship_reference_list",
@@ -555,231 +554,16 @@ export function validateFlow(
     }
   };
 
-  const formulaType = (formula: FlowFormula, where: Where, path: Path): StaticType => {
-    const child = (value: FlowFormula, ...segments: (string | number)[]) =>
-      formulaType(value, where, [...path, ...segments]);
-    const expect = (
-      actual: StaticType,
-      accepted: (type: string) => boolean,
-      childPath: Path,
-      wanted: string,
-    ) => {
-      if (actual === undefined || actual === "json" || accepted(actual)) return;
-      add(
-        childPath,
-        "vortex.definition.source_type_compatibility",
-        "invalid_value",
-        `Expected ${wanted}, found ${actual}`,
-      );
-    };
-    const numericArgs = (args: readonly FlowFormula[], segment: string): StaticType => {
-      const types = args.map((arg, index) => {
-        const type = child(arg, segment, index);
-        expect(
-          type,
-          (candidate) => numericTypes.has(candidate),
-          [...path, segment, index],
-          "a number",
-        );
-        return type;
-      });
-      return types.includes("money")
-        ? "money"
-        : types.some((type) => type === undefined || type === "json")
-          ? undefined
-          : types.includes("decimal_number")
-            ? "decimal_number"
-            : "whole_number";
-    };
-    switch (formula.op) {
-      case "literal":
-        return formula.type;
-      case "reference":
-        return resolveReference(formula.reference, where, [...path, "reference"]);
-      case "record_id": {
-        const type = child(formula.arg, "arg");
-        if (type !== "json") {
-          add(
-            [...path, "arg"],
-            "vortex.definition.source_type_compatibility",
-            "invalid_value",
-            `The record_id operand must have a declared JSON type, found ${type ?? "an unknown type"}`,
-          );
-          return undefined;
-        }
-        return "text";
-      }
-      case "deadline_passed":
-        if (!where.nowAllowed)
-          add(
-            path,
-            "vortex.definition.workflow_node_values",
-            "invalid_value",
-            "A deadline uses the current time",
-          );
-        expect(
-          child(formula.due, "due"),
-          (type) => type === "date_time",
-          [...path, "due"],
-          "a date-time deadline",
-        );
-        if (formula.status !== undefined)
-          expect(
-            child(formula.status, "status"),
-            (type) => type === "text" || type === "choice",
-            [...path, "status"],
-            "a status",
-          );
-        return "yes_no";
-      case "now":
-        if (!where.nowAllowed)
-          add(
-            path,
-            "vortex.definition.workflow_node_values",
-            "invalid_value",
-            "The now operator is allowed only in interactive and background flows, and never in a trigger",
-          );
-        return "date_time";
-      case "add":
-      case "multiply":
-      case "subtract":
-        return numericArgs(formula.args, "args");
-      case "divide": {
-        const type = numericArgs(formula.args, "args");
-        return type === "money" ? "money" : type === undefined ? undefined : "decimal_number";
-      }
-      case "round": {
-        const type = child(formula.arg, "arg");
-        expect(type, (candidate) => numericTypes.has(candidate), [...path, "arg"], "a number");
-        return type;
-      }
-      case "eq":
-      case "neq":
-      case "lt":
-      case "lte":
-      case "gt":
-      case "gte":
-      case "contains":
-      case "starts_with":
-      case "ends_with": {
-        const left = child(formula.left, "left");
-        const right = child(formula.right, "right");
-        if (
-          left !== undefined &&
-          right !== undefined &&
-          left !== "json" &&
-          right !== "json" &&
-          !valueTypesCompatible(left, right, "condition") &&
-          !valueTypesCompatible(right, left, "condition")
-        )
-          add(
-            path,
-            "vortex.definition.source_type_compatibility",
-            "invalid_value",
-            `Cannot compare ${left} with ${right}`,
-          );
-        return "yes_no";
-      }
-      case "is_empty":
-      case "is_not_empty":
-        child(formula.arg, "arg");
-        return "yes_no";
-      case "in": {
-        const value = child(formula.value, "value");
-        formula.options.forEach((option, index) => {
-          const type = child(option, "options", index);
-          if (
-            value !== undefined &&
-            type !== undefined &&
-            value !== "json" &&
-            type !== "json" &&
-            !valueTypesCompatible(type, value, "condition")
-          )
-            add(
-              [...path, "options", index],
-              "vortex.definition.source_type_compatibility",
-              "invalid_value",
-              `An option of type ${type} cannot be compared with ${value}`,
-            );
-        });
-        return "yes_no";
-      }
-      case "and":
-      case "or":
-        formula.args.forEach((arg, index) =>
-          expect(
-            child(arg, "args", index),
-            (type) => type === "yes_no",
-            [...path, "args", index],
-            "a yes/no value",
-          ),
-        );
-        return "yes_no";
-      case "not":
-        expect(
-          child(formula.arg, "arg"),
-          (type) => type === "yes_no",
-          [...path, "arg"],
-          "a yes/no value",
-        );
-        return "yes_no";
-      case "if": {
-        expect(
-          child(formula.condition, "condition"),
-          (type) => type === "yes_no",
-          [...path, "condition"],
-          "a yes/no value",
-        );
-        const then = child(formula.then, "then");
-        const otherwise = child(formula.else, "else");
-        if (
-          then === undefined ||
-          otherwise === undefined ||
-          then === "json" ||
-          otherwise === "json"
-        )
-          return undefined;
-        if (then === otherwise) return then;
-        if (numericTypes.has(then) && numericTypes.has(otherwise))
-          return then === "money" || otherwise === "money" ? "money" : "decimal_number";
-        add(
-          [...path, "else"],
-          "vortex.definition.source_type_compatibility",
-          "invalid_value",
-          `Both results of if must have one type, found ${then} and ${otherwise}`,
-        );
-        return undefined;
-      }
-      case "join":
-        formula.parts.forEach((part, index) => child(part, "parts", index));
-        return "text";
-      case "date_add": {
-        const date = child(formula.date, "date");
-        expect(date, (type) => dateTypes.has(type), [...path, "date"], "a date or date and time");
-        expect(
-          child(formula.amount, "amount"),
-          (type) => type === "whole_number",
-          [...path, "amount"],
-          "a whole number",
-        );
-        return date;
-      }
-      case "date_diff":
-        expect(
-          child(formula.from, "from"),
-          (type) => dateTypes.has(type),
-          [...path, "from"],
-          "a date or date and time",
-        );
-        expect(
-          child(formula.to, "to"),
-          (type) => dateTypes.has(type),
-          [...path, "to"],
-          "a date or date and time",
-        );
-        return "whole_number";
-    }
-  };
+  const checkFormulaAt = (formula: FlowFormula, where: Where, path: Path): StaticType =>
+    checkFlowFormula(
+      formula,
+      {
+        nowAllowed: where.nowAllowed,
+        reference: (reference, referencePath) => resolveReference(reference, where, referencePath),
+        issue: add,
+      },
+      path,
+    );
 
   const valueType = (value: FlowValue, where: Where, path: Path): StaticType => {
     switch (value.kind) {
@@ -788,7 +572,7 @@ export function validateFlow(
       case "reference":
         return resolveReference(value.reference, where, [...path, "reference"]);
       case "formula":
-        return formulaType(value.formula, where, [...path, "formula"]);
+        return checkFormulaAt(value.formula, where, [...path, "formula"]);
       // A map is a JSON object of values. Every entry is checked as a value of its own, so a
       // reference inside it resolves or is refused exactly as one outside it would be.
       case "map":
@@ -962,7 +746,7 @@ export function validateFlow(
           `${name} must be a formula`,
         );
       else {
-        const type = formulaType(value.formula, where, [...path, "formula"]);
+        const type = checkFormulaAt(value.formula, where, [...path, "formula"]);
         // A calculation declares its result type, and its formula must produce it.
         const declaredResult = calculationResultType(task);
         if (
@@ -1116,7 +900,7 @@ export function validateFlow(
     switch (task.type) {
       case "if": {
         const node = task as Extract<FlowTask, { type: "if" }>;
-        const type = formulaType(node.condition, where, [...path, "condition"]);
+        const type = checkFormulaAt(node.condition, where, [...path, "condition"]);
         if (type !== undefined && type !== "json" && type !== "yes_no")
           add(
             [...path, "condition"],
@@ -1229,7 +1013,7 @@ export function validateFlow(
   // Triggers: an entry condition reads only the trigger's own values and the record.
   flow.triggers.forEach((trigger, index) => {
     if (trigger.condition === undefined) return;
-    const type = formulaType(
+    const type = checkFormulaAt(
       trigger.condition,
       { nowAllowed: false, scope: new Map(), triggerOnly: true },
       ["triggers", index, "condition"],

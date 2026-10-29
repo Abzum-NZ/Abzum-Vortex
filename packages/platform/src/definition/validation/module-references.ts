@@ -1,5 +1,5 @@
 import {
-  calculationFormulaType,
+  checkCalculationFormula,
   calculationReadTimeSupported,
 } from "../module-calculation-formula";
 import { flowFormulaSchema, flowFormulaUsesNow } from "../../workflows/flow-values";
@@ -431,7 +431,7 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
             !calculationReadTimeSupported(flowFormulaSchema.parse(expression))
           )
             valid = false;
-          const actualType = calculationFormulaType(
+          const actualType = checkCalculationFormula(
             flowFormulaSchema.parse(expression),
             (id) => typedFieldValueType(fieldMap.get(id)),
             "canonical",

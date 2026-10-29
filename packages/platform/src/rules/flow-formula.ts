@@ -1,3 +1,4 @@
+import { valueTypesCompatible } from "../catalogue/catalogues";
 import type { JsonValue } from "../catalogue/common";
 import {
   compareExactDecimals,
@@ -692,4 +693,284 @@ export const flowRuntimeValuesEqual = (
 ): boolean | undefined => {
   const order = compare(left, right);
   return order === undefined ? undefined : order === 0 || order === "equal_only_same";
+};
+
+/** A location in a formula, relative to its containing definition. */
+export type FlowFormulaPath = (string | number)[];
+
+export type FlowFormulaCheckOptions = Readonly<{
+  nowAllowed: boolean;
+  /** A record money literal cannot carry a currency. */
+  moneyLiterals?: boolean;
+  reference: (reference: FlowReference, path: FlowFormulaPath) => string | undefined;
+  issue: (
+    path: FlowFormulaPath,
+    rule: "vortex.definition.source_type_compatibility" | "vortex.definition.workflow_node_values",
+    family: "invalid_value",
+    message: string,
+  ) => void;
+}>;
+
+const numericTypes: ReadonlySet<string> = new Set(["whole_number", "decimal_number", "money"]);
+const dateTypes: ReadonlySet<string> = new Set(["date", "date_time"]);
+
+/** Checks a formula against its reference environment and reports errors at their exact paths. */
+export const checkFlowFormula = (
+  formula: FlowFormula,
+  options: FlowFormulaCheckOptions,
+  path: FlowFormulaPath = [],
+): string | undefined => {
+  const add = options.issue;
+  const child = (value: FlowFormula, ...segments: (string | number)[]) =>
+    checkFlowFormula(value, options, [...path, ...segments]);
+  const expect = (
+    actual: string | undefined,
+    accepted: (type: string) => boolean,
+    childPath: FlowFormulaPath,
+    wanted: string,
+  ) => {
+    if (actual === undefined || actual === "json" || accepted(actual)) return;
+    add(
+      childPath,
+      "vortex.definition.source_type_compatibility",
+      "invalid_value",
+      `Expected ${wanted}, found ${actual}`,
+    );
+  };
+  const numericArgs = (
+    args: readonly FlowFormula[],
+    segment: string,
+    operation: "add" | "subtract" | "multiply" | "divide",
+  ): string | undefined => {
+    const types = args.map((arg, index) => {
+      const type = child(arg, segment, index);
+      expect(
+        type,
+        (candidate) => numericTypes.has(candidate),
+        [...path, segment, index],
+        "a number",
+      );
+      return type;
+    });
+    const money = types.flatMap((type, index) => (type === "money" ? [index] : []));
+    if (
+      ((operation === "add" || operation === "subtract") &&
+        money.length > 0 &&
+        money.length !== types.length) ||
+      (operation === "multiply" && money.length > 1) ||
+      (operation === "divide" && money.length > 0 && (money.length !== 1 || money[0] !== 0))
+    ) {
+      add(
+        path,
+        "vortex.definition.source_type_compatibility",
+        "invalid_value",
+        "These money operands cannot be combined",
+      );
+      return undefined;
+    }
+    return types.includes("money")
+      ? "money"
+      : types.some((type) => type === undefined || type === "json")
+        ? undefined
+        : types.includes("decimal_number")
+          ? "decimal_number"
+          : "whole_number";
+  };
+  switch (formula.op) {
+    case "literal":
+      if (formula.type === "money" && options.moneyLiterals === false) {
+        add(
+          path,
+          "vortex.definition.source_type_compatibility",
+          "invalid_value",
+          "A money literal must carry its currency",
+        );
+        return undefined;
+      }
+      return formula.type;
+    case "reference":
+      return options.reference(formula.reference, [...path, "reference"]);
+    case "record_id": {
+      const type = child(formula.arg, "arg");
+      if (type !== "json") {
+        add(
+          [...path, "arg"],
+          "vortex.definition.source_type_compatibility",
+          "invalid_value",
+          `The record_id operand must have a declared JSON type, found ${type ?? "an unknown type"}`,
+        );
+        return undefined;
+      }
+      return "text";
+    }
+    case "deadline_passed":
+      if (!options.nowAllowed)
+        add(
+          path,
+          "vortex.definition.workflow_node_values",
+          "invalid_value",
+          "A deadline uses the current time",
+        );
+      expect(
+        child(formula.due, "due"),
+        (type) => dateTypes.has(type),
+        [...path, "due"],
+        "a date or date-time deadline",
+      );
+      if (formula.status !== undefined)
+        expect(
+          child(formula.status, "status"),
+          (type) => type === "text" || type === "choice",
+          [...path, "status"],
+          "a status",
+        );
+      return "yes_no";
+    case "now":
+      if (!options.nowAllowed)
+        add(
+          path,
+          "vortex.definition.workflow_node_values",
+          "invalid_value",
+          "The now operator is allowed only in interactive and background flows, and never in a trigger",
+        );
+      return "date_time";
+    case "add":
+    case "multiply":
+    case "subtract": {
+      const type = numericArgs(formula.args, "args", formula.op);
+      return type === "whole_number" && formula.scale > 0 ? "decimal_number" : type;
+    }
+    case "divide": {
+      const type = numericArgs(formula.args, "args", formula.op);
+      return type === "money" ? "money" : type === undefined ? undefined : "decimal_number";
+    }
+    case "round": {
+      const type = child(formula.arg, "arg");
+      expect(type, (candidate) => numericTypes.has(candidate), [...path, "arg"], "a number");
+      return type;
+    }
+    case "eq":
+    case "neq":
+    case "lt":
+    case "lte":
+    case "gt":
+    case "gte":
+    case "contains":
+    case "starts_with":
+    case "ends_with": {
+      const left = child(formula.left, "left");
+      const right = child(formula.right, "right");
+      if (
+        left !== undefined &&
+        right !== undefined &&
+        left !== "json" &&
+        right !== "json" &&
+        !valueTypesCompatible(left, right, "condition") &&
+        !valueTypesCompatible(right, left, "condition")
+      )
+        add(
+          path,
+          "vortex.definition.source_type_compatibility",
+          "invalid_value",
+          `Cannot compare ${left} with ${right}`,
+        );
+      return "yes_no";
+    }
+    case "is_empty":
+    case "is_not_empty":
+      child(formula.arg, "arg");
+      return "yes_no";
+    case "in": {
+      const value = child(formula.value, "value");
+      formula.options.forEach((option, index) => {
+        const type = child(option, "options", index);
+        if (
+          value !== undefined &&
+          type !== undefined &&
+          value !== "json" &&
+          type !== "json" &&
+          !valueTypesCompatible(type, value, "condition")
+        )
+          add(
+            [...path, "options", index],
+            "vortex.definition.source_type_compatibility",
+            "invalid_value",
+            `An option of type ${type} cannot be compared with ${value}`,
+          );
+      });
+      return "yes_no";
+    }
+    case "and":
+    case "or":
+      formula.args.forEach((arg, index) =>
+        expect(
+          child(arg, "args", index),
+          (type) => type === "yes_no",
+          [...path, "args", index],
+          "a yes/no value",
+        ),
+      );
+      return "yes_no";
+    case "not":
+      expect(
+        child(formula.arg, "arg"),
+        (type) => type === "yes_no",
+        [...path, "arg"],
+        "a yes/no value",
+      );
+      return "yes_no";
+    case "if": {
+      expect(
+        child(formula.condition, "condition"),
+        (type) => type === "yes_no",
+        [...path, "condition"],
+        "a yes/no value",
+      );
+      const then = child(formula.then, "then");
+      const otherwise = child(formula.else, "else");
+      if (then === undefined || otherwise === undefined || then === "json" || otherwise === "json")
+        return undefined;
+      if (then === otherwise) return then;
+      if (
+        (then === "whole_number" || then === "decimal_number") &&
+        (otherwise === "whole_number" || otherwise === "decimal_number")
+      )
+        return "decimal_number";
+      add(
+        [...path, "else"],
+        "vortex.definition.source_type_compatibility",
+        "invalid_value",
+        `Both results of if must have one type, found ${then} and ${otherwise}`,
+      );
+      return undefined;
+    }
+    case "join":
+      formula.parts.forEach((part, index) => child(part, "parts", index));
+      return "text";
+    case "date_add": {
+      const date = child(formula.date, "date");
+      expect(date, (type) => dateTypes.has(type), [...path, "date"], "a date or date and time");
+      expect(
+        child(formula.amount, "amount"),
+        (type) => type === "whole_number",
+        [...path, "amount"],
+        "a whole number",
+      );
+      return date;
+    }
+    case "date_diff":
+      expect(
+        child(formula.from, "from"),
+        (type) => dateTypes.has(type),
+        [...path, "from"],
+        "a date or date and time",
+      );
+      expect(
+        child(formula.to, "to"),
+        (type) => dateTypes.has(type),
+        [...path, "to"],
+        "a date or date and time",
+      );
+      return "whole_number";
+  }
 };

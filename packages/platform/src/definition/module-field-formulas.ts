@@ -1,7 +1,7 @@
 import { flowFormulaSchema, flowFormulaUsesNow } from "../workflows/flow-values";
 import {
   calculationFormulaDependencies,
-  calculationFormulaType,
+  checkCalculationFormula,
   calculationReadTimeSupported,
 } from "./module-calculation-formula";
 import type { ApplicationSourceDocument } from "./application-source-contracts";
@@ -160,7 +160,7 @@ export const calculationResultChoices = (
   expression: CalculationExpression,
   fields: ReadonlyMap<string, FormulaField>,
 ): readonly CalculationResultType[] => {
-  const result = calculationFormulaType(expression, (key) => valueType(fields.get(key)), "source");
+  const result = checkCalculationFormula(expression, (key) => valueType(fields.get(key)), "source");
   if (result === "whole_number" || result === "decimal_number")
     return ["whole_number", "decimal_number"];
   return result !== undefined && result in calculationResultTypeLabels
