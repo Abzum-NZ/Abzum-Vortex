@@ -202,9 +202,12 @@ const allSteps = (tasks: readonly FlowTask[]): FlowTask[] =>
   ]);
 
 /** Every reference a task's values and conditions read. */
-const referencesIn = (value: unknown, found: FlowReference[] = []): FlowReference[] => {
+export const flowValueReferences = (
+  value: unknown,
+  found: FlowReference[] = [],
+): FlowReference[] => {
   if (Array.isArray(value)) {
-    for (const item of value) referencesIn(item, found);
+    for (const item of value) flowValueReferences(item, found);
   } else if (typeof value === "object" && value !== null) {
     const record = value as Record<string, unknown>;
     // Validated literals are data, even when their text or JSON resembles a reference.
@@ -222,7 +225,7 @@ const referencesIn = (value: unknown, found: FlowReference[] = []): FlowReferenc
         !(record.op === "deadline_passed" && key === "terminalStatusValues") &&
         !(record.kind === "switch" && (key === "when" || key === "cases"))
       )
-        referencesIn(item, found);
+        flowValueReferences(item, found);
   }
   return found;
 };
@@ -236,7 +239,7 @@ const serverResolvedInputs = (bindings: readonly FlowBindingInputs[]): ReadonlyS
     for (const [name, input] of Object.entries(inputs)) {
       if (input.kind === "caller" || input.kind === "literal") continue;
       if (
-        referencesIn(input).some(
+        flowValueReferences(input).some(
           (item) =>
             item.source !== "page" && item.source !== "form" && item.source !== "execution_now",
         )
@@ -302,7 +305,7 @@ const inputTypes = (
   formTypes: FlowFormTypes,
 ): Record<string, string> => {
   const types: Record<string, string> = {};
-  for (const reference of referencesIn(steps)) {
+  for (const reference of flowValueReferences(steps)) {
     switch (reference.source) {
       case "input":
         types[`inputs.${reference.name}`] = flow.inputs[reference.name]?.type ?? "json";
@@ -502,7 +505,7 @@ export const compileFlowPlan = (
   // A declaration belongs in the page only when a page step, a path guard, or a final output
   // reads it. Server-only declarations stay with the server even when the same flow is bound to
   // a page. Defaults are validated literals, so they cannot introduce further references.
-  const pageReferences = referencesIn([
+  const pageReferences = flowValueReferences([
     ...segments.flatMap((segment) => [
       segment.guard,
       ...(segment.kind === "page" ? [segment.tasks] : []),
@@ -533,7 +536,7 @@ export const compileFlowPlan = (
         pageInputs.add(name);
     }
   }
-  const formReferences = referencesIn([
+  const formReferences = flowValueReferences([
     ...segments.flatMap((segment) => [
       segment.guard,
       ...(segment.kind === "page" ? [segment.tasks] : []),
@@ -613,7 +616,7 @@ export const compileFlowPlan = (
           name,
           {
             type,
-            value: referencesIn(value).some((reference) =>
+            value: flowValueReferences(value).some((reference) =>
               serverOnlyReference(reference, serverInputs),
             )
               ? { kind: "reference" as const, reference: { source: "final_output" as const, name } }
@@ -673,7 +676,7 @@ export const flowBindingPlanIssue = (
 ): string | undefined => {
   if (
     plan.definition.execution === "interactive" &&
-    referencesIn([
+    flowValueReferences([
       plan.definition.tasks,
       plan.definition.errors,
       plan.definition.finally,
@@ -688,7 +691,7 @@ export const flowBindingPlanIssue = (
   if (binding.event === "options_requested" && (plan.pageSteps || plan.changes))
     return "An options flow only reads: it can hold no page steps and no changes";
   const serverInputs = serverResolvedInputs(binding.inputs);
-  const conditionInput = referencesIn(binding.settings?.condition).find(
+  const conditionInput = flowValueReferences(binding.settings?.condition).find(
     (reference) => reference.source === "input" && serverInputs.has(reference.name),
   );
   if (conditionInput?.source === "input")
@@ -697,12 +700,12 @@ export const flowBindingPlanIssue = (
     serverOnlyReference(reference, serverInputs);
   for (const segment of plan.segments) {
     for (const guard of segment.guard)
-      if (referencesIn(guard).some(serverOnly))
+      if (flowValueReferences(guard).some(serverOnly))
         return `Step ${guard.taskId} has a page path condition that reads a server-only value`;
     if (segment.kind !== "page") continue;
     // Check children first so a refusal names the step that reads the value, not its parent.
     for (const step of allSteps(segment.tasks).reverse())
-      if (referencesIn(step).some(serverOnly))
+      if (flowValueReferences(step).some(serverOnly))
         return `Step ${step.id} reads a server-only value in the page`;
   }
   return undefined;
@@ -764,7 +767,7 @@ export const flowPlansOf = (releaseSet: PlannedReleaseSet): FlowPlanSet => {
       continue;
     }
     try {
-      const usesForm = referencesIn([flow, bindings.get(id), conditions.get(id)]).some(
+      const usesForm = flowValueReferences([flow, bindings.get(id), conditions.get(id)]).some(
         (reference) => reference.source === "form",
       );
       if (usesForm) formTypes ??= installedFlowFormTypes(releaseSet);

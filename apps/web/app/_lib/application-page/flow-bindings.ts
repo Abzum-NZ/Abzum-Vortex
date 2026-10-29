@@ -1,5 +1,6 @@
 import {
   buildLinkTilesQueryBinding,
+  flowValueReferences,
   readOrganizationRuntimeSettings,
   type HumanOrganizationRequestDependencies,
   type InstalledRuntimeContext,
@@ -393,7 +394,11 @@ export const projectPlacementBindings = (
           ({ value }) => value.kind !== "reference" || value.reference.source !== "final_output",
         ) &&
         Object.values(pageInputs).every(
-          (value) => value.kind === "caller" || value.kind === "literal",
+          (value) =>
+            value.kind === "caller" ||
+            flowValueReferences(value).every(
+              (reference) => reference.source === "form" || reference.source === "execution_now",
+            ),
         );
       return {
         ...(safePageOnly ? { browser: { plan, inputs: pageInputs } } : {}),
