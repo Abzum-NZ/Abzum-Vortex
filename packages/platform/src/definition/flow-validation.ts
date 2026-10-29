@@ -766,6 +766,13 @@ export function validateFlow(
     where: Where,
     path: Path,
   ) => {
+    if (task.type === "data.calculate" && name === "result_type" && value.kind !== "literal")
+      add(
+        path,
+        "vortex.definition.workflow_node_values",
+        "invalid_value",
+        "A calculation declares its result type as a literal",
+      );
     if (task.type === "data.calculate" && name === "result_type" && isTextLiteral(value)) {
       const resultType = (value as Extract<FlowValue, { kind: "literal" }>).literal.value;
       const precise = resultType === "decimal_number" || resultType === "money";
