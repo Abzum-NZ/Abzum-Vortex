@@ -374,7 +374,11 @@ const runTenantOrganizationMutation = async (
             outcome: "conflict",
             diagnostic: flowRefusalFeedbackSchema.parse({ code: result.code }),
           } as const;
-        if (result.code === "invalid_command" || result.code === "duplicate_conflict")
+        if (
+          result.code === "invalid_command" ||
+          result.code === "duplicate_conflict" ||
+          result.code === "multi_factor_required"
+        )
           return {
             kind: "confirmed_failure",
             outcome: result.code === "invalid_command" ? "validation" : "refused",
@@ -442,7 +446,8 @@ const runTenantOrganizationCreation = async (
         if (
           result.code === "invalid_command" ||
           result.code === "duplicate_conflict" ||
-          result.code === "stale_revision"
+          result.code === "stale_revision" ||
+          result.code === "multi_factor_required"
         )
           return {
             kind: "confirmed_failure",
@@ -1204,6 +1209,7 @@ export const createProtectedOperationExecutor = (
       if (result.kind === "unavailable") {
         if (
           result.code === "recent_authentication_required" ||
+          result.code === "multi_factor_required" ||
           result.code === "role_settings_change_required"
         )
           return {

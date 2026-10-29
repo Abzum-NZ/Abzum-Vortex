@@ -3,13 +3,15 @@ import { withPageReadAttribution } from "../../../../_lib/page-read-attribution"
 
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { splitProjectedPage } from "@vortex/platform/schema";
+import { flowRefusalFeedbackSentences, splitProjectedPage } from "@vortex/platform/schema";
 import type { ApplicationAccount, DisplaySemanticEvent } from "@vortex/ui";
 import { DEFAULT_PLATFORM_THEME_RELEASE, DefinitionError } from "@vortex/platform/server";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { ApplicationExperiencePage } from "./_components/application-experience-page";
 import { ApplicationPageView } from "./_components/application-page-view";
+import { multiFactorPath } from "./_components/application-page-view/notices";
 import { BarePage } from "../_components/bare-page";
 import {
   OrganizationAddressState,
@@ -55,6 +57,7 @@ const adoptionCoordinatorCodes = new Set<string>([
   "APPLICATION_INSTALLATION_REFUSED",
   "APPLICATION_INSTALLATION_PERMISSION_REFUSED",
   "APPLICATION_INSTALLATION_RECENT_AUTHENTICATION_REQUIRED",
+  "APPLICATION_INSTALLATION_MULTI_FACTOR_REQUIRED",
   "APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE",
   "APPLICATION_INSTALLATION_STALE",
   "APPLICATION_INSTALLATION_INCOMPLETE",
@@ -157,6 +160,7 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
 
     let refused = false;
     let recentAuthenticationRequired = false;
+    let multiFactorRequired = false;
     try {
       await adoptApplicationRelease(currentIdentity.session, {
         organizationId: rechecked.read.organizationId,
@@ -173,16 +177,18 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
         fallback: {
           recentAuthenticationRequired:
             coordinatorCode === "APPLICATION_INSTALLATION_RECENT_AUTHENTICATION_REQUIRED",
+          multiFactorRequired: coordinatorCode === "APPLICATION_INSTALLATION_MULTI_FACTOR_REQUIRED",
         },
       });
       recentAuthenticationRequired = refusal.recentAuthenticationRequired;
+      multiFactorRequired = refusal.multiFactorRequired;
       refused = true;
     }
     // A refusal, a stale revision or a failed preparation changes nothing; the page keeps showing
     // the prior release. Only a committed switch revalidates the address.
     if (refused)
       redirect(
-        `${back}?adoption=${recentAuthenticationRequired ? "recent_authentication_required" : "refused"}`,
+        `${back}?adoption=${multiFactorRequired ? "multi_factor_required" : recentAuthenticationRequired ? "recent_authentication_required" : "refused"}`,
       );
     revalidatePath(back);
     redirect(`${back}?adoption=adopted`);
@@ -369,11 +375,13 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
   // The page runtime keeps the whole projection, so shell placements keep their data and events;
   // only the rendering is split between the frame and the content.
   const adoptionOutcome =
-    parameters.adoption === "recent_authentication_required"
-      ? "A recent sign-in is required to adopt this release. Sign out, then sign in again with your email address and password before adopting. The current release is still in use."
-      : parameters.adoption === "refused"
-        ? "The release could not be adopted. The current release is still in use."
-        : undefined;
+    parameters.adoption === "multi_factor_required"
+      ? flowRefusalFeedbackSentences.multi_factor_required
+      : parameters.adoption === "recent_authentication_required"
+        ? "A recent sign-in is required to adopt this release. Sign out, then sign in again with your email address and password before adopting. The current release is still in use."
+        : parameters.adoption === "refused"
+          ? "The release could not be adopted. The current release is still in use."
+          : undefined;
   const preview =
     resolved.installedContext === undefined
       ? undefined
@@ -400,7 +408,15 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
         pageFeedback={
           adoptionOutcome === undefined ? undefined : (
             <Alert role="status" aria-live="polite" data-vortex-release-adoption="outcome">
-              <AlertDescription>{adoptionOutcome}</AlertDescription>
+              <AlertDescription>
+                {adoptionOutcome}
+                {parameters.adoption === "multi_factor_required" ? (
+                  <>
+                    {" "}
+                    <Link href={multiFactorPath}>Verify</Link>
+                  </>
+                ) : null}
+              </AlertDescription>
             </Alert>
           )
         }

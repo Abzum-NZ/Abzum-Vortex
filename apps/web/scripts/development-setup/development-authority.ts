@@ -66,8 +66,8 @@ export const inSystemTransaction = <Result>(
 /**
  * The identity session of the nominated first owner as the trusted local setup vouches for it: the
  * person just signed up locally and the developer named them on the command line. The recent
- * primary authentication that installing an application requires is the developer's own run of
- * this command, so it is stamped now and lasts one hour.
+ * authentication that setup operations require is the developer's own run of this local-only
+ * command, so primary and multi-factor evidence are stamped now and last one hour.
  */
 export const nominatedOwnerSession = (identityId: string): IdentitySession => {
   const now = Date.now();
@@ -75,9 +75,10 @@ export const nominatedOwnerSession = (identityId: string): IdentitySession => {
   return identitySessionSchema.parse({
     identityId,
     sessionId: randomUUID(),
-    authenticationStrength: "single_factor",
+    authenticationStrength: "multi_factor",
     accessTokenIssuedAt: issuedAt,
     accessTokenExpiresAt: new Date(now + 60 * 60_000).toISOString(),
     primaryAuthenticatedAt: issuedAt,
+    multiFactorAuthenticatedAt: issuedAt,
   });
 };

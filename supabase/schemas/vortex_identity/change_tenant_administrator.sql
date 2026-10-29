@@ -61,6 +61,13 @@ begin
     actor_identity_id, p_tenant_id,
     'platform.tenant.administrators.manage', evaluated_at
   );
+  if vortex_access.recent_authentication_deadline_internal(
+    vortex_platform.current_context(), evaluated_at,
+    '{"kind":"multi_factor","maximumAgeSeconds":3600}'::jsonb
+  ) is null then
+    raise exception using errcode = 'V3152',
+      message = 'Tenant governance requires multi-factor authentication';
+  end if;
   if target_identity_id is null or not exists (
       select 1 from vortex_identity.identity_projections p
       where p.identity_id = target_identity_id and p.state = 'active'

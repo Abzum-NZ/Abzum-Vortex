@@ -426,7 +426,9 @@ begin
     when not catalogue_available then 'permission_unavailable'
     when not scoped_available then 'target_policy_unavailable'
     when not path_effective then 'permission_not_effective'
-    when not authentication_satisfied then 'authentication_unsatisfied'
+    when not authentication_satisfied and declaration_authentication ->> 'kind' = 'multi_factor'
+        then 'multi_factor_unsatisfied'
+      when not authentication_satisfied then 'authentication_unsatisfied'
     else null
   end;
 
