@@ -1,10 +1,9 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { correlationIdSchema } from "../catalogue/common";
 import { identityIdSchema, platformIdSchema } from "../catalogue/identifiers";
-import { describeFailure } from "../catalogue/runtime-primitives";
+import { databaseCode, describeFailure } from "../catalogue/runtime-primitives";
 import { isLoopbackHostname } from "./loopback-hostname";
 import {
   withRuntimeTransaction,
@@ -75,7 +74,7 @@ export type IdentityDisablementResult =
       subjectIdentityId: string;
       sessionsRevoked: number;
       correlationId: string;
-      /** True when an exact retry returned the already recorded result. */
+      /** True when a retry returned the already recorded result. */
       replayed: boolean;
     }>
   | Readonly<{ outcome: "refused"; code: IdentityDisablementFailureCode }>;
@@ -97,6 +96,7 @@ type BeginRow = DatabaseRow & {
   outcome: unknown;
   sessions_revoked: unknown;
   correlation_id: unknown;
+  subject_identity_id: unknown;
 };
 type CompleteRow = DatabaseRow & { outcome: unknown; sessions_revoked: unknown };
 
@@ -118,17 +118,6 @@ const validateConfiguration = (configuration: IdentityAuthorityDisablementConfig
   if (!configuration.secretKey.startsWith("sb_secret_"))
     throw new Error("Identity Authority disablement requires the privileged provider key");
 };
-
-const fingerprint = (command: IdentityDisablementCommand): string =>
-  `sha256:${createHash("sha256")
-    .update(
-      JSON.stringify({
-        actorIdentityId: command.actorIdentityId.toLowerCase(),
-        commandId: command.commandId.toLowerCase(),
-        subjectIdentityId: command.subjectIdentityId.toLowerCase(),
-      }),
-    )
-    .digest("hex")}`;
 
 const count = (value: unknown): number | undefined => {
   const parsed = typeof value === "bigint" ? Number(value) : value;
@@ -177,8 +166,6 @@ export const createIdentityAuthorityDisablement = (
     async disable(candidate: IdentityDisablementCommand): Promise<IdentityDisablementResult> {
       const command = parseCommand(candidate);
       if (command === undefined) return { outcome: "refused", code: "invalid_command" };
-      if (command.actorIdentityId.toLowerCase() === command.subjectIdentityId.toLowerCase())
-        return { outcome: "refused", code: "self_disablement" };
 
       try {
         // 1. Record the command before the provider is called.
@@ -189,15 +176,20 @@ export const createIdentityAuthorityDisablement = (
                 ${command.actorIdentityId}::uuid,
                 ${command.subjectIdentityId}::uuid,
                 ${command.commandId}::uuid,
-                ${fingerprint(command)}::text,
                 ${command.correlationId}::uuid
               )
             `,
           ),
         );
-        if (begun.outcome === "conflict") return { outcome: "refused", code: "command_conflict" };
         const recordedCorrelationId = correlationIdSchema.safeParse(begun.correlation_id);
-        if (!recordedCorrelationId.success) throw new Error("Identity disablement record mismatch");
+        const recordedSubjectId = identityIdSchema.safeParse(begun.subject_identity_id);
+        if (!recordedCorrelationId.success || !recordedSubjectId.success)
+          throw new Error("Identity disablement record mismatch");
+        const recordedCommand = {
+          ...command,
+          subjectIdentityId: recordedSubjectId.data,
+          correlationId: recordedCorrelationId.data,
+        };
         if (begun.outcome === "replayed") {
           const sessionsRevoked = count(begun.sessions_revoked);
           if (sessionsRevoked === undefined)
@@ -205,7 +197,7 @@ export const createIdentityAuthorityDisablement = (
           return {
             outcome: "disabled",
             commandId: command.commandId,
-            subjectIdentityId: command.subjectIdentityId,
+            subjectIdentityId: recordedCommand.subjectIdentityId,
             sessionsRevoked,
             correlationId: recordedCorrelationId.data,
             replayed: true,
@@ -214,27 +206,30 @@ export const createIdentityAuthorityDisablement = (
         if (begun.outcome !== "started") throw new Error("Identity disablement record mismatch");
 
         // 2. Ban the identity at the provider (idempotent for a retry).
-        const { error } = await client.auth.admin.updateUserById(command.subjectIdentityId, {
-          ban_duration: disabledBanDuration,
-        });
+        const { error } = await client.auth.admin.updateUserById(
+          recordedCommand.subjectIdentityId,
+          {
+            ban_duration: disabledBanDuration,
+          },
+        );
         if (error) {
           if (isUserNotFound(error)) {
-            await complete(command, "subject_not_found");
+            await complete(recordedCommand, "subject_not_found");
             return { outcome: "refused", code: "subject_not_found" };
           }
-          await complete(command, "provider_unavailable");
+          await complete(recordedCommand, "provider_unavailable");
           return { outcome: "refused", code: "authority_unavailable" };
         }
 
         // 3. Revoke the subject's provider sessions and record the outcome together.
-        const finished = await complete(command, "disabled");
+        const finished = await complete(recordedCommand, "disabled");
         const sessionsRevoked = count(finished.sessions_revoked);
         if (finished.outcome !== "disabled" || sessionsRevoked === undefined)
           throw new Error("Identity disablement record mismatch");
         return {
           outcome: "disabled",
           commandId: command.commandId,
-          subjectIdentityId: command.subjectIdentityId,
+          subjectIdentityId: recordedCommand.subjectIdentityId,
           sessionsRevoked,
           correlationId: recordedCorrelationId.data,
           replayed: false,
@@ -243,6 +238,10 @@ export const createIdentityAuthorityDisablement = (
         // No provider message, key or database detail leaves this boundary; the log carries only
         // the safe description.
         console.error(`[identity] authority disablement failed: ${describeFailure(error)}`);
+        if (databaseCode(error) === "V3191")
+          return { outcome: "refused", code: "self_disablement" };
+        if (databaseCode(error) === "V3001")
+          return { outcome: "refused", code: "command_conflict" };
         return { outcome: "refused", code: "authority_unavailable" };
       }
     },
