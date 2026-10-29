@@ -70,6 +70,10 @@ export const studioFlowReferenceToken = (reference: FlowReference): string => {
     case "execution_actor":
     case "execution_now":
       return reference.source;
+    case "page":
+      return `page:${reference.name}`;
+    case "form":
+      return `form:${reference.form}:${reference.field}`;
   }
 };
 

@@ -33,7 +33,13 @@ import {
   roleIdSchema,
   semanticVersionSchema,
 } from "../catalogue/identifiers";
-import { labelSchema, safeHttpsUrlSchema, sortKeySchema } from "../catalogue/common";
+import {
+  jsonValueSchema,
+  labelSchema,
+  safeHttpsUrlSchema,
+  sortKeySchema,
+} from "../catalogue/common";
+import { typedValueMatchesType } from "../rules/condition-types";
 import { actionInputValueTypes, applicationExperienceStateSchema } from "../catalogue/catalogues";
 import { permissionDeclarationSchema } from "../access/permissions";
 import {
@@ -465,8 +471,50 @@ export function isPresentationOnlyApplicationExperience(
   return shell !== undefined && !declaresGatedPlacement(shell.layout);
 }
 
+/**
+ * A value a page declares (Studio flows design §8): a number, an amount of money, text, a yes or no,
+ * or a list, with its label and its value when the page opens. Flows set it and components and
+ * other flows read it; it lives only in the page, is never trusted by the server and resets when
+ * the page reloads.
+ */
+export const pageValueDeclarationSchema = z
+  .object({
+    type: z.enum(["decimal_number", "money", "text", "yes_no", "json"]),
+    label: labelSchema,
+    initial: jsonValueSchema,
+  })
+  .strict()
+  .superRefine((declaration, context) => {
+    if (
+      declaration.initial !== null &&
+      !typedValueMatchesType(declaration.initial, declaration.type, "flow")
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["initial"],
+        message: "A page value starts empty or with a value of its type",
+      });
+    if (
+      declaration.type === "json" &&
+      declaration.initial !== null &&
+      !Array.isArray(declaration.initial)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["initial"],
+        message: "A list page value starts empty or with a list",
+      });
+  });
+export const pageValueDeclarationsSchema = z
+  .record(builderKeySchema, pageValueDeclarationSchema)
+  .refine((values) => Object.keys(values).length <= 50, {
+    message: "A page declares at most 50 values",
+  });
+
 const pageCommon = {
   pageId: pageIdSchema,
+  /** The page's declared values, keyed by name; absent when it declares none. */
+  values: pageValueDeclarationsSchema.optional(),
   replacementOfPageId: pageIdSchema.optional(),
   key: builderKeySchema,
   name: labelSchema,

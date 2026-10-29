@@ -430,6 +430,18 @@ export function validateFlow(
         return "organization_account_reference";
       case "execution_now":
         return "date_time";
+      // Not yet runnable: the page runner reads page values and form fields in page segments.
+      case "page":
+      case "form":
+        add(
+          path,
+          "vortex.definition.unsupported_workflow_node",
+          "unsupported_choice",
+          reference.source === "page"
+            ? `The page value ${reference.name} cannot be read yet`
+            : `The form field ${reference.form}.${reference.field} cannot be read yet`,
+        );
+        return undefined;
       case "task_output": {
         if (where.triggerOnly) {
           add(

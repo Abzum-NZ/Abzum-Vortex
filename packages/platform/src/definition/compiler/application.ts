@@ -81,8 +81,18 @@ function compileApplicationPages(
     const compiledComposition = composition.pages[index];
     if (compiledComposition === undefined)
       fail("vortex.definition.invalid_compilation_output", "invalid_value");
+    // Not yet runnable: page values arrive with the page runner's value store.
+    if (page.values !== undefined && Object.keys(asObject(page.values)).length > 0)
+      throw new DefinitionCompilationError(
+        "vortex.definition.unsupported_workflow_node",
+        "unsupported_choice",
+        resolution.location("page", String(page.id)),
+        undefined,
+        `Page ${String(page.key)}: page values cannot run yet`,
+      );
     const base = {
       pageId: pageId(String(page.id)),
+      ...(page.values === undefined ? {} : { values: page.values }),
       ...(page.replaces_page === undefined
         ? {}
         : { replacementOfPageId: pageId(String(page.replaces_page)) }),
