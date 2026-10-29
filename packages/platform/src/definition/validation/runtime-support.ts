@@ -9,7 +9,6 @@ export const runtimeSupportRuleCodes = [
   "vortex.definition.public_page_not_supported",
   "vortex.definition.public_address_not_supported",
   "vortex.definition.interface_operation_not_supported",
-  "vortex.definition.incoming_message_not_supported",
 ] as const;
 
 /** Publication promises only behaviour that the platform can serve and enforce. */
@@ -36,14 +35,6 @@ export function runtimeSupportRule(
         ),
       );
     };
-    for (const flow of array(content.flows)) {
-      if (array(flow.triggers).some((trigger) => trigger.type === "IncomingMessage"))
-        refuse(
-          "vortex.definition.incoming_message_not_supported",
-          { kind: "flow", key: String(flow.key) },
-          "Flows cannot yet start when an external message arrives. Remove the incoming message trigger before publishing.",
-        );
-    }
     if (output.kind !== "application") continue;
     // Each refused declaration requires its own per-minute limit, so refusing the declaration
     // also refuses the limit that nothing would enforce.

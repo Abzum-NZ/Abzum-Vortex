@@ -424,6 +424,8 @@ const eventWords: Readonly<Record<string, string>> = {
   action: "is used",
   row_clicked: "row is clicked",
   row_action: "row action is used",
+  bulk_action: "bulk action is used",
+  batch_edit: "values are pasted, filled or undone",
   [recordsTableRowEditEvent]: "row is saved",
   [recordsTableInlineEditEvent]: "value is edited",
   card_moved: "card is moved",
@@ -437,19 +439,23 @@ const eventWords: Readonly<Record<string, string>> = {
   page_changed: "page changes",
   selection_changed: "selection changes",
   field_changed: "field changes",
+  field_focus_lost: "field loses focus",
+  options_requested: "options are requested",
+  record_loaded: "record is loaded",
   form_ready: "form is ready",
   form_reset: "form is reset",
   form_submit: "is submitted",
+  form_cancel: "is cancelled",
   tab_changed: "tab changes",
   row_expanded: "row is expanded",
-
   guided_step_changed: "step changes",
 };
 
 const operationWords: Readonly<Record<string, string>> = {
   create: "created",
   update: "changed",
-  transition: "moved on",
+  delete: "deleted",
+  restore: "restored",
 };
 
 const recordWords = (recordTypeId: string): string =>

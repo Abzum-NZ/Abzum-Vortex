@@ -88,7 +88,7 @@ export type FlowValidationOptions = Readonly<{
   formTitle?: ((reference: string) => string | undefined) | undefined;
   /**
    * Finds a flow compiled together with this one, in either shape, from the reference a `run_flow`
-   * or `flow.run_background` task names. A target it does not return has no declared inputs,
+   * or `backend.run` task names. A target it does not return has no declared inputs,
    * outputs or execution kind here, so the call is refused rather than left untyped.
    */
   targetFlow?: (reference: string) => FlowDefinition | FlowSource | SourceFlow | undefined;

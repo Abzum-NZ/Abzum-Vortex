@@ -384,7 +384,7 @@ const placementOperationBindings = (
             if (recordType !== undefined && !recordTypeIds.has(recordType.toLowerCase()))
               outcome.resolved = false;
             if (
-              task.type === "flow.run_background" &&
+              task.type === "backend.run" &&
               !flows.has(String(literal(task, "flow")).toLowerCase())
             )
               outcome.resolved = false;
