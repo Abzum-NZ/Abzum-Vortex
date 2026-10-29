@@ -328,9 +328,13 @@ function ApplicationSwitcher({
       >
         <SwitcherButton icon="grid" label={applicationName} />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-56" aria-busy={switcher === undefined}>
+      <DropdownMenuContent
+        align="end"
+        className="w-[min(28rem,calc(100vw-2rem))] min-w-56"
+        aria-busy={switcher === undefined}
+      >
         {source?.search === undefined ? null : (
-          <div className="w-96 max-w-[90vw] p-2" onKeyDown={(event) => event.stopPropagation()}>
+          <div className="w-full p-2" onKeyDown={(event) => event.stopPropagation()}>
             <ApplicationSearchControl
               placementId="application-switcher-search"
               settings={{

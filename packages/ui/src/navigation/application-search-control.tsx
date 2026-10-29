@@ -79,6 +79,7 @@ export function ApplicationSearchControl({
           id={`${placementId}-query`}
           name="q"
           type="search"
+          className="min-w-0"
           maxLength={2_000}
           defaultValue={
             applicationSearch.kind === "available" ||
@@ -89,7 +90,7 @@ export function ApplicationSearchControl({
           }
           placeholder={placeholder}
         />
-        <Button type="submit" variant="outline">
+        <Button type="submit" variant="outline" className="shrink-0">
           {submitLabel}
         </Button>
       </form>
