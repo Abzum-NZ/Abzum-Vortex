@@ -1,7 +1,7 @@
 import type { PlatformPermissionSource } from "../../access/platform-permissions";
 import type { applicationCompilationRequestSchema } from "../definition-compilation-contracts";
 import { inspectApplicationPageReplacements } from "../../pages/application-page-replacement";
-import type { FlowDefinition } from "../../workflows/flow-contracts";
+import { flowBindingInputSchema, type FlowDefinition } from "../../workflows/flow-contracts";
 import { applicationDraftSchema } from "../application-contracts";
 import {
   applicationCompilationOutputSchema,
@@ -600,6 +600,9 @@ function compileApplicationFlowBindings(
     // flow only reads.
     const planIssue = flowBindingPlanIssue(plans.get(flowId)!, {
       event: String(binding.event),
+      inputs: Object.fromEntries(
+        Object.entries(inputs).map(([name, value]) => [name, flowBindingInputSchema.parse(value)]),
+      ),
       settings: settings.data,
     });
     if (planIssue !== undefined)

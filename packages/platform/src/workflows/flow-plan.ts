@@ -3,7 +3,7 @@ import {
   PLATFORM_SERVICE_OPERATIONS,
   platformOperationKey,
 } from "../catalogue/platform-service-operation-catalogue";
-import type { FlowDefinition, FlowTask } from "./flow-contracts";
+import type { FlowBindingInput, FlowDefinition, FlowTask } from "./flow-contracts";
 import { flowTaskChildLists, isFlowControlTask } from "./flow-contracts";
 import { flowTaskRegistry, type FlowTaskTypeKey } from "./flow-task-registry";
 import { parseFlowReference, type FlowFormula, type FlowReference } from "./flow-values";
@@ -513,13 +513,45 @@ export const compileFlowPlans = (flows: readonly FlowDefinition[]): FlowPlanSet 
 /** Why a binding's plan cannot run as bound, or undefined. Publication refuses it by name. */
 export const flowBindingPlanIssue = (
   plan: FlowPlan,
-  binding: Readonly<{ event: string; settings?: Readonly<{ concurrency?: string }> | undefined }>,
+  binding: Readonly<{
+    event: string;
+    inputs: Readonly<Record<string, FlowBindingInput>>;
+    settings?: Readonly<{ concurrency?: string }> | undefined;
+  }>,
 ): string | undefined => {
   // An aborted request does not stop the server: an earlier change can still commit.
   if (binding.settings?.concurrency === "latest_wins" && plan.changes)
     return "Latest wins cannot be used on a flow that changes data; use Queue";
   if (binding.event === "options_requested" && (plan.pageSteps || plan.changes))
     return "An options flow only reads: it can hold no page steps and no changes";
+  const serverOnly = (reference: FlowReference): boolean => {
+    switch (reference.source) {
+      case "execution_actor":
+      case "execution_now":
+      case "trigger_record":
+      case "trigger_previous":
+      case "module_field":
+        return true;
+      case "input": {
+        const input = binding.inputs[reference.name];
+        if (input === undefined || input.kind === "caller" || input.kind === "literal")
+          return false;
+        return referencesIn(input).some((item) => item.source !== "page" && item.source !== "form");
+      }
+      default:
+        return false;
+    }
+  };
+  for (const segment of plan.segments) {
+    for (const guard of segment.guard)
+      if (referencesIn(guard).some(serverOnly))
+        return `Step ${guard.taskId} has a page path condition that reads a server-only value`;
+    if (segment.kind !== "page") continue;
+    // Check children first so a refusal names the step that reads the value, not its parent.
+    for (const step of allSteps(segment.tasks).reverse())
+      if (referencesIn(step).some(serverOnly))
+        return `Step ${step.id} reads a server-only value in the page`;
+  }
   return undefined;
 };
 
