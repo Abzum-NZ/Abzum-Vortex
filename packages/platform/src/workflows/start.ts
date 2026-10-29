@@ -82,8 +82,8 @@ export type FlowSegmentReceipt = Readonly<{
 }>;
 type SegmentExecution<Value> = Readonly<{
   value: Value;
-  /** The segment ended refused: all its effects and its receipt must roll back. */
-  refused: boolean;
+  /** Unsuccessful segments roll back their effects and receipt. */
+  outcome: "succeeded" | "refused" | "failed";
   /** Only task outcomes and declared non-sensitive effect outputs; null means not replayable. */
   effects: Readonly<
     Record<
@@ -97,7 +97,7 @@ type SegmentExecution<Value> = Readonly<{
   warnings: Readonly<Record<string, readonly BeforeSaveRuleWarning[]>>;
 }>;
 export type StartFlowResult<Value> =
-  | Readonly<{ kind: "completed"; value: Value }>
+  | Readonly<{ kind: "completed"; value: Value; runId: string }>
   | Readonly<{ kind: "reload" }>
   | Readonly<{ kind: "rate_limited"; retryAfterSeconds: number }>
   | Readonly<{ kind: "refused" }>;
@@ -112,6 +112,7 @@ type StartFlowDependencies<Value> = Readonly<{
     context: SegmentContext,
     segment: FlowServerSegment | null,
     replay: FlowSegmentReceipt | undefined,
+    runId: string,
   ) => Promise<SegmentExecution<Value>>;
 }>;
 
@@ -165,7 +166,9 @@ export const startFlow = async <Value>(
     plan: FlowPlan;
     expected: SegmentIdentity;
     gestureId: string;
-    runId: string;
+    runId?: string;
+    /** Required when the plan has a completion segment; resolved from the trusted binding. */
+    bindingId?: string;
     iteration: string;
     channel: "page" | "headless";
     /** Resolved by the server before opening a profile-change scope. */
@@ -173,8 +176,18 @@ export const startFlow = async <Value>(
   }>,
 ): Promise<StartFlowResult<Value>> => {
   const id = z.uuid().safeParse(request.gestureId);
-  const runId = z.uuid().safeParse(request.runId);
-  if (!id.success || !runId.success || request.iteration.length > 200) return { kind: "refused" };
+  const suppliedRunId = z.uuid().safeParse(request.runId);
+  const bindingId = z.uuid().safeParse(request.bindingId);
+  const serverSegments = request.plan.segments.filter((part) => part.kind === "server");
+  const hasCompletion = serverSegments.some((part) => part.tasks.length === 0);
+  const completionOnly = serverSegments.length === 1 && hasCompletion;
+  if (
+    !id.success ||
+    (!suppliedRunId.success && !(completionOnly && request.runId === undefined)) ||
+    (hasCompletion && !bindingId.success) ||
+    request.iteration.length > 200
+  )
+    return { kind: "refused" };
   const segment =
     request.expected === null
       ? null
@@ -215,7 +228,8 @@ export const startFlow = async <Value>(
       if (request.plan.segments.some((part) => part.kind === "server")) return { kind: "reload" };
       return {
         kind: "completed",
-        value: (await dependencies.execute(context, null, undefined)).value,
+        value: (await dependencies.execute(context, null, undefined, suppliedRunId.data!)).value,
+        runId: suppliedRunId.data!,
       };
     }
     if (
@@ -232,6 +246,34 @@ export const startFlow = async <Value>(
       segment.id,
       request.iteration,
     );
+    let runId = suppliedRunId.success ? suppliedRunId.data : undefined;
+    let evidenceState: "started" | "succeeded" | "refused" | "failed" | "closed" | undefined;
+    if (hasCompletion) {
+      if (runId === undefined) {
+        const opened = await transaction.query`select vortex_access.flow_run_evidence(${'start'}::text, ${null}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${null}::uuid) as result`;
+        runId = z.object({ state: z.literal("started"), runId: z.uuid() }).strict().parse(opened[0]?.result).runId;
+      }
+      const locked = await transaction.query`select vortex_access.flow_run_evidence(${'lock'}::text, ${runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${null}::uuid) as result`;
+      const evidence = z.discriminatedUnion("state", [
+        z.object({ state: z.literal("unavailable") }).strict(),
+        z.object({ state: z.enum(["started", "succeeded", "refused", "failed", "closed"]), completionCommandId: z.uuid().nullable() }).strict(),
+      ]).parse(locked[0]?.result);
+      if (evidence.state === "unavailable") return { kind: "refused" };
+      evidenceState = evidence.state;
+      if (segment.tasks.length === 0) {
+        if (evidence.state === "refused" || evidence.state === "failed" ||
+          (evidence.state === "closed" && evidence.completionCommandId !== commandId))
+          return { kind: "refused" };
+      } else if (evidence.state === "closed") return { kind: "refused" };
+    }
+    if (runId === undefined) return { kind: "refused" };
+    const recordOutcome = async (outcome: SegmentExecution<Value>["outcome"]): Promise<void> => {
+      if (!hasCompletion || evidenceState === "closed") return;
+      const action = segment.tasks.length === 0 && outcome === "succeeded" ? "close" : outcome;
+      const updated = await transaction.query`select vortex_access.flow_run_evidence(${action}::text, ${runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${action === "close" ? commandId : null}::uuid) as result`;
+      const expectedState = action === "close" ? "closed" : action;
+      z.object({ state: z.literal(expectedState) }).strict().parse(updated[0]?.result);
+    };
     let replay: FlowSegmentReceipt | undefined;
     if (segment.changes) {
       await transaction.query`select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(${`${scope.organizationId}:flow_segment:${commandId}`}, 818))`;
@@ -267,13 +309,14 @@ export const startFlow = async <Value>(
         return { kind: "rate_limited", retryAfterSeconds: rate.retry_after_seconds };
     }
     if (!segment.changes || replay !== undefined) {
-      const executed = await dependencies.execute(context, segment, replay);
+      const executed = await dependencies.execute(context, segment, replay, runId);
       if (Object.keys(executed.effects).length > 0)
         throw new Error("FLOW_SEGMENT_UNEXPECTED_EFFECT");
-      return { kind: "completed", value: executed.value };
+      await recordOutcome(executed.outcome);
+      return { kind: "completed", value: executed.value, runId };
     }
     const rollback = new Error("FLOW_SEGMENT_REFUSED_ROLLBACK");
-    let declined: Readonly<{ value: Value }> | undefined;
+    let declined: Readonly<{ value: Value; outcome: "refused" | "failed" }> | undefined;
     try {
       const value = await requireRequestSavepoint(transaction).withSavepoint(async (child) => {
         const rows =
@@ -284,9 +327,10 @@ export const startFlow = async <Value>(
           { ...context, transaction: child },
           segment,
           undefined,
+          runId,
         );
-        if (executed.refused) {
-          declined = { value: executed.value };
+        if (executed.outcome !== "succeeded") {
+          declined = { value: executed.value, outcome: executed.outcome };
           throw rollback;
         }
         const safeEffects: Record<string, FlowSegmentReplay[string]> = {};
@@ -298,7 +342,7 @@ export const startFlow = async <Value>(
             throw new Error("FLOW_SEGMENT_EFFECT_OUTCOME_MISMATCH");
           safeEffects[key] = effect.replay;
           const outputs = effect.replay?.outputs ?? {};
-          await child.query`select vortex_platform.record_flow_segment_effect(${runId.data}::uuid, ${taskPath}::text, ${iteration}::text, ${effect.outcome}::text, ${JSON.stringify(outputs)}::text::jsonb)`;
+          await child.query`select vortex_platform.record_flow_segment_effect(${runId}::uuid, ${taskPath}::text, ${iteration}::text, ${effect.outcome}::text, ${JSON.stringify(outputs)}::text::jsonb)`;
         }
         const warnings = Object.fromEntries(
           Object.entries(executed.warnings).map(([key, entries]) => [
@@ -310,10 +354,13 @@ export const startFlow = async <Value>(
         await child.query`select vortex_record.complete_flow_segment_receipt(${commandId}::uuid, ${JSON.stringify(receipt)}::text::jsonb)`;
         return executed.value;
       });
-      return { kind: "completed", value };
+      await recordOutcome("succeeded");
+      return { kind: "completed", value, runId };
     } catch (error) {
-      if (error === rollback && declined !== undefined)
-        return { kind: "completed", value: declined.value };
+      if (error === rollback && declined !== undefined) {
+        await recordOutcome(declined.outcome);
+        return { kind: "completed", value: declined.value, runId };
+      }
       throw error;
     }
   };

@@ -33,7 +33,7 @@ export const runFlowSegment = async (
 ): Promise<
   Readonly<{
     step: FlowRunStep;
-    refused: boolean;
+    outcome: "succeeded" | "refused" | "failed";
     effects: Readonly<
       Record<
         string,
@@ -79,7 +79,15 @@ export const runFlowSegment = async (
     }
     step = resumeFlowRun(step.state, result, run.library, undefined, segment, receipt?.effects);
   }
-  const refused =
-    (step.kind === "finished" || step.kind === "boundary") && step.result?.status === "failed";
-  return { step, refused, effects, warnings };
+  const failure =
+    (step.kind === "finished" || step.kind === "boundary") && step.result?.status === "failed"
+      ? step.result.failure
+      : undefined;
+  const outcome =
+    failure === undefined
+      ? "succeeded"
+      : failure.outcome === "failed" || failure.outcome === "uncertain"
+        ? "failed"
+        : "refused";
+  return { step, outcome, effects, warnings };
 };
