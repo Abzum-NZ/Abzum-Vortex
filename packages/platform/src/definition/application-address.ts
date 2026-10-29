@@ -50,7 +50,7 @@ import {
   type RequestDatabaseTransaction,
 } from "../db/request-transaction";
 import { z } from "zod";
-import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bundle-context";
+import { createInstalledContextLoader } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
 import {
   loadStoredNavigationProjection,
@@ -856,17 +856,7 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
           !sameId(scope.applicationRootId, addressedIdentity.identity.applicationRootId)
         )
           return undefined;
-        const context = await createHumanInstalledPageBundleContextLoader({
-          transaction,
-          scope: {
-            organizationId: scope.organizationId,
-            organizationAccountId: scope.organizationAccountId,
-            applicationRootId: scope.applicationRootId,
-            ...(scope.previewInstallationId === undefined
-              ? {}
-              : { previewInstallationId: scope.previewInstallationId }),
-          },
-        }).load();
+        const context = await createInstalledContextLoader(transaction, scope).load();
         const application = context.releaseSet.application;
         const identity = addressedIdentity.identity;
         if (

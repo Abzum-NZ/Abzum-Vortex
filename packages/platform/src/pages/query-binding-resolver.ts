@@ -84,6 +84,36 @@ type Resolved =
 const firstValue = (value: string | readonly string[] | undefined): string | undefined =>
   typeof value === "string" ? value : value?.[0];
 
+/** Validates invocation control values and overlays only their declared parameters on the address. */
+export const bindInvocationControls = async (
+  context: QueryBindingContext,
+  candidates: Readonly<Record<string, string>>,
+  validateOption: (placementId: string, value: string, parsed: JsonValue) => Promise<boolean>,
+): Promise<QueryBindingContext | undefined> => {
+  const supplied = new Map<string, string>();
+  for (const [placement, value] of Object.entries(candidates)) {
+    const key = placement.toLowerCase();
+    // Other page controls can be dependency evidence; they never become query inputs here.
+    if (!context.controls.has(key)) continue;
+    if (supplied.has(key)) return undefined;
+    supplied.set(key, value);
+  }
+  const address: Record<string, string | readonly string[] | undefined> = { ...context.address };
+  const names = new Set<string>();
+  for (const [placement, name] of context.controls) {
+    if (names.has(name)) return undefined;
+    names.add(name);
+    delete address[name];
+    const raw = supplied.get(placement);
+    if (raw === undefined || raw === "") continue;
+    const declared = context.parameters.get(name);
+    const parsed = declared === undefined ? undefined : parseQueryBindingText(raw, declared);
+    if (parsed === undefined || !(await validateOption(placement, raw, parsed))) return undefined;
+    address[name] = raw;
+  }
+  return { ...context, address };
+};
+
 /** The calendar date an anchor names, counted in the time zone at `now`. */
 export const relativeAnchorDate = (
   now: Date,

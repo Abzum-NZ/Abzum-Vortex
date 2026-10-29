@@ -370,7 +370,6 @@ const flowTaskTreeSchema: z.ZodType<FlowTask> = z.lazy(() => {
       .strict()
       .superRefine((task, context) => {
         const keys = new Set<string>();
-        const values = new Set<string>();
         task.cases.forEach((entry, index) => {
           if (keys.has(entry.key))
             context.addIssue({
@@ -379,14 +378,6 @@ const flowTaskTreeSchema: z.ZodType<FlowTask> = z.lazy(() => {
               message: "Switch case keys must be unique",
             });
           keys.add(entry.key);
-          const value = JSON.stringify(entry.when);
-          if (values.has(value))
-            context.addIssue({
-              code: "custom",
-              path: ["cases", index, "when"],
-              message: "Switch case values must be unique",
-            });
-          values.add(value);
         });
       }),
     z

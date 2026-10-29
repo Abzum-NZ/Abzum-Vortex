@@ -3,17 +3,9 @@ import type { PlacementFlowBinding } from "../../../../../../_lib/application-pa
 import type { ComponentFlowBinding } from "./types";
 
 export const asComponentBinding = (
-  placementId: string,
+  _placementId: string,
   binding: PlacementFlowBinding,
-): ComponentFlowBinding =>
-  ({
-    bindingId: binding.bindingId,
-    // The placement id and the binding's control id are the same stable identity.
-    controlId: placementId,
-    eventId: binding.eventId,
-    event: binding.event,
-    flow: { flowId: binding.flowId, inputs: {} },
-  }) as ComponentFlowBinding;
+): ComponentFlowBinding => binding;
 
 /**
  * What a component event supplies to its bound flow, by the caller input names the flow declares.

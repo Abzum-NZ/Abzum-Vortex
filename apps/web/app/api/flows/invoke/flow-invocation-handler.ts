@@ -4,6 +4,7 @@ import {
   flowBindingInvocationSchema,
   logRefusal,
   recordIdSchema,
+  sameId,
   type ProtectedOperationChannel,
 } from "@vortex/platform/schema";
 import { invokeInstalledFlow } from "@vortex/platform/server";
@@ -35,6 +36,19 @@ import {
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { privateJsonResponse as privateResponse } from "../../../_lib/private-response";
 import { mapWebError } from "../../../_lib/web-error-mapper";
+import {
+  projectRowReferenceChoiceForm,
+  validateProjectedControlOption,
+} from "../../../_lib/application-page/reference-choice";
+import {
+  previewLinkChoiceTypeIds,
+  validateProjectedLinkControl,
+} from "../../../_lib/application-page/link-input";
+import {
+  loadInstalledContext,
+  requestDependencies,
+} from "../../../_lib/application-page/installed-context";
+import { prepareRuntimePreviewChoices } from "../../../_lib/runtime-preview-demand";
 
 const maximumRequestBodyLength = 131_072;
 const requestSchema = z
@@ -44,6 +58,15 @@ const requestSchema = z
     applicationKey: z.string().min(1).max(200),
     pageKey: z.string().min(1).max(200),
     pageRecordId: recordIdSchema.optional(),
+    pageInputs: z
+      .object({
+        parameters: z.record(
+          z.string().min(1).max(200),
+          z.union([z.string(), z.array(z.string())]),
+        ),
+        controls: z.record(z.string().min(1).max(200), z.string()),
+      })
+      .strict(),
     invocation: flowBindingInvocationSchema,
   })
   .strict();
@@ -99,10 +122,37 @@ export const createFlowInvocationHandler =
         body.organizationShortName,
         body.applicationKey,
         body.pageKey,
+        "addressed",
       );
       if (address.kind === "temporarily_unavailable")
         return privateResponse({ kind: "unavailable" }, 503);
       if (address.kind !== "application_page") return refusedResponse();
+
+      if (address.application.previewInstallationId !== undefined) {
+        const loaded =
+          address.installedContext === undefined
+            ? await loadInstalledContext(identity.session, requestDependencies(), {
+                organizationId: address.read.organizationId,
+                applicationRootId: address.application.applicationRootId,
+                previewInstallationId: address.application.previewInstallationId,
+              })
+            : { kind: "available" as const, value: address.installedContext };
+        if (loaded.kind === "temporarily_unavailable")
+          return privateResponse({ kind: "unavailable" }, 503);
+        if (loaded.kind !== "available") return refusedResponse();
+        const page = loaded.value.releaseSet.application.content.pages.find(
+          (candidate) => candidate.key === body.pageKey,
+        );
+        if (page === undefined) return refusedResponse();
+        const demand = await prepareRuntimePreviewChoices(
+          identity.session,
+          loaded.value,
+          previewLinkChoiceTypeIds(loaded.value, page),
+        );
+        if (demand.kind === "temporarily_unavailable")
+          return privateResponse({ kind: "unavailable" }, 503);
+        if (demand.kind !== "ready") return refusedResponse();
+      }
 
       const result = await invokeInstalledFlow(identity.session, body, address, {
         authorityId: getIdentityAuthorityConfiguration().authorityId,
@@ -111,6 +161,54 @@ export const createFlowInvocationHandler =
         telemetry: appTelemetry,
         releaseCatalogue: installedReleaseCatalogue,
         continuationKey: getQueryContinuationKey(),
+        projectRowForm: (bound, context, page, pageId, formId, subject) =>
+          projectRowReferenceChoiceForm(
+            bound.transaction,
+            bound.scope,
+            context,
+            page,
+            pageId,
+            formId,
+            subject,
+          ),
+        validateControlOption: (input) => {
+          return validateProjectedControlOption(
+            input.bound,
+            input.context,
+            input.page,
+            input.placementId,
+            input.raw,
+            input.parsed,
+            input.subject,
+            (gate) => {
+              if (
+                input.subject === undefined ||
+                !sameId(input.subject.recordTypeId, gate.recordTypeId)
+              )
+                return new Set();
+              const held = Object.entries(input.heldValues).find(([field]) =>
+                sameId(field, gate.fieldId),
+              )?.[1];
+              return new Set(
+                typeof held === "string"
+                  ? [held]
+                  : Array.isArray(held)
+                    ? held.filter((value): value is string => typeof value === "string")
+                    : [],
+              );
+            },
+            (placementId, selected) =>
+              validateProjectedLinkControl(
+                input.bound,
+                input.context,
+                input.page,
+                placementId,
+                selected,
+                input.controls,
+                async () => ({ kind: "ready" }),
+              ),
+          );
+        },
         guidedFormControls: getGuidedFormControlIds,
         guidedFormFlowId: getGuidedFormFlowId,
         confirmationKey: guidedFormConfirmationKey,
@@ -136,7 +234,13 @@ export const createFlowInvocationHandler =
           return page.kind === "available" ? page.model : undefined;
         },
       });
-      if (result.kind === "refused") return refusedResponse();
+      if (result.kind === "refused")
+        return result.reason === undefined ? refusedResponse() : privateResponse(result, 409);
+      if (result.kind === "rate_limited") {
+        const response = privateResponse({ kind: "refused", code: "flow_rate_limited" }, 429);
+        response.headers.set("Retry-After", String(result.retryAfterSeconds));
+        return response;
+      }
       return privateResponse(result, result.kind === "reload" ? 409 : 200);
     } catch (error) {
       return mapWebError(error, {
