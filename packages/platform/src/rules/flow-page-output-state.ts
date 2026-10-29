@@ -76,6 +76,9 @@ export const pageFlowSegmentSeed = (
       parts[0] !== "forms"
     )
       continue;
+    // A task on another branch may not have run, and variables can be initialized by the
+    // receiving interpreter. Preserve absence instead of manufacturing a value for either.
+    if (value === undefined && (parts[0] === "outputs" || parts[0] === "vars")) continue;
     if (
       value === undefined ||
       value.type !== type ||
