@@ -11,6 +11,17 @@ type FormField = Readonly<{
   validate?: () => string | undefined;
 }>;
 
+/** Evaluated presentation reactions for one field or button placement. */
+export type FormPlacementReactions = Readonly<{
+  visible?: boolean;
+  required?: boolean;
+  readOnly?: boolean;
+  enabled?: boolean;
+}>;
+
+/** Reactions are addressed by placement, so two controls can react independently. */
+export type FormReactions = Readonly<Record<string, FormPlacementReactions>>;
+
 /** The enclosing form's field registry and activation state. */
 export type FormScope = Readonly<{
   /** A submission is pending or the form's data is loading; submit cannot be activated. */

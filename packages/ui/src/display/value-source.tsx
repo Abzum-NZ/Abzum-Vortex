@@ -56,7 +56,14 @@ export function ValueSourceView({
   const format = string(properties.format);
   let text: string;
   if (format === "plain") {
-    const rendered = typeof pageValue === "string" ? pageValue : JSON.stringify(pageValue);
+    const rendered =
+      typeof pageValue === "string"
+        ? pageValue
+        : typeof pageValue === "boolean"
+          ? pageValue
+            ? "Yes"
+            : "No"
+          : JSON.stringify(pageValue);
     if (rendered === undefined) return invalid();
     text = rendered;
   } else {
