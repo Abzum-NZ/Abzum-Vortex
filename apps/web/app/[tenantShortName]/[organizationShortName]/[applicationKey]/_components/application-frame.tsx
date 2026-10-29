@@ -33,6 +33,7 @@ import {
   readApplicationSwitcherAction,
   readReleaseAdoptionAction,
   searchApplicationAction,
+  searchLauncherAction,
 } from "../frame-actions";
 import {
   ApplicationFrameStateProvider,
@@ -189,6 +190,7 @@ export function ApplicationFrame({
     searched.source === model.search
       ? searched
       : { source: model.search, expression, view: model.search };
+  const [loadingMore, setLoadingMore] = useState(false);
   useEffect(() => {
     if (current.expression === expression || expression === undefined) return;
     let cancelled = false;
@@ -210,7 +212,7 @@ export function ApplicationFrame({
       cancelled = true;
     };
   }, [application, current.expression, expression, model.search]);
-  const applicationSearch: ApplicationSearch =
+  const searchView: ApplicationSearch =
     expression === undefined
       ? searchEnabled
         ? { kind: "available", expression: "", results: [], more: false }
@@ -220,6 +222,44 @@ export function ApplicationFrame({
         : searchEnabled
           ? { kind: "available", expression, results: [], more: false }
           : { kind: "disabled" };
+  const applicationSearch: ApplicationSearch =
+    searchView.kind === "available" && searchView.cursor !== undefined && !loadingMore
+      ? {
+          ...searchView,
+          showMore: () => {
+            setLoadingMore(true);
+            void searchApplicationAction(
+              application.tenantShortName,
+              application.organizationShortName,
+              application.key,
+              searchView.expression,
+              searchView.cursor,
+            )
+              .then((next) => {
+                setSearched((previous) => {
+                  if (
+                    previous.source !== model.search ||
+                    previous.expression !== searchView.expression ||
+                    previous.view.kind !== "available" ||
+                    previous.view.cursor !== searchView.cursor
+                  )
+                    return previous;
+                  return {
+                    ...previous,
+                    view:
+                      next.kind === "available"
+                        ? { ...next, results: [...previous.view.results, ...next.results] }
+                        : next,
+                  };
+                });
+              })
+              .catch((error: unknown) => {
+                console.error("[application-frame] search continuation failed", error);
+              })
+              .finally(() => setLoadingMore(false));
+          },
+        }
+      : searchView;
   const searchSubject = recordIdSchema.safeParse(searchParams.get("record_id") ?? undefined);
   const applicationSearchPageSubject = searchSubject.success ? searchSubject.data : undefined;
 
@@ -347,12 +387,23 @@ export function ApplicationFrame({
             locale={model.locale}
             timeZone={model.timeZone}
             applicationShellRuntime={applicationShellRuntime}
-            applicationSwitcherSource={() =>
-              readApplicationSwitcherAction(
-                application.tenantShortName,
-                application.organizationShortName,
-              )
-            }
+            applicationSwitcherSource={Object.assign(
+              () =>
+                readApplicationSwitcherAction(
+                  application.tenantShortName,
+                  application.organizationShortName,
+                ),
+              {
+                search: (expression: string, groupKey?: string, cursor?: string) =>
+                  searchLauncherAction(
+                    application.tenantShortName,
+                    application.organizationShortName,
+                    expression,
+                    groupKey,
+                    cursor,
+                  ),
+              },
+            )}
             applicationSearch={applicationSearch}
             applicationSearchPageSubject={applicationSearchPageSubject}
             projectedNavigation={navigation}
