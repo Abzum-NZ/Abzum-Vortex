@@ -1,6 +1,22 @@
+import { flowPathGuardMatches } from "./flow-path-guard";
+export { flowPathGuardMatches } from "./flow-path-guard";
+import { flowSegmentValues } from "./flow-segment-values";
+import type { FlowPlan, FlowServerSegment } from "../workflows/flow-plan";
+import type { parseFlowSegmentSeed } from "./flow-segment-seed";
 import { pageStepIntents } from "./flow-page-steps";
 export { pageStepIntents } from "./flow-page-steps";
-import { describeFailure } from "../catalogue/runtime-primitives";
+import {
+  at,
+  pathKey,
+  iterationKey,
+  Failed,
+  failed,
+  newActivation,
+  observe,
+  initialState,
+  flowRunStateVersion,
+} from "./flow-interpreter-state";
+export { flowRunStateVersion } from "./flow-interpreter-state";
 import { flowValueMatchesType } from "./flow-value-shapes";
 import type { JsonValue } from "../catalogue/common";
 import { isRecordLinkValue } from "../records/module-field-value-predicates";
@@ -49,26 +65,23 @@ import {
  * code, and no failure is ever swallowed or turned into success.
  */
 
-export const flowRunStateVersion = "1" as const;
-
 import type {
-  FlowFailureOutcome,
-  FlowFailureCode,
   FlowFailure,
   FlowRuntimeValues,
   FlowInterfaceIntent,
   FlowRunState,
   FlowProgram,
   FlowProgramLibrary,
+  FlowLibrary,
   FlowOutputMemberTypeResolver,
   FlowFormReferenceResolver,
   FlowProtectedTaskCall,
   FlowRunResult,
   FlowRunStep,
-  FlowTaskTraceObservation,
   FlowTaskTraceObserver,
   FlowRunStart,
   FlowRunResume,
+  FlowSegmentReplay,
   PathSegment,
   Frame,
   Phase,
@@ -96,6 +109,7 @@ export type {
   FlowTaskTraceObserver,
   FlowRunStart,
   FlowRunResume,
+  FlowSegmentReplay,
 } from "./flow-interpreter-types";
 
 const maximumSteps = 10_000;
@@ -104,47 +118,6 @@ const typed = (type: string, value: JsonValue): FlowRuntimeValue => ({ type, val
 const text = (value: string): FlowRuntimeValue => typed("text", value);
 
 const clone = <Value>(input: Value): Value => JSON.parse(JSON.stringify(input)) as Value;
-
-const pathKey = (path: readonly PathSegment[]): string => path.join("/");
-
-const at = (root: unknown, path: readonly PathSegment[]): unknown =>
-  path.reduce<unknown>(
-    (current, segment) =>
-      current !== null && typeof current === "object"
-        ? (current as Record<PathSegment, unknown>)[segment]
-        : undefined,
-    root,
-  );
-
-/** The iteration key: every loop position on the call stack, or `0` outside any loop. */
-const iterationKey = (state: FlowRunState): string => {
-  const positions = state.activations.flatMap((activation) =>
-    activation.frames.flatMap((frame) => (frame.loop === undefined ? [] : [frame.loop.iteration])),
-  );
-  return positions.length === 0 ? "0" : positions.join(".");
-};
-
-class Failed extends Error {
-  constructor(readonly failure: FlowFailure) {
-    super(failure.code);
-  }
-}
-
-const failed = (
-  code: FlowFailureCode,
-  outcome: FlowFailureOutcome,
-  taskId?: string,
-  reason?: string,
-): never => {
-  throw new Failed({
-    outcome,
-    code,
-    ...(taskId === undefined ? {} : { taskId }),
-    ...(reason === undefined ? {} : { reason }),
-  });
-};
-
-// ─── Values ───────────────────────────────────────────────────────────────────────────────────
 
 const declaredNull = (type: string): FlowRuntimeValue => typed(type, null);
 
@@ -265,7 +238,7 @@ const scopeOf = (
       case "trigger_previous":
         return activation.prefix === "" ? state.previousRecord?.[reference.field] : undefined;
       case "form":
-        return resolveForm?.(reference);
+        return resolveForm?.(reference) ?? state.forms?.[reference.form]?.[reference.field];
       default:
         return undefined;
     }
@@ -327,6 +300,7 @@ const buildInputs = (
   flow: FlowProgram,
   supplied: Readonly<Record<string, unknown>>,
   taskId?: string,
+  requiredInputs?: ReadonlySet<string>,
 ): FlowRuntimeValues => {
   const invalid = (reason: string) => failed("inputs_invalid", "validation", taskId, reason);
   if (Object.keys(supplied).some((name) => !Object.hasOwn(flow.inputs, name)))
@@ -337,7 +311,8 @@ const buildInputs = (
     if (candidate === undefined || candidate === null) {
       if (declaration.default !== undefined)
         inputs[name] = typed(declaration.type, declaration.default);
-      else if (declaration.required) invalid(`required input "${name}" is missing`);
+      else if (declaration.required && (requiredInputs === undefined || requiredInputs.has(name)))
+        invalid(`required input "${name}" is missing`);
       continue;
     }
     if (!flowValueMatchesType(candidate, declaration.type))
@@ -347,32 +322,6 @@ const buildInputs = (
   return inputs;
 };
 
-const initialVariables = (flow: FlowProgram): FlowRuntimeValues =>
-  Object.fromEntries(
-    Object.entries(flow.variables).map(([name, declaration]) => [
-      name,
-      typed(declaration.type, declaration.default ?? null),
-    ]),
-  );
-
-const newActivation = (
-  flow: FlowProgram,
-  inputs: FlowRuntimeValues,
-  prefix: string,
-  callTaskId?: string,
-): Activation => ({
-  flowId: flow.id,
-  prefix,
-  ...(callTaskId === undefined ? {} : { callTaskId }),
-  inputs,
-  variables: initialVariables(flow),
-  outputs: {},
-  phase: "tasks",
-  frames: [{ path: ["tasks"], index: 0 }],
-});
-
-// ─── The machine ──────────────────────────────────────────────────────────────────────────────
-
 type Machine = {
   state: {
     -readonly [Key in keyof FlowRunState]: FlowRunState[Key];
@@ -380,6 +329,9 @@ type Machine = {
   library: FlowProgramLibrary;
   resolveMember: FlowOutputMemberTypeResolver;
   resolveForm?: FlowFormReferenceResolver;
+  segment?: FlowServerSegment;
+  replay?: FlowSegmentReplay;
+  boundaryBefore?: ReadonlySet<string>;
 };
 
 const topOf = (machine: Machine) =>
@@ -436,6 +388,39 @@ const finishActivation = (machine: Machine, activation: Activation): FlowRunResu
   const flow = flowOf(machine, activation);
   if (activation.failure !== undefined) return { status: "failed", failure: activation.failure };
   const outputs: Record<string, FlowRuntimeValue> = {};
+  if (machine.segment !== undefined && machine.state.activations.length === 1) {
+    Object.assign(
+      outputs,
+      flowSegmentValues(machine.segment.outputs, activation.variables, activation.outputs),
+    );
+    const carriedOutputs = flowSegmentValues(
+      machine.segment.carriedOutputs,
+      activation.variables,
+      activation.outputs,
+    );
+    const finalOutputs: Record<string, FlowRuntimeValue> = {};
+    for (const [name, expression] of Object.entries(machine.segment.finalOutputExpressions)) {
+      const value = evaluateValue(
+        expression,
+        machine.state,
+        activation,
+        flow,
+        name,
+        machine.resolveMember,
+        machine.resolveForm,
+      );
+      if (value.type !== machine.segment.finalOutputTypes[name])
+        failed("value_unresolved", "failed", name);
+      finalOutputs[name] = value;
+    }
+    return {
+      status: "completed",
+      outputs,
+      finalOutputs,
+      carriedOutputs,
+      ...(activation.stopped === undefined ? {} : { stopped: activation.stopped }),
+    };
+  }
   for (const [name, declaration] of Object.entries(flow.outputs))
     outputs[name] = evaluateValue(
       declaration.value,
@@ -905,20 +890,6 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
 const snapshot = (machine: Machine): FlowRunState => clone(machine.state) as FlowRunState;
 
 /** Runs the machine until it needs the host or the run is finished. */
-const observe = (
-  observer: FlowTaskTraceObserver | undefined,
-  observation: FlowTaskTraceObservation,
-): void => {
-  try {
-    observer?.(observation);
-  } catch (error) {
-    console.error(
-      `[flows] trace observer failed FLOW_TRACE_OBSERVER_FAILED: ${describeFailure(error)}`,
-    );
-    // Diagnostics must never change a flow result.
-  }
-};
-
 const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep => {
   for (;;) {
     machine.state.steps += 1;
@@ -927,7 +898,10 @@ const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep =>
     const frame = activation.frames[activation.frames.length - 1];
 
     if (frame === undefined) {
-      const following = nextPhase(machine, activation);
+      const following =
+        machine.segment !== undefined && machine.state.activations.length === 1
+          ? undefined
+          : nextPhase(machine, activation);
       if (following !== undefined) {
         replaceTop(machine, following);
         continue;
@@ -967,6 +941,16 @@ const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep =>
 
     const list = at(flowOf(machine, activation), frame.path) as readonly FlowTask[] | undefined;
     if (list === undefined || frame.index >= list.length) {
+      if (
+        machine.segment !== undefined &&
+        machine.state.activations.length === 1 &&
+        activation.frames.length === 1
+      )
+        return {
+          kind: "boundary",
+          state: snapshot(machine),
+          result: finishActivation(machine, activation),
+        };
       // The list is done. A For each body starts its next iteration; everything else pops.
       if (frame.loop !== undefined && frame.loop.iteration + 1 < frame.loop.count)
         replaceTop(
@@ -982,6 +966,31 @@ const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep =>
 
     const taskPath = [...frame.path, frame.index];
     const task = list[frame.index]!;
+    if (
+      machine.segment === undefined &&
+      machine.state.activations.length === 1 &&
+      machine.boundaryBefore?.has(task.id)
+    )
+      return { kind: "boundary", state: snapshot(machine), nextTaskId: task.id };
+    if (
+      machine.segment !== undefined &&
+      machine.state.activations.length === 1 &&
+      !machine.segment.tasks.some(
+        (root) =>
+          root.id === task.id ||
+          findTask(
+            flowTaskChildLists(root).flatMap((child) => child.tasks),
+            task.id,
+          ) !== undefined,
+      )
+    ) {
+      return {
+        kind: "boundary",
+        state: snapshot(machine),
+        result: finishActivation(machine, activation),
+        nextTaskId: task.id,
+      };
+    }
     const observation = {
       flowId: activation.flowId,
       taskId: task.id,
@@ -992,6 +1001,22 @@ const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep =>
       const activationCount = machine.state.activations.length;
       const executed = execute(machine, task, taskPath);
       if (executed.kind === "suspend") {
+        if (
+          executed.step.kind === "protected_task" &&
+          machine.replay !== undefined &&
+          executed.step.call.effect !== "read"
+        ) {
+          const key = JSON.stringify([executed.step.call.taskPath, executed.step.call.iteration]);
+          const replay = machine.replay[key];
+          if (replay === undefined || replay === null || replay.kind !== "task_result")
+            return failed(
+              "replay_unavailable",
+              "refused",
+              task.id,
+              "the earlier result cannot be shown again; reload",
+            );
+          return { ...executed.step, replay };
+        }
         if (executed.step.kind === "interface") {
           const intent = executed.step.intents.find((intent) => intent.taskId === task.id);
           observe(observer, {
@@ -1021,7 +1046,6 @@ const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep =>
     }
   }
 };
-
 const failedStep = (machine: Machine, failure: FlowFailure): FlowRunStep => {
   const intents = machine.state.pendingIntents;
   machine.state.pendingIntents = [];
@@ -1054,29 +1078,15 @@ export const startFlowRun = (
   resolveMember: FlowOutputMemberTypeResolver,
   observer?: FlowTaskTraceObserver,
   resolveForm?: FlowFormReferenceResolver,
+  boundaryBefore?: ReadonlySet<string>,
 ): FlowRunStep => {
-  const state: FlowRunState = {
-    version: flowRunStateVersion,
-    runId: start.runId,
-    now: start.now,
-    ...(start.organizationLocalDate === undefined
-      ? {}
-      : { organizationLocalDate: start.organizationLocalDate }),
-    ...(start.actor === undefined ? {} : { actor: start.actor }),
-    ...(start.subject === undefined ? {} : { subject: start.subject }),
-    activations: [],
-    protectedOperations: 0,
-    committedEffects: 0,
-    steps: 0,
-    pendingIntents: [],
-    ...(start.triggerRecord === undefined ? {} : { triggerRecord: start.triggerRecord }),
-    ...(start.previousRecord === undefined ? {} : { previousRecord: start.previousRecord }),
-  };
+  const state = initialState(start);
   const machine: Machine = {
     state: { ...state },
     library,
     resolveMember,
     ...(resolveForm === undefined ? {} : { resolveForm }),
+    ...(boundaryBefore === undefined ? {} : { boundaryBefore }),
   };
   const flow = library(start.flowId);
   if (flow === undefined)
@@ -1092,6 +1102,87 @@ export const startFlowRun = (
   }
   machine.state.activations = [newActivation(flow, inputs, "")];
   return drive(machine, observer);
+};
+
+/** Starts the admitted server segment with the host's binding inputs and validated page values. */
+export const startFlowSegment = (
+  plan: FlowPlan,
+  segmentId: string,
+  start: FlowRunStart,
+  seed: Readonly<Record<string, unknown>>,
+  library: FlowLibrary,
+  resolveMember: FlowOutputMemberTypeResolver,
+  parseSeed: typeof parseFlowSegmentSeed,
+  replay?: FlowSegmentReplay,
+): FlowRunStep => {
+  const state = initialState(start);
+  const machine: Machine = { state: { ...state }, library, resolveMember };
+  const segment = plan.segments.find((part) => part.kind === "server" && part.id === segmentId);
+  if (
+    segment === undefined ||
+    segment.kind !== "server" ||
+    start.flowId !== plan.flowId ||
+    library(start.flowId) !== plan.definition
+  )
+    return failedStep(machine, { outcome: "refused", code: "flow_unavailable" });
+  const flow = plan.definition;
+  if (flow.execution !== "interactive")
+    return failedStep(machine, { outcome: "refused", code: "flow_not_runnable" });
+  try {
+    const parsed = parseSeed(flow, segment, seed, start);
+    if (Object.keys(parsed.inputs).some((name) => Object.hasOwn(start.inputs, name)))
+      failed("inputs_invalid", "refused", undefined, "page input overrides a server binding");
+    const requiredInputs = new Set(
+      Object.keys(segment.inputs)
+        .filter((name) => name.startsWith("inputs."))
+        .map((name) => name.slice(7)),
+    );
+    const inputs = buildInputs(
+      flow,
+      { ...start.inputs, ...parsed.inputs },
+      undefined,
+      requiredInputs,
+    );
+    const { variables, outputs, forms } = parsed;
+    const completion = segment.tasks.length === 0;
+    if (completion && segment.firstTaskPath.length !== 0)
+      failed("inputs_invalid", "refused", undefined, "completion segment has invalid tasks");
+    machine.state.forms = forms;
+    const taskPath = segment.firstTaskPath;
+    const index = taskPath.at(-1);
+    if (!completion && typeof index !== "number")
+      return failedStep(machine, { outcome: "refused", code: "flow_unavailable" });
+    if (!completion && (taskPath[0] !== segment.section || at(flow, taskPath) !== segment.tasks[0]))
+      failed("flow_unavailable", "refused", undefined, "segment location is invalid");
+    const activation: Activation = {
+      ...newActivation(flow, inputs, ""),
+      variables,
+      outputs,
+      phase: segment.section,
+      frames: completion ? [] : [{ path: taskPath.slice(0, -1), index: index as number }],
+    };
+    machine.state.activations = [activation];
+    machine.segment = segment;
+    if (replay !== undefined) machine.replay = replay;
+    if (
+      !flowPathGuardMatches(
+        segment.guard,
+        scopeOf(machine.state, activation, flow, resolveMember),
+        (value, task) => evaluateValue(value, machine.state, activation, flow, task, resolveMember),
+      )
+    )
+      failed("inputs_invalid", "refused", undefined, "segment path does not match");
+    return completion
+      ? {
+          kind: "boundary",
+          state: snapshot(machine),
+          result: finishActivation(machine, activation),
+        }
+      : drive(machine);
+  } catch (error) {
+    if (error instanceof Failed) return failedStep(machine, error.failure);
+    throw error;
+  }
 };
 
 /**
@@ -1142,6 +1233,77 @@ export const startPageFlowSegment = (
   return drive(machine);
 };
 
+/** Evaluates one authored value in the interpreter's scope. */
+export const evaluateFlowValue = (
+  flow: FlowProgram,
+  value: FlowValue,
+  start: FlowRunStart,
+  resolveMember: FlowOutputMemberTypeResolver,
+): FlowRuntimeValue => {
+  const activation = newActivation(
+    flow,
+    start.verifiedInputs ?? buildInputs(flow, start.inputs),
+    "",
+  );
+  return evaluateValue(
+    value,
+    { ...initialState(start), activations: [activation] },
+    activation,
+    flow,
+    "value",
+    resolveMember,
+  );
+};
+
+/** Continues a preserved boundary without answering a suspended task or page intent. */
+export const continueFlowRun = (
+  previous: FlowRunState,
+  library: FlowLibrary,
+  resolveMember: FlowOutputMemberTypeResolver,
+  resolveForm?: FlowFormReferenceResolver,
+  segment?: FlowServerSegment,
+  replay?: FlowSegmentReplay,
+  boundaryBefore?: ReadonlySet<string>,
+): FlowRunStep => {
+  const machine: Machine = {
+    state: clone(previous),
+    library,
+    resolveMember,
+    ...(resolveForm === undefined ? {} : { resolveForm }),
+    ...(segment === undefined ? {} : { segment }),
+    ...(replay === undefined ? {} : { replay }),
+    ...(boundaryBefore === undefined ? {} : { boundaryBefore }),
+  };
+  if (previous.awaiting !== undefined || previous.version !== flowRunStateVersion)
+    return failedStep(machine, { outcome: "failed", code: "resume_mismatch" });
+  if (segment !== undefined) {
+    try {
+      const activation = topOf(machine);
+      const flow = flowOf(machine, activation);
+      if (
+        (segment.tasks.length > 0 && activation.phase !== segment.section) ||
+        !flowPathGuardMatches(
+          segment.guard,
+          scopeOf(machine.state, activation, flow, resolveMember, resolveForm),
+          (value, task) =>
+            evaluateValue(value, machine.state, activation, flow, task, resolveMember, resolveForm),
+        )
+      )
+        failed("inputs_invalid", "refused", undefined, "segment path does not match");
+      if (segment.tasks.length === 0)
+        return {
+          kind: "boundary",
+          state: snapshot(machine),
+          result: finishActivation(machine, activation),
+        };
+    } catch (error) {
+      if (error instanceof Failed) return failedStep(machine, error.failure);
+      throw error;
+    }
+  }
+  return drive(machine);
+};
+
 /**
  * Resumes a suspended run with what the host obtained: the safe outcome of the protected task it
  * ran, or the person's answer to the form or confirmation. A resume of the wrong kind is refused,
@@ -1154,12 +1316,18 @@ export const resumeFlowRun = (
   resolveMember: FlowOutputMemberTypeResolver,
   observer?: FlowTaskTraceObserver,
   resolveForm?: FlowFormReferenceResolver,
+  segment?: FlowServerSegment,
+  replay?: FlowSegmentReplay,
+  boundaryBefore?: ReadonlySet<string>,
 ): FlowRunStep => {
   const machine: Machine = {
     state: clone(previous),
     library,
     resolveMember,
     ...(resolveForm === undefined ? {} : { resolveForm }),
+    ...(segment === undefined ? {} : { segment }),
+    ...(replay === undefined ? {} : { replay }),
+    ...(boundaryBefore === undefined ? {} : { boundaryBefore }),
   };
   const awaiting = machine.state.awaiting;
   const mismatch = () => failedStep(machine, { outcome: "failed", code: "resume_mismatch" });

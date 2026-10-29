@@ -36,6 +36,7 @@ import {
   flowBindingPlanIssue,
   flowValueReferences,
   FlowPlanError,
+  rowActionFormTargets,
 } from "../../workflows/flow-plan";
 import { applicationSearchSourceReferences } from "../source-identities";
 import {
@@ -632,7 +633,7 @@ function compileApplicationFlowBindings(
   }
   let plans: ReturnType<typeof compileFlowPlans>["plans"];
   try {
-    plans = compileFlowPlans(flows, inputsByFlow, formTypes, conditions).plans;
+    plans = compileFlowPlans(flows, inputsByFlow, formTypes, conditions, definitionKey).plans;
   } catch (error) {
     if (!(error instanceof FlowPlanError)) throw error;
     const binding = sourceBindings.find(
@@ -756,6 +757,20 @@ function compileApplicationFlowBindings(
     }
     // The binding's own plan: latest-wins only on a flow that changes nothing, and an options
     // flow only reads.
+    if (binding.event === "row_action") {
+      try {
+        rowActionFormTargets(flowId, (id) => flowsById.get(id));
+      } catch (error) {
+        if (!(error instanceof FlowPlanError)) throw error;
+        throw new DefinitionCompilationError(
+          "vortex.definition.unsupported_workflow_node",
+          "unsupported_choice",
+          location,
+          undefined,
+          `Flow ${error.flowId}, step ${error.taskId ?? "unknown"}: ${error.reason}`,
+        );
+      }
+    }
     const planIssue = flowBindingPlanIssue(plans.get(flowId)!, {
       event: String(binding.event),
       inputs: inputsByFlow.get(flowId) ?? [],

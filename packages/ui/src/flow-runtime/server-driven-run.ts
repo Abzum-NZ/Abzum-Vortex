@@ -61,6 +61,7 @@ export async function driveServerFlow(
   host: FlowIntentHost,
   signal?: AbortSignal,
   committed?: () => void,
+  sourceTablePlacementId?: string,
 ): Promise<ServerDrivenResult> {
   let response = first;
   let awaitingSurface = false;
@@ -73,6 +74,8 @@ export async function driveServerFlow(
     for (let round = 0; round < maximumRounds; round += 1) {
       if (signal?.aborted) return abandoned();
       switch (response.kind) {
+        case "run_opened":
+          return refuseInvalidServerFlowState("unexpected_run_start");
         case "reload":
         case "refused":
         case "unavailable":
@@ -141,7 +144,7 @@ export async function driveServerFlow(
           // The exact evidence the server issued with this pause, sent back unchanged on resume; the
           // page never builds a target or receipt of its own.
           const evidence: FlowResumeEvidence = {
-            ...(response.target === undefined ? {} : { target: response.target }),
+            target: response.target,
             ...(response.receipt === undefined ? {} : { receipt: response.receipt }),
           };
           awaitingSurface = true;
@@ -151,7 +154,15 @@ export async function driveServerFlow(
             return refuseInvalidServerFlowState(`${response.awaiting}_intent`);
           if (signal?.aborted) return abandoned();
           answerSent = true;
-          response = await client.resume(flowId, continuation, answer, evidence, signal);
+          response = await client.resume(
+            flowId,
+            continuation,
+            answer,
+            evidence,
+            signal,
+            sourceTablePlacementId,
+            response.carriedValues,
+          );
           break;
         }
       }

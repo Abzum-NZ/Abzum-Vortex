@@ -5,14 +5,7 @@ import type { ComponentFlowBinding } from "./types";
 export const asComponentBinding = (
   _placementId: string,
   binding: PlacementFlowBinding,
-): ComponentFlowBinding => ({
-  bindingId: binding.bindingId,
-  controlId: binding.controlId,
-  eventId: binding.eventId,
-  event: binding.event,
-  flow: { flowId: binding.flowId, inputs: {} },
-  settings: binding.settings,
-});
+): ComponentFlowBinding => binding;
 
 /**
  * What a component event supplies to its bound flow, by the caller input names the flow declares.

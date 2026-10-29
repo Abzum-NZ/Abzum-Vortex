@@ -1,10 +1,11 @@
 import "server-only";
 
-import type { z } from "zod";
+import { z } from "zod";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import type { SelectedOrganizationScope } from "../access/identity-access";
 import type { JsonValue } from "../catalogue/common";
 import { sameId } from "../catalogue/runtime-primitives";
+import { recordIdSchema } from "../catalogue/identifiers";
 import {
   type QueryContinuation,
   type QueryContinuationKey,
@@ -19,6 +20,7 @@ import type {
   ProtectedQueryResult,
   ProtectedQueryPage,
 } from "./protected-query-contracts";
+import { protectedQueryRefusalReasonCodes } from "./protected-query-contracts";
 import {
   conditionFieldIds,
   type ResultRow,
@@ -119,6 +121,56 @@ const readPage = async (
     ) as result
   `;
   return pageReadSchema.parse(one(rows));
+};
+
+const membershipReadSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({ outcome: z.literal("completed"), recordIds: z.array(recordIdSchema).max(200) })
+    .strict(),
+  z
+    .object({ outcome: z.literal("refused"), reasonCode: z.enum(protectedQueryRefusalReasonCodes) })
+    .strict(),
+]);
+
+/** Re-decide only the supplied identities against the installed query and current authority. */
+export const readQueryMembership = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  command: ProtectedQueryCommand,
+) => {
+  const ids = command.exactRecordIds;
+  if (
+    scope.applicationRootId === undefined ||
+    ids === undefined ||
+    command.continuationToken !== undefined ||
+    ids.length !== command.pageSize
+  )
+    return refuseWithCause("request_invalid", "membership", "exact_ids_required");
+  const userRefusal = userInputRefusal(command);
+  if (userRefusal !== undefined) return refuseWithCause(userRefusal, "user_input", userRefusal);
+  const admitted = await admitQueryInputs(transaction, command);
+  if (admitted.outcome === "refused") return admitted;
+  const rows = await transaction.query<ResultRow>`
+    select vortex_record.run_module_query_members(
+      ${command.moduleRootId}::uuid,
+      ${command.queryId}::uuid,
+      ${admitted.declared.moduleReleaseRevision}::bigint,
+      ${JSON.stringify(admitted.inputValues)}::text::jsonb,
+      ${sqlArray(command.requestedFieldIds)}::text::uuid[],
+      ${sqlArray(command.requestedSystemFieldKeys)}::text::text[],
+      ${command.filter === undefined ? null : JSON.stringify(command.filter)}::text::jsonb,
+      ${sqlArray(command.filterableFieldIds)}::text::uuid[],
+      ${JSON.stringify(command.sort)}::text::jsonb,
+      ${command.search ?? null}::text,
+      ${sqlArray(command.sortableFieldIds)}::text::uuid[],
+      ${sqlArray(command.searchableFieldIds)}::text::uuid[],
+      ${sqlArray(ids)}::text::uuid[]
+    ) as result
+  `;
+  const result = membershipReadSchema.parse(one(rows));
+  return result.outcome === "refused"
+    ? refuseWithCause(result.reasonCode, "membership", result.reasonCode)
+    : result;
 };
 
 export const runCommand = async (

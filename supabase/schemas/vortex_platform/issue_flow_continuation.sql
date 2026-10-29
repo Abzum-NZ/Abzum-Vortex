@@ -2,6 +2,7 @@ create or replace function vortex_platform.issue_flow_continuation(
   p_token_hash text,
   p_run_id uuid,
   p_organization_id uuid,
+  p_application_root_id uuid,
   p_identity_id uuid,
   p_flow_id uuid,
   p_release_key text,
@@ -21,6 +22,7 @@ begin
   if p_token_hash is null or p_token_hash !~ '^[a-f0-9]{64}$'
     or not vortex_platform.is_non_nil_uuid(p_run_id::text)
     or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_application_root_id::text)
     or not vortex_platform.is_non_nil_uuid(p_identity_id::text)
     or not vortex_platform.is_non_nil_uuid(p_flow_id::text)
     or p_release_key is null
@@ -49,10 +51,10 @@ begin
   expiry := pg_catalog.statement_timestamp() + pg_catalog.make_interval(secs => p_lifetime_seconds);
 
   insert into vortex_platform.flow_continuations (
-    token_hash, run_id, organization_id, identity_id, flow_id, release_key, state,
+    token_hash, run_id, organization_id, application_root_id, identity_id, flow_id, release_key, state,
     elapsed_milliseconds, created_at, expires_at
   ) values (
-    p_token_hash, p_run_id, p_organization_id, p_identity_id, p_flow_id, p_release_key, p_state,
+    p_token_hash, p_run_id, p_organization_id, p_application_root_id, p_identity_id, p_flow_id, p_release_key, p_state,
     p_elapsed_milliseconds, pg_catalog.statement_timestamp(), expiry
   );
 
@@ -60,16 +62,16 @@ begin
 end
 $function$;
 
-alter function vortex_platform.issue_flow_continuation(text,uuid,uuid,uuid,uuid,text,jsonb,integer,integer) owner to vortex_owner;
+alter function vortex_platform.issue_flow_continuation(text,uuid,uuid,uuid,uuid,uuid,text,jsonb,integer,integer) owner to vortex_owner;
 
 revoke all on function vortex_platform.issue_flow_continuation(
-  text, uuid, uuid, uuid, uuid, text, jsonb, integer, integer
+  text, uuid, uuid, uuid, uuid, uuid, text, jsonb, integer, integer
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_platform.issue_flow_continuation(
-  text, uuid, uuid, uuid, uuid, text, jsonb, integer, integer
+  text, uuid, uuid, uuid, uuid, uuid, text, jsonb, integer, integer
 ) to vortex_runtime;
 
 comment on function vortex_platform.issue_flow_continuation(
-  text, uuid, uuid, uuid, uuid, text, jsonb, integer, integer
+  text, uuid, uuid, uuid, uuid, uuid, text, jsonb, integer, integer
 ) is
   'Private flow-continuation issue: stores the suspended state of one server-driven flow run bound to its run, initiator, organisation and exact flow release, expiring, under the hash of a server-generated token.';

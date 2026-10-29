@@ -140,11 +140,26 @@ export function createFlowRuntimeState() {
 export type FlowRuntimeState = ReturnType<typeof createFlowRuntimeState>;
 
 /** The safe identity of a binding used by a surface that does not receive its input map. */
-export type FlowBindingReference = Readonly<{
+export type PlacementFlowBinding = Readonly<{
+  controlId: ComponentFlowBinding["controlId"];
+  settings: ComponentFlowBinding["settings"];
+  browser?: Readonly<{ plan: BrowserFlowPlan; inputs: Readonly<Record<string, FlowBindingInput>> }>;
   bindingId: string;
+  eventId: string;
   flowId: string;
   event: string;
+  entrySegments: readonly Readonly<{ segmentId: string; fingerprint: string }>[];
+  callerInputs: readonly string[];
+  savesFormValues: boolean;
+  recordTypeId?: string;
+  selectedReadInputs?: readonly Readonly<{ callerInputName: string; recordTypeId: string }>[];
 }>;
+
+/** The safe identity a tool receives for its projected binding. */
+export type FlowBindingReference = Pick<
+  PlacementFlowBinding,
+  "bindingId" | "flowId" | "event" | "entrySegments"
+>;
 
 export type FlowRuntime = Readonly<{
   /** Loads the page runner after visible data has been served. */
@@ -156,10 +171,11 @@ export type FlowRuntime = Readonly<{
    * commits a second time.
    */
   dispatch: (
-    binding: ComponentFlowBinding,
+    binding: PlacementFlowBinding,
     callerInputs: Readonly<Record<string, unknown>> | undefined,
     clickId: string,
     subject?: FlowSubjectContext,
+    sourceTablePlacementId?: string,
     cycle?: FlowEventCycle,
   ) => Promise<ServerDrivenResult>;
   /** Starts one exact server binding and drives its normal intents and continuations. */
@@ -169,6 +185,7 @@ export type FlowRuntime = Readonly<{
     clickId: string,
     signal?: AbortSignal,
     subject?: FlowSubjectContext,
+    sourceTablePlacementId?: string,
     cycle?: FlowEventCycle,
   ) => Promise<ServerDrivenResult>;
 }>;
@@ -180,6 +197,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
     clickId: string,
     signal?: AbortSignal,
     subject?: FlowSubjectContext,
+    sourceTablePlacementId?: string,
     cycle?: FlowEventCycle,
   ): Promise<ServerDrivenResult> => {
     const settings = options.bindingSettings(binding.bindingId);
@@ -206,6 +224,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
             clickId,
             runSignal,
             subject,
+            sourceTablePlacementId,
             settings,
           );
         } finally {
@@ -219,13 +238,14 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
       await Promise.all([import("./flow-runtime-driver"), import("./browser-flow-runner")]);
     },
     dispatchReference,
-    dispatch: (binding, callerInputs = {}, clickId, subject, cycle) =>
+    dispatch: (binding, callerInputs = {}, clickId, subject, sourceTablePlacementId, cycle) =>
       dispatchReference(
-        { bindingId: binding.bindingId, flowId: binding.flow.flowId, event: binding.event },
+        binding,
         callerInputs,
         clickId,
         undefined,
         subject,
+        sourceTablePlacementId,
         cycle,
       ),
   });

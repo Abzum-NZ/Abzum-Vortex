@@ -21,6 +21,10 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
     return { kind: "unavailable" };
   };
   return {
+    openRun: (...args) =>
+      client()
+        .then((loaded) => loaded.openRun(...args))
+        .catch(unavailable),
     startBinding: (...args) =>
       client()
         .then((loaded) => loaded.startBinding(...args))

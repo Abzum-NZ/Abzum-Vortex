@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
-import { jsonValueSchema, type JsonValue } from "../catalogue/common";
+import type { JsonValue } from "../catalogue/common";
 import { groupIdSchema, recordIdSchema, recordTypeIdSchema } from "../catalogue/identifiers";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import { describeFailure, isRecord, sameId } from "../catalogue/runtime-primitives";
@@ -20,10 +20,16 @@ import {
   unlocatedCorrectionsRefusal,
   type FlowRefusalFeedback,
 } from "../workflows/flow-refusal-feedback";
-import type { BeforeSaveRuleWarning } from "../rules/before-save-flow-run";
+import { storedFlowWarningSchema, storeFlowWarning } from "../workflows/flow-warning-replay";
+import {
+  rerenderBeforeSaveWarning,
+  type BeforeSaveRuleWarning,
+} from "../rules/before-save-flow-run";
 import type {
   FlowProtectedTaskCall,
+  FlowRunResume,
   FlowRunState,
+  FlowRuntimeValues,
   FlowTaskOutcome,
 } from "../rules/flow-interpreter";
 import {
@@ -111,20 +117,68 @@ export const createFlowTaskRunner = (
   const isEmptyEffectOutput = (value: unknown): boolean =>
     isRecord(value) && Object.keys(value).length === 0;
 
-  /** A refused save stores only its located field keys and codes, so a replay reports them again. */
+  /** A stored refusal carries its stable code, never rendered correction text. */
   const storedCorrectionDiagnostic = (value: unknown): FlowRefusalFeedback | undefined => {
     if (!isRecord(value) || Object.keys(value).length !== 1) return undefined;
     const parsed = flowRefusalFeedbackSchema.safeParse(value.diagnostic);
     return parsed.success ? parsed.data : undefined;
   };
 
-  const storedWarningsSchema = z.array(
-    z.object({ code: z.string(), message: z.string() }).strict(),
-  );
-  const replayWarnings = (
+  const storedWarningsSchema = z.array(storedFlowWarningSchema);
+  const replayWarnings = async (
+    run: Run,
+    plan: TaskPlan,
     outputs: Readonly<Record<string, unknown>>,
-  ): readonly BeforeSaveRuleWarning[] =>
-    outputs.warnings === undefined ? [] : storedWarningsSchema.parse(outputs.warnings);
+  ): Promise<readonly BeforeSaveRuleWarning[] | undefined> => {
+    if (outputs.warnings === undefined) return [];
+    const warnings = storedWarningsSchema.parse(outputs.warnings);
+    const dynamic = warnings.some((warning) => warning.kind === "dynamic");
+    let record: FlowRuntimeValues | undefined;
+    if (dynamic) {
+      if (
+        run.authority.kind !== "person" ||
+        dependencies.currentRecords === undefined ||
+        plan.kind === "operation"
+      )
+        return undefined;
+      const result = isRecord(outputs.result) ? outputs.result : undefined;
+      const recordId = recordIdSchema.safeParse(
+        plan.kind === "save" || plan.asSave ? outputs.record : result?.recordId,
+      );
+      if (!recordId.success) return undefined;
+      const current = await dependencies.currentRecords.read(
+        run.authority.session,
+        run.authority.selection,
+        {
+          recordTypeId: plan.command.recordTypeId,
+          recordId: recordId.data,
+        },
+      );
+      if (current.outcome !== "read") return undefined;
+      record = current.values;
+    }
+    return warnings.map((warning) => {
+      const flow = run.release.flows.get(warning.flowId);
+      if (warning.kind === "dynamic" && (flow === undefined || record === undefined))
+        throw new Error("FLOW_WARNING_SOURCE_UNAVAILABLE");
+      return {
+        code: warning.code,
+        flowId: warning.flowId,
+        taskPath: warning.taskPath,
+        messageIsLiteral: warning.kind === "literal",
+        message:
+          warning.kind === "literal"
+            ? warning.message
+            : rerenderBeforeSaveWarning(
+                flow!,
+                warning.taskPath,
+                warning.code,
+                record!,
+                (dependencies.now ?? (() => new Date()))().toISOString(),
+              ),
+      };
+    });
+  };
 
   /** The rule's authored refusal of a protected record path, when its safe error carries one. */
   const ruleRefusalResult = (
@@ -495,6 +549,13 @@ export const createFlowTaskRunner = (
     }
   };
 
+  const taskTarget = (plan: TaskPlan) =>
+    plan.kind === "action"
+      ? { recordTypeId: plan.command.recordTypeId, recordId: plan.command.recordId }
+      : plan.kind === "save" && plan.command.operation === "update"
+        ? { recordTypeId: plan.command.recordTypeId, recordId: plan.command.recordId }
+        : undefined;
+
   /** Runs a planned task's effect, holding the claim. Every failure is a safe outcome. */
   const runPlan = async (
     run: Run,
@@ -512,12 +573,7 @@ export const createFlowTaskRunner = (
     // The page subject is retained as run evidence. A fresh read under this initiator's request
     // scope verifies the exact record type and identity before either protected change is attempted.
     // The record service still checks change or action permission inside its own transaction.
-    const target =
-      plan.kind === "action"
-        ? { recordTypeId: plan.command.recordTypeId, recordId: plan.command.recordId }
-        : plan.kind === "save" && plan.command.operation === "update"
-          ? { recordTypeId: plan.command.recordTypeId, recordId: plan.command.recordId }
-          : undefined;
+    const target = taskTarget(plan);
     if (target !== undefined) {
       const subject = await dependencies.subjects!.read(session, selection, target);
       if (subject !== "read")
@@ -582,25 +638,7 @@ export const createFlowTaskRunner = (
             outcome: "validation",
             ...(diagnostic.success ? { diagnostic: diagnostic.data } : {}),
           },
-          stored: diagnostic.success
-            ? {
-                diagnostic: {
-                  code: diagnostic.data.code,
-                  ...(located.length === 0
-                    ? {}
-                    : {
-                        corrections: located.map((correction) => ({
-                          field: correction.field,
-                          code: correction.code,
-                          ...(correction.message === undefined
-                            ? {}
-                            : { message: correction.message }),
-                        })),
-                      }),
-                  ...(ruleRefusal === undefined ? {} : { ruleRefusal }),
-                },
-              }
-            : {},
+          stored: diagnostic.success ? { diagnostic: { code: diagnostic.data.code } } : {},
         };
       }
       return {
@@ -672,7 +710,7 @@ export const createFlowTaskRunner = (
           presentation: { ...guidance, code: diagnostic.code },
         });
     }
-    if (diagnostic !== undefined) stored.diagnostic = jsonValueSchema.parse(diagnostic);
+    if (diagnostic !== undefined) stored.diagnostic = { code: diagnostic.code };
     return {
       result: {
         outcome,
@@ -799,7 +837,9 @@ export const createFlowTaskRunner = (
                 replayedOutputs.record.toLowerCase() !== ledgerOutputs.record.toLowerCase()
               )
                 return { outcome: "refused" };
-              appendWarnings(run, call, replayWarnings(ledgerOutputs));
+              const warnings = await replayWarnings(run, planned.plan, ledgerOutputs);
+              if (warnings === undefined) return { outcome: "refused" };
+              appendWarnings(run, call, warnings);
             }
             return replayed.result;
           } catch (error) {
@@ -831,7 +871,9 @@ export const createFlowTaskRunner = (
         };
       const outputs = { ...claim.outputs };
       if (claim.outcome === "committed" && planned.plan.kind !== "operation") {
-        appendWarnings(run, call, replayWarnings(outputs));
+        const warnings = await replayWarnings(run, planned.plan, outputs);
+        if (warnings === undefined) return { outcome: "refused" };
+        appendWarnings(run, call, warnings);
         delete outputs.warnings;
       }
       return {
@@ -855,7 +897,9 @@ export const createFlowTaskRunner = (
       ...ran.stored,
       ...(ran.warnings === undefined || ran.warnings.length === 0
         ? {}
-        : { warnings: ran.warnings.map(({ code, message }) => ({ code, message })) }),
+        : {
+            warnings: ran.warnings.map(storeFlowWarning),
+          }),
     };
     try {
       await completeFlowEffect(key, ran.result.outcome, stored);
@@ -866,5 +910,84 @@ export const createFlowTaskRunner = (
     return ran.result;
   };
 
-  return runProtectedTask;
+  /** Runs one task inside its admitted segment; its caller owns the transaction and receipt. */
+  const runSegmentTask = async (
+    run: Run,
+    state: FlowRunState,
+    call: FlowProtectedTaskCall,
+  ): Promise<
+    Readonly<{
+      result: TaskResult;
+      replay: Extract<FlowRunResume, { kind: "task_result" }> | null | undefined;
+      warnings: readonly BeforeSaveRuleWarning[];
+    }>
+  > => {
+    if (call.taskType === "record.read_fields" || call.taskType === "record.pin_identity")
+      return { result: await runProtectedTask(run, state, call), replay: undefined, warnings: [] };
+    if (run.selectedRecordReadSeen && call.taskType !== "record.save")
+      return {
+        result: { outcome: "refused" },
+        replay: { kind: "task_result", outcome: "refused" },
+        warnings: [],
+      };
+    const planned = planTask(run, state, call);
+    if (!("plan" in planned))
+      return {
+        result: planned,
+        replay:
+          call.effect === "read" ? undefined : { kind: "task_result", outcome: planned.outcome },
+        warnings: [],
+      };
+    const ran = await runPlan(run, state, call, planned.plan);
+    appendWarnings(run, call, ran.warnings);
+    const isRead =
+      planned.plan.kind === "operation" && planned.plan.entry.descriptor.effect === "read";
+    if (isRead) return { result: ran.result, replay: undefined, warnings: ran.warnings ?? [] };
+    const sensitive =
+      planned.plan.kind === "operation" &&
+      (planned.plan.entry.descriptor.sensitiveOutputs ?? []).some(
+        (name) =>
+          isRecord(ran.result.outputs?.result) && Object.hasOwn(ran.result.outputs.result, name),
+      );
+    if (sensitive) return { result: ran.result, replay: null, warnings: ran.warnings ?? [] };
+    const outputs = Object.fromEntries(
+      Object.entries(ran.stored).filter(([name]) => name !== "diagnostic" && name !== "warnings"),
+    );
+    const diagnostic = flowRefusalFeedbackSchema.safeParse(ran.stored.diagnostic);
+    return {
+      result: ran.result,
+      replay: {
+        kind: "task_result",
+        outcome: ran.result.outcome,
+        outputs,
+        ...(diagnostic.success ? { diagnostic: diagnostic.data } : {}),
+      },
+      warnings: ran.warnings ?? [],
+    };
+  };
+
+  /** Rebuilds warning text from current readable data before returning a stored effect outcome. */
+  const replaySegmentTask = async (
+    run: Run,
+    state: FlowRunState,
+    call: FlowProtectedTaskCall,
+    replay: Extract<FlowRunResume, { kind: "task_result" }>,
+    warnings: readonly z.infer<typeof storedFlowWarningSchema>[],
+  ): Promise<FlowRunResume | undefined> => {
+    const planned = planTask(run, state, call);
+    if (!("plan" in planned)) return undefined;
+    if (run.authority.kind !== "person") return undefined;
+    // The completed receipt is scoped to the verified actor and binding. Its subject may have
+    // been deleted by this very command; replay exposes only its stored safe outcome.
+    if (warnings.length === 0) return replay;
+    const rendered = await replayWarnings(run, planned.plan, {
+      ...replay.outputs,
+      warnings,
+    });
+    if (rendered === undefined) return undefined;
+    appendWarnings(run, call, rendered);
+    return replay;
+  };
+
+  return Object.freeze({ run: runProtectedTask, runSegmentTask, replaySegmentTask });
 };

@@ -18,6 +18,7 @@ import { z } from "zod";
 
 type FlowContinuationBinding = Readonly<{
   organizationId: string;
+  applicationRootId: string;
   identityId: string;
   flowId: string;
   /** The exact release of the flow set the run is bound to. */
@@ -44,13 +45,14 @@ type FlowEffectClaim =
 
 const expiryRowSchema = z.object({ expires_at: z.union([z.date(), z.string()]) });
 const consumeRowSchema = z.object({ result: z.unknown() });
-const consumeResultSchema = z.discriminatedUnion("kind", [
+const peekResultSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("unavailable") }),
   z.object({
     kind: z.literal("available"),
     runId: z.uuid(),
     state: z.record(z.string(), z.unknown()),
     elapsedMilliseconds: z.number().int().min(0),
+    releaseKey: z.string().min(1),
   }),
 ]);
 const claimResultSchema = z.discriminatedUnion("kind", [
@@ -89,6 +91,7 @@ export const issueFlowContinuation = async (
         ${input.tokenHash}::text,
         ${input.runId}::uuid,
         ${input.organizationId}::uuid,
+        ${input.applicationRootId}::uuid,
         ${input.identityId}::uuid,
         ${input.flowId}::uuid,
         ${input.releaseKey}::text,
@@ -105,35 +108,34 @@ export const issueFlowContinuation = async (
   return { expiresAt };
 };
 
-/**
- * Returns the stored run once. Unknown, expired, already used, foreign and wrong-release tokens
- * are all `undefined`.
- */
-export const consumeFlowContinuation = async (
-  input: FlowContinuationBinding & Readonly<{ tokenHash: string }>,
+/** Reads a bound continuation for path selection without spending it on a refused admission. */
+export const peekFlowContinuation = async (
+  input: Omit<FlowContinuationBinding, "releaseKey"> & Readonly<{ tokenHash: string }>,
 ): Promise<
-  Readonly<{ runId: string; state: unknown; elapsedMilliseconds: number }> | undefined
+  | Readonly<{ runId: string; state: unknown; elapsedMilliseconds: number; releaseKey: string }>
+  | undefined
 > => {
   const rows = await withRuntimeTransaction(
     (transaction) =>
       transaction.query`
-      select vortex_platform.consume_flow_continuation(
+      select vortex_platform.peek_flow_continuation(
         ${input.tokenHash}::text,
         ${input.organizationId}::uuid,
+        ${input.applicationRootId}::uuid,
         ${input.identityId}::uuid,
-        ${input.flowId}::uuid,
-        ${input.releaseKey}::text
+        ${input.flowId}::uuid
       ) as result
     `,
   );
   const row = consumeRowSchema.safeParse(rows[0]);
   if (rows.length !== 1 || !row.success) return undefined;
-  const result = consumeResultSchema.safeParse(row.data.result);
+  const result = peekResultSchema.safeParse(row.data.result);
   if (!result.success || result.data.kind !== "available") return undefined;
   return {
     runId: result.data.runId,
     state: result.data.state,
     elapsedMilliseconds: result.data.elapsedMilliseconds,
+    releaseKey: result.data.releaseKey,
   };
 };
 

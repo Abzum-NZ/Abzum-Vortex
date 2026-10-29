@@ -3,7 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
-  createHumanInstalledPageBundleContextLoader,
+  createInstalledContextLoader,
   readAddressedApplicationAtAddress,
   requireInstalledRuntimeContext,
   resolvePermittedApplicationAddress,
@@ -113,17 +113,8 @@ export const loadApplicationSearch = async (
       session,
       { organizationId: read.organizationId, applicationRootId },
       async (transaction, scope) => {
-        const scopedApplicationRootId = scope.applicationRootId;
-        if (scopedApplicationRootId === undefined) throw new Error("SEARCH_SCOPE_UNAVAILABLE");
         const context = requireInstalledRuntimeContext(
-          await createHumanInstalledPageBundleContextLoader({
-            transaction,
-            scope: {
-              organizationId: scope.organizationId,
-              organizationAccountId: scope.organizationAccountId,
-              applicationRootId: scopedApplicationRootId,
-            },
-          }).load(),
+          await createInstalledContextLoader(transaction, scope).load(),
         );
         const application = context.releaseSet.application;
         if (

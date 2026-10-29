@@ -11,7 +11,7 @@ import {
   placementSettings,
   TABLE_BLOCK_RELEASE,
 } from "../../definition/application-composition-catalogue";
-import { createHumanInstalledPageBundleContextLoader } from "../../definition/installed-page-bundle-context";
+import { createInstalledContextLoader } from "../../definition/installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
 import type { PlacementModule, PlacementQuery } from "../placement-read/shared";
 
@@ -81,17 +81,7 @@ export const loadRecordsTablePlacement = async (
   ) {
     const read = await requests.run(session, address.selection, async (transaction, scope) => {
       if (scope.applicationRootId === undefined) throw new Error("BULK_SCOPE_UNAVAILABLE");
-      return createHumanInstalledPageBundleContextLoader({
-        transaction,
-        scope: {
-          organizationId: scope.organizationId,
-          organizationAccountId: scope.organizationAccountId,
-          applicationRootId: scope.applicationRootId,
-          ...(scope.previewInstallationId === undefined
-            ? {}
-            : { previewInstallationId: scope.previewInstallationId }),
-        },
-      }).load();
+      return createInstalledContextLoader(transaction, scope).load();
     });
     if (read.kind !== "available") return { refused: "installation_unavailable" };
     installed = read.value;

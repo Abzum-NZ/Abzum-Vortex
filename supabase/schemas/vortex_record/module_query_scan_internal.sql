@@ -171,7 +171,7 @@ begin
       select coalesce(pg_catalog.jsonb_agg(pg_catalog.to_jsonb(projected) order by projected.ordinality), '[]'::jsonb)
       into projection_batch
       from vortex_record.read_system_projection_rows_internal(v_storage_contract_id,
-        null::uuid[], projection_sort_key, projection_direction, projection_after,
+        exact_record_ids, projection_sort_key, projection_direction, projection_after,
         projection_batch_size, projection_predicate) with ordinality as projected(organization_id,
         record_id, revision, attribute_values, ordinality);
     exception when sqlstate '22023' then
@@ -542,7 +542,7 @@ begin
   select coalesce(pg_catalog.jsonb_agg(pg_catalog.to_jsonb(projected) order by projected.ordinality), '[]'::jsonb)
   into projection_batch
   from vortex_record.read_system_projection_rows_internal(v_storage_contract_id,
-    null::uuid[], projection_sort_key, projection_direction, projection_after,
+    exact_record_ids, projection_sort_key, projection_direction, projection_after,
     projection_batch_size, projection_predicate) with ordinality as projected(organization_id,
     record_id, revision, attribute_values, ordinality);
   end loop;

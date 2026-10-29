@@ -7,7 +7,13 @@ import { recordsTableInlineEditEvent } from "../../definition/application-compos
 import { recordsTableRowEditEvent } from "../../definition/application-composition/records-table-features/row-edit";
 import type { ComponentFlowBinding } from "../../definition/application-flow-bindings";
 import type { RequestDatabaseTransaction } from "../../db/request-transaction";
-import type { HumanOrganizationRequestResult } from "../../access/human-organization-request";
+import type {
+  BoundHumanOrganizationRequest,
+  HumanOrganizationRequestResult,
+} from "../../access/human-organization-request";
+import { readCurrentOrganizationRuntimeSettingsAfterAuthorization } from "../../access/organization-runtime-settings-administration";
+import { readCurrentRecordOwnerGroupsAfterAuthorization } from "../../access/record-owner-groups";
+import type { JsonValue } from "../../catalogue/common";
 import type { InstalledFlowBindings } from "../../definition/flow-binding-endpoint";
 import {
   placementSettings,
@@ -15,7 +21,7 @@ import {
 } from "../../definition/application-composition-catalogue";
 import { projectRowActionAvailability } from "./row-actions";
 import { fieldEditorsOf } from "../placement-read/shared";
-import { pageSubjectFromRead } from "../page-subject-read";
+import { pageSubjectFromRead, readPageSubjectInTransaction } from "../page-subject-read";
 import {
   recordsTableRequestRefusal,
   rowMayChangeField,
@@ -23,6 +29,106 @@ import {
   type RecordsTableRequestRefusal,
 } from ".";
 import { installedPlacementProps } from "./placement";
+import type { SelectedOrganizationScope } from "../../access/identity-access";
+import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
+import { readQueryBindings } from "../../definition/application-composition/query-bindings";
+import { protectedQueryCommandSchema } from "../../queries/protected-query-contracts";
+import { readQueryMembership } from "../../queries/protected-query-table";
+import {
+  bindInvocationControls,
+  resolveQueryBindings,
+  type QueryBindingContext,
+} from "../query-binding-resolver";
+import { resolveProjectedTablePlacement } from "../projected-table-placement";
+import type { PageDefinition } from "../../definition/application-contracts";
+import {
+  findModuleQuery,
+  placementSettingsOf,
+  type PlacementReadEntry,
+} from "../placement-read/shared";
+
+/** Proves supplied rows against the projected table's installed query under this request's scope. */
+const recordsTableMembershipRefusal = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  context: InstalledRuntimeContext,
+  placement: PlacementReadEntry,
+  bindings: QueryBindingContext,
+  recordIds: readonly string[],
+): Promise<string | undefined> => {
+  const queryId =
+    typeof placement.vortex.queryId === "string" ? placement.vortex.queryId : undefined;
+  const bound = queryId === undefined ? undefined : findModuleQuery(context, queryId);
+  if (bound === undefined) return "query_not_installed";
+  const declared = readQueryBindings(placementSettingsOf(placement));
+  if (declared.kind !== "read") return "query_bindings_malformed";
+  const resolved = await resolveQueryBindings(declared.bindings, bound.query.inputs, bindings, {});
+  if (resolved.kind !== "resolved") return `query_inputs_${resolved.kind}`;
+  const command = protectedQueryCommandSchema.safeParse({
+    moduleRootId: bound.module.rootId,
+    queryId: bound.query.queryId,
+    inputValues: resolved.inputValues,
+    requestedFieldIds: bound.query.selectedFieldIds.slice(0, 1),
+    pageSize: recordIds.length,
+    exactRecordIds: recordIds,
+  });
+  if (!command.success) return "query_membership_command_invalid";
+  const result = await readQueryMembership(transaction, scope, command.data);
+  if (result.outcome !== "completed") return `query_membership_${result.reasonCode}`;
+  return recordIds.every((id) => result.recordIds.some((member) => sameId(id, member)))
+    ? undefined
+    : "record_not_in_query";
+};
+
+/** Resolves a projected table and its current bound inputs before proving exact row membership. */
+export const projectedTableMembershipRefusal = async (
+  bound: BoundHumanOrganizationRequest,
+  context: InstalledRuntimeContext,
+  page: Readonly<Record<string, unknown>>,
+  pageDefinition: PageDefinition,
+  request: Readonly<{
+    placementId: string;
+    subjectId: string | undefined;
+    parameters: Readonly<Record<string, string | readonly string[]>>;
+    controls: Readonly<Record<string, string>>;
+    recordIds: readonly string[];
+  }>,
+  validateOption: (placementId: string, raw: string, parsed: JsonValue) => Promise<boolean>,
+): Promise<string | undefined> => {
+  if (
+    request.recordIds.length === 0 ||
+    request.recordIds.some((id) => !recordIdSchema.safeParse(id).success) ||
+    new Set(request.recordIds.map((id) => id.toLowerCase())).size !== request.recordIds.length
+  )
+    return "record_selection_invalid";
+  const table = resolveProjectedTablePlacement(page, request.placementId, {
+    context,
+    pageDefinition,
+    parameters: request.parameters,
+    subjectId: request.subjectId,
+  });
+  if (table.kind === "refused") return table.reason;
+  const bindings = table.bindings({
+    readSubject: (recordTypeId, recordId) =>
+      readPageSubjectInTransaction(bound.transaction, { recordTypeId, recordId }),
+    readTimeZone: async () =>
+      (await readCurrentOrganizationRuntimeSettingsAfterAuthorization(bound.transaction))?.timeZone,
+    readViewerTeams: async () =>
+      (await readCurrentRecordOwnerGroupsAfterAuthorization(bound.transaction)).map(
+        (group) => group.groupId,
+      ),
+  });
+  const validated = await bindInvocationControls(bindings, request.controls, validateOption);
+  if (validated === undefined) return "control_values_invalid";
+  return recordsTableMembershipRefusal(
+    bound.transaction,
+    bound.scope,
+    context,
+    table.placement,
+    validated,
+    request.recordIds,
+  );
+};
 
 /**
  * Why one inline-edited cell may not be written now, or undefined when it may: the field must be

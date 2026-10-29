@@ -1,5 +1,5 @@
 import {
-  createHumanInstalledPageBundleContextLoader,
+  createInstalledContextLoader,
   createLinkTilesQueryResolver,
   createPageSubjectReader,
   createProtectedQueryService,
@@ -59,17 +59,7 @@ export const createPlacementReadServices = (
     permissions: platformPermissionSource,
     createInstalledContextLoader(transaction, scope) {
       if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
-      return createHumanInstalledPageBundleContextLoader({
-        transaction,
-        scope: {
-          organizationId: scope.organizationId,
-          organizationAccountId: scope.organizationAccountId,
-          applicationRootId: scope.applicationRootId,
-          ...(scope.previewInstallationId === undefined
-            ? {}
-            : { previewInstallationId: scope.previewInstallationId }),
-        },
-      });
+      return createInstalledContextLoader(transaction, scope);
     },
   });
   const applicationPageLinks = createApplicationPageLinkReader({

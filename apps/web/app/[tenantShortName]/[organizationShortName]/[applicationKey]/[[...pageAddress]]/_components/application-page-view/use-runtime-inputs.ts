@@ -113,6 +113,7 @@ export function useRuntimeInputs({
   router,
   requestChoicePage,
   runtimeInputsRef,
+  controlDraftsRef,
   setPanelRef,
 }: Readonly<{
   currentData: ApplicationPageModel["data"];
@@ -137,6 +138,7 @@ export function useRuntimeInputs({
     afterAccepted?: () => Promise<Notice | undefined>,
     clickId?: string,
     reportOnControl?: ControlReport,
+    sourceTablePlacementId?: string,
   ) => Promise<DispatchOutcome>;
   fieldFlowEvents: ReturnType<typeof useFieldFlowEvents>;
   readBoardColumns: (
@@ -233,6 +235,7 @@ export function useRuntimeInputs({
     formId?: string,
   ) => Promise<void>;
   runtimeInputsRef: RefObject<Readonly<Record<string, unknown>>>;
+  controlDraftsRef: RefObject<{ scope: string; values: Record<string, unknown> }>;
   setPanelRef: RefObject<FlowIntentHost["setPanel"]>;
 }>) {
   const pageParameters = usePageParameters({
@@ -370,6 +373,7 @@ export function useRuntimeInputs({
                 undefined,
                 undefined,
                 tableData !== undefined && event.event === "row_action" ? "transient" : undefined,
+                tableData !== undefined && event.event === "row_action" ? placementId : undefined,
               );
             };
         // An inline edit commits one stored value through the bound flow at the revision the row
@@ -665,12 +669,14 @@ export function useRuntimeInputs({
         events.field_changed = fieldFlows.changed;
       if (fieldFlows.focusLost !== undefined && supportsEvent("field_focus_lost"))
         events.field_focus_lost = fieldFlows.focusLost;
-      if (publishedParameter !== undefined && supportsEvent("field_changed")) {
+      if (supportsEvent("field_changed")) {
         const fieldChanged = events.field_changed as
           ((event: ControlSemanticEvent) => void) | undefined;
         events.field_changed = (event: ControlSemanticEvent) => {
           fieldChanged?.(event);
-          pageParameters.change(placementId, event);
+          if (event.event === "field_changed" && controlDraftsRef.current.scope === navigationKey)
+            controlDraftsRef.current.values[placementId] = event.value;
+          if (publishedParameter !== undefined) pageParameters.change(placementId, event);
         };
       }
       // A table whose click is bound to a flow keeps that flow; the flow publishes the record when

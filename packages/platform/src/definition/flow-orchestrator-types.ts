@@ -6,7 +6,11 @@ import {
   type OrganizationSelectionCandidate,
 } from "../access/identity-access";
 import type { JsonValue } from "../catalogue/common";
-import { recordIdSchema, revisionSchema } from "../catalogue/identifiers";
+import {
+  containedComponentIdSchema,
+  recordIdSchema,
+  revisionSchema,
+} from "../catalogue/identifiers";
 import type {
   ExecuteNamedActionResult,
   InstalledNamedActionReference,
@@ -22,10 +26,18 @@ import type {
   FlowTriggerOrigin,
 } from "../workflows/flow-contracts";
 import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
+import type { FlowPlan, FlowServerSegment } from "../workflows/flow-plan";
+import type {
+  FlowContinuationExecution,
+  FlowSegmentReceipt,
+  SegmentExecution,
+  StartFlowResult,
+} from "../workflows/start";
 import type { FlowWarningNotice } from "../workflows/form-continuation-contracts";
 import { formContinuationAnswerSchema } from "../workflows/form-continuation-answer";
 import type { RecordSaveServiceResult } from "../records/save-record";
 import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
+import type { QueryContinuationKey } from "../queries/continuation-token";
 import type { ActionFlowRunner } from "../rules/action-flow-run";
 import type { BeforeSaveRuleWarning } from "../rules/before-save-flow-run";
 import type {
@@ -33,6 +45,8 @@ import type {
   FlowFailureOutcome,
   FlowInterfaceIntent,
   FlowLibrary,
+  FlowRunState,
+  FlowRunStep,
   FlowRuntimeValues,
 } from "../rules/flow-interpreter";
 import type { ProtectedOperationExecutor } from "./protected-operation-executor";
@@ -45,8 +59,11 @@ import { flowIdSchema } from "../catalogue/identifiers";
  */
 export type FlowRelease = Readonly<{
   releaseKey: string;
+  installationRevision: number;
   /** The release's planned flows (`flowPlansOf`), validated once per release. */
   flows: ReadonlyMap<string, FlowDefinition>;
+  /** The same release's segment plans, compiled together with the flow definitions. */
+  plans: ReadonlyMap<string, FlowPlan>;
   /** The release's record types by lower-case record type id, for the values of a Save record task. */
   recordTypes?: ReadonlyMap<string, FlowRecordType>;
   /** The release's named actions by action key, for a Call protected operation task naming one. */
@@ -169,6 +186,25 @@ type NamedActionRecordPort = Readonly<{
 export type NamedActionExecutionResult = Awaited<ReturnType<NamedActionRecordPort["execute"]>>;
 
 export type FlowOrchestratorDependencies = Readonly<{
+  continuationKey: QueryContinuationKey;
+  /** Admits exactly one planned server segment and supplies its transaction-bound ports. */
+  admitSegment: (
+    run: Run,
+    state: FlowRunState,
+    segment: FlowServerSegment,
+    execute: (
+      boundPorts: FlowOrchestratorDependencies,
+      replay: FlowSegmentReceipt | undefined,
+    ) => Promise<SegmentExecution<Readonly<{ step: FlowRunStep; run: Run }>>>,
+  ) => Promise<StartFlowResult<Readonly<{ step: FlowRunStep; run: Run }>>>;
+  /** Admits a continuation that reaches another page intent or finishes without a segment. */
+  admitContinuation: (
+    run: Run,
+    state: FlowRunState,
+    execute: () => Promise<FlowContinuationExecution<FlowOrchestratorResponse>>,
+    openReplay: (payload: string, expiresAt: string) => FlowOrchestratorResponse,
+  ) => Promise<StartFlowResult<FlowOrchestratorResponse>>;
+  admitPageStart: (run: Run, state: FlowRunState) => Promise<StartFlowResult<null>>;
   executor: Pick<ProtectedOperationExecutor, "execute">;
   /** Runs named-action flows; without it an action is unavailable. */
   actionRecords?: NamedActionRecordPort;
@@ -229,6 +265,8 @@ export const startRequestSchema = z
   .object({
     session: identitySessionSchema,
     selection: organizationSelectionCandidateSchema,
+    bindingId: containedComponentIdSchema,
+    gestureId: z.uuid(),
     binding: z
       .object({
         flowId: flowIdSchema,
@@ -262,6 +300,8 @@ export type FlowResumeRequest = z.input<typeof resumeRequestSchema>;
 export type FlowRunExpectation = Readonly<{
   /** The exact release of the flow set; must equal the release trusted installation state resolves. */
   releaseKey: string;
+  /** The complete set of possible first server segments shown by the binding. */
+  entrySegments?: readonly Readonly<{ segmentId: string; fingerprint: string }>[];
   /** The paused node the caller answers; the stored run must be paused at exactly this node. */
   pausedAt?: Readonly<{ nodeId: string; awaiting: "form" | "confirm" }>;
   /** The receipt the caller holds; the stored run must be that run with that many committed effects. */
@@ -319,6 +359,9 @@ export type FlowOrchestratorResponse =
       expiresAt: string;
       unavailable: readonly FlowUnavailableNotice[];
     }>
+  | Readonly<{ kind: "reload" }>
+  | Readonly<{ kind: "rate_limited"; retryAfterSeconds: number }>
+  | Readonly<{ kind: "already_answered" }>
   | Readonly<{ kind: "refused" }>;
 
 type RunAuthority = Readonly<{
@@ -340,6 +383,16 @@ export type Run = {
   origin: FlowTriggerOrigin;
   originId: string;
   flowId: string;
+  bindingId: string;
+  gestureId: string;
+  continuationPlan?: Readonly<{
+    installationRevision: number;
+    flowId: string;
+    fingerprint: string;
+  }>;
+  /** A peeked answer is spent only in the first transaction that admits its next segment. */
+  pendingContinuation?: Readonly<{ tokenHash: string; releaseKey: string; answerHash: string }>;
+  continuationSegments?: Readonly<Record<string, string>>;
   release: FlowRelease;
   library: FlowLibrary;
   /** Server milliseconds already spent by earlier segments of this run. */

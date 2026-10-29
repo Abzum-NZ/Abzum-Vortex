@@ -10,7 +10,7 @@ import {
   placementSettings,
   TABLE_BLOCK_RELEASE,
 } from "../../definition/application-composition-catalogue";
-import { createHumanInstalledPageBundleContextLoader } from "../../definition/installed-page-bundle-context";
+import { createInstalledContextLoader } from "../../definition/installed-page-bundle-context";
 import { installedNamedActions } from "../../definition/installed-named-actions";
 import { recordsTableBulkActions } from "../../definition/application-composition/records-table-features/bulk-actions";
 import { collectActionFlowTasks } from "../../rules/action-flow-run";
@@ -84,17 +84,7 @@ export const readRecordsTableNamedActionAvailability = async (
     async (transaction, scope, issuedAt): Promise<NamedActionAvailabilityResult> => {
       if (scope.applicationRootId === undefined) return refuse("application_scope_missing");
       // Load in this request transaction rather than trusting a previous read's projection.
-      const installed = await createHumanInstalledPageBundleContextLoader({
-        transaction,
-        scope: {
-          organizationId: scope.organizationId,
-          organizationAccountId: scope.organizationAccountId,
-          applicationRootId: scope.applicationRootId,
-          ...(scope.previewInstallationId === undefined
-            ? {}
-            : { previewInstallationId: scope.previewInstallationId }),
-        },
-      }).load();
+      const installed = await createInstalledContextLoader(transaction, scope).load();
       const page = installed.releaseSet.application.content.pages.find(
         (candidate) => candidate.key === request.pageKey,
       );

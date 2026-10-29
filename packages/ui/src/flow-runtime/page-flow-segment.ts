@@ -50,6 +50,10 @@ export async function drivePageFlowSegment(
     let step = startPageFlowSegment(program, start, resolveMember, previous, resolveForm);
     for (let round = 0; round < 50; round += 1) {
       if (signal?.aborted) return { kind: "abandoned" };
+      if (step.kind === "boundary") {
+        console.error("[flow] unexpected boundary in a page segment");
+        return { kind: "unavailable" };
+      }
       if (step.kind === "protected_task") {
         console.error("[flow] protected task appeared in a page segment");
         return { kind: "unavailable" };

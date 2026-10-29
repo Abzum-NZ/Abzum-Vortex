@@ -11,6 +11,7 @@ export async function runFlowBinding(
   clickId: string,
   runSignal: AbortSignal,
   subject: FlowSubjectContext | undefined,
+  sourceTablePlacementId: string | undefined,
   settings: NonNullable<ReturnType<FlowRuntimeOptions["bindingSettings"]>>,
 ): Promise<ServerDrivenResult> {
   const browser = options.browserBinding?.(binding.bindingId);
@@ -53,11 +54,16 @@ export async function runFlowBinding(
   }
   const [first, { driveServerFlow }] = await Promise.all([
     options.client.startBinding(
-      { bindingId: binding.bindingId, flowId: binding.flowId },
+      {
+        bindingId: binding.bindingId,
+        flowId: binding.flowId,
+        entrySegments: binding.entrySegments,
+      },
       callerInputs ?? {},
       clickId,
       runSignal,
       subject,
+      sourceTablePlacementId,
     ),
     import("./server-driven-run"),
   ]);
@@ -68,5 +74,6 @@ export async function runFlowBinding(
     options.host,
     runSignal,
     options.committed === undefined ? undefined : () => options.committed?.(binding.bindingId),
+    sourceTablePlacementId,
   );
 }

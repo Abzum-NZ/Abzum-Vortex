@@ -4,7 +4,6 @@ import { createHash } from "node:crypto";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
 import type { JsonValue } from "../catalogue/common";
 import {
-  fieldIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
   type IdentityAuthorityId,
@@ -12,10 +11,7 @@ import {
 import { describeFailure, sameId, isRecord } from "../catalogue/runtime-primitives";
 import {
   flowTaskChildLists,
-  flowReadFieldsProjectionSchema,
-  flowReadFieldsTypeMapSchema,
   type FlowDefinition,
-  type FlowReadFieldsScalarType,
   type FlowTask,
 } from "../workflows/flow-contracts";
 import type { FlowBindingInvocation } from "../workflows/flow-invocation-contracts";
@@ -27,12 +23,14 @@ import type { ApplicationContent } from "./application-contracts";
 import type { ProtectedOperationChannel } from "./application-flow-bindings";
 import { canonicalJson } from "./canonical-json";
 import type { ModuleDefinitionConsumerReadResult } from "./definition-consumer-read";
-import type { ExactDefinitionDependency } from "./definition-store-contracts";
 import type { RecordReferenceChoiceCommand } from "../queries/reference-choice-contracts";
 import type { PermittedApplication, PermittedApplicationsRead } from "./application-launcher-read";
 import { createOrganizationAccessAdministrationService } from "../access/organization-access-administration-access";
 import { runOrganizationAccessOperation } from "../access/organization-access-decision-access";
-import { createHumanOrganizationRequestService } from "../access/human-organization-request";
+import {
+  createHumanOrganizationRequestService,
+  type BoundHumanOrganizationRequest,
+} from "../access/human-organization-request";
 import { createRequestBoundTenantGovernanceService } from "../identity/tenant-governance-request-bound";
 import { createReferenceChoiceService } from "../queries/reference-choice-service";
 import { changeConnectionInstance } from "../connections/connection-administration";
@@ -50,11 +48,29 @@ import type { createDatabaseApplicationBoundReleaseSetService } from "./applicat
 import { readPermittedApplicationsAtAddress } from "./application-address";
 import { createFlowCurrentRecordReader } from "./flow-current-record";
 import { createFlowOrchestrator } from "./flow-orchestrator";
-import type { FlowNamedAction, FlowRecordType, FlowRelease } from "./flow-orchestrator-types";
+import type {
+  FlowNamedAction,
+  FlowOrchestratorDependencies,
+  FlowRecordType,
+  FlowRelease,
+} from "./flow-orchestrator-types";
 import { createFormContinuationService } from "./form-continuation";
-import { flowReadFieldsScalarTypeForField } from "./flow-compilation";
+import {
+  installedModuleClosure,
+  installedSelectedRecordReadContext,
+} from "./flow-selected-record-context";
 import { flowPlansOf } from "../workflows/flow-plan";
-import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bundle-context";
+import { openFlowAdmissionRun } from "../workflows/start";
+import {
+  admitFlowContinuation,
+  admitFlowPageStart,
+  admitFlowSegment,
+  type AdmissionHost,
+} from "./flow-admission";
+import { admitPageGesture } from "./flow-admission-page";
+import { admitRowForm } from "./flow-row-form-admission";
+import { openFlowCarriedValues, sealFlowCarriedValues } from "../workflows/flow-carried-values";
+import { createInstalledContextLoader } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
 import { installedNamedActionDescriptors, installedNamedActions } from "./installed-named-actions";
 import { runtimeContextSelection } from "./runtime-preview";
@@ -101,7 +117,19 @@ type GuidedInvocationPage = Readonly<{
   bindings: Readonly<Record<string, readonly Readonly<{ event: string; bindingId: string }>[]>>;
 }>;
 
-type InvocationDependencies = Readonly<{
+export type FlowControlOptionRequest = Readonly<{
+  bound: BoundHumanOrganizationRequest;
+  context: InstalledRuntimeContext;
+  page: Readonly<Record<string, unknown>>;
+  placementId: string;
+  raw: string;
+  parsed: JsonValue;
+  subject: Readonly<{ recordTypeId: string; recordId: string }> | undefined;
+  heldValues: Readonly<Record<string, JsonValue>>;
+  controls: Readonly<Record<string, string>>;
+}>;
+
+export type InvocationDependencies = Readonly<{
   authorityId: IdentityAuthorityId;
   /** The application catalogue's install and upgrade journeys, run under the initiator's authority. */
   applicationStore: ApplicationStoreService;
@@ -109,6 +137,22 @@ type InvocationDependencies = Readonly<{
   telemetry: NonNullable<Parameters<typeof createRecordSaveService>[0]["telemetry"]>;
   releaseCatalogue: Parameters<typeof createDatabaseApplicationBoundReleaseSetService>[0];
   continuationKey: QueryContinuationKey;
+  validateControlOption: (input: FlowControlOptionRequest) => Promise<boolean>;
+  projectRowForm: (
+    bound: BoundHumanOrganizationRequest,
+    context: InstalledRuntimeContext,
+    page: Readonly<Record<string, unknown>>,
+    pageId: string,
+    formId: string,
+    subject: Readonly<{ moduleRootId: string; recordTypeId: string; recordId: string }>,
+  ) => Promise<
+    | (ProjectedForm &
+        Readonly<{
+          visibleFields: ReadonlyMap<string, Readonly<{ placementId: string; kind: string }>>;
+          projectedPage: Readonly<Record<string, unknown>>;
+        }>)
+    | undefined
+  >;
   guidedFormControls: (
     page: unknown,
     shells?: unknown,
@@ -174,287 +218,17 @@ export type FlowInvocationRequest = Readonly<{
   pageKey: string;
   /** The record the addressed page was opened for (an address candidate, never authority). */
   pageRecordId?: string | undefined;
+  /** Untrusted address and declared control values; the page binding resolver validates them. */
+  pageInputs: Readonly<{
+    parameters: Readonly<Record<string, string | readonly string[]>>;
+    controls: Readonly<Record<string, string>>;
+  }>;
   invocation: FlowBindingInvocation;
 }>;
 
 /** One log line per form-continuation or guided-binding refusal; the page keeps its neutral outcome. */
 const logFlowRefusal = (code: string): void => {
   console.error(`[flows] invocation refused ${code}`);
-};
-
-type SelectedRecordReadField = Readonly<{
-  alias: string;
-  fieldId: string;
-  type: FlowReadFieldsScalarType;
-}>;
-
-type SelectedRecordReadProjection = Readonly<{
-  recordTypeId: string;
-  fields: readonly SelectedRecordReadField[];
-}>;
-
-type SelectedRecordReadModule = Readonly<{
-  moduleRootId: string;
-  moduleReleaseRevision: number;
-  storageContractId: string;
-}>;
-
-type InstalledSelectedRecordReadContext = Readonly<{
-  projections: NonNullable<FlowRelease["selectedRecordReadProjections"]>;
-  /** Flow input name to its one exact selected-record type, keyed by lower-case flow ID. */
-  inputs: ReadonlyMap<string, ReadonlyMap<string, string>>;
-  /** Exact installed Module owning each read target, keyed by lower-case record type ID. */
-  modules: ReadonlyMap<string, SelectedRecordReadModule>;
-}>;
-
-type ModuleDependency = Extract<ExactDefinitionDependency, { kind: "module" }>;
-
-const moduleDependencyMatches = (
-  dependency: ModuleDependency,
-  release: ModuleDefinitionConsumerReadResult,
-): boolean =>
-  sameId(dependency.rootId, release.rootId) &&
-  dependency.key === release.definitionKey &&
-  dependency.releaseRevision === release.releaseRevision &&
-  dependency.releaseVersion === release.releaseVersion &&
-  dependency.contentFingerprint === release.contentFingerprint;
-
-/** Resolve only the exact Module closure reachable from the installed Application manifests. */
-const installedModuleClosure = (
-  application: Readonly<{
-    content: ApplicationContent;
-    dependencyManifest: readonly ExactDefinitionDependency[];
-  }>,
-  releases: readonly ModuleDefinitionConsumerReadResult[],
-): ReadonlyMap<string, ModuleDefinitionConsumerReadResult> | undefined => {
-  const byRoot = new Map<string, ModuleDefinitionConsumerReadResult>();
-  for (const release of releases) {
-    const root = release.rootId.toLowerCase();
-    if (byRoot.has(root)) return undefined;
-    byRoot.set(root, release);
-  }
-
-  const directDependencies = application.dependencyManifest.filter(
-    (entry): entry is ModuleDependency => entry.kind === "module",
-  );
-  if (directDependencies.length !== application.content.moduleBindings.length) return undefined;
-  for (const binding of application.content.moduleBindings) {
-    const matches = directDependencies.filter(
-      (dependency) =>
-        sameId(dependency.rootId, binding.moduleRootId) &&
-        dependency.releaseVersion === binding.resolvedVersion,
-    );
-    if (matches.length !== 1) return undefined;
-  }
-
-  const reachable = new Map<string, ModuleDefinitionConsumerReadResult>();
-  const pending = [...directDependencies];
-  while (pending.length > 0) {
-    const dependency = pending.pop();
-    if (dependency === undefined) continue;
-    const root = dependency.rootId.toLowerCase();
-    const release = byRoot.get(root);
-    if (release === undefined || !moduleDependencyMatches(dependency, release)) return undefined;
-    if (reachable.has(root)) continue;
-    reachable.set(root, release);
-    pending.push(
-      ...release.dependencyManifest.filter(
-        (entry): entry is ModuleDependency => entry.kind === "module",
-      ),
-    );
-  }
-
-  return reachable.size === releases.length ? reachable : undefined;
-};
-
-const installedSelectedRecordReadContext = (
-  application: Readonly<{
-    content: ApplicationContent;
-    dependencyManifest: readonly ExactDefinitionDependency[];
-  }>,
-  releases: readonly ModuleDefinitionConsumerReadResult[],
-): InstalledSelectedRecordReadContext | undefined => {
-  const modules = installedModuleClosure(application, releases);
-  if (modules === undefined) return undefined;
-
-  const recordTypes = new Map<
-    string,
-    Array<
-      Readonly<{
-        module: ModuleDefinitionConsumerReadResult;
-        recordType: ModuleDefinitionConsumerReadResult["content"]["recordTypes"][number];
-      }>
-    >
-  >();
-  const readModules = new Map<string, SelectedRecordReadModule>();
-  for (const module of modules.values())
-    for (const recordType of module.content.recordTypes) {
-      const key = recordType.recordTypeId.toLowerCase();
-      const owners = recordTypes.get(key) ?? [];
-      owners.push({ module, recordType });
-      recordTypes.set(key, owners);
-    }
-
-  const moduleByRoot = new Map(
-    [...modules.values()].map((module) => [module.rootId.toLowerCase(), module] as const),
-  );
-  const moduleDependenciesFor = (rootId: string): Set<string> | undefined => {
-    const root = rootId.toLowerCase();
-    if (!moduleByRoot.has(root)) return undefined;
-    const visited = new Set<string>();
-    const pending = [root];
-    while (pending.length > 0) {
-      const current = pending.pop();
-      if (current === undefined || visited.has(current)) continue;
-      visited.add(current);
-      const module = moduleByRoot.get(current);
-      if (module === undefined) return undefined;
-      for (const dependency of module.dependencyManifest)
-        if (dependency.kind === "module") pending.push(dependency.rootId.toLowerCase());
-    }
-    visited.delete(root);
-    return visited;
-  };
-
-  const projections = new Map<string, Map<string, SelectedRecordReadProjection>>();
-  const inputs = new Map<string, Map<string, string>>();
-  const seenFlowIds = new Set<string>();
-  const flowOwners: Array<Readonly<{ flow: FlowDefinition; moduleRootId?: string }>> = [
-    ...application.content.flows.map((flow) => ({ flow })),
-    ...[...modules.values()].flatMap((module) =>
-      module.content.flows.map((flow) => ({ flow, moduleRootId: module.rootId })),
-    ),
-  ];
-
-  for (const { flow, moduleRootId } of flowOwners) {
-    const flowId = String(flow.id);
-    const normalizedFlowId = flowId.toLowerCase();
-    if (seenFlowIds.has(normalizedFlowId)) return undefined;
-    seenFlowIds.add(normalizedFlowId);
-    const flowProjections = new Map<string, SelectedRecordReadProjection>();
-    const flowInputs = new Map<string, string>();
-    const seenTaskIds = new Set<string>();
-    const moduleDependencies =
-      moduleRootId === undefined ? undefined : moduleDependenciesFor(moduleRootId);
-    if (moduleRootId !== undefined && moduleDependencies === undefined) return undefined;
-
-    const visit = (tasks: readonly FlowTask[]): boolean => {
-      for (const task of tasks) {
-        const taskId = String(task.id);
-        const normalizedTaskId = taskId.toLowerCase();
-        if (seenTaskIds.has(normalizedTaskId)) return false;
-        seenTaskIds.add(normalizedTaskId);
-        if (task.type === "record.read_fields") {
-          const compiled = task as FlowTask &
-            Readonly<{
-              properties?: Readonly<Record<string, unknown>>;
-              readFieldTypes?: unknown;
-            }>;
-          const properties = compiled.properties;
-          const recordTypeValue = properties?.record_type;
-          const recordTypeLiteral =
-            isRecord(recordTypeValue) && recordTypeValue.kind === "literal"
-              ? recordTypeValue.literal
-              : undefined;
-          const recordTypeId =
-            isRecord(recordTypeLiteral) && recordTypeLiteral.type === "text"
-              ? recordTypeIdSchema.safeParse(recordTypeLiteral.value)
-              : undefined;
-          const fieldsValue = properties?.fields;
-          const fieldsLiteral =
-            isRecord(fieldsValue) && fieldsValue.kind === "literal"
-              ? fieldsValue.literal
-              : undefined;
-          const fields =
-            isRecord(fieldsLiteral) && fieldsLiteral.type === "json"
-              ? flowReadFieldsProjectionSchema.safeParse(fieldsLiteral.value)
-              : undefined;
-          const fieldTypes = flowReadFieldsTypeMapSchema.safeParse(compiled.readFieldTypes);
-          if (
-            !recordTypeId?.success ||
-            !fields?.success ||
-            !fieldTypes.success ||
-            Object.keys(fieldTypes.data).length !== fields.data.length ||
-            flowProjections.has(taskId)
-          )
-            return false;
-
-          const selectedRecordOwners = recordTypes.get(recordTypeId.data.toLowerCase()) ?? [];
-          if (selectedRecordOwners.length !== 1) return false;
-          const owner = selectedRecordOwners[0]!;
-          const ownerRoot = owner.module.rootId.toLowerCase();
-          if (
-            (moduleDependencies !== undefined && !moduleDependencies.has(ownerRoot)) ||
-            (moduleRootId !== undefined && sameId(moduleRootId, owner.module.rootId))
-          )
-            return false;
-
-          const recordValue = properties?.record;
-          const reference =
-            isRecord(recordValue) && recordValue.kind === "reference"
-              ? recordValue.reference
-              : undefined;
-          if (
-            !isRecord(reference) ||
-            reference.source !== "input" ||
-            typeof reference.name !== "string"
-          )
-            return false;
-          const inputName = reference.name;
-          const declaration = flow.inputs[inputName];
-          if (
-            declaration === undefined ||
-            declaration.type !== "record_reference" ||
-            declaration.recordTypeIds?.length !== 1 ||
-            !sameId(declaration.recordTypeIds[0]!, recordTypeId.data)
-          )
-            return false;
-          const previousInputType = flowInputs.get(inputName);
-          if (previousInputType !== undefined && !sameId(previousInputType, recordTypeId.data))
-            return false;
-          flowInputs.set(inputName, recordTypeId.data);
-
-          const projectedFields: SelectedRecordReadField[] = [];
-          const seenFieldIds = new Set<string>();
-          for (const field of fields.data) {
-            const fieldId = fieldIdSchema.safeParse(field.field);
-            const scalarType = fieldTypes.data[field.alias];
-            if (!fieldId.success || scalarType === undefined) return false;
-            const normalizedFieldId = fieldId.data.toLowerCase();
-            if (seenFieldIds.has(normalizedFieldId)) return false;
-            seenFieldIds.add(normalizedFieldId);
-            const matchingFields = owner.recordType.fields.filter((candidate) =>
-              sameId(candidate.fieldId, fieldId.data),
-            );
-            if (
-              matchingFields.length !== 1 ||
-              flowReadFieldsScalarTypeForField(matchingFields[0]!.type) !== scalarType
-            )
-              return false;
-            projectedFields.push({ alias: field.alias, fieldId: fieldId.data, type: scalarType });
-          }
-
-          flowProjections.set(taskId, {
-            recordTypeId: recordTypeId.data,
-            fields: projectedFields,
-          });
-          readModules.set(recordTypeId.data.toLowerCase(), {
-            moduleRootId: owner.module.rootId,
-            moduleReleaseRevision: owner.module.releaseRevision,
-            storageContractId: owner.recordType.storageContractId,
-          });
-        }
-        for (const child of flowTaskChildLists(task)) if (!visit(child.tasks)) return false;
-      }
-      return true;
-    };
-
-    if (!visit([...flow.tasks, ...flow.errors, ...flow.finally])) return undefined;
-    if (flowProjections.size > 0) projections.set(flowId, flowProjections);
-    if (flowInputs.size > 0) inputs.set(normalizedFlowId, flowInputs);
-  }
-
-  return { projections, inputs, modules: readModules };
 };
 
 const guidedClickId = (draftId: string, revision: number, bindingId: string): string => {
@@ -525,17 +299,7 @@ export async function invokeInstalledFlow(
     permissions: dependencies.releaseCatalogue.permissions,
     createInstalledContextLoader: (transaction, scope) => {
       if (scope.applicationRootId === undefined) throw new Error("RECORD_PIN_TARGET_UNAVAILABLE");
-      return createHumanInstalledPageBundleContextLoader({
-        transaction,
-        scope: {
-          organizationId: scope.organizationId,
-          organizationAccountId: scope.organizationAccountId,
-          applicationRootId: scope.applicationRootId,
-          ...(scope.previewInstallationId === undefined
-            ? {}
-            : { previewInstallationId: scope.previewInstallationId }),
-        },
-      });
+      return createInstalledContextLoader(transaction, scope);
     },
     resolveTargetApplication: async (session, sourceSelection, applicationKey) => {
       if (
@@ -565,33 +329,42 @@ export async function invokeInstalledFlow(
         : undefined;
     },
   });
-  const executor = createProtectedOperationExecutor({
-    accessAdministration: createOrganizationAccessAdministrationService(requestDependencies),
-    connectionAdministration: (session, selection, change) =>
-      requests.runChange(session, selection, (transaction) =>
-        changeConnectionInstance(transaction, change),
-      ),
-    connectionHealth: (session, selection, command) =>
-      requests.runChange(session, selection, (transaction, scope) =>
-        checkConnectionHealth(transaction, scope, command),
-      ),
-    applicationStore: dependencies.applicationStore,
-    tenantGovernance: {
-      run: (session, selection, operation) =>
-        requests.runAccessChange(session, selection, (transaction, scope) =>
-          operation({
-            tenantId: scope.tenantId,
-            operations: createRequestBoundTenantGovernanceService(transaction, scope),
-          }),
+  const executorFor = (boundRequest?: BoundHumanOrganizationRequest) => {
+    const scopedDependencies = {
+      ...requestDependencies,
+      ...(boundRequest === undefined ? {} : { boundRequest }),
+    };
+    const scopedRequests = createHumanOrganizationRequestService(scopedDependencies);
+    return createProtectedOperationExecutor({
+      accessAdministration: createOrganizationAccessAdministrationService(scopedDependencies),
+      connectionAdministration: (session, selection, change) =>
+        scopedRequests.runChange(session, selection, (transaction) =>
+          changeConnectionInstance(transaction, change),
         ),
-    },
-  });
+      connectionHealth: (session, selection, command) =>
+        scopedRequests.runChange(session, selection, (transaction, scope) =>
+          checkConnectionHealth(transaction, scope, command),
+        ),
+      applicationStore: dependencies.applicationStore,
+      tenantGovernance: {
+        run: (session, selection, operation) =>
+          scopedRequests.runAccessChange(session, selection, (transaction, scope) =>
+            operation({
+              tenantId: scope.tenantId,
+              operations: createRequestBoundTenantGovernanceService(transaction, scope),
+            }),
+          ),
+      },
+    });
+  };
   // Save record tasks and named actions run through the record service's own
   // protected paths, under the initiator's verified request and in their own transactions.
   const records = createRecordSaveService(requestDependencies);
-  const subjectReader = createPageSubjectReader(requestDependencies);
   const actionRecords = createNamedActionRecordPort(requestDependencies);
-  const selectedRecordReadsFor = (installation: InstalledFlowBindings) => ({
+  const selectedRecordReadsFor = (
+    installation: InstalledFlowBindings,
+    requests: ReturnType<typeof createHumanOrganizationRequestService>,
+  ) => ({
     readFields: async (
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
@@ -647,20 +420,122 @@ export async function invokeInstalledFlow(
       }),
   });
 
-  const orchestratorFor = (
+  const dependenciesFor = (
     release: FlowRelease,
     runId: string | undefined,
     installation: InstalledFlowBindings,
-  ) =>
-    createFlowOrchestrator({
-      executor,
-      records,
-      actionRecords,
+    boundRequest?: BoundHumanOrganizationRequest,
+  ): FlowOrchestratorDependencies => {
+    const scopedDependencies = {
+      ...requestDependencies,
+      ...(boundRequest === undefined ? {} : { boundRequest }),
+    };
+    const requests = createHumanOrganizationRequestService(scopedDependencies);
+    const subjectReader = createPageSubjectReader(scopedDependencies);
+    const matchesBound = (session: IdentitySession, selection: OrganizationSelectionCandidate) =>
+      boundRequest !== undefined &&
+      canonicalJson(session) === canonicalJson(boundRequest.session) &&
+      canonicalJson(selection) === canonicalJson(boundRequest.selection);
+    const admissionHost: AdmissionHost = {
+      requests: requestDependencies,
+      invocation,
+      installationOf: installedFlowBindings,
+      pageAccess: async (context, bound) => {
+        const page = context.releaseSet.application.content.pages.find(
+          (candidate) => candidate.key === body.pageKey,
+        );
+        if (page === undefined) return false;
+        const capability = createStoredPageCapabilityService({
+          ...requestDependencies,
+          context,
+          permissions: dependencies.releaseCatalogue.permissions,
+          selection: { pageId: String(page.pageId) },
+        });
+        return (
+          (await capability.projectInTransaction(bound.transaction, bound.scope)) !== undefined
+        );
+      },
+      pageGate: async (context, binding, bound, currentInstallation, state) => {
+        if (!(await gateBindingToAddressedPage(context, binding.controlId, bound))) return false;
+        const page = admittedProjection?.page;
+        if (page === undefined) return false;
+        const guided = guidedControls.get(binding.controlId.toLowerCase());
+        if (
+          guided !== undefined &&
+          (guided === null || !guided.summary || binding.event !== "form_submit")
+        )
+          return false;
+        return admitPageGesture(
+          {
+            validateOption: dependencies.validateControlOption,
+            projectRowForm: (rowBound, rowContext, rowPage, tableId, formId, recordId) =>
+              admitRowForm(
+                dependencies,
+                requestDependencies,
+                rowBound,
+                rowContext,
+                rowPage,
+                body,
+                binding,
+                state,
+                tableId,
+                formId,
+                recordId,
+              ),
+          },
+          bound,
+          context,
+          currentInstallation,
+          page,
+          body,
+          binding,
+          state,
+        );
+      },
+      portsFor: dependenciesFor,
+    };
+    return {
+      continuationKey: dependencies.continuationKey,
+      admitSegment: (run, state, segment, execute) =>
+        admitFlowSegment(admissionHost, installation, run, state, segment, execute),
+      admitContinuation: (run, state, execute, openReplay) =>
+        admitFlowContinuation(admissionHost, installation, run, state, execute, openReplay),
+      admitPageStart: (run, state) => admitFlowPageStart(admissionHost, installation, run, state),
+      executor: executorFor(boundRequest),
+      records:
+        boundRequest === undefined
+          ? records
+          : {
+              save: async (session, selection, command) =>
+                matchesBound(session, selection)
+                  ? records.saveInTransaction(
+                      boundRequest.transaction,
+                      boundRequest.issuedAt,
+                      selection,
+                      command,
+                    )
+                  : { kind: "unavailable" },
+            },
+      actionRecords:
+        boundRequest === undefined
+          ? actionRecords
+          : {
+              execute: async (session, selection, command, run) =>
+                matchesBound(session, selection)
+                  ? actionRecords.executeInTransaction(
+                      boundRequest.transaction,
+                      boundRequest.issuedAt,
+                      selection,
+                      command,
+                      run,
+                    )
+                  : { kind: "unavailable" },
+            },
       subjects: {
         read: async (session, selection, subject) =>
           (await subjectReader.read(session, selection, subject)).kind,
       },
-      selectedRecordReads: selectedRecordReadsFor(installation),
+      selectedRecordReads: selectedRecordReadsFor(installation, requests),
       currentRecords: createFlowCurrentRecordReader({
         requests,
         reader: selectedRecordReader,
@@ -687,17 +562,7 @@ export async function invokeInstalledFlow(
               !sameId(scope.applicationRootId, installation.applicationRootId)
             )
               return false;
-            const current = await createHumanInstalledPageBundleContextLoader({
-              transaction,
-              scope: {
-                organizationId: scope.organizationId,
-                organizationAccountId: scope.organizationAccountId,
-                applicationRootId: scope.applicationRootId,
-                ...(scope.previewInstallationId === undefined
-                  ? {}
-                  : { previewInstallationId: scope.previewInstallationId }),
-              },
-            }).load();
+            const current = await createInstalledContextLoader(transaction, scope).load();
             const application = current.releaseSet.application;
             const modules = installedModuleClosure(application, current.releaseSet.modules);
             return (
@@ -725,9 +590,18 @@ export async function invokeInstalledFlow(
               })
             );
           });
-          return checked.kind === "available" && checked.value
-            ? recordPinService.acquireIdentity(session, selection, selector)
-            : { outcome: "unavailable" };
+          if (checked.kind !== "available" || !checked.value) return { outcome: "unavailable" };
+          if (boundRequest === undefined)
+            return recordPinService.acquireIdentity(session, selection, selector);
+          if (selector.applicationKey !== address.application.key)
+            return { outcome: "unavailable" };
+          return recordPinService.acquireIdentityInRequest(
+            boundRequest.transaction,
+            boundRequest.scope,
+            selection.organizationId,
+            selection.applicationRootId,
+            selector,
+          );
         },
       },
       authorizeInvocation: async (session, selection, flow) => {
@@ -781,17 +655,7 @@ export async function invokeInstalledFlow(
               !sameId(scope.applicationRootId, installation.applicationRootId)
             )
               return false;
-            const current = await createHumanInstalledPageBundleContextLoader({
-              transaction,
-              scope: {
-                organizationId: scope.organizationId,
-                organizationAccountId: scope.organizationAccountId,
-                applicationRootId: scope.applicationRootId,
-                ...(scope.previewInstallationId === undefined
-                  ? {}
-                  : { previewInstallationId: scope.previewInstallationId }),
-              },
-            }).load();
+            const current = await createInstalledContextLoader(transaction, scope).load();
             const application = current.releaseSet.application;
             const modules = installedModuleClosure(application, current.releaseSet.modules);
             if (
@@ -904,7 +768,13 @@ export async function invokeInstalledFlow(
       // The release was read from the trusted installation for this exact request.
       resolveRelease: async () => release,
       ...(runId === undefined ? {} : { newRunId: () => runId }),
-    });
+    };
+  };
+  const orchestratorFor = (
+    release: FlowRelease,
+    runId: string | undefined,
+    installation: InstalledFlowBindings,
+  ) => createFlowOrchestrator(dependenciesFor(release, runId, installation));
 
   const guidedControls = new Map<
     string,
@@ -947,7 +817,7 @@ export async function invokeInstalledFlow(
     }
     // The release's plans, built once per installed release: one flow per identity (a Module flow
     // never shadows an Application flow; an ambiguous release is refused rather than run).
-    const flows = flowPlansOf(releaseSet).flows;
+    const { flows, plans } = flowPlansOf(releaseSet);
     const selectedReadContext = installedSelectedRecordReadContext(application, releaseSet.modules);
     if (selectedReadContext === undefined)
       throw new Error("SELECTED_RECORD_READ_BINDING_UNAVAILABLE");
@@ -994,6 +864,7 @@ export async function invokeInstalledFlow(
       ].join(":"),
       bindings: application.content.flowBindings,
       flows,
+      plans,
       recordTypes,
       namedActions,
       selectedRecordReadProjections: selectedReadContext.projections,
@@ -1024,17 +895,7 @@ export async function invokeInstalledFlow(
     const read = await requests.run(session, selection, async (transaction, scope) => {
       if (scope.applicationRootId === undefined)
         throw new Error("INSTALLED_FLOW_BINDINGS_SCOPE_UNAVAILABLE");
-      return createHumanInstalledPageBundleContextLoader({
-        transaction,
-        scope: {
-          organizationId: scope.organizationId,
-          organizationAccountId: scope.organizationAccountId,
-          applicationRootId: scope.applicationRootId,
-          ...(scope.previewInstallationId === undefined
-            ? {}
-            : { previewInstallationId: scope.previewInstallationId }),
-        },
-      }).load();
+      return createInstalledContextLoader(transaction, scope).load();
     });
     return read.kind === "available" ? read.value : undefined;
   };
@@ -1065,7 +926,9 @@ export async function invokeInstalledFlow(
     }
     const release: FlowRelease = {
       releaseKey: installed.releaseKey,
+      installationRevision: installed.installationRevision,
       flows: installed.flows,
+      plans: installed.plans,
       ...(installed.recordTypes === undefined ? {} : { recordTypes: installed.recordTypes }),
       ...(installed.namedActions === undefined ? {} : { namedActions: installed.namedActions }),
       ...(installed.selectedRecordReadProjections === undefined
@@ -1083,10 +946,6 @@ export async function invokeInstalledFlow(
         ) {
           logFlowRefusal("FORM_CONTINUATION_FOREIGN_APPLICATION");
           return { kind: "unavailable" };
-        }
-        if (installation.installationReleaseRevision !== installed.installationRevision) {
-          logFlowRefusal("FORM_CONTINUATION_STALE_INSTALLATION");
-          return { kind: "stale" };
         }
         const flow = installed.flows.get(flowId);
         if (flow === undefined) {
@@ -1110,10 +969,8 @@ export async function invokeInstalledFlow(
     const trustedFormId = request.target.formId;
     if (
       trustedFormId === undefined ||
-      request.target.releaseKey !== installed.releaseKey ||
       request.target.installation.applicationRootId.toLowerCase() !==
         installed.applicationRootId.toLowerCase() ||
-      request.target.installation.installationReleaseRevision !== installed.installationRevision ||
       !declaresPausedNode(installed.flows.get(request.target.flowId), {
         nodeId: request.target.nodeId,
         formId: trustedFormId,
@@ -1162,6 +1019,13 @@ export async function invokeInstalledFlow(
   };
 
   const invocation = body.invocation;
+  let admittedProjection:
+    | Readonly<{
+        accessVersion: BoundHumanOrganizationRequest["scope"]["accessVersion"];
+        installationRevision: number;
+        page: Readonly<Record<string, unknown>>;
+      }>
+    | undefined;
   /**
    * Projects the addressed page for this person and requires the control on it, once and usable.
    * The client only learns that the invocation is refused; the cause is logged.
@@ -1169,6 +1033,7 @@ export async function invokeInstalledFlow(
   const gateBindingToAddressedPage = async (
     context: InstalledRuntimeContext,
     controlId: string,
+    bound?: BoundHumanOrganizationRequest,
   ): Promise<boolean> => {
     const page = context.releaseSet.application.content.pages.find(
       (candidate) => candidate.key === body.pageKey,
@@ -1177,7 +1042,7 @@ export async function invokeInstalledFlow(
       logFlowRefusal("BINDING_CONTROL_NOT_ON_PAGE page_not_installed");
       return false;
     }
-    const projected = await createStoredPageCapabilityService({
+    const capability = createStoredPageCapabilityService({
       ...requestDependencies,
       context,
       permissions: dependencies.releaseCatalogue.permissions,
@@ -1187,11 +1052,35 @@ export async function invokeInstalledFlow(
         pageId: String(page.pageId),
         ...(body.pageRecordId === undefined ? {} : { subjectRecordId: body.pageRecordId }),
       },
-    }).project(identity.session, runtimeContextSelection(context));
+    });
+    if (
+      bound !== undefined &&
+      admittedProjection !== undefined &&
+      (admittedProjection.accessVersion !== bound.scope.accessVersion ||
+        admittedProjection.installationRevision !== context.applicationReleaseRevision)
+    ) {
+      logFlowRefusal("BINDING_PROJECTION_CONTEXT_CHANGED");
+      return false;
+    }
+    const projected =
+      bound === undefined
+        ? await capability.project(identity.session, runtimeContextSelection(context))
+        : {
+            kind: "available" as const,
+            value:
+              admittedProjection?.page ??
+              (await capability.projectInTransaction(bound.transaction, bound.scope)),
+          };
     if (projected.kind !== "available" || projected.value === undefined) {
       logFlowRefusal(`BINDING_CONTROL_NOT_ON_PAGE page_projection_${projected.kind}`);
       return false;
     }
+    if (bound !== undefined && admittedProjection === undefined)
+      admittedProjection = {
+        accessVersion: bound.scope.accessVersion,
+        installationRevision: context.applicationReleaseRevision,
+        page: projected.value,
+      };
     const gate = requireProjectedPlacement(projected.value, controlId);
     if (gate.kind === "refused") {
       logFlowRefusal(`BINDING_CONTROL_NOT_ON_PAGE ${gate.reason}`);
@@ -1209,7 +1098,7 @@ export async function invokeInstalledFlow(
   // Use the same installed snapshot for this gate and the endpoint. A crafted action on a
   // guided page must not start a flow before its final form submit is confirmed.
   const bindingContext =
-    invocation.kind === "binding"
+    invocation.kind !== "continuation"
       ? await readInstalledContext(identity.session, selection)
       : undefined;
   const bindingInstallation =
@@ -1218,6 +1107,30 @@ export async function invokeInstalledFlow(
     if (bindingContext === undefined || bindingInstallation === undefined) {
       logFlowRefusal("BINDING_INSTALLATION_NOT_CURRENT");
       return { kind: "refused" };
+    }
+    if (invocation.segment !== undefined) {
+      const plan = bindingInstallation.plans.get(String(invocation.flowId));
+      const segment = plan?.segments.find(
+        (part) => part.kind === "server" && part.id === invocation.segment?.segmentId,
+      );
+      if (segment === undefined || segment.kind !== "server") return { kind: "refused" };
+      try {
+        openFlowCarriedValues(
+          invocation.carriedValues,
+          dependencies.continuationKey,
+          {
+            flowId: String(invocation.flowId),
+            bindingId: String(invocation.bindingId),
+            identityId: identity.session.identityId,
+            organizationId: selection.organizationId,
+            applicationRootId: selection.applicationRootId,
+          },
+          segment,
+        );
+      } catch (error) {
+        logFlowRefusal(`BINDING_CARRIED_VALUES_INVALID ${describeFailure(error)}`);
+        return { kind: "refused" };
+      }
     }
     const binding = bindingInstallation.bindings.find(
       (candidate) => candidate.bindingId.toLowerCase() === invocation.bindingId.toLowerCase(),
@@ -1259,7 +1172,65 @@ export async function invokeInstalledFlow(
 
   const endpoint = createFlowBindingEndpoint({
     readInstallation:
-      invocation.kind === "binding" ? async () => bindingInstallation : readInstalled,
+      invocation.kind !== "continuation" ? async () => bindingInstallation : readInstalled,
+    openRun: async (session, selection, binding, installation) => {
+      const plan = installation.plans?.get(String(binding.flow.flowId));
+      if (plan === undefined) return { kind: "refused" };
+      const release: FlowRelease = {
+        releaseKey: installation.releaseKey,
+        installationRevision: installation.installationRevision,
+        flows: installation.flows,
+        plans: installation.plans!,
+      };
+      const opened = await openFlowAdmissionRun(
+        {
+          requests: requestDependencies,
+          authorizeBinding: async (bound) => {
+            if (bound.scope.applicationRootId === undefined) return false;
+            const current = await createInstalledContextLoader(
+              bound.transaction,
+              bound.scope,
+            ).load();
+            const currentBinding = current.releaseSet.application.content.flowBindings.filter(
+              (entry) => sameId(entry.bindingId, binding.bindingId),
+            );
+            if (
+              current.applicationReleaseRevision !== installation.installationRevision ||
+              currentBinding.length !== 1 ||
+              canonicalJson(currentBinding[0]) !== canonicalJson(binding)
+            )
+              return false;
+            return gateBindingToAddressedPage(current, binding.controlId, bound);
+          },
+          authorizeInvocation: async (bound) =>
+            (await dependenciesFor(release, undefined, installation, bound).authorizeInvocation?.(
+              session,
+              selection,
+              plan.definition,
+            )) === true,
+        },
+        { session, selection, plan, bindingId: String(binding.bindingId) },
+      );
+      if (opened.kind !== "opened" || selection.applicationRootId === undefined)
+        return { kind: "refused" };
+      const carriedValues = sealFlowCarriedValues(
+        {},
+        {},
+        dependencies.continuationKey,
+        {
+          flowId: String(binding.flow.flowId),
+          bindingId: String(binding.bindingId),
+          runId: opened.runId,
+          identityId: session.identityId,
+          organizationId: selection.organizationId,
+          applicationRootId: selection.applicationRootId,
+        },
+        undefined,
+        true,
+      );
+      if (carriedValues === undefined) throw new Error("FLOW_RUN_TOKEN_UNAVAILABLE");
+      return { kind: "run_opened", carriedValues };
+    },
     adaptFormSubmit: async (binding, callerInputs, subject, installation) => {
       const resolveValues = async (values: unknown) => {
         if (installation.applicationContent === undefined || installation.modules === undefined)
@@ -1423,8 +1394,6 @@ export async function invokeInstalledFlow(
         guided.flowId === undefined ||
         String(model.pageId).toLowerCase() !== guided.pageId.toLowerCase() ||
         draft.computedStepId !== summary.id ||
-        model.invocation.installationRevision !== body.invocation.installationRevision ||
-        model.invocation.releaseKey !== body.invocation.releaseKey ||
         draft.draftId.toLowerCase() !== reference.draftId.toLowerCase() ||
         draft.revision !== reference.revision ||
         draft.flowId.toLowerCase() !== guided.flowId.toLowerCase() ||

@@ -1,7 +1,7 @@
 import "server-only";
 
 import {
-  createHumanInstalledPageBundleContextLoader,
+  createInstalledContextLoader,
   type HumanOrganizationRequestDependencies,
 } from "@vortex/platform/server";
 import type { IdentitySession, OrganizationSelectionCandidate } from "@vortex/platform/schema";
@@ -24,16 +24,6 @@ export const loadInstalledContext = (
     selection,
     async (transaction, scope) => {
       if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
-      return createHumanInstalledPageBundleContextLoader({
-        transaction,
-        scope: {
-          organizationId: scope.organizationId,
-          organizationAccountId: scope.organizationAccountId,
-          applicationRootId: scope.applicationRootId,
-          ...(scope.previewInstallationId === undefined
-            ? {}
-            : { previewInstallationId: scope.previewInstallationId }),
-        },
-      }).load();
+      return createInstalledContextLoader(transaction, scope).load();
     },
   );

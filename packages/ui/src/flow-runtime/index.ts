@@ -15,6 +15,7 @@ export {
   createFlowRuntime,
   createFlowRuntimeState,
   type FlowBindingReference,
+  type PlacementFlowBinding,
   type FlowRuntime,
   type FlowRuntimeOptions,
   type FlowRuntimeState,
@@ -40,7 +41,6 @@ export { createFlowInvokeClient } from "./lazy-flow-client";
 export {
   parseServerFlowResponse,
   type FlowApplicationAddress,
-  type FlowInstallationContext,
   type FlowSubjectContext,
   type FlowInvokeClient,
   type FlowInvokeClientOptions,

@@ -1,6 +1,7 @@
 import {
   buildLinkTilesQueryBinding,
   flowValueReferences,
+  flowEntrySegments,
   readOrganizationRuntimeSettings,
   type HumanOrganizationRequestDependencies,
   type InstalledRuntimeContext,
@@ -378,7 +379,10 @@ export const projectPlacementBindings = (
           return flowTaskChildLists(task).some((child) => savesValues(child.tasks));
         });
       const flow = application.content.flows.find((entry) => sameId(entry.id, binding.flow.flowId));
-      const plan = plans.plans.get(String(binding.flow.flowId))?.browser;
+      const fullPlan = plans.plans.get(String(binding.flow.flowId));
+      if (fullPlan === undefined) throw new Error("FLOW_BINDING_PLAN_UNAVAILABLE");
+      const entrySegments = flowEntrySegments(fullPlan);
+      const plan = fullPlan.browser;
       const pageInputs =
         plan === undefined
           ? {}
@@ -409,6 +413,10 @@ export const projectPlacementBindings = (
         event: binding.event,
         flowId: binding.flow.flowId,
         settings: binding.settings,
+        entrySegments: entrySegments.map((segment) => ({
+          segmentId: segment.id,
+          fingerprint: segment.fingerprint,
+        })),
         callerInputs: Object.values(binding.flow.inputs).flatMap((input) =>
           typeof input === "object" && input !== null && input.kind === "caller"
             ? [input.name]

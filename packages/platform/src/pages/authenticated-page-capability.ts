@@ -12,6 +12,7 @@ import type {
 import { compiledItemSlots } from "../definition/application-composition/compiled-item-tree";
 import { pageDefinitionSchema, type PageDefinition } from "../definition/application-contracts";
 import { canonicalJson } from "../definition/canonical-json";
+import { sameId } from "../catalogue/runtime-primitives";
 import type { ConditionNode } from "../definition/module-foundation-contracts";
 import { isTrustedInstalledPageComposition } from "../definition/installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "../definition/installed-runtime-context";
@@ -20,6 +21,7 @@ import { decideOrganizationAccessBatch } from "../access/organization-access-dec
 import { evaluateOrganizationRecordPermissionAvailability } from "../access/organization-record-permission-availability";
 import {
   projectPageCapability,
+  projectPlacementSubtree,
   type PageCapabilityState,
   type ProjectedPageCapability,
 } from "./page-capability-projection";
@@ -27,6 +29,8 @@ import {
   resolvePageComposition,
   type ResolvedPageComposition,
 } from "./page-composition-resolution";
+import { requireProjectedPlacement } from "./projected-placement-gate";
+import { walkPlacementData } from "./placement-walk";
 
 type PermissionBinding = Readonly<{
   permissionKey: string;
@@ -180,35 +184,88 @@ const gateDecision = (
 
 const sameKey = (left: string, right: string): boolean => left === right;
 
-/**
- * Projects one loaded page capability for the viewer: the page gate, then each placement's view and
- * use gates, visibility condition and bound action, all decided in this one verified transaction.
- * The page gate and every placement's permission gate are decided together in one batch
- * statement; a record placement gate keeps its own availability read. Undefined when the page is
- * not the viewer's to open.
- */
-export const projectAuthenticatedPageCapability = async (
+/** A field operand of a row form is resolved only once its row has been proved. */
+const conditionReadsField = (condition: ConditionNode): boolean => {
+  if (condition.kind === "comparison")
+    return condition.left.source === "field" || condition.right?.source === "field";
+  if (condition.kind === "not") return conditionReadsField(condition.condition);
+  return condition.conditions.some(conditionReadsField);
+};
+
+/** The shared view, use, visibility and action decision for one placement. */
+const evaluatePlacement = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  page: PageDefinition,
+  required: RequiredPlacement,
+  binding: FixedAuthenticatedPageCapability["placements"][string],
+  pageAccess: GateDecision,
+  ancestorHidden: boolean,
+  decide: (binding: PermissionBinding | PlacementPermissionBinding) => Promise<GateDecision>,
+  evaluators: PageCapabilityEvaluators,
+  deferRowCondition = false,
+) => {
+  const view =
+    required.viewPermissionKey === undefined
+      ? { allowed: true, correlationId: pageAccess.correlationId, validUntil: undefined }
+      : binding.viewPermission !== undefined &&
+          sameKey(binding.viewPermission.permissionKey, required.viewPermissionKey)
+        ? await decide(binding.viewPermission)
+        : undefined;
+  const use =
+    required.usePermissionKey === undefined
+      ? { allowed: true, correlationId: pageAccess.correlationId, validUntil: undefined }
+      : binding.usePermission !== undefined &&
+          sameKey(binding.usePermission.permissionKey, required.usePermissionKey)
+        ? await decide(binding.usePermission)
+        : undefined;
+  if (view === undefined || use === undefined)
+    throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
+  const conditionAllowed =
+    required.visibilityCondition === undefined
+      ? binding.visibilityConditionAllowed
+      : deferRowCondition && conditionReadsField(required.visibilityCondition)
+        ? true
+        : !view.allowed || ancestorHidden
+          ? false
+          : await evaluators.evaluateVisibilityCondition(
+              transaction,
+              scope,
+              page,
+              required.visibilityCondition,
+            );
+  const actionAvailable =
+    ancestorHidden || !view.allowed
+      ? undefined
+      : await evaluators.evaluateActionAvailability(transaction, scope, page, required.placementId);
+  return {
+    view,
+    use,
+    hidden:
+      ancestorHidden ||
+      !view.allowed ||
+      (required.visibilityCondition !== undefined && conditionAllowed !== true) ||
+      actionAvailable === false,
+    state: {
+      viewAllowed: view.allowed,
+      useAllowed: use.allowed,
+      ...(binding.operationRequired === undefined
+        ? {}
+        : { operationRequired: binding.operationRequired }),
+      operationBound: binding.operationBound,
+      ...(conditionAllowed === undefined ? {} : { conditionAllowed }),
+      ...(actionAvailable === undefined ? {} : { actionAvailable }),
+    },
+  };
+};
+
+/** Batch the same page and placement declarations for a full page or a scoped projection. */
+const placementDecisions = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   loaded: FixedAuthenticatedPageCapability,
-  evaluators: PageCapabilityEvaluators,
-): Promise<ProjectedPageCapability | undefined> => {
-  const page = pageDefinitionSchema.parse(loaded.page);
-  if (
-    loaded.resolvedComposition !== undefined &&
-    (loaded.resolvedCompositionContext === undefined ||
-      !isTrustedInstalledPageComposition(
-        loaded.resolvedCompositionContext,
-        loaded.resolvedComposition,
-      ) ||
-      canonicalJson(loaded.resolvedComposition.page) !== canonicalJson(page))
-  )
-    throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
-  const resolved =
-    loaded.resolvedComposition ?? resolvePageComposition(page, loaded.applicationShells);
-  if (!sameKey(loaded.pagePermission.permissionKey, page.accessPermissionKey))
-    throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
-
+  required: readonly RequiredPlacement[],
+) => {
   // One projection transaction decides each exact declaration once; repeated declarations
   // reuse the decision and its validity deadline.
   const decided = new Map<string, GateDecision>();
@@ -217,7 +274,7 @@ export const projectAuthenticatedPageCapability = async (
       kind: isRecordPlacementBinding(binding) ? "record" : "permission",
       declaration: binding.declaration,
     });
-  const placementGates = requiredPlacements(resolved).flatMap((required) => {
+  const placementGates = required.flatMap((required) => {
     const binding = loaded.placements[required.placementId];
     return [
       required.viewPermissionKey !== undefined &&
@@ -254,7 +311,40 @@ export const projectAuthenticatedPageCapability = async (
     }
     return decision;
   };
-  const pageAccess = await decide(loaded.pagePermission);
+  return { decide, pageAccess: await decide(loaded.pagePermission) };
+};
+
+/**
+ * Projects one loaded page capability for the viewer: the page gate, then each placement's view and
+ * use gates, visibility condition and bound action, all decided in this one verified transaction.
+ * The page gate and every placement's permission gate are decided together in one batch
+ * statement; a record placement gate keeps its own availability read. Undefined when the page is
+ * not the viewer's to open.
+ */
+export const projectAuthenticatedPageCapability = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  loaded: FixedAuthenticatedPageCapability,
+  evaluators: PageCapabilityEvaluators,
+  rowFormIds: ReadonlySet<string> = new Set(),
+): Promise<ProjectedPageCapability | undefined> => {
+  const page = pageDefinitionSchema.parse(loaded.page);
+  if (
+    loaded.resolvedComposition !== undefined &&
+    (loaded.resolvedCompositionContext === undefined ||
+      !isTrustedInstalledPageComposition(
+        loaded.resolvedCompositionContext,
+        loaded.resolvedComposition,
+      ) ||
+      canonicalJson(loaded.resolvedComposition.page) !== canonicalJson(page))
+  )
+    throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
+  const resolved =
+    loaded.resolvedComposition ?? resolvePageComposition(page, loaded.applicationShells);
+  if (!sameKey(loaded.pagePermission.permissionKey, page.accessPermissionKey))
+    throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
+  const requiredList = requiredPlacements(resolved);
+  const { decide, pageAccess } = await placementDecisions(transaction, scope, loaded, requiredList);
   if (!pageAccess.allowed) return undefined;
   const correlations = new Set([
     pageAccess.correlationId.toLowerCase(),
@@ -272,68 +362,31 @@ export const projectAuthenticatedPageCapability = async (
   retainEarliestAccessEligibility(pageAccess.validUntil);
   const states: Record<string, PageCapabilityState["placements"][string]> = {};
   const hiddenPlacements = new Set<string>();
-  for (const required of requiredPlacements(resolved)) {
+  for (const required of requiredList) {
     if (states[required.placementId] !== undefined) continue;
     const binding = loaded.placements[required.placementId];
     if (binding === undefined) throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
-    const view =
-      required.viewPermissionKey === undefined
-        ? { allowed: true, correlationId: pageAccess.correlationId, validUntil: undefined }
-        : binding.viewPermission !== undefined &&
-            sameKey(binding.viewPermission.permissionKey, required.viewPermissionKey)
-          ? await decide(binding.viewPermission)
-          : undefined;
-    const use =
-      required.usePermissionKey === undefined
-        ? { allowed: true, correlationId: pageAccess.correlationId, validUntil: undefined }
-        : binding.usePermission !== undefined &&
-            sameKey(binding.usePermission.permissionKey, required.usePermissionKey)
-          ? await decide(binding.usePermission)
-          : undefined;
-    if (view === undefined || use === undefined)
-      throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
-    retainEarliestAccessEligibility(view.validUntil);
-    retainEarliestAccessEligibility(use.validUntil);
-    correlations.add(view.correlationId.toLowerCase());
-    correlations.add(use.correlationId.toLowerCase());
     const ancestorHidden = required.ancestorPlacementIds.some((id) => hiddenPlacements.has(id));
-    const conditionAllowed =
-      required.visibilityCondition === undefined
-        ? binding.visibilityConditionAllowed
-        : !view.allowed || ancestorHidden
-          ? false
-          : await evaluators.evaluateVisibilityCondition(
-              transaction,
-              scope,
-              page,
-              required.visibilityCondition,
-            );
-    const actionAvailable =
-      ancestorHidden || !view.allowed
-        ? undefined
-        : await evaluators.evaluateActionAvailability(
-            transaction,
-            scope,
-            page,
-            required.placementId,
-          );
-    if (
-      ancestorHidden ||
-      !view.allowed ||
-      (required.visibilityCondition !== undefined && conditionAllowed !== true) ||
-      actionAvailable === false
-    )
-      hiddenPlacements.add(required.placementId);
-    states[required.placementId] = {
-      viewAllowed: view.allowed,
-      useAllowed: use.allowed,
-      ...(binding.operationRequired === undefined
-        ? {}
-        : { operationRequired: binding.operationRequired }),
-      operationBound: binding.operationBound,
-      ...(conditionAllowed === undefined ? {} : { conditionAllowed }),
-      ...(actionAvailable === undefined ? {} : { actionAvailable }),
-    };
+    const evaluated = await evaluatePlacement(
+      transaction,
+      scope,
+      page,
+      required,
+      binding,
+      pageAccess,
+      ancestorHidden,
+      decide,
+      evaluators,
+      [required.placementId, ...required.ancestorPlacementIds].some((id) =>
+        rowFormIds.has(id.toLowerCase()),
+      ),
+    );
+    retainEarliestAccessEligibility(evaluated.view.validUntil);
+    retainEarliestAccessEligibility(evaluated.use.validUntil);
+    correlations.add(evaluated.view.correlationId.toLowerCase());
+    correlations.add(evaluated.use.correlationId.toLowerCase());
+    if (evaluated.hidden) hiddenPlacements.add(required.placementId);
+    states[required.placementId] = evaluated.state;
   }
   if (correlations.size !== 1) throw new Error("PAGE_CAPABILITY_EVIDENCE_UNAVAILABLE");
   const projected = projectPageCapability(resolved, {
@@ -355,4 +408,104 @@ export const projectAuthenticatedPageCapability = async (
       return undefined;
   }
   return projected;
+};
+
+/** Re-evaluates only a form subtree on an already-projected page for the gesture's subject. */
+export const projectAuthenticatedFormCapability = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  loaded: FixedAuthenticatedPageCapability,
+  projectedPage: Readonly<Record<string, unknown>>,
+  formId: string,
+  evaluators: PageCapabilityEvaluators,
+): Promise<Readonly<Record<string, unknown>> | undefined> => {
+  if (
+    requireProjectedPlacement(projectedPage, formId).kind !== "on_page" ||
+    projectedPage.accessVersion !== scope.accessVersion ||
+    (loaded.applicationReleaseRevision !== undefined &&
+      projectedPage.applicationReleaseRevision !== loaded.applicationReleaseRevision)
+  )
+    return undefined;
+  const page = pageDefinitionSchema.parse(loaded.page);
+  if (
+    !sameKey(loaded.pagePermission.permissionKey, page.accessPermissionKey) ||
+    (loaded.resolvedComposition !== undefined &&
+      (loaded.resolvedCompositionContext === undefined ||
+        !isTrustedInstalledPageComposition(
+          loaded.resolvedCompositionContext,
+          loaded.resolvedComposition,
+        ) ||
+        canonicalJson(loaded.resolvedComposition.page) !== canonicalJson(page)))
+  )
+    throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
+  const resolved =
+    loaded.resolvedComposition ?? resolvePageComposition(page, loaded.applicationShells);
+  const layouts =
+    resolved.roots.kind === "page"
+      ? [resolved.roots.main]
+      : Object.values(resolved.roots.stepContent);
+  let item: Record<string, unknown> | undefined;
+  for (const layout of layouts) {
+    const matches: Record<string, unknown>[] = [];
+    walkPlacementData(layout, (candidate) => {
+      if (sameId(candidate.placementId, formId)) matches.push(candidate.item);
+      return undefined;
+    });
+    if (matches.length > 1) return undefined;
+    if (matches[0] !== undefined) {
+      if (item !== undefined && canonicalJson(item) !== canonicalJson(matches[0])) return undefined;
+      item = matches[0];
+    }
+  }
+  if (item === undefined) return undefined;
+  const required = requiredPlacements(resolved).filter(
+    (entry) =>
+      sameId(entry.placementId, formId) ||
+      entry.ancestorPlacementIds.some((ancestor) => sameId(ancestor, formId)),
+  );
+  const { decide, pageAccess } = await placementDecisions(transaction, scope, loaded, required);
+  if (!pageAccess.allowed) return undefined;
+  const correlations = new Set([
+    pageAccess.correlationId.toLowerCase(),
+    ...(loaded.sourceCorrelationId === undefined ? [] : [loaded.sourceCorrelationId.toLowerCase()]),
+  ]);
+  let earliest = pageAccess.validUntil;
+  const retain = (candidate: string | undefined) => {
+    if (
+      candidate !== undefined &&
+      (earliest === undefined || Date.parse(candidate) < Date.parse(earliest))
+    )
+      earliest = candidate;
+  };
+  const states: Record<string, PageCapabilityState["placements"][string]> = {};
+  const hidden = new Set<string>();
+  for (const entry of required) {
+    if (states[entry.placementId] !== undefined) continue;
+    const binding = loaded.placements[entry.placementId];
+    if (binding === undefined) throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
+    const evaluated = await evaluatePlacement(
+      transaction,
+      scope,
+      page,
+      entry,
+      binding,
+      pageAccess,
+      entry.ancestorPlacementIds.some((ancestor) => hidden.has(ancestor)),
+      decide,
+      evaluators,
+    );
+    retain(evaluated.view.validUntil);
+    retain(evaluated.use.validUntil);
+    correlations.add(evaluated.view.correlationId.toLowerCase());
+    correlations.add(evaluated.use.correlationId.toLowerCase());
+    if (evaluated.hidden) hidden.add(entry.placementId);
+    states[entry.placementId] = evaluated.state;
+  }
+  if (correlations.size !== 1) throw new Error("PAGE_CAPABILITY_EVIDENCE_UNAVAILABLE");
+  if (
+    earliest !== undefined &&
+    !(await evaluators.validateAccessEligibilityUntil(transaction, scope, earliest))
+  )
+    return undefined;
+  return projectPlacementSubtree(item, states);
 };

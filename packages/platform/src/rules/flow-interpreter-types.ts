@@ -4,7 +4,7 @@ import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
 import type { FlowReference } from "../workflows/flow-values";
 import type { FormContinuationAnswer } from "../workflows/form-continuation-answer";
 import type { FlowRuntimeValue } from "./flow-formula";
-import type { flowRunStateVersion } from "./flow-interpreter-core";
+import type { flowRunStateVersion } from "./flow-interpreter-state";
 
 /** The safe outcomes a failed run reports; the default error handler shows each of them. */
 export type FlowFailureOutcome = "refused" | "conflict" | "validation" | "uncertain" | "failed";
@@ -28,7 +28,8 @@ export type FlowFailureCode =
   | "output_unresolved"
   | "task_refused"
   | "resume_mismatch"
-  | "continuation_unavailable";
+  | "continuation_unavailable"
+  | "replay_unavailable";
 
 export type FlowFailure = Readonly<{
   outcome: FlowFailureOutcome;
@@ -119,6 +120,7 @@ export type FlowRunState = Readonly<{
   triggerRecord?: FlowRuntimeValues;
   /** The record as stored before a save, keyed by field key, for `trigger.previous.<field>` reads. */
   previousRecord?: FlowRuntimeValues;
+  forms?: Readonly<Record<string, FlowRuntimeValues>>;
   /** Warnings and requirements the save rule tasks reported, in the order they ran. */
   ruleFeedback?: readonly FlowRuleFeedback[];
   activations: readonly Activation[];
@@ -190,13 +192,21 @@ export type FlowRunResult =
   | Readonly<{
       status: "completed";
       outputs: FlowRuntimeValues;
+      finalOutputs?: FlowRuntimeValues;
+      carriedOutputs?: FlowRuntimeValues;
       /** The outcome key of the Stop task that ended the flow early, when one did. */
       stopped?: string;
     }>
   | Readonly<{ status: "failed"; failure: FlowFailure }>;
 
 export type FlowRunStep =
-  | Readonly<{ kind: "protected_task"; state: FlowRunState; call: FlowProtectedTaskCall }>
+  | Readonly<{
+      kind: "protected_task";
+      state: FlowRunState;
+      call: FlowProtectedTaskCall;
+      replay?: FlowRunResume;
+    }>
+  | Readonly<{ kind: "boundary"; state: FlowRunState; result?: FlowRunResult; nextTaskId?: string }>
   | Readonly<{
       kind: "interface";
       state: FlowRunState;
@@ -249,6 +259,8 @@ export type FlowRunStart = Readonly<{
    * and the interpreter's own value-shape check is not applied to them.
    */
   verifiedInputs?: FlowRuntimeValues;
+  pageResolvedInputs?: readonly string[];
+  carriedValues?: Readonly<Record<string, FlowRuntimeValue>>;
 }>;
 
 export type FlowRunResume =
@@ -259,3 +271,8 @@ export type FlowRunResume =
       diagnostic?: FlowRefusalFeedback;
     }>
   | FormContinuationAnswer;
+
+/** Safe effect outcomes indexed by task path and iteration. */
+export type FlowSegmentReplay = Readonly<
+  Record<string, Extract<FlowRunResume, { kind: "task_result" }> | null>
+>;

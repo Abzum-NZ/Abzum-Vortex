@@ -35,7 +35,12 @@ export type PageWebMcpTool = Readonly<{
     required: readonly string[];
     additionalProperties: false;
   }>;
-  binding: Readonly<{ bindingId: string; flowId: string; event: string }>;
+  binding: Readonly<{
+    bindingId: string;
+    flowId: string;
+    event: string;
+    entrySegments: PlacementFlowBinding["entrySegments"];
+  }>;
 }>;
 
 type ProjectionInput = Readonly<{
@@ -227,6 +232,7 @@ export const projectPageWebMcpTools = (input: ProjectionInput): readonly PageWeb
         bindingId: String(binding.bindingId),
         flowId: String(binding.flow.flowId),
         event: binding.event,
+        entrySegments: pageBinding.entrySegments,
       },
     });
   }

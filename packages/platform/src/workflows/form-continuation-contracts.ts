@@ -75,15 +75,6 @@ export const formContinuationDraftEvidenceSchema = z
   .object({ draftId: platformIdSchema, revision: revisionSchema })
   .strict();
 
-/** Asks the server to start a flow the person may run, which may pause at a form. */
-export const formContinuationStartRequestSchema = z
-  .object({
-    installation: formContinuationInstallationSchema,
-    flowId: flowIdSchema,
-    inputs: z.record(builderKeySchema, jsonValueSchema).default({}),
-  })
-  .strict();
-
 /** Continues, submits or cancels the exact paused task with its continuation. */
 export const formContinuationRequestSchema = z
   .object({
@@ -153,6 +144,7 @@ export const formContinuationRefusalReasonSchema = z.enum([
    * or receipt no longer matches. One neutral reason, so a replay or forgery learns nothing.
    */
   "not_resumable",
+  "already_answered",
 ]);
 
 /**
@@ -190,6 +182,8 @@ export const formContinuationOutcomeSchema = z.discriminatedUnion("kind", [
       draft: formContinuationDraftEvidenceSchema.optional(),
     })
     .strict(),
+  z.object({ kind: z.literal("reload") }).strict(),
+  z.object({ kind: z.literal("rate_limited"), retryAfterSeconds: z.number().int().nonnegative() }).strict(),
   z.object({ kind: z.literal("refused"), reason: formContinuationRefusalReasonSchema }).strict(),
 ]);
 
@@ -197,7 +191,6 @@ export type FormContinuationInstallation = z.infer<typeof formContinuationInstal
 export type FormContinuationTarget = z.infer<typeof formContinuationTargetSchema>;
 export type FormContinuationReceipt = z.infer<typeof formContinuationReceiptSchema>;
 export type FormContinuationDraftEvidence = z.infer<typeof formContinuationDraftEvidenceSchema>;
-export type FormContinuationStartRequest = z.input<typeof formContinuationStartRequestSchema>;
 export type FormContinuationRequest = z.input<typeof formContinuationRequestSchema>;
 export type FormContinuationIntent = z.infer<typeof formContinuationIntentSchema>;
 export type FormContinuationUnavailableNotice = z.infer<
@@ -212,12 +205,6 @@ export type FormContinuationOutcome = z.infer<typeof formContinuationOutcomeSche
  * to the caller: every failure is a `refused` outcome.
  */
 export interface FormContinuationService {
-  /** Starts a flow for the verified person; the result may be a form request to continue. */
-  request(
-    session: IdentitySession,
-    selection: OrganizationSelectionCandidate,
-    request: FormContinuationStartRequest,
-  ): Promise<FormContinuationOutcome>;
   /** Continues, submits, cancels or confirms the exact paused node. */
   continue(
     session: IdentitySession,

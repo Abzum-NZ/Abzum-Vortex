@@ -88,6 +88,7 @@ export function usePlacementActions({
       clickId?: string,
       /** The gesture is shown on its own control, which tells the person its outcome. */
       reportOnControl?: ControlReport,
+      sourceTablePlacementId?: string,
       /** A field change initiated by another flow continues that same cycle. */
       cycle?: FlowEventCycle,
     ) => {
@@ -114,6 +115,7 @@ export function usePlacementActions({
           ),
           clickId ?? crypto.randomUUID(),
           gestureSubject,
+          sourceTablePlacementId,
           cycle,
         ),
         formOwners[placementId],

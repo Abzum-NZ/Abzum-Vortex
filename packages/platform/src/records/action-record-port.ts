@@ -15,6 +15,7 @@ import {
 import { saveRecordCommandSchema } from "./records";
 import {
   createHumanOrganizationRequestService,
+  HumanOrganizationRequestRestart,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "../access/human-organization-request";
@@ -1233,6 +1234,48 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
     }
   };
   return Object.freeze({
+    /** Runs one named action inside the caller's verified request transaction. */
+    async executeInTransaction(
+      transaction: RequestDatabaseTransaction,
+      issuedAt: string,
+      selection: OrganizationSelectionCandidate,
+      commandCandidate: unknown,
+      run: ActionFlowRunner,
+    ): Promise<NamedActionServiceResult> {
+      const command = parsedCommand(commandCandidate);
+      if (command === undefined || selection.applicationRootId === undefined)
+        return { kind: "unavailable" };
+      const activityId = newActivityId();
+      if (activityId === undefined) return { kind: "temporarily_unavailable" };
+      const state = attemptStateOf(command, activityId);
+      const attempt = await attemptNamedActions(transaction, issuedAt, [state], run, ids);
+      const value = attempt.kind === "completed" ? attempt.outcomes[0]! : attempt.outcome;
+      const settlement = state.deleteSettlement as Settled<unknown> | undefined;
+      if (settlement?.kind === "restart" || value === restart)
+        throw new HumanOrganizationRequestRestart();
+      if (settlement?.kind === "result")
+        return { kind: "available", value: deleteRefusal(settlement) };
+      if (value === recordedRefusal) {
+        const refused = state.preconditionRefusal as NamedActionAttemptState["preconditionRefusal"];
+        if (refused !== undefined)
+          return {
+            kind: "available",
+            value: safeRefusal(
+              refused.correlationId,
+              "operation_refused",
+              "the action's precondition refused the subject record (refusal recorded)",
+              refused.reason,
+            ),
+          };
+        console.error("[named-action] refused NAMED_ACTION_REFUSAL_RECORDED");
+        return { kind: "unavailable" };
+      }
+      const warnings = state.attempted.executions.flatMap((execution) => execution.warnings);
+      return value.outcome === "completed" && warnings.length > 0
+        ? { kind: "available", value, warnings }
+        : { kind: "available", value };
+    },
+
     async execute(
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
