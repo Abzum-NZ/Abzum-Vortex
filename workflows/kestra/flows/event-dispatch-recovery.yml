@@ -15,11 +15,11 @@ concurrency:
 tasks:
   - id: recover_missed_wakeups
     type: io.kestra.plugin.core.http.Request
-    uri: "{{ secret('VORTEX_EVENT_DISPATCH_WAKEUP_URL') }}"
+    uri: "{{ secret('VORTEX_EVENT_DISPATCH_RECOVERY_URL') }}"
     method: POST
     contentType: application/json
     headers:
-      Authorization: "Bearer {{ secret('VORTEX_EVENT_DISPATCH_WAKEUP_CREDENTIAL') }}"
+      Authorization: "Bearer {{ secret('VORTEX_EVENT_DISPATCH_RECOVERY_CREDENTIAL') }}"
     body: '{"source":"scheduled_recovery"}'
     timeout: PT4M
     options:
