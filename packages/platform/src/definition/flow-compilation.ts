@@ -120,6 +120,8 @@ export type FlowCompilationResolver = Readonly<{
 
 export type FlowCompilationInput = Readonly<{
   flows: readonly SourceFlow[];
+  /** The authored flows before shorthand references and defaults are parsed. */
+  rawFlows?: readonly unknown[];
   resolver: FlowCompilationResolver;
   /** The definition keys this definition declares as dependencies; a flow may reach only these. */
   declaredDefinitionKeys: readonly string[];
@@ -150,6 +152,7 @@ type Context = {
   readonly resolved: { canonicalPath: Path; sourcePath: Path }[];
   /** The one record type every record trigger of the flow names, when they agree. */
   readonly triggerRecordType: string | undefined;
+  readonly rawSource: unknown;
 };
 
 const refusal = (
@@ -217,7 +220,12 @@ export function resolveFlowFormReferences<Value>(
 const resolveFormReferences = <Value>(ctx: Context, value: Value, path: Path): Value =>
   resolveFlowFormReferences(
     value,
-    (form, referencePath) => resolveAt(ctx, ctx.resolver.form(form), referencePath),
+    (form, referencePath) => {
+      let sourcePath = referencePath;
+      while (sourcePath.length > 0 && !valueAt(ctx.rawSource, sourcePath).found)
+        sourcePath = sourcePath.slice(0, -1);
+      return resolveAt(ctx, ctx.resolver.form(form), referencePath, sourcePath);
+    },
     path,
   );
 
@@ -601,7 +609,7 @@ const startsWith = (path: Path, prefix: Path): boolean =>
 
 const flowProvenance = (
   canonical: FlowDefinition,
-  source: SourceFlow,
+  source: unknown,
   resolved: Context["resolved"],
   canonicalIndex: number,
   sourceIndex: number,
@@ -688,6 +696,7 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
       transaction: source.execution === "transaction",
       resolved: [],
       triggerRecordType: triggerRecordType(source),
+      rawSource: input.rawFlows?.[sourceIndex] ?? source,
     };
 
     // Structure, run locations, typed references, outputs and error handling, in one pass. Run
@@ -813,7 +822,17 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
     const bindings = input.referenceEnvironments?.(input.flows[entry.sourceIndex]!);
     const contexts =
       bindings !== undefined && bindings.length > 0
-        ? bindings.map((binding) => [binding])
+        ? bindings.map((binding) => [
+            {
+              ...binding,
+              forms: Object.fromEntries(
+                Object.entries(binding.forms).map(([alias, fields]) => [
+                  resolver.form(alias).identifier,
+                  fields,
+                ]),
+              ),
+            },
+          ])
         : [bindings];
     const invalid = contexts.flatMap((referenceEnvironments) =>
       validateFlow(entry.flow, {
@@ -857,7 +876,13 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
     );
   }
   const provenance = compiled.flatMap(({ flow, sourceIndex, resolved }, canonicalIndex) =>
-    flowProvenance(flow, input.flows[sourceIndex]!, resolved, canonicalIndex, sourceIndex),
+    flowProvenance(
+      flow,
+      input.rawFlows?.[sourceIndex] ?? input.flows[sourceIndex]!,
+      resolved,
+      canonicalIndex,
+      sourceIndex,
+    ),
   );
   const result = compiledFlowSetSchema.safeParse({
     flows: compiled.map(({ flow }) => flow),

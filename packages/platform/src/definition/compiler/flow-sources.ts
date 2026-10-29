@@ -257,6 +257,7 @@ function compileOwnedFlowSources(
             });
           },
     flows: parsed.data,
+    rawFlows: asObject(source.body).flows as readonly unknown[],
     declaredDefinitionKeys,
     operationInputs: callableOperation,
     resolver: {
