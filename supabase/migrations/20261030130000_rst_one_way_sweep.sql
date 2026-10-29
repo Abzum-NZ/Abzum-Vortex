@@ -1,3 +1,5 @@
+begin;
+
 set local role vortex_owner;
 
 create or replace function vortex_access.list_organization_activity_entries_projection(
@@ -15807,5 +15809,7 @@ grant execute on function vortex_definition.write_preview_shape_internal(uuid, b
   to vortex_owner;
 comment on function vortex_definition.write_preview_shape_internal(uuid, boolean) is
   'Writes what a preview runs from its rehearsed releases: the exact Module pins, its isolated Record storage (new, or moved in place to the new releases keeping its records), and its own permission registration with the draft''s roles, which only its builder holds.';
+
+commit;
 
 reset role;
