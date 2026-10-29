@@ -355,7 +355,7 @@ export async function invokeInstalledFlow(
         scopedRequests.runChange(session, selection, (transaction, scope) =>
           checkConnectionHealth(transaction, scope, command),
         ),
-      ...(boundRequest === undefined ? { applicationStore: dependencies.applicationStore } : {}),
+      applicationStore: dependencies.applicationStore,
       tenantGovernance: {
         run: (session, selection, operation) =>
           scopedRequests.runAccessChange(session, selection, (transaction, scope) =>
