@@ -883,6 +883,10 @@ export const flowEntrySegmentsMatch = (
   );
 };
 
+/** Identifies the whole plan when a continuation reaches no server segment. */
+export const flowPlanFingerprint = (plan: FlowPlan): `sha256:${string}` =>
+  fingerprintCanonicalValue({ definition: plan.definition, segments: plan.segments });
+
 /** Derive the literal form placements reachable from a row-action flow. */
 export const rowActionFormTargets = (
   flowId: string,

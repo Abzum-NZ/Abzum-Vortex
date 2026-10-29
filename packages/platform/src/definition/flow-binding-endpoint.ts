@@ -822,6 +822,7 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
 
         const release: FlowRelease = {
           releaseKey: installation.releaseKey,
+          installationRevision: installation.installationRevision,
           flows: installation.flows,
           plans: installation.plans,
           ...(installation.recordTypes === undefined

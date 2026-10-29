@@ -41,7 +41,7 @@ import {
 } from "./flow-orchestrator-types";
 import { createFlowTaskRunner } from "./flow-task-runner";
 import { flowMaximumServerSeconds } from "../workflows/flow-limits";
-import { flowEntrySegmentsMatch } from "../workflows/flow-plan";
+import { flowEntrySegmentsMatch, flowPlanFingerprint } from "../workflows/flow-plan";
 
 /** Orchestrates flows with verified authority, revision-bound writes and single-use continuations. */
 
@@ -187,7 +187,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     try {
       // A run holding a sensitive value (in a task output, variable or intent) is never stored, so
       // it ends here instead of waiting for the person.
-      if (!carriesSensitive(state, run.sensitive))
+      const plan = run.release.plans.get(run.flowId);
+      if (!carriesSensitive(state, run.sensitive) && plan !== undefined)
         stored = await issueFlowContinuation({
           tokenHash: sha256(token),
           runId: step.state.runId,
@@ -200,6 +201,11 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
             warnings: run.warnings,
             bindingId: run.bindingId,
             gestureId: run.gestureId,
+            planIdentity: {
+              installationRevision: run.release.installationRevision,
+              flowId: run.flowId,
+              fingerprint: flowPlanFingerprint(plan),
+            },
           },
           elapsedMilliseconds: Math.min(elapsedMilliseconds(run), 3_600_000),
           lifetimeSeconds: flowContinuationLifetimeSeconds,
@@ -435,6 +441,11 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
             warnings: z.array(flowWarningNoticeSchema),
             bindingId: z.uuid(),
             gestureId: z.uuid(),
+            planIdentity: z.object({
+              installationRevision: z.number().int().positive(),
+              flowId: z.uuid(),
+              fingerprint: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+            }).strict(),
           })
           .strict()
           .parse(stored.state);
@@ -476,6 +487,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           flowId: prepared.flowId,
           bindingId: snapshot.bindingId,
           gestureId: snapshot.gestureId,
+          continuationPlan: snapshot.planIdentity,
           release: prepared.release,
           library: prepared.library,
           carriedMilliseconds: stored.elapsedMilliseconds,

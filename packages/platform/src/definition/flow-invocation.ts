@@ -866,6 +866,7 @@ export async function invokeInstalledFlow(
     }
     const release: FlowRelease = {
       releaseKey: installed.releaseKey,
+      installationRevision: installed.installationRevision,
       flows: installed.flows,
       plans: installed.plans,
       ...(installed.recordTypes === undefined ? {} : { recordTypes: installed.recordTypes }),
@@ -1099,6 +1100,7 @@ export async function invokeInstalledFlow(
       if (plan === undefined) return { kind: "refused" };
       const release: FlowRelease = {
         releaseKey: installation.releaseKey,
+        installationRevision: installation.installationRevision,
         flows: installation.flows,
         plans: installation.plans!,
       };

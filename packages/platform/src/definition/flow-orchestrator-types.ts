@@ -50,6 +50,7 @@ import { flowIdSchema } from "../catalogue/identifiers";
  */
 export type FlowRelease = Readonly<{
   releaseKey: string;
+  installationRevision: number;
   /** The release's planned flows (`flowPlansOf`), validated once per release. */
   flows: ReadonlyMap<string, FlowDefinition>;
   /** The same release's segment plans, compiled together with the flow definitions. */
@@ -355,6 +356,11 @@ export type Run = {
   flowId: string;
   bindingId: string;
   gestureId: string;
+  continuationPlan?: Readonly<{
+    installationRevision: number;
+    flowId: string;
+    fingerprint: string;
+  }>;
   release: FlowRelease;
   library: FlowLibrary;
   /** Server milliseconds already spent by earlier segments of this run. */
