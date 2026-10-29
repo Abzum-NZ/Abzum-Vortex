@@ -1,7 +1,7 @@
 create or replace function vortex_platform.admit_flow_continuation(
   p_token_hash text, p_run_id uuid, p_flow_id uuid, p_release_key text, p_command_id uuid
 )
-returns text
+returns jsonb
 language plpgsql volatile security definer set search_path = ''
 as $function$
 declare
@@ -13,9 +13,9 @@ begin
     or not vortex_platform.is_non_nil_uuid(p_run_id::text)
     or not vortex_platform.is_non_nil_uuid(p_command_id::text)
     or p_release_key is null then
-    return 'unavailable';
+    return pg_catalog.jsonb_build_object('status', 'unavailable');
   end if;
-  select continuation.consumed_at, continuation.consumed_command_id into held
+  select continuation.consumed_at, continuation.consumed_command_id, continuation.replay_payload into held
   from vortex_platform.flow_continuations as continuation
   where continuation.token_hash = p_token_hash
     and continuation.run_id = p_run_id
@@ -25,14 +25,16 @@ begin
     and continuation.release_key = p_release_key
     and continuation.expires_at > pg_catalog.statement_timestamp()
   for update;
-  if not found then return 'unavailable'; end if;
+  if not found then return pg_catalog.jsonb_build_object('status', 'unavailable'); end if;
   if held.consumed_at is not null then
-    return case when held.consumed_command_id = p_command_id then 'replay' else 'already_answered' end;
+    return case when held.consumed_command_id = p_command_id
+      then pg_catalog.jsonb_build_object('status', 'replay', 'payload', held.replay_payload)
+      else pg_catalog.jsonb_build_object('status', 'already_answered') end;
   end if;
   update vortex_platform.flow_continuations as continuation
   set consumed_at = pg_catalog.statement_timestamp(), consumed_command_id = p_command_id
   where continuation.token_hash = p_token_hash;
-  return 'admitted';
+  return pg_catalog.jsonb_build_object('status', 'admitted');
 end
 $function$;
 

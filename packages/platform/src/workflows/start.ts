@@ -256,8 +256,8 @@ export const startFlow = async <Value>(
     };
     const consumeContinuation = async (runId: string, commandId: string): Promise<boolean> => {
       if (request.continuation === undefined) return true;
-      const rows = await transaction.query`select vortex_platform.admit_flow_continuation(${request.continuation.tokenHash}::text, ${runId}::uuid, ${currentPlan.flowId}::uuid, ${request.continuation.releaseKey}::text, ${commandId}::uuid) as status`;
-      const status = z.object({ status: z.enum(["admitted", "replay", "already_answered", "unavailable"]) }).parse(rows[0]).status;
+      const rows = await transaction.query`select vortex_platform.admit_flow_continuation(${request.continuation.tokenHash}::text, ${runId}::uuid, ${currentPlan.flowId}::uuid, ${request.continuation.releaseKey}::text, ${commandId}::uuid) as result`;
+      const status = z.object({ status: z.enum(["admitted", "replay", "already_answered", "unavailable"]) }).parse(z.object({ result: z.unknown() }).parse(rows[0]).result).status;
       if (status === "already_answered") console.error("[flows] this step was already answered");
       return status === "admitted" || status === "replay";
     };
