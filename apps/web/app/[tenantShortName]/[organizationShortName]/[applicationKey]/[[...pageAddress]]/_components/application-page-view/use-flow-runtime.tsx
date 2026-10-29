@@ -131,8 +131,7 @@ export function useFlowRuntime({
           parameters[name] = values.length === 1 ? values[0]! : values;
         }
         const controls: Record<string, string> = {};
-        for (const placementId of Object.keys(model.pageParameters.controls)) {
-          const input = runtimeInputsRef.current[placementId];
+        for (const [placementId, input] of Object.entries(runtimeInputsRef.current)) {
           if (!isRecord(input) || !isRecord(input.data) || input.data.status !== "ready") continue;
           const values = input.data.values;
           if (!isRecord(values)) continue;

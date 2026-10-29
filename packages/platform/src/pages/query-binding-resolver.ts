@@ -93,7 +93,9 @@ export const bindInvocationControls = async (
   const supplied = new Map<string, string>();
   for (const [placement, value] of Object.entries(candidates)) {
     const key = placement.toLowerCase();
-    if (supplied.has(key) || !context.controls.has(key)) return undefined;
+    // Other page controls can be dependency evidence; they never become query inputs here.
+    if (!context.controls.has(key)) continue;
+    if (supplied.has(key)) return undefined;
     supplied.set(key, value);
   }
   const address: Record<string, string | readonly string[] | undefined> = { ...context.address };
