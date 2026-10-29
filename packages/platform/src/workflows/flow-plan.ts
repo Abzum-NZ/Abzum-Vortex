@@ -1,8 +1,15 @@
 import { fingerprintCanonicalValue } from "../definition/canonical-json-definition";
+import { flowRuntimeValuesEqual } from "../rules/flow-formula";
 import type { FlowDefinition, FlowTask } from "./flow-contracts";
 import { flowTaskChildLists, isFlowControlTask } from "./flow-contracts";
 import { flowTaskRegistry, type FlowTaskTypeKey } from "./flow-task-registry";
-import { parseFlowReference, type FlowFormula, type FlowReference } from "./flow-values";
+import {
+  parseFlowReference,
+  type FlowFormula,
+  type FlowLiteral,
+  type FlowReference,
+  type FlowValue,
+} from "./flow-values";
 
 /**
  * The compiled plan of one flow: its tasks cut into page segments (steps the page performs, no
@@ -18,7 +25,14 @@ type UnitLocation = "page" | "server" | "neutral" | "mixed";
 /** One branch decision on the path from the start of the flow to a segment. */
 export type FlowPathCondition =
   | Readonly<{ taskId: string; kind: "if"; branch: "then" | "else"; condition: FlowFormula }>
-  | Readonly<{ taskId: string; kind: "switch"; branch: string; value: unknown; when?: unknown }>;
+  | Readonly<{ taskId: string; kind: "switch"; branch: string; value: FlowValue; when: FlowLiteral }>
+  | Readonly<{
+      taskId: string;
+      kind: "switch";
+      branch: "default";
+      value: FlowValue;
+      cases: readonly FlowLiteral[];
+    }>;
 
 /** A typed value a segment reads from before it or hands on after it. */
 export type FlowPlanValueTypes = Readonly<Record<string, string>>;
@@ -320,7 +334,13 @@ const cut = (flow: FlowDefinition, section: FlowPlanSection, tasks: readonly Flo
           if (node.default !== undefined)
             walk(node.default, [
               ...guard,
-              { taskId: node.id, kind: "switch", branch: "default", value: node.value },
+              {
+                taskId: node.id,
+                kind: "switch",
+                branch: "default",
+                value: node.value,
+                cases: node.cases.map((entry) => entry.when),
+              },
             ]);
           break;
         }
@@ -343,6 +363,21 @@ const cut = (flow: FlowDefinition, section: FlowPlanSection, tasks: readonly Flo
 
 /** Compiles one validated flow into its plan. Throws `FlowPlanError` naming the step it refuses. */
 export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
+  for (const step of allSteps([...flow.tasks, ...flow.errors, ...flow.finally])) {
+    if (step.type !== "switch") continue;
+    const cases = (step as Extract<FlowTask, { type: "switch" }>).cases;
+    for (let index = 0; index < cases.length; index += 1) {
+      const current = cases[index]!;
+      for (const previous of cases.slice(0, index)) {
+        if (flowRuntimeValuesEqual(previous.when, current.when) === true)
+          throw new FlowPlanError(
+            flow.id,
+            step.id,
+            `Switch (${step.id}) cases ${previous.key} and ${current.key} match the same value`,
+          );
+      }
+    }
+  }
   const drafts = [
     ...cut(flow, "tasks", flow.tasks),
     ...cut(flow, "errors", flow.errors),
