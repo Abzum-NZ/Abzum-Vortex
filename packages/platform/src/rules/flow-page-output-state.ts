@@ -35,10 +35,11 @@ export const browserFlowMemberTypeResolver = (
   return (_task, taskId, outputKey, path) => members.get([taskId, outputKey, ...path].join("."));
 };
 
-/** Builds exactly the page-held variable, task-output and form seed the segment declares. */
+/** Builds exactly the page-held input, variable, task-output and form seed the segment declares. */
 export const pageFlowSegmentSeed = (
   state: FlowRunState,
   declarations: Readonly<Record<string, string>>,
+  pageInputs: ReadonlySet<string>,
   resolveForm?: FlowFormReferenceResolver,
 ): Readonly<Record<string, JsonValue>> => {
   const activation = state.activations[0];
@@ -53,15 +54,25 @@ export const pageFlowSegmentSeed = (
   const entries: [string, JsonValue][] = [];
   for (const [name, type] of Object.entries(declarations)) {
     const parts = name.split(".");
+    // Server-resolved inputs are never released or supplied by the page.
+    if (parts[0] === "inputs" && !pageInputs.has(parts[1] ?? "")) continue;
     const value =
-      parts[0] === "vars" && parts.length === 2
-        ? activation.variables[parts[1]!]
-        : parts[0] === "outputs" && parts.length === 3
-          ? activation.outputs[parts[1]!]?.[parts[2]!]
-          : parts[0] === "forms" && parts.length === 3
-            ? resolveForm?.({ source: "form", form: parts[1]!, field: parts[2]! })
-            : undefined;
-    if (parts[0] !== "vars" && parts[0] !== "outputs" && parts[0] !== "forms") continue;
+      parts[0] === "inputs" && parts.length === 2
+        ? activation.inputs[parts[1]!]
+        : parts[0] === "vars" && parts.length === 2
+          ? activation.variables[parts[1]!]
+          : parts[0] === "outputs" && parts.length === 3
+            ? activation.outputs[parts[1]!]?.[parts[2]!]
+            : parts[0] === "forms" && parts.length === 3
+              ? resolveForm?.({ source: "form", form: parts[1]!, field: parts[2]! })
+              : undefined;
+    if (
+      parts[0] !== "inputs" &&
+      parts[0] !== "vars" &&
+      parts[0] !== "outputs" &&
+      parts[0] !== "forms"
+    )
+      continue;
     if (
       value === undefined ||
       value.type !== type ||
