@@ -3,7 +3,6 @@ create or replace function vortex_identity.apply_configured_tenant_lifecycle(
   p_cluster_id uuid,
   p_operator_actor_id uuid,
   p_duplicate_key uuid,
-  p_command_fingerprint text,
   p_tenant_id uuid,
   p_expected_revision bigint
 )
@@ -44,8 +43,6 @@ begin
     or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
     or p_tenant_id is null
     or not vortex_platform.is_non_nil_uuid(p_tenant_id::text)
-    or p_command_fingerprint is null
-    or p_command_fingerprint !~ '^sha256:[0-9a-f]{64}$'
     or p_expected_revision is null
     or p_expected_revision not between 1 and 9007199254740991 then
     raise exception using errcode = '22023',
@@ -59,22 +56,16 @@ begin
   ));
 
   claimed := vortex_record.claim_scoped_command_receipt_internal(
-    p_operation, p_duplicate_key, null, null, p_operator_actor_id,
+    p_operation, p_duplicate_key, null, p_tenant_id, p_operator_actor_id,
     'Administration duplicate conflicts'
   );
   if claimed is not null then
     select r.* into stored
     from pg_catalog.jsonb_to_record(claimed) as r(
       "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
-      "subjectRevisions" bigint[], "fingerprint" text, "clusterId" uuid
+      "subjectRevisions" bigint[]
     );
-    if stored."fingerprint" <> p_command_fingerprint
-      or stored."clusterId" is distinct from p_cluster_id
-      or stored."subjectIds" <> array[p_tenant_id] then
-      raise exception using errcode = 'V3001',
-        message = 'Administration duplicate conflicts';
-    end if;
-    return query select 'replayed'::text, p_operation, p_tenant_id,
+    return query select 'replayed'::text, p_operation, stored."subjectIds"[1],
       stored."subjectRevisions"[1], stored."receiptId", stored."acceptedAt";
     return;
   end if;
@@ -181,8 +172,7 @@ begin
     pg_catalog.jsonb_build_object(
       'receiptId', new_correlation_id, 'acceptedAt', evaluated_at,
       'subjectIds', pg_catalog.to_jsonb(array[p_tenant_id]),
-      'subjectRevisions', pg_catalog.to_jsonb(array[resulting_revision]),
-      'fingerprint', p_command_fingerprint, 'clusterId', p_cluster_id
+      'subjectRevisions', pg_catalog.to_jsonb(array[resulting_revision])
     )
   );
 
@@ -191,12 +181,12 @@ begin
 end
 $function$;
 
-revoke execute on function vortex_identity.apply_configured_tenant_lifecycle(text,uuid,uuid,uuid,text,uuid,bigint) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+revoke execute on function vortex_identity.apply_configured_tenant_lifecycle(text,uuid,uuid,uuid,uuid,bigint) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
-grant execute on function vortex_identity.apply_configured_tenant_lifecycle(text,uuid,uuid,uuid,text,uuid,bigint) to vortex_owner;
+grant execute on function vortex_identity.apply_configured_tenant_lifecycle(text,uuid,uuid,uuid,uuid,bigint) to vortex_owner;
 
-comment on function vortex_identity.apply_configured_tenant_lifecycle(text,uuid,uuid,uuid,text,uuid,bigint) is 'Private exact composition for configured-system tenant suspension and reactivation.';
+comment on function vortex_identity.apply_configured_tenant_lifecycle(text,uuid,uuid,uuid,uuid,bigint) is 'Private exact composition for configured-system tenant suspension and reactivation.';
 
-alter function vortex_identity.apply_configured_tenant_lifecycle(p_operation text, p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_expected_revision bigint) owner to vortex_owner;
+alter function vortex_identity.apply_configured_tenant_lifecycle(p_operation text, p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_tenant_id uuid, p_expected_revision bigint) owner to vortex_owner;
 
-grant execute on function vortex_identity.apply_configured_tenant_lifecycle(p_operation text, p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_expected_revision bigint) to postgres;
+grant execute on function vortex_identity.apply_configured_tenant_lifecycle(p_operation text, p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_tenant_id uuid, p_expected_revision bigint) to postgres;

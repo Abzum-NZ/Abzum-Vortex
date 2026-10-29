@@ -588,7 +588,7 @@ export const createConfiguredTenantAdministrationService = (
         const value = command.data;
         const rows = await run(
           (transaction) =>
-            transaction.query<TenantLifecycleRow>`select * from vortex_identity.suspend_tenant(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.expectedRevision}::bigint)`,
+            transaction.query<TenantLifecycleRow>`select * from vortex_identity.suspend_tenant(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${value.tenantId}::uuid, ${value.expectedRevision}::bigint)`,
         );
         return suspendTenantResultSchema.parse(tenantLifecycleResult(one(rows)));
       } catch (error) {
@@ -614,7 +614,7 @@ export const createConfiguredTenantAdministrationService = (
         const value = command.data;
         const rows = await run(
           (transaction) =>
-            transaction.query<TenantLifecycleRow>`select * from vortex_identity.reactivate_tenant(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.expectedRevision}::bigint)`,
+            transaction.query<TenantLifecycleRow>`select * from vortex_identity.reactivate_tenant(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${value.tenantId}::uuid, ${value.expectedRevision}::bigint)`,
         );
         return reactivateTenantResultSchema.parse(tenantLifecycleResult(one(rows)));
       } catch (error) {
