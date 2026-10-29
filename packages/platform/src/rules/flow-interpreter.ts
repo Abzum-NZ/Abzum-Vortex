@@ -4,7 +4,6 @@ import {
   Failed,
   flowRunStateVersion,
   initialState,
-  initialVariables,
   newActivation,
   iterationKey,
   pathKey,
@@ -13,6 +12,7 @@ import {
 } from "./flow-interpreter-state";
 import { typedValueMatchesType } from "./condition-types";
 import { flowPathGuardMatches } from "./flow-path-guard";
+import { parseFlowSegmentSeed } from "./flow-segment-seed";
 import type { JsonValue } from "../catalogue/common";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import { recordLinkValueSchema } from "../records/module-field-values";
@@ -170,6 +170,7 @@ export type FlowRunState = Readonly<{
   triggerRecord?: FlowRuntimeValues;
   /** The record as stored before a save, keyed by field key, for `trigger.previous.<field>` reads. */
   previousRecord?: FlowRuntimeValues;
+  forms?: Readonly<Record<string, FlowRuntimeValues>>;
   /** Warnings and requirements the save rule tasks reported, in the order they ran. */
   ruleFeedback?: readonly FlowRuleFeedback[];
   activations: readonly Activation[];
@@ -356,6 +357,15 @@ const scopeOf = (
         );
       case "variable":
         return activation.variables[reference.name];
+      case "form": {
+        const form =
+          state.forms !== undefined && Object.hasOwn(state.forms, reference.form)
+            ? state.forms[reference.form]
+            : undefined;
+        return form !== undefined && Object.hasOwn(form, reference.field)
+          ? form[reference.field]
+          : undefined;
+      }
       case "task_output": {
         const output = activation.outputs[reference.task]?.[reference.key];
         if (output === undefined || reference.path === undefined) return output;
@@ -1212,47 +1222,11 @@ export const startFlowSegment = (
     return failedStep(machine, { outcome: "refused", code: "flow_not_runnable" });
   try {
     const inputs = buildInputs(flow, start.inputs);
-    const variables: Record<string, FlowRuntimeValue> = { ...initialVariables(flow) };
-    const outputs: Record<string, Record<string, FlowRuntimeValue>> = {};
-    const expected = Object.entries(segment.inputs).filter(
-      ([name]) => name.startsWith("vars.") || name.startsWith("outputs."),
-    );
-    if (
-      Object.keys(seed).length !== expected.length ||
-      Object.keys(seed).some((name) => !expected.some(([key]) => key === name))
-    )
-      failed(
-        "inputs_invalid",
-        "refused",
-        undefined,
-        "segment seed has undeclared or missing values",
-      );
-    for (const [name, type] of expected) {
-      const candidate = seed[name];
-      if (candidate !== null && !typedValueMatchesType(candidate, type, "flow"))
-        failed(
-          "inputs_invalid",
-          "refused",
-          undefined,
-          `segment input ${name} is not a valid ${type} value`,
-        );
-      const value = typed(type, candidate as JsonValue);
-      const parts = name.split(".");
-      if (parts[0] === "vars") variables[parts[1]!] = value;
-      else (outputs[parts[1]!] ??= {})[parts[2]!] = value;
-    }
+    const { variables, outputs, forms } = parseFlowSegmentSeed(flow, segment.inputs, seed);
     const completion = segment.tasks.length === 0;
-    if (
-      completion &&
-      (expected.some(([name]) => !name.startsWith("outputs.")) ||
-        segment.firstTaskPath.length !== 0)
-    )
-      failed(
-        "inputs_invalid",
-        "refused",
-        undefined,
-        "completion segment has invalid inputs or tasks",
-      );
+    if (completion && segment.firstTaskPath.length !== 0)
+      failed("inputs_invalid", "refused", undefined, "completion segment has invalid tasks");
+    machine.state.forms = forms;
     const taskPath = segment.firstTaskPath;
     const index = taskPath.at(-1);
     if (!completion && typeof index !== "number")
