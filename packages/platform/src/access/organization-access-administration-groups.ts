@@ -111,7 +111,7 @@ export const createAccessAdministrationGroupOperations = ({
         "createGroup",
         requests.runAccessChange(session, candidate, async (transaction, scope) => {
           const rows = await transaction.query<GroupChangeRow>`
-            select outcome, organization_id, group_summary, access_version
+            select outcome, organization_id, group_summary, access_version, refusal_reason
             from vortex_access.create_organization_group_for_administration(
               ${groupId}::uuid,
               ${command.data.key}::text,
@@ -121,7 +121,7 @@ export const createAccessAdministrationGroupOperations = ({
           `;
           const row = requireOne(rows);
           if (isRecordedRefusal(row, row.group_summary, scope.organizationId, scope.accessVersion))
-            return recordedRefusal;
+            return recordedRefusal(row);
           return changedGroup(rows, scope.organizationId, scope.accessVersion, {
             groupId,
             key: command.data.key,
@@ -162,7 +162,7 @@ export const createAccessAdministrationGroupOperations = ({
         "renameGroup",
         requests.runAccessChange(session, candidate, async (transaction, scope) => {
           const rows = await transaction.query<GroupChangeRow>`
-            select outcome, organization_id, group_summary, access_version
+            select outcome, organization_id, group_summary, access_version, refusal_reason
             from vortex_access.rename_organization_group_for_administration(
               ${command.data.groupId}::uuid,
               ${command.data.expectedGroupRevision}::bigint,
@@ -172,7 +172,7 @@ export const createAccessAdministrationGroupOperations = ({
           `;
           const row = requireOne(rows);
           if (isRecordedRefusal(row, row.group_summary, scope.organizationId, scope.accessVersion))
-            return recordedRefusal;
+            return recordedRefusal(row);
           return changedGroup(rows, scope.organizationId, scope.accessVersion, {
             groupId: command.data.groupId,
             label: command.data.label,
@@ -213,7 +213,7 @@ export const createAccessAdministrationGroupOperations = ({
         requests.runAccessChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<GroupChangeRow>`
-            select outcome, organization_id, group_summary, access_version
+            select outcome, organization_id, group_summary, access_version, refusal_reason
             from vortex_access.retire_organization_group_for_administration(
               ${command.data.groupId}::uuid,
               ${command.data.expectedGroupRevision}::bigint,
@@ -222,7 +222,7 @@ export const createAccessAdministrationGroupOperations = ({
           `,
           );
           if (isRecordedRefusal(row, row.group_summary, scope.organizationId, scope.accessVersion))
-            return recordedRefusal;
+            return recordedRefusal(row);
           const parsed = changeOrganizationAdministrationGroupResultSchema.safeParse({
             group: normalizeGroup(row.group_summary),
             accessVersion: databaseRevision(row.access_version),
@@ -278,7 +278,7 @@ export const createAccessAdministrationGroupOperations = ({
         requests.runAccessChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<MembershipChangeRow>`
-            select outcome, organization_id, membership_summary, access_version
+            select outcome, organization_id, membership_summary, access_version, refusal_reason
             from vortex_access.add_organization_group_membership_for_administration(
               ${membershipId}::uuid,
               ${command.data.groupId}::uuid,
@@ -297,7 +297,7 @@ export const createAccessAdministrationGroupOperations = ({
               scope.accessVersion,
             )
           )
-            return recordedRefusal;
+            return recordedRefusal(row);
           const parsed = changeOrganizationAdministrationMembershipResultSchema.safeParse({
             membership: normalizeMembership(row.membership_summary),
             accessVersion: databaseRevision(row.access_version),
@@ -356,7 +356,7 @@ export const createAccessAdministrationGroupOperations = ({
         requests.runAccessChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<MembershipChangeRow>`
-            select outcome, organization_id, membership_summary, access_version
+            select outcome, organization_id, membership_summary, access_version, refusal_reason
             from vortex_access.remove_organization_group_membership_for_administration(
               ${command.data.membershipId}::uuid,
               ${command.data.expectedMembershipRevision}::bigint,
@@ -372,7 +372,7 @@ export const createAccessAdministrationGroupOperations = ({
               scope.accessVersion,
             )
           )
-            return recordedRefusal;
+            return recordedRefusal(row);
           const parsed = changeOrganizationAdministrationMembershipResultSchema.safeParse({
             membership: normalizeMembership(row.membership_summary),
             accessVersion: databaseRevision(row.access_version),

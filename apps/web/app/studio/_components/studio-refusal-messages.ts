@@ -37,6 +37,8 @@ export const unavailableMessage = (
   switch (reason) {
     case "session_ended":
       return "Your session has ended. Sign in again to continue.";
+    case "multi_factor_required":
+      return "This needs two-step verification. Verify, or set it up, then try again.";
     case "recent_authentication_required":
       return "This needs a recent sign-in. Sign in again, then reload this page.";
     case "permission_missing":

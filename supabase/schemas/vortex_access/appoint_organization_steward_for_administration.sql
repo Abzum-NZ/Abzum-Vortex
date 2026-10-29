@@ -6,7 +6,7 @@ returns table (
   outcome text,
   organization_id uuid,
   appointment_summary jsonb,
-  access_version bigint
+  access_version bigint, refusal_reason text
 )
 language plpgsql
 volatile
@@ -114,7 +114,7 @@ begin
     and decision.correlation_id = context_correlation_id
     and decision.reason_code in (
       'permission_unavailable', 'permission_not_effective',
-      'authentication_unsatisfied', 'delegation_insufficient'
+      'authentication_unsatisfied', 'multi_factor_unsatisfied', 'delegation_insufficient'
     ) then
     activity_id := pg_catalog.gen_random_uuid();
     activity_result := vortex_record.append_organization_activity_entry(
@@ -128,7 +128,7 @@ begin
         message = 'Organization steward appointment refusal Activity is stale';
     end if;
     return query select 'refused'::text, context_organization_id,
-      null::jsonb, context_access_version;
+      null::jsonb, context_access_version, case decision.reason_code when 'authentication_unsatisfied' then 'recent_authentication_required' when 'multi_factor_unsatisfied' then 'multi_factor_required' else null end;
     return;
   end if;
   if decision.outcome is distinct from 'eligible'
@@ -172,7 +172,7 @@ begin
         message = 'Organization steward appointment refusal Activity is stale';
     end if;
     return query select 'refused'::text, context_organization_id,
-      null::jsonb, context_access_version;
+      null::jsonb, context_access_version, null::text;
     return;
   end if;
   -- Match the target against the same live minimum used by the permanent-steward
@@ -407,7 +407,7 @@ begin
   end if;
   if target_account.revision is distinct from p_expected_account_revision then
     return query select 'conflict'::text, context_organization_id,
-      null::jsonb, context_access_version;
+      null::jsonb, context_access_version, null::text;
     return;
   end if;
   if existing_role_assignment_id is not null then
@@ -426,7 +426,7 @@ begin
       'delegationAuthorityId', existing_delegation_authority_id
     );
     return query select 'unchanged'::text, context_organization_id,
-      result_summary, context_access_version;
+      result_summary, context_access_version, null::text;
     return;
   end if;
 
@@ -630,7 +630,7 @@ begin
     'delegationAuthorityId', generated_delegation_authority_id
   );
   return query select 'changed'::text, context_organization_id,
-    result_summary, version_change.current_version;
+    result_summary, version_change.current_version, null::text;
 end
 $function$;
 

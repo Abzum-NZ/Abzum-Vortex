@@ -75,23 +75,20 @@ export const vortexSuperAdministratorAssignmentQuerySchema = z
   })
   .strict();
 
-export const vortexSuperAdministratorAssignmentReadResultSchema = z.discriminatedUnion(
-  "outcome",
-  [
-    z
-      .object({
-        outcome: z.literal("available"),
-        page: vortexSuperAdministratorAssignmentPageSchema,
-      })
-      .strict(),
-    z
-      .object({
-        outcome: z.literal("refused"),
-        code: z.enum(["invalid_request", "unavailable"]),
-      })
-      .strict(),
-  ],
-);
+export const vortexSuperAdministratorAssignmentReadResultSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      outcome: z.literal("available"),
+      page: vortexSuperAdministratorAssignmentPageSchema,
+    })
+    .strict(),
+  z
+    .object({
+      outcome: z.literal("refused"),
+      code: z.enum(["invalid_request", "unavailable"]),
+    })
+    .strict(),
+]);
 
 export const bootstrapVortexSuperAdministratorCommandSchema = z
   .object({
@@ -152,6 +149,7 @@ export const vortexSuperAdministratorAssignmentMutationResultSchema = z.discrimi
           "assignment_unavailable",
           "stale_revision",
           "recent_authentication_required",
+          "multi_factor_required",
           "duplicate_conflict",
           "operator_not_configured",
           "operation_unavailable",

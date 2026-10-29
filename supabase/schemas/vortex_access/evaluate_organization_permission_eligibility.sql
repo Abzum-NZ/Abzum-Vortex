@@ -657,6 +657,8 @@ begin
         then 'target_policy_unavailable'
       when not decision.permission_available then 'permission_unavailable'
       when decision.path_valid_until is null then 'permission_not_effective'
+      when not authentication_satisfied and declaration_authentication ->> 'kind' = 'multi_factor'
+        then 'multi_factor_unsatisfied'
       when not authentication_satisfied then 'authentication_unsatisfied'
       when not decision.delegation_satisfied then 'delegation_insufficient'
       else null

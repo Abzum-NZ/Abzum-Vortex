@@ -8,7 +8,7 @@ returns table (
   outcome text,
   organization_id uuid,
   role_summary jsonb,
-  access_version bigint
+  access_version bigint, refusal_reason text
 )
 language plpgsql
 volatile
@@ -178,7 +178,7 @@ begin
     and decision.correlation_id = context_correlation_id
     and decision.reason_code in (
       'permission_unavailable', 'permission_not_effective',
-      'authentication_unsatisfied', 'delegation_insufficient'
+      'authentication_unsatisfied', 'multi_factor_unsatisfied', 'delegation_insufficient'
     ) then
     activity_result := vortex_record.append_organization_activity_entry(
       context_organization_id, p_activity_id, decision.checked_at,
@@ -191,7 +191,7 @@ begin
         message = 'Organization role retirement refusal Activity is stale';
     end if;
     return query select 'refused'::text, context_organization_id,
-      null::jsonb, context_access_version;
+      null::jsonb, context_access_version, case decision.reason_code when 'authentication_unsatisfied' then 'recent_authentication_required' when 'multi_factor_unsatisfied' then 'multi_factor_required' else null end;
     return;
   end if;
 
@@ -232,7 +232,7 @@ begin
   end if;
 
   return query select 'completed'::text, context_organization_id, changed_summary,
-    changed.access_version;
+    changed.access_version, null::text;
 end
 $function$;
 

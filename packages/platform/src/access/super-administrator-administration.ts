@@ -73,13 +73,15 @@ const mutationRefusal = (
       ? operation === "revoke_vortex_super_administrator"
         ? "assignment_unavailable"
         : "identity_unavailable"
-      : code === "V3142"
-        ? "recent_authentication_required"
-        : code === "V3143"
-          ? "duplicate_conflict"
-          : code === "V3102"
-            ? "stale_revision"
-            : undefined;
+      : code === "V3152"
+        ? "multi_factor_required"
+        : code === "V3142"
+          ? "recent_authentication_required"
+          : code === "V3143"
+            ? "duplicate_conflict"
+            : code === "V3102"
+              ? "stale_revision"
+              : undefined;
   return reason === undefined ? undefined : { outcome: "refused", operation, code: reason };
 };
 

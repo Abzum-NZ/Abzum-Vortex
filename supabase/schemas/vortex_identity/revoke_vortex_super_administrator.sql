@@ -78,8 +78,8 @@ begin
     context_value, evaluated_at,
     '{"kind":"multi_factor","maximumAgeSeconds":3600}'::jsonb
   ) is null then
-    raise exception using errcode = 'V3142',
-      message = 'A recent sign-in is required for super-administrator changes';
+    raise exception using errcode = 'V3152',
+      message = 'Multi-factor authentication is required for super-administrator changes';
   end if;
 
   computed_fingerprint := 'sha256:' || pg_catalog.encode(extensions.digest(

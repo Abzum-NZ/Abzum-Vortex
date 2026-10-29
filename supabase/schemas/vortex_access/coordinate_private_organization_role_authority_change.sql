@@ -255,6 +255,10 @@ begin
       message = 'Private Organization role-authority change is unavailable';
   end if;
 
+  if decision.outcome = 'refused' and decision.reason_code = 'multi_factor_unsatisfied' then
+    raise exception using errcode = 'V3152',
+      message = 'Organization role-authority change requires multi-factor authentication';
+  end if;
   if decision.outcome = 'refused' and decision.reason_code = 'authentication_unsatisfied' then
     raise exception using errcode = 'V3150',
       message = 'Organization role-authority change requires recent primary authentication';
