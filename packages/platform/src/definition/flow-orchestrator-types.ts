@@ -374,6 +374,8 @@ export type Run = {
     flowId: string;
     fingerprint: string;
   }>;
+  /** A peeked answer is spent only in the first transaction that admits its next segment. */
+  pendingContinuation?: Readonly<{ tokenHash: string; releaseKey: string; answerHash: string }>;
   release: FlowRelease;
   library: FlowLibrary;
   /** Server milliseconds already spent by earlier segments of this run. */

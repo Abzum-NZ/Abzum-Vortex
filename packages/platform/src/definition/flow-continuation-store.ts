@@ -54,6 +54,16 @@ const consumeResultSchema = z.discriminatedUnion("kind", [
     elapsedMilliseconds: z.number().int().min(0),
   }),
 ]);
+const peekResultSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("unavailable") }),
+  z.object({
+    kind: z.literal("available"),
+    runId: z.uuid(),
+    state: z.record(z.string(), z.unknown()),
+    elapsedMilliseconds: z.number().int().min(0),
+    releaseKey: z.string().min(1),
+  }),
+]);
 const claimResultSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("claimed") }),
   z.object({
@@ -142,9 +152,10 @@ export const consumeFlowContinuation = async (
 
 /** Reads a bound continuation for path selection without spending it on a refused admission. */
 export const peekFlowContinuation = async (
-  input: FlowContinuationBinding & Readonly<{ tokenHash: string }>,
+  input: Omit<FlowContinuationBinding, "releaseKey"> & Readonly<{ tokenHash: string }>,
 ): Promise<
-  Readonly<{ runId: string; state: unknown; elapsedMilliseconds: number }> | undefined
+  | Readonly<{ runId: string; state: unknown; elapsedMilliseconds: number; releaseKey: string }>
+  | undefined
 > => {
   const rows = await withRuntimeTransaction(
     (transaction) =>
@@ -154,19 +165,19 @@ export const peekFlowContinuation = async (
         ${input.organizationId}::uuid,
         ${input.applicationRootId}::uuid,
         ${input.identityId}::uuid,
-        ${input.flowId}::uuid,
-        ${input.releaseKey}::text
+        ${input.flowId}::uuid
       ) as result
     `,
   );
   const row = consumeRowSchema.safeParse(rows[0]);
   if (rows.length !== 1 || !row.success) return undefined;
-  const result = consumeResultSchema.safeParse(row.data.result);
+  const result = peekResultSchema.safeParse(row.data.result);
   if (!result.success || result.data.kind !== "available") return undefined;
   return {
     runId: result.data.runId,
     state: result.data.state,
     elapsedMilliseconds: result.data.elapsedMilliseconds,
+    releaseKey: result.data.releaseKey,
   };
 };
 

@@ -140,6 +140,8 @@ export const admitFlowSegment = async (
       bindingId: run.bindingId,
       iteration: iterationKey(state),
       channel: "page",
+      ...(run.pendingContinuation === undefined ? {} : { continuation: run.pendingContinuation }),
+      ...(run.continuationPlan === undefined ? {} : { continuationPlan: run.continuationPlan }),
       ...(typeof profileAccountId === "string" ? { profileAccountId } : {}),
     },
   );
