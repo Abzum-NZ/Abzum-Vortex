@@ -20,7 +20,6 @@ import {
   studioFlowConditionContext,
   studioFlowOutline,
   studioFlowReferenceChoices,
-  studioFlowFieldOptions,
   type StudioFlowCommand,
   type StudioFlowCreateCommand,
   type StudioFlowContext,
@@ -31,6 +30,8 @@ import {
   type StudioFlowStartDraft,
   type StudioFlowStartProjection,
   type StudioFlowStepDraft,
+  type StudioFlowStepPickerContext,
+  type StudioFlowStepType,
   type StudioFlowTaskListOutline,
   type StudioFlowTaskOutline,
 } from "@vortex/ui/studio";
@@ -105,6 +106,8 @@ export function StudioFlowInspector({
   stepPath,
   ownerNote,
   choices,
+  pickerContext,
+  typesAt,
   start,
   controlLabel,
   disabled,
@@ -121,6 +124,8 @@ export function StudioFlowInspector({
   ownerNote: string | undefined;
   /** What a step setting can point at in the draft. */
   choices: StudioFlowDraftChoices;
+  pickerContext: (path: StudioFlowPath) => StudioFlowStepPickerContext;
+  typesAt: (path: StudioFlowPath) => readonly StudioFlowStepType[];
   start: StudioFlowStartProjection;
   controlLabel: (alias: string) => string;
   disabled: boolean;
@@ -254,24 +259,6 @@ export function StudioFlowInspector({
     }
     return result;
   };
-  const pickerContext = (path: StudioFlowPath) => ({
-    condition: studioFlowConditionContext(
-      outline === null
-        ? []
-        : studioFlowReferenceChoices(
-            context.source,
-            outline.flow,
-            outline.siblings,
-            selection.moduleKey,
-            path,
-            choices.forms,
-          ),
-    ),
-    fields:
-      outline === null
-        ? []
-        : (studioFlowFieldOptions(context.source, outline.flow, selection.moduleKey, {}) ?? []),
-  });
   const add = (
     command: Extract<StudioFlowCommand, { kind: "insert_task" | "add_branch" }>,
     done: string,
@@ -354,7 +341,7 @@ export function StudioFlowInspector({
             context={pickerContext([...main.path, main.tasks.length])}
             id="flow-add-last"
             label="Add a step at the end"
-            types={actions.stepTypes}
+            types={typesAt(main.path)}
             disabled={disabled}
             action="Add"
             onAdd={(taskType, settings) =>
@@ -576,7 +563,7 @@ export function StudioFlowInspector({
           context={pickerContext([...listPath, index + 1])}
           id="flow-add-after"
           label="Add a step after this one"
-          types={actions.stepTypes}
+          types={typesAt(listPath)}
           disabled={disabled}
           action="Add"
           onAdd={(taskType, settings) =>
@@ -598,7 +585,7 @@ export function StudioFlowInspector({
             context={pickerContext([...child.path, child.tasks.length])}
             id={`flow-add-in-${JSON.stringify(child.path)}`}
             label={`Add a step to ${child.label}`}
-            types={actions.stepTypes}
+            types={typesAt(child.path)}
             disabled={disabled}
             action="Add"
             onAdd={(taskType, settings) =>
@@ -620,7 +607,7 @@ export function StudioFlowInspector({
             context={pickerContext(step.path)}
             id="flow-add-branch"
             label={`Add the ${actions.branch} branch, starting with`}
-            types={actions.stepTypes}
+            types={typesAt(step.path)}
             disabled={disabled}
             action="Add branch"
             onAdd={(taskType, settings) =>

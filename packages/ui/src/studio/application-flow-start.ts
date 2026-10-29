@@ -6,6 +6,7 @@ import {
   sourceItemTree,
   sourcePageSlotAddresses,
   sourcePageSlotAt,
+  sourcePageShell,
   type ApplicationSourceDocument,
   type FlowBeforeSaveOperation,
   type FlowLiteral,
@@ -202,13 +203,20 @@ export const describeStudioFlowBehaviour = (
       .filter((binding) => binding.flow === flow.id || binding.flow === flow.key)
       .map((binding) => binding.control),
   );
-  return source.body.pages.flatMap((page) =>
-    sourcePageSlotAddresses(page).flatMap((address) =>
-      sourceItemTree(sourcePageSlotAt(page, address)?.items ?? [])
-        .filter((item) => controls.has(item.props.id))
-        .map((item) => `${page.name}: ${controlLabel(item.props.id)}`),
-    ),
-  );
+  return source.body.pages.flatMap((page) => {
+    const shell = source.body.shells.find(
+      (entry) => entry.id === sourcePageShell(page.composition),
+    );
+    const items = [
+      ...sourcePageSlotAddresses(page).flatMap((address) =>
+        sourceItemTree(sourcePageSlotAt(page, address)?.items ?? []),
+      ),
+      ...sourceItemTree(shell?.layout.content ?? []),
+    ];
+    return items
+      .filter((item) => controls.has(item.props.id))
+      .map((item) => `${page.name}: ${controlLabel(item.props.id)}`);
+  });
 };
 
 /** The Start inspector's form for a flow. */
