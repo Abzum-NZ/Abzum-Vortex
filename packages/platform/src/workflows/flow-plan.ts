@@ -241,6 +241,21 @@ const serverResolvedInputs = (bindings: readonly FlowBindingInputs[]): ReadonlyS
   return names;
 };
 
+/** Values the page cannot resolve directly, even when a binding supplies a different input. */
+const serverOnlyReference = (reference: FlowReference, serverInputs: ReadonlySet<string>): boolean => {
+  switch (reference.source) {
+    case "execution_actor":
+    case "trigger_record":
+    case "trigger_previous":
+    case "module_field":
+      return true;
+    case "input":
+      return serverInputs.has(reference.name);
+    default:
+      return false;
+  }
+};
+
 const outputTypes = (steps: readonly FlowTask[]): Record<string, string> =>
   Object.fromEntries(
     steps.flatMap((step) =>
@@ -603,19 +618,7 @@ export const flowBindingPlanIssue = (
   );
   if (conditionInput?.source === "input")
     return `The start condition reads input ${conditionInput.name}, which is resolved on the server`;
-  const serverOnly = (reference: FlowReference): boolean => {
-    switch (reference.source) {
-      case "execution_actor":
-      case "trigger_record":
-      case "trigger_previous":
-      case "module_field":
-        return true;
-      case "input":
-        return serverInputs.has(reference.name);
-      default:
-        return false;
-    }
-  };
+  const serverOnly = (reference: FlowReference): boolean => serverOnlyReference(reference, serverInputs);
   for (const segment of plan.segments) {
     for (const guard of segment.guard)
       if (referencesIn(guard).some(serverOnly))
