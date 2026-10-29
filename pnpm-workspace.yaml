@@ -14,7 +14,7 @@ catalog:
   "@types/ws": 8.18.1
   postgres: 3.4.9
   react: 19.3.0
-  react-day-picker: 10.0.1
+  react-day-picker: 10.0.2
   semver: 7.8.5
   supabase: 2.117.0
   tailwindcss: 4.3.3
