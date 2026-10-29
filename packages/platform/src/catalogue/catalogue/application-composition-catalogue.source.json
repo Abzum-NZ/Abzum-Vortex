@@ -4577,5 +4577,89 @@
     },
     "supportedEvents": ["field_changed"],
     "supportedStateOperations": []
+  },
+  "CONNECTION_SECRET_INPUT_BLOCK_RELEASE": {
+    "blockId": "771b25f4-168b-443c-8e9d-b6a1c1673b91",
+    "key": "platform.form.connection_secret_input",
+    "releaseVersion": "1.0.0",
+    "name": "Connection secret input",
+    "description": "Stores a connection secret and supplies only its single-use reference to the form.",
+    "icon": "key-round",
+    "paletteGroup": "input",
+    "rendererKey": "platform.renderer.connection_secret_input",
+    "properties": [
+      {
+        "kind": "text",
+        "key": "name",
+        "label": "Field name",
+        "help": "Key of this field in form values and events: lowercase words separated by underscores",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 40
+      },
+      {
+        "kind": "text",
+        "key": "label",
+        "presentation": true,
+        "label": "Label",
+        "help": "Accessible name and visual field label",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 120
+      },
+      {
+        "kind": "text",
+        "key": "placeholder",
+        "presentation": true,
+        "label": "Placeholder",
+        "help": "Placeholder hint text",
+        "required": false,
+        "minLength": 0,
+        "maxLength": 200
+      },
+      {
+        "kind": "text",
+        "key": "help_text",
+        "presentation": true,
+        "label": "Help text",
+        "help": "Descriptive help text below the input",
+        "required": false,
+        "minLength": 0,
+        "maxLength": 500
+      },
+      {
+        "kind": "boolean",
+        "key": "required",
+        "label": "Required",
+        "help": "Whether the field is required",
+        "required": false
+      },
+      {
+        "kind": "boolean",
+        "key": "disabled",
+        "label": "Disabled",
+        "help": "Whether the field is disabled",
+        "required": false
+      },
+      {
+        "kind": "boolean",
+        "key": "read_only",
+        "label": "Read-only",
+        "help": "Whether the field is read-only",
+        "required": false
+      }
+    ],
+    "slots": [],
+    "capabilities": {
+      "responsiveVisibility": true,
+      "responsiveOrder": true,
+      "gridWidth": true,
+      "height": "content",
+      "publicSurface": "refused",
+      "accessibleName": "required",
+      "accessibleNamePropertyPath": ["label"]
+    },
+    "supportedEvents": ["field_changed"],
+    "supportedStateOperations": []
   }
 }

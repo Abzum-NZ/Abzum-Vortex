@@ -59,6 +59,10 @@ const FORM_PAYLOAD_PARSER: PlatformComponentPayloadParser = createPayloadParser(
 export const CONTROL_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistration[] =
   Object.freeze([
     Object.freeze({
+      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.CONNECTION_SECRET_INPUT_BLOCK_RELEASE,
+      parsePayload: controlPayloadParser<never>(),
+    }),
+    Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TEXT_INPUT_BLOCK_RELEASE,
       parsePayload: controlPayloadParser<TextInputPayload>(),
     }),
