@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
   createHumanOrganizationRequestService,
+  HumanOrganizationRequestRestart,
   type BoundHumanOrganizationRequest,
   type HumanOrganizationRequestDependencies,
 } from "../access/human-organization-request";
@@ -103,6 +104,7 @@ type StartFlowDependencies<Value> = Readonly<{
   requests: HumanOrganizationRequestDependencies;
   authorizeBinding: (context: SegmentContext) => Promise<boolean>;
   authorizeInvocation: (context: SegmentContext) => Promise<boolean>;
+  /** Rebuild the segment frame for each call: a restart rolls back the entire transaction. */
   execute: (
     context: SegmentContext,
     segment: FlowServerSegment | null,
@@ -252,17 +254,25 @@ export const startFlow = async <Value>(
     }
     return { kind: "completed", value: executed.value };
   };
-  const result =
-    segment?.preScopeLock === "organization_account"
-      ? await requests.runProfileChange(
-          request.session,
-          request.selection,
-          request.profileAccountId!,
-          operation,
-          () => undefined,
-        )
-      : mode === "access_change"
-        ? await requests.runAccessChange(request.session, request.selection, operation)
-        : await requests.run(request.session, request.selection, operation);
-  return result.kind === "available" ? result.value : { kind: "refused" };
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const result =
+        segment?.preScopeLock === "organization_account"
+          ? await requests.runProfileChange(
+              request.session,
+              request.selection,
+              request.profileAccountId!,
+              operation,
+              () => undefined,
+            )
+          : mode === "access_change"
+            ? await requests.runAccessChange(request.session, request.selection, operation)
+            : await requests.run(request.session, request.selection, operation);
+      return result.kind === "available" ? result.value : { kind: "refused" };
+    } catch (error) {
+      if (!(error instanceof HumanOrganizationRequestRestart)) throw error;
+    }
+  }
+  console.error("[flows] segment could not acquire stable relationship totals after three attempts");
+  return { kind: "refused" };
 };

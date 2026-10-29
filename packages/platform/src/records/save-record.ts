@@ -24,6 +24,7 @@ import {
 } from "./records";
 import {
   createHumanOrganizationRequestService,
+  HumanOrganizationRequestRestart,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "../access/human-organization-request";
@@ -1122,8 +1123,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
           if (correction !== undefined) return correction;
           throw error;
         });
-      if (value === restartRelationshipTotalSave)
-        throw new Error("RECORD_SAVE_RESTART_TRANSACTION");
+      if (value === restartRelationshipTotalSave) throw new HumanOrganizationRequestRestart();
       if (value === recordedRefusal) {
         console.error("[record] save refused RECORD_SAVE_REFUSAL_RECORDED");
         return { kind: "unavailable" };

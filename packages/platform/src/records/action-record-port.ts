@@ -15,6 +15,7 @@ import {
 import { saveRecordCommandSchema } from "./records";
 import {
   createHumanOrganizationRequestService,
+  HumanOrganizationRequestRestart,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "../access/human-organization-request";
@@ -1251,7 +1252,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
       const value = attempt.kind === "completed" ? attempt.outcomes[0]! : attempt.outcome;
       const settlement = state.deleteSettlement as Settled<unknown> | undefined;
       if (settlement?.kind === "restart" || value === restart)
-        throw new Error("NAMED_ACTION_RESTART_TRANSACTION");
+        throw new HumanOrganizationRequestRestart();
       if (settlement?.kind === "result")
         return { kind: "available", value: deleteRefusal(settlement) };
       if (value === recordedRefusal) {

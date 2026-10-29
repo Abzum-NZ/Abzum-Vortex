@@ -44,6 +44,13 @@ type ChangePreparation = (
   scope: SelectedOrganizationScope,
 ) => Promise<void>;
 
+/** A protected operation needs its enclosing transaction restarted from the beginning. */
+export class HumanOrganizationRequestRestart extends Error {
+  constructor() {
+    super("HUMAN_ORGANIZATION_REQUEST_RESTART");
+  }
+}
+
 /** A scope already resolved and locked by the enclosing admitted segment. */
 export type BoundHumanOrganizationRequest = Readonly<{
   transaction: RequestDatabaseTransaction;
@@ -355,6 +362,7 @@ export const createHumanOrganizationRequestService = (
       appendTelemetry(correlationId, "success", startedAtMs);
       return { kind: "available", value };
     } catch (error) {
+      if (error instanceof HumanOrganizationRequestRestart) throw error;
       const code = databaseCode(error);
       if (code !== undefined && mapDatabaseRefusal !== undefined) {
         const refusal = mapDatabaseRefusal(code, error);
