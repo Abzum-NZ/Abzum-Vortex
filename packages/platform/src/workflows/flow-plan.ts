@@ -569,7 +569,17 @@ export const compileFlowPlan = (
           ]),
       ),
       outputs: Object.fromEntries(
-        Object.entries(flow.outputs).map(([name, { type, value }]) => [name, { type, value }]),
+        Object.entries(flow.outputs).map(([name, { type, value }]) => [
+          name,
+          {
+            type,
+            value: referencesIn(value).some((reference) =>
+              serverOnlyReference(reference, serverInputs),
+            )
+              ? { kind: "reference" as const, reference: { source: "final_output" as const, name } }
+              : value,
+          },
+        ]),
       ),
       segments: segments.map((segment) =>
         segment.kind === "page"
