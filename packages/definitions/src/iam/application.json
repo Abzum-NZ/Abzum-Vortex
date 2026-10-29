@@ -6963,7 +6963,14 @@
         "event_id": "event_iam_administration_action",
         "event": "action",
         "flow": "flow_update_own_profile",
-        "inputs": {}
+        "inputs": {},
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
+        }
       },
       {
         "id": "binding_revise_role_metadata",
@@ -6980,6 +6987,13 @@
             "kind": "caller",
             "name": "revision"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -6997,6 +7011,13 @@
             "kind": "caller",
             "name": "label"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -7014,6 +7035,13 @@
             "kind": "caller",
             "name": "revision"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -7027,6 +7055,13 @@
             "kind": "caller",
             "name": "record_id"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -7044,6 +7079,13 @@
             "kind": "caller",
             "name": "revision"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -7057,6 +7099,13 @@
             "kind": "caller",
             "name": "values"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "form",
+          "timeoutMs": 10000
         }
       },
       {
@@ -7074,6 +7123,13 @@
             "kind": "caller",
             "name": "values"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "form",
+          "timeoutMs": 10000
         }
       },
       {
@@ -7117,6 +7173,13 @@
               "value": "accept"
             }
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "form",
+          "timeoutMs": 10000
         }
       },
       {
@@ -7130,6 +7193,13 @@
             "kind": "caller",
             "name": "record_id"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -7147,6 +7217,13 @@
             "kind": "caller",
             "name": "revision"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -7160,6 +7237,13 @@
             "kind": "caller",
             "name": "record_id"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -7177,6 +7261,13 @@
             "kind": "caller",
             "name": "revision"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -7194,6 +7285,13 @@
             "kind": "caller",
             "name": "revision"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -7211,6 +7309,13 @@
             "kind": "caller",
             "name": "revision"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -7228,6 +7333,13 @@
             "kind": "caller",
             "name": "revision"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -7245,6 +7357,13 @@
             "kind": "caller",
             "name": "revision"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -7262,6 +7381,13 @@
             "kind": "caller",
             "name": "revision"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -7270,7 +7396,14 @@
         "event_id": "event_new_access_request",
         "event": "action",
         "flow": "navigate_new_access_request",
-        "inputs": {}
+        "inputs": {},
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
+        }
       },
       {
         "id": "binding_edit_access_request",
@@ -7283,6 +7416,13 @@
             "kind": "caller",
             "name": "record_id"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -7300,6 +7440,13 @@
             "kind": "caller",
             "name": "revision"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -7317,6 +7464,13 @@
             "kind": "caller",
             "name": "revision"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       }
     ]

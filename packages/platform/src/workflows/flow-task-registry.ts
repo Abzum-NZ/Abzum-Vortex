@@ -1,20 +1,16 @@
 import { z } from "zod";
-import { safeFlowResultKindSchema } from "../definition/application-flow-bindings";
+import { flowTaskEffectClassSchema, safeFlowResultKindSchema } from "./flow-effects";
+import type { FlowTaskEffectClass } from "./flow-effects";
 import { workflowValueTypeSchema } from "../catalogue/catalogues";
 import { retryPolicySchema } from "../catalogue/common";
-import {
-  flowControlTaskTypeKeys,
-  flowDurableOnlyTaskTypeKeys,
-  flowMaximumServerSeconds,
-  flowTaskChildLists,
-  isFlowControlTask,
-} from "./flow-contracts";
+import { flowControlTaskTypeKeys, flowDurableOnlyTaskTypeKeys, flowTaskChildLists, isFlowControlTask } from "./flow-contracts";
 import type { FlowDefinition, FlowExecutionKind, FlowSource, FlowTask } from "./flow-contracts";
 import {
   builderKeySchema,
   namespacedKeySchema,
   stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
+import { flowMaximumServerSeconds } from "./flow-limits";
 
 /*
  * The one registry of task types (architecture decision 1, "The task registry"). Every building
@@ -37,19 +33,6 @@ import {
 export const flowTaskRunLocationSchema = z.enum(["browser", "server", "transaction", "durable"]);
 export type FlowTaskRunLocation = z.infer<typeof flowTaskRunLocationSchema>;
 
-/**
- * What a task does. `pure` computes from its inputs, `read` reads under the run's authority,
- * `change` changes data through a protected operation, `background_start` commits the start of a
- * durable run, and `interface` talks to the person through the page.
- */
-export const flowTaskEffectClassSchema = z.enum([
-  "pure",
-  "read",
-  "change",
-  "background_start",
-  "interface",
-]);
-export type FlowTaskEffectClass = z.infer<typeof flowTaskEffectClassSchema>;
 
 /**
  * How a task compiles to a Kestra flow when it is placed in a durable flow. Customer text is never

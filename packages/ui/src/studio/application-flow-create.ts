@@ -8,6 +8,7 @@ import {
   applicationSourceDocumentSchema,
   authoredRecordsTableEventAvailable,
   builderKeySchema,
+  defaultFlowBindingSettings,
   defaultSaveFlowSource,
   sourcePageItems,
   validateFlow,
@@ -416,6 +417,7 @@ const bindControl = (
     event,
     flow: flowKey,
     inputs,
+    settings: defaultFlowBindingSettings(event),
   });
   if (event === "row_action" && !rowActionMenu && item !== undefined)
     (item.props as Record<string, unknown>).row_action_event_id = eventId;

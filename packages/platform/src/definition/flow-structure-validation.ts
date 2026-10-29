@@ -1,17 +1,8 @@
 import type { DefinitionRuleFailureFamily } from "../catalogue/validation-errors";
-import {
-  flowMaximumForEachItemsDurable,
-  flowMaximumForEachItemsOther,
-  flowMaximumServerSeconds,
-  flowMaximumTaskCount,
-  flowMaximumTaskNestingDepth,
-  flowTaskChildLists,
-  flowTriggerExecutionKinds,
-  type FlowSource,
-  type FlowTask,
-} from "../workflows/flow-contracts";
+import { flowTaskChildLists, flowTriggerExecutionKinds, type FlowSource, type FlowTask } from "../workflows/flow-contracts";
 import { flowLiteralSchema } from "../workflows/flow-values";
 import type { DefinitionCompilerRefusalCode } from "./compilation-error";
+import { flowMaximumForEachItemsDurable, flowMaximumForEachItemsOther, flowMaximumServerSeconds, flowMaximumTaskCount, flowMaximumTaskNestingDepth } from "../workflows/flow-limits";
 
 /** A location inside a flow source: object keys and array indexes from its root. */
 export type Path = (string | number)[];

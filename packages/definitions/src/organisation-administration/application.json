@@ -2549,6 +2549,13 @@
             "kind": "caller",
             "name": "body"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "form",
+          "timeoutMs": 10000
         }
       },
       {
@@ -2566,6 +2573,13 @@
             "kind": "caller",
             "name": "details"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "form",
+          "timeoutMs": 10000
         }
       },
       {
@@ -2583,6 +2597,13 @@
             "kind": "caller",
             "name": "revision"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -2600,6 +2621,13 @@
             "kind": "caller",
             "name": "revision"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -2617,6 +2645,13 @@
             "kind": "caller",
             "name": "revision"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -2625,7 +2660,14 @@
         "event_id": "event_invite_person",
         "event": "action",
         "flow": "flow_create_organization_invitation",
-        "inputs": {}
+        "inputs": {},
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
+        }
       },
       {
         "id": "binding_revoke_invitation",
@@ -2642,6 +2684,13 @@
             "kind": "caller",
             "name": "revision"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -2655,6 +2704,13 @@
             "kind": "caller",
             "name": "record_id"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -2672,6 +2728,13 @@
             "kind": "caller",
             "name": "record"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "form",
+          "timeoutMs": 10000
         }
       },
       {
@@ -2680,7 +2743,14 @@
         "event_id": "event_new_notice",
         "event": "action",
         "flow": "navigate_new_notice",
-        "inputs": {}
+        "inputs": {},
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
+        }
       },
       {
         "id": "binding_new_privacy_request",
@@ -2688,7 +2758,14 @@
         "event_id": "event_new_privacy_request",
         "event": "action",
         "flow": "navigate_new_privacy_request",
-        "inputs": {}
+        "inputs": {},
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
+        }
       }
     ]
   }

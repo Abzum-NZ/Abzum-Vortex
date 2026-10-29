@@ -3108,6 +3108,13 @@
             "kind": "caller",
             "name": "record_id"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -3121,6 +3128,13 @@
             "kind": "caller",
             "name": "record_id"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -3134,6 +3148,13 @@
             "kind": "caller",
             "name": "record_id"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -3147,6 +3168,13 @@
             "kind": "caller",
             "name": "record_id"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       }
     ]

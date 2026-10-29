@@ -2186,6 +2186,13 @@
             "kind": "caller",
             "name": "description"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "form",
+          "timeoutMs": 10000
         }
       },
       {
@@ -2199,6 +2206,13 @@
             "kind": "caller",
             "name": "record_id"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -2216,6 +2230,13 @@
             "kind": "caller",
             "name": "is_favourite"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "form",
+          "timeoutMs": 10000
         }
       },
       {
@@ -2229,6 +2250,13 @@
             "kind": "caller",
             "name": "record_id"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -2242,6 +2270,13 @@
             "kind": "caller",
             "name": "record_id"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -2255,6 +2290,13 @@
             "kind": "caller",
             "name": "record_id"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -2268,6 +2310,13 @@
             "kind": "caller",
             "name": "record_id"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -2281,6 +2330,13 @@
             "kind": "caller",
             "name": "record"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "form",
+          "timeoutMs": 10000
         }
       }
     ]

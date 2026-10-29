@@ -584,6 +584,7 @@ function compileApplicationFlowBindings(
       eventId: resolution.id(definitionKey, "event", String(binding.event_id), "content"),
       event: binding.event,
       flow: { flowId, inputs },
+      settings: asObject(binding.settings),
     };
   });
 }

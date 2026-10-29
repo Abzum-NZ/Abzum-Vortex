@@ -14,11 +14,7 @@ import {
   executeNamedActionCommandSchema,
   type ExecuteNamedActionCommand,
 } from "../records/named-actions";
-import {
-  executionAuthorityContextSchema,
-  flowMaximumServerSeconds,
-  type FlowDefinition,
-} from "../workflows/flow-contracts";
+import { executionAuthorityContextSchema, type FlowDefinition } from "../workflows/flow-contracts";
 import { flowWarningNoticeSchema } from "../workflows/form-continuation-contracts";
 import { readFlowRunAsPrincipalForRun } from "../access/flow-run-as-principals";
 import { withRuntimeTransaction } from "../db/request-transaction";
@@ -59,6 +55,7 @@ import {
   type Run,
 } from "./flow-orchestrator-types";
 import { createFlowTaskRunner } from "./flow-task-runner";
+import { flowMaximumServerSeconds } from "../workflows/flow-limits";
 
 /** Orchestrates flows with verified authority, revision-bound writes and single-use continuations. */
 

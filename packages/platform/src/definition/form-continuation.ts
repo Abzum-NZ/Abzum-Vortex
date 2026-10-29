@@ -14,9 +14,10 @@ import {
   type FormContinuationStartRequest,
   type FormContinuationTarget,
 } from "../workflows/form-continuation-contracts";
-import { safeFlowResultDescriptors, type SafeFlowResultKind } from "./application-flow-bindings";
+import { safeFlowResultDescriptors } from "./application-flow-bindings";
 import type { FlowOrchestrator } from "./flow-orchestrator";
 import type { FlowOrchestratorResponse } from "./flow-orchestrator-types";
+import type { SafeFlowResultKind } from "../workflows/flow-effects";
 
 /**
  * The App implementation of the web-independent form request and continuation contract

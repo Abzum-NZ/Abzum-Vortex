@@ -2,16 +2,7 @@ import { z } from "zod";
 import { workflowValueTypeSchema } from "../catalogue/catalogues";
 import { descriptionSchema, jsonValueSchema, retryPolicySchema } from "../catalogue/common";
 import { definitionProvenanceEntrySchema } from "../definition/definition-provenance";
-import {
-  flowExecutionKindSchema,
-  flowMaximumTaskCount,
-  flowReadFieldsProjectionSchema,
-  flowRegisteredTaskTypeSchema,
-  flowScheduleRecurrenceSchema,
-  flowSchema,
-  flowStandardEventKindSchema,
-  flowTaskTimeoutSchema,
-} from "./flow-contracts";
+import { flowExecutionKindSchema, flowReadFieldsProjectionSchema, flowRegisteredTaskTypeSchema, flowScheduleRecurrenceSchema, flowSchema, flowStandardEventKindSchema, flowTaskTimeoutSchema } from "./flow-contracts";
 import { flowFormulaSchema, flowLiteralSchema, flowValueSchema } from "./flow-values";
 import type { FlowFormula, FlowLiteral, FlowValue } from "./flow-values";
 import {
@@ -20,6 +11,7 @@ import {
   recordTypeIdSchema,
   stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
+import { flowMaximumTaskCount } from "./flow-limits";
 
 /**
  * The authored form of a flow inside a module or application source, and the result of compiling
