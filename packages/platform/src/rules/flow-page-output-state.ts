@@ -40,6 +40,7 @@ export const pageFlowSegmentSeed = (
   state: FlowRunState,
   declarations: Readonly<Record<string, string>>,
   pageInputs: ReadonlySet<string>,
+  carriedInputKeys: readonly string[],
   resolveForm?: FlowFormReferenceResolver,
 ): Readonly<Record<string, JsonValue>> => {
   const activation = state.activations[0];
@@ -52,7 +53,9 @@ export const pageFlowSegmentSeed = (
   )
     throw new Error("FLOW_PAGE_SEED_STATE_INVALID");
   const entries: [string, JsonValue][] = [];
+  const carried = new Set(carriedInputKeys);
   for (const [name, type] of Object.entries(declarations)) {
+    if (carried.has(name)) continue;
     const parts = name.split(".");
     // Server-resolved inputs are never released or supplied by the page.
     if (parts[0] === "inputs" && !pageInputs.has(parts[1] ?? "")) continue;
