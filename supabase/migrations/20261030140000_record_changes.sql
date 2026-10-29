@@ -826,6 +826,9 @@ begin
       (storage_set -> 'storageChanges') || (generated_plan -> 'storageChanges')
     );
     written_revisions := vortex_record.apply_record_storage_changes_internal(storage_set -> 'storageChanges');
+    perform vortex_record.apply_relationship_edges_internal(
+      vortex_record.prepare_record_restore_edges_internal(deletion_plan -> 'subjects')
+    );
     perform vortex_record.validate_record_restore_set_internal(deletion_plan -> 'subjects');
     select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
       'recordKey', prepared.value -> 'recordKey',
@@ -7199,27 +7202,23 @@ comment on function vortex_record.transfer_record_ownership_for_offboarding_inte
 ) is
   'Private offboarding single-record ownership transfer: the public transfer contract, with the command receipt, Activity and Event, for a named source owner.';
 
-create or replace function vortex_record.validate_record_restore_set_internal(p_subjects jsonb)
-returns void
+create or replace function vortex_record.prepare_record_restore_edges_internal(p_subjects jsonb)
+returns jsonb
 language plpgsql
 volatile
 security invoker
 set search_path = ''
 as $function$
 declare
-  subjects jsonb := p_subjects;
   subject jsonb;
   field_value jsonb;
   retained_value jsonb;
   relationship_value jsonb;
   edge_changes jsonb := '[]'::jsonb;
-  loaded jsonb;
-  decision jsonb;
-  bounds jsonb;
 begin
-  -- Validate retained fields and prepare links against the complete proposed
-  -- closure. Any refusal rolls this preparation back, including its row writes.
-  for subject in select item.value from pg_catalog.jsonb_array_elements(subjects) as item(value)
+  -- Storage has restored the complete proposed closure. Validate retained fields
+  -- and collect its links before the command applies all relationship changes.
+  for subject in select item.value from pg_catalog.jsonb_array_elements(p_subjects) as item(value)
   loop
     for field_value in
       select item.value from pg_catalog.jsonb_array_elements(subject #> '{recordType,fields}') as item(value)
@@ -7256,8 +7255,30 @@ begin
       end if;
     end loop;
   end loop;
-  perform vortex_record.apply_relationship_edges_internal(edge_changes);
+  return edge_changes;
+end
+$function$;
+alter function vortex_record.prepare_record_restore_edges_internal(jsonb) owner to vortex_record_adapter;
+revoke all on function vortex_record.prepare_record_restore_edges_internal(jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+comment on function vortex_record.prepare_record_restore_edges_internal(jsonb) is
+  'Private restore edge preparation over the restored storage set: validates retained fields and targets, returning links for the command-wide edge write.';
 
+create or replace function vortex_record.validate_record_restore_set_internal(p_subjects jsonb)
+returns void
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  subjects jsonb := p_subjects;
+  subject jsonb;
+  field_value jsonb;
+  loaded jsonb;
+  decision jsonb;
+  bounds jsonb;
+begin
   -- Re-evaluate the actual proposed records, including recovered optional
   -- links, before exposing preparation to the runtime rule evaluator.
   for subject in select item.value from pg_catalog.jsonb_array_elements(subjects) as item(value)
@@ -7294,7 +7315,7 @@ alter function vortex_record.validate_record_restore_set_internal(jsonb) owner t
 revoke all on function vortex_record.validate_record_restore_set_internal(jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_record.validate_record_restore_set_internal(jsonb) is
-  'Private restore finalization: validates retained values and recovered targets, applies the prepared edge set once and checks current authority against the complete restored graph.';
+  'Private restore finalization: checks current authority and changed-field bounds against the complete restored storage and relationship graph.';
 
 -- Private Record-adapter routine; migrations install the complete canonical body
 -- under its owner with schema CREATE granted only for that migration transaction.
