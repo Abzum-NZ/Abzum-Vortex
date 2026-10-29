@@ -4,12 +4,9 @@
 
 Kestra open source runs on the Coolify-managed server with its own PostgreSQL. It is the workflow and
 operations service in the [current hosting boundary](../../docs/specification/17-runtime-storage-and-caching.md#hosting-boundaries).
-The operations instance runs scheduled event-dispatch recovery and runtime-bundle cleanup. Customer-authored
-durable workflows run in the separate application instance.
+The operations instance runs scheduled event-dispatch recovery and runtime-bundle cleanup. The separate application instance is retained for future durable workflows.
 
-No application user sees it. The Vortex Workflow service operates customer-authored workflows
-through the [protected-operation boundary](../../docs/specification/09-workflows-and-pipelines.md#protected-operation-contract).
-The two operations flows use only their protected route credentials.
+No application user sees it. The two operations flows use only their protected route credentials.
 
 ## What is here
 
@@ -102,9 +99,7 @@ execution logs.
 
 These two scheduled flows use the Kestra HTTP task and need no database client, delivery CLI, or
 repository checkout at runtime. Vortex builders cannot upload Kestra YAML, choose a Process runner,
-or interpolate Kestra environment values. Application workflows are compiled from the published
-generic node catalogue and call protected Vortex operations; adding any raw command node would be a
-separate security decision and is refused by the current specification.
+or interpolate Kestra environment values. Customer durable workflow compilation and callbacks are not currently implemented; the future backend must preserve this boundary.
 
 ## Application instance
 

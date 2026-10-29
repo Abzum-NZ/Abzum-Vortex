@@ -5,6 +5,7 @@ drop function vortex_access.complete_protected_node_effect(uuid, uuid, uuid, tex
 drop function vortex_access.read_flow_execution_binding(uuid, uuid, uuid, uuid, uuid, text, uuid, uuid, text, uuid, uuid, text, uuid, uuid);
 drop function vortex_access.read_flow_execution_binding_for_run(uuid, uuid, uuid, text, uuid, uuid, text, uuid, uuid, text, uuid, uuid);
 drop function vortex_access.flow_execution_binding_authority_internal(uuid, uuid, uuid, text);
+drop function vortex_access.resolve_durable_system_actor_scope(uuid, uuid, uuid, text);
 drop function vortex_access.flow_execution_binding_to_json_internal(vortex_access.flow_execution_bindings);
 drop function vortex_access.read_flow_run_as_principal_for_run(uuid, uuid, uuid, text, uuid);
 drop function vortex_access.flow_run_as_principal_to_json_internal(vortex_access.flow_run_as_principals);
