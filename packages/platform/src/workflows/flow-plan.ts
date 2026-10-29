@@ -545,7 +545,7 @@ export const flowBindingPlanIssue = (
   binding: Readonly<{
     event: string;
     inputs: readonly Readonly<Record<string, FlowBindingInput>>[];
-    settings?: Readonly<{ concurrency?: string }> | undefined;
+    settings?: Readonly<{ concurrency?: string; condition?: FlowFormula | null }> | undefined;
   }>,
 ): string | undefined => {
   if (
@@ -565,6 +565,11 @@ export const flowBindingPlanIssue = (
   if (binding.event === "options_requested" && (plan.pageSteps || plan.changes))
     return "An options flow only reads: it can hold no page steps and no changes";
   const serverInputs = serverResolvedInputs(binding.inputs);
+  const conditionInput = referencesIn(binding.settings?.condition).find(
+    (reference) => reference.source === "input" && serverInputs.has(reference.name),
+  );
+  if (conditionInput?.source === "input")
+    return `The start condition reads input ${conditionInput.name}, which is resolved on the server`;
   const serverOnly = (reference: FlowReference): boolean => {
     switch (reference.source) {
       case "execution_actor":
