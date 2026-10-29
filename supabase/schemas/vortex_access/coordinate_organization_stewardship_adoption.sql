@@ -175,8 +175,6 @@ begin
         and expected.source_version = platform_registration.source_version
         and expected.catalogue_fingerprint =
           platform_registration.permission_catalogue_fingerprint
-        and expected.catalogue_fingerprint =
-          platform_registration.candidate_fingerprint
       ),
       false
     )

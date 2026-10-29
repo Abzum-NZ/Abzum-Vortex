@@ -7601,4 +7601,1439 @@ alter function vortex_access.record_metering_event(p_tenant_id uuid, p_organizat
 
 grant execute on function vortex_access.record_metering_event(p_tenant_id uuid, p_organization_id uuid, p_allocation_owner text, p_operation_id uuid, p_capability_key text, p_quantity numeric, p_unit text, p_source text, p_dimensions jsonb, p_occurred_at timestamp with time zone, p_source_event_id uuid, p_metering_event_id uuid, p_correlation_id uuid, p_corrects_metering_event_id uuid, p_correction_direction text) to postgres;
 
+
+-- Registration revisions and exact source entries replace the duplicate candidate hash.
+do $preflight$
+declare
+  bad_organization uuid;
+  bad_owner uuid;
+begin
+  select current_row.organization_id, current_row.registration_owner_id
+  into bad_organization, bad_owner
+  from vortex_access.permission_registrations as current_row
+  left join vortex_access.permission_registration_revisions as history
+    on history.organization_id = current_row.organization_id
+    and history.registration_kind = current_row.registration_kind
+    and history.registration_owner_id = current_row.registration_owner_id
+    and history.revision = current_row.revision
+  where current_row.candidate_fingerprint is distinct from history.candidate_fingerprint
+    or (current_row.registration_kind = 'platform'
+      and current_row.candidate_fingerprint is distinct from current_row.permission_catalogue_fingerprint)
+  limit 1;
+  if found then
+    raise exception using errcode = '23514',
+      message = pg_catalog.format('permission_candidate_history_mismatch: organization %s owner %s',
+        bad_organization, bad_owner);
+  end if;
+end
+$preflight$;
+alter table vortex_access.permission_registration_revisions
+  drop constraint permission_registration_revisions_fingerprints_valid;
+alter table vortex_access.permission_registration_revisions drop column candidate_fingerprint;
+alter table vortex_access.permission_registrations drop column candidate_fingerprint;
+alter table vortex_access.permission_registration_revisions
+  add constraint permission_registration_revisions_catalogue_fingerprint_valid
+  check (permission_catalogue_fingerprint ~ '^sha256:[a-f0-9]{64}$');
+
+CREATE OR REPLACE FUNCTION vortex_access.apply_application_permission_registration_internal(p_operation text, p_expected_revision bigint, p_candidate jsonb, p_changed_by uuid, p_correlation_id uuid) RETURNS TABLE(operation text, organization_id uuid, application_root_id uuid, registration_state text, registration_revision bigint, access_version bigint, correlation_id uuid)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $_$
+declare
+  operation_at timestamptz;
+  candidate_organization_id uuid;
+  candidate_application_root_id uuid;
+  candidate_release jsonb;
+  candidate_release_revision bigint;
+  candidate_release_version text;
+  candidate_validation_version text;
+  candidate_content_fingerprint text;
+  candidate_resolution_fingerprint text;
+  candidate_catalogue_fingerprint text;
+  current_registration vortex_access.permission_registrations%rowtype;
+  next_revision bigint;
+  resulting_version bigint;
+  entry_value jsonb;
+  permission_value jsonb;
+  source_value jsonb;
+  entry_owner_kind text;
+  entry_owner_id uuid;
+  entry_source_revision bigint;
+  canonical_application_permissions jsonb;
+begin
+  if p_operation not in ('register', 'update', 'reactivate')
+    or p_candidate is null
+    or pg_catalog.jsonb_typeof(p_candidate) <> 'object'
+    or p_changed_by is null
+    or p_changed_by = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_correlation_id is null
+    or p_correlation_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or (p_operation = 'register' and p_expected_revision is not null)
+    or (p_operation <> 'register' and (p_expected_revision is null or p_expected_revision not between 1 and 9007199254740991))
+    or p_candidate - array[
+      'contractVersion', 'organizationId', 'applicationRootId', 'applicationRelease',
+      'applicationCatalogueFingerprint', 'applicationPermissionIds', 'entries'
+    ]::text[] <> '{}'::jsonb
+    or not (p_candidate ?& array[
+      'contractVersion', 'organizationId', 'applicationRootId', 'applicationRelease',
+      'applicationCatalogueFingerprint', 'applicationPermissionIds', 'entries'
+    ])
+    or p_candidate ->> 'contractVersion' <> '1.0.0'
+    or pg_catalog.jsonb_typeof(p_candidate -> 'applicationRelease') <> 'object'
+    or pg_catalog.jsonb_typeof(p_candidate -> 'applicationPermissionIds') <> 'array'
+    or pg_catalog.jsonb_typeof(p_candidate -> 'entries') <> 'array' then
+    raise exception using errcode = '22023', message = 'Application permission registration input is invalid';
+  end if;
+
+  begin
+    candidate_organization_id := (p_candidate ->> 'organizationId')::uuid;
+    candidate_application_root_id := (p_candidate ->> 'applicationRootId')::uuid;
+    candidate_release := p_candidate -> 'applicationRelease';
+    candidate_release_revision := (candidate_release ->> 'releaseRevision')::bigint;
+    candidate_release_version := candidate_release ->> 'releaseVersion';
+    candidate_validation_version := candidate_release ->> 'validationContractVersion';
+    candidate_content_fingerprint := candidate_release ->> 'contentFingerprint';
+    candidate_resolution_fingerprint := candidate_release ->> 'resolutionFingerprint';
+    candidate_catalogue_fingerprint := p_candidate ->> 'applicationCatalogueFingerprint';
+  exception when invalid_text_representation or numeric_value_out_of_range then
+    raise exception using errcode = '22023', message = 'Application permission registration input is invalid';
+  end;
+
+  if candidate_organization_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or candidate_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or candidate_release - array[
+      'kind', 'definitionKey', 'rootId', 'releaseRevision', 'releaseVersion',
+      'validationContractVersion', 'contentFingerprint', 'resolutionFingerprint'
+    ]::text[] <> '{}'::jsonb
+    or not (candidate_release ?& array[
+      'kind', 'definitionKey', 'rootId', 'releaseRevision', 'releaseVersion',
+      'validationContractVersion', 'contentFingerprint', 'resolutionFingerprint'
+    ])
+    or candidate_release ->> 'kind' <> 'application'
+    or (candidate_release ->> 'rootId')::uuid <> candidate_application_root_id
+    or candidate_release_revision not between 1 and 9007199254740991
+    or candidate_catalogue_fingerprint !~ '^sha256:[a-f0-9]{64}$' then
+    raise exception using errcode = '22023', message = 'Application permission registration input is invalid';
+  end if;
+
+  perform 1
+  from vortex_access.organization_access_versions as version
+  join vortex_identity.organizations as organization
+    on organization.organization_id = version.organization_id
+  join vortex_identity.tenants as tenant on tenant.tenant_id = organization.tenant_id
+  where version.organization_id = candidate_organization_id
+    and organization.state = 'active'
+    and tenant.state = 'active'
+  for update of version;
+  if not found then
+    raise exception using errcode = '42501', message = 'Application permission registration scope is unavailable';
+  end if;
+
+  select release.compilation_output #> '{canonical,content,permissions}'
+  into canonical_application_permissions
+    from vortex_definition.roots as root
+    join vortex_definition.releases as release on release.root_id = root.root_id
+    where root.root_id = candidate_application_root_id
+      and root.organization_id = candidate_organization_id
+      and root.kind = 'application'
+      and root.key = candidate_release ->> 'definitionKey'
+      and release.release_revision = candidate_release_revision
+      and release.release_version = candidate_release_version
+      and release.validation_contract_version = candidate_validation_version
+      and release.content_fingerprint = candidate_content_fingerprint
+      and release.resolution_fingerprint = candidate_resolution_fingerprint;
+  if not found
+    or pg_catalog.jsonb_typeof(canonical_application_permissions) is distinct from 'array' then
+    raise exception using errcode = '40001', message = 'Application permission release evidence is stale or unavailable';
+  end if;
+
+  for entry_value in
+    select item.entry from pg_catalog.jsonb_array_elements(p_candidate -> 'entries') as item(entry)
+  loop
+    if pg_catalog.jsonb_typeof(entry_value) <> 'object'
+      or entry_value - array[
+        'applicationRootId', 'ownerKind', 'ownerId', 'permission',
+        'sourceRelease', 'meaningFingerprint'
+      ]::text[] <> '{}'::jsonb
+      or (entry_value ->> 'applicationRootId')::uuid <> candidate_application_root_id
+      or pg_catalog.jsonb_typeof(entry_value -> 'permission') <> 'object'
+      or pg_catalog.jsonb_typeof(entry_value -> 'sourceRelease') <> 'object'
+      or entry_value ->> 'meaningFingerprint' !~ '^sha256:[a-f0-9]{64}$' then
+      raise exception using errcode = '22023', message = 'Application permission entry is invalid';
+    end if;
+    permission_value := entry_value -> 'permission';
+    source_value := entry_value -> 'sourceRelease';
+    begin
+      entry_owner_kind := entry_value ->> 'ownerKind';
+      entry_owner_id := (entry_value ->> 'ownerId')::uuid;
+      entry_source_revision := (source_value ->> 'releaseRevision')::bigint;
+    exception when invalid_text_representation or numeric_value_out_of_range then
+      raise exception using errcode = '22023', message = 'Application permission entry is invalid';
+    end;
+    if entry_owner_kind not in ('application', 'module')
+      or entry_owner_id = '00000000-0000-0000-0000-000000000000'::uuid
+      or permission_value - array[
+        'permissionId', 'key', 'label', 'description', 'recordTypeId',
+        'recordScope', 'fieldPolicy', 'actionKind', 'namedAction', 'administrative'
+      ]::text[] <> '{}'::jsonb
+      or not (permission_value ?& array[
+        'permissionId', 'key', 'label', 'description', 'actionKind', 'administrative'
+      ])
+      or (
+        permission_value ? 'recordScope'
+        and (
+          permission_value ->> 'recordTypeId' is null
+          or pg_catalog.jsonb_typeof(permission_value -> 'recordScope') is distinct from 'object'
+        )
+      )
+      or (
+        permission_value ? 'fieldPolicy'
+        and (
+          permission_value ->> 'recordTypeId' is null
+          or not vortex_access.permission_field_policy_is_valid(
+            permission_value -> 'fieldPolicy'
+          )
+        )
+      )
+      or source_value - array[
+        'kind', 'definitionKey', 'rootId', 'releaseRevision', 'releaseVersion',
+        'validationContractVersion', 'contentFingerprint', 'resolutionFingerprint'
+      ]::text[] <> '{}'::jsonb
+      or not (source_value ?& array[
+        'kind', 'definitionKey', 'rootId', 'releaseRevision', 'releaseVersion',
+        'validationContractVersion', 'contentFingerprint', 'resolutionFingerprint'
+      ])
+      or source_value ->> 'kind' <> entry_owner_kind
+      or (source_value ->> 'rootId')::uuid <> entry_owner_id
+      or entry_source_revision not between 1 and 9007199254740991 then
+      raise exception using errcode = '22023', message = 'Application permission entry is invalid';
+    end if;
+    if entry_owner_kind = 'application' then
+      if entry_owner_id <> candidate_application_root_id or source_value <> candidate_release then
+        raise exception using errcode = '40001', message = 'Application permission ownership evidence is stale or unavailable';
+      end if;
+    elsif not exists (
+      select 1
+      from vortex_definition.reachable_module_dependency_edges(
+        candidate_application_root_id, candidate_release_revision
+      ) as dependency
+      join vortex_definition.roots as module_root on module_root.root_id = dependency.target_root_id
+      join vortex_definition.releases as module_release
+        on module_release.root_id = dependency.target_root_id
+        and module_release.release_revision = dependency.target_release_revision
+      where dependency.target_root_id = entry_owner_id
+        and dependency.target_release_revision = entry_source_revision
+        and dependency.dependency_reference = source_value ->> 'definitionKey'
+        and dependency.dependency_version = source_value ->> 'releaseVersion'
+        and dependency.dependency_content_fingerprint = source_value ->> 'contentFingerprint'
+        and module_root.organization_id = candidate_organization_id
+        and module_root.kind = 'module'
+        and module_root.key = source_value ->> 'definitionKey'
+        and module_release.release_version = source_value ->> 'releaseVersion'
+        and module_release.validation_contract_version = source_value ->> 'validationContractVersion'
+        and module_release.content_fingerprint = source_value ->> 'contentFingerprint'
+        and module_release.resolution_fingerprint = source_value ->> 'resolutionFingerprint'
+    ) then
+      raise exception using errcode = '40001', message = 'Module permission ownership evidence is stale or unavailable';
+    end if;
+  end loop;
+
+  if coalesce(
+    (
+      select pg_catalog.jsonb_agg(stored.permission_value order by
+        (stored.permission_value ->> 'key') collate "C",
+        (stored.permission_value ->> 'permissionId') collate "C")
+      from pg_catalog.jsonb_array_elements(canonical_application_permissions) as stored(permission_value)
+    ),
+    '[]'::jsonb
+  ) is distinct from coalesce(
+    (
+      select pg_catalog.jsonb_agg(item.entry_value -> 'permission' order by
+        (item.entry_value #>> '{permission,key}') collate "C",
+        (item.entry_value #>> '{permission,permissionId}') collate "C")
+      from pg_catalog.jsonb_array_elements(p_candidate -> 'entries') as item(entry_value)
+      where item.entry_value ->> 'ownerKind' = 'application'
+    ),
+    '[]'::jsonb
+  ) then
+    raise exception using errcode = '40001', message = 'Application permission declarations are stale or unavailable';
+  end if;
+
+  if exists (
+    select 1
+    from vortex_definition.reachable_module_dependency_edges(
+      candidate_application_root_id, candidate_release_revision
+    ) as dependency
+    join vortex_definition.releases as module_release
+      on module_release.root_id = dependency.target_root_id
+      and module_release.release_revision = dependency.target_release_revision
+    where (
+        pg_catalog.jsonb_typeof(
+          module_release.compilation_output #> '{canonical,content,permissions}'
+        ) is distinct from 'array'
+        or coalesce(
+          (
+            select pg_catalog.jsonb_agg(stored.permission_value order by
+              (stored.permission_value ->> 'key') collate "C",
+              (stored.permission_value ->> 'permissionId') collate "C")
+            from pg_catalog.jsonb_array_elements(
+              module_release.compilation_output #> '{canonical,content,permissions}'
+            ) as stored(permission_value)
+          ),
+          '[]'::jsonb
+        ) is distinct from coalesce(
+          (
+            select pg_catalog.jsonb_agg(item.entry_value -> 'permission' order by
+              (item.entry_value #>> '{permission,key}') collate "C",
+              (item.entry_value #>> '{permission,permissionId}') collate "C")
+            from pg_catalog.jsonb_array_elements(p_candidate -> 'entries') as item(entry_value)
+            where item.entry_value ->> 'ownerKind' = 'module'
+              and (item.entry_value ->> 'ownerId')::uuid = dependency.target_root_id
+          ),
+          '[]'::jsonb
+        )
+      )
+  ) then
+    raise exception using errcode = '40001', message = 'Module permission declarations are stale or unavailable';
+  end if;
+
+  if coalesce(
+    (
+      select pg_catalog.jsonb_agg(item.entry_value order by
+        (item.entry_value ->> 'ownerKind') collate "C",
+        (item.entry_value ->> 'ownerId') collate "C",
+        (item.entry_value #>> '{permission,key}') collate "C",
+        (item.entry_value #>> '{permission,permissionId}') collate "C")
+      from pg_catalog.jsonb_array_elements(p_candidate -> 'entries') as item(entry_value)
+    ),
+    '[]'::jsonb
+  ) <> p_candidate -> 'entries' then
+    raise exception using errcode = '22023', message = 'Application permission entry order is invalid';
+  end if;
+
+  if (
+    select coalesce(
+      pg_catalog.jsonb_agg(permission.permission_value ->> 'permissionId' order by
+        (permission.permission_value ->> 'key') collate "C",
+        (permission.permission_value ->> 'permissionId') collate "C"),
+      '[]'::jsonb
+    )
+    from pg_catalog.jsonb_array_elements(p_candidate -> 'entries') as item(entry_value)
+    cross join lateral (select item.entry_value -> 'permission' as permission_value) as permission
+    where item.entry_value ->> 'ownerKind' = 'application'
+      and (permission.permission_value ->> 'administrative')::boolean = false
+  ) <> p_candidate -> 'applicationPermissionIds' then
+    raise exception using errcode = '22023', message = 'Application permission snapshot is invalid';
+  end if;
+
+  select registration.* into current_registration
+  from vortex_access.permission_registrations as registration
+  where registration.organization_id = candidate_organization_id
+    and registration.registration_kind = 'application'
+    and registration.registration_owner_id = candidate_application_root_id;
+
+  if p_operation = 'register' then
+    if found then
+      raise exception using errcode = '40001', message = 'Application permission registration already exists';
+    end if;
+    next_revision := 1;
+  else
+    if not found
+      or current_registration.revision <> p_expected_revision
+      or current_registration.revision = 9007199254740991
+      or (p_operation = 'update' and current_registration.state <> 'active')
+      or (p_operation = 'reactivate' and current_registration.state <> 'withdrawn') then
+      raise exception using errcode = '40001', message = 'Application permission registration revision is stale or unavailable';
+    end if;
+    next_revision := current_registration.revision + 1;
+  end if;
+
+  if p_operation = 'register' then
+    operation_at := pg_catalog.clock_timestamp();
+  else
+    operation_at := greatest(
+      current_registration.changed_at,
+      pg_catalog.clock_timestamp()
+    );
+  end if;
+
+  insert into vortex_access.permission_registration_revisions (
+    organization_id, registration_kind, registration_owner_id, revision, state, operation, source_definition_key, source_version, source_revision, validation_contract_version, permission_catalogue_fingerprint, changed_at, changed_by, change_correlation_id
+  ) values (
+    candidate_organization_id, 'application', candidate_application_root_id, next_revision, 'active', p_operation, candidate_release ->> 'definitionKey', candidate_release_version, candidate_release_revision, candidate_validation_version, candidate_catalogue_fingerprint, operation_at, p_changed_by, p_correlation_id
+  );
+
+  insert into vortex_access.permission_catalogue_entries (
+    organization_id, registration_kind, registration_owner_id, registration_revision,
+    application_root_id, owner_kind, owner_id, permission_id, permission_key,
+    label, description, record_type_id, action_kind, named_action, administrative,
+    source_kind, source_definition_key, source_root_id, source_version, source_revision,
+    source_validation_contract_version, source_catalogue_fingerprint, meaning_fingerprint,
+    record_scope, field_policy
+  )
+  select candidate_organization_id, 'application', candidate_application_root_id,
+    next_revision, candidate_application_root_id, item.entry_value ->> 'ownerKind',
+    (item.entry_value ->> 'ownerId')::uuid,
+    (permission.permission_value ->> 'permissionId')::uuid,
+    permission.permission_value ->> 'key', permission.permission_value ->> 'label',
+    permission.permission_value ->> 'description',
+    (permission.permission_value ->> 'recordTypeId')::uuid,
+    permission.permission_value ->> 'actionKind',
+    permission.permission_value ->> 'namedAction',
+    (permission.permission_value ->> 'administrative')::boolean,
+    source.source_value ->> 'kind', source.source_value ->> 'definitionKey',
+    (source.source_value ->> 'rootId')::uuid, source.source_value ->> 'releaseVersion',
+    (source.source_value ->> 'releaseRevision')::bigint,
+    source.source_value ->> 'validationContractVersion', null,
+    item.entry_value ->> 'meaningFingerprint',
+    permission.permission_value -> 'recordScope',
+    permission.permission_value -> 'fieldPolicy'
+  from pg_catalog.jsonb_array_elements(p_candidate -> 'entries') as item(entry_value)
+  cross join lateral (select item.entry_value -> 'permission' as permission_value) as permission
+  cross join lateral (select item.entry_value -> 'sourceRelease' as source_value) as source;
+
+  if p_operation = 'register' then
+    insert into vortex_access.permission_registrations (
+    organization_id, registration_kind, registration_owner_id, state, revision, source_definition_key, source_version, source_revision, validation_contract_version, permission_catalogue_fingerprint, changed_at, changed_by, change_correlation_id
+  ) values (
+    candidate_organization_id, 'application', candidate_application_root_id, 'active', next_revision, candidate_release ->> 'definitionKey', candidate_release_version, candidate_release_revision, candidate_validation_version, candidate_catalogue_fingerprint, operation_at, p_changed_by, p_correlation_id
+  );
+  else
+    update vortex_access.permission_registrations as registration
+    set state = 'active', revision = next_revision,
+        source_definition_key = candidate_release ->> 'definitionKey',
+        source_version = candidate_release_version,
+        source_revision = candidate_release_revision,
+        validation_contract_version = candidate_validation_version,
+        permission_catalogue_fingerprint = candidate_catalogue_fingerprint,
+        changed_at = operation_at, changed_by = p_changed_by,
+        change_correlation_id = p_correlation_id
+    where registration.organization_id = candidate_organization_id
+      and registration.registration_kind = 'application'
+      and registration.registration_owner_id = candidate_application_root_id;
+  end if;
+
+  select incremented.current_version into resulting_version
+  from vortex_access.increment_organization_access_version(
+    candidate_organization_id, p_changed_by, p_correlation_id, 'application_access_changed'
+  ) as incremented;
+
+  return query select p_operation, candidate_organization_id, candidate_application_root_id,
+    'active'::text, next_revision, resulting_version, p_correlation_id;
+exception when invalid_text_representation or numeric_value_out_of_range then
+  raise exception using errcode = '22023', message = 'Application permission registration input is invalid';
+end
+$_$;
+
+ALTER FUNCTION vortex_access.apply_application_permission_registration_internal(p_operation text, p_expected_revision bigint, p_candidate jsonb, p_changed_by uuid, p_correlation_id uuid) OWNER TO vortex_owner;
+
+COMMENT ON FUNCTION vortex_access.apply_application_permission_registration_internal(p_operation text, p_expected_revision bigint, p_candidate jsonb, p_changed_by uuid, p_correlation_id uuid) IS 'The registration writer of the coordinated application-access change; owner-only.';
+
+REVOKE ALL ON FUNCTION vortex_access.apply_application_permission_registration_internal(p_operation text, p_expected_revision bigint, p_candidate jsonb, p_changed_by uuid, p_correlation_id uuid) FROM PUBLIC;
+
+grant execute on function vortex_access.apply_application_permission_registration_internal(p_operation text, p_expected_revision bigint, p_candidate jsonb, p_changed_by uuid, p_correlation_id uuid) to postgres;
+
+CREATE OR REPLACE FUNCTION vortex_access.application_permission_registration_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_candidate jsonb) RETURNS boolean
+    LANGUAGE plpgsql STABLE
+    SET search_path TO ''
+    AS $$
+declare
+  release_value jsonb;
+  actual_entries jsonb;
+  actual_application_permission_ids jsonb;
+  registration_exact boolean;
+begin
+  if p_organization_id is null
+    or p_organization_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_application_root_id is null
+    or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_registration_revision is null
+    or p_registration_revision not between 1 and 9007199254740991
+    or p_candidate is null
+    or pg_catalog.jsonb_typeof(p_candidate) is distinct from 'object'
+    or p_candidate - array[
+      'contractVersion', 'organizationId', 'applicationRootId', 'applicationRelease',
+      'applicationCatalogueFingerprint', 'applicationPermissionIds', 'entries'
+    ]::text[] <> '{}'::jsonb
+    or not (p_candidate ?& array[
+      'contractVersion', 'organizationId', 'applicationRootId', 'applicationRelease',
+      'applicationCatalogueFingerprint', 'applicationPermissionIds', 'entries'
+    ])
+    or p_candidate ->> 'contractVersion' is distinct from '1.0.0'
+    or (p_candidate ->> 'organizationId')::uuid is distinct from p_organization_id
+    or (p_candidate ->> 'applicationRootId')::uuid is distinct from p_application_root_id
+    or pg_catalog.jsonb_typeof(p_candidate -> 'applicationRelease') is distinct from 'object'
+    or pg_catalog.jsonb_typeof(p_candidate -> 'applicationPermissionIds') is distinct from 'array'
+    or pg_catalog.jsonb_typeof(p_candidate -> 'entries') is distinct from 'array' then
+    return false;
+  end if;
+
+  release_value := p_candidate -> 'applicationRelease';
+
+  select pg_catalog.count(*) = 1 into registration_exact
+  from vortex_access.permission_registrations as registration
+  join vortex_access.permission_registration_revisions as history
+    on history.organization_id = registration.organization_id
+    and history.registration_kind = registration.registration_kind
+    and history.registration_owner_id = registration.registration_owner_id
+    and history.revision = registration.revision
+  join vortex_definition.releases as release
+    on release.root_id = registration.registration_owner_id
+    and release.release_revision = registration.source_revision
+    and release.release_version = registration.source_version
+    and release.validation_contract_version = registration.validation_contract_version
+  where registration.organization_id = p_organization_id
+    and registration.registration_kind = 'application'
+    and registration.registration_owner_id = p_application_root_id
+    and registration.state = 'active'
+    and registration.revision = p_registration_revision
+    and registration.source_definition_key = release_value ->> 'definitionKey'
+    and registration.source_version = release_value ->> 'releaseVersion'
+    and registration.source_revision = (release_value ->> 'releaseRevision')::bigint
+    and registration.validation_contract_version =
+      release_value ->> 'validationContractVersion'
+    and release.content_fingerprint = release_value ->> 'contentFingerprint'
+    and release.resolution_fingerprint = release_value ->> 'resolutionFingerprint'
+    and registration.permission_catalogue_fingerprint =
+      p_candidate ->> 'applicationCatalogueFingerprint'
+    and history.operation in ('register', 'update', 'reactivate')
+    and row(
+      registration.state, registration.source_definition_key, registration.source_version,
+      registration.source_revision, registration.validation_contract_version,
+      registration.permission_catalogue_fingerprint,
+      registration.changed_at, registration.changed_by, registration.change_correlation_id
+    ) is not distinct from row(
+      history.state, history.source_definition_key, history.source_version,
+      history.source_revision, history.validation_contract_version,
+      history.permission_catalogue_fingerprint,
+      history.changed_at, history.changed_by, history.change_correlation_id
+    );
+
+  if not registration_exact then
+    return false;
+  end if;
+
+  select coalesce(
+    pg_catalog.jsonb_agg(
+      pg_catalog.jsonb_build_object(
+        'applicationRootId', entry.application_root_id,
+        'ownerKind', entry.owner_kind,
+        'ownerId', entry.owner_id,
+        'permission', pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
+          'permissionId', entry.permission_id,
+          'key', entry.permission_key,
+          'label', entry.label,
+          'description', entry.description,
+          'recordTypeId', entry.record_type_id,
+          'recordScope', entry.record_scope,
+          'fieldPolicy', entry.field_policy,
+          'actionKind', entry.action_kind,
+          'namedAction', entry.named_action,
+          'administrative', entry.administrative
+        )),
+        'sourceRelease', pg_catalog.jsonb_build_object(
+          'kind', entry.source_kind,
+          'definitionKey', entry.source_definition_key,
+          'rootId', entry.source_root_id,
+          'releaseRevision', entry.source_revision,
+          'releaseVersion', entry.source_version,
+          'validationContractVersion', entry.source_validation_contract_version,
+          'contentFingerprint', source_release.content_fingerprint,
+          'resolutionFingerprint', source_release.resolution_fingerprint
+        ),
+        'meaningFingerprint', entry.meaning_fingerprint
+      ) order by
+        entry.owner_kind collate "C", entry.owner_id,
+        entry.permission_key collate "C", entry.permission_id
+    ),
+    '[]'::jsonb
+  ) into actual_entries
+  from vortex_access.permission_catalogue_entries as entry
+  left join vortex_definition.releases as source_release
+    on source_release.root_id = entry.source_root_id
+    and source_release.release_revision = entry.source_revision
+    and source_release.release_version = entry.source_version
+    and source_release.validation_contract_version =
+      entry.source_validation_contract_version
+  where entry.organization_id = p_organization_id
+    and entry.registration_kind = 'application'
+    and entry.registration_owner_id = p_application_root_id
+    and entry.registration_revision = p_registration_revision;
+
+  select coalesce(
+    pg_catalog.jsonb_agg(entry.permission_id order by
+      entry.permission_key collate "C", entry.permission_id),
+    '[]'::jsonb
+  ) into actual_application_permission_ids
+  from vortex_access.permission_catalogue_entries as entry
+  where entry.organization_id = p_organization_id
+    and entry.registration_kind = 'application'
+    and entry.registration_owner_id = p_application_root_id
+    and entry.registration_revision = p_registration_revision
+    and entry.owner_kind = 'application'
+    and not entry.administrative;
+
+  return actual_entries = p_candidate -> 'entries'
+    and actual_application_permission_ids = p_candidate -> 'applicationPermissionIds';
+exception
+  when invalid_text_representation or numeric_value_out_of_range then
+    return false;
+end
+$$;
+
+ALTER FUNCTION vortex_access.application_permission_registration_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_candidate jsonb) OWNER TO vortex_owner;
+
+REVOKE ALL ON FUNCTION vortex_access.application_permission_registration_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_candidate jsonb) FROM PUBLIC;
+
+grant execute on function vortex_access.application_permission_registration_matches_candidate(p_organization_id uuid, p_application_root_id uuid, p_registration_revision bigint, p_candidate jsonb) to postgres;
+
+CREATE OR REPLACE FUNCTION vortex_access.withdraw_application_permission_registration_internal(p_organization_id uuid, p_application_root_id uuid, p_expected_revision bigint, p_changed_by uuid, p_correlation_id uuid) RETURNS TABLE(operation text, organization_id uuid, application_root_id uuid, registration_state text, registration_revision bigint, access_version bigint, correlation_id uuid)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  operation_at timestamptz;
+  current_registration vortex_access.permission_registrations%rowtype;
+  next_revision bigint;
+  resulting_version bigint;
+begin
+  if p_organization_id is null
+    or p_organization_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_application_root_id is null
+    or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_expected_revision is null
+    or p_expected_revision not between 1 and 9007199254740991
+    or p_changed_by is null
+    or p_changed_by = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_correlation_id is null
+    or p_correlation_id = '00000000-0000-0000-0000-000000000000'::uuid then
+    raise exception using errcode = '22023', message = 'Application permission withdrawal input is invalid';
+  end if;
+
+  perform 1
+  from vortex_access.organization_access_versions as version
+  join vortex_identity.organizations as organization
+    on organization.organization_id = version.organization_id
+  join vortex_identity.tenants as tenant on tenant.tenant_id = organization.tenant_id
+  where version.organization_id = p_organization_id
+    and organization.state = 'active'
+    and tenant.state = 'active'
+  for update of version;
+  if not found then
+    raise exception using errcode = '42501', message = 'Application permission withdrawal scope is unavailable';
+  end if;
+
+  select registration.* into current_registration
+  from vortex_access.permission_registrations as registration
+  where registration.organization_id = p_organization_id
+    and registration.registration_kind = 'application'
+    and registration.registration_owner_id = p_application_root_id;
+  if not found
+    or current_registration.state <> 'active'
+    or current_registration.revision <> p_expected_revision
+    or current_registration.revision = 9007199254740991 then
+    raise exception using errcode = '40001', message = 'Application permission registration revision is stale or unavailable';
+  end if;
+  next_revision := current_registration.revision + 1;
+  operation_at := greatest(
+    current_registration.changed_at,
+    pg_catalog.clock_timestamp()
+  );
+
+  insert into vortex_access.permission_registration_revisions (
+    organization_id, registration_kind, registration_owner_id, revision, state, operation, source_definition_key, source_version, source_revision, validation_contract_version, permission_catalogue_fingerprint, changed_at, changed_by, change_correlation_id
+  ) values (
+    p_organization_id, 'application', p_application_root_id, next_revision, 'withdrawn', 'withdraw', current_registration.source_definition_key, current_registration.source_version, current_registration.source_revision, current_registration.validation_contract_version, current_registration.permission_catalogue_fingerprint, operation_at, p_changed_by, p_correlation_id
+  );
+
+  insert into vortex_access.permission_catalogue_entries (
+    organization_id, registration_kind, registration_owner_id, registration_revision,
+    application_root_id, owner_kind, owner_id, permission_id, permission_key,
+    label, description, record_type_id, action_kind, named_action, administrative,
+    source_kind, source_definition_key, source_root_id, source_version, source_revision,
+    source_validation_contract_version, source_catalogue_fingerprint, meaning_fingerprint,
+    record_scope, field_policy
+  )
+  select entry.organization_id, entry.registration_kind, entry.registration_owner_id,
+    next_revision, entry.application_root_id, entry.owner_kind, entry.owner_id,
+    entry.permission_id, entry.permission_key, entry.label, entry.description,
+    entry.record_type_id, entry.action_kind, entry.named_action, entry.administrative,
+    entry.source_kind, entry.source_definition_key, entry.source_root_id,
+    entry.source_version, entry.source_revision, entry.source_validation_contract_version,
+    entry.source_catalogue_fingerprint, entry.meaning_fingerprint, entry.record_scope,
+    entry.field_policy
+  from vortex_access.permission_catalogue_entries as entry
+  where entry.organization_id = p_organization_id
+    and entry.registration_kind = 'application'
+    and entry.registration_owner_id = p_application_root_id
+    and entry.registration_revision = current_registration.revision;
+
+  update vortex_access.permission_registrations as registration
+  set state = 'withdrawn', revision = next_revision, changed_at = operation_at,
+      changed_by = p_changed_by, change_correlation_id = p_correlation_id
+  where registration.organization_id = p_organization_id
+    and registration.registration_kind = 'application'
+    and registration.registration_owner_id = p_application_root_id;
+
+  select incremented.current_version into resulting_version
+  from vortex_access.increment_organization_access_version(
+    p_organization_id, p_changed_by, p_correlation_id, 'application_access_changed'
+  ) as incremented;
+  return query select 'withdraw'::text, p_organization_id, p_application_root_id,
+    'withdrawn'::text, next_revision, resulting_version, p_correlation_id;
+end
+$$;
+
+ALTER FUNCTION vortex_access.withdraw_application_permission_registration_internal(p_organization_id uuid, p_application_root_id uuid, p_expected_revision bigint, p_changed_by uuid, p_correlation_id uuid) OWNER TO vortex_owner;
+
+COMMENT ON FUNCTION vortex_access.withdraw_application_permission_registration_internal(p_organization_id uuid, p_application_root_id uuid, p_expected_revision bigint, p_changed_by uuid, p_correlation_id uuid) IS 'The registration withdrawal of the coordinated application-access change; owner-only.';
+
+REVOKE ALL ON FUNCTION vortex_access.withdraw_application_permission_registration_internal(p_organization_id uuid, p_application_root_id uuid, p_expected_revision bigint, p_changed_by uuid, p_correlation_id uuid) FROM PUBLIC;
+
+grant execute on function vortex_access.withdraw_application_permission_registration_internal(p_organization_id uuid, p_application_root_id uuid, p_expected_revision bigint, p_changed_by uuid, p_correlation_id uuid) to postgres;
+
+create or replace function vortex_access.initialize_platform_permission_catalogue(
+  p_organization_id uuid,
+  p_changed_by uuid,
+  p_correlation_id uuid
+)
+returns table (
+  organization_id uuid,
+  registration_revision bigint,
+  access_version bigint
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  operation_at timestamptz := pg_catalog.statement_timestamp();
+  current_registration vortex_access.permission_registrations%rowtype;
+  resulting_version bigint;
+  expected_count bigint;
+  platform_owner_id constant uuid := vortex_access.platform_permission_owner_id();
+  catalogue_fingerprint constant text :=
+    'sha256:60d2c42cab03723fda56198083a70e8703792587546379372334d99609b15538';
+begin
+  if p_organization_id is null
+    or p_organization_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_changed_by is null
+    or p_changed_by = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_correlation_id is null
+    or p_correlation_id = '00000000-0000-0000-0000-000000000000'::uuid then
+    raise exception using errcode = '22023',
+      message = 'Platform permission registration input is invalid';
+  end if;
+
+  perform 1
+  from vortex_access.organization_access_versions as version
+  join vortex_identity.organizations as organization
+    on organization.organization_id = version.organization_id
+  join vortex_identity.tenants as tenant on tenant.tenant_id = organization.tenant_id
+  where version.organization_id = p_organization_id
+    and organization.state = 'active'
+    and tenant.state = 'active'
+  for update of version;
+  if not found then
+    raise exception using errcode = '42501',
+      message = 'Platform permission registration scope is unavailable';
+  end if;
+
+  perform pg_catalog.set_config(
+    'vortex_access.exclusive_organization_id', p_organization_id::text, true
+  );
+
+  select registration.* into current_registration
+  from vortex_access.permission_registrations as registration
+  where registration.organization_id = p_organization_id
+    and registration.registration_kind = 'platform'
+    and registration.registration_owner_id = platform_owner_id
+  for update;
+  if found then
+    if not vortex_access.platform_permission_catalogue_revision_is_exact(
+      p_organization_id, 6
+    ) then
+      raise exception using errcode = '55000',
+        message = 'Platform permission registration evidence is invalid';
+    end if;
+    return query select p_organization_id, 6::bigint, version.current_version
+    from vortex_access.organization_access_versions as version
+    where version.organization_id = p_organization_id;
+    return;
+  end if;
+
+  select pg_catalog.count(*) into expected_count
+  from vortex_access.read_platform_permission_declaration_catalogue_internal(6);
+  if expected_count <> 23 then
+    raise exception using errcode = '55000',
+      message = 'Platform permission declarations are invalid';
+  end if;
+
+  insert into vortex_access.permission_registration_revisions (
+    organization_id, registration_kind, registration_owner_id, revision,
+    state, operation, source_definition_key, source_version, source_revision,
+    validation_contract_version, permission_catalogue_fingerprint,
+    changed_at, changed_by, change_correlation_id
+  ) values (
+    p_organization_id, 'platform', platform_owner_id, 6,
+    'active', 'platform_initialize', null, '1.4.0', null, null,
+    catalogue_fingerprint, operation_at, p_changed_by,
+    p_correlation_id
+  );
+
+  insert into vortex_access.permission_catalogue_entries (
+    organization_id, registration_kind, registration_owner_id,
+    registration_revision, application_root_id, owner_kind, owner_id,
+    permission_id, permission_key, label, description, record_type_id,
+    record_scope, field_policy, action_kind, named_action, administrative,
+    source_kind, source_definition_key, source_root_id, source_version,
+    source_revision, source_validation_contract_version,
+    source_catalogue_fingerprint, meaning_fingerprint
+  )
+  select p_organization_id, 'platform', platform_owner_id, 6,
+    null, 'platform', platform_owner_id, declaration.permission_id,
+    declaration.permission_key, declaration.label, declaration.description,
+    null, null, null, declaration.action_kind, null, true,
+    'platform_catalogue', null, null, declaration.source_version,
+    null, null, declaration.catalogue_fingerprint,
+    declaration.meaning_fingerprint
+  from vortex_access.read_platform_permission_declaration_catalogue_internal(6)
+    as declaration;
+
+  insert into vortex_access.permission_registrations (
+    organization_id, registration_kind, registration_owner_id, state, revision,
+    source_definition_key, source_version, source_revision,
+    validation_contract_version, permission_catalogue_fingerprint,
+    changed_at, changed_by, change_correlation_id
+  ) values (
+    p_organization_id, 'platform', platform_owner_id, 'active', 6,
+    null, '1.4.0', null, null, catalogue_fingerprint,
+    operation_at, p_changed_by, p_correlation_id
+  );
+
+  insert into vortex_access.permission_continuities (
+    organization_id, application_root_id, owner_kind, owner_id,
+    permission_id, registration_kind, registration_owner_id, state,
+    continuity_revision, meaning_fingerprint,
+    last_processed_registration_revision, changed_at
+  )
+  select p_organization_id, null, 'platform', platform_owner_id,
+    declaration.permission_id, 'platform', platform_owner_id, 'available',
+    1, declaration.meaning_fingerprint, 6, operation_at
+  from vortex_access.read_platform_permission_declaration_catalogue_internal(6)
+    as declaration;
+
+  if not vortex_access.platform_permission_catalogue_revision_is_exact(
+    p_organization_id, 6
+  ) then
+    raise exception using errcode = '55000',
+      message = 'Platform permission registration evidence is invalid';
+  end if;
+
+  select incremented.current_version into strict resulting_version
+  from vortex_access.increment_organization_access_version(
+    p_organization_id, p_changed_by, p_correlation_id,
+    'application_access_changed'
+  ) as incremented;
+  return query select p_organization_id, 6::bigint, resulting_version;
+end
+$function$;
+
+revoke all on function vortex_access.initialize_platform_permission_catalogue(uuid, uuid, uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+comment on function vortex_access.initialize_platform_permission_catalogue(uuid, uuid, uuid) is
+  'Owner-only initializer for the current platform permission catalogue.';
+
+alter function vortex_access.initialize_platform_permission_catalogue(uuid, uuid, uuid)
+  owner to vortex_owner;
+
+grant execute on function vortex_access.initialize_platform_permission_catalogue(uuid, uuid, uuid)
+  to postgres;
+
+create or replace function vortex_access.platform_permission_catalogue_revision_is_exact(
+  p_organization_id uuid,
+  p_registration_revision bigint
+)
+returns boolean
+language sql
+stable
+security invoker
+set search_path = ''
+as $function$
+  with expected as materialized (
+    select declaration.*
+    from vortex_access.read_platform_permission_declaration_catalogue_internal(6)
+      as declaration
+  ),
+  entries as materialized (
+    select entry.*
+    from vortex_access.permission_catalogue_entries as entry
+    where entry.organization_id = p_organization_id
+      and entry.registration_kind = 'platform'
+      and entry.registration_owner_id = vortex_access.platform_permission_owner_id()
+      and entry.registration_revision = 6
+  )
+  select coalesce(
+    p_organization_id is not null
+    and p_organization_id <> '00000000-0000-0000-0000-000000000000'::uuid
+    and p_registration_revision = 6
+    and (select pg_catalog.count(*) from expected) = 23
+    and (select pg_catalog.count(*) from entries) = 23
+    and exists (
+      select 1
+      from vortex_access.permission_registrations as registration
+      join vortex_access.permission_registration_revisions as history
+        on history.organization_id = registration.organization_id
+        and history.registration_kind = registration.registration_kind
+        and history.registration_owner_id = registration.registration_owner_id
+        and history.revision = registration.revision
+      where registration.organization_id = p_organization_id
+        and registration.registration_kind = 'platform'
+        and registration.registration_owner_id = vortex_access.platform_permission_owner_id()
+        and registration.state = 'active'
+        and registration.revision = 6
+        and registration.source_definition_key is null
+        and registration.source_version = '1.4.0'
+        and registration.source_revision is null
+        and registration.validation_contract_version is null
+        and registration.permission_catalogue_fingerprint =
+          'sha256:60d2c42cab03723fda56198083a70e8703792587546379372334d99609b15538'
+        and registration.changed_by is not null
+        and registration.change_correlation_id is not null
+        and history.operation = 'platform_initialize'
+        and row(history.state, history.source_definition_key, history.source_version,
+          history.source_revision, history.validation_contract_version,
+          history.permission_catalogue_fingerprint,
+          history.changed_at, history.changed_by, history.change_correlation_id)
+          is not distinct from row(registration.state, registration.source_definition_key,
+          registration.source_version, registration.source_revision,
+          registration.validation_contract_version,
+          registration.permission_catalogue_fingerprint,
+          registration.changed_at, registration.changed_by, registration.change_correlation_id)
+    )
+    and not exists (
+      select 1
+      from vortex_access.permission_registration_revisions as history
+      where history.organization_id = p_organization_id
+        and history.registration_kind = 'platform'
+        and history.registration_owner_id = vortex_access.platform_permission_owner_id()
+        and history.revision <> 6
+    )
+    and not exists (
+      select entry.application_root_id, entry.owner_kind, entry.owner_id,
+        entry.permission_id, entry.permission_key, entry.label, entry.description,
+        entry.record_type_id, entry.record_scope, entry.field_policy,
+        entry.action_kind, entry.named_action, entry.administrative,
+        entry.source_kind, entry.source_definition_key, entry.source_root_id,
+        entry.source_version, entry.source_revision,
+        entry.source_validation_contract_version, entry.source_catalogue_fingerprint,
+        entry.meaning_fingerprint
+      from entries as entry
+      except all
+      select null::uuid, 'platform'::text,
+        vortex_access.platform_permission_owner_id(),
+        expected.permission_id, expected.permission_key, expected.label,
+        expected.description, null::uuid, null::jsonb, null::jsonb,
+        expected.action_kind, null::text, true, 'platform_catalogue'::text,
+        null::text, null::uuid, expected.source_version, null::bigint,
+        null::text, expected.catalogue_fingerprint, expected.meaning_fingerprint
+      from expected
+    )
+    and (select pg_catalog.count(*) from vortex_access.permission_continuities as continuity
+      where continuity.organization_id = p_organization_id
+        and continuity.registration_kind = 'platform'
+        and continuity.registration_owner_id = vortex_access.platform_permission_owner_id()) = 23
+    and not exists (
+      select 1 from expected
+      where not exists (
+        select 1 from vortex_access.permission_continuities as continuity
+        where continuity.organization_id = p_organization_id
+          and continuity.application_root_id is null
+          and continuity.registration_kind = 'platform'
+          and continuity.registration_owner_id = vortex_access.platform_permission_owner_id()
+          and continuity.owner_kind = 'platform'
+          and continuity.owner_id = continuity.registration_owner_id
+          and continuity.permission_id = expected.permission_id
+          and continuity.meaning_fingerprint = expected.meaning_fingerprint
+          and continuity.state = 'available'
+          and continuity.continuity_revision > 0
+          and continuity.last_processed_registration_revision = 6
+      )
+    ), false
+  )
+$function$;
+
+revoke all on function
+  vortex_access.platform_permission_catalogue_revision_is_exact(uuid, bigint)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+comment on function vortex_access.platform_permission_catalogue_revision_is_exact(uuid, bigint) is
+  'Owner-only assertion for the current platform catalogue registration, entries and continuities.';
+
+alter function vortex_access.platform_permission_catalogue_revision_is_exact(uuid, bigint)
+  owner to vortex_owner;
+
+grant execute on function vortex_access.platform_permission_catalogue_revision_is_exact(uuid, bigint)
+  to postgres;
+
+create or replace function vortex_access.coordinate_organization_stewardship_adoption(
+  p_organization_id uuid,
+  p_organization_account_id uuid,
+  p_role_id uuid,
+  p_role_key text,
+  p_role_label text,
+  p_role_description text,
+  p_role_assignment_id uuid,
+  p_delegation_authority_id uuid,
+  p_changed_by uuid,
+  p_correlation_id uuid
+)
+returns table (
+  outcome text,
+  operation text,
+  requirement jsonb,
+  access_version bigint,
+  correlation_id uuid
+)
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  platform_owner_id constant uuid := vortex_access.platform_permission_owner_id();
+  stewardship vortex_access.organization_stewardship_requirements%rowtype;
+  platform_registration vortex_access.permission_registrations%rowtype;
+  is_replay boolean;
+  expected_count bigint;
+  expected_metadata_exact boolean;
+  continuity_count bigint;
+  distinct_continuity_count bigint;
+  granted_count bigint;
+  checked_at timestamptz;
+  next_access_version bigint;
+begin
+  if p_organization_id is null
+    or p_organization_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_organization_account_id is null
+    or p_organization_account_id =
+      '00000000-0000-0000-0000-000000000000'::uuid
+    or p_role_id is null
+    or p_role_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_role_assignment_id is null
+    or p_role_assignment_id =
+      '00000000-0000-0000-0000-000000000000'::uuid
+    or p_delegation_authority_id is null
+    or p_delegation_authority_id =
+      '00000000-0000-0000-0000-000000000000'::uuid
+    or p_role_key is null
+    or pg_catalog.char_length(p_role_key) not between 1 and 40
+    or p_role_key !~ '^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$'
+    or p_role_label is null
+    or p_role_label is distinct from pg_catalog.btrim(p_role_label)
+    or pg_catalog.char_length(p_role_label) not between 1 and 60
+    or p_role_description is null
+    or p_role_description is distinct from pg_catalog.btrim(p_role_description)
+    or pg_catalog.char_length(p_role_description) not between 1 and 1000
+    or p_changed_by is null
+    or p_changed_by = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_correlation_id is null
+    or p_correlation_id = '00000000-0000-0000-0000-000000000000'::uuid then
+    raise exception using errcode = '22023',
+      message = 'Organization stewardship adoption input is invalid';
+  end if;
+
+  perform 1
+  from vortex_access.organization_access_versions as version
+  join vortex_identity.organizations as organization
+    on organization.organization_id = version.organization_id
+  join vortex_identity.tenants as tenant
+    on tenant.tenant_id = organization.tenant_id
+  where version.organization_id = p_organization_id
+    and organization.state = 'active'
+    and tenant.state = 'active'
+  for update of version;
+  if not found then
+    raise exception using errcode = '42501',
+      message = 'Organization stewardship adoption scope is unavailable';
+  end if;
+
+  perform pg_catalog.set_config(
+    'vortex_access.exclusive_organization_id', p_organization_id::text, true
+  );
+
+  select stored.* into stewardship
+  from vortex_access.organization_stewardship_requirements as stored
+  where stored.organization_id = p_organization_id
+  for update;
+
+  is_replay := found;
+  if is_replay then
+    if stewardship.original_organization_account_id <>
+        p_organization_account_id
+      or stewardship.original_role_id <> p_role_id
+      or stewardship.original_role_assignment_id <> p_role_assignment_id
+      or stewardship.original_delegation_authority_id <>
+        p_delegation_authority_id
+      or stewardship.adopted_by <> p_changed_by
+      or stewardship.adoption_correlation_id <> p_correlation_id then
+      raise exception using errcode = '40001',
+        message = 'Organization stewardship adoption conflicts with existing evidence';
+    end if;
+  end if;
+
+  if not is_replay then
+    perform 1
+    from vortex_identity.organization_accounts as account
+    join vortex_identity.identity_projections as identity
+      on identity.identity_id = account.identity_id
+      and identity.state = 'active'
+    where account.organization_id = p_organization_id
+      and account.organization_account_id = p_organization_account_id
+      and account.state = 'active'
+    for update of account;
+    if not found then
+      raise exception using errcode = '40001',
+        message = 'Organization stewardship account is stale or unavailable';
+    end if;
+
+    if exists (
+      select 1 from vortex_access.organization_roles as role
+      where role.organization_id = p_organization_id
+        and (role.role_id = p_role_id or role.role_key = p_role_key)
+    ) or exists (
+      select 1 from vortex_access.organization_role_assignments as assignment
+      where assignment.organization_id = p_organization_id
+        and assignment.role_assignment_id = p_role_assignment_id
+    ) or exists (
+      select 1
+      from vortex_access.organization_delegation_authorities as delegation
+      where delegation.organization_id = p_organization_id
+        and delegation.delegation_authority_id = p_delegation_authority_id
+    ) then
+      raise exception using errcode = '40001',
+        message = 'Organization stewardship grant identity is unavailable';
+    end if;
+  end if;
+
+  select registration.* into platform_registration
+  from vortex_access.permission_registrations as registration
+  where registration.organization_id = p_organization_id
+    and registration.registration_kind = 'platform'
+    and registration.registration_owner_id = platform_owner_id
+    and registration.state = 'active'
+  for update;
+  if not found
+    or not vortex_access.platform_permission_catalogue_revision_is_exact(
+      p_organization_id, platform_registration.revision
+    ) then
+    raise exception using errcode = '55000',
+      message = 'Platform permission catalogue evidence is invalid';
+  end if;
+
+  -- The private producer supplies the whole selected catalogue and its target.
+  with expected as materialized (
+    select declaration.*
+    from vortex_access.read_platform_permission_declaration_catalogue_internal(
+      platform_registration.revision
+    ) as declaration
+  )
+  select pg_catalog.count(*),
+    coalesce(
+      pg_catalog.count(*) > 0
+      and pg_catalog.count(*) = pg_catalog.count(distinct expected.permission_id)
+      and pg_catalog.count(*) = pg_catalog.count(distinct expected.permission_key)
+      and pg_catalog.count(distinct expected.declared_current_revision) = 1
+      and pg_catalog.count(distinct expected.registration_revision) = 1
+      and pg_catalog.count(distinct expected.source_version) = 1
+      and pg_catalog.count(distinct expected.catalogue_fingerprint) = 1
+      and pg_catalog.bool_and(
+        expected.registration_revision = platform_registration.revision
+        and expected.declared_current_revision = platform_registration.revision
+        and expected.source_version = platform_registration.source_version
+        and expected.catalogue_fingerprint =
+          platform_registration.permission_catalogue_fingerprint
+      ),
+      false
+    )
+  into expected_count, expected_metadata_exact
+  from expected;
+  if not expected_metadata_exact then
+    raise exception using errcode = '55000',
+      message = 'Platform permission catalogue evidence is invalid';
+  end if;
+
+  -- Lock the complete fixed registration-owner set, including invalid roots.
+  perform 1
+  from vortex_access.permission_continuities as continuity
+  where continuity.organization_id = p_organization_id
+    and continuity.registration_kind = 'platform'
+    and continuity.registration_owner_id = platform_owner_id
+  order by continuity.owner_kind collate "C", continuity.owner_id,
+    continuity.permission_id
+  for update;
+
+  select pg_catalog.count(*), pg_catalog.count(distinct continuity.permission_id)
+  into continuity_count, distinct_continuity_count
+  from vortex_access.permission_continuities as continuity
+  where continuity.organization_id = p_organization_id
+    and continuity.registration_kind = 'platform'
+    and continuity.registration_owner_id = platform_owner_id;
+
+  if continuity_count <> expected_count
+    or distinct_continuity_count <> expected_count
+    or exists (
+      select 1
+      from vortex_access.permission_continuities as continuity
+      where continuity.organization_id = p_organization_id
+        and continuity.registration_kind = 'platform'
+        and continuity.registration_owner_id = platform_owner_id
+        and not exists (
+          select 1
+          from vortex_access.permission_catalogue_entries as entry
+          where entry.organization_id = continuity.organization_id
+            and entry.registration_kind = continuity.registration_kind
+            and entry.registration_owner_id = platform_owner_id
+            and entry.registration_revision = platform_registration.revision
+            and entry.application_root_id is null
+            and entry.owner_kind = 'platform'
+            and entry.owner_id = platform_owner_id
+            and entry.owner_kind = continuity.owner_kind
+            and entry.owner_id = continuity.owner_id
+            and entry.permission_id = continuity.permission_id
+            and entry.meaning_fingerprint = continuity.meaning_fingerprint
+            and continuity.application_root_id is null
+            and continuity.state = 'available'
+            and continuity.continuity_revision > 0
+            and continuity.last_processed_registration_revision =
+              platform_registration.revision
+        )
+    ) or exists (
+      select 1
+      from vortex_access.permission_catalogue_entries as entry
+      where entry.organization_id = p_organization_id
+        and entry.registration_kind = 'platform'
+        and entry.registration_owner_id = platform_owner_id
+        and entry.registration_revision = platform_registration.revision
+        and not exists (
+          select 1
+          from vortex_access.permission_continuities as continuity
+          where continuity.organization_id = entry.organization_id
+            and continuity.application_root_id is null
+            and continuity.registration_kind = 'platform'
+            and continuity.registration_owner_id = platform_owner_id
+            and continuity.owner_kind = 'platform'
+            and continuity.owner_id = platform_owner_id
+            and continuity.owner_kind = entry.owner_kind
+            and continuity.owner_id = entry.owner_id
+            and continuity.permission_id = entry.permission_id
+            and continuity.state = 'available'
+            and continuity.continuity_revision > 0
+            and continuity.meaning_fingerprint = entry.meaning_fingerprint
+            and continuity.last_processed_registration_revision =
+              platform_registration.revision
+        )
+    ) then
+    raise exception using errcode = '55000',
+      message = 'Platform permission continuity evidence is incomplete';
+  end if;
+
+  if is_replay then
+    perform vortex_access.assert_organization_has_permanent_steward(
+      p_organization_id
+    );
+    select version.current_version into next_access_version
+    from vortex_access.organization_access_versions as version
+    where version.organization_id = p_organization_id;
+    return query select 'unchanged'::text,
+      'adopt_organization_stewardship'::text,
+      pg_catalog.jsonb_build_object(
+        'organizationId', stewardship.organization_id,
+        'originalOrganizationAccountId',
+          stewardship.original_organization_account_id,
+        'originalRoleId', stewardship.original_role_id,
+        'originalRoleAssignmentId', stewardship.original_role_assignment_id,
+        'originalDelegationAuthorityId',
+          stewardship.original_delegation_authority_id,
+        'revision', stewardship.revision,
+        'adoptedByActorId', stewardship.adopted_by,
+        'adoptedAt', stewardship.adopted_at,
+        'adoptionCorrelationId', stewardship.adoption_correlation_id,
+        'changedByActorId', stewardship.changed_by,
+        'changedAt', stewardship.changed_at,
+        'changeCorrelationId', stewardship.change_correlation_id
+      ), next_access_version, p_correlation_id;
+    return;
+  end if;
+
+  checked_at := pg_catalog.clock_timestamp();
+
+  insert into vortex_access.organization_roles (
+    organization_id, role_id, role_kind, role_key, application_root_id,
+    source_role_id, derived_application_root_id, derived_source_role_id,
+    derived_source_definition_key, derived_source_release_revision,
+    derived_source_release_version,
+    derived_source_validation_contract_version, live_revision, created_by, created_at
+  ) values (
+    p_organization_id, p_role_id, 'custom', p_role_key, null, null,
+    null, null, null, null, null, null, 1,
+    p_changed_by, checked_at
+  );
+
+  insert into vortex_access.organization_role_permission_entries (
+    organization_id, role_id, role_revision, entry_ordinal, role_kind,
+    role_application_root_id, application_root_id, owner_kind, owner_id,
+    permission_id, registration_kind, registration_owner_id,
+    accepted_registration_revision, catalogue_fingerprint,
+    continuity_revision, meaning_fingerprint
+  )
+  select p_organization_id, p_role_id, 1,
+    pg_catalog.row_number() over (
+      order by entry.owner_kind collate "C", entry.owner_id,
+        entry.permission_id
+    ),
+    'custom', null, null, entry.owner_kind, entry.owner_id,
+    entry.permission_id, 'platform', entry.registration_owner_id,
+    entry.registration_revision,
+    platform_registration.permission_catalogue_fingerprint,
+    continuity.continuity_revision, entry.meaning_fingerprint
+  from vortex_access.permission_catalogue_entries as entry
+  join vortex_access.permission_continuities as continuity
+    on continuity.organization_id = entry.organization_id
+    and continuity.application_root_id is null
+    and continuity.owner_kind = entry.owner_kind
+    and continuity.owner_id = entry.owner_id
+    and continuity.permission_id = entry.permission_id
+    and continuity.registration_kind = 'platform'
+    and continuity.registration_owner_id = platform_owner_id
+    and continuity.registration_owner_id = entry.registration_owner_id
+    and continuity.state = 'available'
+    and continuity.continuity_revision > 0
+    and continuity.last_processed_registration_revision =
+      platform_registration.revision
+    and continuity.meaning_fingerprint = entry.meaning_fingerprint
+  where entry.organization_id = p_organization_id
+    and entry.application_root_id is null
+    and entry.registration_kind = 'platform'
+    and entry.registration_owner_id = platform_owner_id
+    and entry.registration_revision = platform_registration.revision
+    and entry.owner_kind = 'platform'
+    and entry.owner_id = platform_owner_id
+  order by entry.owner_kind collate "C", entry.owner_id, entry.permission_id;
+
+  get diagnostics granted_count = row_count;
+  if granted_count <> expected_count or (
+    select pg_catalog.count(distinct grant_entry.permission_id)
+    from vortex_access.organization_role_permission_entries as grant_entry
+    where grant_entry.organization_id = p_organization_id
+      and grant_entry.role_id = p_role_id
+      and grant_entry.role_revision = 1
+  ) <> expected_count then
+    raise exception using errcode = '55000',
+      message = 'Platform permission stewardship grant evidence is incomplete';
+  end if;
+
+  insert into vortex_access.organization_role_revisions (
+    organization_id, role_id, revision, role_kind, application_root_id,
+    lifecycle, privilege_classification, assignment_policy,
+    policy_continuity_revision, authority_continuity_revision,
+    activation_policy_id, activation_policy_revision,
+    role_key, label, description,
+    source_definition_key, source_release_revision, source_release_version,
+    source_validation_contract_version, accepted_registration_revision,
+    template_continuity_revision,
+    changed_by, changed_at, change_correlation_id
+  ) values (
+    p_organization_id, p_role_id, 1, 'custom', null, 'active', 'privileged',
+    'standing', 1, 1, null, null, p_role_key, p_role_label,
+    p_role_description, null, null, null, null, null, null,
+    p_changed_by, checked_at, p_correlation_id
+  );
+
+  insert into vortex_access.organization_role_assignments (
+    organization_id, role_assignment_id, role_id, assignee_kind,
+    organization_account_id, group_id, assignment_kind, revision, starts_at,
+    expires_at, state, granted_by, granted_at, grant_correlation_id,
+    changed_by, changed_at, change_correlation_id, revoked_by, revoked_at,
+    revocation_correlation_id
+  ) values (
+    p_organization_id, p_role_assignment_id, p_role_id,
+    'organization_account', p_organization_account_id, null, 'standing', 1,
+    checked_at, null, 'live', p_changed_by, checked_at, p_correlation_id,
+    p_changed_by, checked_at, p_correlation_id, null, null, null
+  );
+
+  insert into vortex_access.organization_delegation_authorities (
+    organization_id, delegation_authority_id, holder_kind,
+    organization_account_id, group_id, scope_kind, bounded_permissions,
+    revision, starts_at, expires_at, state, granted_by,
+    granted_at, grant_correlation_id, changed_by, changed_at,
+    change_correlation_id, revoked_by, revoked_at,
+    revocation_correlation_id
+  ) values (
+    p_organization_id, p_delegation_authority_id, 'organization_account',
+    p_organization_account_id, null, 'organization_catalogue', null, 1,
+    checked_at, null, 'live', p_changed_by, checked_at, p_correlation_id,
+    p_changed_by, checked_at, p_correlation_id, null, null, null
+  );
+
+  insert into vortex_access.organization_stewardship_requirements (
+    organization_id, original_organization_account_id, original_role_id,
+    original_role_assignment_id, original_delegation_authority_id, revision,
+    adopted_by, adopted_at, adoption_correlation_id, changed_by, changed_at,
+    change_correlation_id
+  ) values (
+    p_organization_id, p_organization_account_id, p_role_id,
+    p_role_assignment_id, p_delegation_authority_id, 1, p_changed_by,
+    checked_at, p_correlation_id, p_changed_by, checked_at, p_correlation_id
+  ) returning * into stewardship;
+
+  perform vortex_access.assert_organization_has_permanent_steward(
+    p_organization_id
+  );
+
+  perform 1
+  from vortex_access.increment_organization_access_version(
+    p_organization_id, p_changed_by, p_correlation_id,
+    'stewardship_changed'
+  ) as version;
+
+  select version.current_version into next_access_version
+  from vortex_access.organization_access_versions as version
+  where version.organization_id = p_organization_id;
+  return query select 'changed'::text,
+    'adopt_organization_stewardship'::text,
+    pg_catalog.jsonb_build_object(
+      'organizationId', stewardship.organization_id,
+      'originalOrganizationAccountId',
+        stewardship.original_organization_account_id,
+      'originalRoleId', stewardship.original_role_id,
+      'originalRoleAssignmentId', stewardship.original_role_assignment_id,
+      'originalDelegationAuthorityId',
+        stewardship.original_delegation_authority_id,
+      'revision', stewardship.revision,
+      'adoptedByActorId', stewardship.adopted_by,
+      'adoptedAt', stewardship.adopted_at,
+      'adoptionCorrelationId', stewardship.adoption_correlation_id,
+      'changedByActorId', stewardship.changed_by,
+      'changedAt', stewardship.changed_at,
+      'changeCorrelationId', stewardship.change_correlation_id
+    ), next_access_version, p_correlation_id;
+end
+$function$;
+
+comment on function vortex_access.coordinate_organization_stewardship_adoption(
+  uuid, uuid, uuid, text, text, text, uuid, uuid, uuid, uuid
+) is
+  'Owner-only atomic whole-current-catalogue first-steward adoption or exact unchanged replay. It preserves original grants and validates complete availability.';
+
+revoke execute on function
+  vortex_access.coordinate_organization_stewardship_adoption(
+    uuid, uuid, uuid, text, text, text, uuid, uuid, uuid, uuid
+  ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+grant execute on function vortex_access.coordinate_organization_stewardship_adoption(uuid, uuid, uuid, text, text, text, uuid, uuid, uuid, uuid) to postgres;
+
 reset role;

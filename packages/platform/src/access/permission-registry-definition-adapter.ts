@@ -195,9 +195,6 @@ export const verifyPreparedApplicationPermissionRegistration = (
     moduleReleaseByOwner.set(entry.ownerId, release);
   }
 
-  const { candidateFingerprint, ...candidateCore } = candidate;
-  if (candidateFingerprint !== fingerprintCanonicalValue(candidateCore))
-    throw new PermissionRegistryPreparationError("PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID");
   return candidate;
 };
 
@@ -278,8 +275,5 @@ const prepareRegistrationForRelease = (
     applicationPermissionIds: catalogue.permissionIds,
     entries,
   };
-  return verifyPreparedApplicationPermissionRegistration({
-    ...candidate,
-    candidateFingerprint: fingerprintCanonicalValue(candidate),
-  });
+  return verifyPreparedApplicationPermissionRegistration(candidate);
 };

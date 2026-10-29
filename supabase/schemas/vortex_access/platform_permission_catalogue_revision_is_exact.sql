@@ -46,18 +46,17 @@ as $function$
         and registration.validation_contract_version is null
         and registration.permission_catalogue_fingerprint =
           'sha256:60d2c42cab03723fda56198083a70e8703792587546379372334d99609b15538'
-        and registration.candidate_fingerprint = registration.permission_catalogue_fingerprint
         and registration.changed_by is not null
         and registration.change_correlation_id is not null
         and history.operation = 'platform_initialize'
         and row(history.state, history.source_definition_key, history.source_version,
           history.source_revision, history.validation_contract_version,
-          history.permission_catalogue_fingerprint, history.candidate_fingerprint,
+          history.permission_catalogue_fingerprint,
           history.changed_at, history.changed_by, history.change_correlation_id)
           is not distinct from row(registration.state, registration.source_definition_key,
           registration.source_version, registration.source_revision,
           registration.validation_contract_version,
-          registration.permission_catalogue_fingerprint, registration.candidate_fingerprint,
+          registration.permission_catalogue_fingerprint,
           registration.changed_at, registration.changed_by, registration.change_correlation_id)
     )
     and not exists (

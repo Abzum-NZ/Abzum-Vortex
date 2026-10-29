@@ -18,13 +18,11 @@ begin
     or pg_catalog.jsonb_typeof(p_candidate) is distinct from 'object'
     or p_candidate - array[
       'contractVersion', 'organizationId', 'applicationRootId', 'applicationRelease',
-      'applicationCatalogueFingerprint', 'applicationPermissionIds', 'entries',
-      'candidateFingerprint'
+      'applicationCatalogueFingerprint', 'applicationPermissionIds', 'entries'
     ]::text[] <> '{}'::jsonb
     or not (p_candidate ?& array[
       'contractVersion', 'organizationId', 'applicationRootId', 'applicationRelease',
-      'applicationCatalogueFingerprint', 'applicationPermissionIds', 'entries',
-      'candidateFingerprint'
+      'applicationCatalogueFingerprint', 'applicationPermissionIds', 'entries'
     ])
     or p_candidate ->> 'contractVersion' is distinct from '1.0.0'
     or (p_candidate ->> 'organizationId')::uuid is distinct from p_organization_id
@@ -63,17 +61,16 @@ begin
     and release.resolution_fingerprint = release_value ->> 'resolutionFingerprint'
     and registration.permission_catalogue_fingerprint =
       p_candidate ->> 'applicationCatalogueFingerprint'
-    and registration.candidate_fingerprint = p_candidate ->> 'candidateFingerprint'
     and history.operation in ('register', 'update', 'reactivate')
     and row(
       registration.state, registration.source_definition_key, registration.source_version,
       registration.source_revision, registration.validation_contract_version,
-      registration.permission_catalogue_fingerprint, registration.candidate_fingerprint,
+      registration.permission_catalogue_fingerprint,
       registration.changed_at, registration.changed_by, registration.change_correlation_id
     ) is not distinct from row(
       history.state, history.source_definition_key, history.source_version,
       history.source_revision, history.validation_contract_version,
-      history.permission_catalogue_fingerprint, history.candidate_fingerprint,
+      history.permission_catalogue_fingerprint,
       history.changed_at, history.changed_by, history.change_correlation_id
     );
 

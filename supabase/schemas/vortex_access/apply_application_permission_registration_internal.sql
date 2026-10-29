@@ -13,7 +13,6 @@ declare
   candidate_content_fingerprint text;
   candidate_resolution_fingerprint text;
   candidate_catalogue_fingerprint text;
-  supplied_candidate_fingerprint text;
   current_registration vortex_access.permission_registrations%rowtype;
   next_revision bigint;
   resulting_version bigint;
@@ -36,13 +35,11 @@ begin
     or (p_operation <> 'register' and (p_expected_revision is null or p_expected_revision not between 1 and 9007199254740991))
     or p_candidate - array[
       'contractVersion', 'organizationId', 'applicationRootId', 'applicationRelease',
-      'applicationCatalogueFingerprint', 'applicationPermissionIds', 'entries',
-      'candidateFingerprint'
+      'applicationCatalogueFingerprint', 'applicationPermissionIds', 'entries'
     ]::text[] <> '{}'::jsonb
     or not (p_candidate ?& array[
       'contractVersion', 'organizationId', 'applicationRootId', 'applicationRelease',
-      'applicationCatalogueFingerprint', 'applicationPermissionIds', 'entries',
-      'candidateFingerprint'
+      'applicationCatalogueFingerprint', 'applicationPermissionIds', 'entries'
     ])
     or p_candidate ->> 'contractVersion' <> '1.0.0'
     or pg_catalog.jsonb_typeof(p_candidate -> 'applicationRelease') <> 'object'
@@ -61,7 +58,6 @@ begin
     candidate_content_fingerprint := candidate_release ->> 'contentFingerprint';
     candidate_resolution_fingerprint := candidate_release ->> 'resolutionFingerprint';
     candidate_catalogue_fingerprint := p_candidate ->> 'applicationCatalogueFingerprint';
-    supplied_candidate_fingerprint := p_candidate ->> 'candidateFingerprint';
   exception when invalid_text_representation or numeric_value_out_of_range then
     raise exception using errcode = '22023', message = 'Application permission registration input is invalid';
   end;
@@ -79,8 +75,7 @@ begin
     or candidate_release ->> 'kind' <> 'application'
     or (candidate_release ->> 'rootId')::uuid <> candidate_application_root_id
     or candidate_release_revision not between 1 and 9007199254740991
-    or candidate_catalogue_fingerprint !~ '^sha256:[a-f0-9]{64}$'
-    or supplied_candidate_fingerprint !~ '^sha256:[a-f0-9]{64}$' then
+    or candidate_catalogue_fingerprint !~ '^sha256:[a-f0-9]{64}$' then
     raise exception using errcode = '22023', message = 'Application permission registration input is invalid';
   end if;
 
@@ -326,9 +321,9 @@ begin
   end if;
 
   insert into vortex_access.permission_registration_revisions (
-    organization_id, registration_kind, registration_owner_id, revision, state, operation, source_definition_key, source_version, source_revision, validation_contract_version, permission_catalogue_fingerprint, candidate_fingerprint, changed_at, changed_by, change_correlation_id
+    organization_id, registration_kind, registration_owner_id, revision, state, operation, source_definition_key, source_version, source_revision, validation_contract_version, permission_catalogue_fingerprint, changed_at, changed_by, change_correlation_id
   ) values (
-    candidate_organization_id, 'application', candidate_application_root_id, next_revision, 'active', p_operation, candidate_release ->> 'definitionKey', candidate_release_version, candidate_release_revision, candidate_validation_version, candidate_catalogue_fingerprint, supplied_candidate_fingerprint, operation_at, p_changed_by, p_correlation_id
+    candidate_organization_id, 'application', candidate_application_root_id, next_revision, 'active', p_operation, candidate_release ->> 'definitionKey', candidate_release_version, candidate_release_revision, candidate_validation_version, candidate_catalogue_fingerprint, operation_at, p_changed_by, p_correlation_id
   );
 
   insert into vortex_access.permission_catalogue_entries (
@@ -362,9 +357,9 @@ begin
 
   if p_operation = 'register' then
     insert into vortex_access.permission_registrations (
-    organization_id, registration_kind, registration_owner_id, state, revision, source_definition_key, source_version, source_revision, validation_contract_version, permission_catalogue_fingerprint, candidate_fingerprint, changed_at, changed_by, change_correlation_id
+    organization_id, registration_kind, registration_owner_id, state, revision, source_definition_key, source_version, source_revision, validation_contract_version, permission_catalogue_fingerprint, changed_at, changed_by, change_correlation_id
   ) values (
-    candidate_organization_id, 'application', candidate_application_root_id, 'active', next_revision, candidate_release ->> 'definitionKey', candidate_release_version, candidate_release_revision, candidate_validation_version, candidate_catalogue_fingerprint, supplied_candidate_fingerprint, operation_at, p_changed_by, p_correlation_id
+    candidate_organization_id, 'application', candidate_application_root_id, 'active', next_revision, candidate_release ->> 'definitionKey', candidate_release_version, candidate_release_revision, candidate_validation_version, candidate_catalogue_fingerprint, operation_at, p_changed_by, p_correlation_id
   );
   else
     update vortex_access.permission_registrations as registration
@@ -374,7 +369,6 @@ begin
         source_revision = candidate_release_revision,
         validation_contract_version = candidate_validation_version,
         permission_catalogue_fingerprint = candidate_catalogue_fingerprint,
-        candidate_fingerprint = supplied_candidate_fingerprint,
         changed_at = operation_at, changed_by = p_changed_by,
         change_correlation_id = p_correlation_id
     where registration.organization_id = candidate_organization_id

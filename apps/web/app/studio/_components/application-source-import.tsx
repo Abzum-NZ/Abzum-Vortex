@@ -63,7 +63,7 @@ type Props = Readonly<{
   ) => "applied" | "unchanged" | "stale";
 }>;
 
-const candidateFingerprint = async (source: ApplicationSourceDocument): Promise<string> => {
+const fingerprintSourceDocument = async (source: ApplicationSourceDocument): Promise<string> => {
   const digest = await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(canonicalJson(source)),
@@ -293,7 +293,7 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
         );
         return;
       }
-      const submittedFingerprint = await candidateFingerprint(candidate.source);
+      const submittedFingerprint = await fingerprintSourceDocument(candidate.source);
       if (!responseIsCurrent()) return;
       if (result.candidateSourceFingerprint !== submittedFingerprint) {
         studioNotice(
