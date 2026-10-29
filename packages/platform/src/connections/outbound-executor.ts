@@ -83,7 +83,11 @@ const safeUrl = (candidate: string, allowedHosts: readonly string[]): URL | unde
       return undefined;
     return url;
   } catch (error) {
-    logRefusal("connection", "outbound URL", error instanceof TypeError ? "invalid_url" : "url_error");
+    logRefusal(
+      "connection",
+      "outbound URL",
+      error instanceof TypeError ? "invalid_url" : "url_error",
+    );
     return undefined;
   }
 };
@@ -153,7 +157,11 @@ export async function executeConnectionOperation(
   try {
     request = adapter.prepareRequest(operation, await resolveSecret(), input);
   } catch (error) {
-    logRefusal("connection", "outbound credentials", error instanceof TypeError ? "invalid_adapter" : "credential_unavailable");
+    logRefusal(
+      "connection",
+      "outbound credentials",
+      error instanceof TypeError ? "invalid_adapter" : "credential_unavailable",
+    );
     return { outcome: "terminal", code: "credential_unavailable" };
   }
   if (
