@@ -128,7 +128,7 @@ export const admitFlowContinuation = async (
     run.pendingContinuation === undefined ||
     run.continuationPlan === undefined
   )
-    return { kind: "refused" };
+    return { kind: "refused", committedNow: false };
   return startFlow(
     {
       requests: host.requests,
@@ -167,7 +167,7 @@ export const admitFlowPageStart = async (
   const admission = prepareAdmission(host, installation, run, state);
   const plan = run.release.plans.get(run.flowId);
   if (admission === undefined || plan === undefined || host.invocation.kind !== "binding")
-    return { kind: "refused" } as const;
+    return { kind: "refused", committedNow: false } as const;
   return startFlow(
     {
       requests: host.requests,
@@ -199,7 +199,7 @@ export const admitFlowSegment = async (
 ): ReturnType<FlowOrchestratorDependencies["admitSegment"]> => {
   const [run, state, segment, execute] = args;
   const admission = prepareAdmission(host, installation, run, state);
-  if (admission === undefined) return { kind: "refused" };
+  if (admission === undefined) return { kind: "refused", committedNow: false };
   const selection = run.authority.selection;
   const first =
     segment.preScopeLock === "organization_account"
@@ -212,12 +212,12 @@ export const admitFlowSegment = async (
       ? first.call.flowInputs.organization_account_id?.value
       : undefined;
   const plan = run.release.plans.get(run.flowId);
-  if (plan === undefined) return { kind: "refused" };
+  if (plan === undefined) return { kind: "refused", committedNow: false };
   const expectedFingerprint =
     run.pendingContinuation === undefined
       ? segment.fingerprint
       : run.continuationSegments?.[segment.id];
-  if (expectedFingerprint === undefined) return { kind: "reload" };
+  if (expectedFingerprint === undefined) return { kind: "reload", committedNow: false };
   return startFlow(
     {
       requests: host.requests,
