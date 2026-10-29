@@ -4355,4 +4355,1125 @@ alter function vortex_identity.revoke_tenant_administrator(p_duplicate_key uuid,
 grant execute on function vortex_identity.revoke_tenant_administrator(p_duplicate_key uuid, p_tenant_id uuid, p_assignment_id uuid, p_expected_revision bigint) to postgres;
 
 
+-- Organisation governance receipts were tenant-scoped. Recover the exact
+-- organisation from each stored subject set, failing if it cannot be mapped.
+create temporary table organization_receipt_scope_carry on commit drop as
+select organization_id, tenant_id from vortex_identity.organizations;
+grant select on organization_receipt_scope_carry to vortex_record_adapter;
+reset role;
+set local role vortex_record_adapter;
+do $organization_receipts$
+declare
+  bad_command uuid;
+begin
+  select receipt.command_id into bad_command
+  from vortex_record.command_receipts as receipt
+  where receipt.command_kind in (
+      'archive_tenant_organization', 'reactivate_tenant_organization',
+      'suspend_tenant_organization', 'rename_tenant_organization',
+      'reparent_tenant_organization', 'adopt_organization'
+    ) and (receipt.organization_id is not null or (
+      select count(*) from organization_receipt_scope_carry as organization
+      where organization.tenant_id = receipt.tenant_id
+        and receipt.result -> 'subjectIds' @> pg_catalog.to_jsonb(array[organization.organization_id])
+    ) <> 1)
+  order by receipt.command_id limit 1;
+  if bad_command is not null then
+    raise exception 'Organisation scope cannot be recovered for command %', bad_command;
+  end if;
+end
+$organization_receipts$;
+update vortex_record.command_receipts as receipt
+set organization_id = organization.organization_id,
+  result = receipt.result - 'fingerprint' - 'clusterId'
+from organization_receipt_scope_carry as organization
+where receipt.command_kind in (
+    'archive_tenant_organization', 'reactivate_tenant_organization',
+    'suspend_tenant_organization', 'rename_tenant_organization',
+    'reparent_tenant_organization', 'adopt_organization'
+  ) and organization.tenant_id = receipt.tenant_id
+  and receipt.result -> 'subjectIds' @> pg_catalog.to_jsonb(array[organization.organization_id]);
+reset role;
+set local role vortex_owner;
+drop function vortex_identity.archive_tenant_organization(uuid, text, uuid, uuid, bigint);
+drop function vortex_identity.reactivate_tenant_organization(uuid, text, uuid, uuid, bigint);
+drop function vortex_identity.suspend_tenant_organization(uuid, text, uuid, uuid, bigint);
+drop function vortex_identity.rename_tenant_organization(uuid, text, uuid, uuid, bigint, text);
+drop function vortex_identity.reparent_tenant_organization(uuid, text, uuid, uuid, bigint, uuid);
+drop function vortex_identity.adopt_organization(uuid, uuid, text, uuid, uuid, uuid, uuid);
+
+create or replace function vortex_identity.archive_tenant_organization(
+  p_duplicate_key uuid,
+  p_tenant_id uuid,
+  p_organization_id uuid,
+  p_expected_revision bigint
+)
+returns table (
+  outcome text,
+  operation text,
+  organization_id uuid,
+  revision bigint,
+  correlation_id uuid,
+  accepted_at timestamptz
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  evaluated_at timestamptz;
+  actor_identity_id uuid;
+  current_revision bigint;
+  current_state text;
+  stored record;
+  claimed jsonb;
+  target_access_found boolean;
+  target_organization_found boolean;
+  new_correlation_id uuid := pg_catalog.gen_random_uuid();
+  resulting_revision bigint;
+begin
+  if p_duplicate_key is null
+    or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
+    or p_tenant_id is null
+    or not vortex_platform.is_non_nil_uuid(p_tenant_id::text)
+    or p_organization_id is null
+    or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
+    or p_expected_revision is null
+    or p_expected_revision not between 1 and 9007199254740991 then
+    raise exception using
+      errcode = '22023',
+      message = 'Tenant organisation archive command is invalid';
+  end if;
+
+  actor_identity_id := vortex_identity.tenant_request_actor_id();
+
+  perform 1
+  from vortex_access.organization_access_versions as version
+  join vortex_identity.organizations as organization
+    on organization.organization_id = version.organization_id
+  where version.organization_id = p_organization_id
+    and organization.tenant_id = p_tenant_id
+  for update of version;
+  target_access_found := found;
+
+  perform 1
+  from vortex_identity.tenants as tenant
+  where tenant.tenant_id = p_tenant_id
+  for update;
+  if not found then
+    raise exception using errcode = 'V3101', message = 'Tenant operation is unavailable';
+  end if;
+
+  perform 1
+  from vortex_identity.identity_projections as projection
+  where projection.identity_id = actor_identity_id
+  for share;
+  perform 1
+  from vortex_identity.tenant_administrator_assignments as assignment
+  where assignment.tenant_id = p_tenant_id
+    and assignment.identity_id = actor_identity_id
+  order by assignment.assignment_id
+  for update;
+
+  select organization.revision, organization.state
+  into current_revision, current_state
+  from vortex_identity.organizations as organization
+  where organization.tenant_id = p_tenant_id
+    and organization.organization_id = p_organization_id
+  for update;
+  target_organization_found := found;
+
+  evaluated_at := pg_catalog.clock_timestamp();
+  perform vortex_identity.require_current_tenant_capability(
+    actor_identity_id,
+    p_tenant_id,
+    'platform.tenant.organizations.lifecycle',
+    evaluated_at
+  );
+  if vortex_access.recent_authentication_deadline_internal(
+    vortex_platform.current_context(), evaluated_at,
+    '{"kind":"multi_factor","maximumAgeSeconds":3600}'::jsonb
+  ) is null then
+    raise exception using errcode = 'V3152',
+      message = 'Tenant governance requires multi-factor authentication';
+  end if;
+
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'archive_tenant_organization', p_duplicate_key, p_organization_id, p_tenant_id, actor_identity_id,
+    'Administration duplicate conflicts'
+  );
+  if claimed is not null then
+    select r.* into stored
+    from pg_catalog.jsonb_to_record(claimed) as r(
+      "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
+      "subjectRevisions" bigint[]
+    );
+    return query
+    select 'replayed'::text,
+      'archive_tenant_organization'::text,
+      stored."subjectIds"[1],
+      stored."subjectRevisions"[1],
+      stored."receiptId",
+      stored."acceptedAt";
+    return;
+  end if;
+
+  if not target_access_found or not target_organization_found then
+    raise exception using errcode = 'V3101', message = 'Tenant operation is unavailable';
+  end if;
+
+  if current_revision <> p_expected_revision
+    or current_revision = 9007199254740991 then
+    raise exception using errcode = 'V3102', message = 'Organisation revision is stale';
+  end if;
+  if current_state not in ('active', 'suspended')
+    or exists (
+      select 1
+      from vortex_identity.organizations as child
+      where child.tenant_id = p_tenant_id
+        and child.parent_organization_id = p_organization_id
+        and child.state in ('active', 'suspended')
+    ) then
+    raise exception using errcode = 'V3101', message = 'Tenant operation is unavailable';
+  end if;
+
+  resulting_revision := current_revision + 1;
+  update vortex_identity.organizations as organization
+  set state = 'archived',
+    state_changed_at = evaluated_at,
+    revision = resulting_revision
+  where organization.tenant_id = p_tenant_id
+    and organization.organization_id = p_organization_id;
+
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key,
+    pg_catalog.jsonb_build_object(
+      'receiptId', new_correlation_id, 'acceptedAt', evaluated_at,
+      'subjectIds', pg_catalog.to_jsonb(array[p_organization_id]),
+      'subjectRevisions', pg_catalog.to_jsonb(array[resulting_revision])
+    )
+  );
+
+  return query
+  select 'accepted'::text,
+    'archive_tenant_organization'::text,
+    p_organization_id,
+    resulting_revision,
+    new_correlation_id,
+    evaluated_at;
+end
+$function$;
+
+revoke execute on function vortex_identity.archive_tenant_organization(uuid, uuid, uuid, bigint)
+  from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
+grant execute on function vortex_identity.archive_tenant_organization(uuid, uuid, uuid, bigint)
+  to vortex_runtime;
+
+comment on function vortex_identity.archive_tenant_organization(uuid, uuid, uuid, bigint) is
+  'Protected terminal organisation archive with no unresolved direct child, under the bound request context person''s current tenant authority and accepted replay.';
+
+alter function vortex_identity.archive_tenant_organization(p_duplicate_key uuid, p_tenant_id uuid, p_organization_id uuid, p_expected_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_identity.archive_tenant_organization(p_duplicate_key uuid, p_tenant_id uuid, p_organization_id uuid, p_expected_revision bigint) to postgres;
+
+
+create or replace function vortex_identity.reactivate_tenant_organization(
+  p_duplicate_key uuid,
+  p_tenant_id uuid,
+  p_organization_id uuid,
+  p_expected_revision bigint
+)
+returns table (
+  outcome text,
+  operation text,
+  organization_id uuid,
+  revision bigint,
+  correlation_id uuid,
+  accepted_at timestamptz
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  evaluated_at timestamptz;
+  actor_identity_id uuid;
+  current_parent_id uuid;
+  current_revision bigint;
+  current_state text;
+  parent_state text;
+  stored record;
+  claimed jsonb;
+  target_access_found boolean;
+  target_organization_found boolean;
+  new_correlation_id uuid := pg_catalog.gen_random_uuid();
+  resulting_revision bigint;
+begin
+  if p_duplicate_key is null
+    or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
+    or p_tenant_id is null
+    or not vortex_platform.is_non_nil_uuid(p_tenant_id::text)
+    or p_organization_id is null
+    or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
+    or p_expected_revision is null
+    or p_expected_revision not between 1 and 9007199254740991 then
+    raise exception using
+      errcode = '22023',
+      message = 'Tenant organisation reactivation command is invalid';
+  end if;
+
+  actor_identity_id := vortex_identity.tenant_request_actor_id();
+
+  perform 1
+  from vortex_access.organization_access_versions as version
+  join vortex_identity.organizations as organization
+    on organization.organization_id = version.organization_id
+  where version.organization_id = p_organization_id
+    and organization.tenant_id = p_tenant_id
+  for update of version;
+  target_access_found := found;
+
+  perform 1
+  from vortex_identity.tenants as tenant
+  where tenant.tenant_id = p_tenant_id
+  for update;
+  if not found then
+    raise exception using errcode = 'V3101', message = 'Tenant operation is unavailable';
+  end if;
+
+  perform 1
+  from vortex_identity.identity_projections as projection
+  where projection.identity_id = actor_identity_id
+  for share;
+  perform 1
+  from vortex_identity.tenant_administrator_assignments as assignment
+  where assignment.tenant_id = p_tenant_id
+    and assignment.identity_id = actor_identity_id
+  order by assignment.assignment_id
+  for update;
+
+  select organization.parent_organization_id,
+    organization.revision, organization.state
+  into current_parent_id, current_revision, current_state
+  from vortex_identity.organizations as organization
+  where organization.tenant_id = p_tenant_id
+    and organization.organization_id = p_organization_id
+  for update;
+  target_organization_found := found;
+
+  evaluated_at := pg_catalog.clock_timestamp();
+  perform vortex_identity.require_current_tenant_capability(
+    actor_identity_id,
+    p_tenant_id,
+    'platform.tenant.organizations.lifecycle',
+    evaluated_at
+  );
+  if vortex_access.recent_authentication_deadline_internal(
+    vortex_platform.current_context(), evaluated_at,
+    '{"kind":"multi_factor","maximumAgeSeconds":3600}'::jsonb
+  ) is null then
+    raise exception using errcode = 'V3152',
+      message = 'Tenant governance requires multi-factor authentication';
+  end if;
+
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'reactivate_tenant_organization', p_duplicate_key, p_organization_id, p_tenant_id, actor_identity_id,
+    'Administration duplicate conflicts'
+  );
+  if claimed is not null then
+    select r.* into stored
+    from pg_catalog.jsonb_to_record(claimed) as r(
+      "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
+      "subjectRevisions" bigint[]
+    );
+    return query
+    select 'replayed'::text,
+      'reactivate_tenant_organization'::text,
+      stored."subjectIds"[1],
+      stored."subjectRevisions"[1],
+      stored."receiptId",
+      stored."acceptedAt";
+    return;
+  end if;
+
+  if not target_access_found or not target_organization_found then
+    raise exception using errcode = 'V3101', message = 'Tenant operation is unavailable';
+  end if;
+
+  if current_revision <> p_expected_revision
+    or current_revision = 9007199254740991 then
+    raise exception using errcode = 'V3102', message = 'Organisation revision is stale';
+  end if;
+  if current_state <> 'suspended' then
+    raise exception using errcode = 'V3101', message = 'Tenant operation is unavailable';
+  end if;
+
+  if current_parent_id is not null then
+    select parent.state
+    into parent_state
+    from vortex_identity.organizations as parent
+    where parent.tenant_id = p_tenant_id
+      and parent.organization_id = current_parent_id;
+    if not found or parent_state in ('archived', 'removal_pending') then
+      raise exception using errcode = 'V3101', message = 'Tenant operation is unavailable';
+    end if;
+  end if;
+
+  if not exists (
+      select 1
+      from vortex_access.organization_stewardship_requirements as requirement
+      where requirement.organization_id = p_organization_id
+    )
+    or not vortex_access.organization_has_permanent_steward(
+      p_organization_id, evaluated_at
+    ) then
+    raise exception using errcode = 'V3101', message = 'Tenant operation is unavailable';
+  end if;
+
+  resulting_revision := current_revision + 1;
+  update vortex_identity.organizations as organization
+  set state = 'active',
+    state_changed_at = evaluated_at,
+    revision = resulting_revision
+  where organization.tenant_id = p_tenant_id
+    and organization.organization_id = p_organization_id;
+
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key,
+    pg_catalog.jsonb_build_object(
+      'receiptId', new_correlation_id, 'acceptedAt', evaluated_at,
+      'subjectIds', pg_catalog.to_jsonb(array[p_organization_id]),
+      'subjectRevisions', pg_catalog.to_jsonb(array[resulting_revision])
+    )
+  );
+
+  return query
+  select 'accepted'::text,
+    'reactivate_tenant_organization'::text,
+    p_organization_id,
+    resulting_revision,
+    new_correlation_id,
+    evaluated_at;
+end
+$function$;
+
+revoke execute on function vortex_identity.reactivate_tenant_organization(uuid, uuid, uuid, bigint)
+  from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
+grant execute on function vortex_identity.reactivate_tenant_organization(uuid, uuid, uuid, bigint)
+  to vortex_runtime;
+
+comment on function vortex_identity.reactivate_tenant_organization(uuid, uuid, uuid, bigint) is
+  'Protected stewardship-ready suspended-to-active organisation transition under the bound request context person''s current tenant authority and accepted replay.';
+
+alter function vortex_identity.reactivate_tenant_organization(p_duplicate_key uuid, p_tenant_id uuid, p_organization_id uuid, p_expected_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_identity.reactivate_tenant_organization(p_duplicate_key uuid, p_tenant_id uuid, p_organization_id uuid, p_expected_revision bigint) to postgres;
+
+
+create or replace function vortex_identity.suspend_tenant_organization(
+  p_duplicate_key uuid,
+  p_tenant_id uuid,
+  p_organization_id uuid,
+  p_expected_revision bigint
+)
+returns table (
+  outcome text,
+  operation text,
+  organization_id uuid,
+  revision bigint,
+  correlation_id uuid,
+  accepted_at timestamptz
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  evaluated_at timestamptz;
+  actor_identity_id uuid;
+  current_revision bigint;
+  current_state text;
+  stored record;
+  claimed jsonb;
+  target_access_found boolean;
+  target_organization_found boolean;
+  new_correlation_id uuid := pg_catalog.gen_random_uuid();
+  resulting_revision bigint;
+begin
+  if p_duplicate_key is null
+    or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
+    or p_tenant_id is null
+    or not vortex_platform.is_non_nil_uuid(p_tenant_id::text)
+    or p_organization_id is null
+    or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
+    or p_expected_revision is null
+    or p_expected_revision not between 1 and 9007199254740991 then
+    raise exception using
+      errcode = '22023',
+      message = 'Tenant organisation suspension command is invalid';
+  end if;
+
+  actor_identity_id := vortex_identity.tenant_request_actor_id();
+
+  perform 1
+  from vortex_access.organization_access_versions as version
+  join vortex_identity.organizations as organization
+    on organization.organization_id = version.organization_id
+  where version.organization_id = p_organization_id
+    and organization.tenant_id = p_tenant_id
+  for update of version;
+  target_access_found := found;
+
+  perform 1
+  from vortex_identity.tenants as tenant
+  where tenant.tenant_id = p_tenant_id
+  for update;
+  if not found then
+    raise exception using errcode = 'V3101', message = 'Tenant operation is unavailable';
+  end if;
+
+  perform 1
+  from vortex_identity.identity_projections as projection
+  where projection.identity_id = actor_identity_id
+  for share;
+  perform 1
+  from vortex_identity.tenant_administrator_assignments as assignment
+  where assignment.tenant_id = p_tenant_id
+    and assignment.identity_id = actor_identity_id
+  order by assignment.assignment_id
+  for update;
+
+  select organization.revision, organization.state
+  into current_revision, current_state
+  from vortex_identity.organizations as organization
+  where organization.tenant_id = p_tenant_id
+    and organization.organization_id = p_organization_id
+  for update;
+  target_organization_found := found;
+
+  evaluated_at := pg_catalog.clock_timestamp();
+  perform vortex_identity.require_current_tenant_capability(
+    actor_identity_id,
+    p_tenant_id,
+    'platform.tenant.organizations.lifecycle',
+    evaluated_at
+  );
+  if vortex_access.recent_authentication_deadline_internal(
+    vortex_platform.current_context(), evaluated_at,
+    '{"kind":"multi_factor","maximumAgeSeconds":3600}'::jsonb
+  ) is null then
+    raise exception using errcode = 'V3152',
+      message = 'Tenant governance requires multi-factor authentication';
+  end if;
+
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'suspend_tenant_organization', p_duplicate_key, p_organization_id, p_tenant_id, actor_identity_id,
+    'Administration duplicate conflicts'
+  );
+  if claimed is not null then
+    select r.* into stored
+    from pg_catalog.jsonb_to_record(claimed) as r(
+      "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
+      "subjectRevisions" bigint[]
+    );
+    return query
+    select 'replayed'::text,
+      'suspend_tenant_organization'::text,
+      stored."subjectIds"[1],
+      stored."subjectRevisions"[1],
+      stored."receiptId",
+      stored."acceptedAt";
+    return;
+  end if;
+
+  if not target_access_found or not target_organization_found then
+    raise exception using errcode = 'V3101', message = 'Tenant operation is unavailable';
+  end if;
+
+  if current_revision <> p_expected_revision
+    or current_revision = 9007199254740991 then
+    raise exception using errcode = 'V3102', message = 'Organisation revision is stale';
+  end if;
+  if current_state <> 'active' then
+    raise exception using errcode = 'V3101', message = 'Tenant operation is unavailable';
+  end if;
+
+  resulting_revision := current_revision + 1;
+  update vortex_identity.organizations as organization
+  set state = 'suspended',
+    state_changed_at = evaluated_at,
+    revision = resulting_revision
+  where organization.tenant_id = p_tenant_id
+    and organization.organization_id = p_organization_id;
+
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key,
+    pg_catalog.jsonb_build_object(
+      'receiptId', new_correlation_id, 'acceptedAt', evaluated_at,
+      'subjectIds', pg_catalog.to_jsonb(array[p_organization_id]),
+      'subjectRevisions', pg_catalog.to_jsonb(array[resulting_revision])
+    )
+  );
+
+  return query
+  select 'accepted'::text,
+    'suspend_tenant_organization'::text,
+    p_organization_id,
+    resulting_revision,
+    new_correlation_id,
+    evaluated_at;
+end
+$function$;
+
+revoke execute on function vortex_identity.suspend_tenant_organization(uuid, uuid, uuid, bigint)
+  from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
+grant execute on function vortex_identity.suspend_tenant_organization(uuid, uuid, uuid, bigint)
+  to vortex_runtime;
+
+comment on function vortex_identity.suspend_tenant_organization(uuid, uuid, uuid, bigint) is
+  'Protected non-cascading active-to-suspended organisation transition under the bound request context person''s current tenant authority and accepted replay.';
+
+alter function vortex_identity.suspend_tenant_organization(p_duplicate_key uuid, p_tenant_id uuid, p_organization_id uuid, p_expected_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_identity.suspend_tenant_organization(p_duplicate_key uuid, p_tenant_id uuid, p_organization_id uuid, p_expected_revision bigint) to postgres;
+
+
+create or replace function vortex_identity.rename_tenant_organization(
+  p_duplicate_key uuid,
+  p_tenant_id uuid,
+  p_organization_id uuid,
+  p_expected_revision bigint,
+  p_display_name text
+)
+returns table (
+  outcome text,
+  operation text,
+  organization_id uuid,
+  revision bigint,
+  correlation_id uuid,
+  accepted_at timestamptz
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  evaluated_at timestamptz;
+  actor_identity_id uuid;
+  current_revision bigint;
+  stored record;
+  claimed jsonb;
+  new_correlation_id uuid := pg_catalog.gen_random_uuid();
+  resulting_revision bigint;
+begin
+  if p_duplicate_key is null
+    or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
+    or p_tenant_id is null
+    or not vortex_platform.is_non_nil_uuid(p_tenant_id::text)
+    or p_organization_id is null
+    or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
+    or p_expected_revision is null
+    or p_expected_revision not between 1 and 9007199254740991
+    or p_display_name is null
+    or p_display_name <> pg_catalog.btrim(p_display_name)
+    or pg_catalog.char_length(p_display_name) not between 1 and 120 then
+    raise exception using
+      errcode = '22023',
+      message = 'Tenant organisation rename command is invalid';
+  end if;
+
+  actor_identity_id := vortex_identity.tenant_request_actor_id();
+
+  perform 1
+  from vortex_identity.tenants as tenant
+  where tenant.tenant_id = p_tenant_id
+  for update;
+  if not found then
+    raise exception using errcode = 'V3101', message = 'Tenant operation is unavailable';
+  end if;
+
+  perform 1
+  from vortex_identity.identity_projections as projection
+  where projection.identity_id = actor_identity_id
+  for share;
+  perform 1
+  from vortex_identity.tenant_administrator_assignments as assignment
+  where assignment.tenant_id = p_tenant_id
+    and assignment.identity_id = actor_identity_id
+  order by assignment.assignment_id
+  for update;
+
+  evaluated_at := pg_catalog.clock_timestamp();
+  perform vortex_identity.require_current_tenant_capability(
+    actor_identity_id,
+    p_tenant_id,
+    'platform.tenant.organizations.rename',
+    evaluated_at
+  );
+  if vortex_access.recent_authentication_deadline_internal(
+    vortex_platform.current_context(), evaluated_at,
+    '{"kind":"multi_factor","maximumAgeSeconds":3600}'::jsonb
+  ) is null then
+    raise exception using errcode = 'V3152',
+      message = 'Tenant governance requires multi-factor authentication';
+  end if;
+
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'rename_tenant_organization', p_duplicate_key, p_organization_id, p_tenant_id, actor_identity_id,
+    'Administration duplicate conflicts'
+  );
+  if claimed is not null then
+    select r.* into stored
+    from pg_catalog.jsonb_to_record(claimed) as r(
+      "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
+      "subjectRevisions" bigint[]
+    );
+    return query
+    select 'replayed'::text,
+      'rename_tenant_organization'::text,
+      stored."subjectIds"[1],
+      stored."subjectRevisions"[1],
+      stored."receiptId",
+      stored."acceptedAt";
+    return;
+  end if;
+
+  select organization.revision
+  into current_revision
+  from vortex_identity.organizations as organization
+  where organization.tenant_id = p_tenant_id
+    and organization.organization_id = p_organization_id
+  for update;
+  if not found then
+    raise exception using errcode = 'V3101', message = 'Tenant operation is unavailable';
+  end if;
+  if current_revision <> p_expected_revision then
+    raise exception using errcode = 'V3102', message = 'Organisation revision is stale';
+  end if;
+
+  resulting_revision := current_revision + 1;
+  update vortex_identity.organizations
+  set display_name = p_display_name,
+    revision = resulting_revision
+  where organizations.tenant_id = p_tenant_id
+    and organizations.organization_id = p_organization_id;
+
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key,
+    pg_catalog.jsonb_build_object(
+      'receiptId', new_correlation_id, 'acceptedAt', evaluated_at,
+      'subjectIds', pg_catalog.to_jsonb(array[p_organization_id]),
+      'subjectRevisions', pg_catalog.to_jsonb(array[resulting_revision])
+    )
+  );
+
+  return query
+  select 'accepted'::text,
+    'rename_tenant_organization'::text,
+    p_organization_id,
+    resulting_revision,
+    new_correlation_id,
+    evaluated_at;
+end
+$function$;
+
+revoke execute on function vortex_identity.rename_tenant_organization(uuid, uuid, uuid, bigint, text)
+  from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
+grant execute on function vortex_identity.rename_tenant_organization(uuid, uuid, uuid, bigint, text)
+  to vortex_runtime;
+
+comment on function vortex_identity.rename_tenant_organization(uuid, uuid, uuid, bigint, text) is
+  'Protected same-tenant display-name-only organisation rename under the bound request context person''s current structural authority, exact revision and accepted replay.';
+
+alter function vortex_identity.rename_tenant_organization(p_duplicate_key uuid, p_tenant_id uuid, p_organization_id uuid, p_expected_revision bigint, p_display_name text) owner to vortex_owner;
+
+grant execute on function vortex_identity.rename_tenant_organization(p_duplicate_key uuid, p_tenant_id uuid, p_organization_id uuid, p_expected_revision bigint, p_display_name text) to postgres;
+
+
+create or replace function vortex_identity.reparent_tenant_organization(
+  p_duplicate_key uuid,
+  p_tenant_id uuid,
+  p_organization_id uuid,
+  p_expected_revision bigint,
+  p_parent_organization_id uuid
+)
+returns table (
+  outcome text,
+  operation text,
+  organization_id uuid,
+  revision bigint,
+  correlation_id uuid,
+  accepted_at timestamptz
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  evaluated_at timestamptz;
+  actor_identity_id uuid;
+  current_revision bigint;
+  current_state text;
+  parent_state text;
+  stored record;
+  claimed jsonb;
+  new_correlation_id uuid := pg_catalog.gen_random_uuid();
+  resulting_revision bigint;
+begin
+  if p_duplicate_key is null
+    or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
+    or p_tenant_id is null
+    or not vortex_platform.is_non_nil_uuid(p_tenant_id::text)
+    or p_organization_id is null
+    or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
+    or p_expected_revision is null
+    or p_expected_revision not between 1 and 9007199254740991
+    or (
+      p_parent_organization_id is not null
+      and not vortex_platform.is_non_nil_uuid(p_parent_organization_id::text)
+    ) then
+    raise exception using
+      errcode = '22023',
+      message = 'Tenant organisation reparent command is invalid';
+  end if;
+
+  actor_identity_id := vortex_identity.tenant_request_actor_id();
+
+  perform 1
+  from vortex_identity.tenants as tenant
+  where tenant.tenant_id = p_tenant_id
+  for update;
+  if not found then
+    raise exception using errcode = 'V3101', message = 'Tenant operation is unavailable';
+  end if;
+
+  perform 1
+  from vortex_identity.identity_projections as projection
+  where projection.identity_id = actor_identity_id
+  for share;
+  perform 1
+  from vortex_identity.tenant_administrator_assignments as assignment
+  where assignment.tenant_id = p_tenant_id
+    and assignment.identity_id = actor_identity_id
+  order by assignment.assignment_id
+  for update;
+
+  evaluated_at := pg_catalog.clock_timestamp();
+  perform vortex_identity.require_current_tenant_capability(
+    actor_identity_id,
+    p_tenant_id,
+    'platform.tenant.organizations.reparent',
+    evaluated_at
+  );
+  if vortex_access.recent_authentication_deadline_internal(
+    vortex_platform.current_context(), evaluated_at,
+    '{"kind":"multi_factor","maximumAgeSeconds":3600}'::jsonb
+  ) is null then
+    raise exception using errcode = 'V3152',
+      message = 'Tenant governance requires multi-factor authentication';
+  end if;
+
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'reparent_tenant_organization', p_duplicate_key, p_organization_id, p_tenant_id, actor_identity_id,
+    'Administration duplicate conflicts'
+  );
+  if claimed is not null then
+    select r.* into stored
+    from pg_catalog.jsonb_to_record(claimed) as r(
+      "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
+      "subjectRevisions" bigint[]
+    );
+    return query
+    select 'replayed'::text,
+      'reparent_tenant_organization'::text,
+      stored."subjectIds"[1],
+      stored."subjectRevisions"[1],
+      stored."receiptId",
+      stored."acceptedAt";
+    return;
+  end if;
+
+  select organization.revision, organization.state
+  into current_revision, current_state
+  from vortex_identity.organizations as organization
+  where organization.tenant_id = p_tenant_id
+    and organization.organization_id = p_organization_id
+  for update;
+  if not found then
+    raise exception using errcode = 'V3101', message = 'Tenant operation is unavailable';
+  end if;
+  if current_revision <> p_expected_revision then
+    raise exception using errcode = 'V3102', message = 'Organisation revision is stale';
+  end if;
+  if p_parent_organization_id = p_organization_id then
+    raise exception using errcode = 'V3101', message = 'Tenant operation is unavailable';
+  end if;
+  if p_parent_organization_id is not null then
+    select parent.state
+    into parent_state
+    from vortex_identity.organizations as parent
+    where parent.tenant_id = p_tenant_id
+      and parent.organization_id = p_parent_organization_id;
+    if not found
+      or (
+        current_state in ('active', 'suspended')
+        and parent_state in ('archived', 'removal_pending')
+      ) then
+      raise exception using errcode = 'V3101', message = 'Tenant operation is unavailable';
+    end if;
+  end if;
+
+  resulting_revision := current_revision + 1;
+  update vortex_identity.organizations
+  set parent_organization_id = p_parent_organization_id,
+    revision = resulting_revision
+  where organizations.tenant_id = p_tenant_id
+    and organizations.organization_id = p_organization_id;
+
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key,
+    pg_catalog.jsonb_build_object(
+      'receiptId', new_correlation_id, 'acceptedAt', evaluated_at,
+      'subjectIds', pg_catalog.to_jsonb(array[p_organization_id]),
+      'subjectRevisions', pg_catalog.to_jsonb(array[resulting_revision])
+    )
+  );
+
+  return query
+  select 'accepted'::text,
+    'reparent_tenant_organization'::text,
+    p_organization_id,
+    resulting_revision,
+    new_correlation_id,
+    evaluated_at;
+end
+$function$;
+
+revoke execute on function vortex_identity.reparent_tenant_organization(uuid, uuid, uuid, bigint, uuid)
+  from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
+grant execute on function vortex_identity.reparent_tenant_organization(uuid, uuid, uuid, bigint, uuid)
+  to vortex_runtime;
+
+comment on function vortex_identity.reparent_tenant_organization(uuid, uuid, uuid, bigint, uuid) is
+  'Protected same-tenant adjacency-link-only organisation move under the bound request context person''s current structural authority, exact revision and accepted replay.';
+
+alter function vortex_identity.reparent_tenant_organization(p_duplicate_key uuid, p_tenant_id uuid, p_organization_id uuid, p_expected_revision bigint, p_parent_organization_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_identity.reparent_tenant_organization(p_duplicate_key uuid, p_tenant_id uuid, p_organization_id uuid, p_expected_revision bigint, p_parent_organization_id uuid) to postgres;
+
+
+create or replace function vortex_identity.adopt_organization(
+  p_operator_actor_id uuid,
+  p_duplicate_key uuid,
+  p_tenant_id uuid,
+  p_organization_id uuid,
+  p_steward_identity_id uuid,
+  p_organization_account_id uuid
+)
+returns table (
+  outcome text,
+  operation text,
+  tenant_id uuid,
+  organization_id uuid,
+  organization_account_id uuid,
+  access_version bigint,
+  correlation_id uuid,
+  accepted_at timestamptz
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  stored record;
+  claimed jsonb;
+  requirement vortex_access.organization_stewardship_requirements%rowtype;
+  account_revision bigint;
+  new_role_id uuid := pg_catalog.gen_random_uuid();
+  new_role_assignment_id uuid := pg_catalog.gen_random_uuid();
+  new_delegation_id uuid := pg_catalog.gen_random_uuid();
+  new_correlation_id uuid := pg_catalog.gen_random_uuid();
+  operation_at timestamptz := pg_catalog.clock_timestamp();
+  resulting_access_version bigint;
+  result_subject_ids uuid[];
+  result_subject_revisions bigint[];
+  authoritative_tenant_id uuid;
+  authoritative_organization_id uuid;
+  authoritative_account_id uuid;
+  replay_account_id uuid;
+begin
+  if not vortex_platform.is_non_nil_uuid(p_operator_actor_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
+    or not vortex_platform.is_non_nil_uuid(p_tenant_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_steward_identity_id::text)
+    or not vortex_platform.is_non_nil_uuid(p_organization_account_id::text) then
+    raise exception using errcode = '22023', message = 'Organization adoption input is invalid';
+  end if;
+
+  -- Keep Access before Identity without creating state or refusing a replay.
+  perform 1
+  from vortex_access.organization_access_versions as version
+  join vortex_identity.organizations as organization
+    on organization.organization_id = version.organization_id
+  where version.organization_id = p_organization_id
+    and organization.tenant_id = p_tenant_id
+  for update of version;
+
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'adopt_organization', p_duplicate_key, p_organization_id, p_tenant_id, p_operator_actor_id,
+    'Administration duplicate conflicts'
+  );
+  if claimed is not null then
+    select r.* into stored
+    from pg_catalog.jsonb_to_record(claimed) as r(
+      "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
+      "subjectRevisions" bigint[]
+    );
+    select account.organization_account_id into replay_account_id
+    from vortex_identity.organization_accounts as account
+    where account.organization_id = p_organization_id
+      and account.organization_account_id = any(stored."subjectIds");
+    if replay_account_id is null then
+      raise exception using errcode = '55000', message = 'Stored adoption result is unavailable';
+    end if;
+    return query select 'replayed'::text, 'adopt_organization'::text,
+      p_tenant_id, p_organization_id, replay_account_id,
+      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", p_organization_id)],
+      stored."receiptId", stored."acceptedAt";
+    return;
+  end if;
+
+  -- This is deliberately an unlocked eligibility probe. Existing request
+  -- resolution locks Access first and then authoritatively locks Identity, so
+  -- adoption must follow that same order.
+  perform 1
+  from vortex_identity.organizations as organization
+  join vortex_identity.tenants as tenant
+    on tenant.tenant_id = organization.tenant_id
+  where organization.organization_id = p_organization_id
+    and organization.tenant_id = p_tenant_id
+    and organization.state = 'active'
+    and tenant.state = 'active';
+  if not found then
+    raise exception using errcode = 'V3003', message = 'Administration scope is unavailable';
+  end if;
+
+  perform 1 from vortex_access.initialize_organization_access_version(
+    p_organization_id, p_operator_actor_id, new_correlation_id
+  );
+  perform 1
+  from vortex_access.organization_access_versions as version
+  where version.organization_id = p_organization_id
+  for update;
+  if not found then
+    raise exception using errcode = 'V3003', message = 'Administration scope is unavailable';
+  end if;
+
+
+  if exists (
+    select 1
+    where vortex_record.command_receipt_subject_exists_internal(
+      'adopt_organization', p_tenant_id, p_organization_id, p_duplicate_key
+    )
+  ) then
+    raise exception using errcode = 'V3003', message = 'Administration scope is unavailable';
+  end if;
+
+  perform 1 from vortex_access.initialize_platform_permission_catalogue(
+    p_organization_id, p_operator_actor_id, new_correlation_id
+  );
+
+  select scope.tenant_id, scope.organization_id,
+    scope.organization_account_id, account.revision
+  into authoritative_tenant_id, authoritative_organization_id,
+    authoritative_account_id, account_revision
+  from vortex_identity.resolve_active_organization_account(
+    p_steward_identity_id, p_organization_id
+  ) as scope
+  join vortex_identity.organization_accounts as account
+    on account.organization_account_id = scope.organization_account_id;
+  if not found or authoritative_account_id is distinct from p_organization_account_id then
+    raise exception using errcode = 'V3002', message = 'Nominated steward is unavailable';
+  end if;
+  if authoritative_tenant_id is distinct from p_tenant_id
+    or authoritative_organization_id is distinct from p_organization_id then
+    raise exception using errcode = 'V3003', message = 'Administration scope is unavailable';
+  end if;
+
+  select current_requirement.* into requirement
+  from vortex_access.organization_stewardship_requirements as current_requirement
+  where current_requirement.organization_id = p_organization_id
+  for update;
+  if found then
+    if requirement.original_organization_account_id <> p_organization_account_id then
+      raise exception using errcode = 'V3002', message = 'Nominated steward is unavailable';
+    end if;
+    select adopted.access_version into resulting_access_version
+    from vortex_access.coordinate_organization_stewardship_adoption(
+      p_organization_id, p_organization_account_id,
+      requirement.original_role_id, 'organization_steward',
+      'Organisation steward', 'Permanent minimum organisation administration.',
+      requirement.original_role_assignment_id,
+      requirement.original_delegation_authority_id,
+      requirement.adopted_by, requirement.adoption_correlation_id
+    ) as adopted;
+  else
+    select adopted.access_version into resulting_access_version
+    from vortex_access.coordinate_organization_stewardship_adoption(
+      p_organization_id, p_organization_account_id, new_role_id,
+      'organization_steward', 'Organisation steward',
+      'Permanent minimum organisation administration.',
+      new_role_assignment_id, new_delegation_id, p_operator_actor_id,
+      new_correlation_id
+    ) as adopted;
+  end if;
+
+  -- The role revision check trigger is deferred. Validate it while the privileged
+  -- boundary is still active so a runtime-role commit cannot bypass or fail its reads.
+  set constraints
+    vortex_access.organization_role_revisions_checked
+    immediate;
+  set constraints
+    vortex_access.organization_role_revisions_checked
+    deferred;
+
+  select pg_catalog.array_agg(subject_id order by subject_id),
+    pg_catalog.array_agg(subject_revision order by subject_id)
+  into result_subject_ids, result_subject_revisions
+  from (values
+    (p_organization_id, resulting_access_version),
+    (p_organization_account_id, account_revision)
+  ) as result(subject_id, subject_revision);
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key,
+    pg_catalog.jsonb_build_object(
+      'receiptId', new_correlation_id, 'acceptedAt', operation_at,
+      'subjectIds', pg_catalog.to_jsonb(result_subject_ids),
+      'subjectRevisions', pg_catalog.to_jsonb(result_subject_revisions)
+    )
+  );
+  return query select 'accepted'::text, 'adopt_organization'::text,
+    p_tenant_id, p_organization_id, p_organization_account_id,
+    resulting_access_version, new_correlation_id, operation_at;
+end
+$function$;
+
+revoke execute on function vortex_identity.adopt_organization(uuid,uuid,uuid,uuid,uuid,uuid) from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
+
+grant execute on function vortex_identity.adopt_organization(uuid,uuid,uuid,uuid,uuid,uuid) to vortex_runtime;
+
+comment on function vortex_identity.adopt_organization(uuid,uuid,uuid,uuid,uuid,uuid) is 'Configured-system-only explicit organisation stewardship adoption through the existing Access coordinator.';
+
+alter function vortex_identity.adopt_organization(p_operator_actor_id uuid, p_duplicate_key uuid, p_tenant_id uuid, p_organization_id uuid, p_steward_identity_id uuid, p_organization_account_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_identity.adopt_organization(p_operator_actor_id uuid, p_duplicate_key uuid, p_tenant_id uuid, p_organization_id uuid, p_steward_identity_id uuid, p_organization_account_id uuid) to postgres;
+
+
 reset role;

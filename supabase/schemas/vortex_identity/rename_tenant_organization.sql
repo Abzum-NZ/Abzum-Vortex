@@ -1,6 +1,5 @@
 create or replace function vortex_identity.rename_tenant_organization(
   p_duplicate_key uuid,
-  p_command_fingerprint text,
   p_tenant_id uuid,
   p_organization_id uuid,
   p_expected_revision bigint,
@@ -36,8 +35,6 @@ begin
     or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
     or p_expected_revision is null
     or p_expected_revision not between 1 and 9007199254740991
-    or p_command_fingerprint is null
-    or p_command_fingerprint !~ '^sha256:[0-9a-f]{64}$'
     or p_display_name is null
     or p_display_name <> pg_catalog.btrim(p_display_name)
     or pg_catalog.char_length(p_display_name) not between 1 and 120 then
@@ -83,20 +80,15 @@ begin
   end if;
 
   claimed := vortex_record.claim_scoped_command_receipt_internal(
-    'rename_tenant_organization', p_duplicate_key, null, p_tenant_id, actor_identity_id,
+    'rename_tenant_organization', p_duplicate_key, p_organization_id, p_tenant_id, actor_identity_id,
     'Administration duplicate conflicts'
   );
   if claimed is not null then
     select r.* into stored
     from pg_catalog.jsonb_to_record(claimed) as r(
       "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
-      "subjectRevisions" bigint[], "fingerprint" text, "clusterId" uuid
+      "subjectRevisions" bigint[]
     );
-    if stored."fingerprint" <> p_command_fingerprint then
-      raise exception using
-        errcode = 'V3001',
-        message = 'Administration duplicate conflicts';
-    end if;
     return query
     select 'replayed'::text,
       'rename_tenant_organization'::text,
@@ -132,8 +124,7 @@ begin
     pg_catalog.jsonb_build_object(
       'receiptId', new_correlation_id, 'acceptedAt', evaluated_at,
       'subjectIds', pg_catalog.to_jsonb(array[p_organization_id]),
-      'subjectRevisions', pg_catalog.to_jsonb(array[resulting_revision]),
-      'fingerprint', p_command_fingerprint, 'clusterId', null::uuid
+      'subjectRevisions', pg_catalog.to_jsonb(array[resulting_revision])
     )
   );
 
@@ -147,14 +138,14 @@ begin
 end
 $function$;
 
-revoke execute on function vortex_identity.rename_tenant_organization(uuid, text, uuid, uuid, bigint, text)
+revoke execute on function vortex_identity.rename_tenant_organization(uuid, uuid, uuid, bigint, text)
   from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
-grant execute on function vortex_identity.rename_tenant_organization(uuid, text, uuid, uuid, bigint, text)
+grant execute on function vortex_identity.rename_tenant_organization(uuid, uuid, uuid, bigint, text)
   to vortex_runtime;
 
-comment on function vortex_identity.rename_tenant_organization(uuid, text, uuid, uuid, bigint, text) is
+comment on function vortex_identity.rename_tenant_organization(uuid, uuid, uuid, bigint, text) is
   'Protected same-tenant display-name-only organisation rename under the bound request context person''s current structural authority, exact revision and accepted replay.';
 
-alter function vortex_identity.rename_tenant_organization(p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_organization_id uuid, p_expected_revision bigint, p_display_name text) owner to vortex_owner;
+alter function vortex_identity.rename_tenant_organization(p_duplicate_key uuid, p_tenant_id uuid, p_organization_id uuid, p_expected_revision bigint, p_display_name text) owner to vortex_owner;
 
-grant execute on function vortex_identity.rename_tenant_organization(p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_organization_id uuid, p_expected_revision bigint, p_display_name text) to postgres;
+grant execute on function vortex_identity.rename_tenant_organization(p_duplicate_key uuid, p_tenant_id uuid, p_organization_id uuid, p_expected_revision bigint, p_display_name text) to postgres;

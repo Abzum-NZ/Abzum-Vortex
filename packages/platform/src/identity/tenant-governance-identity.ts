@@ -428,7 +428,7 @@ export const createTenantGovernanceService = (
         const value = command.data;
         const rows = await run(
           (tx) =>
-            tx.query<OrganizationMutationRow>`select * from vortex_identity.rename_tenant_organization(${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint, ${value.displayName}::text)`,
+            tx.query<OrganizationMutationRow>`select * from vortex_identity.rename_tenant_organization(${value.duplicateKey}::uuid, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint, ${value.displayName}::text)`,
         );
         return renameTenantOrganizationResultSchema.parse(
           organizationMutationResult(rows.length === 1 ? rows[0] : undefined),
@@ -457,7 +457,7 @@ export const createTenantGovernanceService = (
         const value = command.data;
         const rows = await run(
           (tx) =>
-            tx.query<OrganizationMutationRow>`select * from vortex_identity.reparent_tenant_organization(${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint, ${value.parentOrganizationId}::uuid)`,
+            tx.query<OrganizationMutationRow>`select * from vortex_identity.reparent_tenant_organization(${value.duplicateKey}::uuid, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint, ${value.parentOrganizationId}::uuid)`,
         );
         return reparentTenantOrganizationResultSchema.parse(
           organizationMutationResult(rows.length === 1 ? rows[0] : undefined),
@@ -486,7 +486,7 @@ export const createTenantGovernanceService = (
         const value = command.data;
         const rows = await run(
           (tx) =>
-            tx.query<OrganizationMutationRow>`select * from vortex_identity.suspend_tenant_organization(${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint)`,
+            tx.query<OrganizationMutationRow>`select * from vortex_identity.suspend_tenant_organization(${value.duplicateKey}::uuid, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint)`,
         );
         return suspendTenantOrganizationResultSchema.parse(
           organizationMutationResult(rows.length === 1 ? rows[0] : undefined),
@@ -515,7 +515,7 @@ export const createTenantGovernanceService = (
         const value = command.data;
         const rows = await run(
           (tx) =>
-            tx.query<OrganizationMutationRow>`select * from vortex_identity.reactivate_tenant_organization(${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint)`,
+            tx.query<OrganizationMutationRow>`select * from vortex_identity.reactivate_tenant_organization(${value.duplicateKey}::uuid, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint)`,
         );
         return reactivateTenantOrganizationResultSchema.parse(
           organizationMutationResult(rows.length === 1 ? rows[0] : undefined),
@@ -544,7 +544,7 @@ export const createTenantGovernanceService = (
         const value = command.data;
         const rows = await run(
           (tx) =>
-            tx.query<OrganizationMutationRow>`select * from vortex_identity.archive_tenant_organization(${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint)`,
+            tx.query<OrganizationMutationRow>`select * from vortex_identity.archive_tenant_organization(${value.duplicateKey}::uuid, ${value.tenantId}::uuid, ${value.organizationId}::uuid, ${value.expectedRevision}::bigint)`,
         );
         return archiveTenantOrganizationResultSchema.parse(
           organizationMutationResult(rows.length === 1 ? rows[0] : undefined),

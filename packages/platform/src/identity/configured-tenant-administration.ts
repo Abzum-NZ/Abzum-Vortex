@@ -1,6 +1,5 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
 import {
   bootstrapVortexSuperAdministratorCommandSchema,
   vortexSuperAdministratorAssignmentMutationResultSchema,
@@ -128,8 +127,6 @@ type SuperAdministratorBootstrapRow = DatabaseRow & {
   accepted_at: unknown;
 };
 
-const fingerprint = (command: object): string =>
-  `sha256:${createHash("sha256").update(JSON.stringify(command), "utf8").digest("hex")}`;
 const configuredContext = (
   environment: Readonly<Record<string, string | undefined>>,
 ): ConfiguredTenantAdministrationOperatorContext | undefined => {
@@ -451,7 +448,6 @@ export const createConfiguredTenantAdministrationService = (
             select * from vortex_identity.adopt_organization(
               ${operator.systemActorId}::uuid,
               ${value.duplicateKey}::uuid,
-              ${fingerprint(value)}::text,
               ${value.tenantId}::uuid,
               ${value.organizationId}::uuid,
               ${value.organizationSteward.identityId}::uuid,
