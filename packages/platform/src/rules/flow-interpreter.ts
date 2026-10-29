@@ -12,13 +12,13 @@ import {
 } from "./flow-interpreter-state";
 import { typedValueMatchesType } from "./condition-types";
 import { flowPathGuardMatches } from "./flow-path-guard";
+import { findTask, validReadFieldsResume } from "./flow-read-fields-resume";
 import { flowSegmentValues, parseFlowSegmentSeed } from "./flow-segment-seed";
 import type { JsonValue } from "../catalogue/common";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import { moneyValueSchema, recordLinkValueSchema } from "../records/module-field-values";
 import { platformOperationKey } from "../catalogue/platform-service-operation-catalogue";
 import {
-  flowReadFieldsProjectionSchema,
   flowReadFieldsTypeMapSchema,
   flowTaskChildLists,
   type FlowDefinition,
@@ -300,17 +300,6 @@ const text = (value: string): FlowRuntimeValue => typed("text", value);
 const clone = <Value>(input: Value): Value => JSON.parse(JSON.stringify(input)) as Value;
 
 const declaredNull = (type: string): FlowRuntimeValue => typed(type, null);
-
-const findTask = (tasks: readonly FlowTask[], taskId: string): FlowTask | undefined => {
-  for (const task of tasks) {
-    if (task.id === taskId) return task;
-    for (const child of flowTaskChildLists(task)) {
-      const found = findTask(child.tasks, taskId);
-      if (found !== undefined) return found;
-    }
-  }
-  return undefined;
-};
 
 const declaredOutputFieldType = (
   state: FlowRunState,
@@ -616,56 +605,6 @@ const declaredOutputs = (
     if (typedValueMatchesType(value, type, "flow")) outputs[key] = typed(type, value);
   }
   return outputs;
-};
-
-const validReadFieldsResume = (
-  flow: FlowDefinition | undefined,
-  taskId: string,
-  produced: Readonly<Record<string, JsonValue>> | undefined,
-): boolean => {
-  const task =
-    flow === undefined
-      ? undefined
-      : findTask([...flow.tasks, ...flow.errors, ...flow.finally], taskId);
-  if (task?.type !== "record.read_fields") return false;
-  const registered = task as Extract<FlowTask, { properties: unknown }> & {
-    properties: Readonly<Record<string, FlowValue>>;
-    readFieldTypes?: Readonly<Record<string, string>>;
-  };
-  const fields = registered.properties.fields;
-  const projection =
-    fields?.kind === "literal" && fields.literal.type === "json"
-      ? flowReadFieldsProjectionSchema.safeParse(fields.literal.value)
-      : undefined;
-  const types = flowReadFieldsTypeMapSchema.safeParse(registered.readFieldTypes);
-  if (!projection?.success || !types.success) return false;
-  const declaredAliases = projection.data.map((field) => field.alias);
-  const typeAliases = Object.keys(types.data);
-  if (
-    declaredAliases.length !== typeAliases.length ||
-    declaredAliases.some((alias) => !Object.hasOwn(types.data, alias))
-  )
-    return false;
-  if (
-    produced === undefined ||
-    typeof produced !== "object" ||
-    Array.isArray(produced) ||
-    Object.keys(produced).length !== 1 ||
-    !Object.hasOwn(produced, "values")
-  )
-    return false;
-  const values: unknown = produced.values;
-  if (values === null || typeof values !== "object" || Array.isArray(values)) return false;
-  const actual = values as Record<string, unknown>;
-  const actualAliases = Object.keys(actual);
-  return (
-    actualAliases.length === declaredAliases.length &&
-    declaredAliases.every(
-      (alias) =>
-        Object.hasOwn(actual, alias) &&
-        typedValueMatchesType(actual[alias], types.data[alias]!, "flow"),
-    )
-  );
 };
 
 /**
@@ -1435,9 +1374,18 @@ export const resumeFlowRun = (
       resume.outcome === "committed" ||
       resume.outcome === "background_pending";
     if (succeeded) {
+      const currentFlow = machine.library(activation.flowId);
       if (
         awaiting.taskType === "record.read_fields" &&
-        !validReadFieldsResume(machine.library(activation.flowId), awaiting.taskId, resume.outputs)
+        !validReadFieldsResume(
+          currentFlow === undefined
+            ? undefined
+            : findTask(
+                [...currentFlow.tasks, ...currentFlow.errors, ...currentFlow.finally],
+                awaiting.taskId,
+              ),
+          resume.outputs,
+        )
       ) {
         replaceTop(
           machine,
