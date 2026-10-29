@@ -6,7 +6,6 @@ import {
   readFormIntent,
   type FlowIntent,
   type FlowIntentHost,
-  type FlowIntentKind,
 } from "./intents";
 
 type PageStepImplementation = (
@@ -39,16 +38,9 @@ const pageStepImplementations = {
   "interface.set_filter": presentation,
 } satisfies Record<PageStepType, PageStepImplementation>;
 
-const implementationByIntent = {
-  show_message: pageStepImplementations["interface.show_message"],
-  show_form: pageStepImplementations["interface.show_form"],
-  confirm: pageStepImplementations["interface.confirm"],
-  navigate: pageStepImplementations["interface.navigate"],
-  refresh: pageStepImplementations["interface.refresh"],
-  set_panel: pageStepImplementations["interface.set_panel"],
-  set_filter: pageStepImplementations["interface.set_filter"],
-} satisfies Record<FlowIntentKind, PageStepImplementation>;
-
 /** The same page implementations handle both local steps and server-returned intents. */
-export const performPageFlowIntent: PageStepImplementation = (intent, host, signal) =>
-  implementationByIntent[intent.kind](intent, host, signal);
+export const performPageFlowIntent: PageStepImplementation = (intent, host, signal) => {
+  const implementation = pageStepImplementations[`interface.${intent.kind}` as PageStepType];
+  if (implementation === undefined) throw new Error("FLOW_PAGE_STEP_UNAVAILABLE");
+  return implementation(intent, host, signal);
+};
