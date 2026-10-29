@@ -214,7 +214,7 @@ begin
           and assignment.organization_account_id = accepted.organization_account_id
           and assignment.assignment_kind = case role_fact.assignment_policy
             when 'standing' then 'standing' else 'eligible' end
-          and assignment.state = 'live' and assignment.starts_at <= checked_at
+          and assignment.state = 'live'
           and (assignment.expires_at is null or assignment.expires_at > checked_at)
       ) then
         select changed.access_version into resulting_version
