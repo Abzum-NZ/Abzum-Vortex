@@ -53,7 +53,6 @@ import type {
   FlowOrchestratorResponse,
   FlowRecordType,
   FlowRelease,
-  FlowRunExpectation,
   FlowUnavailableNotice,
 } from "./flow-orchestrator-types";
 import type { FlowSubject } from "../rules/flow-interpreter";
@@ -142,14 +141,14 @@ type FlowBindingEndpointDependencies = Readonly<{
     Readonly<{ kind: "run_opened"; carriedValues: string }> | Readonly<{ kind: "refused" }>
   >;
   /**
-   * The orchestrator bound to exactly this release. `runId` is set for a binding start so a
-   * repeated click reuses one run identity; it is absent for a continuation.
+   * The orchestrator bound to exactly this release. `runId` is the binding start's, so a
+   * repeated click reuses one run identity.
    */
   orchestratorFor: (
     release: FlowRelease,
-    runId: string | undefined,
+    runId: string,
     installation: InstalledFlowBindings,
-  ) => Pick<FlowOrchestrator, "invokeBinding" | "continueAnswer">;
+  ) => Pick<FlowOrchestrator, "invokeBinding">;
   /**
    * THE SEAM for the form request's submit adapter (`adaptPrivateFormSubmit`): turns what a form
    * submission supplies, and the record the form was rendered for, into the caller inputs of a
@@ -165,9 +164,9 @@ type FlowBindingEndpointDependencies = Readonly<{
   /**
    * THE SEAM for the form request's continuation adapter: forwards an exact paused target and its
    * run receipt to the web-independent form continuation interface, which compares them with
-   * trusted state. Until it is supplied a continuation that carries a target is refused.
+   * trusted state.
    */
-  continueForm?: (
+  continueForm: (
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
     request: FormContinuationRequest,
@@ -208,7 +207,7 @@ export type FlowBindingEndpointResult =
       expiresAt: string;
       carriedValues?: string;
       /** The exact paused target and receipt the surface returns with the continuation (evidence). */
-      target?: FormContinuationTarget;
+      target: FormContinuationTarget;
       receipt?: FormContinuationReceipt;
       unavailable: readonly FlowUnavailableNotice[];
     }>
@@ -688,6 +687,8 @@ const toResult = (
       return finishedResult(response, context);
     case "suspended": {
       const target = suspendedTarget(response, context);
+      // A pause the person could not answer through the one form continuation path is not offered.
+      if (target === undefined) return refused;
       const receipt = formContinuationReceiptSchema.safeParse({
         runId: response.runId,
         committedEffects: response.committedEffects,
@@ -699,7 +700,7 @@ const toResult = (
         intents: response.intents,
         continuation: response.continuation,
         expiresAt: response.expiresAt,
-        ...(target === undefined ? {} : { target }),
+        target,
         ...(receipt.success ? { receipt: receipt.data } : {}),
         unavailable: response.unavailable,
       };
@@ -841,48 +842,19 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           if (!installation.bindings.some((entry) => sameId(entry.flow.flowId, request.flowId)))
             return refuse("FLOW_INVOKE_CONTINUATION_FLOW_NOT_BOUND");
           const target = request.target;
-          // An exact paused target always goes to the form continuation interface, the one place
+          // The exact paused target always goes to the form continuation interface, the one place
           // that compares the installation, release, flow, node, form and receipt with trusted
-          // state; a stale target comes back as a reload and a forged one as the neutral refusal.
-          if (target !== undefined) {
-            if (dependencies.continueForm === undefined)
-              return refuse("FLOW_INVOKE_FORM_CONTINUATION_UNAVAILABLE");
-            if (!sameId(target.flowId, request.flowId))
-              return refuse("FLOW_INVOKE_CONTINUATION_TARGET_FLOW_MISMATCH");
-            const outcome = await dependencies.continueForm(session.data, selection.data, {
-              target,
-              continuation: request.continuation,
-              answer: request.answer,
-              ...(request.receipt === undefined ? {} : { receipt: request.receipt }),
-            });
-            return continuationResult(outcome, installation.installationRevision, {
-              flowId: request.flowId,
-              installation,
-            });
-          }
-          // A form answer must pass through the paused-target adapter, which resolves every
-          // reference-choice key before the flow sees the submitted values.
-          if (request.answer.kind === "submit")
-            return refuse("FLOW_INVOKE_FORM_ANSWER_WITHOUT_TARGET");
-          const expectation: FlowRunExpectation = {
-            releaseKey: installation.releaseKey,
+          // state and resolves every reference-choice key; a stale target comes back as a reload
+          // and a forged one as the neutral refusal.
+          if (!sameId(target.flowId, request.flowId))
+            return refuse("FLOW_INVOKE_CONTINUATION_TARGET_FLOW_MISMATCH");
+          const outcome = await dependencies.continueForm(session.data, selection.data, {
+            target,
+            continuation: request.continuation,
+            answer: request.answer,
             ...(request.receipt === undefined ? {} : { receipt: request.receipt }),
-          };
-          const response = await dependencies
-            .orchestratorFor(release, undefined, installation)
-            .continueAnswer(
-              {
-                session: session.data,
-                selection: selection.data,
-                flowId: request.flowId,
-                continuation: request.continuation,
-                answer: request.answer,
-              },
-              expectation,
-            );
-          return toResult(response, {
-            applicationRootId: installation.applicationRootId,
-            installationRevision: installation.installationRevision,
+          });
+          return continuationResult(outcome, installation.installationRevision, {
             flowId: request.flowId,
             installation,
           });

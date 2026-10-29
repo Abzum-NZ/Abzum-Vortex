@@ -145,7 +145,7 @@ export async function driveServerFlow(
           // The exact evidence the server issued with this pause, sent back unchanged on resume; the
           // page never builds a target or receipt of its own.
           const evidence: FlowResumeEvidence = {
-            ...(response.target === undefined ? {} : { target: response.target }),
+            target: response.target,
             ...(response.receipt === undefined ? {} : { receipt: response.receipt }),
           };
           if (response.awaiting === "form") {

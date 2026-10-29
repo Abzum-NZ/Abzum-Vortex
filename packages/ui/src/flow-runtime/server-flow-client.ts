@@ -30,7 +30,7 @@ export type FlowApplicationAddress = Readonly<{
  */
 export type FlowResumeEvidence = Readonly<{
   /** The exact paused target: installation, release, flow, node, awaiting form and receipt. */
-  target?: FormContinuationTarget;
+  target: FormContinuationTarget;
   /** The run receipt: which run and how many protected effects it has committed. */
   receipt?: FormContinuationReceipt;
 }>;
@@ -56,7 +56,7 @@ export type ServerFlowResponse =
       continuation: string;
       expiresAt: string;
       carriedValues?: string;
-      target?: FormContinuationTarget;
+      target: FormContinuationTarget;
       receipt?: FormContinuationReceipt;
     }>
   | Readonly<{ kind: "refused"; reason?: "this step was already answered" }>
@@ -88,7 +88,7 @@ export type FlowInvokeClient = Readonly<{
     flowId: string,
     continuation: string,
     answer: FormContinuationAnswer,
-    evidence?: FlowResumeEvidence,
+    evidence: FlowResumeEvidence,
     signal?: AbortSignal,
     sourceTablePlacementId?: string,
     carriedValues?: string,
@@ -164,6 +164,7 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
       if (
         intents === undefined ||
         !isEvidence(candidate.target) ||
+        candidate.target === undefined ||
         !isEvidence(candidate.receipt) ||
         !isCarriedValues(candidate.carriedValues) ||
         typeof candidate.runId !== "string" ||
@@ -182,9 +183,7 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         ...(candidate.carriedValues === undefined
           ? {}
           : { carriedValues: candidate.carriedValues }),
-        ...(candidate.target === undefined
-          ? {}
-          : { target: candidate.target as FormContinuationTarget }),
+        target: candidate.target as FormContinuationTarget,
         ...(candidate.receipt === undefined
           ? {}
           : { receipt: candidate.receipt as FormContinuationReceipt }),
@@ -359,8 +358,8 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
           answer,
           ...(carriedValues === undefined ? {} : { carriedValues }),
           ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
-          ...(evidence?.target === undefined ? {} : { target: evidence.target }),
-          ...(evidence?.receipt === undefined ? {} : { receipt: evidence.receipt }),
+          target: evidence.target,
+          ...(evidence.receipt === undefined ? {} : { receipt: evidence.receipt }),
         },
         signal,
       ),

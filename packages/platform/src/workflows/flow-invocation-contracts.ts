@@ -61,7 +61,7 @@ const continuationInvocationSchema = z
      * The exact paused target and run receipt the surface last saw. Both are evidence: the server
      * compares them with trusted state so a caller cannot skip inputs or name a different node.
      */
-    target: formContinuationTargetSchema.optional(),
+    target: formContinuationTargetSchema,
     receipt: formContinuationReceiptSchema.optional(),
   })
   .strict();
