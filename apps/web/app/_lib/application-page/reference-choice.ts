@@ -6,10 +6,20 @@ import {
   createReferenceChoiceService,
   createStoredPageCapabilityService,
   requireProjectedPlacement,
+  CHOICE_INPUT_BLOCK_RELEASE,
+  LINK_INPUT_BLOCK_RELEASE,
+  TEXT_INPUT_BLOCK_RELEASE,
+  DATE_INPUT_BLOCK_RELEASE,
+  placementSettings,
+  fieldControl,
+  planChoiceOptionGates,
+  decideChoiceOptionGates,
+  applyChoiceOptionGates,
 } from "@vortex/platform/server";
 import {
   type IdentitySession,
   type OrganizationSelectionCandidate,
+  isRecord,
   sameId,
   walkPageComposition,
 } from "@vortex/platform/schema";
@@ -19,6 +29,7 @@ import { platformPermissionSource } from "../platform-permission-source";
 import { withContributedFormPlacements, withContributedPlacements } from "./contributed-placements";
 import {
   projectedReferenceChoiceForm,
+  hasReferenceChoiceSource,
   referenceChoiceFieldForPlacement,
   type ProjectedReferenceChoiceForm,
 } from "../reference-choices";
@@ -66,6 +77,64 @@ export const validateProjectedReferenceChoice = async (
     resolved.kind === "available" &&
     resolved.value.outcome === "completed" &&
     resolved.value.choices.some((choice) => choice.key === key)
+  );
+};
+
+/** Uses the page's own option gates for a published control value. */
+export const validateProjectedControlOption = async (
+  bound: Parameters<
+    ReturnType<typeof createReferenceChoiceService>["resolveExactInTransaction"]
+  >[0],
+  context: InstalledRuntimeContext,
+  projectedPage: Readonly<Record<string, unknown>>,
+  placementId: string,
+  value: string,
+  subject: Readonly<{ recordTypeId: string; recordId: string }> | undefined,
+  held: Parameters<typeof applyChoiceOptionGates>[2],
+): Promise<boolean> => {
+  const gate = requireProjectedPlacement(projectedPage, placementId);
+  if (gate.kind !== "on_page") return false;
+  if (hasReferenceChoiceSource(gate.placement))
+    return validateProjectedReferenceChoice(bound, context, projectedPage, placementId, value);
+  const props = structuredClone(gate.placement.props);
+  const placement = {
+    props,
+    vortex: gate.placement.vortex,
+    settings: placementSettings(props),
+  };
+  if (fieldControl(placement) === "choice") {
+    const plan = planChoiceOptionGates([placement], context);
+    if (plan === undefined) return false;
+    const allowed = await decideChoiceOptionGates(bound.transaction, plan, subject);
+    applyChoiceOptionGates(plan, allowed, held);
+    return (
+      Array.isArray(props.options) &&
+      props.options.some((option) => isRecord(option) && option.key === value)
+    );
+  }
+  const block = gate.placement.vortex.block;
+  if (
+    fieldControl(placement) === "link" ||
+    (isRecord(block) &&
+      typeof block.blockId === "string" &&
+      sameId(block.blockId, LINK_INPUT_BLOCK_RELEASE.blockId))
+  )
+    return false;
+  if (
+    isRecord(block) &&
+    typeof block.blockId === "string" &&
+    sameId(block.blockId, CHOICE_INPUT_BLOCK_RELEASE.blockId)
+  )
+    return (
+      Array.isArray(props.options) &&
+      props.options.some((option) => isRecord(option) && option.key === value)
+    );
+  return (
+    fieldControl(placement) === "text" ||
+    (isRecord(block) &&
+      typeof block.blockId === "string" &&
+      (sameId(block.blockId, TEXT_INPUT_BLOCK_RELEASE.blockId) ||
+        sameId(block.blockId, DATE_INPUT_BLOCK_RELEASE.blockId)))
   );
 };
 
