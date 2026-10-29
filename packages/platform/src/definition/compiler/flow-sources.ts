@@ -35,7 +35,10 @@ import {
   type JsonObject,
 } from "./shared";
 import { moduleDependencies } from "../module-dependencies";
-import { FORM_CONTAINER_BLOCK_RELEASE } from "../application-composition-catalogue";
+import {
+  CONTROL_BLOCK_RELEASES,
+  FORM_CONTAINER_BLOCK_RELEASE,
+} from "../application-composition-catalogue";
 
 /**
  * Compiles the flows a module or application owns to permanent identities, refusing an
@@ -208,18 +211,39 @@ function compileOwnedFlowSources(
                     FORM_CONTAINER_BLOCK_RELEASE.releaseVersion
                 )
                   continue;
-                const records = new Set(
-                  sourceItemTree([form]).flatMap((item) => {
-                    const reference = item.props.field;
-                    if (typeof reference !== "string") return [];
-                    const dot = reference.lastIndexOf(".");
-                    return dot > 0 && recordsByReference.has(reference.slice(0, dot))
-                      ? [reference.slice(0, dot)]
-                      : [];
-                  }),
-                );
-                const record = records.size === 1 ? [...records][0] : undefined;
-                forms[form.props.id] = record === undefined ? {} : recordsByReference.get(record)!;
+                const fields: Record<string, string> = {};
+                for (const control of sourceItemTree([form])) {
+                  const release = CONTROL_BLOCK_RELEASES.find(
+                    (candidate) => candidate.rendererKey === control.type,
+                  );
+                  if (release === undefined) continue;
+                  const reference = control.props.field;
+                  const dot = typeof reference === "string" ? reference.lastIndexOf(".") : -1;
+                  const record =
+                    dot > 0 && typeof reference === "string"
+                      ? recordsByReference.get(reference.slice(0, dot))
+                      : undefined;
+                  const field =
+                    dot > 0 && typeof reference === "string" ? reference.slice(dot + 1) : undefined;
+                  const name =
+                    typeof control.props.name === "string" && control.props.name !== ""
+                      ? control.props.name
+                      : field;
+                  if (name === undefined) continue;
+                  const declared = release.value_type;
+                  const type =
+                    record !== undefined && field !== undefined
+                      ? record[field]
+                      : declared?.kind === "fixed"
+                        ? declared.type
+                        : declared?.kind === "boolean_setting"
+                          ? control.props[declared.setting] === true
+                            ? declared.when_true
+                            : declared.when_false
+                          : undefined;
+                  if (type !== undefined) fields[name] = type;
+                }
+                forms[form.props.id] = fields;
               }
               return [
                 {
