@@ -1,4 +1,5 @@
 import { isBuilderKey } from "../catalogue/identifier-predicates";
+import { isPlainRecord } from "../catalogue/json-value";
 
 /** The maximum number of selected-record output members. */
 export const flowMaximumRecordReadFields = 20;
@@ -20,7 +21,13 @@ export type FlowReadFieldsProjectionEntry = { alias: string; field: string };
 export type FlowReadFieldsTypeMap = Record<string, FlowReadFieldsScalarType>;
 
 export const isFlowReadFieldsTypeMap = (value: unknown): value is FlowReadFieldsTypeMap => {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  if (!isPlainRecord(value)) return false;
+  if (
+    Reflect.ownKeys(value).some(
+      (key) => typeof key !== "string" && Object.prototype.propertyIsEnumerable.call(value, key),
+    )
+  )
+    return false;
   const entries = Object.entries(value);
   return (
     entries.length >= 1 &&

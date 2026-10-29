@@ -2,6 +2,20 @@
 export type JsonValue =
   string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
+/** Records admit plain objects, including objects with a null prototype. */
+export const isPlainRecord = (value: unknown): value is Record<string, unknown> => {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const constructor: unknown = Reflect.get(value, "constructor");
+  if (typeof constructor !== "function") return true;
+  const prototype: unknown = Reflect.get(constructor, "prototype");
+  return (
+    prototype !== null &&
+    typeof prototype === "object" &&
+    !Array.isArray(prototype) &&
+    Object.hasOwn(prototype, "isPrototypeOf")
+  );
+};
+
 /** Checks JSON values without bringing schema libraries into a browser flow runner. */
 export const isJsonValue = (value: unknown): value is JsonValue => {
   const ancestors = new Set<object>();
@@ -9,19 +23,7 @@ export const isJsonValue = (value: unknown): value is JsonValue => {
     if (entry === null || typeof entry === "string" || typeof entry === "boolean") return true;
     if (typeof entry === "number") return Number.isFinite(entry);
     if (typeof entry !== "object" || ancestors.has(entry)) return false;
-    if (!Array.isArray(entry)) {
-      const constructor: unknown = Reflect.get(entry, "constructor");
-      if (typeof constructor === "function") {
-        const prototype: unknown = Reflect.get(constructor, "prototype");
-        if (
-          prototype === null ||
-          typeof prototype !== "object" ||
-          Array.isArray(prototype) ||
-          !Object.hasOwn(prototype, "isPrototypeOf")
-        )
-          return false;
-      }
-    }
+    if (!Array.isArray(entry) && !isPlainRecord(entry)) return false;
     ancestors.add(entry);
     let valid = true;
     if (Array.isArray(entry)) {
