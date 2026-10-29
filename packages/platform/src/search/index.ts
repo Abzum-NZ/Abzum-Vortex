@@ -60,6 +60,7 @@ export {
   literalSearchRequiredTokens,
   literalSearchRefusalReasonCodes,
   matchLiteralSearch,
+  matchesLiteralSearchText,
   type LiteralSearchCompleted,
   type LiteralSearchInput,
   type LiteralSearchMatch,
@@ -68,6 +69,8 @@ export {
   type LiteralSearchRefusalReasonCode,
   type LiteralSearchResult,
 } from "./literal-search";
+
+export { splitSearchFilters } from "./search-filters";
 
 export {
   sharedResultGroupDecisions,

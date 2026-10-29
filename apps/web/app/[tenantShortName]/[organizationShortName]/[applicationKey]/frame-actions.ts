@@ -6,7 +6,11 @@ import { loadApplicationSearch } from "../../../_lib/application-search";
 import { loadPermittedApplicationsAtAddress } from "../../../_lib/organization-context";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { readApplicationReleaseAdoption } from "../../../_lib/application-release-adoption";
-import { runtimePreviewOf } from "@vortex/platform/server";
+import {
+  matchesLiteralSearchText,
+  runtimePreviewOf,
+  splitSearchFilters,
+} from "@vortex/platform/server";
 import { mapWebError } from "../../../_lib/web-error-mapper";
 
 type ApplicationSearchView = Awaited<ReturnType<typeof loadApplicationSearch>>;
@@ -144,6 +148,7 @@ export async function searchApplicationAction(
   organizationShortName: string,
   applicationKey: string,
   expression: string,
+  cursor?: string,
 ): Promise<ApplicationSearchView> {
   if (
     [tenantShortName, organizationShortName, applicationKey, expression].some(
@@ -162,5 +167,93 @@ export async function searchApplicationAction(
     resolution.session,
     { tenantShortName, organizationShortName, applicationKey },
     expression,
+    cursor,
   );
+}
+
+/** Search only applications currently openable by this signed-in viewer. */
+export async function searchLauncherAction(
+  tenantShortName: string,
+  organizationShortName: string,
+  expression: string,
+  groupKey?: string,
+  cursor?: string,
+): Promise<
+  | { kind: "unavailable" }
+  | { kind: "refused"; reason: string }
+  | {
+      kind: "available";
+      groups: {
+        key: string;
+        title: string;
+        results: { href: string; title: string; subtitle?: string }[];
+        cursor?: string;
+      }[];
+    }
+> {
+  const resolution = await resolveIdentitySession();
+  if (resolution.kind !== "active" || expression.length > 2_000) return { kind: "unavailable" };
+  const read = await loadPermittedApplicationsAtAddress(
+    resolution.session,
+    tenantShortName,
+    organizationShortName,
+  );
+  if (read.kind !== "available") return { kind: "unavailable" };
+  const split = splitSearchFilters(expression);
+  if (split === undefined || (split.literal === "" && split.filters.length === 0))
+    return { kind: "refused", reason: "Check the search expression." };
+  const groups: {
+    key: string;
+    title: string;
+    results: { href: string; title: string; subtitle?: string }[];
+    cursor?: string;
+  }[] = [];
+  if (groupKey === undefined || groupKey === "applications") {
+    const apps =
+      split.filters.length > 0
+        ? []
+        : read.applications.filter((app) => matchesLiteralSearchText(split.literal, app.name));
+    if (split.filters.length === 0 && matchesLiteralSearchText(split.literal, "") === undefined)
+      return { kind: "refused", reason: "Check the search expression." };
+    const start =
+      cursor === undefined || groupKey === undefined
+        ? 0
+        : apps.findIndex((app) => app.key === cursor) + 1;
+    if (cursor !== undefined && groupKey === "applications" && start === 0)
+      return { kind: "unavailable" };
+    const page = apps.slice(start, Math.min(start + 40, 200));
+    if (page.length > 0)
+      groups.push({
+        key: "applications",
+        title: "Applications",
+        results: page.map((app) => ({
+          title: app.name,
+          href: `/${encodeURIComponent(tenantShortName)}/${encodeURIComponent(organizationShortName)}/${encodeURIComponent(app.key)}/${encodeURIComponent(app.homePageKey)}`,
+        })),
+        ...(start + page.length < Math.min(apps.length, 200)
+          ? { cursor: page[page.length - 1]!.key }
+          : {}),
+      });
+  }
+  let refusal: string | undefined;
+  for (const app of read.applications) {
+    const key = `records:${app.key}`;
+    if (groupKey !== undefined && groupKey !== key) continue;
+    const result = await loadApplicationSearch(
+      resolution.session,
+      { tenantShortName, organizationShortName, applicationKey: app.key },
+      expression,
+      groupKey === key ? cursor : undefined,
+    );
+    if (result.kind === "refused") refusal = result.reason;
+    if (result.kind === "available" && result.results.length > 0)
+      groups.push({
+        key,
+        title: app.name,
+        results: [...result.results],
+        ...(result.cursor === undefined ? {} : { cursor: result.cursor }),
+      });
+  }
+  if (groups.length === 0 && refusal !== undefined) return { kind: "refused", reason: refusal };
+  return { kind: "available", groups };
 }

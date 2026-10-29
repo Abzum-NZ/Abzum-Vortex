@@ -45,6 +45,8 @@ An organisation-owned **connection instance** selects a connection type and stor
 
 An application connection binding records the permanent connection-type identifier, an accepted version requirement, the exact resolved catalogue version, and the operation keys the application requires. Publication requires the exact compiled connection artifact from the caller's immutable resolution snapshot, checks that the declared requirement accepts the resolved version, and compares the snapshot and compiled operation catalogues in both directions before resolving every required operation against both. Missing, foreign-snapshot, altered, or partial connection artifacts are refused. This makes the application reproducible without embedding a connection instance or secret in its definition.
 
+The current administration surface creates, edits and revokes instances, stores secrets in Vault through a write-only reference, and runs bounded health checks through a runtime-only execution ticket. No provider adapter is registered yet; a health check reports "No adapter available". Flow calls to connection operations are not available in the current flow contract.
+
 ## Authorisation lifecycle
 
 Password-like keys and [OAuth 2.0](https://oauth.net/2/) grants are created through a server-side flow. The platform records grant time, granted scopes, expiry, refresh state, and revocation. Refresh is locked so parallel work does not race or reuse a rotated token. Revocation immediately prevents new calls and marks waiting workflow steps for a policy-controlled failure path.

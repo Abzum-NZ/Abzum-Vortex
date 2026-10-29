@@ -16,6 +16,7 @@ const platformGuidanceCodes: ReadonlySet<string> = new Set<FlowRefusalFeedbackCo
   "assignments_manage_required",
   "invitation_already_pending",
   "invitation_role_not_delegable",
+  "connection_key_in_use",
 ]);
 
 export const refusalKeepsPlatformGuidance = (code: string | undefined): boolean =>

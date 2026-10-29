@@ -1,10 +1,21 @@
 import {
+  CURRENT_CONNECTION_TYPE_RELEASES,
   sourceApplicationModuleSchema,
   organizationRuntimeSettingsDateFormatOptions,
   organizationRuntimeSettingsNumberFormatOptions,
   type SourceApplicationModule,
 } from "@vortex/platform/schema";
 import { activityQuery, activityReadPermission, activityRecordType } from "./activity";
+
+/** Choices and display labels are derived from the platform's current releases. */
+export const connectionTypeChoices = CURRENT_CONNECTION_TYPE_RELEASES.map((release) => ({
+  key: release.source.key,
+  label: release.source.body.name,
+}));
+export const connectionTypeDisplayOptions = CURRENT_CONNECTION_TYPE_RELEASES.map((release) => ({
+  value: release.rootId,
+  label: release.source.body.name,
+}));
 
 // Content fields are editable through the standard create and update actions.
 // Lifecycle fields (state and its timestamps) change only through the named

@@ -136,6 +136,36 @@
           "readable_fields": ["organization_id", "revision", "key", "label", "lifecycle"],
           "changeable_fields": []
         }
+      },
+      {
+        "id": "app_permission_connection_instance_read",
+        "key": "vortex.organisation_administration.connection_instance.read",
+        "label": "Read connections",
+        "description": "Allows reading the protected connection projection.",
+        "record_type": "vortex.system_directory:connection_instance",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "organization_id",
+            "revision",
+            "destination_key",
+            "connection_type_id",
+            "connection_type_version",
+            "state",
+            "last_health_outcome",
+            "token_expires_at",
+            "secret_set"
+          ],
+          "changeable_fields": []
+        }
       }
     ],
     "roles": [
@@ -172,7 +202,8 @@
           "vortex.organisation_administration.organization_invitation.read",
           "vortex.organisation_administration.role.read",
           "vortex.organisation_administration.organization_settings.read",
-          "vortex.organisation_administration.activity_entry.read"
+          "vortex.organisation_administration.activity_entry.read",
+          "vortex.organisation_administration.connection_instance.read"
         ]
       }
     ],
@@ -214,6 +245,14 @@
             "icon": "settings",
             "page": "organisation_runtime_settings",
             "permission": "platform.organization.runtime_settings.read"
+          },
+          {
+            "id": "nav_connections",
+            "type": "page",
+            "label": "Connections",
+            "icon": "key-round",
+            "page": "connections",
+            "permission": "platform.organization.connections.manage"
           }
         ]
       },
@@ -338,6 +377,46 @@
         "key": "vortex.app.organisation_administration.invite_person",
         "label": "Invite person",
         "record_type": "vortex.system_directory:organization_invitation",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_create_connection",
+        "key": "vortex.app.organisation_administration.create_connection",
+        "label": "Create connection",
+        "record_type": "vortex.system_directory:connection_instance",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_revoke_connection",
+        "key": "vortex.app.organisation_administration.revoke_connection",
+        "label": "Revoke connection",
+        "record_type": "vortex.system_directory:connection_instance",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_health_connection",
+        "key": "vortex.app.organisation_administration.health_connection",
+        "label": "Check connection health",
+        "record_type": "vortex.system_directory:connection_instance",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_edit_connection",
+        "key": "vortex.app.organisation_administration.edit_connection",
+        "label": "Edit connection",
+        "record_type": "vortex.system_directory:connection_instance",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_open_connection_detail",
+        "key": "vortex.app.organisation_administration.open_connection_detail",
+        "label": "Open connection",
+        "record_type": "vortex.system_directory:connection_instance",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       }
@@ -941,8 +1020,12 @@
                             "responsive": {
                               "desktop": {
                                 "visible": true,
-                                "width": { "kind": "fill" },
-                                "height": { "kind": "content" }
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
                               }
                             }
                           }
@@ -1904,6 +1987,423 @@
           },
           "content": []
         }
+      },
+      {
+        "id": "page_connections",
+        "key": "connections",
+        "name": "Connections",
+        "type": "dashboard",
+        "permission": "platform.organization.connections.manage",
+        "composition": {
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.button",
+                  "props": {
+                    "id": "button_create_connection",
+                    "label": "Create connection",
+                    "action_kind": "action",
+                    "variant": "primary",
+                    "vortex": {
+                      "block": {
+                        "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                        "release_version": "1.0.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "connections_text_description",
+                    "text": "Manage connections and check their health.",
+                    "vortex": {
+                      "block": {
+                        "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.table",
+                  "props": {
+                    "presentation": "grid",
+                    "id": "connections_region",
+                    "title": "Connections",
+                    "empty_message": "No connections yet",
+                    "columns": [
+                      {
+                        "field": "vortex.system_directory:connection_instance.destination_key",
+                        "label": "Destination",
+                        "visible": true,
+                        "pin": "start"
+                      },
+                      {
+                        "field": "vortex.system_directory:connection_instance.state",
+                        "label": "State",
+                        "visible": true,
+                        "pin": "unpinned"
+                      },
+                      {
+                        "field": "vortex.system_directory:connection_instance.last_health_outcome",
+                        "label": "Health",
+                        "visible": true,
+                        "pin": "unpinned"
+                      }
+                    ],
+                    "row_actions": [
+                      {
+                        "event_id": "event_edit_connection",
+                        "label": "Edit",
+                        "icon": "workflow",
+                        "placement": "menu"
+                      },
+                      {
+                        "event_id": "event_health_connection",
+                        "label": "Check health",
+                        "icon": "workflow",
+                        "placement": "menu"
+                      },
+                      {
+                        "event_id": "event_revoke_connection",
+                        "label": "Revoke",
+                        "icon": "workflow",
+                        "placement": "menu"
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                        "release_version": "2.0.0"
+                      },
+                      "query": "vortex.system_directory:connection_instances",
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
+                      },
+                      "spreadsheet": {
+                        "enabled": false
+                      },
+                      "row_actions": {
+                        "enabled": true
+                      }
+                    },
+                    "row_click": {
+                      "event_id": "event_open_connection_detail",
+                      "mode": "flow"
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.form_container",
+                  "props": {
+                    "id": "form_create_connection",
+                    "title": "Create connection",
+                    "content": [
+                      {
+                        "type": "platform.renderer.choice_input",
+                        "props": {
+                          "id": "input_create_connection_connection_type_id",
+                          "name": "connection_type_key",
+                          "label": "Connection type",
+                          "required": true,
+                          "vortex": {
+                            "block": {
+                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                              "release_version": "1.2.0"
+                            },
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          },
+                          "options": []
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.text_input",
+                        "props": {
+                          "id": "input_create_connection_destination_key",
+                          "name": "destination_key",
+                          "label": "Destination",
+                          "required": true,
+                          "vortex": {
+                            "block": {
+                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "release_version": "1.0.0"
+                            },
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.connection_secret_input",
+                        "props": {
+                          "id": "input_create_connection_secret_reference_id",
+                          "name": "secret_reference_id",
+                          "label": "Secret",
+                          "required": true,
+                          "vortex": {
+                            "block": {
+                              "block_id": "771b25f4-168b-443c-8e9d-b6a1c1673b91",
+                              "release_version": "1.0.0"
+                            },
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                        "release_version": "1.0.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": false,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.form_container",
+                  "props": {
+                    "id": "form_edit_connection",
+                    "title": "Edit connection",
+                    "content": [
+                      {
+                        "type": "platform.renderer.text_input",
+                        "props": {
+                          "id": "input_edit_connection_destination_key",
+                          "name": "destination_key",
+                          "label": "Destination",
+                          "required": true,
+                          "vortex": {
+                            "block": {
+                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "release_version": "1.0.0"
+                            },
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.connection_secret_input",
+                        "props": {
+                          "id": "input_edit_connection_secret_reference_id",
+                          "name": "secret_reference_id",
+                          "label": "Secret",
+                          "required": false,
+                          "vortex": {
+                            "block": {
+                              "block_id": "771b25f4-168b-443c-8e9d-b6a1c1673b91",
+                              "release_version": "1.0.0"
+                            },
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          },
+                          "help_text": "Leave blank to keep the existing secret."
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                        "release_version": "1.0.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": false,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ],
+              "vortex": {
+                "shell": "shell_organisation_administration",
+                "slot_orders": {}
+              }
+            }
+          },
+          "content": []
+        }
+      },
+      {
+        "id": "page_connection_detail",
+        "key": "connection_detail",
+        "name": "Connection details",
+        "type": "detail",
+        "record_type": "vortex.system_directory:connection_instance",
+        "permission": "platform.organization.connections.manage",
+        "composition": {
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.record_detail",
+                  "props": {
+                    "id": "connection_detail",
+                    "heading_source": "field",
+                    "heading_field": "vortex.system_directory:connection_instance.destination_key",
+                    "title": "Connection details",
+                    "detail_fields": [
+                      {
+                        "field": "vortex.system_directory:connection_instance.destination_key",
+                        "label": "Destination"
+                      },
+                      {
+                        "field": "vortex.system_directory:connection_instance.connection_type_id",
+                        "label": "Connection type"
+                      },
+                      {
+                        "field": "vortex.system_directory:connection_instance.connection_type_version",
+                        "label": "Type version"
+                      },
+                      {
+                        "field": "vortex.system_directory:connection_instance.state",
+                        "label": "State"
+                      },
+                      {
+                        "field": "vortex.system_directory:connection_instance.last_health_outcome",
+                        "label": "Health"
+                      },
+                      {
+                        "field": "vortex.system_directory:connection_instance.secret_set",
+                        "label": "Secret set"
+                      },
+                      {
+                        "field": "vortex.system_directory:connection_instance.token_expires_at",
+                        "label": "Token expires"
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "e2569df0-2f10-4b20-b41d-177b66cd136c",
+                        "release_version": "1.2.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    },
+                    "row_action_event_id": "row_action_connection_detail"
+                  }
+                }
+              ],
+              "vortex": {
+                "shell": "shell_organisation_administration",
+                "slot_orders": {}
+              }
+            }
+          },
+          "content": []
+        }
       }
     ],
     "flows": [
@@ -2194,7 +2694,10 @@
                   },
                   "role_id": {
                     "kind": "literal",
-                    "literal": { "type": "json", "value": null }
+                    "literal": {
+                      "type": "json",
+                      "value": null
+                    }
                   },
                   "expires_at": {
                     "kind": "formula",
@@ -2609,6 +3112,610 @@
           }
         ],
         "outputs": {}
+      },
+      {
+        "id": "flow_create_connection",
+        "key": "create_connection",
+        "labels": {
+          "name": "Create connection"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {},
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "form",
+            "type": "interface.show_form",
+            "version": "1.0.0",
+            "properties": {
+              "form": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "form_create_connection"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "destination_key": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
+                  },
+                  "secret_reference_id": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
+                  },
+                  "connection_type_key": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "form_cancelled",
+            "type": "if",
+            "condition": {
+              "op": "not",
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "form",
+                  "key": "submitted"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "stop_form_cancelled",
+                "type": "stop",
+                "outcome": "cancelled"
+              }
+            ]
+          },
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.create_connection_instance"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "destination_key": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "form",
+                      "key": "values",
+                      "path": ["destination_key"]
+                    }
+                  },
+                  "secret_reference_id": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "form",
+                      "key": "values",
+                      "path": ["secret_reference_id"]
+                    }
+                  },
+                  "connection_type_key": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "form",
+                      "key": "values",
+                      "path": ["connection_type_key"]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "invitation_sent",
+            "type": "interface.show_message",
+            "version": "1.0.0",
+            "properties": {
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Connection created."
+                }
+              },
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Create connection"
+                }
+              },
+              "target": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "dialog"
+                }
+              },
+              "severity": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "success"
+                }
+              }
+            }
+          },
+          {
+            "id": "refresh_invitations",
+            "type": "interface.refresh",
+            "version": "1.0.0",
+            "properties": {
+              "component": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "connections_region"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
+          }
+        },
+        "errors": [],
+        "finally": []
+      },
+      {
+        "id": "flow_revoke_connection",
+        "key": "revoke_connection",
+        "labels": {
+          "name": "Revoke connection"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "connection_instance_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": ["vortex.system_directory:connection_instance"]
+          },
+          "expected_revision": {
+            "type": "whole_number",
+            "required": true
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.revoke_connection_instance"
+                }
+              }
+            }
+          },
+          {
+            "id": "refresh_revoke_connection",
+            "type": "interface.refresh",
+            "version": "1.0.0",
+            "properties": {
+              "component": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "connections_region"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
+          }
+        },
+        "errors": [],
+        "finally": []
+      },
+      {
+        "id": "flow_health_connection",
+        "key": "health_connection",
+        "labels": {
+          "name": "Check connection health"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "connection_instance_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": ["vortex.system_directory:connection_instance"]
+          },
+          "expected_revision": {
+            "type": "whole_number",
+            "required": true
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.health_check_connection_instance"
+                }
+              }
+            }
+          },
+          {
+            "id": "refresh_health_connection",
+            "type": "interface.refresh",
+            "version": "1.0.0",
+            "properties": {
+              "component": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "connections_region"
+                }
+              }
+            }
+          },
+          {
+            "id": "health_result_message",
+            "type": "interface.show_message",
+            "version": "1.0.0",
+            "properties": {
+              "message": {
+                "kind": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "call",
+                  "key": "result",
+                  "path": ["health_outcome"]
+                }
+              },
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Connection health"
+                }
+              },
+              "target": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "dialog"
+                }
+              },
+              "severity": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "success"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
+          }
+        },
+        "errors": [],
+        "finally": []
+      },
+      {
+        "id": "flow_edit_connection",
+        "key": "edit_connection",
+        "labels": {
+          "name": "Edit connection"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "connection_instance_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": ["vortex.system_directory:connection_instance"]
+          },
+          "expected_revision": {
+            "type": "whole_number",
+            "required": true
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "form",
+            "type": "interface.show_form",
+            "version": "1.0.0",
+            "properties": {
+              "form": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "form_edit_connection"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "destination_key": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
+                  },
+                  "secret_reference_id": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "form_cancelled",
+            "type": "if",
+            "condition": {
+              "op": "not",
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "form",
+                  "key": "submitted"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "stop_form_cancelled",
+                "type": "stop",
+                "outcome": "cancelled"
+              }
+            ]
+          },
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.edit_connection_instance"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "connection_instance_id": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "connection_instance_id"
+                    }
+                  },
+                  "expected_revision": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "expected_revision"
+                    }
+                  },
+                  "destination_key": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "form",
+                      "key": "values",
+                      "path": ["destination_key"]
+                    }
+                  },
+                  "secret_reference_id": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "form",
+                      "key": "values",
+                      "path": ["secret_reference_id"]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "refresh_invitations",
+            "type": "interface.refresh",
+            "version": "1.0.0",
+            "properties": {
+              "component": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "connections_region"
+                }
+              }
+            }
+          },
+          {
+            "id": "invitation_sent",
+            "type": "interface.show_message",
+            "version": "1.0.0",
+            "properties": {
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Connection updated."
+                }
+              },
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Edit connection"
+                }
+              },
+              "target": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "dialog"
+                }
+              },
+              "severity": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "success"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "result": {
+            "type": "json",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "call",
+                "key": "result"
+              }
+            }
+          }
+        },
+        "errors": [],
+        "finally": []
+      },
+      {
+        "id": "flow_open_connection_detail",
+        "key": "open_connection_detail",
+        "labels": {
+          "name": "Open connection"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": ["vortex.system_directory:connection_instance"]
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "navigate",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "connection_detail"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ inputs.record_id }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {},
+        "errors": [],
+        "finally": []
       }
     ],
     "flow_bindings": [
@@ -2837,6 +3944,113 @@
         "event": "action",
         "flow": "navigate_new_privacy_request",
         "inputs": {},
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
+        }
+      },
+      {
+        "id": "binding_revoke_connection",
+        "control": "connections_region",
+        "event_id": "event_revoke_connection",
+        "event": "row_action",
+        "flow": "flow_revoke_connection",
+        "inputs": {
+          "connection_instance_id": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "expected_revision": {
+            "kind": "caller",
+            "name": "revision"
+          }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
+        }
+      },
+      {
+        "id": "binding_health_connection",
+        "control": "connections_region",
+        "event_id": "event_health_connection",
+        "event": "row_action",
+        "flow": "flow_health_connection",
+        "inputs": {
+          "connection_instance_id": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "expected_revision": {
+            "kind": "caller",
+            "name": "revision"
+          }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
+        }
+      },
+      {
+        "id": "binding_create_connection",
+        "control": "button_create_connection",
+        "event_id": "event_create_connection",
+        "event": "action",
+        "flow": "flow_create_connection",
+        "inputs": {},
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
+        }
+      },
+      {
+        "id": "binding_edit_connection",
+        "control": "connections_region",
+        "event_id": "event_edit_connection",
+        "event": "row_action",
+        "flow": "flow_edit_connection",
+        "inputs": {
+          "connection_instance_id": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "expected_revision": {
+            "kind": "caller",
+            "name": "revision"
+          }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
+        }
+      },
+      {
+        "id": "binding_open_connection_detail",
+        "control": "connections_region",
+        "event_id": "event_open_connection_detail",
+        "event": "row_clicked",
+        "flow": "flow_open_connection_detail",
+        "inputs": {
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        },
         "settings": {
           "condition": null,
           "debounceMs": 0,

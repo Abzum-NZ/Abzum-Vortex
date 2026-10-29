@@ -6,6 +6,7 @@ import { jsonValueSchema } from "../catalogue/common";
 import { fieldIdSchema, recordIdSchema, revisionSchema } from "../catalogue/identifiers";
 import { sameId } from "../catalogue/runtime-primitives";
 import type { ApplicationSearch } from "../definition/application-contracts";
+import type { ModuleField } from "../definition/module-contracts";
 import { activeApplicationInstallationSchema } from "../files/storage";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import { protectedQueryRowCapabilitiesSchema } from "../queries/protected-query-contracts";
@@ -16,6 +17,7 @@ import {
 } from "./application-search";
 import { searchDocumentSchemaVersion, type SearchDocument } from "./document-store";
 import { literalSearchRequiredTokens } from "./literal-search";
+import { splitSearchFilters } from "./search-filters";
 
 const candidateBatchSize = 1_000;
 const firstRecordId = "00000000-0000-0000-0000-000000000000";
@@ -48,6 +50,7 @@ export type InstalledSearchModule = Readonly<{
   rootId: string;
   releaseRevision: number;
   recordTypeIds: readonly string[];
+  recordTypeFields: readonly Readonly<{ recordTypeId: string; fields: readonly ModuleField[] }>[];
 }>;
 
 /** Search one installed application inside the caller's validated human transaction. */
@@ -64,8 +67,12 @@ export const searchInstalledApplication = async (
   const { transaction, scope, configuration, expression } = input;
   const applicationRootId = scope.applicationRootId;
   if (applicationRootId === undefined) throw new Error("SEARCH_SCOPE_UNAVAILABLE");
-  const requiredTokens = literalSearchRequiredTokens(expression);
-  if (requiredTokens === undefined) return { kind: "refused" };
+  const split = splitSearchFilters(expression);
+  if (split === undefined || (split.literal === "" && split.filters.length === 0))
+    return { kind: "refused", reason: "Check the search expression." };
+  const requiredTokens = split.literal === "" ? [] : literalSearchRequiredTokens(split.literal);
+  if (requiredTokens === undefined)
+    return { kind: "refused", reason: "Check the search expression." };
 
   // Keyset pages cannot reveal how many hidden records the index contains. Exact
   // current Record reads decide which matches may leave the server.
@@ -109,6 +116,11 @@ export const searchInstalledApplication = async (
     scope,
     configuration,
     expression,
+    fieldsByRecordType: new Map(
+      input.modules.flatMap((module) =>
+        module.recordTypeFields.map((record) => [record.recordTypeId.toLowerCase(), record.fields]),
+      ),
+    ),
     candidateBatches,
     readCurrentRecords: async (request): Promise<ReadonlyMap<string, ApplicationSearchRecord>> => {
       const current = new Map<string, ApplicationSearchRecord>();

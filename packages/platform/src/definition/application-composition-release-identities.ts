@@ -13,6 +13,13 @@ export type PlatformBlockReleaseIdentity = Readonly<{
 }>;
 
 export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
+  CONNECTION_SECRET_INPUT_BLOCK_RELEASE: {
+    blockId: "771b25f4-168b-443c-8e9d-b6a1c1673b91",
+    key: "platform.form.connection_secret_input",
+    rendererKey: "platform.renderer.connection_secret_input",
+    releaseVersion: "1.0.0",
+    contentFingerprint: "sha256:159d51f8da8a237ad601eb87555055088597f7adc4a29cc3bf2ca19e6bd0542f",
+  },
   QUERY_NOTICE_BLOCK_RELEASE: {
     blockId: "69e284dd-e253-484a-8aad-676026eebf0e",
     key: "platform.display.query_notice",
