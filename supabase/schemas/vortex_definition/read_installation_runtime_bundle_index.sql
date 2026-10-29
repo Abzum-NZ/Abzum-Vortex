@@ -18,7 +18,7 @@ begin
     or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid
     or p_application_release_revision is null
     or p_application_release_revision not between 1 and 9007199254740991
-    or p_bundle_format_version is distinct from 2 then
+    or p_bundle_format_version is distinct from 3 then
     raise exception using errcode = '22023',
       message = 'Installation runtime bundle key is invalid';
   end if;

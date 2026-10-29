@@ -102,21 +102,32 @@ export const fieldInputSourceField = (
         }
       : undefined;
   };
+  // The field's options source: a parent field that narrows its options, and each option's parents.
+  const optionsSource = (
+    typeof settings.optionsSource === "object" && settings.optionsSource !== null
+      ? settings.optionsSource
+      : {}
+  ) as FieldInputJson;
+  const optionParents = (
+    typeof optionsSource.optionParents === "object" && optionsSource.optionParents !== null
+      ? optionsSource.optionParents
+      : {}
+  ) as FieldInputJson;
   const choices =
     (type === "choice" || type === "several_choices") && Array.isArray(settings.options)
       ? (settings.options as FieldInputJson[]).map((option) => ({
           key: String(option.value),
           label: String(option.label),
-          ...(Array.isArray(option.parentValues)
-            ? { parentValues: (option.parentValues as unknown[]).map(String) }
+          ...(Array.isArray(optionParents[String(option.value)])
+            ? {
+                parentValues: (optionParents[String(option.value)] as unknown[]).map(String),
+              }
             : {}),
         }))
       : [];
   const dependsOn =
-    (type === "link" || type === "choice") &&
-    typeof settings.dependsOn === "object" &&
-    settings.dependsOn !== null
-      ? (settings.dependsOn as FieldInputJson)
+    (type === "link" || type === "choice") && optionsSource.parentFieldId !== undefined
+      ? optionsSource
       : undefined;
   const parent = dependsOn === undefined ? undefined : parentOf(String(dependsOn.parentFieldId));
   if (dependsOn !== undefined && parent === undefined) return undefined;
@@ -266,7 +277,7 @@ export const createApplicationResolutionSnapshot = (
   const identities = [...input.identities].sort((left, right) =>
     compareCanonicalStrings(identityOrder(left), identityOrder(right)),
   );
-  const evidence = { contractVersion: "3.0.0" as const, definitions, identities };
+  const evidence = { contractVersion: "4.0.0" as const, definitions, identities };
   return definitionResolutionSnapshotSchema.parse({
     ...evidence,
     fingerprint: fingerprintCanonicalValue(evidence),

@@ -32,21 +32,15 @@ const dependencySubject = (entry: z.infer<typeof exactDefinitionDependencySchema
             ? `${entry.kind}:${entry.applicationRootId}:${entry.queryId}`
             : entry.kind === "module_query"
               ? `${entry.kind}:${entry.moduleRootId}:${entry.queryId}`
-              : entry.kind === "application_form"
-                ? `${entry.kind}:${entry.applicationRootId}:${entry.formId}`
-                : entry.kind === "application_workflow"
-                  ? `${entry.kind}:${entry.applicationRootId}:${entry.workflowId}`
-                  : entry.kind === "application_action"
-                    ? `${entry.kind}:${entry.applicationRootId}:${entry.actionId}`
-                    : entry.kind === "protected_operation"
-                      ? `${entry.kind}:${entry.operation.owner.kind}:${
-                          entry.operation.owner.kind === "application"
-                            ? entry.operation.owner.applicationRootId
-                            : entry.operation.owner.kind === "module"
-                              ? entry.operation.owner.moduleRootId
-                              : entry.operation.owner.serviceId
-                        }:${entry.operation.operationId}`
-                      : `${entry.kind}:${entry.key}`
+              : entry.kind === "protected_operation"
+                ? `${entry.kind}:${entry.operation.owner.kind}:${
+                    entry.operation.owner.kind === "application"
+                      ? entry.operation.owner.applicationRootId
+                      : entry.operation.owner.kind === "module"
+                        ? entry.operation.owner.moduleRootId
+                        : entry.operation.owner.serviceId
+                  }:${entry.operation.operationId}`
+                : `${entry.kind}:${entry.key}`
   ).toLowerCase();
 
 /** A complete manifest in canonical subject order, using the publication contract's exact entries. */
@@ -90,7 +84,7 @@ export const applicationDefinitionConsumerReadResultSchema = z
     content: applicationContentSchema,
     toolBundle: applicationToolBundleSchema,
     ...definitionConsumerReadResultCommon,
-    validationContractVersion: z.literal("3.0.0"),
+    validationContractVersion: z.literal("4.0.0"),
     platformCompatibilityVersion: applicationPlatformCompatibilityVersionSchema,
   })
   .strict()
@@ -103,14 +97,14 @@ export const applicationDefinitionConsumerReadResultSchema = z
       });
   });
 
-/** The Module 3.0.0 stored consumer projection and its exact immutable release identity. */
+/** The Module 4.0.0 stored consumer projection and its exact immutable release identity. */
 export const moduleDefinitionConsumerReadResultSchema = z
   .object({
     kind: z.literal("module"),
     rootId: moduleRootIdSchema,
     content: moduleContentSchema,
     ...definitionConsumerReadResultCommon,
-    validationContractVersion: z.literal("3.0.0"),
+    validationContractVersion: z.literal("4.0.0"),
   })
   .strict();
 

@@ -53,6 +53,8 @@ begin
   select locked.* into strict initial_authority
   from vortex_access.lock_application_installation_authority() as locked;
 
+  -- Detaching only retires bindings, so an installed release of an earlier definition contract
+  -- stays detachable: its identity is checked, never its contract version.
   if not exists (
     select 1
     from vortex_definition.roots as root
@@ -61,10 +63,8 @@ begin
       and root.organization_id = initial_authority.organization_id
       and root.kind = 'application'
       and release.release_revision = p_application_release_revision
-      and release.validation_contract_version = any (vortex_definition.accepted_contract_version('application'))
       and release.compilation_output #>> '{kind}' = 'application'
       and release.compilation_output #>> '{canonical,envelope,rootId}' = p_application_root_id::text
-      and release.compilation_output #>> '{validationContractVersion}' = any (vortex_definition.accepted_contract_version('application'))
   ) then
     raise exception using errcode = 'P0002',
       message = 'Exact Application release is unavailable';

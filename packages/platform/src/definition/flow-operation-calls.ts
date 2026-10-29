@@ -4,7 +4,7 @@ import {
   type PlatformServiceOperationCatalogueEntry,
 } from "../catalogue/platform-service-operation-catalogue";
 import type { DefinitionRuleFailureFamily } from "../catalogue/validation-errors";
-import { platformOperationKey } from "../workflows/default-flow-sources";
+import { platformOperationKey } from "../catalogue/platform-service-operation-catalogue";
 import {
   flowTaskChildLists,
   type FlowDefinition,

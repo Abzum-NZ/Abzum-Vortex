@@ -186,6 +186,7 @@ export const createDraftModuleOverlay = (
           rootId,
           anchorReleaseRevision: null,
           latestRelease: null,
+          supersededReleaseVersion: null,
         } as DefinitionPublicationCandidate["releaseHistory"]),
       savedConditionHistory: previous?.savedConditionHistory ?? [],
       latestPlatformPins: previous?.latestPlatformPins ?? [],

@@ -17,7 +17,7 @@ import {
 import { moduleContentSchema, moduleDraftSchema } from "./module-contracts";
 
 export const versionImpactSchema = z.enum(["patch", "minor", "major"]);
-export const moduleVersionImpactPolicyVersion = "3.0.0" as const;
+export const moduleVersionImpactPolicyVersion = "4.0.0" as const;
 export { stableDefinitionReleaseVersionSchema };
 
 export const versionImpactReasonCodes = [
@@ -117,6 +117,18 @@ export const versionImpactReasonSchema = z
   })
   .strict();
 
+/**
+ * The one reason a release answers when the release before it was published under an earlier
+ * definition contract: its content cannot be compared, so the new release is a major change.
+ */
+export const definitionContractChangedReason = (
+  kind: "application" | "module",
+): z.infer<typeof versionImpactReasonSchema> => ({
+  impact: "major",
+  code: "public_contract_changed",
+  location: { componentKind: kind, property: "definition" },
+});
+
 const textOrder = (left: string, right: string): number =>
   left < right ? -1 : left > right ? 1 : 0;
 const optionRank = <Value extends string>(options: readonly Value[], value: Value): number =>
@@ -174,17 +186,17 @@ const historyLimit = 10_000;
 export const applicationVersionImpactRequestSchema = z
   .object({
     kind: z.literal("application"),
-    validationContractVersion: z.literal("3.0.0"),
+    validationContractVersion: z.literal("4.0.0"),
     history: z.array(publishedApplicationDefinitionSchema).max(historyLimit),
     candidate: applicationDraftSchema,
   })
   .strict();
 
-/** Immutable Module history evidence; publication dispatch requires the exact 3.0.0 pair. */
+/** Immutable Module history evidence; publication dispatch requires the exact 4.0.0 pair. */
 export const moduleVersionImpactHistoryEntrySchema = z
   .object({
     publication: publishedModuleReferenceSchema.extend({
-      validationContractVersion: z.literal("3.0.0"),
+      validationContractVersion: z.literal("4.0.0"),
     }),
     content: moduleContentSchema,
     dependencyManifest: z.array(publishedDefinitionReferenceSchema),

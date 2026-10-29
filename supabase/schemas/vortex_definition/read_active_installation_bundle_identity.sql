@@ -90,7 +90,7 @@ begin
   before_identity:=identity_value;
   select stored.* into stored_bundle from vortex_definition.installation_runtime_bundles as stored
   where stored.organization_id=selected_org and stored.application_root_id=selected_app
-    and stored.application_release_revision=selected_revision and stored.bundle_format_version=2;
+    and stored.application_release_revision=selected_revision and stored.bundle_format_version=3;
   if found then
     current_manifest:=stored_bundle.source_manifest;
     select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
@@ -99,7 +99,7 @@ begin
       'resolutionFingerprint',module.value -> 'resolutionFingerprint')
       order by (module.value ->> 'rootId')::uuid)
     into manifest_pins from pg_catalog.jsonb_array_elements(current_manifest -> 'modules') as module(value);
-    if current_manifest ->> 'bundleFormatVersion' is distinct from '2'
+    if current_manifest ->> 'bundleFormatVersion' is distinct from '3'
       or current_manifest -> 'application' is distinct from registered_identity
       or current_manifest ->> 'pinFingerprint' is distinct from pin_hash
       or stored_bundle.pin_fingerprint is distinct from pin_hash
@@ -115,9 +115,9 @@ begin
       or (current_manifest #>> '{preparedRecordAccessPlan,mappingFingerprint}') !~ '^sha256:[a-f0-9]{64}$' then
       raise exception using errcode='23514', message='Active runtime bundle manifest differs';
     end if;
-    bundle_index:=vortex_definition.read_installation_runtime_bundle_index(selected_app,selected_revision,2);
+    bundle_index:=vortex_definition.read_installation_runtime_bundle_index(selected_app,selected_revision,3);
   else
-    -- Missing format2 takes a genuine locked active-only cold source path.
+    -- A missing format-3 bundle takes a genuine locked active-only cold source path.
     -- The mapping locker derives identity inline and cannot recurse into this reader.
     mapping:=vortex_definition.lock_active_installation_runtime_mapping_internal(before_identity);
     stable_plan:=vortex_record.resolve_active_bundle_record_access_plan_internal(before_identity);
@@ -133,7 +133,7 @@ begin
       'application',mapping -> 'application','modules',mapping -> 'modules',
       'preparedRecordAccessPlan',stable_plan);
   source_manifest := pg_catalog.jsonb_build_object(
-    'bundleFormatVersion', 2,
+    'bundleFormatVersion', 3,
     'application', pg_catalog.jsonb_build_object(
       'rootId', active_source #> '{application,rootId}',
       'definitionKey', active_source #> '{application,key}',
@@ -241,4 +241,4 @@ alter function vortex_definition.read_active_installation_bundle_identity() owne
 revoke all on function vortex_definition.read_active_installation_bundle_identity()
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_definition.read_active_installation_bundle_identity() to vortex_owner, vortex_request;
-comment on function vortex_definition.read_active_installation_bundle_identity() is 'Returns fresh active format2 identity and index, or a private exact locked active cold source for the same HUMAN request; carries no viewer permission decision.';
+comment on function vortex_definition.read_active_installation_bundle_identity() is 'Returns fresh active format-3 identity and index, or a private exact locked active cold source for the same HUMAN request; carries no viewer permission decision.';

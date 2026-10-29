@@ -1,4 +1,3 @@
-import { flowContractVersion } from "./flow-contracts";
 import type { SourceFlow } from "./flow-source-contracts";
 import type { ProtectedOperationDescriptor } from "../definition/application-flow-bindings";
 
@@ -45,7 +44,6 @@ export type DefaultSaveFlowInput = DefaultFlowIdentity &
  * a form binding maps both by name and no save is hidden in the page.
  */
 export const defaultSaveFlowSource = (input: DefaultSaveFlowInput): SourceFlow => ({
-  contractVersion: flowContractVersion,
   id: input.id,
   key: input.key,
   ...(input.description === undefined ? {} : { description: input.description }),
@@ -104,13 +102,6 @@ export type DefaultQueryFlowInput = DefaultFlowIdentity &
     recordType: string;
   }>;
 
-/**
- * The readable key a Call protected operation task uses for a registered platform-service
- * operation: the operation's own key under the platform namespace. A named action of a Module is
- * called by the action's own namespaced key, so neither is ever chosen by a release or an id.
- */
-export const platformOperationKey = (operationKey: string): string => `platform.${operationKey}`;
-
 export type DefaultOperationFlowInput = DefaultFlowIdentity &
   Readonly<{
     /** The operation's key: `platformOperationKey(...)` or a named action's namespaced key. */
@@ -129,7 +120,6 @@ export type DefaultOperationFlowInput = DefaultFlowIdentity &
  * shows each safely.
  */
 export const defaultOperationFlowSource = (input: DefaultOperationFlowInput): SourceFlow => ({
-  contractVersion: flowContractVersion,
   id: input.id,
   key: input.key,
   ...(input.description === undefined ? {} : { description: input.description }),

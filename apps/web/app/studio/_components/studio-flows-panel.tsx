@@ -66,8 +66,6 @@ export function StudioFlowsPanel({
                       ({
                         BeforeSave: "Before save",
                         Event: "On event",
-                        Schedule: "On schedule",
-                        IncomingMessage: "On message",
                       })[trigger.type],
                   )
                   .join(", "),

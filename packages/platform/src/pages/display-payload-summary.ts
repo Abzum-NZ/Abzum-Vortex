@@ -57,7 +57,7 @@ export const chartPayloadSchema = z
   .readonly();
 export type ChartPayload = z.output<typeof chartPayloadSchema>;
 
-export const queryNoticeSeverities = ["info", "success", "warning", "critical"] as const;
+export const queryNoticeSeverities = ["info", "success", "warning", "error"] as const;
 export type QueryNoticeSeverity = (typeof queryNoticeSeverities)[number];
 
 const noticeTextSchema = z.string().max(1_000_000);

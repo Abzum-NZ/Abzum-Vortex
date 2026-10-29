@@ -5,7 +5,7 @@ import {
   type ModulePlatformPermissionDeclaration,
   type PermissionDeclaration,
 } from "@vortex/platform/schema";
-import { organisationAdministrationPlatformPermissions } from "./organisation-administration/module";
+import { organisationAdministrationPlatformPermissions } from "./organisation-administration/platform-permissions";
 import { systemCorePlatformPermissions } from "./system-core/platform-permissions";
 
 export const platformPermissionOwnerId = platformIdSchema.parse(

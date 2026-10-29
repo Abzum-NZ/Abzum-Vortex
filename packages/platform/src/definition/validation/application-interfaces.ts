@@ -70,7 +70,7 @@ export function applicationInterfaceRules(scope: ApplicationScope): void {
       // A change or background start names one application-owned interactive flow entry point.
       // The flow commits exactly one piece of work besides pure and read steps, which decides
       // the shape: a Call protected operation task naming a named action is a named-action
-      // entry point, and a Run background flow task is an interface-started flow. A read names
+      // entry point, and a Run on back end task is an interface-started flow. A read names
       // a declared query.
       const targetQuery =
         target.kind === "query" ? queriesByKey.get(String(target.key)) : undefined;
@@ -113,7 +113,7 @@ export function applicationInterfaceRules(scope: ApplicationScope): void {
       const targetAction =
         calledOperationKey === undefined ? undefined : actions.get(calledOperationKey);
       const startedFlowId =
-        committingTask?.type === "flow.run_background" ? committingLiteral("flow") : undefined;
+        committingTask?.type === "backend.run" ? committingLiteral("flow") : undefined;
       const targetKind: "action" | "query" | "start" | undefined =
         target.kind === "query"
           ? "query"

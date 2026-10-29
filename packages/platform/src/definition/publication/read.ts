@@ -337,7 +337,7 @@ const compileConnectionTypeRelease = (
     },
   ];
   const resolutionEvidence = {
-    contractVersion: "3.0.0" as const,
+    contractVersion: "4.0.0" as const,
     definitions,
     identities: [],
   };

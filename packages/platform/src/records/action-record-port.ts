@@ -31,7 +31,7 @@ import {
 } from "./action-flow-effects";
 import {
   beginBeforeSaveRuleExecution,
-  parseBeforeSaveFlowSet,
+  beforeSaveFlowSetOf,
   type BeforeSaveRuleExecution,
 } from "./before-save-rules";
 import {
@@ -249,7 +249,7 @@ const creationFinalValues = (
       return {
         reason: `the created record ${creation.ordinal} is not a valid save command: ${describeIssues(command.error.issues.map((value) => ({ code: value.code, path: value.path.map(String) })))}`,
       };
-    const ruleSet = parseBeforeSaveFlowSet(target.beforeSaveFlows, target.recordTypeId);
+    const ruleSet = beforeSaveFlowSetOf(target.beforeSaveFlows, target.recordTypeId);
     if (ruleSet === undefined)
       return { reason: `the created record ${creation.ordinal} has unavailable before-save rules` };
     const execution = beginBeforeSaveRuleExecution(ruleSet);
@@ -702,7 +702,7 @@ const planNamedAction = async (
   )
     return restart;
 
-  const subjectRuleSet = parseBeforeSaveFlowSet(
+  const subjectRuleSet = beforeSaveFlowSetOf(
     prepared.beforeSaveFlows,
     prepared.recordType.recordTypeId,
   );
@@ -765,10 +765,7 @@ const planNamedAction = async (
   if (totalPreparation.outcome === "prepared") {
     closureRules = new Map();
     for (const record of totalPreparation.records) {
-      const ruleSet = parseBeforeSaveFlowSet(
-        record.beforeSaveFlows,
-        record.recordType.recordTypeId,
-      );
+      const ruleSet = beforeSaveFlowSetOf(record.beforeSaveFlows, record.recordType.recordTypeId);
       if (ruleSet === undefined)
         return safeRefusal(
           prepared.correlationId,

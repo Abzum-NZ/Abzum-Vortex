@@ -62,7 +62,7 @@ export type StudioFlowCommand =
       taskPath: StudioFlowPath;
       direction: "up" | "down";
     }>
-  /** Adds the branch a decision is missing (Else, Otherwise) or another parallel branch, starting with one step. */
+  /** Adds the branch a decision is missing (Else, Otherwise), starting with one step. */
   | Readonly<{
       kind: "add_branch";
       taskId: string;
@@ -299,13 +299,20 @@ const seededTask = (
     const seed =
       definition.type === "rule.refuse" && key === "reason"
         ? refusalReasonSeed
-        : definition.type === "interface.show_message" && key === "title"
-          ? // A message is headed by what the person was doing: the flow's name.
-            text(flow.labels?.name ?? "")
-          : seedValue(declaration.type, flow, source);
+        : definition.type === "interface.show_message" && key === "target"
+          ? // The page shows messages in a dialog today.
+            text("dialog")
+          : definition.type === "interface.show_message" && key === "severity"
+            ? text("info")
+            : definition.type === "data.calculate" && key === "result_type"
+              ? text("decimal_number")
+              : seedValue(declaration.type, flow, source);
     if (seed === undefined) return undefined;
     properties[key] = seed;
   }
+  // A dialog is headed by what the person was doing: the flow's name.
+  if (definition.type === "interface.show_message")
+    properties.title = text(flow.labels?.name ?? "");
   return { id, type: definition.type, version: definition.version, properties };
 };
 
@@ -531,9 +538,7 @@ export const projectStudioFlowStepActions = (
           ? "Else"
           : task.type === "switch" && "cases" in task && task.default === undefined
             ? "Otherwise"
-            : task.type === "parallel" && "branches" in task
-              ? `Branch ${task.branches.length + 1}`
-              : null;
+            : null;
     return {
       stepTypes: types,
       canMoveUp: typeof index === "number" && index > 0,
@@ -732,13 +737,11 @@ export const applyStudioFlowCommand = (
           owner.else = [task as SourceFlowTask];
         else if (owner.type === "switch" && "cases" in owner && owner.default === undefined)
           owner.default = [task as SourceFlowTask];
-        else if (owner.type === "parallel" && "branches" in owner)
-          owner.branches.push([task as SourceFlowTask]);
         else
           return {
             kind: "unsupported",
             reason:
-              "This step has no branch to add. Only a decision without Else or Otherwise, or a parallel step, can get one.",
+              "This step has no branch to add. Only a decision without Else or Otherwise can get one.",
           };
         return done((task as SourceFlowTask).id);
       }

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { sameId } from "../catalogue/runtime-primitives";
+import { optionParentValues, optionsSourceNarrowing } from "../definition/field-options-source";
 import type { RecordTypeDefinition } from "../definition/module-contracts";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
 
@@ -54,13 +55,11 @@ export const firstFieldDependencyRefusal = async (
     return stored === undefined ? undefined : existingValues[stored];
   };
   for (const field of recordType.fields) {
-    if (
-      (field.type !== "link" && field.type !== "choice") ||
-      field.settings.dependsOn === undefined
-    )
-      continue;
+    if (field.type !== "link" && field.type !== "choice") continue;
+    const narrowing = optionsSourceNarrowing(field.settings.optionsSource);
+    if (narrowing === undefined) continue;
     const childFieldId = String(field.fieldId);
-    const { parentFieldId } = field.settings.dependsOn;
+    const { parentFieldId } = narrowing;
     if (
       !submitted.has(childFieldId.toLowerCase()) &&
       !submitted.has(String(parentFieldId).toLowerCase())
@@ -77,12 +76,16 @@ export const firstFieldDependencyRefusal = async (
       const parentChosen = effective(String(parentFieldId));
       if (typeof parentChosen !== "string") return refusal("parent_empty");
       const option = field.settings.options.find((candidate) => candidate.value === chosen);
-      if (option?.parentValues?.includes(parentChosen) !== true) return refusal("child_mismatch");
+      const parents =
+        option === undefined
+          ? undefined
+          : optionParentValues(field.settings.optionsSource, option.value);
+      if (parents?.includes(parentChosen) !== true) return refusal("child_mismatch");
       continue;
     }
     const child = linkValue(effective(childFieldId));
     if (child === undefined) continue;
-    const { filterFieldId } = field.settings.dependsOn;
+    const filterFieldId = narrowing.filterFieldId!;
     const parent = linkValue(effective(String(parentFieldId)));
     if (parent === undefined) return refusal("parent_empty");
     // The child is read as the saver reads it.

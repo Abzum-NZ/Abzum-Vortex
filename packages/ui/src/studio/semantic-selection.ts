@@ -91,10 +91,6 @@ export const studioFlowTaskEntries = (
         walk(task.default, [...taskPath, "default"]);
       }
       if ("tasks" in task) walk(task.tasks, [...taskPath, "tasks"]);
-      if ("branches" in task)
-        task.branches.forEach((branch, branchIndex) =>
-          walk(branch, [...taskPath, "branches", branchIndex]),
-        );
     });
   };
   walk(flow.tasks, ["tasks"]);

@@ -36,12 +36,84 @@ Where these sections conflict with this document, this document wins until each 
 | 10 | Agents build applications through the same operations | Every builder operation is one typed, permission-checked operation used by the designer, the API and MCP, including preview installation. |
 | 11 | Building, installing and system applications are permission-gated | Only roles with the builder permissions can change definitions. System applications are customisable by them, but cannot be uninstalled. |
 | 12 | shadcn/ui on Base UI is the component base | Every Vortex interface primitive is a shadcn/ui component built on Base UI, styled with Tailwind CSS and themed by the existing Vortex theme engine. |
+| A | Amendment, 29 October 2026: Studio flows | One interpreter runs one compiled plan per release: page channels run page steps in the browser and call the server once per server segment, headless channels keep the server driver, and back-end work runs through a back-end adapter (simulated now, Kestra later). Contract 4 holds only what runs. |
+
+## Amendment A (29 October 2026) — Studio flows: one compiled plan, page steps in the page, a back-end adapter
+
+**Status:** owner-approved direction of 29 October 2026 (Epic 1, [#3660](https://github.com/Abzum-NZ/Abzum-Vortex/issues/3660); recorded by [#3725](https://github.com/Abzum-NZ/Abzum-Vortex/issues/3725)). Where it conflicts with Decisions 1, 3 and 9 below, this amendment wins. It also replaces the earlier workflow-foundation decision that every flow is server-driven with no in-page interpreter.
+
+### What runs today, and what this amendment changes
+
+- **Today** every flow is driven by the server orchestrator, even a flow that only navigates. The page renders the intents the server returns (Show message, Confirm, Show form, Navigate) and resumes with a continuation. No interpreter runs in the browser, so Decision 3's browser feedback is not built.
+- **Today** no durable, Schedule, IncomingMessage or background start runs. The Kestra compiler, the start-intent chain, the protected-node callback and the node-level run-as model have no live caller and are deleted ([#3752](https://github.com/Abzum-NZ/Abzum-Vortex/issues/3752)). Git history keeps them; the Kestra adapter is rebuilt later behind the back-end adapter interface on contract 4.
+
+### The decisions
+
+1. **One interpreter, one compiled plan, two drivers.** Publication and the runtime use one compiler that turns each flow into a plan of **page segments** (page steps), **server segments** (server steps, each one request and one transaction) and **back-end steps**, with the path guard that reaches each server segment. The plan is built once per release and cached with the installation's runtime bundle; it is never stored. Page channels (the page, WebMCP) run page segments in the browser and call the server once per server segment. Headless channels (external API and MCP) keep the server driver: the orchestrator's drive loop returns intents and continuations. One interpreter with two drivers chosen by channel is one engine, not two.
+2. **S1: Run on back end is a step with a back-end adapter.** `backend.run` (modes `await` and `start`) replaces Run background flow. The `simulated` adapter is the only one now; Kestra and n8n are later adapters behind the same interface, with no change to flows or to Studio. The simulated child runs in its own transaction after the calling segment commits, as Kestra will; `start` mode runs after the reply. `backend.run` ends a server segment.
+3. **S2: every action-bearing event has a default flow**, generated as visible steps (validate, rules, save, message, navigate or refresh). What a builder sees is what runs; the page holds no hidden behaviour.
+4. **S3: page rule steps are feedback only.** Authority stays in BeforeSave flows and server segments. Every server segment re-checks its path guard.
+5. **S4: reads stay data bindings, not flows.** Lists, paging, filters, expansion and choices are query bindings whose filters may read page values. Only the `load` and `refresh` events may run flows; an opt-in rows flow is a read-only exception with the same paging limits.
+6. **Kept from the workflow foundation:** one admission gate, now admitting server segments; named actions are flows only; guided forms run flows on their events, while their steps stay page composition edited on the canvas. **Deferred to the back-end epic:** the run ledger, event starts under system authority, IncomingMessage, durable Event triggers, registration at install, run-as grants and the Inbox.
+7. **Event names keep their contract names.** The 53 shipped bindings keep `action`, `form_submit`, `row_action`, `row_clicked` and the rest; Studio shows friendly labels.
+
+### Behaviour the plan carries (Studio flows design)
+
+- **Events.** Every interaction is a component event bound to exactly one flow. A binding is (component, event) → flow plus optional condition, debounce (0 to 250 ms), concurrency (`ignore_while_running`, `latest_wins`, `queue`), exclusive scope (`none`, `form`, `page`) and timeout. Defaults live in the definition. `latest_wins` is allowed only on a binding whose plan has no change segment; an exclusive binding needs a timeout. Values set by a flow fire `changed` marked as flow-set; a flow is not re-entered for the same component in one cycle, and a cycle stops after 3 levels with a visible reason.
+- **Options.** A choice or link field has one options source on the field (data model): a fixed list, a query binding with declared inputs, or an options flow returning value, label and description. Options run under the person's permissions, load on demand (keyset 40, 200 maximum), are cached per input values, and the save re-checks membership inside its transaction. An options flow holds only pure and read steps.
+- **Agents.** Agents act through the same page model: field, option, button, grid and page tools generated from the definition, through the same gate (channel `webmcp` in the person's page, `mcp` for external clients). A hidden field is not a tool; a read-only field refuses; WebMCP never skips a confirmation. The separate agent tool bundle is deleted.
+- **Grid.** Rows load through query bindings; every grid gesture (open, cell edit, paste and fill, undo, card move, quick add, bulk action, selection) is an event bound to a flow. Up to 200 selected ids is one transaction and one set-based write; "all matching" beyond 200 runs as `backend.run` in `start` mode with progress and per-batch transactions.
+- **Order.** One flow per component event. UI reactions (show or hide, required, read-only, dependent options, calculated values, filters) are declarations, not flows. BeforeSave flows run in the declared order of the record type's ordered list inside the save transaction; any refusal stops the save and warnings are collected. After-save subscribers (`Event` trigger) are independent, run once each on the simulated back end after commit, and may declare "run after". The page runner settles in-flight change flows before a submit (up to 2 s; beyond that the submit is refused with the reason, typed values kept).
+- **Page values and messages.** A page declares typed page values (number, money, text, boolean, list); flows write them with `set_value`. They live only in the page and are never trusted by the server. `show_message` has a target (toast, banner, inline under a component, a message slot by placement id) and a severity (info, success, warning, error), plus one optional action bound to a flow; `clear_message` removes a message. `data.calculate` declares its result type. Formulas are typed text parsed in Studio only, compiled to closures over the typed tree and never evaluated as code.
+- **Studio.** One node registry says where each step runs (`runs: page, server, backend`); the palette offers a step only where it runs, and publish refuses a step with no implementation where it is placed. Test runs use the real runtime on the preview copy; only the back end is simulated.
+- **Speed.** Page-only flows make no request; one server segment is one request and one transaction; `for_each` over record steps compiles to one set-based change.
+
+### Contract 4
+
+One definition contract version, `4.0.0`, replaces 3.0.0 for applications, modules and record types; the old version is no longer accepted. It holds only what Epic 1 runs:
+
+- **Bindings** gain `condition`, `debounceMs`, `concurrency`, `exclusive` and `timeoutMs`; the channel set gains `webmcp`. The node-level execution binding and the second effect vocabulary are removed.
+- **Events** gain `field_focus_lost`, `options_requested` (the one options event), `form_cancel`, `record_loaded` and `batch_edit`; every existing name stays.
+- **BeforeSave** has no `priority`: order is the record type's ordered rule list. The `transition` operation is removed; `delete` and `restore` are added and refused at publication until the one record writer applies rules to them.
+- **Registry** tasks carry `runs: {page, server, backend}` flags, and the page and server implementation maps are typed from them. Added: `backend.run`, `interface.set_value`, `interface.clear_message`, `interface.validate_form`; `show_message` target, severity and action; a declared result type on `data.calculate`. Removed: `flow.run_background`, `connection.call`, `message.acknowledge`, `file.attach`, `file.move`, `file.export` and the durable-only control tasks (`parallel`, `wait_until`, `wait_for_person`). Execution kind `durable` and triggers `Schedule` and `IncomingMessage` are removed; `Event` stays.
+- **References** gain `page` (a declared page value) and `form` (a field of a named form on the page). A server segment refuses a `page` reference: only typed caller inputs cross.
+- **Options source** is one declaration on each choice or link field and absorbs `dependsOn` and choice `parentValues`.
+- **One of each:** one flow id brand, one structure rule set, no unused flow-target dependency kinds, no run-as vocabulary without a reader.
+- **Not yet runnable** steps, settings and sources are refused at publication by name and hidden in the palette by the `runs` flags until their runtime lands; nothing that already runs is refused.
+- **Stored definitions** are forward-migrated: one migration converts every draft; every active installation moves to a contract-4 release through the existing publication and adoption operations; old releases stay as sealed history and restoring one is refused with a reason.
+
+### Segment trust rules
+
+1. A value returned by one segment and sent to the next through the page is a caller input: the server re-validates it by type and access and never trusts it as its own output.
+2. A guard over page-only values (a page value, a confirmation answer) proves consistency, not authority. Studio warns when a refusing rule exists only in the page.
+3. The browser plan holds only page steps and segment stubs (id, input and output types, labels): no operation inputs, server-step properties or secrets.
+4. Admission refusals stay neutral (`refused`, no detail); business refusals (BeforeSave, an option no longer allowed) carry their reason.
+5. The idempotency key is (gesture or form-instance id, segment id, iteration path), shared by people and agents. A form's gesture id is its form-instance submission id, minted when the form opens.
+6. Each server segment carries a fingerprint of its compiled server steps and its input and output types. The gate admits a segment whose fingerprint is unchanged in the current release, so publishing does not refuse every open form.
+
+### Decisions taken on their recommended defaults
+
+| # | Decision |
+| --- | --- |
+| D1 | Studio-built drafts and installations are forward-migrated to contract 4, not reset. |
+| D2 | The options source lives on the field, so every writer (pages, import, API, agents) is checked. |
+| D3 | After-save subscribers run now, on the simulated back end. |
+| D4 | The simulated back-end child runs in its own transaction after the caller commits. |
+| D5 | Formulas are typed text with autocomplete, parsed in Studio only, compiled to closures. |
+| D6 | Up to 200 selected ids is one transaction; "all matching" runs as `backend.run` in `start` mode. |
+| D7 | A save while a lookup runs longer than 2 s is refused with the reason, keeping typed values. |
+| A4 | The dead chains (durable and Kestra, start intents, node-level run-as, the runtime-bundle trigger index, `executeAction`) are deleted before contract 4, not converted. |
+| A5 | Contract 4 holds only what Epic 1 runs; a registered task that runs nowhere is removed, not kept refused. Later epics add each back with its runner. |
+| A8 | Rule-like declarations outside flows stay declarations: pipeline transitions, choice-option `requiredPermissionId`, sharing and visibility conditions, conditional formatting. |
+| A9 | The SQL condition evaluator (`evaluate_typed_condition_node_internal`) and the query filter compiler (`compile_query_filter_internal`) stay: they are read-time query predicates, not a second flow evaluator. One TypeScript checker, one TypeScript evaluator and one SQL predicate compiler each keep a distinct job. |
 
 ## Decision 1 — One flow definition, one Vortex flow engine, Kestra for durable work
 
 ### The flow definition
 
-A flow is stored data inside the release of the module or application that owns it. It is never code. Its shape follows the Kestra flow definition, so its durable form compiles to a Kestra flow.
+A flow is stored data inside the release of the module or application that owns it. It is never code. Its shape follows the Kestra flow definition, so a later Kestra adapter can run it.
+
+> Contract 4 ([Amendment A](#amendment-a-29-october-2026--studio-flows-one-compiled-plan-page-steps-in-the-page-a-back-end-adapter)) removes the `durable` execution kind, the `Schedule` and `IncomingMessage` triggers, Run background flow and the durable-only control tasks; the rows below that name them describe the back-end epic's direction, not contract 4.
 
 | Field | Meaning |
 | --- | --- |
@@ -80,7 +152,7 @@ Cycles between flows are refused at publication. Transaction flows may use only 
 
 ### The task registry
 
-Every task type is registered once (#983) with:
+Every task type is registered once (#983). Contract 4 replaces the run locations below with `runs: {page, server, backend}` flags and typed implementation maps (Amendment A). The original registration held:
 - its version;
 - its run locations: `browser`; `server`, a protected operation in its own short transaction; `transaction`, only inside the owning record save; `durable`, on Kestra;
 - its effect class: pure, read, change, background start or interface;
@@ -91,21 +163,17 @@ Publication refuses a flow that puts a task where it cannot run. Work moves betw
 
 ### The Vortex flow engine
 
-The flow engine is built in-house and is part of the application. It has three parts:
-- a pure interpreter in `packages/platform/src/rules`, shared by the browser and the server;
-- a server orchestrator in `packages/platform/src/definition`, which runs protected tasks through the one protected-operation executor (#989);
-- a browser runner in `ui`, which runs interface tasks (#1013).
+> Superseded by [Amendment A](#amendment-a-29-october-2026--studio-flows-one-compiled-plan-page-steps-in-the-page-a-back-end-adapter): one interpreter runs one compiled plan with a page driver and a server driver; page steps run in the page and each server segment is one request.
 
-**Who drives a flow:**
-- A flow whose reachable tasks are all browser or pure tasks runs entirely in the page.
-- Any flow that contains a protected task is driven by the server orchestrator from its first task.
-- At a browser task, such as Show form, Confirm or Show message, the server returns a typed intent and a continuation. The continuation is a private draft (#68) or an encrypted, expiring token. The page or MCP client resumes the flow with it.
-- The server issues the run id.
-- Duplicate-protection keys are (run id, task path, iteration).
+The flow engine is built in-house and is part of the application. It has two parts today:
+- a pure interpreter in `packages/platform/src/rules`;
+- a server orchestrator in `packages/platform/src/definition`, which runs protected tasks through the one protected-operation executor (#989).
+
+**Who drives a flow today:** the server orchestrator drives every flow from its first task. At a page task, such as Show form, Confirm or Show message, the server returns a typed intent and a continuation, and the page or MCP client resumes the flow with it. No interpreter runs in the browser yet; the page driver of Amendment A adds it.
 
 **When a protected task is refused:** a refused, conflict or invalid outcome sends the flow to its `errors` handler, unless the task sets `allowRefusal: true`. In that case the flow branches on `{{ outputs.task.outcome }}`.
 
-**Background runs** re-run in full on redelivery. Duplicate keys (occurrence, installation revision, flow, task path, iteration) make every protected effect happen once.
+**Back-end runs** (Amendment A) re-run in full on redelivery. Duplicate keys make every protected effect happen once.
 
 **Options considered and rejected:**
 
@@ -130,15 +198,14 @@ The flow engine is built in-house and is part of the application. It has three p
 ### One start path
 
 1. A binding (button, menu, row action, form submit, agent tool, interface operation) starts a flow. Web controls, MCP tools and interface operations use the same entry point (#1014, #1097).
-2. The server orchestrator drives any flow that contains a protected task (see "Who drives a flow").
-3. A **Run background flow** task commits a start intent with typed inputs, and the start is dispatched to Kestra (#666, #667, #1088). Kestra runs waits, human tasks, schedules, retries and external calls. It calls back into Vortex only for protected operations and for evaluating formulas (#664).
-4. Record events and verified incoming messages start `background` flows on the server. Schedules start `durable` flows on Kestra.
+2. Each server segment of the compiled plan passes the one admission gate (Amendment A).
+3. A **Run on back end** step (`backend.run`) runs a flow through the back-end adapter: the simulated adapter now, Kestra later. Waits, human tasks, schedules, retries and external calls arrive with the Kestra adapter; none runs today.
+4. Committed record events start after-save subscribers (`Event` trigger) on the back-end adapter.
 
 ### Performance
 
-- Interactive flows run synchronously in the request.
-- Compiled flows come from the runtime bundle (Decision 9).
-- A queue hop happens only at Run background flow.
+- A page-only flow makes no request; one server segment is one request and one transaction.
+- Compiled plans are built once per release and cached with the runtime bundle (Decision 9).
 
 ## Decision 2 — Saving is a flow around one atomic operation
 
@@ -160,8 +227,8 @@ The flow engine is built in-house and is part of the application. It has three p
 
 - A rule that must always hold is a flow with a `BeforeSave` trigger and `transaction` execution. Examples: a required value, an allowed status change, "a resolved case needs a resolution time".
 - The server runs it inside the save transaction for every writer: web, agent, interface, import and Kestra. Its refusals, requirements and warnings are authoritative. This integration exists since #578, and its definition moves to the flow format under #976.
-- The browser runs the same definition while a person edits, to show feedback at once. Browser results are never trusted.
-- Work after a change (notify someone, create a follow-up, synchronise another system) is a flow with an `Event` trigger. It runs as a `background` flow, or hands off to Kestra when it waits.
+- The page runs the same definition while a person edits, to show feedback at once, once the page driver of Amendment A runs page segments; it does not today. Page results are never trusted.
+- Work after a change (notify someone, create a follow-up, synchronise another system) is a flow with an `Event` trigger: an after-save subscriber that runs on the back-end adapter after commit.
 
 ## Decision 4 — Formulas and read-time computed fields
 
@@ -285,7 +352,7 @@ Uninstall has these rules for data and access:
 ## Decision 9 — An immutable runtime bundle per installation revision
 
 **What the bundle is:**
-- Prepare builds one runtime bundle per installation revision. It holds compiled pages and navigation, compiled flows and their trigger index, theme tokens, component registry entries, the access plan and the tool bundle.
+- Prepare builds one runtime bundle per installation revision. It holds compiled pages and navigation, compiled flows, theme tokens, component registry entries and the access plan. The compiled flow plans of Amendment A are built from the release and cached with it, never stored.
 - The access plan holds the declared permission requirements only. It holds no decisions.
 - The bundle is an index plus parts of under 1 MB each, stored in Postgres.
 

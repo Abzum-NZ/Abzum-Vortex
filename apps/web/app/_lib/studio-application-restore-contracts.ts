@@ -76,16 +76,16 @@ export const studioApplicationRestoreCommandResultSchema = z.union([
     .strict(),
   z
     .object({
-      kind: z.enum(["refused", "conflict", "temporarily_unavailable"]),
+      kind: z.enum(["refused", "superseded", "conflict", "temporarily_unavailable"]),
       stateMayHaveChanged: z.union([z.literal(false), z.literal("unknown")]),
     })
     .strict(),
 ]);
 
 export type StudioPersonLabel = z.infer<typeof studioPersonLabelSchema>;
-/** Why a restore did not run. */
+/** Why a restore did not run; `superseded`: the version predates the current definition contract. */
 export type StudioApplicationRestoreFailure = Readonly<{
-  kind: "refused" | "conflict" | "temporarily_unavailable";
+  kind: "refused" | "superseded" | "conflict" | "temporarily_unavailable";
 }>;
 export type StudioApplicationRestoreCommand = z.infer<typeof studioApplicationRestoreCommandSchema>;
 export type StudioApplicationRestoreReceipt = z.infer<typeof studioApplicationRestoreReceiptSchema>;

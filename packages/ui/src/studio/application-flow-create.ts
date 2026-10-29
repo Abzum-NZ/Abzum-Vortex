@@ -8,7 +8,7 @@ import {
   applicationSourceDocumentSchema,
   authoredRecordsTableEventAvailable,
   builderKeySchema,
-  flowContractVersion,
+  defaultFlowBindingSettings,
   defaultSaveFlowSource,
   sourcePageItems,
   validateFlow,
@@ -417,6 +417,7 @@ const bindControl = (
     event,
     flow: flowKey,
     inputs,
+    settings: defaultFlowBindingSettings(event),
   });
   if (event === "row_action" && !rowActionMenu && item !== undefined)
     (item.props as Record<string, unknown>).row_action_event_id = eventId;
@@ -448,7 +449,6 @@ const interactiveFlow = (
   parts: Pick<SourceFlow, "inputs" | "tasks" | "outputs"> &
     Readonly<{ description?: string; recordInput?: string }>,
 ): SourceFlow => ({
-  contractVersion: flowContractVersion,
   id: key,
   key,
   ...(parts.description === undefined ? {} : { description: parts.description }),
@@ -584,7 +584,6 @@ export const applyStudioFlowCreate = (
           reason: "No free name could be made for this flow. Choose another name.",
         };
       const flow: SourceFlow = {
-        contractVersion: flowContractVersion,
         id: key,
         key,
         labels: { name },
@@ -602,7 +601,6 @@ export const applyStudioFlowCreate = (
             recordTypeId: command.recordTypeKey,
             inputs: {},
             operations: command.operations.map((kind) => ({ kind })),
-            priority: 100,
           },
         ],
         tasks: [
@@ -615,6 +613,10 @@ export const applyStudioFlowCreate = (
         ],
       };
       module.flows.push(flow);
+      // A new rule runs after the record type's existing rules.
+      module.record_types
+        .find((recordType) => recordType.key === command.recordTypeKey)!
+        .before_save_rules.push(flow.id);
       return created(candidate, flow, module.key, undefined);
     }
     if (command.kind === "action" && command.event === "card_moved" && command.recordType === null)
@@ -694,7 +696,12 @@ export const applyStudioFlowCreate = (
             type: "interface.show_message",
             version: "1.0.0",
             // The message is headed by what the person was doing: the flow's name.
-            properties: { message: message(step.message.trim()), title: message(name) },
+            properties: {
+              message: message(step.message.trim()),
+              target: { kind: "literal", literal: { type: "text", value: "dialog" } },
+              severity: { kind: "literal", literal: { type: "text", value: "info" } },
+              title: message(name),
+            },
           },
         ];
       } else {

@@ -185,6 +185,12 @@ function applicationFlowProvenance(
       origin: "source",
       sourcePath: [...sourceBase, "event"],
     });
+    for (const leaf of leafPaths(binding.settings))
+      entries.push({
+        canonicalPath: [...canonicalBase, "settings", ...leaf],
+        origin: "source",
+        sourcePath: [...sourceBase, "settings", ...leaf],
+      });
     for (const leaf of leafPaths(binding.flow.inputs)) {
       const sourceValue = valueAtPath(authored.inputs, leaf);
       const canonicalValue = valueAtPath(binding.flow.inputs, leaf);

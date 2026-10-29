@@ -116,3 +116,10 @@ export const findPlatformServiceOperation = (
       operation.release.operationId === operationId &&
       operation.release.releaseVersion === releaseVersion,
   );
+
+/**
+ * The readable key a Call protected operation task uses for a registered platform-service
+ * operation: the operation's own key under the platform namespace. A named action of a Module is
+ * called by the action's own namespaced key, so neither is ever chosen by a release or an id.
+ */
+export const platformOperationKey = (operationKey: string): string => `platform.${operationKey}`;
