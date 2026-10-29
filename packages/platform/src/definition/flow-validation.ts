@@ -102,6 +102,8 @@ export type FlowValidationOptions = Readonly<{
    * checked; its value type belongs to the record type and is checked by the evaluator.
    */
   triggerRecordFieldExists?: (field: string) => boolean;
+  /** The field's common declared type across the trigger's record types, when known. */
+  triggerRecordFieldType?: (field: string) => string | undefined;
   /**
    * The declared inputs, with their types, of the operation a Call protected operation task names
    * by its readable key. Without it, the inputs the task maps are not checked against the
@@ -424,8 +426,7 @@ export function validateFlow(
             "broken_reference",
             `The trigger record has no field ${reference.field}`,
           );
-        // A record field's type belongs to the record type, which the flow does not carry.
-        return undefined;
+        return options.triggerRecordFieldType?.(reference.field);
       case "execution_actor":
         return "organization_account_reference";
       case "execution_now":

@@ -116,6 +116,9 @@ function compileOwnedFlowSources(
         identifier: resolution.field(qualifiedRecordType, String(field.id)),
         recordTypeId,
         type: String(field.type),
+        ...(["calculation", "total"].includes(String(field.type))
+          ? { valueType: String(asObject(field.settings).result_type) }
+          : {}),
       });
   }
   for (const output of dependencyOutputs) {
@@ -127,6 +130,9 @@ function compileOwnedFlowSources(
           identifier: String(field.fieldId),
           recordTypeId: String(recordType.recordTypeId),
           type: String(field.type),
+          ...(["calculation", "total"].includes(String(field.type))
+            ? { valueType: String(asObject(field.settings).resultType) }
+            : {}),
         });
   }
   const owned = (kind: string, alias: string): ResolvedFlowIdentity => {

@@ -61,6 +61,7 @@ export type ResolvedFlowFieldMetadata = Readonly<{
   identifier: string;
   recordTypeId: string;
   type: string;
+  valueType?: string;
 }>;
 
 /** Maps canonical Module field discriminators to the scalar types a Flow may expose. */
@@ -636,6 +637,19 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
             throw error;
           }
         }),
+      triggerRecordFieldType: (field) => {
+        const types = recordTypes.map((recordType) => {
+          try {
+            const identity = resolver.field(recordType, field);
+            const matches = resolver.fieldMetadata(identity.identifier);
+            return matches.length === 1 ? (matches[0]!.valueType ?? matches[0]!.type) : undefined;
+          } catch (error) {
+            if (error instanceof DefinitionCompilationError) return undefined;
+            throw error;
+          }
+        });
+        return types.length > 0 && types.every((type) => type === types[0]) ? types[0] : undefined;
+      },
     })[0];
     if (invalid !== undefined)
       throw new DefinitionCompilationError(
