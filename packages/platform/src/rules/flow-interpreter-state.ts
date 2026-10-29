@@ -5,9 +5,11 @@ import type {
   FlowFailureOutcome,
   FlowRunState,
   FlowRunStart,
+  FlowRuntimeValues,
   FlowTaskTraceObservation,
   FlowTaskTraceObserver,
 } from "./flow-interpreter";
+import type { FlowDefinition } from "../workflows/flow-contracts";
 
 export const flowRunStateVersion = "1" as const;
 
@@ -24,6 +26,30 @@ export const initialState = (start: FlowRunStart): FlowRunState => ({
   pendingIntents: [],
   ...(start.triggerRecord === undefined ? {} : { triggerRecord: start.triggerRecord }),
   ...(start.previousRecord === undefined ? {} : { previousRecord: start.previousRecord }),
+});
+
+export const initialVariables = (flow: FlowDefinition): FlowRuntimeValues =>
+  Object.fromEntries(
+    Object.entries(flow.variables).map(([name, declaration]) => [
+      name,
+      { type: declaration.type, value: declaration.default ?? null },
+    ]),
+  );
+
+export const newActivation = (
+  flow: FlowDefinition,
+  inputs: FlowRuntimeValues,
+  prefix: string,
+  callTaskId?: string,
+): FlowRunState["activations"][number] => ({
+  flowId: flow.id,
+  prefix,
+  ...(callTaskId === undefined ? {} : { callTaskId }),
+  inputs,
+  variables: initialVariables(flow),
+  outputs: {},
+  phase: "tasks",
+  frames: [{ path: ["tasks"], index: 0 }],
 });
 
 export type PathSegment = string | number;

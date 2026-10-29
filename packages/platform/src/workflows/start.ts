@@ -12,6 +12,8 @@ import { jsonValueSchema } from "../catalogue/common";
 import { flowRefusalFeedbackSchema } from "./flow-refusal-feedback";
 import type { FlowPlan, FlowServerSegment } from "./flow-plan";
 import type { FlowSegmentReplay } from "../rules/flow-interpreter";
+import type { BeforeSaveRuleWarning } from "../rules/before-save-flow-run";
+import { storedFlowWarningSchema, storeFlowWarning } from "./flow-warning-replay";
 
 const effectSchema = z
   .object({
@@ -30,7 +32,12 @@ const effectSchema = z
     diagnostic: flowRefusalFeedbackSchema.optional(),
   })
   .strict();
-const receiptSchema = z.object({ effects: z.record(z.string(), effectSchema.nullable()) }).strict();
+const receiptSchema = z
+  .object({
+    effects: z.record(z.string(), effectSchema.nullable()),
+    warnings: z.record(z.string(), z.array(storedFlowWarningSchema)),
+  })
+  .strict();
 const claimSchema = z.discriminatedUnion("status", [
   z.object({ status: z.literal("none") }),
   z.object({ status: z.literal("claimed") }),
@@ -67,10 +74,15 @@ const commandIdOf = (
 
 type SegmentIdentity = Readonly<{ segmentId: string; fingerprint: string }> | null;
 type SegmentContext = BoundHumanOrganizationRequest;
+export type FlowSegmentReceipt = Readonly<{
+  effects: FlowSegmentReplay;
+  warnings: Readonly<Record<string, readonly z.infer<typeof storedFlowWarningSchema>[]>>;
+}>;
 type SegmentExecution<Value> = Readonly<{
   value: Value;
   /** Only task outcomes and declared non-sensitive effect outputs; null means not replayable. */
   effects: FlowSegmentReplay;
+  warnings: Readonly<Record<string, readonly BeforeSaveRuleWarning[]>>;
 }>;
 export type StartFlowResult<Value> =
   | Readonly<{ kind: "completed"; value: Value }>
@@ -86,7 +98,7 @@ type StartFlowDependencies<Value> = Readonly<{
   execute: (
     context: SegmentContext,
     segment: FlowServerSegment | null,
-    replay: FlowSegmentReplay | undefined,
+    replay: FlowSegmentReceipt | undefined,
   ) => Promise<SegmentExecution<Value>>;
 }>;
 
@@ -164,26 +176,29 @@ export const startFlow = async <Value>(
       segment.id,
       request.iteration,
     );
-    let replay: FlowSegmentReplay | undefined;
+    let replay: FlowSegmentReceipt | undefined;
     if (segment.changes) {
       await transaction.query`select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(${`${scope.organizationId}:flow_segment:${commandId}`}, 818))`;
       const rows =
         await transaction.query`select vortex_record.flow_segment_receipt(${commandId}::uuid, true) as result`;
       const found = claimSchema.parse(rows[0]?.result);
       if (found.status === "completed")
-        replay = Object.fromEntries(
-          Object.entries(found.result.effects).map(([key, effect]) => [
-            key,
-            effect === null
-              ? null
-              : {
-                  kind: effect.kind,
-                  outcome: effect.outcome,
-                  ...(effect.outputs === undefined ? {} : { outputs: effect.outputs }),
-                  ...(effect.diagnostic === undefined ? {} : { diagnostic: effect.diagnostic }),
-                },
-          ]),
-        );
+        replay = {
+          effects: Object.fromEntries(
+            Object.entries(found.result.effects).map(([key, effect]) => [
+              key,
+              effect === null
+                ? null
+                : {
+                    kind: effect.kind,
+                    outcome: effect.outcome,
+                    ...(effect.outputs === undefined ? {} : { outputs: effect.outputs }),
+                    ...(effect.diagnostic === undefined ? {} : { diagnostic: effect.diagnostic }),
+                  },
+            ]),
+          ),
+          warnings: found.result.warnings,
+        };
       else if (found.status !== "none") return { kind: "refused" };
     }
     if (replay === undefined) {
@@ -203,7 +218,13 @@ export const startFlow = async <Value>(
     }
     const executed = await dependencies.execute(context, segment, replay);
     if (segment.changes && replay === undefined) {
-      const receipt = receiptSchema.parse({ effects: executed.effects });
+      const warnings = Object.fromEntries(
+        Object.entries(executed.warnings).map(([key, entries]) => [
+          key,
+          entries.map(storeFlowWarning),
+        ]),
+      );
+      const receipt = receiptSchema.parse({ effects: executed.effects, warnings });
       await transaction.query`select vortex_record.complete_flow_segment_receipt(${commandId}::uuid, ${JSON.stringify(receipt)}::text::jsonb)`;
     }
     return { kind: "completed", value: executed.value };

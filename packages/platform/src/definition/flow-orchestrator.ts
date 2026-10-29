@@ -325,7 +325,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     );
   };
 
-  const runProtectedTask = createFlowTaskRunner(dependencies, runNamedAction);
+  const { run: runProtectedTask } = createFlowTaskRunner(dependencies, runNamedAction);
 
   return Object.freeze({
     /**

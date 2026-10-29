@@ -4,6 +4,8 @@ import {
   Failed,
   flowRunStateVersion,
   initialState,
+  initialVariables,
+  newActivation,
   iterationKey,
   pathKey,
   observe,
@@ -478,30 +480,6 @@ const buildInputs = (
   }
   return inputs;
 };
-
-const initialVariables = (flow: FlowDefinition): FlowRuntimeValues =>
-  Object.fromEntries(
-    Object.entries(flow.variables).map(([name, declaration]) => [
-      name,
-      typed(declaration.type, declaration.default ?? null),
-    ]),
-  );
-
-const newActivation = (
-  flow: FlowDefinition,
-  inputs: FlowRuntimeValues,
-  prefix: string,
-  callTaskId?: string,
-): Activation => ({
-  flowId: flow.id,
-  prefix,
-  ...(callTaskId === undefined ? {} : { callTaskId }),
-  inputs,
-  variables: initialVariables(flow),
-  outputs: {},
-  phase: "tasks",
-  frames: [{ path: ["tasks"], index: 0 }],
-});
 
 // ─── The machine ──────────────────────────────────────────────────────────────────────────────
 
@@ -980,6 +958,12 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
     allowRefusal,
   };
   replaceTop(machine, next);
+  const operation =
+    registered.type === "operation.call"
+      ? Object.values(PLATFORM_SERVICE_OPERATIONS).find(
+          (candidate) => platformOperationKey(candidate.key) === properties.operation?.value,
+        )
+      : undefined;
   return {
     kind: "suspend",
     step: {
@@ -989,7 +973,8 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
         taskId,
         taskType: registered.type,
         taskVersion: registered.version,
-        effect: definition.effect as FlowProtectedTaskCall["effect"],
+        effect: (operation?.descriptor.effect ??
+          definition.effect) as FlowProtectedTaskCall["effect"],
         taskPath: `${activation.prefix}${pathKey(taskPath)}`,
         iteration: iterationKey(machine.state),
         properties,
@@ -1321,6 +1306,26 @@ export const startFlowSegment = (
     throw error;
   }
 };
+/** Evaluates one authored value in the same scope used by the flow interpreter. */
+export const evaluateFlowValue = (
+  flow: FlowDefinition,
+  value: FlowValue,
+  start: FlowRunStart,
+): FlowRuntimeValue => {
+  const activation = newActivation(
+    flow,
+    start.verifiedInputs ?? buildInputs(flow, start.inputs),
+    "",
+  );
+  return evaluateValue(
+    value,
+    { ...initialState(start), activations: [activation] },
+    activation,
+    flow,
+    "value",
+  );
+};
+
 /** Continues a preserved boundary without answering a suspended task or page intent. */
 export const continueFlowRun = (
   previous: FlowRunState,

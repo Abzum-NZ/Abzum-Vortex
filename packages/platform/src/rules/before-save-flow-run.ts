@@ -4,8 +4,11 @@ import type {
   FlowDefinition,
   FlowTask,
 } from "../workflows/flow-contracts";
+import { flowTaskChildLists } from "../workflows/flow-contracts";
+import type { FlowValue } from "../workflows/flow-values";
 import { flowRuntimeValueOf, retypeTasks } from "./action-flow-run";
-import { startFlowRun, type FlowRuntimeValues } from "./flow-interpreter";
+import { evaluateFlowValue, startFlowRun, type FlowRuntimeValues } from "./flow-interpreter";
+import { at } from "./flow-interpreter-state";
 
 /**
  * Runs the `BeforeSave` flows of one record type for one save attempt with the one flow
@@ -26,6 +29,9 @@ export type BeforeSaveRuleRequirement = Readonly<{
 export type BeforeSaveRuleWarning = Readonly<{
   code: string;
   message: string;
+  flowId: string;
+  taskPath: readonly (string | number)[];
+  messageIsLiteral: boolean;
 }>;
 
 export type BeforeSaveRuleRefusal = Readonly<{
@@ -113,6 +119,55 @@ const applicable = (input: EvaluateBeforeSaveFlowsInput) =>
     ),
   );
 
+/** Finds the authored warning rather than the temporary trigger wrapper used by the runner. */
+const warningSource = (flow: FlowDefinition, taskId: string) => {
+  const find = (
+    tasks: readonly FlowTask[],
+    path: readonly (string | number)[],
+  ): Readonly<{ task: FlowTask; path: readonly (string | number)[] }> | undefined => {
+    for (const [index, task] of tasks.entries()) {
+      const current = [...path, index];
+      if (task.id === taskId) return { task, path: current };
+      for (const child of flowTaskChildLists(task)) {
+        const found = find(child.tasks, [...current, ...child.path]);
+        if (found !== undefined) return found;
+      }
+    }
+    return undefined;
+  };
+  return (
+    find(flow.tasks, ["tasks"]) ?? find(flow.errors, ["errors"]) ?? find(flow.finally, ["finally"])
+  );
+};
+
+/** Re-evaluates a dynamic authored warning against a freshly authorised record projection. */
+export const rerenderBeforeSaveWarning = (
+  flow: FlowDefinition,
+  taskPath: readonly (string | number)[],
+  code: string,
+  record: FlowRuntimeValues,
+  now: string,
+): string => {
+  const task = at(flow, taskPath) as FlowTask | undefined;
+  if (task?.type !== "rule.warn" || task.id !== code)
+    throw new BeforeSaveFlowEvaluationError(`warning ${code} has no authored task`);
+  const message = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>).properties
+    .message;
+  if (message === undefined)
+    throw new BeforeSaveFlowEvaluationError(`warning ${code} has no message`);
+  const evaluated = evaluateFlowValue(flow, message, {
+    runId: `before-save-warning:${flow.id}`,
+    flowId: flow.id,
+    inputs: {},
+    now,
+    triggerRecord: record,
+    previousRecord: record,
+  });
+  if (typeof evaluated.value !== "string")
+    throw new BeforeSaveFlowEvaluationError(`warning ${code} did not resolve to text`);
+  return evaluated.value;
+};
+
 export const evaluateBeforeSaveFlows = (
   input: EvaluateBeforeSaveFlowsInput,
 ): EvaluateBeforeSaveFlowsResult => {
@@ -144,9 +199,23 @@ export const evaluateBeforeSaveFlows = (
         `flow ${flow.id} stopped for a ${step.kind} step, which a save cannot answer`,
       );
     for (const feedback of step.state.ruleFeedback ?? []) {
-      if (feedback.kind === "warn")
-        warnings.push({ code: feedback.taskId, message: feedback.message });
-      else if (feedback.field !== undefined)
+      if (feedback.kind === "warn") {
+        const source = warningSource(flow, feedback.taskId);
+        if (source?.task.type !== "rule.warn")
+          throw new BeforeSaveFlowEvaluationError(
+            `warning ${feedback.taskId} has no authored task`,
+          );
+        const message = (
+          source.task as Extract<FlowTask, { properties: Record<string, FlowValue> }>
+        ).properties.message;
+        warnings.push({
+          code: feedback.taskId,
+          message: feedback.message,
+          flowId: flow.id,
+          taskPath: source.path,
+          messageIsLiteral: message?.kind === "literal",
+        });
+      } else if (feedback.field !== undefined)
         requirements.push({
           ruleKey: flow.key,
           fieldId: feedback.field,
