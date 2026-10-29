@@ -171,6 +171,7 @@ type SafeIntents = Extract<FlowOrchestratorResponse, { intents: unknown }>["inte
 export type FlowBindingEndpointResult =
   /** The request named a stale installation revision: reload the page, nothing was run. */
   | Readonly<{ kind: "reload"; installationRevision: number }>
+  | Readonly<{ kind: "rate_limited"; retryAfterSeconds: number }>
   /** The run ended. `descriptor` is the shared safe result; `outputs` only when it says available. */
   | Readonly<{
       kind: "result";

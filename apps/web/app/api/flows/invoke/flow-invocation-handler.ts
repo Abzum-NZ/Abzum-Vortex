@@ -147,6 +147,11 @@ export const createFlowInvocationHandler =
         },
       });
       if (result.kind === "refused") return refusedResponse();
+      if (result.kind === "rate_limited") {
+        const response = privateResponse({ kind: "refused", code: "flow_rate_limited" }, 429);
+        response.headers.set("Retry-After", String(result.retryAfterSeconds));
+        return response;
+      }
       return privateResponse(result, result.kind === "reload" ? 409 : 200);
     } catch (error) {
       return mapWebError(error, {
