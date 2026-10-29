@@ -37,7 +37,9 @@ import {
   type RecordsTableFeatureProjection,
   type RecordsTableSortState,
 } from "@vortex/platform/schema";
+import type { DisplayRenderProps } from "../context";
 import type {
+  BoardPayload,
   DisplayEventHandlers,
   DisplayRow,
   DisplayTableNarrowing,
@@ -175,7 +177,8 @@ type GridExtensionKey = Exclude<RecordsTableFeatureKey, typeof recordsTableBoard
 
 /** Whole-grid views share the lazy registry but do not fill table extension points. */
 const viewLoaders = {
-  [recordsTableBoardFeature.key]: () => import("../board").then((module) => module.BoardView),
+  [recordsTableBoardFeature.key]: (): Promise<ComponentType<DisplayRenderProps<BoardPayload>>> =>
+    import("../board").then((module) => module.BoardView),
 } satisfies Record<typeof recordsTableBoardFeature.key, () => Promise<unknown>>;
 
 export const GridBoardView = lazy(async () => ({
