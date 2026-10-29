@@ -75,6 +75,9 @@ export type FlowServerSegment = Readonly<{
   /** The values the segment reads from outside itself, and the outputs it produces. */
   inputs: FlowPlanValueTypes;
   outputs: FlowPlanValueTypes;
+  /** Server-only reads and writes transported in an opaque carried-values token. */
+  carriedInputs: FlowPlanValueTypes;
+  carriedOutputs: FlowPlanValueTypes;
   /** Server-only expressions for final outputs evaluated after the segment completes. */
   finalOutputExpressions: Readonly<Record<string, FlowValue>>;
   finalOutputTypes: FlowPlanValueTypes;
@@ -108,6 +111,8 @@ export type FlowSegmentStub = Readonly<{
   guard: readonly FlowPathCondition[];
   inputs: FlowPlanValueTypes;
   outputs: FlowPlanValueTypes;
+  /** Carried reads are supplied by the server, never seeded by the page. */
+  carriedInputKeys: readonly string[];
   finalOutputTypes: FlowPlanValueTypes;
   fingerprint: `sha256:${string}`;
   labels: readonly string[];
@@ -263,7 +268,7 @@ const referencesIn = (value: unknown, found: FlowReference[] = []): FlowReferenc
 const outputTypes = (steps: readonly FlowTask[]): Record<string, string> =>
   Object.fromEntries(
     steps.flatMap((step) =>
-      (registered(step)?.outputs ?? []).map((output) => [`${step.id}.${output.key}`, output.type]),
+      (registered(step)?.outputs ?? []).map((output) => [`outputs.${step.id}.${output.key}`, output.type]),
     ),
   );
 
@@ -291,7 +296,7 @@ const inputTypes = (
         types[`outputs.${key}`] =
           reference.key === "outcome"
             ? "text"
-            : ((producer === undefined ? undefined : outputTypes([producer])[key]) ?? "json");
+            : ((producer === undefined ? undefined : outputTypes([producer])[`outputs.${key}`]) ?? "json");
         break;
       }
       case "trigger_record":
@@ -514,6 +519,8 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
     const produced = new Set(steps.map((step) => step.id));
     const inputs = inputTypes(flow, [...draft.tasks, ...draft.guard], produced, id);
     const outputs = outputTypes(steps);
+    const carriedInputs: FlowPlanValueTypes = {};
+    const carriedOutputs: FlowPlanValueTypes = {};
     const finalOutputExpressions: Readonly<Record<string, FlowValue>> = {};
     const finalOutputTypes: FlowPlanValueTypes = {};
     const operations = new Map(steps.map((step) => [step.id, operationOf(flow, step)]));
@@ -555,6 +562,8 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
       firstTaskPath: draft.firstTaskPath,
       inputs,
       outputs,
+      carriedInputs,
+      carriedOutputs,
       finalOutputExpressions,
       finalOutputTypes,
       changes: effects.length > 0,
@@ -569,6 +578,8 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
         tasks: draft.tasks,
         inputs,
         outputs,
+        carriedInputs,
+        carriedOutputs,
         finalOutputExpressions,
         finalOutputTypes,
         operations: steps.flatMap((step) => {
@@ -608,6 +619,7 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
               guard: segment.guard,
               inputs: segment.inputs,
               outputs: segment.outputs,
+              carriedInputKeys: Object.keys(segment.carriedInputs),
               finalOutputTypes: segment.finalOutputTypes,
               fingerprint: segment.fingerprint,
               labels: segment.labels,

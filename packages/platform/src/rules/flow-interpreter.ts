@@ -12,7 +12,7 @@ import {
 } from "./flow-interpreter-state";
 import { typedValueMatchesType } from "./condition-types";
 import { flowPathGuardMatches } from "./flow-path-guard";
-import { parseFlowSegmentSeed } from "./flow-segment-seed";
+import { flowSegmentValues, parseFlowSegmentSeed } from "./flow-segment-seed";
 import type { JsonValue } from "../catalogue/common";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import { recordLinkValueSchema } from "../records/module-field-values";
@@ -207,6 +207,8 @@ export type FlowRunResult =
       outputs: FlowRuntimeValues;
       /** Segment final outputs occupy a separate namespace from task outputs. */
       finalOutputs?: FlowRuntimeValues;
+      /** Server-only values for sealing; never returned to the page in plaintext. */
+      carriedOutputs?: FlowRuntimeValues;
       /** The outcome key of the Stop task that ended the flow early, when one did. */
       stopped?: string;
     }>
@@ -552,11 +554,15 @@ const finishActivation = (machine: Machine, activation: Activation): FlowRunResu
   if (activation.failure !== undefined) return { status: "failed", failure: activation.failure };
   const outputs: Record<string, FlowRuntimeValue> = {};
   if (machine.segment !== undefined && machine.state.activations.length === 1) {
-    for (const name of Object.keys(machine.segment.outputs)) {
-      const [task, key] = name.split(".");
-      const value = activation.outputs[task!]?.[key!];
-      if (value !== undefined) outputs[name] = value;
-    }
+    Object.assign(
+      outputs,
+      flowSegmentValues(machine.segment.outputs, activation.variables, activation.outputs),
+    );
+    const carriedOutputs = flowSegmentValues(
+      machine.segment.carriedOutputs,
+      activation.variables,
+      activation.outputs,
+    );
     const finalOutputs: Record<string, FlowRuntimeValue> = {};
     for (const [name, expression] of Object.entries(machine.segment.finalOutputExpressions)) {
       const value = evaluateValue(expression, machine.state, activation, flow, name);
@@ -568,6 +574,7 @@ const finishActivation = (machine: Machine, activation: Activation): FlowRunResu
       status: "completed",
       outputs,
       finalOutputs,
+      carriedOutputs,
       ...(activation.stopped === undefined ? {} : { stopped: activation.stopped }),
     };
   }
