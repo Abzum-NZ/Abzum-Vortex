@@ -507,6 +507,8 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
     const produced = new Set(steps.map((step) => step.id));
     const inputs = inputTypes(flow, [...draft.tasks, ...draft.guard], produced, id);
     const outputs = outputTypes(steps);
+    const finalOutputExpressions: Readonly<Record<string, FlowValue>> = {};
+    const finalOutputTypes: FlowPlanValueTypes = {};
     const operations = new Map(steps.map((step) => [step.id, operationOf(flow, step)]));
     const effects = steps.filter((step) => {
       const effect =
@@ -546,8 +548,8 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
       firstTaskPath: draft.firstTaskPath,
       inputs,
       outputs,
-      finalOutputExpressions: {},
-      finalOutputTypes: {},
+      finalOutputExpressions,
+      finalOutputTypes,
       changes: effects.length > 0,
       accessChange,
       multiTransaction,
@@ -558,6 +560,8 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
         tasks: draft.tasks,
         inputs,
         outputs,
+        finalOutputExpressions,
+        finalOutputTypes,
         operations: steps.flatMap((step) => {
           const operation = operations.get(step.id);
           return operation === undefined ? [] : [operation];
