@@ -3,9 +3,8 @@ export { pageStepIntents } from "./flow-page-steps";
 import { describeFailure } from "../catalogue/runtime-primitives";
 import { flowValueMatchesType } from "./flow-value-shapes";
 import type { JsonValue } from "../catalogue/common";
-import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import { isRecordLinkValue } from "../records/value-predicates";
-import { platformOperationKey } from "../catalogue/platform-service-operation-catalogue";
+import { flowOperationOutputMembers } from "../workflows/flow-operation-output-members";
 import type { FlowDefinition, FlowExecutionKind, FlowTask } from "../workflows/flow-contracts";
 import { isFlowReadFieldsProjection, isFlowReadFieldsTypeMap } from "../workflows/flow-read-fields";
 import { flowTaskChildLists } from "../workflows/flow-task-tree";
@@ -337,18 +336,8 @@ const declaredOutputFieldType = (
 ): string | undefined => {
   const task = findTask([...flow.tasks, ...flow.errors, ...flow.finally], taskId);
   if (task?.type === "operation.call" && outputKey === "result" && path.length === 1) {
-    const operation = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>)
-      .properties.operation;
-    const key = operation?.kind === "literal" ? operation.literal.value : undefined;
-    const entry = Object.values(PLATFORM_SERVICE_OPERATIONS).find(
-      (candidate) => platformOperationKey(candidate.key) === key,
-    );
-    if (
-      entry !== undefined &&
-      (entry.descriptor.effect === "read" || entry.descriptor.effect === "change") &&
-      Object.hasOwn(entry.descriptor.outputs, path[0]!)
-    )
-      return entry.descriptor.outputs[path[0]!]!.type;
+    const members = flowOperationOutputMembers(task);
+    if (Object.hasOwn(members, path[0]!)) return members[path[0]!];
   }
   if (task?.type === "record.read_fields" && path.length === 1) {
     const types = task.readFieldTypes;

@@ -1,8 +1,5 @@
 import { fingerprintCanonicalValue } from "../definition/canonical-json-definition";
-import {
-  PLATFORM_SERVICE_OPERATIONS,
-  platformOperationKey,
-} from "../catalogue/platform-service-operation-catalogue";
+import { flowOperationOutputMembers } from "./flow-operation-output-members";
 import type { FlowBindingInput, FlowDefinition, FlowTask } from "./flow-contracts";
 import { flowTaskChildLists, isFlowControlTask } from "./flow-contracts";
 import { flowTaskRegistry, type FlowTaskTypeKey } from "./flow-task-registry";
@@ -250,17 +247,8 @@ const outputMemberTypes = (steps: readonly FlowTask[]): Record<string, string> =
       for (const [member, type] of Object.entries(step.readFieldTypes ?? {}))
         types[`${step.id}.values.${member}`] = type;
     } else if (step.type === "operation.call") {
-      const operation = step.properties.operation;
-      const key = operation?.kind === "literal" ? operation.literal.value : undefined;
-      const entry = Object.values(PLATFORM_SERVICE_OPERATIONS).find(
-        (candidate) => platformOperationKey(candidate.key) === key,
-      );
-      if (
-        entry !== undefined &&
-        (entry.descriptor.effect === "read" || entry.descriptor.effect === "change")
-      )
-        for (const [member, declaration] of Object.entries(entry.descriptor.outputs))
-          types[`${step.id}.result.${member}`] = declaration.type;
+      for (const [member, type] of Object.entries(flowOperationOutputMembers(step)))
+        types[`${step.id}.result.${member}`] = type;
     }
   }
   return types;
