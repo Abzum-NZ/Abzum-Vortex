@@ -8,7 +8,7 @@ The platform uses three operated services:
 
 - [Vercel](https://vercel.com/docs) runs the [Next.js](https://nextjs.org/docs) web application, server routes, and shared runtime cache.
 - [Supabase](https://supabase.com/docs) provides [PostgreSQL](https://www.postgresql.org/docs/) data storage, identity-authority support, file storage, live updates, and a durable [message queue](https://supabase.com/docs/guides/queues).
-- [Kestra](https://kestra.io/docs) executes durable flows, schedules, migrations, access-test orchestration, backups, and operational jobs.
+- [Kestra](https://kestra.io/docs) runs operational jobs; a future backend will execute durable application flows.
 
 [Doppler](https://docs.doppler.com/docs) distributes environment secrets. It is a secret-management control, not an application data store.
 
@@ -28,8 +28,7 @@ flowchart LR
     IDP --> VERCEL[Vercel web and server]
     VERCEL --> SUPA[Supabase data, accounts, files, live updates and queue]
     SUPA -->|event wake-up| VERCEL
-    VERCEL -->|start or advance run| KESTRA[Kestra durable flow execution]
-    KESTRA -->|signed protected operation| VERCEL
+    KESTRA[Kestra operational jobs] -->|recovery and cleanup| VERCEL
     DOPPLER[Doppler secrets] --> VERCEL
     DOPPLER --> KESTRA
 ```
@@ -49,7 +48,7 @@ Vortex uses Supabase as an integrated platform, but each capability has one narr
 | [CLI, database tests and linting](https://supabase.com/docs/guides/local-development/cli/testing-and-linting)                                                                                           | Reproducible local database, migration checks, pgTAP tests and database lint                                                                          | The shared Testing project remains the authoritative platform and separation test. Kestra alone migrates Testing and Production.                                                                                                          |
 | [Managed backups](https://supabase.com/docs/guides/platform/backups) and database advisers                                                                                                              | Provider recovery layer and reviewed security/performance findings                                                                                    | Independent encrypted backups, restore drills and reviewed migrations remain required. Adviser suggestions never change production automatically.                                                                                         |
 
-Supabase Cron is not a second scheduler: Kestra owns business schedules, retention, recovery, and operational jobs. Edge Functions are not a second server boundary: Vercel owns web and interface routes. Supabase Vault is not a second secret authority: Doppler owns secrets. Read replicas are added only after measured read demand, recovery needs, cost, and routing behaviour justify them. Direct browser access to business tables, direct cross-cluster database connections, logical replication for sharing, and service-role-key use are refused.
+Supabase Cron is not a second scheduler: Kestra owns operational recovery jobs; business scheduling is future work. Edge Functions are not a second server boundary: Vercel owns web and interface routes. Supabase Vault is not a second secret authority: Doppler owns secrets. Read replicas are added only after measured read demand, recovery needs, cost, and routing behaviour justify them. Direct browser access to business tables, direct cross-cluster database connections, logical replication for sharing, and service-role-key use are refused.
 
 The Phase 10 MCP interface uses the managed Supabase OAuth 2.1 server under the approved authorization contract. Its adapter implements the required protocol behavior and returns a safe unavailable result when the configured capability cannot serve the request. A missing provider capability cannot silently introduce a second identity or token service; any necessary change to the approved provider boundary belongs to the owning specification decision. Hosted capability checks are not a development completion gate. See the [current roadmap](../build-plan/README.md#phases).
 
@@ -84,7 +83,7 @@ The codebase is divided into sixteen named services. These are package and owner
 | Query      | Tables, boards, calendars, summaries and saved views                                                                                                                                         |
 | Rule       | The pure flow interpreter shared by the browser and the server: typed conditions, the one formula tree and the transaction-safe task subset, with no server-service imports                                       |
 | Event      | Transactional event outbox, queue dispatch, retries and failed sequences                                                                                                                     |
-| Workflow   | The [Kestra](https://kestra.io/docs) adapter: execution references, schedules and generic human-input waits; Kestra owns execution status                                                       |
+| Workflow   | Future durable backend: execution references, schedules and generic human-input waits                                                       |
 | App        | The server flow orchestrator, which drives any flow containing a protected task, plus application assembly, module bindings, navigation, options and application roles                             |
 | Page       | Block registration, page resolution, form drafts, page states and rendering contract                                                                                                         |
 | Theme      | Application-contained and platform-catalogue theme values, inheritance and legibility validation                                                                                             |
