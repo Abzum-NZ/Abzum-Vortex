@@ -26,7 +26,9 @@ export async function storeConnectionSecret(
       /^[A-Z0-9]{5}$/.test(error.code)
         ? error.code
         : "unknown";
-    throw new Error(`Connection secret storage failed (${code})`);
+    const failure = new Error("Connection secret storage failed");
+    failure.name = `ConnectionSecretStorage_${code}`;
+    throw failure;
   }
   if (rows.length !== 1) throw new Error("Connection secret storage returned an invalid row count");
   return z.guid().parse(rows[0]?.reference);

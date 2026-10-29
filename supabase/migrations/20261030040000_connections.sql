@@ -1,6 +1,7 @@
 grant usage on schema vault to vortex_owner;
 grant execute on function vault.create_secret(text, text, text, uuid) to vortex_owner;
 grant delete on table vault.secrets to vortex_owner;
+grant select (id) on table vault.secrets to vortex_owner;
 grant select on table vault.decrypted_secrets to vortex_owner;
 grant execute on function vault._crypto_aead_det_decrypt(bytea, bytea, bigint, bytea, bytea) to vortex_owner;
 set local role vortex_owner;
