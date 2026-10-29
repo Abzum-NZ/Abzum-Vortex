@@ -450,6 +450,23 @@ const scopeOf = (
   },
 });
 
+/** The same typed reference scope used by page path guards and final output expressions. */
+export const pageFlowScope = (
+  state: FlowRunState,
+  program: FlowProgram,
+  resolveMember: FlowOutputMemberTypeResolver,
+): FlowFormulaScope => {
+  const activation = state.activations[0];
+  if (
+    state.version !== flowRunStateVersion ||
+    state.activations.length !== 1 ||
+    activation === undefined ||
+    activation.flowId !== program.id
+  )
+    throw new Error("FLOW_PAGE_SCOPE_INVALID");
+  return scopeOf(state, activation, program, resolveMember);
+};
+
 const evaluateValue = (
   value: FlowValue,
   state: FlowRunState,
