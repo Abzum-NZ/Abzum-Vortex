@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { newPasswordPolicy } from "@vortex/platform/server";
 import { Field, FieldDescription } from "@vortex/ui/components/field";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
@@ -6,7 +7,10 @@ import { AuthShell } from "../_components/auth-shell";
 import { SubmitButton } from "../_components/submit-button";
 import { updatePassword } from "../actions";
 
-export default function UpdatePasswordPage() {
+export default async function UpdatePasswordPage({
+  searchParams,
+}: Readonly<{ searchParams: Promise<{ status?: string }> }>) {
+  const { status } = await searchParams;
   return (
     <AuthShell
       eyebrow="Password recovery"
@@ -23,6 +27,11 @@ export default function UpdatePasswordPage() {
         </div>
       }
     >
+      {status === "invalid_password" ? (
+        <p role="alert" className="text-sm text-destructive">
+          {newPasswordPolicy.description}
+        </p>
+      ) : null}
       <form className="flex flex-col gap-5" action={updatePassword}>
         <Field>
           <Label htmlFor="email">Email address</Label>
@@ -43,18 +52,17 @@ export default function UpdatePasswordPage() {
         </Field>
         <Field>
           <Label htmlFor="password">New password</Label>
+          <FieldDescription>{newPasswordPolicy.description}</FieldDescription>
           <Input
             id="password"
             name="password"
             type="password"
             autoComplete="new-password"
-            minLength={8}
-            pattern="(?=.*[A-Za-z])(?=.*\d).{8,1024}"
+            minLength={newPasswordPolicy.minimumLength}
+            pattern={newPasswordPolicy.pattern}
+            title={newPasswordPolicy.description}
             required
           />
-          <FieldDescription>
-            Use at least 8 characters, including a letter and a number.
-          </FieldDescription>
         </Field>
         <SubmitButton pendingLabel="Updating password…">Update password</SubmitButton>
       </form>

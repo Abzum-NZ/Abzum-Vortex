@@ -13,6 +13,7 @@ import type { ControlReport, DispatchOutcome, Notice, TableContinuationTarget } 
 import {
   unavailableNotice,
   finishedNotice,
+  multiFactorPath,
   reauthenticationPath,
   refusalNotices,
   outcomeNotices,
@@ -211,13 +212,16 @@ export function useApplyDispatch({
                   : `${diagnostic.presentation?.message ?? reason.text} ${resultNotice.text}`,
             };
           }
-          // Signing in again comes back to this page and record, where the person can retry.
-          if (resultNotice.link?.href === reauthenticationPath)
+          // Signing in again, or verifying, comes back to this page and record, where the person can retry.
+          if (
+            resultNotice.link?.href === reauthenticationPath ||
+            resultNotice.link?.href === multiFactorPath
+          )
             resultNotice = {
               ...resultNotice,
               link: {
                 ...resultNotice.link,
-                href: `${reauthenticationPath}&${new URLSearchParams({
+                href: `${resultNotice.link.href}&${new URLSearchParams({
                   continuation: JSON.stringify({
                     kind: "application_page",
                     tenantShortName: model.invocation.tenantShortName,

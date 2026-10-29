@@ -157,14 +157,14 @@ export const createAccessAdministrationAssignmentOperations = ({
       return mapRecordedRefusal(
         "assignRoleAssignment",
         requests.runAccessChangeWithRefusal<
-          AssignOrganizationAdministrationRoleAssignmentResult | typeof recordedRefusal
+          AssignOrganizationAdministrationRoleAssignmentResult | ReturnType<typeof recordedRefusal>
         >(
           session,
           candidate,
           async (transaction, scope) => {
             const row = requireOne(
               await transaction.query<RoleAssignmentChangeRow>`
-          select outcome, organization_id, assignment_summary, access_version
+          select outcome, organization_id, assignment_summary, access_version, refusal_reason
           from vortex_access.assign_organization_role_assignment_for_administration(
             ${roleAssignmentId}::uuid,
             ${command.data.roleId}::uuid,
@@ -187,7 +187,7 @@ export const createAccessAdministrationAssignmentOperations = ({
                 scope.accessVersion,
               )
             )
-              return recordedRefusal;
+              return recordedRefusal(row);
             const parsed = changeOrganizationAdministrationRoleAssignmentResultSchema.safeParse({
               assignment: normalizeAssignmentLedgerFact(row.assignment_summary),
               accessVersion: databaseRevision(row.access_version),
@@ -246,7 +246,7 @@ export const createAccessAdministrationAssignmentOperations = ({
         requests.runAccessChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<StewardshipAppointmentRow>`
-              select outcome, organization_id, appointment_summary, access_version
+              select outcome, organization_id, appointment_summary, access_version, refusal_reason
               from vortex_access.appoint_organization_steward_for_administration(
                 ${command.data.organizationAccountId}::uuid,
                 ${command.data.expectedAccountRevision}::bigint
@@ -261,7 +261,7 @@ export const createAccessAdministrationAssignmentOperations = ({
               scope.accessVersion,
             )
           )
-            return recordedRefusal;
+            return recordedRefusal(row);
           if (
             typeof row.organization_id !== "string" ||
             !sameId(row.organization_id, scope.organizationId)
@@ -335,7 +335,7 @@ export const createAccessAdministrationAssignmentOperations = ({
         requests.runAccessChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<RoleAssignmentChangeRow>`
-          select outcome, organization_id, assignment_summary, access_version
+          select outcome, organization_id, assignment_summary, access_version, refusal_reason
           from vortex_access.revoke_organization_role_assignment_for_administration(
             ${command.data.roleAssignmentId}::uuid,
             ${command.data.expectedAssignmentRevision}::bigint,
@@ -351,7 +351,7 @@ export const createAccessAdministrationAssignmentOperations = ({
               scope.accessVersion,
             )
           )
-            return recordedRefusal;
+            return recordedRefusal(row);
           const parsed = changeOrganizationAdministrationRoleAssignmentResultSchema.safeParse({
             assignment: normalizeAssignmentLedgerFact(row.assignment_summary),
             accessVersion: databaseRevision(row.access_version),
@@ -405,7 +405,7 @@ export const createAccessAdministrationAssignmentOperations = ({
         requests.runAccessChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<RoleActivationChangeRow>`
-          select outcome, organization_id, activation_summary, access_version
+          select outcome, organization_id, activation_summary, access_version, refusal_reason
           from vortex_access.deactivate_organization_role_activation_for_administration(
             ${command.data.roleActivationId}::uuid,
             ${command.data.expectedActivationRevision}::bigint,
@@ -420,7 +420,7 @@ export const createAccessAdministrationAssignmentOperations = ({
               scope.accessVersion,
             )
           )
-            return recordedRefusal;
+            return recordedRefusal(row);
           const parsed = changeOrganizationAdministrationRoleActivationResultSchema.safeParse({
             activation: normalizeRoleActivation(row.activation_summary),
             accessVersion: databaseRevision(row.access_version),
@@ -476,7 +476,7 @@ export const createAccessAdministrationAssignmentOperations = ({
         requests.runAccessChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<DelegationAuthorityChangeRow>`
-          select outcome, organization_id, delegation_summary, access_version
+          select outcome, organization_id, delegation_summary, access_version, refusal_reason
           from vortex_access.grant_organization_delegation_authority_for_administration(
             ${delegationAuthorityId}::uuid,
             ${command.data.holderKind}::text,
@@ -493,7 +493,7 @@ export const createAccessAdministrationAssignmentOperations = ({
               scope.accessVersion,
             )
           )
-            return recordedRefusal;
+            return recordedRefusal(row);
           const parsed = changeOrganizationAdministrationDelegationAuthorityResultSchema.safeParse({
             delegation: normalizeAssignmentLedgerFact(row.delegation_summary),
             accessVersion: databaseRevision(row.access_version),
@@ -558,7 +558,7 @@ export const createAccessAdministrationAssignmentOperations = ({
         requests.runAccessChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<DelegationAuthorityChangeRow>`
-          select outcome, organization_id, delegation_summary, access_version
+          select outcome, organization_id, delegation_summary, access_version, refusal_reason
           from vortex_access.revoke_organization_delegation_authority_for_administration(
             ${command.data.delegationAuthorityId}::uuid,
             ${command.data.expectedDelegationRevision}::bigint,
@@ -573,7 +573,7 @@ export const createAccessAdministrationAssignmentOperations = ({
               scope.accessVersion,
             )
           )
-            return recordedRefusal;
+            return recordedRefusal(row);
           const parsed = changeOrganizationAdministrationDelegationAuthorityResultSchema.safeParse({
             delegation: normalizeAssignmentLedgerFact(row.delegation_summary),
             accessVersion: databaseRevision(row.access_version),

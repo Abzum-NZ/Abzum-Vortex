@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { readPrivacyNotice } from "@vortex/platform/server";
+import { newPasswordPolicy, readPrivacyNotice } from "@vortex/platform/server";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Field, FieldDescription } from "@vortex/ui/components/field";
 import { Input } from "@vortex/ui/components/input";
@@ -34,6 +34,11 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
       }
     >
       <StatusMessage status={notice === undefined ? "registration_closed" : status} />
+      {notice !== undefined && status === "invalid_password" ? (
+        <p role="alert" className="text-sm text-destructive">
+          {newPasswordPolicy.description}
+        </p>
+      ) : null}
       {notice !== undefined && (
         <form className="flex flex-col gap-5" action={register}>
           <p className="text-sm text-muted-foreground">
@@ -49,18 +54,17 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
           </Field>
           <Field>
             <Label htmlFor="password">Password</Label>
+            <FieldDescription>{newPasswordPolicy.description}</FieldDescription>
             <Input
               id="password"
               name="password"
               type="password"
               autoComplete="new-password"
-              minLength={8}
-              pattern="(?=.*[A-Za-z])(?=.*\d).{8,1024}"
+              minLength={newPasswordPolicy.minimumLength}
+              pattern={newPasswordPolicy.pattern}
+              title={newPasswordPolicy.description}
               required
             />
-            <FieldDescription>
-              Use at least 8 characters, including a letter and a number.
-            </FieldDescription>
           </Field>
           <Field orientation="horizontal">
             <Checkbox id="privacy-notice" name="privacy_notice_acknowledged" required />

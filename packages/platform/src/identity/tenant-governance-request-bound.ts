@@ -90,6 +90,7 @@ const mappedIdentitySqlErrorCodes = new Set([
   "V3101",
   "V3102",
   "V3103",
+  "V3152",
   "42501",
   "23503",
   "23505",

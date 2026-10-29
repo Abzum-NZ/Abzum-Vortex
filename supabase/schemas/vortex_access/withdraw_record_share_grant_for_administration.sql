@@ -86,6 +86,15 @@ begin
       message = 'Record-share grant withdrawal is unavailable';
   end if;
 
+
+  if vortex_access.recent_authentication_deadline_internal(
+    context_value, pg_catalog.clock_timestamp(),
+    '{"kind":"multi_factor","maximumAgeSeconds":3600}'::jsonb
+  ) is null then
+    raise exception using errcode = 'V3152',
+      message = 'Record-share grant administration requires multi-factor authentication';
+  end if;
+
   update vortex_access.record_share_grants as grants
   set status = 'revoked',
       revoked_at = now_value,

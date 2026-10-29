@@ -92,6 +92,13 @@ begin
     'platform.tenant.organizations.lifecycle',
     evaluated_at
   );
+  if vortex_access.recent_authentication_deadline_internal(
+    vortex_platform.current_context(), evaluated_at,
+    '{"kind":"multi_factor","maximumAgeSeconds":3600}'::jsonb
+  ) is null then
+    raise exception using errcode = 'V3152',
+      message = 'Tenant governance requires multi-factor authentication';
+  end if;
 
   claimed := vortex_record.claim_scoped_command_receipt_internal(
     'archive_tenant_organization', p_duplicate_key, null, p_tenant_id, actor_identity_id,

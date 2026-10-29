@@ -2,7 +2,7 @@ create or replace function vortex_access.grant_organization_delegation_authority
   p_delegation_authority_id uuid, p_holder_kind text, p_holder_id uuid,
   p_expected_holder_revision bigint, p_activity_id uuid
 )
-returns table (outcome text, organization_id uuid, delegation_summary jsonb, access_version bigint)
+returns table (outcome text, organization_id uuid, delegation_summary jsonb, access_version bigint, refusal_reason text)
 language plpgsql volatile security definer set search_path = '' as $function$
 declare
   context_value jsonb; context_organization_id uuid; context_account_id uuid;
@@ -34,7 +34,7 @@ begin
       'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', vortex_access.required_platform_permission('platform.organization.assignments.manage'),
-      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'multi_factor', 'maximumAgeSeconds', 3600),
       'authority', pg_catalog.jsonb_build_object('kind', 'delegated_management',
         'before', pg_catalog.jsonb_build_object('kind', 'none'),
         'after', pg_catalog.jsonb_build_object('kind', 'organization_catalogue')))) as evaluated;
@@ -48,7 +48,7 @@ begin
     and decision.correlation_id = context_correlation_id
     and decision.reason_code in (
       'permission_unavailable', 'permission_not_effective',
-      'authentication_unsatisfied', 'delegation_insufficient'
+      'authentication_unsatisfied', 'multi_factor_unsatisfied', 'delegation_insufficient'
     ) then
     activity_result := vortex_record.append_organization_activity_entry(
       context_organization_id, p_activity_id, decision.checked_at,
@@ -59,7 +59,7 @@ begin
     if activity_result is distinct from 'inserted' then
       raise exception using errcode = '40001', message = 'Delegation grant refusal Activity is stale';
     end if;
-    return query select 'refused'::text, context_organization_id, null::jsonb, context_access_version;
+    return query select 'refused'::text, context_organization_id, null::jsonb, context_access_version, case decision.reason_code when 'authentication_unsatisfied' then 'recent_authentication_required' when 'multi_factor_unsatisfied' then 'multi_factor_required' else null end;
     return;
   end if;
   if decision.outcome is distinct from 'eligible'
@@ -83,7 +83,7 @@ begin
     if activity_result is distinct from 'inserted' then
       raise exception using errcode = '40001', message = 'Delegation grant refusal Activity is stale';
     end if;
-    return query select 'refused'::text, context_organization_id, null::jsonb, context_access_version;
+    return query select 'refused'::text, context_organization_id, null::jsonb, context_access_version, null::text;
     return;
   end if;
   if p_holder_kind = 'organization_account' then
@@ -119,7 +119,7 @@ begin
     'grant_delegation', array[p_delegation_authority_id]::uuid[], array[]::uuid[], vortex_platform.channel(),
     context_correlation_id, 'completed');
   if activity_result is distinct from 'inserted' then raise exception using errcode = '40001', message = 'Delegation Activity is stale'; end if;
-  return query select 'completed'::text, context_organization_id, summary, changed.access_version;
+  return query select 'completed'::text, context_organization_id, summary, changed.access_version, null::text;
 end $function$;
 
 alter function vortex_access.grant_organization_delegation_authority_for_administration(uuid, text, uuid, bigint, uuid) owner to vortex_owner;

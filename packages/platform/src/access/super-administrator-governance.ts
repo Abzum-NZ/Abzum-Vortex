@@ -149,6 +149,7 @@ export const vortexSuperAdministratorAssignmentMutationResultSchema = z.discrimi
           "assignment_unavailable",
           "stale_revision",
           "recent_authentication_required",
+          "multi_factor_required",
           "duplicate_conflict",
           "operator_not_configured",
           "operation_unavailable",

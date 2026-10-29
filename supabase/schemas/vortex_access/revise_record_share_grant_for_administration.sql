@@ -78,6 +78,14 @@ begin
 
   perform vortex_access.check_record_share_grant_terms_internal(p_terms, context_value);
 
+  if vortex_access.recent_authentication_deadline_internal(
+    context_value, pg_catalog.clock_timestamp(),
+    '{"kind":"multi_factor","maximumAgeSeconds":3600}'::jsonb
+  ) is null then
+    raise exception using errcode = 'V3152',
+      message = 'Record-share grant administration requires multi-factor authentication';
+  end if;
+
   -- A revision cannot turn a same-organisation proposal into a cross-organisation
   -- one or back: consent is bound to the grant's recipient organisation.
   cross_organization := (p_terms ->> 'recipientOrganizationId')::uuid

@@ -47,7 +47,10 @@ export type HumanOrganizationRequestResult<Result> =
   | Readonly<{ kind: "available"; value: Result }>
   | Readonly<{
       kind: "unavailable";
-      code?: "recent_authentication_required" | "role_settings_change_required";
+      code?:
+        | "recent_authentication_required"
+        | "multi_factor_required"
+        | "role_settings_change_required";
       cause?: string;
     }>
   | Readonly<{ kind: "temporarily_unavailable"; cause?: string; databaseCode?: string }>;
@@ -316,6 +319,7 @@ export const createHumanOrganizationRequestService = (
         return suspendedAccountResult();
       }
       const recentAuthenticationRequired = code === "V3150";
+      const multiFactorRequired = code === "V3152";
       const roleSettingsChangeRequired = code === "V3151";
       // Postgres reports a missing privilege (a lost GRANT, a role misconfiguration) with the same
       // code as the access model's refusals, but always as "permission denied for ...".
@@ -326,6 +330,7 @@ export const createHumanOrganizationRequestService = (
       const refused =
         (code === "42501" && !missingPrivilege) ||
         recentAuthenticationRequired ||
+        multiFactorRequired ||
         roleSettingsChangeRequired;
       const cause = describeFailure(error);
       // A request its caller abandoned (the browser left the page) is stopped on purpose, and a
@@ -339,17 +344,19 @@ export const createHumanOrganizationRequestService = (
       else if (refused) console.info(`[access] human organisation request refused: ${cause}`);
       else console.error(`[access] human organisation request failed: ${cause}`);
       appendTelemetry(correlationId, refused ? "refused" : "temporarily_unavailable", startedAtMs);
-      return recentAuthenticationRequired
-        ? { kind: "unavailable", code: "recent_authentication_required", cause }
-        : roleSettingsChangeRequired
-          ? { kind: "unavailable", code: "role_settings_change_required", cause }
-          : refused
-            ? { kind: "unavailable" }
-            : {
-                kind: "temporarily_unavailable",
-                cause,
-                ...(code === undefined ? {} : { databaseCode: code }),
-              };
+      return multiFactorRequired
+        ? { kind: "unavailable", code: "multi_factor_required", cause }
+        : recentAuthenticationRequired
+          ? { kind: "unavailable", code: "recent_authentication_required", cause }
+          : roleSettingsChangeRequired
+            ? { kind: "unavailable", code: "role_settings_change_required", cause }
+            : refused
+              ? { kind: "unavailable" }
+              : {
+                  kind: "temporarily_unavailable",
+                  cause,
+                  ...(code === undefined ? {} : { databaseCode: code }),
+                };
     }
   };
 
