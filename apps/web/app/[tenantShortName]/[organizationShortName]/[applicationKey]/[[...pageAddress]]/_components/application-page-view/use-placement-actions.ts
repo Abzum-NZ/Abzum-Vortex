@@ -90,6 +90,7 @@ export function usePlacementActions({
       clickId?: string,
       /** The gesture is shown on its own control, which tells the person its outcome. */
       reportOnControl?: ControlReport,
+      sourceTablePlacementId?: string,
     ) => {
       const callerInputs = { ...supplied };
       for (const selectedReadInput of binding.selectedReadInputs ?? []) {
@@ -114,6 +115,7 @@ export function usePlacementActions({
           ),
           clickId,
           gestureSubject,
+          sourceTablePlacementId,
         ),
         formOwners[placementId],
         afterAccepted,

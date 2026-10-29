@@ -11,6 +11,7 @@ import {
   isRecord,
 } from "@vortex/platform/schema";
 import { isFlowIntent, type FlowIntent } from "./intents";
+import type { PlacementFlowBinding } from "./flow-runtime";
 
 /** The address the signed-in person is using; the server resolves everything else from it. */
 export type FlowApplicationAddress = Readonly<{
@@ -22,12 +23,6 @@ export type FlowApplicationAddress = Readonly<{
   pageRecordId?: string;
 }>;
 
-/** What the surface was rendered from, so the server can refuse a stale or foreign request. */
-export type FlowInstallationContext = Readonly<{
-  installationRevision: number;
-  releaseKey: string;
-}>;
-
 /**
  * The exact evidence the server issued with a paused run, returned with the continuation so the
  * server can compare it with trusted state. The page never invents it: it stores what the previous
@@ -35,12 +30,13 @@ export type FlowInstallationContext = Readonly<{
  */
 export type FlowResumeEvidence = Readonly<{
   /** The exact paused target: installation, release, flow, node, awaiting form and receipt. */
-  target?: FormContinuationTarget;
+  target: FormContinuationTarget;
   /** The run receipt: which run and how many protected effects it has committed. */
   receipt?: FormContinuationReceipt;
 }>;
 
 export type ServerFlowResponse =
+  | Readonly<{ kind: "run_opened"; carriedValues: string }>
   | Readonly<{ kind: "reload"; installationRevision: number }>
   | Readonly<{
       kind: "result";
@@ -49,6 +45,7 @@ export type ServerFlowResponse =
       descriptor: Readonly<{ outcome: string; commit: string; outputs: string; recovery: string }>;
       outputs: Readonly<Record<string, JsonValue>>;
       intents: readonly FlowIntent[];
+      carriedValues?: string;
       failure?: Readonly<{ code: string; taskId?: string; diagnostic?: FlowRefusalFeedback }>;
     }>
   | Readonly<{
@@ -58,27 +55,43 @@ export type ServerFlowResponse =
       intents: readonly FlowIntent[];
       continuation: string;
       expiresAt: string;
-      target?: FormContinuationTarget;
+      carriedValues?: string;
+      target: FormContinuationTarget;
       receipt?: FormContinuationReceipt;
     }>
-  | Readonly<{ kind: "refused" }>
+  | Readonly<{ kind: "refused"; reason?: "this step was already answered" }>
   | Readonly<{ kind: "unavailable" }>;
 
 export type FlowInvokeClient = Readonly<{
+  openRun: (
+    binding: Pick<PlacementFlowBinding, "bindingId" | "flowId">,
+    clickId: string,
+    signal?: AbortSignal,
+    sourceTablePlacementId?: string,
+  ) => Promise<ServerFlowResponse>;
   startBinding: (
-    binding: Readonly<{ bindingId: string; flowId: string }>,
+    binding: Pick<PlacementFlowBinding, "bindingId" | "flowId" | "entrySegments">,
     callerInputs: Readonly<Record<string, unknown>>,
     clickId: string,
     signal?: AbortSignal,
     /** The one record this gesture is about, when it is not the record the page was rendered for. */
     subject?: FlowSubjectContext,
+    sourceTablePlacementId?: string,
+    carriedValues?: string,
+    segmentValues?: Readonly<{
+      seed: Readonly<Record<string, JsonValue>>;
+      iteration: string;
+      segment?: Readonly<{ segmentId: string; fingerprint: string }>;
+    }>,
   ) => Promise<ServerFlowResponse>;
   resume: (
     flowId: string,
     continuation: string,
     answer: FormContinuationAnswer,
-    evidence?: FlowResumeEvidence,
+    evidence: FlowResumeEvidence,
     signal?: AbortSignal,
+    sourceTablePlacementId?: string,
+    carriedValues?: string,
   ) => Promise<ServerFlowResponse>;
 }>;
 
@@ -90,7 +103,11 @@ export type FlowSubjectContext = Readonly<{ recordId: string; revision: number }
 
 export type FlowInvokeClientOptions = Readonly<{
   address: FlowApplicationAddress;
-  installation: FlowInstallationContext;
+  /** Current address and declared control values, sampled when each request is sent. */
+  pageInputs?: () => Readonly<{
+    parameters: Readonly<Record<string, string | readonly string[]>>;
+    controls: Readonly<Record<string, string>>;
+  }>;
   subject?: FlowSubjectContext;
   endpoint?: string;
   fetchImplementation?: typeof fetch;
@@ -120,13 +137,22 @@ const isWarningNotice = (candidate: unknown): candidate is FlowWarningNotice =>
  * request contract and the server's trusted state check them again.
  */
 const isEvidence = (candidate: unknown): boolean => candidate === undefined || isRecord(candidate);
+const isCarriedValues = (candidate: unknown): candidate is string | undefined =>
+  candidate === undefined ||
+  (typeof candidate === "string" && candidate.length > 0 && candidate.length <= 65_536);
 
 /** Fails closed: anything that is not exactly one of the endpoint's answers is `unavailable`. */
 export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse => {
   if (!isRecord(candidate)) return invalidServerResponse();
   switch (candidate.kind) {
+    case "run_opened":
+      return isCarriedValues(candidate.carriedValues) && candidate.carriedValues !== undefined
+        ? { kind: "run_opened", carriedValues: candidate.carriedValues }
+        : invalidServerResponse();
     case "refused":
-      return refused;
+      return candidate.reason === "this step was already answered"
+        ? { kind: "refused", reason: candidate.reason }
+        : refused;
     case "unavailable":
       return unavailable;
     case "reload":
@@ -138,7 +164,9 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
       if (
         intents === undefined ||
         !isEvidence(candidate.target) ||
+        candidate.target === undefined ||
         !isEvidence(candidate.receipt) ||
+        !isCarriedValues(candidate.carriedValues) ||
         typeof candidate.runId !== "string" ||
         (candidate.awaiting !== "form" && candidate.awaiting !== "confirm") ||
         typeof candidate.continuation !== "string" ||
@@ -152,9 +180,10 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         intents,
         continuation: candidate.continuation,
         expiresAt: candidate.expiresAt,
-        ...(candidate.target === undefined
+        ...(candidate.carriedValues === undefined
           ? {}
-          : { target: candidate.target as FormContinuationTarget }),
+          : { carriedValues: candidate.carriedValues }),
+        target: candidate.target as FormContinuationTarget,
         ...(candidate.receipt === undefined
           ? {}
           : { receipt: candidate.receipt as FormContinuationReceipt }),
@@ -174,7 +203,8 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         typeof descriptor.commit !== "string" ||
         typeof descriptor.outputs !== "string" ||
         typeof descriptor.recovery !== "string" ||
-        !isRecord(candidate.outputs)
+        !isRecord(candidate.outputs) ||
+        !isCarriedValues(candidate.carriedValues)
       )
         return invalidServerResponse();
       const failure = candidate.failure;
@@ -216,6 +246,9 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         },
         outputs: candidate.outputs as Readonly<Record<string, JsonValue>>,
         intents,
+        ...(candidate.carriedValues === undefined
+          ? {}
+          : { carriedValues: candidate.carriedValues }),
         ...(acceptedFailure === undefined ? {} : { failure: acceptedFailure }),
       };
     }
@@ -254,6 +287,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
           ...(options.address.pageRecordId === undefined
             ? {}
             : { pageRecordId: options.address.pageRecordId }),
+          pageInputs: options.pageInputs?.() ?? { parameters: {}, controls: {} },
           invocation,
         }),
       });
@@ -266,36 +300,66 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
       return unavailable;
     }
   };
-  const context = {
-    installationRevision: options.installation.installationRevision,
-    releaseKey: options.installation.releaseKey,
-  };
   return Object.freeze({
-    startBinding: (binding, callerInputs, clickId, signal, subject) =>
+    openRun: (binding, clickId, signal, sourceTablePlacementId) =>
       send(
         {
-          kind: "binding",
-          ...context,
+          kind: "run_start",
           bindingId: binding.bindingId,
           flowId: binding.flowId,
           clickId,
+          ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
+        },
+        signal,
+      ),
+    startBinding: (
+      binding,
+      callerInputs,
+      clickId,
+      signal,
+      subject,
+      sourceTablePlacementId,
+      carriedValues,
+      segmentValues,
+    ) =>
+      send(
+        {
+          kind: "binding",
+          bindingId: binding.bindingId,
+          flowId: binding.flowId,
+          entrySegments: [...binding.entrySegments],
+          ...(segmentValues?.segment === undefined ? {} : { segment: segmentValues.segment }),
+          clickId,
+          seed: segmentValues?.seed ?? {},
+          iteration: segmentValues?.iteration ?? "0",
           callerInputs,
+          ...(carriedValues === undefined ? {} : { carriedValues }),
+          ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
           ...((subject ?? options.subject) === undefined
             ? {}
             : { subject: subject ?? options.subject }),
         },
         signal,
       ),
-    resume: (flowId, continuation, answer, evidence, signal) =>
+    resume: (
+      flowId,
+      continuation,
+      answer,
+      evidence,
+      signal,
+      sourceTablePlacementId,
+      carriedValues,
+    ) =>
       send(
         {
           kind: "continuation",
-          ...context,
           flowId,
           continuation,
           answer,
-          ...(evidence?.target === undefined ? {} : { target: evidence.target }),
-          ...(evidence?.receipt === undefined ? {} : { receipt: evidence.receipt }),
+          ...(carriedValues === undefined ? {} : { carriedValues }),
+          ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
+          target: evidence.target,
+          ...(evidence.receipt === undefined ? {} : { receipt: evidence.receipt }),
         },
         signal,
       ),

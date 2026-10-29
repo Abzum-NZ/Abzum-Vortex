@@ -58,6 +58,7 @@ export function useFlowRuntime({
   model,
   platformComponentRegistry,
   runtimeInputsRef,
+  controlDraftsRef,
   choicePayloadFor,
   fieldInputControlReleases,
   setNotice,
@@ -82,6 +83,7 @@ export function useFlowRuntime({
   model: ApplicationPageModel;
   platformComponentRegistry: ReturnType<typeof createPlatformComponentRegistryForReleases>;
   runtimeInputsRef: RefObject<Readonly<Record<string, unknown>>>;
+  controlDraftsRef: RefObject<{ scope: string; values: Record<string, unknown> }>;
   choicePayloadFor: (placementId: string, formId?: string) => ChoiceInputPayload | undefined;
   fieldInputControlReleases: FieldInputControlReleaseMap;
   setNotice: Dispatch<SetStateAction<Notice | undefined>>;
@@ -119,9 +121,34 @@ export function useFlowRuntime({
         pageKey: application.pageKey,
         ...(subject === undefined ? {} : { pageRecordId: subject.recordId }),
       },
-      installation: {
-        installationRevision: application.installationRevision,
-        releaseKey: application.releaseKey,
+      pageInputs: () => {
+        const search = new URLSearchParams(window.location.search);
+        const parameters: Record<string, string | string[]> = {};
+        for (const name of search.keys()) {
+          const values = search.getAll(name);
+          parameters[name] = values.length === 1 ? values[0]! : values;
+        }
+        const controls: Record<string, string> = {};
+        const forward = (placementId: string, value: unknown) => {
+          if (value === null) controls[placementId] = "";
+          else if (
+            typeof value === "string" ||
+            typeof value === "number" ||
+            typeof value === "boolean"
+          )
+            controls[placementId] = String(value);
+          else if (isRecord(value) && typeof value.recordId === "string")
+            controls[placementId] = value.recordId;
+        };
+        for (const [placementId, input] of Object.entries(runtimeInputsRef.current)) {
+          if (!isRecord(input) || !isRecord(input.data) || input.data.status !== "ready") continue;
+          const values = input.data.values;
+          if (!isRecord(values)) continue;
+          forward(placementId, values.value);
+        }
+        for (const [placementId, value] of Object.entries(controlDraftsRef.current.values))
+          forward(placementId, value);
+        return { parameters, controls };
       },
       ...(subject === undefined ? {} : { subject }),
     };
@@ -142,7 +169,17 @@ export function useFlowRuntime({
       }
     };
     const trackedClient = (client: FlowInvokeClient): FlowInvokeClient => ({
-      startBinding: async (binding, callerInputs, clickId, signal, gestureSubject) => {
+      openRun: (...args) => client.openRun(...args),
+      startBinding: async (
+        binding,
+        callerInputs,
+        clickId,
+        signal,
+        gestureSubject,
+        sourceTablePlacementId,
+        carriedValues,
+        segmentValues,
+      ) => {
         const submission = submittedFormsRef.current.get(binding.bindingId);
         submittedFormsRef.current.delete(binding.bindingId);
         const inputs =
@@ -155,15 +192,34 @@ export function useFlowRuntime({
           clickId,
           signal,
           gestureSubject,
+          sourceTablePlacementId,
+          carriedValues,
+          segmentValues,
         );
         recordResponse(response, submission);
         return response;
       },
-      resume: async (flowId, continuation, answer, evidence, signal) => {
+      resume: async (
+        flowId,
+        continuation,
+        answer,
+        evidence,
+        signal,
+        sourceTablePlacementId,
+        carriedValues,
+      ) => {
         if (answer.kind === "cancel") formCancelledRef.current = true;
         const submission = continuingFormsRef.current.get(continuation);
         continuingFormsRef.current.delete(continuation);
-        const response = await client.resume(flowId, continuation, answer, evidence, signal);
+        const response = await client.resume(
+          flowId,
+          continuation,
+          answer,
+          evidence,
+          signal,
+          sourceTablePlacementId,
+          carriedValues,
+        );
         recordResponse(response, submission);
         return response;
       },
@@ -174,7 +230,15 @@ export function useFlowRuntime({
         createFlowInvokeClient({ ...options, endpoint: "/api/flows/invoke/mcp" }),
       ),
     };
-  }, [application, formCancelledRef, subject, unsavedWorkRegistry]);
+  }, [
+    application,
+    formCancelledRef,
+    model.pageParameters.controls,
+    runtimeInputsRef,
+    controlDraftsRef,
+    subject,
+    unsavedWorkRegistry,
+  ]);
   const applicationFrame = useApplicationFrame();
   const startPageChange = applicationFrame?.startPageChange;
   const navigation = model.navigation ?? applicationFrame?.navigation;

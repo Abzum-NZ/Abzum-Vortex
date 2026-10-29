@@ -24,7 +24,12 @@ import {
 import { flowBindingSettingsSchema } from "../application-flow-bindings";
 import type { ComponentSemanticEventKind } from "../component-semantic-events";
 import { flowBindingSettingNotYetRunnable } from "../flow-step-settings";
-import { compileFlowPlans, flowBindingPlanIssue } from "../../workflows/flow-plan";
+import {
+  compileFlowPlans,
+  flowBindingPlanIssue,
+  FlowPlanError,
+  rowActionFormTargets,
+} from "../../workflows/flow-plan";
 import { applicationSearchSourceReferences } from "../source-identities";
 import {
   materialiseApplicationComposition,
@@ -577,7 +582,7 @@ function compileApplicationFlowBindings(
   const body = asObject(source.body);
   const definitionKey = String(source.key);
   const flowsById = new Map(flows.map((flow) => [String(flow.id), flow]));
-  const plans = compileFlowPlans(flows).plans;
+  const plans = compileFlowPlans(flows, definitionKey).plans;
   return compiledSourceFlowBindings(body).map((binding) => {
     const flowId = resolution.id(definitionKey, "flow", String(binding.flow), "content");
     const flow = flowsById.get(flowId);
@@ -598,6 +603,20 @@ function compileApplicationFlowBindings(
       fail("vortex.definition.application_flow_binding_inputs", "invalid_value", location);
     // The binding's own plan: latest-wins only on a flow that changes nothing, and an options
     // flow only reads.
+    if (binding.event === "row_action") {
+      try {
+        rowActionFormTargets(flowId, (id) => flowsById.get(id));
+      } catch (error) {
+        if (!(error instanceof FlowPlanError)) throw error;
+        throw new DefinitionCompilationError(
+          "vortex.definition.unsupported_workflow_node",
+          "unsupported_choice",
+          location,
+          undefined,
+          `Flow ${error.flowId}, step ${error.taskId ?? "unknown"}: ${error.reason}`,
+        );
+      }
+    }
     const planIssue = flowBindingPlanIssue(plans.get(flowId)!, {
       event: String(binding.event),
       settings: settings.data,
