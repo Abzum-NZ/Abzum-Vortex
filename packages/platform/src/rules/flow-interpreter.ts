@@ -1,7 +1,7 @@
 import { pageStepIntents } from "./flow-page-steps";
 export { pageStepIntents } from "./flow-page-steps";
 import { describeFailure } from "../catalogue/runtime-primitives";
-import { typedValueMatchesType } from "./condition-types";
+import { flowValueMatchesType } from "./flow-value-shapes";
 import type { JsonValue } from "../catalogue/common";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import { isRecordLinkValue } from "../records/value-predicates";
@@ -408,7 +408,7 @@ const scopeOf = (
         if (type === undefined) return undefined;
         // A declared member that is present but empty (a form field left blank) is its typed null.
         if (selected === null) return declaredNull(type);
-        return typedValueMatchesType(selected, type, "flow")
+        return flowValueMatchesType(selected, type)
           ? typed(type, selected as JsonValue)
           : undefined;
       }
@@ -476,7 +476,7 @@ const buildInputs = (
       else if (declaration.required) invalid(`required input "${name}" is missing`);
       continue;
     }
-    if (!typedValueMatchesType(candidate, declaration.type, "flow"))
+    if (!flowValueMatchesType(candidate, declaration.type))
       invalid(`input "${name}" is not a valid ${declaration.type} value`);
     inputs[name] = typed(declaration.type, candidate as JsonValue);
   }
@@ -602,7 +602,7 @@ const declaredOutputs = (
   for (const [key, type] of Object.entries(declared)) {
     const value = produced?.[key];
     if (value === undefined || value === null) continue;
-    if (typedValueMatchesType(value, type, "flow")) outputs[key] = typed(type, value);
+    if (flowValueMatchesType(value, type)) outputs[key] = typed(type, value);
   }
   return outputs;
 };
@@ -648,8 +648,7 @@ const validReadFieldsResume = (
   return (
     actualAliases.length === declaredAliases.length &&
     declaredAliases.every(
-      (alias) =>
-        Object.hasOwn(actual, alias) && typedValueMatchesType(actual[alias], types[alias]!, "flow"),
+      (alias) => Object.hasOwn(actual, alias) && flowValueMatchesType(actual[alias], types[alias]!),
     )
   );
 };
@@ -1248,7 +1247,7 @@ export const resumeFlowRun = (
               declared.find(
                 ([name, type]) =>
                   !Object.hasOwn(answers, name) ||
-                  (answers[name] !== null && !typedValueMatchesType(answers[name], type, "flow")),
+                  (answers[name] !== null && !flowValueMatchesType(answers[name], type)),
               );
       if (invalidAnswer !== undefined) {
         replaceTop(

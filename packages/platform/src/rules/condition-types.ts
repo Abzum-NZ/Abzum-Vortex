@@ -6,12 +6,12 @@ import {
   sourceModuleFieldValueSchemas,
   moduleFieldValueSchemas,
   recordLinkValueSchema,
-  recordRichTextDocumentSchema,
 } from "../records/module-field-values";
-import { jsonValueSchema, type JsonValue } from "../catalogue/common";
+import type { JsonValue } from "../catalogue/common";
 import { platformIdSchema } from "../catalogue/identifiers";
 import { validText, validDate } from "./typed-condition-core";
 import { flowInstantMicros } from "./flow-instant";
+import { flowValueMatchesType } from "./flow-value-shapes";
 
 export type ConditionValueType =
   | "text"
@@ -91,28 +91,16 @@ export function typedValueMatchesType(
   type: string,
   dialect: ValueDialect = "canonical",
 ): value is JsonValue {
+  if (dialect === "flow") return flowValueMatchesType(value, type);
   switch (type) {
-    case "text":
-      return validText(value);
-    case "whole_number":
-      return typeof value === "number" && Number.isSafeInteger(value);
     case "decimal_number":
       return (
         dialect === "source" ? sourceExactDecimalTextSchema : exactDecimalTextSchema
       ).safeParse(value).success;
     case "money":
-      return dialect === "flow"
-        ? exactDecimalTextSchema.safeParse(value).success
-        : (dialect === "source" ? sourceMoneyValueSchema : moneyValueSchema).safeParse(value)
-            .success;
-    case "yes_no":
-      return typeof value === "boolean";
-    case "date":
-      return validDate(value);
-    case "date_time":
-      return flowInstantMicros(value) !== undefined;
+      return (dialect === "source" ? sourceMoneyValueSchema : moneyValueSchema).safeParse(value)
+        .success;
     case "record_reference":
-      if (dialect === "flow") return typeof value === "string" && value.length > 0;
       if (dialect === "source") {
         const entry = value as Record<string, unknown> | null;
         return (
@@ -124,32 +112,15 @@ export function typedValueMatchesType(
         );
       }
       return recordLinkValueSchema.safeParse(value).success;
-    case "organization_account_reference":
-      return platformIdSchema.safeParse(value).success;
-    case "text_collection":
-      return Array.isArray(value) && value.every(validText);
-    case "opaque_json":
-      return jsonValueSchema.safeParse(value).success;
-    case "formatted_text":
-      return recordRichTextDocumentSchema.safeParse(value).success;
-    case "choice":
-      return typeof value === "string" && value.length > 0;
     case "workflow_run_reference":
     case "relationship_reference":
     case "file_reference":
-      return dialect === "flow" && typeof value === "string" && value.length > 0;
     case "several_choices":
     case "record_reference_list":
     case "relationship_reference_list":
-      return (
-        dialect === "flow" &&
-        Array.isArray(value) &&
-        value.every((entry) => typeof entry === "string" && entry.length > 0)
-      );
-    case "json":
-      return jsonValueSchema.safeParse(value).success;
-    default:
       return false;
+    default:
+      return flowValueMatchesType(value, type);
   }
 }
 export const semanticTypeForLiteral = (value: JsonValue): ConditionValueType | undefined => {
