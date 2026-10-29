@@ -495,7 +495,7 @@ export function ApplicationPageViewContent({
     changeTableQuery,
   });
 
-  const fieldFlowEvents = useFieldFlowEvents(navigationKey, runtimeState, runBinding, setNotice);
+  const fieldFlowEvents = useFieldFlowEvents(navigationKey, runtimeState, runBinding);
   const { runtimeInputs } = useRuntimeInputs({
     currentData: tableData,
     model,
