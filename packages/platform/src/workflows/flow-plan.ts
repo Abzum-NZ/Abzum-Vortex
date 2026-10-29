@@ -1,4 +1,8 @@
 import { fingerprintCanonicalValue } from "../definition/canonical-json-definition";
+import {
+  PLATFORM_SERVICE_OPERATIONS,
+  platformOperationKey,
+} from "../catalogue/platform-service-operation-catalogue";
 import type { FlowDefinition, FlowTask } from "./flow-contracts";
 import { flowTaskChildLists, isFlowControlTask } from "./flow-contracts";
 import { flowTaskRegistry, type FlowTaskTypeKey } from "./flow-task-registry";
@@ -18,7 +22,15 @@ type UnitLocation = "page" | "server" | "neutral" | "mixed";
 /** One branch decision on the path from the start of the flow to a segment. */
 export type FlowPathCondition =
   | Readonly<{ taskId: string; kind: "if"; branch: "then" | "else"; condition: FlowFormula }>
-  | Readonly<{ taskId: string; kind: "switch"; branch: string; value: unknown; when?: unknown }>;
+  | Readonly<{
+      taskId: string;
+      kind: "switch";
+      branch: string;
+      value: unknown;
+      when?: unknown;
+      /** All case literals, needed to establish that the default branch matched no case. */
+      cases?: readonly unknown[];
+    }>;
 
 /** A typed value a segment reads from before it or hands on after it. */
 export type FlowPlanValueTypes = Readonly<Record<string, string>>;
@@ -42,6 +54,8 @@ export type FlowServerSegment = Readonly<{
   /** The values the segment reads from outside itself, and the outputs it produces. */
   inputs: FlowPlanValueTypes;
   outputs: FlowPlanValueTypes;
+  /** Types of declared output members keyed by task, output and member. */
+  outputMembers: FlowPlanValueTypes;
   /** Whether a step of the segment changes data or starts back-end work. */
   changes: boolean;
   /** Each For each over record steps, which runs as one set-based change. */
@@ -63,6 +77,7 @@ export type FlowSegmentStub = Readonly<{
   guard: readonly FlowPathCondition[];
   inputs: FlowPlanValueTypes;
   outputs: FlowPlanValueTypes;
+  outputMembers: FlowPlanValueTypes;
   labels: readonly string[];
 }>;
 
@@ -203,6 +218,30 @@ const outputTypes = (steps: readonly FlowTask[]): Record<string, string> =>
     ),
   );
 
+const outputMemberTypes = (steps: readonly FlowTask[]): Record<string, string> => {
+  const types: Record<string, string> = {};
+  for (const step of steps) {
+    if (!("properties" in step)) continue;
+    if (step.type === "record.read_fields") {
+      for (const [member, type] of Object.entries(step.readFieldTypes ?? {}))
+        types[`${step.id}.values.${member}`] = type;
+    } else if (step.type === "operation.call") {
+      const operation = step.properties.operation;
+      const key = operation?.kind === "literal" ? operation.literal.value : undefined;
+      const entry = Object.values(PLATFORM_SERVICE_OPERATIONS).find(
+        (candidate) => platformOperationKey(candidate.key) === key,
+      );
+      if (
+        entry !== undefined &&
+        (entry.descriptor.effect === "read" || entry.descriptor.effect === "change")
+      )
+        for (const [member, declaration] of Object.entries(entry.descriptor.outputs))
+          types[`${step.id}.result.${member}`] = declaration.type;
+    }
+  }
+  return types;
+};
+
 const inputTypes = (
   flow: FlowDefinition,
   steps: readonly (FlowTask | FlowPathCondition)[],
@@ -328,7 +367,13 @@ const cut = (flow: FlowDefinition, section: FlowPlanSection, tasks: readonly Flo
           if (node.default !== undefined)
             walk(node.default, [
               ...guard,
-              { taskId: node.id, kind: "switch", branch: "default", value: node.value },
+              {
+                taskId: node.id,
+                kind: "switch",
+                branch: "default",
+                value: node.value,
+                cases: node.cases.map((entry) => entry.when),
+              },
             ]);
           break;
         }
@@ -372,6 +417,7 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
       tasks: draft.tasks,
       inputs,
       outputs,
+      outputMembers: outputMemberTypes(steps),
       changes: steps.some((step) => {
         const effect = registered(step)?.effect;
         return effect === "change" || effect === "background_start";
@@ -425,6 +471,7 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
               guard: segment.guard,
               inputs: segment.inputs,
               outputs: segment.outputs,
+              outputMembers: segment.outputMembers,
               labels: segment.labels,
             },
       ),
