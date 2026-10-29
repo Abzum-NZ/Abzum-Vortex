@@ -262,16 +262,17 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     selection: OrganizationSelectionCandidate,
     flowId: string,
     kind: "interactive" | "action" = "interactive",
+    ports: FlowOrchestratorDependencies = dependencies,
   ): Promise<PreparedPersonRun | undefined> => {
     // An expired session is not a verified initiator, on a start or on any resume.
     if (!(Date.parse(session.accessTokenExpiresAt) > now().valueOf())) return undefined;
-    const release = await dependencies.resolveRelease(selection.organizationId, flowId);
+    const release = await ports.resolveRelease(selection.organizationId, flowId);
     if (release === undefined) return undefined;
     const validated = libraryOf(release);
     const permitted = async (flow: FlowDefinition): Promise<boolean> =>
       flow.invocationPermissionId === undefined ||
-      (dependencies.authorizeInvocation !== undefined &&
-        (await dependencies.authorizeInvocation(session, selection, flow)));
+      (ports.authorizeInvocation !== undefined &&
+        (await ports.authorizeInvocation(session, selection, flow)));
 
     const flow = validated(flowId);
     // A flow the platform runs for a person runs as that person, and only that. A named action's
@@ -319,13 +320,14 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
     command: ExecuteNamedActionCommand,
+    ports: FlowOrchestratorDependencies = dependencies,
   ): Promise<NamedActionExecutionResult> => {
-    if (dependencies.actionRecords === undefined) return { kind: "unavailable" };
+    if (ports.actionRecords === undefined) return { kind: "unavailable" };
     const flowId = command.action.actionId;
-    const prepared = await prepare(session, selection, flowId, "action");
+    const prepared = await prepare(session, selection, flowId, "action", ports);
     if (prepared === undefined) return { kind: "unavailable" };
     const runId = newRunId();
-    return dependencies.actionRecords.execute(session, selection, command, (seed) =>
+    return ports.actionRecords.execute(session, selection, command, (seed) =>
       collectActionFlowTasks(prepared.library, flowId, runId, seed),
     );
   };
