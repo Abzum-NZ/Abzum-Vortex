@@ -1,8 +1,8 @@
-import { recordsTableRowEditEvent } from "./application-composition/records-table-features/row-edit";
 import "server-only";
 
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { recordsTableRowEditEvent } from "./application-composition/records-table-features/row-edit";
 import {
   identitySessionSchema,
   organizationSelectionCandidateSchema,
@@ -53,7 +53,6 @@ import type {
   FlowOrchestratorResponse,
   FlowRecordType,
   FlowRelease,
-  FlowRunExpectation,
   FlowUnavailableNotice,
 } from "./flow-orchestrator-types";
 import type { FlowSubject } from "../rules/flow-interpreter";
@@ -108,6 +107,7 @@ export type InstalledFlowBindings = Readonly<{
   bindings: readonly ComponentFlowBinding[];
   /** The release's planned flows (`flowPlansOf`). */
   flows: ReadonlyMap<string, FlowDefinition>;
+  plans: FlowRelease["plans"];
   /** The release's record types, for the values of a Save record task. */
   recordTypes?: ReadonlyMap<string, FlowRecordType>;
   /** The release's named actions by key, for a Call protected operation task that names one. */
@@ -132,15 +132,23 @@ type FlowBindingEndpointDependencies = Readonly<{
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
   ) => Promise<InstalledFlowBindings | undefined>;
+  openRun?: (
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    binding: ComponentFlowBinding,
+    installation: InstalledFlowBindings,
+  ) => Promise<
+    Readonly<{ kind: "run_opened"; carriedValues: string }> | Readonly<{ kind: "refused" }>
+  >;
   /**
-   * The orchestrator bound to exactly this release. `runId` is set for a binding start so a
-   * repeated click reuses one run identity; it is absent for a continuation.
+   * The orchestrator bound to exactly this release. `runId` is the binding start's, so a
+   * repeated click reuses one run identity.
    */
   orchestratorFor: (
     release: FlowRelease,
-    runId: string | undefined,
+    runId: string,
     installation: InstalledFlowBindings,
-  ) => Pick<FlowOrchestrator, "start" | "resume">;
+  ) => Pick<FlowOrchestrator, "invokeBinding">;
   /**
    * THE SEAM for the form request's submit adapter (`adaptPrivateFormSubmit`): turns what a form
    * submission supplies, and the record the form was rendered for, into the caller inputs of a
@@ -156,9 +164,9 @@ type FlowBindingEndpointDependencies = Readonly<{
   /**
    * THE SEAM for the form request's continuation adapter: forwards an exact paused target and its
    * run receipt to the web-independent form continuation interface, which compares them with
-   * trusted state. Until it is supplied a continuation that carries a target is refused.
+   * trusted state.
    */
-  continueForm?: (
+  continueForm: (
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
     request: FormContinuationRequest,
@@ -168,8 +176,10 @@ type FlowBindingEndpointDependencies = Readonly<{
 type SafeIntents = Extract<FlowOrchestratorResponse, { intents: unknown }>["intents"];
 
 export type FlowBindingEndpointResult =
+  | Readonly<{ kind: "run_opened"; carriedValues: string }>
   /** The request named a stale installation revision: reload the page, nothing was run. */
   | Readonly<{ kind: "reload"; installationRevision: number }>
+  | Readonly<{ kind: "rate_limited"; retryAfterSeconds: number }>
   /** The run ended. `descriptor` is the shared safe result; `outputs` only when it says available. */
   | Readonly<{
       kind: "result";
@@ -177,6 +187,7 @@ export type FlowBindingEndpointResult =
       runId: string;
       descriptor: SafeFlowResultDescriptor;
       outputs: Readonly<Record<string, JsonValue>>;
+      carriedValues?: string;
       /** Browser intents such as navigation or a message, for the surface to carry out. */
       intents: SafeIntents;
       unavailable: readonly FlowUnavailableNotice[];
@@ -194,13 +205,14 @@ export type FlowBindingEndpointResult =
       intents: SafeIntents;
       continuation: string;
       expiresAt: string;
+      carriedValues?: string;
       /** The exact paused target and receipt the surface returns with the continuation (evidence). */
-      target?: FormContinuationTarget;
+      target: FormContinuationTarget;
       receipt?: FormContinuationReceipt;
       unavailable: readonly FlowUnavailableNotice[];
     }>
   /** Unknown, not installed, foreign, expired or not permitted: one neutral result. */
-  | Readonly<{ kind: "refused" }>;
+  | Readonly<{ kind: "refused"; reason?: "this step was already answered" }>;
 
 const refused: FlowBindingEndpointResult = Object.freeze({ kind: "refused" });
 
@@ -665,10 +677,18 @@ const toResult = (
   }>,
 ): FlowBindingEndpointResult => {
   switch (response.kind) {
+    case "reload":
+      return { kind: "reload", installationRevision: context.installationRevision };
+    case "rate_limited":
+      return response;
+    case "already_answered":
+      return { kind: "refused", reason: "this step was already answered" };
     case "finished":
       return finishedResult(response, context);
     case "suspended": {
       const target = suspendedTarget(response, context);
+      // A pause the person could not answer through the one form continuation path is not offered.
+      if (target === undefined) return refused;
       const receipt = formContinuationReceiptSchema.safeParse({
         runId: response.runId,
         committedEffects: response.committedEffects,
@@ -680,7 +700,7 @@ const toResult = (
         intents: response.intents,
         continuation: response.continuation,
         expiresAt: response.expiresAt,
-        ...(target === undefined ? {} : { target }),
+        target,
         ...(receipt.success ? { receipt: receipt.data } : {}),
         unavailable: response.unavailable,
       };
@@ -701,6 +721,10 @@ const continuationResult = (
   }>,
 ): FlowBindingEndpointResult => {
   switch (outcome.kind) {
+    case "reload":
+      return { kind: "reload", installationRevision };
+    case "rate_limited":
+      return outcome;
     case "finished": {
       const diagnostic = surfaceDiagnostic(
         outcome.failure?.diagnostic,
@@ -741,9 +765,11 @@ const continuationResult = (
         unavailable: outcome.unavailable,
       };
     default:
-      return outcome.reason === "stale_installation"
-        ? { kind: "reload", installationRevision }
-        : refused;
+      return outcome.reason === "already_answered"
+        ? { kind: "refused", reason: "this step was already answered" }
+        : outcome.reason === "stale_installation"
+          ? { kind: "reload", installationRevision }
+          : refused;
   }
 };
 
@@ -767,7 +793,10 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
         if (!selection.success) return refuse("FLOW_INVOKE_SELECTION_INVALID", selection.error);
         if (!invocation.success) return refuse("FLOW_INVOKE_REQUEST_INVALID", invocation.error);
         const request = invocation.data;
-        if (!withinSupplied(request.kind === "binding" ? request.callerInputs : request.answer))
+        if (
+          request.kind !== "run_start" &&
+          !withinSupplied(request.kind === "binding" ? request.callerInputs : request.answer)
+        )
           return refuse("FLOW_INVOKE_INPUT_TOO_LARGE");
 
         const installation = await dependencies.readInstallation(session.data, selection.data);
@@ -780,14 +809,22 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
               ? "FLOW_INVOKE_INSTALLATION_NOT_FOUND"
               : "FLOW_INVOKE_INSTALLATION_ORGANIZATION_MISMATCH",
           );
-        if (request.installationRevision !== installation.installationRevision)
-          return { kind: "reload", installationRevision: installation.installationRevision };
-        if (request.releaseKey !== installation.releaseKey)
-          return refuse("FLOW_INVOKE_RELEASE_MISMATCH");
+        if (request.kind === "run_start") {
+          const matches = installation.bindings.filter((entry) =>
+            sameId(entry.bindingId, request.bindingId),
+          );
+          if (matches.length !== 1 || !sameId(matches[0]!.flow.flowId, request.flowId))
+            return refuse("FLOW_INVOKE_BINDING_FLOW_MISMATCH");
+          return dependencies.openRun === undefined
+            ? refuse("FLOW_INVOKE_RUN_START_UNAVAILABLE")
+            : await dependencies.openRun(session.data, selection.data, matches[0]!, installation);
+        }
 
         const release: FlowRelease = {
           releaseKey: installation.releaseKey,
+          installationRevision: installation.installationRevision,
           flows: installation.flows,
+          plans: installation.plans,
           ...(installation.recordTypes === undefined
             ? {}
             : { recordTypes: installation.recordTypes }),
@@ -805,48 +842,19 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           if (!installation.bindings.some((entry) => sameId(entry.flow.flowId, request.flowId)))
             return refuse("FLOW_INVOKE_CONTINUATION_FLOW_NOT_BOUND");
           const target = request.target;
-          // An exact paused target always goes to the form continuation interface, the one place
+          // The exact paused target always goes to the form continuation interface, the one place
           // that compares the installation, release, flow, node, form and receipt with trusted
-          // state; a stale target comes back as a reload and a forged one as the neutral refusal.
-          if (target !== undefined) {
-            if (dependencies.continueForm === undefined)
-              return refuse("FLOW_INVOKE_FORM_CONTINUATION_UNAVAILABLE");
-            if (!sameId(target.flowId, request.flowId))
-              return refuse("FLOW_INVOKE_CONTINUATION_TARGET_FLOW_MISMATCH");
-            const outcome = await dependencies.continueForm(session.data, selection.data, {
-              target,
-              continuation: request.continuation,
-              answer: request.answer,
-              ...(request.receipt === undefined ? {} : { receipt: request.receipt }),
-            });
-            return continuationResult(outcome, installation.installationRevision, {
-              flowId: request.flowId,
-              installation,
-            });
-          }
-          // A form answer must pass through the paused-target adapter, which resolves every
-          // reference-choice key before the flow sees the submitted values.
-          if (request.answer.kind === "submit")
-            return refuse("FLOW_INVOKE_FORM_ANSWER_WITHOUT_TARGET");
-          const expectation: FlowRunExpectation = {
-            releaseKey: installation.releaseKey,
+          // state and resolves every reference-choice key; a stale target comes back as a reload
+          // and a forged one as the neutral refusal.
+          if (!sameId(target.flowId, request.flowId))
+            return refuse("FLOW_INVOKE_CONTINUATION_TARGET_FLOW_MISMATCH");
+          const outcome = await dependencies.continueForm(session.data, selection.data, {
+            target,
+            continuation: request.continuation,
+            answer: request.answer,
             ...(request.receipt === undefined ? {} : { receipt: request.receipt }),
-          };
-          const response = await dependencies
-            .orchestratorFor(release, undefined, installation)
-            .resume(
-              {
-                session: session.data,
-                selection: selection.data,
-                flowId: request.flowId,
-                continuation: request.continuation,
-                answer: request.answer,
-              },
-              expectation,
-            );
-          return toResult(response, {
-            applicationRootId: installation.applicationRootId,
-            installationRevision: installation.installationRevision,
+          });
+          return continuationResult(outcome, installation.installationRevision, {
             flowId: request.flowId,
             installation,
           });
@@ -896,12 +904,19 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           installation.installationRevision,
           request.clickId,
         );
-        const response = await dependencies.orchestratorFor(release, runId, installation).start({
-          session: session.data,
-          selection: selection.data,
-          binding: { flowId: binding.flow.flowId, inputs },
-          ...(request.subject === undefined ? {} : { subject: request.subject }),
-        });
+        const response = await dependencies
+          .orchestratorFor(release, runId, installation)
+          .invokeBinding(
+            {
+              session: session.data,
+              selection: selection.data,
+              bindingId: binding.bindingId,
+              gestureId: request.clickId,
+              binding: { flowId: binding.flow.flowId, inputs },
+              ...(request.subject === undefined ? {} : { subject: request.subject }),
+            },
+            { releaseKey: installation.releaseKey, entrySegments: request.entrySegments },
+          );
         return toResult(response, {
           applicationRootId: installation.applicationRootId,
           installationRevision: installation.installationRevision,

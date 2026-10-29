@@ -5,13 +5,11 @@ import { logRefusal } from "../catalogue/runtime-primitives";
 import {
   formContinuationOutcomeSchema,
   formContinuationRequestSchema,
-  formContinuationStartRequestSchema,
   type FormContinuationInstallation,
   type FormContinuationOutcome,
   type FormContinuationRefusalReason,
   type FormContinuationRequest,
   type FormContinuationService,
-  type FormContinuationStartRequest,
   type FormContinuationTarget,
 } from "../workflows/form-continuation-contracts";
 import { safeFlowResultDescriptors } from "./application-flow-bindings";
@@ -50,7 +48,7 @@ type FormContinuationInstallationResolver = (
 ) => Promise<FormContinuationInstalledRelease>;
 
 type FormContinuationServiceDependencies = Readonly<{
-  orchestrator: Pick<FlowOrchestrator, "start" | "resume">;
+  orchestrator: Pick<FlowOrchestrator, "continueAnswer">;
   /**
    * Resolves, from the trusted active installation, the exact release of the flow set for the
    * application revision the caller names. It answers `current` only when that installation is the
@@ -100,11 +98,11 @@ export const createFormContinuationService = (
       installation: FormContinuationInstallation;
       flowId: string;
       draft?: Extract<FormContinuationOutcome, { kind: "finished" }>["draft"];
-      resumed: boolean;
     }>,
   ): FormContinuationOutcome => {
-    if (response.kind === "refused")
-      return refuse(context.resumed ? "not_resumable" : "unavailable");
+    if (response.kind === "refused") return refuse("not_resumable");
+    if (response.kind === "already_answered") return refuse("already_answered");
+    if (response.kind === "reload" || response.kind === "rate_limited") return response;
 
     if (response.kind === "suspended") {
       const formId = response.awaiting === "form" ? formIdOf(response) : undefined;
@@ -155,45 +153,6 @@ export const createFormContinuationService = (
   };
 
   return Object.freeze({
-    async request(
-      session: IdentitySession,
-      selection: OrganizationSelectionCandidate,
-      candidate: FormContinuationStartRequest,
-    ): Promise<FormContinuationOutcome> {
-      try {
-        const parsed = formContinuationStartRequestSchema.safeParse(candidate);
-        if (!parsed.success) return refuse("unavailable");
-        const request = parsed.data;
-        const installed = await dependencies.resolveInstallation({
-          session,
-          selection,
-          installation: request.installation,
-          flowId: request.flowId,
-        });
-        if (installed.kind === "stale") return refuse("stale_installation");
-        if (installed.kind !== "current") return refuse("unavailable");
-
-        const response = await dependencies.orchestrator.start(
-          {
-            session,
-            selection,
-            binding: { flowId: request.flowId, inputs: request.inputs },
-          },
-          { releaseKey: installed.releaseKey },
-        );
-        return validated(
-          present(response, {
-            installation: request.installation,
-            flowId: request.flowId,
-            resumed: false,
-          }),
-        );
-      } catch (cause) {
-        logRefusal("form-continuation", "request", "request_failed", cause);
-        return refuse("unavailable");
-      }
-    },
-
     async continue(
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
@@ -219,10 +178,8 @@ export const createFormContinuationService = (
         });
         if (installed.kind === "stale") return refuse("stale_installation");
         if (installed.kind !== "current") return refuse("unavailable");
-        if (installed.releaseKey !== target.releaseKey) return refuse("stale_installation");
-
         const answer = request.answer;
-        const response = await dependencies.orchestrator.resume(
+        const response = await dependencies.orchestrator.continueAnswer(
           {
             session,
             selection,
@@ -241,7 +198,6 @@ export const createFormContinuationService = (
             installation: target.installation,
             flowId: target.flowId,
             ...(request.draft === undefined ? {} : { draft: request.draft }),
-            resumed: true,
           }),
         );
       } catch (cause) {
