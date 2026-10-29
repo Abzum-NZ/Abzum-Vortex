@@ -381,12 +381,36 @@ type HumanInstalledPageBundleContextDependencies = Readonly<{
   scope: HumanInstalledRuntimeScope;
 }>;
 
+/** The one loader every request scope reaches the installed context through. */
+export const createInstalledContextLoader = (
+  transaction: RequestDatabaseTransaction,
+  scope: Readonly<{
+    organizationId: string;
+    organizationAccountId: string;
+    applicationRootId?: string | undefined;
+    previewInstallationId?: string | undefined;
+  }>,
+) => {
+  if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
+  return createHumanInstalledPageBundleContextLoader({
+    transaction,
+    scope: {
+      organizationId: scope.organizationId,
+      organizationAccountId: scope.organizationAccountId,
+      applicationRootId: scope.applicationRootId,
+      ...(scope.previewInstallationId === undefined
+        ? {}
+        : { previewInstallationId: scope.previewInstallationId }),
+    },
+  });
+};
+
 /**
  * Builds the genuine current HUMAN Page context from the cached installed release. Only the active
  * installation identity is read per request; the bundle is read and validated once per immutable
  * release. A missing bundle is an install or activation defect and fails here instead of being repaired.
  */
-export const createHumanInstalledPageBundleContextLoader = (
+const createHumanInstalledPageBundleContextLoader = (
   dependencies: HumanInstalledPageBundleContextDependencies,
 ) => {
   return Object.freeze({
