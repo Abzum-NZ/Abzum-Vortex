@@ -151,7 +151,6 @@ export const admitFlowContinuation = async (
       runId: state.runId,
       bindingId: run.bindingId,
       iteration: iterationKey(state),
-      channel: "page",
       continuation: run.pendingContinuation,
       continuationPlan: run.continuationPlan,
     },
@@ -188,7 +187,6 @@ export const admitFlowPageStart = async (
       runId: state.runId,
       bindingId: run.bindingId,
       iteration: iterationKey(state),
-      channel: "page",
     },
   );
 };
@@ -244,7 +242,6 @@ export const admitFlowSegment = async (
       runId: state.runId,
       bindingId: run.bindingId,
       iteration: iterationKey(state),
-      channel: "page",
       ...(run.pendingContinuation === undefined ? {} : { continuation: run.pendingContinuation }),
       ...(run.continuationPlan === undefined ? {} : { continuationPlan: run.continuationPlan }),
       ...(typeof profileAccountId === "string" ? { profileAccountId } : {}),

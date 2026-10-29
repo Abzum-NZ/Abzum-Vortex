@@ -225,7 +225,6 @@ export const startFlow = async <Value>(
     /** Required when the plan has a completion segment; resolved from the trusted binding. */
     bindingId?: string;
     iteration: string;
-    channel: "page" | "headless";
     /** Hashed continuation read before path selection; consumed only after admission. */
     continuation?: Readonly<{ tokenHash: string; releaseKey: string; answerHash: string }>;
     continuationPlan?: Readonly<{
@@ -284,15 +283,16 @@ export const startFlow = async <Value>(
         ? { profileAccountId: request.profileAccountId! }
         : {}),
     };
-    if (request.channel === "page" && !(await dependencies.authorizeBinding(context)))
-      return { kind: "refused" };
+    if (!(await dependencies.authorizeBinding(context))) return { kind: "refused" };
     const current = await dependencies.currentPlan(context);
     if (current === undefined || current.plan.flowId !== request.plan.flowId)
       return { kind: "refused" };
     const currentPlan = current.plan;
-    if (currentPlan.definition.invocationPermissionId === undefined) {
-      if (request.channel === "headless") return { kind: "refused" };
-    } else if (!(await dependencies.authorizeInvocation(context))) return { kind: "refused" };
+    if (
+      currentPlan.definition.invocationPermissionId !== undefined &&
+      !(await dependencies.authorizeInvocation(context))
+    )
+      return { kind: "refused" };
     if (
       request.entrySegments !== undefined &&
       !flowEntrySegmentsMatch(currentPlan, request.entrySegments)
@@ -331,7 +331,6 @@ export const startFlow = async <Value>(
           if (
             consumed.status === "admitted" &&
             !replay &&
-            request.channel === "page" &&
             !(await dependencies.authorizeGesture({ ...context, transaction: child }))
           )
             throw refused;
@@ -345,7 +344,6 @@ export const startFlow = async <Value>(
     if (request.expected === null) {
       if (
         request.continuation === undefined &&
-        request.channel === "page" &&
         !(await dependencies.authorizeGesture(context))
       )
         return { kind: "refused" };
@@ -522,7 +520,6 @@ export const startFlow = async <Value>(
       else if (found.status !== "none") return { kind: "refused" };
     }
     if (
-      request.channel === "page" &&
       request.continuation === undefined &&
       replay === undefined &&
       !(await dependencies.authorizeGesture(context))
