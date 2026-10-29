@@ -1,4 +1,12 @@
 import { describeFailure } from "../catalogue/runtime-primitives";
+import {
+  at,
+  failed,
+  Failed,
+  iterationKey,
+  pathKey,
+  type PathSegment,
+} from "./flow-interpreter-state";
 import { typedValueMatchesType } from "./condition-types";
 import type { JsonValue } from "../catalogue/common";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
@@ -83,7 +91,8 @@ export type FlowFailureCode =
   | "output_unresolved"
   | "task_refused"
   | "resume_mismatch"
-  | "continuation_unavailable";
+  | "continuation_unavailable"
+  | "replay_unavailable";
 
 export type FlowFailure = Readonly<{
   outcome: FlowFailureOutcome;
@@ -109,8 +118,6 @@ export type FlowRuntimeValues = Readonly<Record<string, FlowRuntimeValue>>;
 
 /** The page subject and revision the host supplied as evidence for this run. */
 export type FlowSubject = Readonly<{ recordId: string; revision: number }>;
-
-type PathSegment = string | number;
 
 type Frame = Readonly<{
   /** Address of the task list inside the activation's flow. */
@@ -274,53 +281,17 @@ export type FlowRunResume =
     }>
   | FormContinuationAnswer;
 
+/** Safe effect outcomes indexed by task path and iteration; read results are never stored here. */
+export type FlowSegmentReplay = Readonly<
+  Record<string, Extract<FlowRunResume, { kind: "task_result" }> | null>
+>;
+
 const maximumSteps = 10_000;
 
 const typed = (type: string, value: JsonValue): FlowRuntimeValue => ({ type, value });
 const text = (value: string): FlowRuntimeValue => typed("text", value);
 
 const clone = <Value>(input: Value): Value => JSON.parse(JSON.stringify(input)) as Value;
-
-const pathKey = (path: readonly PathSegment[]): string => path.join("/");
-
-const at = (root: unknown, path: readonly PathSegment[]): unknown =>
-  path.reduce<unknown>(
-    (current, segment) =>
-      current !== null && typeof current === "object"
-        ? (current as Record<PathSegment, unknown>)[segment]
-        : undefined,
-    root,
-  );
-
-/** The iteration key: every loop position on the call stack, or `0` outside any loop. */
-const iterationKey = (state: FlowRunState): string => {
-  const positions = state.activations.flatMap((activation) =>
-    activation.frames.flatMap((frame) => (frame.loop === undefined ? [] : [frame.loop.iteration])),
-  );
-  return positions.length === 0 ? "0" : positions.join(".");
-};
-
-class Failed extends Error {
-  constructor(readonly failure: FlowFailure) {
-    super(failure.code);
-  }
-}
-
-const failed = (
-  code: FlowFailureCode,
-  outcome: FlowFailureOutcome,
-  taskId?: string,
-  reason?: string,
-): never => {
-  throw new Failed({
-    outcome,
-    code,
-    ...(taskId === undefined ? {} : { taskId }),
-    ...(reason === undefined ? {} : { reason }),
-  });
-};
-
-// ─── Values ───────────────────────────────────────────────────────────────────────────────────
 
 const declaredNull = (type: string): FlowRuntimeValue => typed(type, null);
 
@@ -536,6 +507,7 @@ type Machine = {
   };
   library: FlowLibrary;
   segment?: FlowServerSegment;
+  replay?: FlowSegmentReplay;
 };
 
 const topOf = (machine: Machine) =>
@@ -1130,6 +1102,29 @@ const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep =>
       const activationCount = machine.state.activations.length;
       const executed = execute(machine, task, taskPath);
       if (executed.kind === "suspend") {
+        if (
+          executed.step.kind === "protected_task" &&
+          machine.replay !== undefined &&
+          executed.step.call.effect !== "read"
+        ) {
+          const key = JSON.stringify([executed.step.call.taskPath, executed.step.call.iteration]);
+          const replay = machine.replay[key];
+          if (replay === undefined || replay === null || replay.kind !== "task_result")
+            return failed(
+              "replay_unavailable",
+              "refused",
+              task.id,
+              "the earlier result cannot be shown again; reload",
+            );
+          return resumeFlowRun(
+            executed.step.state,
+            replay,
+            machine.library,
+            observer,
+            machine.segment,
+            machine.replay,
+          );
+        }
         if (executed.step.kind === "interface") {
           const intent = executed.step.intents.find((intent) => intent.taskId === task.id);
           observe(observer, {
@@ -1231,6 +1226,7 @@ export const startFlowSegment = (
   start: FlowRunStart,
   seed: Readonly<Record<string, unknown>>,
   library: FlowLibrary,
+  replay?: FlowSegmentReplay,
 ): FlowRunStep => {
   const state = initialState(start);
   const machine: Machine = { state: { ...state }, library };
@@ -1291,6 +1287,7 @@ export const startFlowSegment = (
     };
     machine.state.activations = [activation];
     machine.segment = segment;
+    if (replay !== undefined) machine.replay = replay;
     for (const condition of segment.guard) {
       const scope = scopeOf(machine.state, activation, flow);
       if (condition.kind === "if") {
@@ -1337,11 +1334,13 @@ export const resumeFlowRun = (
   library: FlowLibrary,
   observer?: FlowTaskTraceObserver,
   segment?: FlowServerSegment,
+  replay?: FlowSegmentReplay,
 ): FlowRunStep => {
   const machine: Machine = {
     state: clone(previous),
     library,
     ...(segment === undefined ? {} : { segment }),
+    ...(replay === undefined ? {} : { replay }),
   };
   const awaiting = machine.state.awaiting;
   const mismatch = () => failedStep(machine, { outcome: "failed", code: "resume_mismatch" });
