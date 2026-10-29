@@ -110,6 +110,18 @@ type GuidedInvocationPage = Readonly<{
   bindings: Readonly<Record<string, readonly Readonly<{ event: string; bindingId: string }>[]>>;
 }>;
 
+export type FlowControlOptionRequest = Readonly<{
+  bound: BoundHumanOrganizationRequest;
+  context: InstalledRuntimeContext;
+  page: Readonly<Record<string, unknown>>;
+  placementId: string;
+  raw: string;
+  parsed: JsonValue;
+  subject: Readonly<{ recordTypeId: string; recordId: string }> | undefined;
+  heldValues: Readonly<Record<string, JsonValue>>;
+  controls: Readonly<Record<string, string>>;
+}>;
+
 type InvocationDependencies = Readonly<{
   authorityId: IdentityAuthorityId;
   /** The application catalogue's install and upgrade journeys, run under the initiator's authority. */
@@ -118,19 +130,7 @@ type InvocationDependencies = Readonly<{
   telemetry: NonNullable<Parameters<typeof createRecordSaveService>[0]["telemetry"]>;
   releaseCatalogue: Parameters<typeof createDatabaseApplicationBoundReleaseSetService>[0];
   continuationKey: QueryContinuationKey;
-  validateControlOption: (
-    input: Readonly<{
-      bound: BoundHumanOrganizationRequest;
-      context: InstalledRuntimeContext;
-      page: Readonly<Record<string, unknown>>;
-      placementId: string;
-      raw: string;
-      parsed: JsonValue;
-      subject: Readonly<{ recordTypeId: string; recordId: string }> | undefined;
-      heldValues: Readonly<Record<string, JsonValue>>;
-      controls: Readonly<Record<string, string>>;
-    }>,
-  ) => Promise<boolean>;
+  validateControlOption: (input: FlowControlOptionRequest) => Promise<boolean>;
   guidedFormControls: (
     page: unknown,
     shells?: unknown,
