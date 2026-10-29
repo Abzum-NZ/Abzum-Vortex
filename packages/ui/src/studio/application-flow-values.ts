@@ -482,15 +482,30 @@ export const studioFlowReferenceChoices = (
     const reference = records.size === 1 ? [...records][0] : undefined;
     const record =
       reference === undefined ? undefined : studioDraftRecordType(source, reference, null);
-    for (const field of record?.record.fields ?? [])
+    // The checker names a form field as the author sees it: the control's name, else its field.
+    const named = new Set<string>();
+    for (const control of placed.flatMap((item) => sourceItemTree([item]))) {
+      const bound = control.props.field;
+      if (typeof bound !== "string" || reference === undefined) continue;
+      const field = record?.record.fields.find(
+        (candidate) => candidate.key === bound.slice(reference.length + 1),
+      );
+      if (field === undefined || !bound.startsWith(`${reference}.`)) continue;
+      const name =
+        typeof control.props.name === "string" && control.props.name !== ""
+          ? control.props.name
+          : field.key;
+      if (named.has(name)) continue;
+      named.add(name);
       add(
-        { source: "form", form: form.alias, field: field.key },
+        { source: "form", form: form.alias, field: name },
         `${form.label}: ${field.label} (not yet runnable)`,
         "Form fields",
         field.type === "calculation" || field.type === "total"
           ? field.settings.result_type
           : studioFieldValueType(field.type),
       );
+    }
   }
   if (path !== null)
     for (const task of studioFlowTasksBefore(flow, path)) {

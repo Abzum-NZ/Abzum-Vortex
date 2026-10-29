@@ -617,23 +617,32 @@ export const applyStudioFlowCreate = (
                 "Only fields of the selected form can be enforced on save.",
               );
             const form = items.find((item) => item.props.id === reference.form);
-            const records = new Set(
-              form === undefined
-                ? []
-                : sourceItemTree([form]).flatMap((item) => {
-                    const field = item.props.field;
-                    if (typeof field !== "string") return [];
-                    const dot = field.lastIndexOf(".");
-                    return dot > 0 ? [field.slice(0, dot)] : [];
-                  }),
+            // A form reference names the control as the author sees it: its name, else its field.
+            const controls = (form === undefined ? [] : sourceItemTree([form])).flatMap((item) => {
+              const field = item.props.field;
+              if (typeof field !== "string") return [];
+              const dot = field.lastIndexOf(".");
+              if (dot <= 0) return [];
+              const name = typeof item.props.name === "string" ? item.props.name : "";
+              return [{ record: field.slice(0, dot), field: field.slice(dot + 1), name }];
+            });
+            const control = controls.find(
+              (candidate) =>
+                (candidate.name === "" ? candidate.field : candidate.name) === reference.field,
             );
-            if (records.size !== 1 || !records.has(target) || !targetFields.has(reference.field))
+            const records = new Set(controls.map((candidate) => candidate.record));
+            if (
+              control === undefined ||
+              records.size !== 1 ||
+              !records.has(target) ||
+              !targetFields.has(control.field)
+            )
               throw new FlowCreateRefusal(
                 "The form field does not belong to the selected record type.",
               );
             return {
               op: "reference",
-              reference: { source: "trigger_record", field: reference.field },
+              reference: { source: "trigger_record", field: control.field },
             };
           }
           return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, map(child)]));
