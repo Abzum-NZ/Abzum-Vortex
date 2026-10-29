@@ -7,11 +7,11 @@ import { platformOperationKey } from "../catalogue/platform-service-operation-ca
 import {
   flowReadFieldsProjectionSchema,
   flowReadFieldsTypeMapSchema,
-  flowTaskChildLists,
   type FlowDefinition,
   type FlowExecutionKind,
   type FlowTask,
 } from "../workflows/flow-contracts";
+import { flowTaskChildLists } from "../workflows/flow-task-tree";
 import {
   refusalKeepsPlatformGuidance,
   type FlowRefusalFeedback,
