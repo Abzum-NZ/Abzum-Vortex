@@ -13,7 +13,12 @@ import type { IdentitySession, OrganizationSelectionCandidate } from "../access/
 import { jsonValueSchema } from "../catalogue/common";
 import { describeFailure } from "../catalogue/runtime-primitives";
 import { flowRefusalFeedbackCodeSchema } from "./flow-refusal-feedback";
-import { flowEntrySegmentsMatch, type FlowPlan, type FlowServerSegment } from "./flow-plan";
+import {
+  flowEntrySegmentsMatch,
+  flowPlanFingerprint,
+  type FlowPlan,
+  type FlowServerSegment,
+} from "./flow-plan";
 import type { FlowSegmentReplay, FlowTaskOutcome } from "../rules/flow-interpreter";
 import type { BeforeSaveRuleWarning } from "../rules/before-save-flow-run";
 import { storedFlowWarningSchema, storeFlowWarning } from "./flow-warning-replay";
@@ -111,9 +116,27 @@ type StartFlowDependencies<Value> = Readonly<{
   authorizeBinding: (context: SegmentContext) => Promise<boolean>;
   authorizeInvocation: (context: SegmentContext) => Promise<boolean>;
   /** Resolve the installed plan under the same scope that authorizes this admission. */
-  currentPlan: (context: SegmentContext) => Promise<
-    Readonly<{ plan: FlowPlan; installationRevision: number }> | undefined
+  currentPlan: (
+    context: SegmentContext,
+  ) => Promise<Readonly<{ plan: FlowPlan; installationRevision: number }> | undefined>;
+  /** A path that ends or suspends without reaching another server segment. */
+  executeContinuation?: (
+    context: SegmentContext,
+    runId: string,
+  ) => Promise<
+    | Readonly<{ kind: "finished"; value: Value }>
+    | Readonly<{
+        kind: "suspended";
+        childTokenHash: string;
+        childState: Readonly<Record<string, unknown>>;
+        elapsedMilliseconds: number;
+        lifetimeSeconds: number;
+        sealedReply: string;
+        value: (expiresAt: string) => Value;
+      }>
   >;
+  /** Opens a sealed child reply only after the current caller has been authorized. */
+  openContinuationReplay?: (payload: string, expiresAt: string) => Value;
   /** Rebuild the segment frame for each call: a restart rolls back the entire transaction. */
   execute: (
     context: SegmentContext,
@@ -125,7 +148,10 @@ type StartFlowDependencies<Value> = Readonly<{
 
 /** Opens completion evidence only for a flow that can reach another server segment first. */
 export const openFlowAdmissionRun = async (
-  dependencies: Pick<StartFlowDependencies<never>, "requests" | "authorizeBinding" | "authorizeInvocation">,
+  dependencies: Pick<
+    StartFlowDependencies<never>,
+    "requests" | "authorizeBinding" | "authorizeInvocation"
+  >,
   request: Readonly<{
     session: IdentitySession;
     selection: OrganizationSelectionCandidate;
@@ -142,25 +168,33 @@ export const openFlowAdmissionRun = async (
   )
     return { kind: "refused" };
   const requests = createHumanOrganizationRequestService(dependencies.requests);
-  const result = await requests.run(request.session, request.selection, async (transaction, scope, issuedAt) => {
-    const context: SegmentContext = {
-      transaction,
-      scope,
-      issuedAt,
-      mode: "shared",
-      session: request.session,
-      selection: request.selection,
-    };
-    if (!(await dependencies.authorizeBinding(context))) return { kind: "refused" } as const;
-    if (
-      request.plan.definition.invocationPermissionId !== undefined &&
-      !(await dependencies.authorizeInvocation(context))
-    )
-      return { kind: "refused" } as const;
-    const rows = await transaction.query`select vortex_access.flow_run_evidence(${'start'}::text, ${null}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data}::uuid, ${null}::uuid) as result`;
-    const opened = z.object({ state: z.literal("started"), runId: z.uuid() }).strict().parse(rows[0]?.result);
-    return { kind: "opened", runId: opened.runId } as const;
-  });
+  const result = await requests.run(
+    request.session,
+    request.selection,
+    async (transaction, scope, issuedAt) => {
+      const context: SegmentContext = {
+        transaction,
+        scope,
+        issuedAt,
+        mode: "shared",
+        session: request.session,
+        selection: request.selection,
+      };
+      if (!(await dependencies.authorizeBinding(context))) return { kind: "refused" } as const;
+      if (
+        request.plan.definition.invocationPermissionId !== undefined &&
+        !(await dependencies.authorizeInvocation(context))
+      )
+        return { kind: "refused" } as const;
+      const rows =
+        await transaction.query`select vortex_access.flow_run_evidence(${"start"}::text, ${null}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data}::uuid, ${null}::uuid) as result`;
+      const opened = z
+        .object({ state: z.literal("started"), runId: z.uuid() })
+        .strict()
+        .parse(rows[0]?.result);
+      return { kind: "opened", runId: opened.runId } as const;
+    },
+  );
   return result.kind === "available" ? result.value : { kind: "refused" };
 };
 
@@ -182,6 +216,11 @@ export const startFlow = async <Value>(
     channel: "page" | "headless";
     /** Hashed continuation read before path selection; consumed only after admission. */
     continuation?: Readonly<{ tokenHash: string; releaseKey: string; answerHash: string }>;
+    continuationPlan?: Readonly<{
+      installationRevision: number;
+      flowId: string;
+      fingerprint: string;
+    }>;
     /** Resolved by the server before opening a profile-change scope. */
     profileAccountId?: string;
   }>,
@@ -248,21 +287,78 @@ export const startFlow = async <Value>(
     )
       return { kind: "reload" };
     const rateLimit = async (kind: "read" | "change"): Promise<number | undefined> => {
-      const rows = await transaction.query`select * from vortex_access.admit_flow_segment_rate(${kind}::text)`;
+      const rows =
+        await transaction.query`select * from vortex_access.admit_flow_segment_rate(${kind}::text)`;
       const rate = z
         .object({ admitted: z.boolean(), retry_after_seconds: z.number().int().nonnegative() })
         .parse(rows[0]);
       return rate.admitted ? undefined : rate.retry_after_seconds;
     };
-    const consumeContinuation = async (runId: string, commandId: string): Promise<boolean> => {
-      if (request.continuation === undefined) return true;
-      const rows = await transaction.query`select vortex_platform.admit_flow_continuation(${request.continuation.tokenHash}::text, ${runId}::uuid, ${currentPlan.flowId}::uuid, ${request.continuation.releaseKey}::text, ${commandId}::uuid) as result`;
-      const status = z.object({ status: z.enum(["admitted", "replay", "already_answered", "unavailable"]) }).parse(z.object({ result: z.unknown() }).parse(rows[0]).result).status;
-      if (status === "already_answered") console.error("[flows] this step was already answered");
-      return status === "admitted" || status === "replay";
+    const consumeContinuation = async (runId: string, commandId: string) => {
+      if (request.continuation === undefined) return { status: "admitted" } as const;
+      const rows =
+        await transaction.query`select vortex_platform.admit_flow_continuation(${request.continuation.tokenHash}::text, ${runId}::uuid, ${currentPlan.flowId}::uuid, ${request.continuation.releaseKey}::text, ${commandId}::uuid) as result`;
+      return z
+        .object({
+          status: z.enum(["admitted", "replay", "already_answered", "unavailable"]),
+          payload: z.string().nullable().optional(),
+          expiresAt: z.string().nullable().optional(),
+        })
+        .parse(z.object({ result: z.unknown() }).parse(rows[0]).result);
     };
     if (request.expected === null) {
-      if (request.continuation !== undefined) return { kind: "refused" };
+      if (request.continuation !== undefined) {
+        if (
+          request.continuationPlan === undefined ||
+          dependencies.executeContinuation === undefined ||
+          dependencies.openContinuationReplay === undefined ||
+          !suppliedRunId.success
+        )
+          return { kind: "refused" };
+        if (
+          request.continuationPlan.installationRevision !== current.installationRevision ||
+          request.continuationPlan.flowId !== currentPlan.flowId ||
+          request.continuationPlan.fingerprint !== flowPlanFingerprint(currentPlan)
+        )
+          return { kind: "reload" };
+        const commandId = commandIdOf(
+          request.session,
+          request.selection,
+          id.data,
+          "continuation",
+          request.iteration,
+          request.continuation,
+        );
+        const retryAfterSeconds = await rateLimit("read");
+        if (retryAfterSeconds !== undefined) return { kind: "rate_limited", retryAfterSeconds };
+        const consumed = await consumeContinuation(suppliedRunId.data, commandId);
+        if (consumed.status === "already_answered")
+          console.error("[flows] this step was already answered");
+        if (consumed.status !== "admitted" && consumed.status !== "replay")
+          return { kind: "refused" };
+        if (consumed.status === "replay" && consumed.payload != null) {
+          if (consumed.expiresAt == null) throw new Error("FLOW_CONTINUATION_CHILD_UNAVAILABLE");
+          return {
+            kind: "completed",
+            value: dependencies.openContinuationReplay(consumed.payload, consumed.expiresAt),
+            runId: suppliedRunId.data,
+          };
+        }
+        const executed = await dependencies.executeContinuation(context, suppliedRunId.data);
+        if (executed.kind === "finished")
+          return { kind: "completed", value: executed.value, runId: suppliedRunId.data };
+        const rows =
+          await transaction.query`select vortex_platform.complete_flow_continuation(${request.continuation.tokenHash}::text, ${commandId}::uuid, ${executed.childTokenHash}::text, ${JSON.stringify(executed.childState)}::text::jsonb, ${executed.elapsedMilliseconds}::integer, ${executed.lifetimeSeconds}::integer, ${executed.sealedReply}::text) as result`;
+        const recorded = z
+          .object({ status: z.literal("recorded"), expiresAt: z.string() })
+          .parse(z.object({ result: z.unknown() }).parse(rows[0]).result);
+        return {
+          kind: "completed",
+          value: executed.value(recorded.expiresAt),
+          runId: suppliedRunId.data,
+        };
+      }
+      if (request.continuationPlan !== undefined) return { kind: "refused" };
       if (currentPlan.segments.some((part) => part.kind === "server")) return { kind: "reload" };
       return {
         kind: "completed",
@@ -299,34 +395,58 @@ export const startFlow = async <Value>(
       request.continuation,
     );
     let runId = suppliedRunId.success ? suppliedRunId.data : undefined;
-    let evidenceState: "started" | "pending" | "succeeded" | "refused" | "failed" | "closed" | undefined;
+    let evidenceState:
+      "started" | "pending" | "succeeded" | "refused" | "failed" | "closed" | undefined;
     if (hasCompletion) {
       if (runId === undefined) {
-        const opened = await transaction.query`select vortex_access.flow_run_evidence(${'start'}::text, ${null}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${null}::uuid) as result`;
-        runId = z.object({ state: z.literal("started"), runId: z.uuid() }).strict().parse(opened[0]?.result).runId;
+        const opened =
+          await transaction.query`select vortex_access.flow_run_evidence(${"start"}::text, ${null}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${null}::uuid) as result`;
+        runId = z
+          .object({ state: z.literal("started"), runId: z.uuid() })
+          .strict()
+          .parse(opened[0]?.result).runId;
       }
-      const locked = await transaction.query`select vortex_access.flow_run_evidence(${'lock'}::text, ${runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${null}::uuid) as result`;
-      const evidence = z.discriminatedUnion("state", [
-        z.object({ state: z.literal("unavailable") }).strict(),
-        z.object({ state: z.enum(["started", "pending", "succeeded", "refused", "failed", "closed"]), pendingCommandId: z.uuid().nullable(), completionCommandId: z.uuid().nullable() }).strict(),
-      ]).parse(locked[0]?.result);
+      const locked =
+        await transaction.query`select vortex_access.flow_run_evidence(${"lock"}::text, ${runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${null}::uuid) as result`;
+      const evidence = z
+        .discriminatedUnion("state", [
+          z.object({ state: z.literal("unavailable") }).strict(),
+          z
+            .object({
+              state: z.enum(["started", "pending", "succeeded", "refused", "failed", "closed"]),
+              pendingCommandId: z.uuid().nullable(),
+              completionCommandId: z.uuid().nullable(),
+            })
+            .strict(),
+        ])
+        .parse(locked[0]?.result);
       if (evidence.state === "unavailable") return { kind: "refused" };
       evidenceState = evidence.state;
       if (segment.tasks.length === 0) {
-        if (evidence.state === "pending" || evidence.state === "refused" || evidence.state === "failed" ||
-          (evidence.state === "closed" && evidence.completionCommandId !== commandId))
+        if (
+          evidence.state === "pending" ||
+          evidence.state === "refused" ||
+          evidence.state === "failed" ||
+          (evidence.state === "closed" && evidence.completionCommandId !== commandId)
+        )
           return { kind: "refused" };
-      } else if (evidence.state === "closed" ||
-        (evidence.state === "pending" && (!segment.multiTransaction || evidence.pendingCommandId !== commandId)))
+      } else if (
+        evidence.state === "closed" ||
+        (evidence.state === "pending" &&
+          (!segment.multiTransaction || evidence.pendingCommandId !== commandId))
+      )
         return { kind: "refused" };
     }
     if (runId === undefined) return { kind: "refused" };
     const recordOutcome = async (outcome: SegmentExecution<Value>["outcome"]): Promise<void> => {
       if (!hasCompletion || evidenceState === "closed") return;
       const action = segment.tasks.length === 0 && outcome === "succeeded" ? "close" : outcome;
-      const updated = await transaction.query`select vortex_access.flow_run_evidence(${action}::text, ${runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${action === "close" || evidenceState === "pending" ? commandId : null}::uuid) as result`;
+      const updated =
+        await transaction.query`select vortex_access.flow_run_evidence(${action}::text, ${runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${action === "close" || evidenceState === "pending" ? commandId : null}::uuid) as result`;
       const expectedState = action === "close" ? "closed" : action;
-      z.object({ state: z.literal(expectedState) }).strict().parse(updated[0]?.result);
+      z.object({ state: z.literal(expectedState) })
+        .strict()
+        .parse(updated[0]?.result);
     };
     let replay: FlowSegmentReceipt | undefined;
     if (segment.changes) {
@@ -357,7 +477,10 @@ export const startFlow = async <Value>(
       const retryAfterSeconds = await rateLimit(segment.changes ? "change" : "read");
       if (retryAfterSeconds !== undefined) return { kind: "rate_limited", retryAfterSeconds };
     }
-    if (!(await consumeContinuation(runId, commandId))) return { kind: "refused" };
+    const consumed = await consumeContinuation(runId, commandId);
+    if (consumed.status === "already_answered")
+      console.error("[flows] this step was already answered");
+    if (consumed.status !== "admitted" && consumed.status !== "replay") return { kind: "refused" };
     if (!segment.changes || replay !== undefined) {
       let executed: SegmentExecution<Value>;
       try {
