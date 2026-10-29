@@ -1203,6 +1203,47 @@ export const startFlowRun = (
 };
 
 /**
+ * Starts one detached page segment, retaining the preceding segment's typed activation. The page
+ * driver chooses the segment and its phase; the interpreter still executes its task tree. Final
+ * outputs and the next phase are handled by the driver after all selected segments have run.
+ */
+export const startPageFlowSegment = (
+  program: FlowProgram,
+  start: FlowRunStart,
+  resolveMember: FlowOutputMemberTypeResolver,
+  previous?: FlowRunState,
+): FlowRunStep => {
+  const library: FlowProgramLibrary = (id) => (id === program.id ? program : undefined);
+  if (
+    program.execution !== "interactive" ||
+    program.errors.length !== 0 ||
+    program.finally.length !== 0 ||
+    Object.keys(program.outputs).length !== 0
+  )
+    throw new Error("FLOW_PAGE_SEGMENT_PROGRAM_INVALID");
+  if (previous === undefined) return startFlowRun(start, library, resolveMember);
+  const machine: Machine = { state: clone(previous), library, resolveMember };
+  const activation = machine.state.activations[0];
+  if (
+    previous.version !== flowRunStateVersion ||
+    previous.runId !== start.runId ||
+    previous.awaiting !== undefined ||
+    previous.activations.length !== 1 ||
+    activation === undefined ||
+    activation.flowId !== program.id ||
+    activation.frames.length !== 0
+  )
+    return failedStep(machine, { outcome: "failed", code: "resume_mismatch" });
+  const retained: { -readonly [Key in keyof Activation]: Activation[Key] } = { ...activation };
+  delete retained.failure;
+  delete retained.stopped;
+  machine.state.activations = [
+    { ...retained, phase: "tasks", frames: [{ path: ["tasks"], index: 0 }] },
+  ];
+  return drive(machine);
+};
+
+/**
  * Resumes a suspended run with what the host obtained: the safe outcome of the protected task it
  * ran, or the person's answer to the form or confirmation. A resume of the wrong kind is refused,
  * so a page can never answer a protected task or skip a confirmation.
