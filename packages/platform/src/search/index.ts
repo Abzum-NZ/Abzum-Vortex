@@ -7,6 +7,8 @@ export {
 } from "./application-search";
 export {
   searchInstalledApplication,
+  sealApplicationSearchCursor,
+  openApplicationSearchCursor,
   type InstalledSearchModule,
 } from "./installed-application-search";
 
@@ -40,55 +42,9 @@ export {
   type SearchIndexShareMetadata,
 } from "./sensitivity-policy";
 
-export {
-  permittedSearchCandidates,
-  permittedSearchLimits,
-  permittedSearchRefusalReasonCodes,
-  type PermittedSearchAccessContext,
-  type PermittedSearchCandidate,
-  type PermittedSearchCurrentRead,
-  type PermittedSearchCurrentReadRequest,
-  type PermittedSearchDependencies,
-  type PermittedSearchInput,
-  type PermittedSearchRefusalReasonCode,
-  type PermittedSearchRequest,
-  type PermittedSearchResult,
-} from "./permitted-search";
-
-export {
-  literalSearchLimits,
-  literalSearchRequiredTokens,
-  literalSearchRefusalReasonCodes,
-  matchLiteralSearch,
-  matchesLiteralSearchText,
-  type LiteralSearchCompleted,
-  type LiteralSearchInput,
-  type LiteralSearchMatch,
-  type LiteralSearchMatchedField,
-  type LiteralSearchRefusal,
-  type LiteralSearchRefusalReasonCode,
-  type LiteralSearchResult,
-} from "./literal-search";
+export { matchesLiteralSearchText } from "./literal-search";
 
 export { splitSearchFilters } from "./search-filters";
-
-export {
-  sharedResultGroupDecisions,
-  sharedResultGroupExclusionReasonCodes,
-  sharedResultPolicyLimits,
-  sharedResultRefusalReasonCodes,
-  type SharedResultCapabilityReadRequest,
-  type SharedResultGroupDecision,
-  type SharedResultGroupExclusionReasonCode,
-  type SharedResultGroupIdentity,
-  type SharedResultPolicyDependencies,
-  type SharedResultPolicyInput,
-  type SharedResultPolicyRequest,
-  type SharedResultPolicyResult,
-  type SharedResultRecipientScope,
-  type SharedResultRefusalReasonCode,
-  type SharedSearchableProjection,
-} from "./shared-result-policy";
 
 export {
   consumeSearchEvents,

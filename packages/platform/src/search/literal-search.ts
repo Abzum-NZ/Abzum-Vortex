@@ -1,73 +1,13 @@
-import { isRecord } from "../catalogue/runtime-primitives";
 import "server-only";
 
-import {
-  permittedSearchCandidates,
-  permittedSearchRefusalReasonCodes,
-  type PermittedSearchCandidate,
-  type PermittedSearchDependencies,
-  type PermittedSearchInput,
-} from "./permitted-search";
-
 /** Finite bounds for the local literal expression grammar. */
-export const literalSearchLimits = Object.freeze({
+const literalSearchLimits = Object.freeze({
   expressionLength: 2_000,
   terms: 32,
   phraseTokens: 64,
 });
 
-const literalSearchLocalRefusalReasonCodes = [
-  "input_invalid",
-  "expression_too_long",
-  "invalid_expression",
-  "too_many_terms",
-  "phrase_too_long",
-  "unsupported_scope",
-] as const;
-
-/** Safe local parser refusals plus the unchanged refusals from permitted search. */
-export const literalSearchRefusalReasonCodes = Object.freeze([
-  ...literalSearchLocalRefusalReasonCodes,
-  ...permittedSearchRefusalReasonCodes,
-] as const);
-
-export type LiteralSearchRefusalReasonCode = (typeof literalSearchRefusalReasonCodes)[number];
-
-/** One bounded local expression evaluated over current permitted candidates. */
-export type LiteralSearchInput = Readonly<{
-  expression: string;
-  expressionMode?: "literal" | "or";
-  /** Filter-only searches still need the current permitted candidate projection. */
-  matchAll?: boolean;
-  search: PermittedSearchInput;
-}>;
-
-/** Approved fields and zero-based parsed expression term indices that matched. */
-export type LiteralSearchMatchedField = Readonly<{
-  fieldId: string;
-  termIndices: readonly number[];
-}>;
-
-export type LiteralSearchMatch = Readonly<{
-  /** The unchanged candidate returned by this call to `permittedSearchCandidates`. */
-  candidate: PermittedSearchCandidate;
-  matchedFields: readonly LiteralSearchMatchedField[];
-}>;
-
-export type LiteralSearchCompleted = Readonly<{
-  outcome: "completed";
-  organizationId: string;
-  applicationRootId: string;
-  recordTypeId: string;
-  matches: readonly LiteralSearchMatch[];
-}>;
-
-export type LiteralSearchRefusal = Readonly<{
-  outcome: "refused";
-  reasonCode: LiteralSearchRefusalReasonCode;
-}>;
-
-export type LiteralSearchResult = LiteralSearchCompleted | LiteralSearchRefusal;
+type LiteralSearchRefusalReasonCode = "invalid_expression" | "too_many_terms" | "phrase_too_long";
 
 type LiteralSearchTerm = Readonly<{
   tokens: readonly string[];
@@ -88,23 +28,6 @@ type TokenMatcherNode = {
   readonly termIndices: number[];
 };
 
-const hasOnlyKeys = (value: Readonly<Record<string, unknown>>, keys: readonly string[]): boolean =>
-  Object.keys(value).every((key) => keys.includes(key));
-
-const isLiteralSearchInput = (value: unknown): value is LiteralSearchInput =>
-  isRecord(value) &&
-  hasOnlyKeys(value, ["expression", "expressionMode", "matchAll", "search"]) &&
-  typeof value.expression === "string" &&
-  (value.matchAll === undefined || typeof value.matchAll === "boolean") &&
-  (value.expressionMode === undefined ||
-    value.expressionMode === "literal" ||
-    value.expressionMode === "or") &&
-  isRecord(value.search) &&
-  hasOnlyKeys(value.search, ["access", "request", "candidates", "shared"]);
-
-const refusal = (reasonCode: LiteralSearchRefusalReasonCode): LiteralSearchRefusal =>
-  Object.freeze({ outcome: "refused", reasonCode });
-
 const normalizeForMatch = (value: string): string => value.normalize("NFC").toLowerCase();
 
 const whitespaceTokens = (value: string): readonly string[] =>
@@ -117,16 +40,12 @@ const isWhitespace = (value: string): boolean => /[\s\p{White_Space}]/u.test(val
 /**
  * Parses bare whitespace-delimited tokens and whole-token quoted phrases. A leading
  * minus excludes a word or phrase from its AND group.
- * In or mode, exact uppercase unquoted OR tokens separate nonempty AND groups.
  * Quotes have no escape syntax and are only valid at token boundaries.
  */
-const parseExpression = (
-  expression: string,
-  expressionMode: "literal" | "or",
-): ParseExpressionResult => {
+const parseExpression = (expression: string): ParseExpressionResult => {
   const terms: LiteralSearchTerm[] = [];
   const groups: number[][] = [];
-  let group: number[] = [];
+  const group: number[] = [];
   let offset = 0;
 
   while (offset < expression.length) {
@@ -163,13 +82,6 @@ const parseExpression = (
       }
 
       const rawTerm = expression.slice(termStart, offset);
-      if (!excluded && expressionMode === "or" && rawTerm === "OR") {
-        if (group.length === 0) return { success: false, reasonCode: "invalid_expression" };
-        groups.push(group);
-        group = [];
-        continue;
-      }
-
       const tokens = whitespaceTokens(rawTerm);
       if (tokens.length !== 1) return { success: false, reasonCode: "invalid_expression" };
       terms.push(Object.freeze({ tokens, excluded }));
@@ -189,19 +101,14 @@ const parseExpression = (
   });
 };
 
-/**
- * The distinct tokens a literal expression requires. A record can only match
- * when every one of them occurs in its indexed text, so the index may select
- * candidates by these tokens before the exact match; `undefined` is an
- * expression the matcher refuses.
- */
-export const literalSearchRequiredTokens = (expression: string): readonly string[] | undefined => {
+/** Parse the literal grammar once for the database search page. */
+export const literalSearchTerms = (
+  expression: string,
+): readonly LiteralSearchTerm[] | undefined => {
+  if (expression === "") return [];
   if (expression.length > literalSearchLimits.expressionLength) return undefined;
-  const parsed = parseExpression(expression, "literal");
-  if (!parsed.success) return undefined;
-  return Object.freeze([
-    ...new Set(parsed.terms.filter((term) => !term.excluded).flatMap((term) => term.tokens)),
-  ]);
+  const parsed = parseExpression(expression);
+  return parsed.success ? parsed.terms : undefined;
 };
 
 /** Builds a token-level Aho-Corasick matcher for all bounded terms. */
@@ -245,55 +152,10 @@ const createTokenMatcher = (terms: readonly LiteralSearchTerm[]): readonly Token
   return nodes;
 };
 
-const matchCandidate = (
-  candidate: PermittedSearchCandidate,
-  terms: readonly LiteralSearchTerm[],
-  groups: readonly (readonly number[])[],
-  matcher: readonly TokenMatcherNode[],
-): LiteralSearchMatch | undefined => {
-  const matchedTermIndices = new Set<number>();
-  const matchedFields: LiteralSearchMatchedField[] = [];
-
-  for (const entry of candidate.entries) {
-    const entryTokens = whitespaceTokens(entry.text);
-    const fieldTermIndices = new Set<number>();
-    let state = 0;
-
-    for (const token of entryTokens) {
-      while (state !== 0 && !matcher[state]!.next.has(token)) state = matcher[state]!.failure;
-      state = matcher[state]!.next.get(token) ?? 0;
-
-      for (const termIndex of matcher[state]!.termIndices) {
-        if (!terms[termIndex]!.excluded) fieldTermIndices.add(termIndex);
-        matchedTermIndices.add(termIndex);
-      }
-
-      if (fieldTermIndices.size === terms.length) break;
-    }
-
-    if (fieldTermIndices.size > 0) {
-      matchedFields.push(
-        Object.freeze({
-          fieldId: entry.fieldId,
-          termIndices: Object.freeze([...fieldTermIndices].sort((left, right) => left - right)),
-        }),
-      );
-    }
-  }
-
-  if (
-    !groups.some((group) =>
-      group.every((termIndex) => matchedTermIndices.has(termIndex) !== terms[termIndex]!.excluded),
-    )
-  )
-    return undefined;
-  return Object.freeze({ candidate, matchedFields: Object.freeze(matchedFields) });
-};
-
 /** Apply the same literal grammar to a permitted application name. */
 export const matchesLiteralSearchText = (expression: string, text: string): boolean | undefined => {
   if (expression.length > literalSearchLimits.expressionLength) return undefined;
-  const parsed = parseExpression(expression, "literal");
+  const parsed = parseExpression(expression);
   if (!parsed.success) return undefined;
   const matcher = createTokenMatcher(parsed.terms);
   const found = new Set<number>();
@@ -306,45 +168,4 @@ export const matchesLiteralSearchText = (expression: string, text: string): bool
   return parsed.groups.some((group) =>
     group.every((index) => found.has(index) !== parsed.terms[index]!.excluded),
   );
-};
-
-/**
- * Matches an expression requiring one complete AND group over only the current
- * readable local candidates returned by `permittedSearchCandidates`.
- */
-export const matchLiteralSearch = async (
-  input: LiteralSearchInput,
-  dependencies: PermittedSearchDependencies,
-): Promise<LiteralSearchResult> => {
-  if (!isLiteralSearchInput(input)) return refusal("input_invalid");
-  // Refuse own or inherited groups before permitted search can inspect them.
-  if ("shared" in input.search) return refusal("unsupported_scope");
-
-  if (input.expression.length > literalSearchLimits.expressionLength)
-    return refusal("expression_too_long");
-
-  const parsed =
-    input.matchAll === true && input.expression === ""
-      ? ({ success: true, terms: [], groups: [[]] } as const)
-      : parseExpression(input.expression, input.expressionMode ?? "literal");
-  if (!parsed.success) return refusal(parsed.reasonCode);
-
-  // Validate only the bounded expression above; filter before reading candidate text.
-  const permitted = await permittedSearchCandidates(input.search, dependencies);
-  if (permitted.outcome === "refused") return refusal(permitted.reasonCode);
-
-  const matcher = createTokenMatcher(parsed.terms);
-  const matches: LiteralSearchMatch[] = [];
-  for (const candidate of permitted.candidates) {
-    const match = matchCandidate(candidate, parsed.terms, parsed.groups, matcher);
-    if (match !== undefined) matches.push(match);
-  }
-
-  return Object.freeze({
-    outcome: "completed",
-    organizationId: permitted.organizationId,
-    applicationRootId: permitted.applicationRootId,
-    recordTypeId: permitted.recordTypeId,
-    matches: Object.freeze(matches),
-  });
 };

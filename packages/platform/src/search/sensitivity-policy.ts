@@ -19,7 +19,7 @@ import { isRecord } from "../catalogue/runtime-primitives";
  * It fails closed. An unknown or malformed classification, a missing or
  * dangling input, an input cycle, or a recipient-copied shared-source record
  * makes the field ineligible. Access changes are handled at read time by the
- * current-field recheck (`permitted-search`), not by widening what may be indexed: a field
+ * current-field recheck in the SQL search page through `read_record`, not by widening what may be indexed: a field
  * withheld now is dropped from candidates even when its index entry is stale.
  *
  * Invalidation: a classification change is a published definition change, so a

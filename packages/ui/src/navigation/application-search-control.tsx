@@ -139,7 +139,7 @@ export function ApplicationSearchControl({
                   </section>
                 ))
               )
-            ) : applicationSearch.results.length === 0 ? (
+            ) : applicationSearch.results.length === 0 && !applicationSearch.more ? (
               <p role="status" className="text-muted-foreground">
                 No results.
               </p>
