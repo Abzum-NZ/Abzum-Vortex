@@ -179,6 +179,21 @@ export type FlowRunState = Readonly<{
 /** How the host finds a compiled flow of the exact release the run is bound to. */
 export type FlowLibrary = (flowId: string) => FlowDefinition | undefined;
 
+/** Resolve a declared server output member without exposing its task properties to the page. */
+export type FlowOutputMemberTypeResolver = (
+  task: FlowTask | undefined,
+  taskId: string,
+  outputKey: string,
+  path: readonly string[],
+) => string | undefined;
+
+const serverOutputMemberType: FlowOutputMemberTypeResolver = (task, _taskId, outputKey, path) => {
+  if (task?.type !== "operation.call" || outputKey !== "result" || path.length !== 1)
+    return undefined;
+  const members = flowOperationOutputMembers(task);
+  return Object.hasOwn(members, path[0]!) ? members[path[0]!] : undefined;
+};
+
 export type FlowProtectedTaskCall = Readonly<{
   taskId: string;
   taskType: string;
@@ -333,12 +348,11 @@ const declaredOutputFieldType = (
   taskId: string,
   outputKey: string,
   path: readonly string[],
+  resolveMember: FlowOutputMemberTypeResolver,
 ): string | undefined => {
   const task = findTask([...flow.tasks, ...flow.errors, ...flow.finally], taskId);
-  if (task?.type === "operation.call" && outputKey === "result" && path.length === 1) {
-    const members = flowOperationOutputMembers(task);
-    if (Object.hasOwn(members, path[0]!)) return members[path[0]!];
-  }
+  const resolved = resolveMember(task, taskId, outputKey, path);
+  if (resolved !== undefined) return resolved;
   if (task?.type === "record.read_fields" && path.length === 1) {
     const types = task.readFieldTypes;
     return isFlowReadFieldsTypeMap(types) && Object.hasOwn(types, path[0]!)
@@ -350,13 +364,15 @@ const declaredOutputFieldType = (
   const inputs = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>).properties
     .inputs;
   if (inputs?.kind !== "map" || !Object.hasOwn(inputs.entries, path[0]!)) return undefined;
-  return evaluateValue(inputs.entries[path[0]!]!, state, activation, flow, taskId).type;
+  return evaluateValue(inputs.entries[path[0]!]!, state, activation, flow, taskId, resolveMember)
+    .type;
 };
 
 const scopeOf = (
   state: FlowRunState,
   activation: Activation,
   flow: FlowDefinition,
+  resolveMember: FlowOutputMemberTypeResolver,
 ): FlowFormulaScope => ({
   now: state.now,
   reference: (reference: FlowReference) => {
@@ -393,6 +409,7 @@ const scopeOf = (
           reference.task,
           reference.key,
           reference.path,
+          resolveMember,
         );
         if (type === undefined) return undefined;
         // A declared member that is present but empty (a form field left blank) is its typed null.
@@ -425,9 +442,10 @@ const evaluateValue = (
   activation: Activation,
   flow: FlowDefinition,
   taskId: string,
+  resolveMember: FlowOutputMemberTypeResolver,
 ): FlowRuntimeValue => {
   return (
-    resolveFlowValue(value, scopeOf(state, activation, flow)) ??
+    resolveFlowValue(value, scopeOf(state, activation, flow, resolveMember)) ??
     failed("value_unresolved", "failed", taskId)
   );
 };
@@ -438,11 +456,12 @@ const evaluateProperties = (
   activation: Activation,
   flow: FlowDefinition,
   taskId: string,
+  resolveMember: FlowOutputMemberTypeResolver,
 ): FlowRuntimeValues =>
   Object.fromEntries(
     Object.entries(properties).map(([name, value]) => [
       name,
-      evaluateValue(value, state, activation, flow, taskId),
+      evaluateValue(value, state, activation, flow, taskId, resolveMember),
     ]),
   );
 
@@ -503,6 +522,7 @@ type Machine = {
     -readonly [Key in keyof FlowRunState]: FlowRunState[Key];
   };
   library: FlowLibrary;
+  resolveMember: FlowOutputMemberTypeResolver;
 };
 
 const topOf = (machine: Machine) =>
@@ -560,7 +580,14 @@ const finishActivation = (machine: Machine, activation: Activation): FlowRunResu
   if (activation.failure !== undefined) return { status: "failed", failure: activation.failure };
   const outputs: Record<string, FlowRuntimeValue> = {};
   for (const [name, declaration] of Object.entries(flow.outputs))
-    outputs[name] = evaluateValue(declaration.value, machine.state, activation, flow, name);
+    outputs[name] = evaluateValue(
+      declaration.value,
+      machine.state,
+      activation,
+      flow,
+      name,
+      machine.resolveMember,
+    );
   return {
     status: "completed",
     outputs,
@@ -700,7 +727,10 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
   switch (task.type) {
     case "if": {
       const node = task as Extract<FlowTask, { type: "if" }>;
-      const condition = evaluateFlowFormula(node.condition, scopeOf(state, activation, flow));
+      const condition = evaluateFlowFormula(
+        node.condition,
+        scopeOf(state, activation, flow, machine.resolveMember),
+      );
       if (condition?.type !== "yes_no") failed("value_unresolved", "failed", taskId);
       next =
         condition!.value === true
@@ -711,7 +741,14 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
     }
     case "switch": {
       const node = task as Extract<FlowTask, { type: "switch" }>;
-      const subject = evaluateValue(node.value, state, activation, flow, taskId);
+      const subject = evaluateValue(
+        node.value,
+        state,
+        activation,
+        flow,
+        taskId,
+        machine.resolveMember,
+      );
       let chosen = -1;
       node.cases.forEach((entry, index) => {
         if (chosen >= 0) return;
@@ -733,7 +770,14 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
     }
     case "for_each": {
       const node = task as Extract<FlowTask, { type: "for_each" }>;
-      const items = evaluateValue(node.items, state, activation, flow, taskId);
+      const items = evaluateValue(
+        node.items,
+        state,
+        activation,
+        flow,
+        taskId,
+        machine.resolveMember,
+      );
       if (!Array.isArray(items.value)) return failed("value_unresolved", "failed", taskId);
       if (items.value.length > Math.min(node.maximumItems, flowMaximumForEachItemsOther))
         failed("for_each_limit", "failed", taskId);
@@ -764,7 +808,7 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
       const supplied = Object.fromEntries(
         Object.entries(node.inputs).map(([name, value]) => [
           name,
-          evaluateValue(value, state, activation, flow, taskId).value,
+          evaluateValue(value, state, activation, flow, taskId, machine.resolveMember).value,
         ]),
       );
       const inputs = buildInputs(child, supplied, taskId);
@@ -783,7 +827,14 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
   const registered = task as Extract<FlowTask, { properties: unknown }>;
   const definition = flowTaskRegistry[registered.type as keyof typeof flowTaskRegistry];
   if (definition === undefined) return failed("task_unknown", "failed", taskId);
-  const properties = evaluateProperties(registered.properties, state, activation, flow, taskId);
+  const properties = evaluateProperties(
+    registered.properties,
+    state,
+    activation,
+    flow,
+    taskId,
+    machine.resolveMember,
+  );
 
   if (definition.effect === "pure") {
     if (!serverRuns(registered.type, "interpreter")) failed("task_not_available", "failed", taskId);
@@ -903,7 +954,7 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
         ? Object.fromEntries(
             Object.entries(inputs.entries).map(([name, entry]) => [
               name,
-              evaluateValue(entry, state, activation, flow, taskId).type,
+              evaluateValue(entry, state, activation, flow, taskId, machine.resolveMember).type,
             ]),
           )
         : undefined;
@@ -1104,6 +1155,7 @@ export const startFlowRun = (
   start: FlowRunStart,
   library: FlowLibrary,
   observer?: FlowTaskTraceObserver,
+  resolveMember: FlowOutputMemberTypeResolver = serverOutputMemberType,
 ): FlowRunStep => {
   const state: FlowRunState = {
     version: flowRunStateVersion,
@@ -1119,7 +1171,7 @@ export const startFlowRun = (
     ...(start.triggerRecord === undefined ? {} : { triggerRecord: start.triggerRecord }),
     ...(start.previousRecord === undefined ? {} : { previousRecord: start.previousRecord }),
   };
-  const machine: Machine = { state: { ...state }, library };
+  const machine: Machine = { state: { ...state }, library, resolveMember };
   const flow = library(start.flowId);
   if (flow === undefined)
     return failedStep(machine, { outcome: "failed", code: "flow_unavailable" });
@@ -1146,8 +1198,9 @@ export const resumeFlowRun = (
   resume: FlowRunResume,
   library: FlowLibrary,
   observer?: FlowTaskTraceObserver,
+  resolveMember: FlowOutputMemberTypeResolver = serverOutputMemberType,
 ): FlowRunStep => {
-  const machine: Machine = { state: clone(previous), library };
+  const machine: Machine = { state: clone(previous), library, resolveMember };
   const awaiting = machine.state.awaiting;
   const mismatch = () => failedStep(machine, { outcome: "failed", code: "resume_mismatch" });
   if (awaiting === undefined || previous.version !== flowRunStateVersion) return mismatch();
