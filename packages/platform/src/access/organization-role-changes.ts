@@ -4,7 +4,6 @@ import {
   actorIdSchema,
   applicationRootIdSchema,
   builderKeySchema,
-  containedComponentIdSchema,
   fingerprintSchema,
   organizationIdSchema,
   revisionSchema,

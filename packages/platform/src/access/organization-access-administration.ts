@@ -2,7 +2,6 @@ import { z } from "zod";
 import {
   applicationRootIdSchema,
   builderKeySchema,
-  containedComponentIdSchema,
   delegationAuthorityIdSchema,
   groupIdSchema,
   membershipIdSchema,

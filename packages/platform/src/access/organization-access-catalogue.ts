@@ -5,7 +5,6 @@ import {
   actorIdSchema,
   applicationRootIdSchema,
   builderKeySchema,
-  containedComponentIdSchema,
   delegationAuthorityIdSchema,
   fingerprintSchema,
   groupIdSchema,
