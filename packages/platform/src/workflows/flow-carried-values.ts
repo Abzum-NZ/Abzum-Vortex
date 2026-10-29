@@ -20,7 +20,6 @@ const identitySchema = z.object({
   applicationRootId: z.uuid(),
 }).strict();
 const payloadSchema = identitySchema.extend({
-  lastSuccessfulSegment: z.string().min(1).max(200),
   values: z.record(z.string().min(1).max(300), z.object({
     type: z.string().min(1).max(100),
     value: jsonValueSchema,
@@ -29,7 +28,6 @@ const payloadSchema = identitySchema.extend({
 
 type CarryIdentity = z.infer<typeof identitySchema>;
 type CarryValues = Readonly<Record<string, FlowRuntimeValue>>;
-type OpenedCarry = Readonly<{ values: CarryValues; lastSuccessfulSegment?: string }>;
 
 export class FlowCarriedValuesError extends Error {
   constructor() {
@@ -44,9 +42,8 @@ export const openFlowCarriedValues = (
   key: QueryContinuationKey,
   identity: CarryIdentity,
   segment: FlowServerSegment,
-): OpenedCarry => {
+): CarryValues => {
   let values: CarryValues = {};
-  let lastSuccessfulSegment: string | undefined;
   if (token !== undefined) {
     if (token.length > maximumTokenLength) throw new FlowCarriedValuesError();
     const opened = openToken(key, purpose, token);
@@ -56,7 +53,6 @@ export const openFlowCarriedValues = (
       !sameId(identity[name as keyof CarryIdentity], parsed.data[name as keyof CarryIdentity]),
     )) throw new FlowCarriedValuesError();
     values = parsed.data.values;
-    lastSuccessfulSegment = parsed.data.lastSuccessfulSegment;
   }
   for (const [name, type] of Object.entries(segment.carriedInputs)) {
     const value = values[name];
@@ -64,17 +60,17 @@ export const openFlowCarriedValues = (
       (value.value !== null && !typedValueMatchesType(value.value, type, "flow"))))
       throw new FlowCarriedValuesError();
   }
-  return { values, ...(lastSuccessfulSegment === undefined ? {} : { lastSuccessfulSegment }) };
+  return values;
 };
 
-/** After success, keep live values and record which server segment completed. */
+/** Keep only values needed after this segment and add its new server-only outputs. */
 export const sealFlowCarriedValues = (
   previous: CarryValues,
   produced: CarryValues,
   key: QueryContinuationKey,
   identity: CarryIdentity,
   segment: FlowServerSegment,
-): string => {
+): string | undefined => {
   const values: Record<string, FlowRuntimeValue> = Object.create(null);
   for (const name of segment.carriedRetainKeys) {
     if (previous[name] !== undefined) values[name] = previous[name]!;
@@ -86,11 +82,8 @@ export const sealFlowCarriedValues = (
       throw new FlowCarriedValuesError();
     values[name] = value;
   }
-  const token = sealToken(key, purpose, payloadSchema.parse({
-    ...identity,
-    lastSuccessfulSegment: segment.id,
-    values,
-  }));
+  if (Object.keys(values).length === 0) return undefined;
+  const token = sealToken(key, purpose, payloadSchema.parse({ ...identity, values }));
   if (token.length > maximumTokenLength) throw new FlowCarriedValuesError();
   return token;
 };
