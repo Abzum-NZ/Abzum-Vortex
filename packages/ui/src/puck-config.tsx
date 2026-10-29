@@ -21,13 +21,16 @@ import {
   createContext,
   lazy,
   Suspense,
+  useCallback,
   useContext,
   useRef,
+  useSyncExternalStore,
   type CSSProperties,
   type MouseEvent,
   type ReactElement,
   type ReactNode,
 } from "react";
+import type { FlowRuntimeState } from "./flow-runtime/flow-runtime";
 import type { ComponentConfig, Config, Field, PuckContext, SlotComponent } from "@puckeditor/core";
 import {
   plainSettingValue,
@@ -131,6 +134,8 @@ export type VortexPuckMetadata = Readonly<{
   layoutCss?: "placement" | "page" | undefined;
   /** Raw component runtime inputs by stable placement identity, validated per block. */
   runtimeInputs?: RuntimeInputsByPlacement | undefined;
+  /** In-flight flow state, observed separately by each placement. */
+  runtimeState?: FlowRuntimeState | undefined;
   /** Permission-filtered application menu threaded to navigation placements. */
   projectedNavigation?: ProjectedNavigation | undefined;
   /** Page-address resolver supplied by the shell. */
@@ -375,6 +380,16 @@ function PlacementBlock(props: {
   const { registry, componentProps, fieldInputControlReleases } = props;
   const { id: placementId, vortex, puck, wrapper } = componentProps;
   const metadataIn = (puck.metadata ?? {}) as VortexPuckMetadata;
+  const runtimeState = metadataIn.runtimeState;
+  const subscribe = useCallback(
+    (listener: () => void) => runtimeState?.subscribe(placementId, listener) ?? (() => {}),
+    [placementId, runtimeState],
+  );
+  const readRunning = useCallback(
+    () => runtimeState?.isRunning(placementId) ?? false,
+    [placementId, runtimeState],
+  );
+  const running = useSyncExternalStore(subscribe, readRunning, () => false);
   const themeTokens = useContext(ThemeTokensContext);
   const rootSlotGap = useContext(RootSlotGapContext);
   const breakpoint = metadataIn.breakpoint;
@@ -476,6 +491,7 @@ function PlacementBlock(props: {
       data-vortex-placement-id={placementId}
       data-vortex-block-id={release.blockId}
       data-vortex-block-key={release.key}
+      aria-busy={running || undefined}
       {...(responsive && !pageEmitsCss ? { "data-vortex-wrapper-scope": placementId } : {})}
       {...(gridChild ? { "data-vortex-grid-child": "" } : {})}
       {...(responsive

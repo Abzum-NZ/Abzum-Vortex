@@ -176,6 +176,7 @@ export type PagePuckRendererProps = Readonly<{
    * registration, so the renderer itself names no payload field, event or callback.
    */
   runtimeInputs?: RuntimeInputsByPlacement;
+  runtimeState?: VortexPuckMetadata["runtimeState"];
   /**
    * The viewer's permission-filtered application menu, threaded to every navigation placement in
    * the resolved tree. It is server-projected viewer data, never an authored setting.
@@ -240,6 +241,7 @@ export function PagePuckRenderer({
   applicationSurface = false,
   feedback,
   runtimeInputs,
+  runtimeState,
   projectedNavigation,
   resolvePageHref,
   onNavigatePage,
@@ -285,6 +287,7 @@ export function PagePuckRenderer({
     readSettings,
     ...(breakpoint === undefined ? {} : { breakpoint }),
     ...(runtimeInputs === undefined ? {} : { runtimeInputs }),
+    ...(runtimeState === undefined ? {} : { runtimeState }),
     ...(projectedNavigation === undefined ? {} : { projectedNavigation }),
     ...(resolvePageHref === undefined ? {} : { resolvePageHref }),
     ...(onNavigatePage === undefined ? {} : { onNavigatePage }),
