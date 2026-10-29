@@ -63,7 +63,6 @@ export async function submitStandardPageAdoption(formData: FormData): Promise<st
     candidateReleaseRevision: numberField(formData, "candidateReleaseRevision"),
     originalPageId: textField(formData, "originalPageId"),
     replacementPageId: textField(formData, "replacementPageId"),
-    comparisonFingerprint: textField(formData, "comparisonFingerprint"),
     decision: textField(formData, "decision"),
     target: { kind: targetKind, id: targetId },
   });

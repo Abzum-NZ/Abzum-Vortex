@@ -3,7 +3,6 @@ import "server-only";
 import { z } from "zod";
 import {
   applicationRootIdSchema,
-  fingerprintSchema,
   pageIdSchema,
   organizationIdSchema,
   platformIdSchema,
@@ -90,7 +89,6 @@ const derivedDraftCommandSchema = z
     candidateReleaseRevision: revisionSchema,
     originalPageId: pageIdSchema,
     replacementPageId: pageIdSchema,
-    comparisonFingerprint: fingerprintSchema,
     decision: z.enum(["keep_replacement", "adopt_original"]),
     target: z.discriminatedUnion("kind", [
       z.object({ kind: z.literal("navigation"), id: platformIdSchema }).strict(),
