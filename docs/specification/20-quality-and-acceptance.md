@@ -47,7 +47,7 @@ Organisation separation applies at every boundary described by [People and organ
 
 Shared-record behavior remains source-authoritative:
 
-- A grant has the exact source, recipient, applications, role, fields, actions, saved condition, lifetime and consent fingerprint approved by both sides. A changed proposal or saved condition requires a new explicit grant decision; recipient input cannot widen it inline.
+- A grant has the exact source, recipient, applications, role, fields, actions, saved condition, lifetime and proposal revision approved by both sides. A changed proposal or saved condition requires a new explicit grant decision; recipient input cannot widen it inline.
 - The recipient receives only permitted response values. Source record values do not become recipient database rows, files, search indexes, materialised reports, workflow state, cross-request cache, logs, traces or grant-mirror content.
 - Lists, detail, search, reports, dashboard blocks, named actions, files and approved exports have the same permission meaning through local and remote adapters. Source ownership and temporary source unavailability remain visible.
 - Revocation, expiry, account removal, application-role loss, record deletion and field-policy reduction affect the next operation. Client state and live subscriptions close or re-authorise without retaining withdrawn values.

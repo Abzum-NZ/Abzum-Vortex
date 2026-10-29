@@ -6400,4 +6400,952 @@ drop function vortex_access.revoke_capability_policy_ceiling(uuid,uuid,uuid,uuid
 drop function vortex_access.set_capability_limit_allocation(uuid,uuid,uuid,uuid,text,text,numeric,timestamp with time zone,bigint,uuid);
 drop function vortex_access.set_capability_policy_ceiling(uuid,uuid,uuid,uuid,uuid,bigint,timestamp with time zone,timestamp with time zone,bigint);
 
+
+-- Preserve the old integrity check for current pending proposals before removing hashes.
+do $preflight$
+declare
+  bad_grant uuid;
+  bad_organization uuid;
+begin
+  select grant_row.grant_id, grant_row.source_organization_id
+  into bad_grant, bad_organization
+  from vortex_access.record_share_grants as grant_row
+  join vortex_access.record_share_grant_consent_requests as request_row
+    on request_row.request_id = grant_row.consent_request_id
+  where grant_row.status = 'pending_consent'
+    and (request_row.revision is distinct from grant_row.revision
+      or request_row.proposed_grant_fingerprint is distinct from grant_row.proposal_fingerprint
+      or exists (
+        select 1 from vortex_access.record_share_grant_consent_decisions as decision_row
+        where decision_row.request_id = request_row.request_id
+          and decision_row.proposal_revision = grant_row.revision
+          and decision_row.proposed_grant_fingerprint is distinct from grant_row.proposal_fingerprint
+      ))
+  limit 1;
+  if found then
+    raise exception using errcode = '23514',
+      message = pg_catalog.format('share_proposal_revision_mismatch: organization %s grant %s',
+        bad_organization, bad_grant);
+  end if;
+end
+$preflight$;
+
+-- Consent evidence names the existing grant revision instead of a duplicate hash.
+drop function vortex_access.propose_record_share_grant_for_administration(uuid, uuid, jsonb, text, uuid);
+drop function vortex_access.revise_record_share_grant_for_administration(uuid, bigint, jsonb, text, uuid);
+drop function vortex_access.record_share_grant_consent_decision_for_administration(uuid, uuid, bigint, text, text, text, uuid);
+alter table vortex_access.record_share_grant_consent_decisions drop column proposed_grant_fingerprint;
+alter table vortex_access.record_share_grant_consent_requests drop column proposed_grant_fingerprint;
+alter table vortex_access.record_share_grants drop column proposal_fingerprint;
+
+CREATE OR REPLACE FUNCTION vortex_access.record_share_grant_json_internal(p_grant_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  stored vortex_access.record_share_grants%rowtype;
+  consent vortex_access.record_share_grant_consent_requests%rowtype;
+  grant_json jsonb;
+  consent_json jsonb := null;
+begin
+  select grants.* into strict stored
+  from vortex_access.record_share_grants as grants
+  where grants.grant_id = p_grant_id;
+
+  grant_json := pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
+    'scopeKind', stored.scope_kind,
+    'grantId', stored.grant_id,
+    'sourceClusterId', stored.source_cluster_id,
+    'sourceOrganizationId', stored.source_organization_id,
+    'sourceApplicationRootId', stored.source_application_root_id,
+    'recipientClusterId', stored.recipient_cluster_id,
+    'recipientOrganizationId', stored.recipient_organization_id,
+    'recipientApplicationRootId', stored.recipient_application_root_id,
+    'readableFieldIds', pg_catalog.to_jsonb(stored.readable_field_ids),
+    'changeableFieldIds', pg_catalog.to_jsonb(stored.changeable_field_ids),
+    'recipientRoleIds', pg_catalog.to_jsonb(stored.recipient_role_ids),
+    'moduleRootId', stored.module_root_id,
+    'allowedActionKeys', pg_catalog.to_jsonb(stored.allowed_action_keys),
+    'exportAllowed', stored.export_allowed,
+    'approvedRecipientRegion', stored.approved_recipient_region,
+    'startsAt', pg_catalog.to_char(
+      stored.starts_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+    ),
+    'expiresAt', case when stored.expires_at is null then null else pg_catalog.to_char(
+      stored.expires_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+    ) end,
+    'status', stored.status,
+    'createdByOrganizationAccountId', stored.created_by_organization_account_id,
+    'consentRequestId', stored.consent_request_id,
+    'contractVersion', stored.contract_version,
+    'contractFingerprint', stored.contract_fingerprint,
+    'recipientBindingId', stored.recipient_binding_id,
+    'definitionMappingFingerprint', stored.definition_mapping_fingerprint,
+    'recordTypeId', stored.record_type_id,
+    'recordId', stored.record_id,
+    'savedConditionId', stored.saved_condition_id,
+    'savedConditionRevision', stored.saved_condition_revision,
+    'savedConditionFingerprint', stored.saved_condition_fingerprint,
+    'revokedAt', case when stored.revoked_at is null then null else pg_catalog.to_char(
+      stored.revoked_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+    ) end,
+    'revokedByOrganizationAccountId', stored.revoked_by_organization_account_id,
+    'revocationReason', stored.revocation_reason
+  ))
+  -- Parameters are added after null stripping so a saved condition's exact
+  -- parameter object survives unchanged.
+  || case when stored.scope_kind = 'saved_condition'
+    then pg_catalog.jsonb_build_object('parameters', stored.saved_condition_parameters)
+    else '{}'::jsonb end;
+
+  if stored.consent_request_id is not null then
+    select requests.* into strict consent
+    from vortex_access.record_share_grant_consent_requests as requests
+    where requests.request_id = stored.consent_request_id;
+    consent_json := pg_catalog.jsonb_build_object(
+      'requestId', consent.request_id,
+      'sourceOrganizationId', consent.source_organization_id,
+      'sourceClusterId', consent.source_cluster_id,
+      'recipientOrganizationId', consent.recipient_organization_id,
+      'recipientClusterId', consent.recipient_cluster_id,
+      'status', consent.status,
+      'requestedByOrganizationAccountId', consent.requested_by_organization_account_id,
+      'requestedAt', pg_catalog.to_char(
+        consent.requested_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+      ),
+      'requiredDecisions', pg_catalog.jsonb_build_array(
+        pg_catalog.jsonb_build_object(
+          'side', 'source_authorization',
+          'authorizedRoleIds', pg_catalog.to_jsonb(consent.source_authorizing_role_ids)
+        ),
+        pg_catalog.jsonb_build_object(
+          'side', 'recipient_acceptance',
+          'authorizedRoleIds', pg_catalog.to_jsonb(consent.recipient_accepting_role_ids)
+        )
+      ),
+      'expiresAt', pg_catalog.to_char(
+        consent.expires_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+      )
+    );
+  end if;
+
+  return pg_catalog.jsonb_build_object(
+    'grant', grant_json,
+    'consentRequest', consent_json,
+    'revision', stored.revision,
+    'changedAt', pg_catalog.to_char(
+      stored.changed_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+    )
+  );
+end
+$$;
+
+alter function vortex_access.record_share_grant_json_internal(p_grant_id uuid) owner to vortex_owner;
+
+REVOKE ALL ON FUNCTION vortex_access.record_share_grant_json_internal(p_grant_id uuid) FROM PUBLIC;
+
+grant execute on function vortex_access.record_share_grant_json_internal(p_grant_id uuid) to postgres;
+
+create or replace function vortex_access.propose_record_share_grant_for_administration(
+  p_grant_id uuid,
+  p_consent_request_id uuid,
+  p_terms jsonb,
+  p_activity_id uuid
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  context_organization_id uuid;
+  context_account_id uuid;
+  context_access_version bigint;
+  context_correlation_id uuid;
+  context_application_root_id uuid;
+  locked_access_version bigint;
+  cross_organization boolean;
+  now_value timestamptz := pg_catalog.statement_timestamp();
+  append_result text;
+begin
+  if p_grant_id is null or p_grant_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_activity_id is null or p_activity_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_terms is null or pg_catalog.jsonb_typeof(p_terms) <> 'object'
+    or (p_consent_request_id is not null
+      and p_consent_request_id = '00000000-0000-0000-0000-000000000000'::uuid) then
+    raise exception using errcode = '22023',
+      message = 'Record-share grant proposal is invalid';
+  end if;
+
+  context_value := vortex_access.validated_human_request_context();
+  context_organization_id := (context_value ->> 'organizationId')::uuid;
+  context_account_id := (context_value ->> 'organizationAccountId')::uuid;
+  context_access_version := (context_value ->> 'accessVersion')::bigint;
+  context_correlation_id := (context_value ->> 'correlationId')::uuid;
+  context_application_root_id := case
+    when context_value ? 'applicationRootId' then (context_value ->> 'applicationRootId')::uuid
+    else null end;
+  if context_application_root_id is null then
+    raise exception using errcode = '42501',
+      message = 'Record-share grant proposal requires an application context';
+  end if;
+
+  -- Take the organisation's shared Access lock before evaluating any authority, so a
+  -- concurrent authority change cannot land between the check and the write.
+  select version.current_version into locked_access_version
+  from vortex_access.organization_access_versions as version
+  join vortex_identity.organizations as organization
+    on organization.organization_id = version.organization_id
+  join vortex_identity.tenants as tenant on tenant.tenant_id = organization.tenant_id
+  where version.organization_id = context_organization_id
+    and organization.state = 'active' and tenant.state = 'active'
+  for share of version;
+  if not found or locked_access_version is distinct from context_access_version then
+    raise exception using errcode = '42501',
+      message = 'Record-share grant proposal is unavailable';
+  end if;
+
+  perform vortex_access.check_record_share_grant_terms_internal(p_terms, context_value);
+
+  if vortex_access.recent_authentication_deadline_internal(
+    context_value, pg_catalog.clock_timestamp(),
+    '{"kind":"multi_factor","maximumAgeSeconds":3600}'::jsonb
+  ) is null then
+    raise exception using errcode = 'V3152',
+      message = 'Record-share grant administration requires multi-factor authentication';
+  end if;
+
+  cross_organization := (p_terms ->> 'recipientOrganizationId')::uuid
+    <> context_organization_id;
+  if cross_organization is distinct from (p_consent_request_id is not null) then
+    raise exception using errcode = '22023',
+      message = 'Record-share grant proposal is invalid';
+  end if;
+
+  insert into vortex_access.record_share_grants (
+    grant_id, source_organization_id, source_cluster_id, source_application_root_id,
+    recipient_cluster_id, recipient_organization_id, recipient_application_root_id,
+    scope_kind, module_root_id, record_type_id, record_id, saved_condition_id,
+    saved_condition_revision, saved_condition_fingerprint, saved_condition_parameters,
+    readable_field_ids, changeable_field_ids, recipient_role_ids, allowed_action_keys,
+    export_allowed, approved_recipient_region, starts_at, expires_at, status,
+    created_by_organization_account_id, consent_request_id, contract_version,
+    contract_fingerprint, recipient_binding_id, definition_mapping_fingerprint,
+    revision, created_at, changed_at
+  ) values (
+    p_grant_id, context_organization_id, (p_terms ->> 'sourceClusterId')::uuid,
+    context_application_root_id, (p_terms ->> 'recipientClusterId')::uuid,
+    (p_terms ->> 'recipientOrganizationId')::uuid,
+    (p_terms ->> 'recipientApplicationRootId')::uuid,
+    p_terms ->> 'scopeKind', (p_terms ->> 'moduleRootId')::uuid,
+    (p_terms ->> 'recordTypeId')::uuid, (p_terms ->> 'recordId')::uuid,
+    (p_terms ->> 'savedConditionId')::uuid, (p_terms ->> 'savedConditionRevision')::bigint,
+    p_terms ->> 'savedConditionFingerprint', p_terms -> 'parameters',
+    vortex_access.record_share_grant_uuid_array_internal(p_terms -> 'readableFieldIds', 1, 500),
+    vortex_access.record_share_grant_uuid_array_internal(p_terms -> 'changeableFieldIds', 0, 500),
+    vortex_access.record_share_grant_uuid_array_internal(p_terms -> 'recipientRoleIds', 1, 100),
+    array(select pg_catalog.jsonb_array_elements_text(p_terms -> 'allowedActionKeys')),
+    (p_terms ->> 'exportAllowed')::boolean, p_terms ->> 'approvedRecipientRegion',
+    (p_terms ->> 'startsAt')::timestamptz, (p_terms ->> 'expiresAt')::timestamptz,
+    case when cross_organization then 'pending_consent' else 'draft' end,
+    context_account_id, p_consent_request_id, p_terms ->> 'contractVersion',
+    p_terms ->> 'contractFingerprint', (p_terms ->> 'recipientBindingId')::uuid,
+    p_terms ->> 'definitionMappingFingerprint', 1,
+    now_value, now_value
+  );
+
+  -- The grant's foreign key to its consent request is deferred, so the request
+  -- follows the grant it names.
+  if cross_organization then
+    insert into vortex_access.record_share_grant_consent_requests (
+      request_id, grant_id, source_organization_id, source_cluster_id,
+      recipient_organization_id, recipient_cluster_id,
+      status, requested_by_organization_account_id, requested_at,
+      source_authorizing_role_ids, recipient_accepting_role_ids, expires_at,
+      revision, changed_at
+    ) values (
+      p_consent_request_id, p_grant_id, context_organization_id,
+      (p_terms ->> 'sourceClusterId')::uuid,
+      (p_terms ->> 'recipientOrganizationId')::uuid,
+      (p_terms ->> 'recipientClusterId')::uuid,
+      'pending', context_account_id, now_value,
+      vortex_access.record_share_grant_uuid_array_internal(
+        p_terms -> 'sourceAuthorizingRoleIds', 1, 100),
+      vortex_access.record_share_grant_uuid_array_internal(
+        p_terms -> 'recipientAcceptingRoleIds', 1, 100),
+      (p_terms ->> 'expiresAt')::timestamptz, 1, now_value
+    );
+  end if;
+
+
+  append_result := vortex_record.append_organization_activity_entry(
+    context_organization_id, p_activity_id, now_value, 'organization_account',
+    context_account_id, 'propose_record_share_grant', array[p_grant_id]::uuid[],
+    array[]::uuid[], vortex_platform.channel(), context_correlation_id, 'completed'
+  );
+  if append_result is distinct from 'inserted' then
+    raise exception using errcode = '40001',
+      message = 'Record-share grant proposal Activity is stale';
+  end if;
+
+  return vortex_access.record_share_grant_json_internal(p_grant_id);
+end
+$function$;
+
+revoke all on function vortex_access.propose_record_share_grant_for_administration(
+  uuid, uuid, jsonb, uuid
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_access.propose_record_share_grant_for_administration(
+  uuid, uuid, jsonb, uuid
+) to vortex_request;
+
+comment on function vortex_access.propose_record_share_grant_for_administration(
+  uuid, uuid, jsonb, uuid
+) is
+  'Fixed protected proposer: stores one exact record-share grant proposal for the context organisation after re-checking its current share authority; cross-organisation proposals stop at pending_consent with a consent request bound to the proposal revision.';
+
+alter function vortex_access.propose_record_share_grant_for_administration(p_grant_id uuid, p_consent_request_id uuid, p_terms jsonb, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.propose_record_share_grant_for_administration(p_grant_id uuid, p_consent_request_id uuid, p_terms jsonb, p_activity_id uuid) to postgres;
+
+create or replace function vortex_access.revise_record_share_grant_for_administration(
+  p_grant_id uuid,
+  p_expected_revision bigint,
+  p_terms jsonb,
+  p_activity_id uuid
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  context_organization_id uuid;
+  context_account_id uuid;
+  context_access_version bigint;
+  context_correlation_id uuid;
+  context_application_root_id uuid;
+  locked_access_version bigint;
+  stored vortex_access.record_share_grants%rowtype;
+  cross_organization boolean;
+  now_value timestamptz := pg_catalog.statement_timestamp();
+  append_result text;
+begin
+  if p_grant_id is null or p_grant_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_expected_revision is null or p_expected_revision not between 1 and 9007199254740991
+    or p_activity_id is null or p_activity_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_terms is null or pg_catalog.jsonb_typeof(p_terms) <> 'object' then
+    raise exception using errcode = '22023',
+      message = 'Record-share grant revision is invalid';
+  end if;
+
+  context_value := vortex_access.validated_human_request_context();
+  context_organization_id := (context_value ->> 'organizationId')::uuid;
+  context_account_id := (context_value ->> 'organizationAccountId')::uuid;
+  context_access_version := (context_value ->> 'accessVersion')::bigint;
+  context_correlation_id := (context_value ->> 'correlationId')::uuid;
+  context_application_root_id := case
+    when context_value ? 'applicationRootId' then (context_value ->> 'applicationRootId')::uuid
+    else null end;
+  if context_application_root_id is null then
+    raise exception using errcode = '42501',
+      message = 'Record-share grant revision requires an application context';
+  end if;
+
+  select version.current_version into locked_access_version
+  from vortex_access.organization_access_versions as version
+  join vortex_identity.organizations as organization
+    on organization.organization_id = version.organization_id
+  join vortex_identity.tenants as tenant on tenant.tenant_id = organization.tenant_id
+  where version.organization_id = context_organization_id
+    and organization.state = 'active' and tenant.state = 'active'
+  for share of version;
+  if not found or locked_access_version is distinct from context_access_version then
+    raise exception using errcode = '42501',
+      message = 'Record-share grant revision is unavailable';
+  end if;
+
+  -- Only the source organisation's own application may revise its proposal; a
+  -- foreign or unknown grant is indistinguishable from a missing one.
+  select grants.* into stored
+  from vortex_access.record_share_grants as grants
+  where grants.grant_id = p_grant_id
+    and grants.source_organization_id = context_organization_id
+    and grants.source_application_root_id = context_application_root_id
+  for update;
+  if not found then
+    raise exception using errcode = '42501',
+      message = 'Record-share grant revision is unavailable';
+  end if;
+  if stored.revision <> p_expected_revision or stored.status not in ('draft', 'pending_consent') then
+    raise exception using errcode = '40001',
+      message = 'Record-share grant is stale or no longer a proposal';
+  end if;
+
+  perform vortex_access.check_record_share_grant_terms_internal(p_terms, context_value);
+
+  if vortex_access.recent_authentication_deadline_internal(
+    context_value, pg_catalog.clock_timestamp(),
+    '{"kind":"multi_factor","maximumAgeSeconds":3600}'::jsonb
+  ) is null then
+    raise exception using errcode = 'V3152',
+      message = 'Record-share grant administration requires multi-factor authentication';
+  end if;
+
+  -- A revision cannot turn a same-organisation proposal into a cross-organisation
+  -- one or back: consent is bound to the grant's recipient organisation.
+  cross_organization := (p_terms ->> 'recipientOrganizationId')::uuid
+    <> context_organization_id;
+  if cross_organization is distinct from (stored.consent_request_id is not null) then
+    raise exception using errcode = '22023',
+      message = 'Record-share grant revision is invalid';
+  end if;
+
+  update vortex_access.record_share_grants as grants
+  set source_cluster_id = (p_terms ->> 'sourceClusterId')::uuid,
+      recipient_cluster_id = (p_terms ->> 'recipientClusterId')::uuid,
+      recipient_organization_id = (p_terms ->> 'recipientOrganizationId')::uuid,
+      recipient_application_root_id = (p_terms ->> 'recipientApplicationRootId')::uuid,
+      scope_kind = p_terms ->> 'scopeKind',
+      module_root_id = (p_terms ->> 'moduleRootId')::uuid,
+      record_type_id = (p_terms ->> 'recordTypeId')::uuid,
+      record_id = (p_terms ->> 'recordId')::uuid,
+      saved_condition_id = (p_terms ->> 'savedConditionId')::uuid,
+      saved_condition_revision = (p_terms ->> 'savedConditionRevision')::bigint,
+      saved_condition_fingerprint = p_terms ->> 'savedConditionFingerprint',
+      saved_condition_parameters = p_terms -> 'parameters',
+      readable_field_ids = vortex_access.record_share_grant_uuid_array_internal(
+        p_terms -> 'readableFieldIds', 1, 500),
+      changeable_field_ids = vortex_access.record_share_grant_uuid_array_internal(
+        p_terms -> 'changeableFieldIds', 0, 500),
+      recipient_role_ids = vortex_access.record_share_grant_uuid_array_internal(
+        p_terms -> 'recipientRoleIds', 1, 100),
+      allowed_action_keys = array(
+        select pg_catalog.jsonb_array_elements_text(p_terms -> 'allowedActionKeys')),
+      export_allowed = (p_terms ->> 'exportAllowed')::boolean,
+      approved_recipient_region = p_terms ->> 'approvedRecipientRegion',
+      starts_at = (p_terms ->> 'startsAt')::timestamptz,
+      expires_at = (p_terms ->> 'expiresAt')::timestamptz,
+      contract_version = p_terms ->> 'contractVersion',
+      contract_fingerprint = p_terms ->> 'contractFingerprint',
+      recipient_binding_id = (p_terms ->> 'recipientBindingId')::uuid,
+      definition_mapping_fingerprint = p_terms ->> 'definitionMappingFingerprint',
+      revision = grants.revision + 1,
+      changed_at = now_value
+  where grants.grant_id = p_grant_id;
+
+  -- The consent request follows the new revision and roles; earlier decisions
+  -- name the previous revision and cannot approve this proposal.
+  if cross_organization then
+    update vortex_access.record_share_grant_consent_requests as requests
+    set recipient_organization_id = (p_terms ->> 'recipientOrganizationId')::uuid,
+        recipient_cluster_id = (p_terms ->> 'recipientClusterId')::uuid,
+        source_cluster_id = (p_terms ->> 'sourceClusterId')::uuid,
+        status = 'pending',
+        requested_by_organization_account_id = context_account_id,
+        requested_at = now_value,
+        source_authorizing_role_ids = vortex_access.record_share_grant_uuid_array_internal(
+          p_terms -> 'sourceAuthorizingRoleIds', 1, 100),
+        recipient_accepting_role_ids = vortex_access.record_share_grant_uuid_array_internal(
+          p_terms -> 'recipientAcceptingRoleIds', 1, 100),
+        expires_at = (p_terms ->> 'expiresAt')::timestamptz,
+        revision = requests.revision + 1,
+        changed_at = now_value
+    where requests.request_id = stored.consent_request_id;
+  end if;
+
+  append_result := vortex_record.append_organization_activity_entry(
+    context_organization_id, p_activity_id, now_value, 'organization_account',
+    context_account_id, 'revise_record_share_grant', array[p_grant_id]::uuid[],
+    array[]::uuid[], vortex_platform.channel(), context_correlation_id, 'completed'
+  );
+  if append_result is distinct from 'inserted' then
+    raise exception using errcode = '40001',
+      message = 'Record-share grant revision Activity is stale';
+  end if;
+
+  return vortex_access.record_share_grant_json_internal(p_grant_id);
+end
+$function$;
+
+revoke all on function vortex_access.revise_record_share_grant_for_administration(
+  uuid, bigint, jsonb, uuid
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_access.revise_record_share_grant_for_administration(
+  uuid, bigint, jsonb, uuid
+) to vortex_request;
+
+comment on function vortex_access.revise_record_share_grant_for_administration(
+  uuid, bigint, jsonb, uuid
+) is
+  'Fixed protected reviser: replaces the terms of a draft or pending_consent proposal under an exact expected revision, re-checking current share authority and resetting its consent request.';
+
+alter function vortex_access.revise_record_share_grant_for_administration(p_grant_id uuid, p_expected_revision bigint, p_terms jsonb, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.revise_record_share_grant_for_administration(p_grant_id uuid, p_expected_revision bigint, p_terms jsonb, p_activity_id uuid) to postgres;
+
+create or replace function vortex_access.record_share_grant_consent_decision_for_administration(
+  p_decision_id uuid,
+  p_request_id uuid,
+  p_expected_revision bigint,
+  p_decision text,
+  p_note text,
+  p_activity_id uuid
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  context_tenant_id uuid;
+  context_organization_id uuid;
+  context_account_id uuid;
+  context_application_root_id uuid;
+  context_access_version bigint;
+  context_correlation_id uuid;
+  context_multi_factor_at timestamptz;
+  authentication_expires_at timestamptz;
+  locked_access_version bigint;
+  current_access_version bigint;
+  lock_organization_id uuid;
+  pre_source_organization_id uuid;
+  pre_source_application_root_id uuid;
+  pre_recipient_organization_id uuid;
+  pre_recipient_application_root_id uuid;
+  registration_target record;
+  stored_grant vortex_access.record_share_grants%rowtype;
+  stored_request vortex_access.record_share_grant_consent_requests%rowtype;
+  source_tenant_id uuid;
+  recipient_tenant_id uuid;
+  side_value text;
+  role_ids uuid[];
+  checked_at timestamptz;
+  path_checked_at timestamptz;
+  authorization_path jsonb;
+  path_valid_until timestamptz;
+  source_authority jsonb;
+  readable_ceiling uuid[];
+  changeable_ceiling uuid[];
+  decision_expires_at timestamptz;
+  inserted_decision_id uuid;
+  activity_result text;
+begin
+  if p_decision_id is null
+    or p_decision_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_request_id is null
+    or p_request_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_expected_revision is null
+    or p_expected_revision not between 1 and 9007199254740991
+    or p_decision is null
+    or p_decision not in ('consented', 'refused')
+    or (p_note is not null and pg_catalog.char_length(p_note) > 500)
+    or p_activity_id is null
+    or p_activity_id = '00000000-0000-0000-0000-000000000000'::uuid then
+    raise exception using errcode = '22023',
+      message = 'Record-share consent decision is invalid';
+  end if;
+
+  context_value := vortex_access.validated_human_request_context();
+  context_tenant_id := (context_value ->> 'tenantId')::uuid;
+  context_organization_id := (context_value ->> 'organizationId')::uuid;
+  context_account_id := (context_value ->> 'organizationAccountId')::uuid;
+  context_access_version := (context_value ->> 'accessVersion')::bigint;
+  context_correlation_id := (context_value ->> 'correlationId')::uuid;
+  context_multi_factor_at :=
+    (context_value ->> 'multiFactorAuthenticatedAt')::timestamptz;
+  context_application_root_id := case
+    when context_value ? 'applicationRootId'
+      then (context_value ->> 'applicationRootId')::uuid
+    else null end;
+  if context_application_root_id is null then
+    raise exception using errcode = '42501',
+      message = 'Record-share consent decision evidence is unavailable';
+  end if;
+
+  select grants.source_organization_id, grants.source_application_root_id,
+    grants.recipient_organization_id, grants.recipient_application_root_id
+  into pre_source_organization_id, pre_source_application_root_id,
+    pre_recipient_organization_id, pre_recipient_application_root_id
+  from vortex_access.record_share_grants as grants
+  join vortex_access.record_share_grant_consent_requests as requests
+    on requests.request_id = grants.consent_request_id
+    and requests.grant_id = grants.grant_id
+  where requests.request_id = p_request_id;
+  if not found
+    or pre_source_organization_id is null
+    or pre_source_application_root_id is null
+    or pre_recipient_organization_id is null
+    or pre_recipient_application_root_id is null
+    or pre_source_organization_id = pre_recipient_organization_id
+    or context_organization_id not in (
+      pre_source_organization_id, pre_recipient_organization_id
+    ) then
+    raise exception using errcode = '42501',
+      message = 'Record-share consent decision is unavailable';
+  end if;
+
+  -- The human scope resolver already holds the caller's Access-version row
+  -- FOR SHARE. Lock both participant versions by organisation ID, then
+  -- exact application registrations by (organisation ID, application root ID).
+  -- FOR SHARE is the weakest lock that blocks non-key updates. NOWAIT avoids a
+  -- cross-side deadlock when the preheld caller row reverses UUID order; SQLSTATE
+  -- 55P03 becomes a retryable unavailable result at the service boundary.
+  for lock_organization_id in
+    select participant.organization_id
+    from (values
+      (pre_source_organization_id),
+      (pre_recipient_organization_id)
+    ) as participant(organization_id)
+    order by participant.organization_id
+  loop
+    select version.current_version into current_access_version
+    from vortex_access.organization_access_versions as version
+    where version.organization_id = lock_organization_id
+    for share nowait;
+    if not found then
+      raise exception using errcode = '42501',
+        message = 'Record-share consent decision is unavailable';
+    end if;
+    if lock_organization_id = context_organization_id then
+      locked_access_version := current_access_version;
+    end if;
+  end loop;
+  if locked_access_version is distinct from context_access_version then
+    raise exception using errcode = '42501',
+      message = 'Record-share consent decision is unavailable';
+  end if;
+
+  for registration_target in
+    select participant.organization_id, participant.application_root_id
+    from (values
+      (pre_source_organization_id, pre_source_application_root_id),
+      (pre_recipient_organization_id, pre_recipient_application_root_id)
+    ) as participant(organization_id, application_root_id)
+    order by participant.organization_id, participant.application_root_id
+  loop
+    perform 1
+    from vortex_access.permission_registrations as registration
+    where registration.organization_id = registration_target.organization_id
+      and registration.registration_kind = 'application'
+      and registration.registration_owner_id = registration_target.application_root_id
+      and registration.state = 'active'
+    for share nowait;
+    if not found then
+      raise exception using errcode = '42501',
+        message = 'Record-share consent application is unavailable';
+    end if;
+  end loop;
+
+  if (
+    select pg_catalog.count(*)
+    from vortex_identity.organizations as organization
+    join vortex_identity.tenants as tenant
+      on tenant.tenant_id = organization.tenant_id
+    where organization.organization_id in (
+      pre_source_organization_id, pre_recipient_organization_id
+    )
+      and organization.state = 'active'
+      and tenant.state = 'active'
+  ) <> 2 then
+    raise exception using errcode = '42501',
+      message = 'Record-share consent decision is unavailable';
+  end if;
+
+  select grants.* into stored_grant
+  from vortex_access.record_share_grants as grants
+  where grants.consent_request_id = p_request_id
+  for update;
+  if not found then
+    raise exception using errcode = '42501',
+      message = 'Record-share consent decision is unavailable';
+  end if;
+
+  select requests.* into stored_request
+  from vortex_access.record_share_grant_consent_requests as requests
+  where requests.request_id = p_request_id
+    and requests.grant_id = stored_grant.grant_id
+  for update;
+  if not found
+    or stored_grant.revision <> p_expected_revision
+    or stored_request.revision <> p_expected_revision
+    or stored_grant.status <> 'pending_consent'
+    or stored_request.status <> 'pending'
+    or stored_grant.consent_request_id is distinct from stored_request.request_id
+    or stored_grant.source_organization_id is distinct from
+      stored_request.source_organization_id
+    or stored_grant.source_organization_id is distinct from
+      pre_source_organization_id
+    or stored_grant.source_cluster_id is distinct from
+      stored_request.source_cluster_id
+    or stored_grant.source_application_root_id is distinct from
+      pre_source_application_root_id
+    or stored_grant.recipient_organization_id is distinct from
+      stored_request.recipient_organization_id
+    or stored_grant.recipient_organization_id is distinct from
+      pre_recipient_organization_id
+    or stored_grant.recipient_cluster_id is distinct from
+      stored_request.recipient_cluster_id
+    or stored_grant.recipient_application_root_id is distinct from
+      pre_recipient_application_root_id
+    or stored_grant.expires_at is distinct from stored_request.expires_at
+    or stored_grant.source_organization_id = stored_grant.recipient_organization_id
+    or stored_grant.source_cluster_id is distinct from stored_grant.recipient_cluster_id then
+    raise exception using errcode = '42501',
+      message = 'Record-share consent decision is stale or unavailable';
+  end if;
+
+  if context_organization_id = stored_grant.source_organization_id then
+    side_value := 'source_authorization';
+    role_ids := stored_request.source_authorizing_role_ids;
+    if context_application_root_id is distinct from
+      stored_grant.source_application_root_id then
+      raise exception using errcode = '42501',
+        message = 'Record-share consent decision is unavailable';
+    end if;
+  elsif context_organization_id = stored_grant.recipient_organization_id then
+    side_value := 'recipient_acceptance';
+    role_ids := stored_request.recipient_accepting_role_ids;
+    if context_application_root_id is distinct from
+      stored_grant.recipient_application_root_id then
+      raise exception using errcode = '42501',
+        message = 'Record-share consent decision is unavailable';
+    end if;
+  else
+    raise exception using errcode = '42501',
+      message = 'Record-share consent decision is unavailable';
+  end if;
+
+  select source.tenant_id, recipient.tenant_id
+  into source_tenant_id, recipient_tenant_id
+  from vortex_identity.organizations as source
+  join vortex_identity.tenants as source_tenant
+    on source_tenant.tenant_id = source.tenant_id
+    and source_tenant.state = 'active'
+  join vortex_identity.organizations as recipient
+    on recipient.organization_id = stored_grant.recipient_organization_id
+    and recipient.state = 'active'
+  join vortex_identity.tenants as recipient_tenant
+    on recipient_tenant.tenant_id = recipient.tenant_id
+    and recipient_tenant.state = 'active'
+  where source.organization_id = stored_grant.source_organization_id
+    and source.state = 'active';
+  if not found
+    or (side_value = 'source_authorization'
+      and source_tenant_id is distinct from context_tenant_id)
+    or (side_value = 'recipient_acceptance'
+      and recipient_tenant_id is distinct from context_tenant_id) then
+    raise exception using errcode = '42501',
+      message = 'Record-share consent decision is unavailable';
+  end if;
+
+  path_checked_at := pg_catalog.clock_timestamp();
+  authentication_expires_at := vortex_access.recent_authentication_deadline_internal(
+    context_value, path_checked_at,
+    '{"kind":"multi_factor","maximumAgeSeconds":300}'::jsonb
+  );
+  if authentication_expires_at is null then
+    raise exception using errcode = 'V3152',
+      message = 'Record-share consent requires recent multi-factor authentication';
+  end if;
+  if stored_grant.expires_at is null
+    or stored_grant.expires_at <= path_checked_at
+    or stored_request.expires_at <= path_checked_at then
+    raise exception using errcode = '42501',
+      message = 'Record-share consent decision evidence is stale or unavailable';
+  end if;
+
+  authorization_path :=
+    vortex_access.record_share_grant_consent_role_path_internal(
+      context_organization_id,
+      context_account_id,
+      context_application_root_id,
+      role_ids,
+      path_checked_at,
+      context_expires_at
+    );
+  if authorization_path is null then
+    raise exception using errcode = '42501',
+      message = 'Record-share consent role path is unavailable';
+  end if;
+  path_valid_until := (authorization_path ->> 'validUntil')::timestamptz;
+
+  if side_value = 'source_authorization' then
+    source_authority :=
+      vortex_access.record_share_grant_source_authority_internal(
+        context_value, stored_grant.module_root_id, stored_grant.record_type_id
+      );
+    if source_authority is null
+      or pg_catalog.jsonb_typeof(source_authority -> 'recordTypeIds') is distinct from 'array'
+      or pg_catalog.jsonb_array_length(source_authority -> 'recordTypeIds') = 0
+      or pg_catalog.jsonb_typeof(source_authority -> 'readableFieldIds') is distinct from 'array'
+      or pg_catalog.jsonb_typeof(source_authority -> 'changeableFieldIds') is distinct from 'array' then
+      raise exception using errcode = '42501',
+        message = 'Record-share consent requires current source share permission';
+    end if;
+    select coalesce(pg_catalog.array_agg(field.value::uuid), array[]::uuid[])
+    into readable_ceiling
+    from pg_catalog.jsonb_array_elements_text(
+      source_authority -> 'readableFieldIds'
+    ) as field(value);
+    select coalesce(pg_catalog.array_agg(field.value::uuid), array[]::uuid[])
+    into changeable_ceiling
+    from pg_catalog.jsonb_array_elements_text(
+      source_authority -> 'changeableFieldIds'
+    ) as field(value);
+    if not (stored_grant.readable_field_ids <@ readable_ceiling)
+      or not (stored_grant.changeable_field_ids <@ changeable_ceiling) then
+      raise exception using errcode = '42501',
+        message = 'Record-share consent exceeds current source field authority';
+    end if;
+  end if;
+
+  checked_at := pg_catalog.clock_timestamp();
+  authentication_expires_at := vortex_access.recent_authentication_deadline_internal(
+    context_value, checked_at,
+    '{"kind":"multi_factor","maximumAgeSeconds":300}'::jsonb
+  );
+  if authentication_expires_at is null then
+    raise exception using errcode = 'V3152',
+      message = 'Record-share consent requires recent multi-factor authentication';
+  end if;
+  if stored_grant.expires_at <= checked_at
+    or stored_request.expires_at <= checked_at
+    or path_valid_until <= checked_at then
+    raise exception using errcode = '42501',
+      message = 'Record-share consent decision evidence is stale or unavailable';
+  end if;
+
+  decision_expires_at := least(
+    authentication_expires_at,
+    path_valid_until,
+    stored_grant.expires_at,
+    stored_request.expires_at
+  );
+
+  insert into vortex_access.record_share_grant_consent_decisions (
+    decision_id,
+    request_id,
+    grant_id,
+    tenant_id,
+    source_organization_id,
+    recipient_organization_id,
+    side,
+    approver_organization_id,
+    approver_organization_account_id,
+    approver_application_root_id,
+    proposal_revision,
+    proposal_expires_at,
+    access_version,
+    decision,
+    note,
+    authorization_path,
+    multi_factor_authenticated_at,
+    multi_factor_authentication_expires_at,
+    decided_at,
+    expires_at,
+    correlation_id
+  ) values (
+    p_decision_id,
+    stored_request.request_id,
+    stored_grant.grant_id,
+    context_tenant_id,
+    stored_grant.source_organization_id,
+    stored_grant.recipient_organization_id,
+    side_value,
+    context_organization_id,
+    context_account_id,
+    context_application_root_id,
+    stored_grant.revision,
+    stored_grant.expires_at,
+    locked_access_version,
+    p_decision,
+    p_note,
+    authorization_path,
+    context_multi_factor_at,
+    authentication_expires_at,
+    checked_at,
+    decision_expires_at,
+    context_correlation_id
+  )
+  on conflict (request_id, proposal_revision, side) do nothing
+  returning decision_id into inserted_decision_id;
+  if not found or inserted_decision_id is distinct from p_decision_id then
+    raise exception using errcode = '42501',
+      message = 'Record-share consent decision is already recorded or unavailable';
+  end if;
+
+  activity_result := vortex_record.append_organization_activity_entry(
+    context_organization_id,
+    p_activity_id,
+    checked_at,
+    'organization_account',
+    context_account_id,
+    'record_share_consent_decision',
+    array[stored_grant.grant_id, stored_request.request_id]::uuid[],
+    array[]::uuid[],
+    vortex_platform.channel(),
+    context_correlation_id,
+    'completed'
+  );
+  if activity_result is distinct from 'inserted' then
+    raise exception using errcode = '40001',
+      message = 'Record-share consent decision Activity is stale';
+  end if;
+
+  return pg_catalog.jsonb_build_object(
+    'decisionId', p_decision_id,
+    'requestId', stored_request.request_id,
+    'side', side_value,
+    'proposalRevision', stored_grant.revision,
+    'approverOrganizationId', context_organization_id,
+    'approverOrganizationAccountId', context_account_id,
+    'approverApplicationRootId', context_application_root_id,
+    'accessVersion', locked_access_version,
+    'proposalExpiresAt', pg_catalog.to_char(
+      stored_grant.expires_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+    ),
+    'decision', p_decision,
+    'decidedAt', pg_catalog.to_char(
+      checked_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+    ),
+    'authorizationPath', authorization_path,
+    'authenticationStrength', 'recent_multi_factor',
+    'multiFactorAuthenticatedAt', pg_catalog.to_char(
+      context_multi_factor_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+    ),
+    'multiFactorAuthenticationExpiresAt', pg_catalog.to_char(
+      authentication_expires_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+    ),
+    'expiresAt', pg_catalog.to_char(
+      decision_expires_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+    ),
+    'correlationId', context_correlation_id
+  ) || case when p_note is null then '{}'::jsonb
+      else pg_catalog.jsonb_build_object('note', p_note) end;
+end
+$function$;
+
+revoke all on function vortex_access.record_share_grant_consent_decision_for_administration(
+  uuid, uuid, bigint, text, text, uuid
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+grant execute on function vortex_access.record_share_grant_consent_decision_for_administration(
+  uuid, uuid, bigint, text, text, uuid
+) to vortex_request;
+
+comment on function vortex_access.record_share_grant_consent_decision_for_administration(
+  uuid, uuid, bigint, text, text, uuid
+) is
+  'Fixed protected same-cluster consent writer: records one immutable side decision for the locked current proposal, requiring current named role-path evidence, source share and field authority where applicable and MFA no older than 300 seconds; it never activates a grant.';
+
+alter function vortex_access.record_share_grant_consent_decision_for_administration(p_decision_id uuid, p_request_id uuid, p_expected_revision bigint, p_decision text, p_note text, p_activity_id uuid) owner to vortex_owner;
+
+grant execute on function vortex_access.record_share_grant_consent_decision_for_administration(p_decision_id uuid, p_request_id uuid, p_expected_revision bigint, p_decision text, p_note text, p_activity_id uuid) to postgres;
+
 reset role;

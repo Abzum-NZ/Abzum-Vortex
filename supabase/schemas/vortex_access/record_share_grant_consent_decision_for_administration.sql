@@ -2,7 +2,6 @@ create or replace function vortex_access.record_share_grant_consent_decision_for
   p_decision_id uuid,
   p_request_id uuid,
   p_expected_revision bigint,
-  p_expected_proposal_fingerprint text,
   p_decision text,
   p_note text,
   p_activity_id uuid
@@ -54,8 +53,6 @@ begin
     or p_request_id = '00000000-0000-0000-0000-000000000000'::uuid
     or p_expected_revision is null
     or p_expected_revision not between 1 and 9007199254740991
-    or p_expected_proposal_fingerprint is null
-    or p_expected_proposal_fingerprint !~ '^sha256:[a-f0-9]{64}$'
     or p_decision is null
     or p_decision not in ('consented', 'refused')
     or (p_note is not null and pg_catalog.char_length(p_note) > 500)
@@ -191,10 +188,6 @@ begin
     or stored_grant.status <> 'pending_consent'
     or stored_request.status <> 'pending'
     or stored_grant.consent_request_id is distinct from stored_request.request_id
-    or stored_grant.proposal_fingerprint is distinct from
-      stored_request.proposed_grant_fingerprint
-    or stored_grant.proposal_fingerprint is distinct from
-      p_expected_proposal_fingerprint
     or stored_grant.source_organization_id is distinct from
       stored_request.source_organization_id
     or stored_grant.source_organization_id is distinct from
@@ -358,7 +351,6 @@ begin
     approver_organization_account_id,
     approver_application_root_id,
     proposal_revision,
-    proposed_grant_fingerprint,
     proposal_expires_at,
     access_version,
     decision,
@@ -381,7 +373,6 @@ begin
     context_account_id,
     context_application_root_id,
     stored_grant.revision,
-    stored_grant.proposal_fingerprint,
     stored_grant.expires_at,
     locked_access_version,
     p_decision,
@@ -422,7 +413,6 @@ begin
     'decisionId', p_decision_id,
     'requestId', stored_request.request_id,
     'side', side_value,
-    'proposedGrantFingerprint', stored_grant.proposal_fingerprint,
     'proposalRevision', stored_grant.revision,
     'approverOrganizationId', context_organization_id,
     'approverOrganizationAccountId', context_account_id,
@@ -453,17 +443,17 @@ end
 $function$;
 
 revoke all on function vortex_access.record_share_grant_consent_decision_for_administration(
-  uuid, uuid, bigint, text, text, text, uuid
+  uuid, uuid, bigint, text, text, uuid
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_access.record_share_grant_consent_decision_for_administration(
-  uuid, uuid, bigint, text, text, text, uuid
+  uuid, uuid, bigint, text, text, uuid
 ) to vortex_request;
 
 comment on function vortex_access.record_share_grant_consent_decision_for_administration(
-  uuid, uuid, bigint, text, text, text, uuid
+  uuid, uuid, bigint, text, text, uuid
 ) is
   'Fixed protected same-cluster consent writer: records one immutable side decision for the locked current proposal, requiring current named role-path evidence, source share and field authority where applicable and MFA no older than 300 seconds; it never activates a grant.';
 
-alter function vortex_access.record_share_grant_consent_decision_for_administration(p_decision_id uuid, p_request_id uuid, p_expected_revision bigint, p_expected_proposal_fingerprint text, p_decision text, p_note text, p_activity_id uuid) owner to vortex_owner;
+alter function vortex_access.record_share_grant_consent_decision_for_administration(p_decision_id uuid, p_request_id uuid, p_expected_revision bigint, p_decision text, p_note text, p_activity_id uuid) owner to vortex_owner;
 
-grant execute on function vortex_access.record_share_grant_consent_decision_for_administration(p_decision_id uuid, p_request_id uuid, p_expected_revision bigint, p_expected_proposal_fingerprint text, p_decision text, p_note text, p_activity_id uuid) to postgres;
+grant execute on function vortex_access.record_share_grant_consent_decision_for_administration(p_decision_id uuid, p_request_id uuid, p_expected_revision bigint, p_decision text, p_note text, p_activity_id uuid) to postgres;

@@ -1094,7 +1094,6 @@ export const grantConsentRequestSchema = z
     sourceClusterId: clusterIdSchema,
     recipientOrganizationId: organizationIdSchema,
     recipientClusterId: clusterIdSchema,
-    proposedGrantFingerprint: fingerprintSchema,
     status: z.enum([
       "draft",
       "pending",
@@ -1181,7 +1180,6 @@ export const grantConsentDecisionSchema = z
     decisionId: grantConsentDecisionIdSchema,
     requestId: grantConsentRequestIdSchema,
     side: z.enum(["source_authorization", "recipient_acceptance"]),
-    proposedGrantFingerprint: fingerprintSchema,
     proposalRevision: revisionSchema,
     approverOrganizationId: organizationIdSchema,
     approverOrganizationAccountId: organizationAccountIdSchema,

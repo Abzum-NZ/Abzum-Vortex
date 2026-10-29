@@ -103,14 +103,14 @@ sequenceDiagram
 
 A proposed cross-organisation grant names one source organisation, one recipient organisation, one recipient application, one or more recipient application roles, one scope, allowed actions, readable and changeable fields, export choice, approved recipient region, start, and required expiry. It also names the source record-contract lineage and the recipient application's proven compatibility mapping. The source enters the recipient's copyable organisation sharing code or follows its signed invitation link, then confirms the returned approved name and region; discovering it grants no access.
 
-Every grant requires an authorised source administrator to approve the exact records, condition parameters, actions, fields, export choice, region, start, and expiry, and an authorised recipient administrator to accept the exact application, roles, responsibility, region, start, and expiry. Both decisions cover one complete proposal fingerprint. Changing any fingerprinted value makes the earlier decisions unusable and returns the proposal to approval.
+Every grant requires an authorised source administrator to approve the exact records, condition parameters, actions, fields, export choice, region, start, and expiry, and an authorised recipient administrator to accept the exact application, roles, responsibility, region, start, and expiry. Both decisions cover the same grant and proposal revision. Revising the proposal makes the earlier decisions unusable and returns the proposal to approval.
 
 An ordinary administration application may present the proposal and collect authorised responses, but the Access service alone records protected [grant-consent evidence](04-access-and-permissions.md#protected-grant-consent) and activates the grant. Consent decisions are immutable; later revocation is a separate recorded action.
 
 For a same-cluster grant, the source and recipient protected records can be changed in one database transaction. For a cross-cluster grant, activation uses signed, duplicate-safe messages rather than pretending two databases share a transaction:
 
-1. The source creates and signs an immutable proposal fingerprint.
-2. The source records its authorised approval, then the recipient verifies the source cluster, application binding, roles, destination policy, and proposal; it returns a signed acceptance or refusal for that exact fingerprint.
+1. The source signs the grant identity, proposal revision and its complete terms.
+2. The source records its authorised approval, then the recipient verifies the source cluster, application binding, roles, destination policy, and proposal; it returns a signed acceptance or refusal for that exact grant and proposal revision.
 3. The source verifies the response and activates the authoritative grant.
 4. The source returns a signed activation receipt, and the recipient marks its non-content grant mirror active.
 5. Either side can ask the source for the current status and safely repair a missed message through [reconciliation](17-runtime-storage-and-caching.md#grant-activation-and-reconciliation).
