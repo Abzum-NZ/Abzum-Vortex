@@ -244,7 +244,10 @@ const serverResolvedInputs = (bindings: readonly FlowBindingInputs[]): ReadonlyS
 const outputTypes = (steps: readonly FlowTask[]): Record<string, string> =>
   Object.fromEntries(
     steps.flatMap((step) =>
-      (registered(step)?.outputs ?? []).map((output) => [`${step.id}.${output.key}`, output.type]),
+      (registered(step)?.outputs ?? []).map((output) => [
+        `outputs.${step.id}.${output.key}`,
+        output.type,
+      ]),
     ),
   );
 
@@ -279,12 +282,12 @@ const inputTypes = (
         types[`vars.${reference.name}`] = flow.variables[reference.name]?.type ?? "json";
         break;
       case "task_output": {
-        const key = `${reference.task}.${reference.key}`;
+        const key = `outputs.${reference.task}.${reference.key}`;
         if (produced.has(reference.task)) break;
         const producer = allSteps([...flow.tasks, ...flow.errors, ...flow.finally]).find(
           (step) => step.id === reference.task,
         );
-        types[`outputs.${key}`] =
+        types[key] =
           (producer === undefined ? undefined : outputTypes([producer])[key]) ?? "json";
         break;
       }

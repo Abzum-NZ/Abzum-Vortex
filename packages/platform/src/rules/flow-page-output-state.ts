@@ -84,7 +84,7 @@ export const pageFlowSegmentSeed = (
   return Object.fromEntries(entries);
 };
 
-/** Carries only declared server segment outputs into the page's typed interpreter activation. */
+/** Carries declared server task outputs and variable writes into the page's typed activation. */
 export const addPageFlowOutputs = (
   state: FlowRunState,
   declarations: Readonly<Record<string, string>>,
@@ -101,20 +101,30 @@ export const addPageFlowOutputs = (
     throw new Error("FLOW_PAGE_OUTPUT_STATE_INVALID");
 
   const outputs = { ...activation.outputs };
+  const variables = { ...activation.variables };
   for (const [name, value] of Object.entries(values)) {
     if (!Object.hasOwn(declarations, name)) throw new Error("FLOW_PAGE_OUTPUT_UNDECLARED");
-    const [taskId, outputKey, ...rest] = name.split(".");
+    const parts = name.split(".");
     const type = declarations[name]!;
-    if (
-      taskId === undefined ||
-      taskId === "" ||
-      outputKey === undefined ||
-      outputKey === "" ||
-      rest.length !== 0 ||
-      (value !== null && !flowValueMatchesType(value, type))
-    )
+    if (value !== null && !flowValueMatchesType(value, type))
       throw new Error("FLOW_PAGE_OUTPUT_INVALID");
     const typed: FlowRuntimeValue = { type, value: value as JsonValue };
+    if (parts[0] === "vars" && parts.length === 2 && parts[1] !== "") {
+      const variable = parts[1]!;
+      if (!Object.hasOwn(variables, variable) || variables[variable]?.type !== type)
+        throw new Error("FLOW_PAGE_OUTPUT_INVALID");
+      Object.defineProperty(variables, variable, {
+        value: typed,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
+      continue;
+    }
+    if (parts[0] !== "outputs" || parts.length !== 3 || parts[1] === "" || parts[2] === "")
+      throw new Error("FLOW_PAGE_OUTPUT_INVALID");
+    const taskId = parts[1]!;
+    const outputKey = parts[2]!;
     Object.defineProperty(outputs, taskId, {
       value: { ...(Object.hasOwn(outputs, taskId) ? outputs[taskId] : {}), [outputKey]: typed },
       enumerable: true,
@@ -122,7 +132,7 @@ export const addPageFlowOutputs = (
       writable: true,
     });
   }
-  return { ...state, activations: [{ ...activation, outputs }] };
+  return { ...state, activations: [{ ...activation, variables, outputs }] };
 };
 
 /** Evaluates browser-visible outputs in the shared scope or takes the declared completion value. */
