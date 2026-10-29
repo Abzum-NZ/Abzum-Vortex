@@ -5,7 +5,6 @@
       "cache": false,
       "persistent": true,
       "passThroughEnv": [
-        "VORTEX_APPLICATION_KESTRA_URL",
         "VORTEX_CLUSTER_ID",
         "VORTEX_COMPONENT_BUNDLE_ORIGIN",
         "VORTEX_ENVIRONMENT",
@@ -27,8 +26,7 @@
         "VORTEX_SUPABASE_PUBLISHABLE_KEY",
         "VORTEX_SUPABASE_URL",
         "VORTEX_SUPABASE_WORKDIR",
-        "VORTEX_TENANT_ADMINISTRATION_OPERATOR_ACTOR_ID",
-        "VORTEX_WORKFLOW_CALLBACK_KEY"
+        "VORTEX_TENANT_ADMINISTRATION_OPERATOR_ACTOR_ID"
       ]
     },
     "typecheck": {
@@ -43,7 +41,6 @@
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**"],
       "passThroughEnv": [
-        "VORTEX_APPLICATION_KESTRA_URL",
         "VORTEX_CLUSTER_ID",
         "VORTEX_COMPONENT_BUNDLE_ORIGIN",
         "VORTEX_ENVIRONMENT",
@@ -65,8 +62,7 @@
         "VORTEX_SUPABASE_PUBLISHABLE_KEY",
         "VORTEX_SUPABASE_URL",
         "VORTEX_SUPABASE_WORKDIR",
-        "VORTEX_TENANT_ADMINISTRATION_OPERATOR_ACTOR_ID",
-        "VORTEX_WORKFLOW_CALLBACK_KEY"
+        "VORTEX_TENANT_ADMINISTRATION_OPERATOR_ACTOR_ID"
       ]
     }
   }

@@ -4,12 +4,9 @@
 
 Kestra open source runs on the Coolify-managed server with its own PostgreSQL. It is the workflow and
 operations service in the [current hosting boundary](../../docs/specification/17-runtime-storage-and-caching.md#hosting-boundaries).
-The operations instance runs scheduled event-dispatch recovery and runtime-bundle cleanup. Customer-authored
-durable workflows run in the separate application instance.
+The operations instance runs scheduled event-dispatch recovery and runtime-bundle cleanup. The separate application instance is retained for future durable workflows.
 
-No application user sees it. The Vortex Workflow service operates customer-authored workflows
-through the [protected-operation boundary](../../docs/specification/09-workflows-and-pipelines.md#protected-operation-contract).
-The two operations flows use only their protected route credentials.
+No application user sees it. The two operations flows use only their protected route credentials.
 
 ## What is here
 
@@ -102,51 +99,11 @@ execution logs.
 
 These two scheduled flows use the Kestra HTTP task and need no database client, delivery CLI, or
 repository checkout at runtime. Vortex builders cannot upload Kestra YAML, choose a Process runner,
-or interpolate Kestra environment values. Application workflows are compiled from the published
-generic node catalogue and call protected Vortex operations; adding any raw command node would be a
-separate security decision and is refused by the current specification.
+or interpolate Kestra environment values. Customer durable workflow compilation and callbacks are not currently implemented; the future backend must preserve this boundary.
 
-## The application instance holds only the callback key
+## Application instance
 
-Kestra open source lets any namespace read any instance secret, so customer flows must never share an
-instance with Vortex's operational secrets. Two separate instances exist:
-
-| Instance | Directory | Holds |
-|---|---|---|
-| Operations (this directory) | `workflows/kestra/` | Event-dispatch recovery and runtime-bundle cleanup route credentials |
-| Application | `workflows/kestra/application/` | Customer durable flows and exactly one flow secret, the callback signing key |
-
-The application instance's environment holds exactly one flow secret,
-`VORTEX_WORKFLOW_CALLBACK_KEY`. The application image is the pinned Kestra image with the
-reviewed `ProtectedCallback` plugin bundled from `application/plugin/`. It also receives the
-non-secret `VORTEX_PROTECTED_CALLBACK_URL`, which names only the fixed Vortex callback route and
-is read by the plugin code rather than exposed to flow templates. It does not receive the operations
-instance's route credentials or any database-delivery or provider secret. Its own PostgreSQL
-password and interface basic-auth password are engine bootstrap values supplied by the deployment
-environment through `KESTRA_CONFIGURATION`. They are not flow secrets and no instance variable
-carries the `ENV_` prefix, so neither Kestra's secret lookup nor its environment variables expose
-them to a flow definition. The application instance bakes no operational flow and starts with no
-`--flow-path`.
-
-That protection covers flow definitions, not code running inside the Kestra container. A Process
-runner script or command task would run as `root` beside the engine, inherit its environment and
-reach its state database, so it could read those bootstrap values. Vortex compiles customer flows
-only to the generic protected-operation callback task, and a package script must not run on this
-instance until it has a sandboxed task runner that sees only its declared inputs and the callback
-key.
-
-`VORTEX_PROTECTED_CALLBACK_URL` must be the absolute HTTPS URL of `/api/flows/callback`; local
-development may use that path on `localhost` over HTTP. The start dispatcher supplies the Vortex
-run UUID as the `vortex_run_id` execution label. The callback plugin refuses a missing or malformed
-run label, signs the exact endpoint request fields with the callback key, disables HTTP redirects,
-and returns only the endpoint's declared evaluator value or protected-operation result.
-
-The Workflow service's registration and start adapters resolve their provider target only through
-`packages/platform/src/workflows/kestra-instance.ts`, which knows only the application instance, reads its
-address only from `VORTEX_APPLICATION_KESTRA_URL`, and exposes no operations address, credential or
-secret. The application's server environment therefore needs no operations-instance address at all. An operational secret must never be added to the
-application instance's environment, and no Workflow adapter may be pointed at this operations
-instance.
+The pinned application Kestra instance is retained for future durable execution; the product callback and compiler are not present. Operational flows run only on the separate operations instance.
 
 ## Retired database delivery
 
