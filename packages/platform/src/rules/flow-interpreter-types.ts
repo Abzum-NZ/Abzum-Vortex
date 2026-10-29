@@ -84,7 +84,7 @@ export type Activation = Readonly<{
 }>;
 
 /** What the suspended run is waiting for, so a resume of the wrong kind is refused. */
-export type Awaiting =
+type Awaiting =
   | Readonly<{ kind: "protected_task"; taskId: string; taskType: string; allowRefusal: boolean }>
   | Readonly<{ kind: "form"; taskId: string; answerTypes?: Readonly<Record<string, string>> }>
   | Readonly<{ kind: "confirm"; taskId: string }>;

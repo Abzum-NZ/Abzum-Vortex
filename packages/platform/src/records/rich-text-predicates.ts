@@ -56,8 +56,7 @@ const inlineAt = (value: unknown, depth: number, insideLink: boolean): value is 
   return false;
 };
 
-export const isRichTextInline = (value: unknown): value is RichTextInline =>
-  inlineAt(value, 1, false);
+const isRichTextInline = (value: unknown): value is RichTextInline => inlineAt(value, 1, false);
 const inlines = (value: unknown): boolean => nonemptyArray(value, isRichTextInline);
 
 export const isRichTextBlock = (value: unknown): value is RichTextBlock => {
@@ -105,7 +104,7 @@ export const isRecordRichTextDocument = (value: unknown): value is RecordRichTex
   return true;
 };
 
-export const normalizeRichTextInline = (value: RichTextInline): RichTextInline => {
+const normalizeRichTextInline = (value: RichTextInline): RichTextInline => {
   if (value.kind === "text") return { kind: "text", text: value.text };
   const children = value.children.map(normalizeRichTextInline);
   return value.kind === "link"
