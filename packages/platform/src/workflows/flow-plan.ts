@@ -1,6 +1,8 @@
 import { fingerprintCanonicalValue } from "../definition/canonical-json-definition";
 import { prepareFlowFormulas } from "../rules/flow-formula-preparation";
 import { flowOperationOutputMembers } from "./flow-operation-output-members";
+import { installedFlowFormTypes, type FlowFormTypes } from "./flow-form-types";
+import type { SystemApplicationBoundReleaseSetResult } from "../definition/definition-consumer-read";
 import type { FlowBindingInput, FlowDefinition, FlowTask } from "./flow-contracts";
 import { flowTaskChildLists, isFlowControlTask } from "./flow-contracts";
 import { flowTaskRegistry, type FlowTaskTypeKey } from "./flow-task-registry";
@@ -243,7 +245,10 @@ const serverResolvedInputs = (bindings: readonly FlowBindingInputs[]): ReadonlyS
 };
 
 /** Values the page cannot resolve directly, even when a binding supplies a different input. */
-const serverOnlyReference = (reference: FlowReference, serverInputs: ReadonlySet<string>): boolean => {
+const serverOnlyReference = (
+  reference: FlowReference,
+  serverInputs: ReadonlySet<string>,
+): boolean => {
   switch (reference.source) {
     case "execution_actor":
     case "trigger_record":
@@ -292,6 +297,7 @@ const inputTypes = (
   steps: readonly (FlowTask | FlowPathCondition)[],
   produced: ReadonlySet<string>,
   segmentId: string,
+  formTypes: FlowFormTypes,
 ): Record<string, string> => {
   const types: Record<string, string> = {};
   for (const reference of referencesIn(steps)) {
@@ -308,8 +314,7 @@ const inputTypes = (
         const producer = allSteps([...flow.tasks, ...flow.errors, ...flow.finally]).find(
           (step) => step.id === reference.task,
         );
-        types[key] =
-          (producer === undefined ? undefined : outputTypes([producer])[key]) ?? "json";
+        types[key] = (producer === undefined ? undefined : outputTypes([producer])[key]) ?? "json";
         break;
       }
       case "trigger_record":
@@ -318,9 +323,19 @@ const inputTypes = (
       case "trigger_previous":
         types[`trigger.previous.${reference.field}`] = "record_field";
         break;
-      // A page value or a form field lives only in the page; the server never reads one.
+      case "form": {
+        const type = formTypes[reference.form]?.[reference.field];
+        if (type === undefined)
+          throw new FlowPlanError(
+            flow.id,
+            undefined,
+            `server segment ${segmentId} reads an unknown form field`,
+          );
+        types[`forms.${reference.form}.${reference.field}`] = type;
+        break;
+      }
+      // Page values are not available until the page-value store is implemented.
       case "page":
-      case "form":
         throw new FlowPlanError(
           flow.id,
           undefined,
@@ -443,6 +458,7 @@ const cut = (flow: FlowDefinition, section: FlowPlanSection, tasks: readonly Flo
 export const compileFlowPlan = (
   flow: FlowDefinition,
   bindings: readonly FlowBindingInputs[] = [],
+  formTypes: FlowFormTypes = {},
 ): FlowPlan => {
   prepareFlowFormulas(flow);
   const drafts = [
@@ -456,7 +472,7 @@ export const compileFlowPlan = (
       return { kind: "page", id, section: draft.section, guard: draft.guard, tasks: draft.tasks };
     const steps = allSteps(draft.tasks);
     const produced = new Set(steps.map((step) => step.id));
-    const inputs = inputTypes(flow, [...draft.tasks, ...draft.guard], produced, id);
+    const inputs = inputTypes(flow, [...draft.tasks, ...draft.guard], produced, id, formTypes);
     const outputs = outputTypes(steps);
     return {
       kind: "server",
@@ -499,7 +515,9 @@ export const compileFlowPlan = (
   const pageResolvedInputs = new Set(
     bindings.flatMap((inputs) =>
       Object.entries(inputs).flatMap(([name, input]) =>
-        input.kind !== "caller" && input.kind !== "literal" && !serverInputs.has(name) ? [name] : [],
+        input.kind !== "caller" && input.kind !== "literal" && !serverInputs.has(name)
+          ? [name]
+          : [],
       ),
     ),
   );
@@ -518,9 +536,7 @@ export const compileFlowPlan = (
   );
   const pageTaskOutputs = new Set(
     pageReferences.flatMap((reference) =>
-      reference.source === "task_output"
-        ? [`outputs.${reference.task}.${reference.key}`]
-        : [],
+      reference.source === "task_output" ? [`outputs.${reference.task}.${reference.key}`] : [],
     ),
   );
   return {
@@ -584,12 +600,13 @@ export const compileFlowPlan = (
 export const compileFlowPlans = (
   flows: readonly FlowDefinition[],
   bindings: ReadonlyMap<string, readonly FlowBindingInputs[]> = new Map(),
+  formTypes: ReadonlyMap<string, FlowFormTypes> = new Map(),
 ): FlowPlanSet => {
   const plans = new Map<string, FlowPlan>();
   for (const flow of flows) {
     const id = String(flow.id);
     if (plans.has(id)) throw new FlowPlanError(id, undefined, "two flows share one identity");
-    plans.set(id, compileFlowPlan(flow, bindings.get(id)));
+    plans.set(id, compileFlowPlan(flow, bindings.get(id), formTypes.get(id)));
   }
   return planSet(plans);
 };
@@ -625,7 +642,8 @@ export const flowBindingPlanIssue = (
   );
   if (conditionInput?.source === "input")
     return `The start condition reads input ${conditionInput.name}, which is resolved on the server`;
-  const serverOnly = (reference: FlowReference): boolean => serverOnlyReference(reference, serverInputs);
+  const serverOnly = (reference: FlowReference): boolean =>
+    serverOnlyReference(reference, serverInputs);
   for (const segment of plan.segments) {
     for (const guard of segment.guard)
       if (referencesIn(guard).some(serverOnly))
@@ -639,19 +657,9 @@ export const flowBindingPlanIssue = (
   return undefined;
 };
 
-/** The release set shape a plan set is built from: the cached, already-validated release content. */
+/** The installed release provides both flow definitions and the authoritative form fields. */
+type PlannedReleaseSet = SystemApplicationBoundReleaseSetResult;
 type PlannedContent = Readonly<{ flows: readonly FlowDefinition[] }>;
-type PlannedReleaseSet = Readonly<{
-  application: Readonly<{
-    content: PlannedContent &
-      Readonly<{
-        flowBindings?: readonly Readonly<{
-          flow: Readonly<{ flowId: string; inputs: FlowBindingInputs }>;
-        }>[];
-      }>;
-  }>;
-  modules: readonly Readonly<{ content: PlannedContent }>[];
-}>;
 
 /**
  * Plan sets by the immutable application content they were built from, with the Module contents
@@ -687,6 +695,7 @@ export const flowPlansOf = (releaseSet: PlannedReleaseSet): FlowPlanSet => {
     held.push(binding.flow.inputs);
     bindings.set(id, held);
   }
+  let formTypes: FlowFormTypes | undefined;
   for (const flow of [
     ...releaseSet.application.content.flows,
     ...modules.flatMap((content) => content.flows),
@@ -698,7 +707,9 @@ export const flowPlansOf = (releaseSet: PlannedReleaseSet): FlowPlanSet => {
       continue;
     }
     try {
-      plans.set(id, compileFlowPlan(flow, bindings.get(id)));
+      const usesForm = referencesIn(flow).some((reference) => reference.source === "form");
+      if (usesForm) formTypes ??= installedFlowFormTypes(releaseSet);
+      plans.set(id, compileFlowPlan(flow, bindings.get(id), usesForm ? formTypes : undefined));
     } catch (error) {
       if (!(error instanceof FlowPlanError)) throw error;
       console.error(`[flows] flow ${id} cannot be planned: ${error.reason}`);

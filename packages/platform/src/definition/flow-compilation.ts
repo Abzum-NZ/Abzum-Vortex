@@ -863,7 +863,32 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
   // Publication compiles the plan the runtime builds, and refuses a flow it cannot plan, naming
   // the step. The plan itself is never stored.
   try {
-    compileFlowPlans(compiled.map(({ flow }) => flow));
+    const formTypes = new Map(
+      compiled.map(({ flow, sourceIndex }) => {
+        const forms: Record<string, Record<string, string>> = {};
+        for (const environment of input.referenceEnvironments?.(input.flows[sourceIndex]!) ?? []) {
+          for (const [alias, fields] of Object.entries(environment.forms)) {
+            const identity = resolver.form(alias).identifier;
+            const known = (forms[identity] ??= {});
+            for (const [field, type] of Object.entries(fields)) {
+              if (known[field] !== undefined && known[field] !== type)
+                throw new FlowPlanError(
+                  flow.id,
+                  undefined,
+                  `form ${alias} has inconsistent field types`,
+                );
+              known[field] = type;
+            }
+          }
+        }
+        return [String(flow.id), forms] as const;
+      }),
+    );
+    compileFlowPlans(
+      compiled.map(({ flow }) => flow),
+      new Map(),
+      formTypes,
+    );
   } catch (error) {
     if (!(error instanceof FlowPlanError)) throw error;
     const planned = compiled.find(({ flow }) => flow.id === error.flowId);
