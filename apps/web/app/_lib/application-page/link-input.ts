@@ -261,7 +261,7 @@ export const previewLinkChoiceTypeIds = (
 };
 
 /** Finds the projected parent control of a dependent link input from the installed field. */
-export const projectedLinkParentControl = (
+const projectedLinkParentControl = (
   context: InstalledRuntimeContext,
   page: Readonly<Record<string, unknown>>,
   placementId: string,
@@ -364,7 +364,7 @@ type ProjectedChoicePage = Extract<
 >;
 
 /** Derives the same installed targets and dependent narrowing for a picker or its exact recheck. */
-export const prepareLinkChoiceDescriptor = async (
+const prepareLinkChoiceDescriptor = async (
   session: IdentitySession,
   projected: Pick<ProjectedChoicePage, "context" | "selection" | "page">,
   request: Pick<RecordChoicePageRequest, "placementId" | "fieldId" | "purpose" | "parentRecordId">,

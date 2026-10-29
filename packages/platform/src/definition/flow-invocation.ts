@@ -69,7 +69,7 @@ import {
 } from "./flow-admission";
 import { admitPageGesture } from "./flow-admission-page";
 import { admitRowForm } from "./flow-row-form-admission";
-import { sealFlowCarriedValues } from "../workflows/flow-carried-values";
+import { openFlowCarriedValues, sealFlowCarriedValues } from "../workflows/flow-carried-values";
 import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
 import { installedNamedActionDescriptors, installedNamedActions } from "./installed-named-actions";
@@ -1132,6 +1132,30 @@ export async function invokeInstalledFlow(
     if (bindingContext === undefined || bindingInstallation === undefined) {
       logFlowRefusal("BINDING_INSTALLATION_NOT_CURRENT");
       return { kind: "refused" };
+    }
+    if (invocation.segment !== undefined) {
+      const plan = bindingInstallation.plans.get(String(invocation.flowId));
+      const segment = plan?.segments.find(
+        (part) => part.kind === "server" && part.id === invocation.segment?.segmentId,
+      );
+      if (segment === undefined || segment.kind !== "server") return { kind: "refused" };
+      try {
+        openFlowCarriedValues(
+          invocation.carriedValues,
+          dependencies.continuationKey,
+          {
+            flowId: String(invocation.flowId),
+            bindingId: String(invocation.bindingId),
+            identityId: identity.session.identityId,
+            organizationId: selection.organizationId,
+            applicationRootId: selection.applicationRootId,
+          },
+          segment,
+        );
+      } catch (error) {
+        logFlowRefusal(`BINDING_CARRIED_VALUES_INVALID ${describeFailure(error)}`);
+        return { kind: "refused" };
+      }
     }
     const binding = bindingInstallation.bindings.find(
       (candidate) => candidate.bindingId.toLowerCase() === invocation.bindingId.toLowerCase(),

@@ -48,7 +48,7 @@ import {
 } from "../placement-read/shared";
 
 /** Proves supplied rows against the projected table's installed query under this request's scope. */
-export const recordsTableMembershipRefusal = async (
+const recordsTableMembershipRefusal = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   context: InstalledRuntimeContext,

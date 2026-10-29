@@ -30,7 +30,7 @@ type CarryIdentity = z.infer<typeof identitySchema>;
 type CarryValues = Readonly<Record<string, FlowRuntimeValue>>;
 type CarryActor = Omit<CarryIdentity, "runId">;
 
-export class FlowCarriedValuesError extends Error {
+class FlowCarriedValuesError extends Error {
   constructor() {
     super("vortex.flow.carried_values_invalid");
     this.name = "FlowCarriedValuesError";

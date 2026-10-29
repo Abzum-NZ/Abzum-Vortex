@@ -52,7 +52,7 @@ export type ReferenceChoiceAddress = Readonly<{
 }>;
 
 /** Proves one dynamic choice key against its installed source under the gate's transaction. */
-export const validateProjectedReferenceChoice = async (
+const validateProjectedReferenceChoice = async (
   bound: Parameters<
     ReturnType<typeof createReferenceChoiceService>["resolveExactInTransaction"]
   >[0],
