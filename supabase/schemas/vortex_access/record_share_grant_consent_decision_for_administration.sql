@@ -21,7 +21,6 @@ declare
   context_application_root_id uuid;
   context_access_version bigint;
   context_correlation_id uuid;
-  context_expires_at timestamptz;
   context_multi_factor_at timestamptz;
   authentication_expires_at timestamptz;
   locked_access_version bigint;
@@ -72,16 +71,13 @@ begin
   context_account_id := (context_value ->> 'organizationAccountId')::uuid;
   context_access_version := (context_value ->> 'accessVersion')::bigint;
   context_correlation_id := (context_value ->> 'correlationId')::uuid;
-  context_expires_at := (context_value ->> 'expiresAt')::timestamptz;
   context_multi_factor_at :=
     (context_value ->> 'multiFactorAuthenticatedAt')::timestamptz;
   context_application_root_id := case
     when context_value ? 'applicationRootId'
       then (context_value ->> 'applicationRootId')::uuid
     else null end;
-  if context_value ->> 'authenticationStrength' is distinct from 'multi_factor'
-    or context_multi_factor_at is null
-    or context_application_root_id is null then
+  if context_application_root_id is null then
     raise exception using errcode = '42501',
       message = 'Record-share consent decision evidence is unavailable';
   end if;
@@ -267,11 +263,15 @@ begin
   end if;
 
   path_checked_at := pg_catalog.clock_timestamp();
-  if context_expires_at is null
-    or context_expires_at <= path_checked_at
-    or context_multi_factor_at > path_checked_at
-    or context_multi_factor_at < path_checked_at - interval '300 seconds'
-    or stored_grant.expires_at is null
+  authentication_expires_at := vortex_access.recent_authentication_deadline_internal(
+    context_value, path_checked_at,
+    '{"kind":"multi_factor","maximumAgeSeconds":300}'::jsonb
+  );
+  if authentication_expires_at is null then
+    raise exception using errcode = 'V3152',
+      message = 'Record-share consent requires recent multi-factor authentication';
+  end if;
+  if stored_grant.expires_at is null
     or stored_grant.expires_at <= path_checked_at
     or stored_request.expires_at <= path_checked_at then
     raise exception using errcode = '42501',
@@ -324,20 +324,21 @@ begin
   end if;
 
   checked_at := pg_catalog.clock_timestamp();
-  if context_expires_at <= checked_at
-    or context_multi_factor_at > checked_at
-    or context_multi_factor_at < checked_at - interval '300 seconds'
-    or stored_grant.expires_at <= checked_at
+  authentication_expires_at := vortex_access.recent_authentication_deadline_internal(
+    context_value, checked_at,
+    '{"kind":"multi_factor","maximumAgeSeconds":300}'::jsonb
+  );
+  if authentication_expires_at is null then
+    raise exception using errcode = 'V3152',
+      message = 'Record-share consent requires recent multi-factor authentication';
+  end if;
+  if stored_grant.expires_at <= checked_at
     or stored_request.expires_at <= checked_at
     or path_valid_until <= checked_at then
     raise exception using errcode = '42501',
       message = 'Record-share consent decision evidence is stale or unavailable';
   end if;
 
-  authentication_expires_at := least(
-    context_expires_at,
-    context_multi_factor_at + interval '300 seconds'
-  );
   decision_expires_at := least(
     authentication_expires_at,
     path_valid_until,

@@ -76,10 +76,10 @@ begin
   evaluated_at := pg_catalog.clock_timestamp();
   if vortex_access.recent_authentication_deadline_internal(
     context_value, evaluated_at,
-    '{"kind":"primary","maximumAgeSeconds":900}'::jsonb
+    '{"kind":"multi_factor","maximumAgeSeconds":3600}'::jsonb
   ) is null then
-    raise exception using errcode = 'V3142',
-      message = 'A recent sign-in is required for super-administrator changes';
+    raise exception using errcode = 'V3152',
+      message = 'Multi-factor authentication is required for super-administrator changes';
   end if;
 
   computed_fingerprint := 'sha256:' || pg_catalog.encode(extensions.digest(

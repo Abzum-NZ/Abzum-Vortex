@@ -226,6 +226,8 @@ const commandFailure = (problem: InstallationProblemShape): ApplicationStoreResu
     };
   if (problem.kind === "authentication_required")
     return { kind: "unavailable", code: "recent_authentication_required" };
+  if (problem.kind === "multi_factor_required")
+    return { kind: "unavailable", code: "multi_factor_required" };
   if (problem.kind === "refused") {
     const code =
       problem.memberRoleRefusal === undefined

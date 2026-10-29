@@ -236,15 +236,9 @@ begin
           else vortex_access.platform_permission_id('platform.organization.roles.manage')
         end
       ),
-      'recentAuthentication', case
-        when operation_name in (
-          'create_custom_from_template', 'accept_new_application_role',
-          'accept_application_role_revision'
-        ) then pg_catalog.jsonb_build_object(
-          'kind', 'primary', 'maximumAgeSeconds', 900
-        )
-        else pg_catalog.jsonb_build_object('kind', 'none')
-      end,
+      'recentAuthentication', pg_catalog.jsonb_build_object(
+        'kind', 'multi_factor', 'maximumAgeSeconds', 3600
+      ),
       'authority', pg_catalog.jsonb_build_object(
         'kind', 'delegated_management',
         'before', authority_before,
@@ -261,6 +255,10 @@ begin
       message = 'Private Organization role-authority change is unavailable';
   end if;
 
+  if decision.outcome = 'refused' and decision.reason_code = 'multi_factor_unsatisfied' then
+    raise exception using errcode = 'V3152',
+      message = 'Organization role-authority change requires multi-factor authentication';
+  end if;
   if decision.outcome = 'refused' and decision.reason_code = 'authentication_unsatisfied' then
     raise exception using errcode = 'V3150',
       message = 'Organization role-authority change requires recent primary authentication';

@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION vortex_platform.read_file_application(p_file_id uuid) RETURNS jsonb
-    LANGUAGE plpgsql STABLE
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO ''
     AS $$
 declare
@@ -13,6 +13,7 @@ begin
   select stored.application_root_id into located_application_root_id
   from vortex_platform.file_records as stored
   where stored.file_id = p_file_id
+    and stored.organization_id = (select vortex_platform.organization_id())
     and stored.lifecycle_state = 'active'
     and stored.owner_record_id is not null;
   if not found or located_application_root_id is null then

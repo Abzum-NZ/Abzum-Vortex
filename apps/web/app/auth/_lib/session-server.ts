@@ -318,3 +318,108 @@ export const endIdentitySession = async (): Promise<void> => {
   const profile = await revokeIdentitySession(await requestCookies());
   if (profile) await applyMutations(identitySessionCookieDeletions(profile));
 };
+
+/** A factor operation uses the same verified session and staged cookie boundary as sign-in. */
+const mfaBoundary = async () => {
+  const previous = await requestCookies();
+  const boundary = createIdentitySessionClient(previous);
+  if (boundary.stage.initialState.kind !== "valid") throw new Error("MFA session is unavailable");
+  const current = await boundary.client.auth.getSession();
+  if (current.error || !current.data.session)
+    throw current.error ?? new Error("MFA session is missing");
+  const checked = await sessionService().resolveVerified(current.data.session.access_token);
+  const staged = boundary.stage.snapshot();
+  if (
+    checked.resolution.kind !== "active" ||
+    !checked.identity ||
+    staged.refused ||
+    staged.mutations.length
+  )
+    throw new Error("MFA session could not be verified without refreshing");
+  return { boundary, previous, identity: checked.identity };
+};
+
+export const readMfaFactor = async (): Promise<
+  { kind: "challenge"; factorId: string } | { kind: "setup" } | { kind: "unavailable" }
+> => {
+  try {
+    const { boundary } = await mfaBoundary();
+    const factors = await boundary.client.auth.mfa.listFactors();
+    if (factors.error) throw factors.error;
+    const staged = boundary.stage.snapshot();
+    if (staged.refused || staged.mutations.length)
+      throw new Error("MFA factor read changed the session");
+    const factor = factors.data.totp[0];
+    return factor ? { kind: "challenge", factorId: factor.id } : { kind: "setup" };
+  } catch (error) {
+    return mapWebError(error, {
+      route: "auth/mfa",
+      operation: "read-factors",
+      code: "MFA_READ_FAILED",
+      fallback: { kind: "unavailable" } as const,
+    });
+  }
+};
+
+export const enrollMfaFactor = async (): Promise<
+  { kind: "enrolled"; factorId: string; secret: string } | { kind: "unavailable" }
+> => {
+  try {
+    const { boundary } = await mfaBoundary();
+    const factors = await boundary.client.auth.mfa.listFactors();
+    if (factors.error) throw factors.error;
+    if (factors.data.all.some((item) => item.status === "verified"))
+      throw new Error("A verified authenticator already exists");
+    for (const factor of factors.data.all.filter(
+      (item) => item.status === "unverified" && item.factor_type === "totp",
+    )) {
+      const removed = await boundary.client.auth.mfa.unenroll({ factorId: factor.id });
+      if (removed.error) throw removed.error;
+    }
+    const enrolled = await boundary.client.auth.mfa.enroll({ factorType: "totp" });
+    if (enrolled.error) throw enrolled.error;
+    if (enrolled.data.type !== "totp") throw new Error("Unexpected MFA factor type");
+    const staged = boundary.stage.snapshot();
+    if (staged.refused || staged.mutations.length)
+      throw new Error("MFA enrolment changed the session");
+    return { kind: "enrolled", factorId: enrolled.data.id, secret: enrolled.data.totp.secret };
+  } catch (error) {
+    return mapWebError(error, {
+      route: "auth/mfa",
+      operation: "enroll-factor",
+      code: "MFA_ENROLL_FAILED",
+      fallback: { kind: "unavailable" } as const,
+    });
+  }
+};
+
+export const verifyMfaFactor = async (factorId: string, code: string): Promise<boolean> => {
+  try {
+    const { boundary, previous, identity } = await mfaBoundary();
+    const verified = await boundary.client.auth.mfa.challengeAndVerify({ factorId, code });
+    if (verified.error) throw verified.error;
+    const checked = await sessionService().resolveVerified(verified.data.access_token);
+    const staged = boundary.stage.snapshot();
+    if (
+      checked.resolution.kind !== "active" ||
+      checked.identity?.identityId !== identity.identityId ||
+      checked.identity.sessionId !== identity.sessionId ||
+      checked.identity.authenticationStrength !== "multi_factor" ||
+      staged.refused ||
+      !staged.mutations.length
+    )
+      throw new Error("MFA verification did not produce a verified multi-factor session");
+    await applyMutations([
+      ...staged.mutations,
+      ...staleCookieDeletions(previous, staged.mutations, boundary.profile),
+    ]);
+    return true;
+  } catch (error) {
+    return mapWebError(error, {
+      route: "auth/mfa",
+      operation: "verify-factor",
+      code: "MFA_VERIFY_FAILED",
+      fallback: false,
+    });
+  }
+};

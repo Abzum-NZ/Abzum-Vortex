@@ -29,12 +29,18 @@ import {
   builderPermissionKeys,
   builderRecentAuthentication,
   deriveBuilderRequirements,
+  roleAcceptanceAuthentication,
 } from "./builder-authority";
 import type { prepareApplicationRoleTemplatesForHumanRequest } from "../access/application-role-template-adapter";
 import { readBuilderApplicationOrigin } from "../access/builder-authority";
 
 type InstallationProblemKind =
-  "conflict" | "refused" | "authentication_required" | "temporarily_unavailable" | "failed";
+  | "conflict"
+  | "refused"
+  | "authentication_required"
+  | "multi_factor_required"
+  | "temporarily_unavailable"
+  | "failed";
 
 export type InstallationUnavailableReason =
   | "republish_required"
@@ -224,7 +230,11 @@ export const readInstallationPermissionDeadline = async (
   if (decision.outcome !== "completed")
     installationProblem(
       `permission_${decision.reasonCode}`,
-      decision.reasonCode === "authentication_required" ? "authentication_required" : "refused",
+      decision.reasonCode === "authentication_required"
+        ? "authentication_required"
+        : decision.reasonCode === "multi_factor_required"
+          ? "multi_factor_required"
+          : "refused",
     );
   return eligibleUntil(decision.value, context);
 };
@@ -242,6 +252,10 @@ export const requireInstallationAuthority = async (
     permissions,
   });
   await requireBuilderAuthority(authority, operation).catch((error: unknown) => {
+    if (error instanceof BuilderAuthorityError && error.code === "BUILDER_MULTI_FACTOR_REQUIRED")
+      installationProblem("multi_factor_required", "multi_factor_required", undefined, {
+        cause: error,
+      });
     if (
       error instanceof Error &&
       "code" in error &&
@@ -427,9 +441,7 @@ export const readBuilderOperationDeadlines = async (
           ownerId: permissions.ownerId,
           permissionId: applications.permissionId,
         },
-        recentAuthentication: requirements.recentAuthentication
-          ? builderRecentAuthentication
-          : { kind: "none" },
+        recentAuthentication: roleAcceptanceAuthentication,
         authority: {
           kind: "delegated_management",
           before: { kind: "none" },
@@ -449,7 +461,11 @@ export const readBuilderOperationDeadlines = async (
     if (decision.outcome !== "completed")
       installationProblem(
         `delegated_permission_${decision.reasonCode}`,
-        decision.reasonCode === "authentication_required" ? "authentication_required" : "refused",
+        decision.reasonCode === "authentication_required"
+          ? "authentication_required"
+          : decision.reasonCode === "multi_factor_required"
+            ? "multi_factor_required"
+            : "refused",
       );
     deadlines.push(eligibleUntil(decision.value, context));
   }

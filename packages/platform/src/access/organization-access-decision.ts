@@ -316,6 +316,7 @@ export const organizationAccessRefusalReasonSchema = z.enum([
   "permission_unavailable",
   "permission_not_effective",
   "authentication_unsatisfied",
+  "multi_factor_unsatisfied",
   "delegation_insufficient",
   "target_policy_unavailable",
 ]);
@@ -534,6 +535,7 @@ export const safeOrganizationAccessRefusalSchema = z
     reasonCode: z.enum([
       "access_refused",
       "authentication_required",
+      "multi_factor_required",
       "target_policy_unavailable",
       "caller_unsupported",
     ]),
@@ -581,10 +583,12 @@ export const safeOrganizationAccessRefusal = (
   safeOrganizationAccessRefusalSchema.parse({
     outcome: "refused",
     reasonCode:
-      refusal.reasonCode === "authentication_unsatisfied"
-        ? "authentication_required"
-        : refusal.reasonCode === "target_policy_unavailable"
-          ? "target_policy_unavailable"
-          : "access_refused",
+      refusal.reasonCode === "multi_factor_unsatisfied"
+        ? "multi_factor_required"
+        : refusal.reasonCode === "authentication_unsatisfied"
+          ? "authentication_required"
+          : refusal.reasonCode === "target_policy_unavailable"
+            ? "target_policy_unavailable"
+            : "access_refused",
     correlationId: refusal.correlationId,
   });

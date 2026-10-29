@@ -61,6 +61,12 @@ export type BuilderOperation =
 /** The recent-authentication requirement, when the operation has one. */
 export const builderRecentAuthentication = { kind: "primary", maximumAgeSeconds: 900 } as const;
 
+/** Accepting role templates creates and revises roles, which is governance: multi-factor within one hour. */
+export const roleAcceptanceAuthentication = {
+  kind: "multi_factor",
+  maximumAgeSeconds: 3600,
+} as const;
+
 /** Facts about the operation's target that only trusted server evidence can supply. */
 export type BuilderTargetFacts = Readonly<{
   /** Whether the root is a platform-supplied system application in this organisation. */
@@ -136,7 +142,7 @@ export type BuilderAuthorityDecision =
   | Readonly<{ outcome: "allowed" }>
   | Readonly<{
       outcome: "refused";
-      reason: "permission_refused" | "authentication_required";
+      reason: "permission_refused" | "authentication_required" | "multi_factor_required";
       correlationId: string;
     }>;
 
@@ -154,6 +160,7 @@ export interface BuilderAuthority {
 export const builderAuthorityErrorCodes = [
   "BUILDER_PERMISSION_REFUSED",
   "BUILDER_RECENT_AUTHENTICATION_REQUIRED",
+  "BUILDER_MULTI_FACTOR_REQUIRED",
 ] as const;
 
 export type BuilderAuthorityErrorCode = (typeof builderAuthorityErrorCodes)[number];
@@ -182,9 +189,11 @@ export const requireBuilderAuthority = async (
   const decision = await authority.require(operation);
   if (decision.outcome === "allowed") return;
   throw new BuilderAuthorityError(
-    decision.reason === "authentication_required"
-      ? "BUILDER_RECENT_AUTHENTICATION_REQUIRED"
-      : "BUILDER_PERMISSION_REFUSED",
+    decision.reason === "multi_factor_required"
+      ? "BUILDER_MULTI_FACTOR_REQUIRED"
+      : decision.reason === "authentication_required"
+        ? "BUILDER_RECENT_AUTHENTICATION_REQUIRED"
+        : "BUILDER_PERMISSION_REFUSED",
     decision.correlationId,
   );
 };

@@ -7,7 +7,7 @@ returns table (
   outcome text,
   organization_id uuid,
   group_summary jsonb,
-  access_version bigint
+  access_version bigint, refusal_reason text
 )
 language plpgsql
 volatile
@@ -89,7 +89,7 @@ begin
       'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', vortex_access.required_platform_permission('platform.organization.groups.manage'),
-      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'multi_factor', 'maximumAgeSeconds', 3600),
       'authority', authority_requirement
     )
   ) as evaluated;
@@ -103,7 +103,7 @@ begin
     and decision.correlation_id = context_correlation_id
     and decision.reason_code in (
       'permission_unavailable', 'permission_not_effective',
-      'authentication_unsatisfied', 'delegation_insufficient'
+      'authentication_unsatisfied', 'multi_factor_unsatisfied', 'delegation_insufficient'
     ) then
     activity_result := vortex_record.append_organization_activity_entry(
       context_organization_id, p_activity_id, decision.checked_at,
@@ -116,7 +116,7 @@ begin
         message = 'Organization Group retirement refusal Activity is stale';
     end if;
     return query select 'refused'::text, context_organization_id,
-      null::jsonb, context_access_version;
+      null::jsonb, context_access_version, case decision.reason_code when 'authentication_unsatisfied' then 'recent_authentication_required' when 'multi_factor_unsatisfied' then 'multi_factor_required' else null end;
     return;
   end if;
 
@@ -155,7 +155,7 @@ begin
       'groupId', changed.group_id, 'key', changed.group_key,
       'label', changed.label, 'state', changed.state,
       'revision', changed.revision
-    ), changed.access_version;
+    ), changed.access_version, null::text;
 end
 $function$;
 
