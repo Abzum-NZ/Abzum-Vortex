@@ -2140,16 +2140,16 @@
                     "title": "Create connection",
                     "content": [
                       {
-                        "type": "platform.renderer.text_input",
+                        "type": "platform.renderer.choice_input",
                         "props": {
                           "id": "input_create_connection_connection_type_id",
-                          "name": "connection_type_id",
-                          "label": "Connection type ID",
+                          "name": "connection_type_key",
+                          "label": "Connection type",
                           "required": true,
                           "vortex": {
                             "block": {
-                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                              "release_version": "1.0.0"
+                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                              "release_version": "1.2.0"
                             },
                             "responsive": {
                               "desktop": {
@@ -2162,33 +2162,8 @@
                                 }
                               }
                             }
-                          }
-                        }
-                      },
-                      {
-                        "type": "platform.renderer.text_input",
-                        "props": {
-                          "id": "input_create_connection_connection_type_version",
-                          "name": "connection_type_version",
-                          "label": "Connection type version",
-                          "required": true,
-                          "vortex": {
-                            "block": {
-                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                              "release_version": "1.0.0"
-                            },
-                            "responsive": {
-                              "desktop": {
-                                "visible": true,
-                                "width": {
-                                  "kind": "fill"
-                                },
-                                "height": {
-                                  "kind": "content"
-                                }
-                              }
-                            }
-                          }
+                          },
+                          "options": []
                         }
                       },
                       {
@@ -2377,7 +2352,7 @@
                       },
                       {
                         "field": "vortex.system_directory:connection_instance.connection_type_id",
-                        "label": "Connection type ID"
+                        "label": "Connection type"
                       },
                       {
                         "field": "vortex.system_directory:connection_instance.connection_type_version",
@@ -3172,20 +3147,6 @@
               "inputs": {
                 "kind": "map",
                 "entries": {
-                  "connection_type_id": {
-                    "kind": "literal",
-                    "literal": {
-                      "type": "text",
-                      "value": "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d16"
-                    }
-                  },
-                  "connection_type_version": {
-                    "kind": "literal",
-                    "literal": {
-                      "type": "text",
-                      "value": "1.0.0"
-                    }
-                  },
                   "destination_key": {
                     "kind": "literal",
                     "literal": {
@@ -3194,6 +3155,13 @@
                     }
                   },
                   "secret_reference_id": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
+                  },
+                  "connection_type_key": {
                     "kind": "literal",
                     "literal": {
                       "type": "text",
@@ -3241,24 +3209,6 @@
               "inputs": {
                 "kind": "map",
                 "entries": {
-                  "connection_type_id": {
-                    "kind": "reference",
-                    "reference": {
-                      "source": "task_output",
-                      "task": "form",
-                      "key": "values",
-                      "path": ["connection_type_id"]
-                    }
-                  },
-                  "connection_type_version": {
-                    "kind": "reference",
-                    "reference": {
-                      "source": "task_output",
-                      "task": "form",
-                      "key": "values",
-                      "path": ["connection_type_version"]
-                    }
-                  },
                   "destination_key": {
                     "kind": "reference",
                     "reference": {
@@ -3275,6 +3225,15 @@
                       "task": "form",
                       "key": "values",
                       "path": ["secret_reference_id"]
+                    }
+                  },
+                  "connection_type_key": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "form",
+                      "key": "values",
+                      "path": ["connection_type_key"]
                     }
                   }
                 }

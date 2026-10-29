@@ -1961,19 +1961,15 @@
         "operationId": "cf598f50-fb64-4368-9039-6e99525b0d86"
       },
       "inputs": {
-        "connection_type_id": {
-          "type": "text",
-          "required": true
-        },
-        "connection_type_version": {
-          "type": "text",
-          "required": true
-        },
         "destination_key": {
           "type": "text",
           "required": true
         },
         "secret_reference_id": {
+          "type": "text",
+          "required": true
+        },
+        "connection_type_key": {
           "type": "text",
           "required": true
         }

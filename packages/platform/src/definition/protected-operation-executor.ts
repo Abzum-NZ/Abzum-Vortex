@@ -1101,8 +1101,7 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
     schema: createConnectionCommandSchema,
     command: (inputs, _selection, effectKey) => ({
       commandId: duplicateKeyFor(effectKey, randomUUID),
-      connectionTypeId: inputs.connection_type_id,
-      connectionTypeVersion: inputs.connection_type_version,
+      connectionTypeKey: inputs.connection_type_key,
       destinationKey: inputs.destination_key,
       secretReferenceId: inputs.secret_reference_id,
     }),

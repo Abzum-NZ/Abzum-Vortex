@@ -43,3 +43,17 @@ const release = (definition: {
 /** The immutable, platform-owned connection-type releases available to every environment. */
 export const PLATFORM_CONNECTION_TYPE_RELEASES: readonly PlatformConnectionTypeCatalogueRelease[] =
   deepFreeze(Object.values(source).map(release));
+
+/** The latest stable release for each connection type, keyed by its stable source key. */
+export const CURRENT_CONNECTION_TYPE_RELEASES = deepFreeze(
+  [...PLATFORM_CONNECTION_TYPE_RELEASES]
+    .sort((a, b) => {
+      const left = a.releaseVersion.split(".").map(Number);
+      const right = b.releaseVersion.split(".").map(Number);
+      return right[0]! - left[0]! || right[1]! - left[1]! || right[2]! - left[2]!;
+    })
+    .filter(
+      (release, index, all) =>
+        all.findIndex((entry) => entry.source.key === release.source.key) === index,
+    ),
+);

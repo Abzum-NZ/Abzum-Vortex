@@ -3,7 +3,7 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
-import { PLATFORM_CONNECTION_TYPE_RELEASES } from "./platform-connection-type-catalogue";
+import { CURRENT_CONNECTION_TYPE_RELEASES } from "./platform-connection-type-catalogue";
 
 const destination = z
   .string()
@@ -21,8 +21,7 @@ const commandId = identifier;
 export const createConnectionCommandSchema = z
   .object({
     commandId,
-    connectionTypeId: identifier,
-    connectionTypeVersion: z.string().min(1).max(80),
+    connectionTypeKey: z.string().min(1).max(200),
     destinationKey: destination,
     secretReferenceId: identifier,
   })
@@ -66,21 +65,20 @@ export async function changeConnectionInstance(
   transaction: RequestDatabaseTransaction,
   change: ConnectionCommand,
 ): Promise<z.output<typeof resultSchema>> {
-  if (
-    change.operation === "create" &&
-    !PLATFORM_CONNECTION_TYPE_RELEASES.some(
-      (release) =>
-        release.rootId.toLowerCase() === change.command.connectionTypeId.toLowerCase() &&
-        release.releaseVersion === change.command.connectionTypeVersion,
-    )
-  )
+  const type =
+    change.operation === "create"
+      ? CURRENT_CONNECTION_TYPE_RELEASES.find(
+          (release) => release.source.key === change.command.connectionTypeKey,
+        )
+      : undefined;
+  if (change.operation === "create" && type === undefined)
     throw new Error("Connection type release is unavailable");
   const id = change.operation === "create" ? randomUUID() : change.command.connectionInstanceId;
   const key = change.operation === "revoke" ? null : change.command.destinationKey;
   const fingerprint =
     key === null ? null : createHash("sha256").update(`${id}:${key}`).digest("hex");
-  const typeId = change.operation === "create" ? change.command.connectionTypeId : null;
-  const version = change.operation === "create" ? change.command.connectionTypeVersion : null;
+  const typeId = type?.rootId ?? null;
+  const version = type?.releaseVersion ?? null;
   const expected = change.operation === "create" ? null : change.command.expectedRevision;
   const secretReference =
     change.operation === "revoke" ? null : (change.command.secretReferenceId ?? null);

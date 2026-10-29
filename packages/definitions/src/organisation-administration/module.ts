@@ -1,4 +1,5 @@
 import {
+  CURRENT_CONNECTION_TYPE_RELEASES,
   modulePlatformPermissionDeclarationSchema,
   sourceApplicationModuleSchema,
   organizationRuntimeSettingsDateFormatOptions,
@@ -6,6 +7,16 @@ import {
   type SourceApplicationModule,
 } from "@vortex/platform/schema";
 import { activityQuery, activityReadPermission, activityRecordType } from "./activity";
+
+/** Choices and display labels are derived from the platform's current releases. */
+export const connectionTypeChoices = CURRENT_CONNECTION_TYPE_RELEASES.map((release) => ({
+  key: release.source.key,
+  label: release.source.body.name,
+}));
+export const connectionTypeDisplayOptions = CURRENT_CONNECTION_TYPE_RELEASES.map((release) => ({
+  value: release.rootId,
+  label: release.source.body.name,
+}));
 
 /** Platform permissions protected by Organisation Administration's system records and operations. */
 export const organisationAdministrationPlatformPermissions = [
@@ -203,17 +214,7 @@ const applicationRoleTemplateAllFields = [
   "continuity_revision",
 ];
 
-/**
- * Ordinary, application-contained records for the Organisation Administration
- * application. Notices and privacy request cases are ordinary administration
- * records in the owning organisation: they describe intent and published content
- * only. Shared people, invitation, group, role and delegation projections live in
- * System Directory and are read through its ordinary module queries. Protected
- * operations remain their only write path, and raw invitation secrets and stored
- * fingerprints are never projected. The writable, extendable organisation
- * settings record, installed-application projection and registered application
- * role-template projection remain declared here.
- */
+/** Organisation records and projections; protected operations remain the only path for platform writes. */
 export const organisationAdministrationModule: SourceApplicationModule =
   sourceApplicationModuleSchema.parse({
     id: "mod_organisation_administration",
