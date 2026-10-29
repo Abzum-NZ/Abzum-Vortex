@@ -94,6 +94,15 @@ type BoardMoveCard = Readonly<{
 type PendingBoardMove = BoardMoveCard &
   Readonly<{ targetKey: string; row: NonNullable<BoardBucketPayload["page"]>["rows"][number] }>;
 
+const visibleBucketCount = (bucket: BoardBucket, moving: PendingBoardMove | undefined) => {
+  const count = bucket.values.rowCount;
+  if (count === null || moving === undefined) return count;
+  const contains = bucket.values.page?.rows.some((row) => row.recordId === moving.recordId);
+  if (bucket.key === moving.bucketKey && contains) return count - 1;
+  if (bucket.key === moving.targetKey && !contains) return count + 1;
+  return count;
+};
+
 /** What a column needs to offer moves: the columns a card may go to and the move in flight. */
 type BoardMover = Readonly<{
   targets: readonly BoardBucket[];
@@ -182,6 +191,7 @@ function BoardColumn({
   moving: PendingBoardMove | undefined;
 }>): ReactElement {
   const page = bucket.values.page;
+  const rowCount = visibleBucketCount(bucket, moving);
   const rows = (page?.rows ?? []).filter(
     (row) =>
       moving === undefined || bucket.key !== moving.bucketKey || row.recordId !== moving.recordId,
@@ -259,19 +269,18 @@ function BoardColumn({
             </Button>
           )}
         </h3>
-        {bucket.values.rowCount === null ? null : (
+        {rowCount === null ? null : (
           <p className="m-0 text-muted-foreground">
-            {countText(bucket.values.rowCount)}{" "}
-            {bucket.values.rowCount === 1 ? "record" : "records"}
+            {countText(rowCount)} {rowCount === 1 ? "record" : "records"}
             {wipLimit === undefined || bucket.selector.kind !== "option"
               ? null
               : ` of ${countText(wipLimit)}`}
           </p>
         )}
-        {bucket.values.rowCount !== null &&
+        {rowCount !== null &&
         wipLimit !== undefined &&
         bucket.selector.kind === "option" &&
-        bucket.values.rowCount > wipLimit ? (
+        rowCount > wipLimit ? (
           <Badge variant="destructive" role="status" data-vortex-board-over-limit="true">
             Over the limit of {countText(wipLimit)} cards
           </Badge>
@@ -897,7 +906,9 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
                 onClick={() => setChosenKey(bucket.key)}
               >
                 {bucket.label}
-                {bucket.values.rowCount === null ? "" : ` (${countText(bucket.values.rowCount)})`}
+                {visibleBucketCount(bucket, moving) === null
+                  ? ""
+                  : ` (${countText(visibleBucketCount(bucket, moving)!)})`}
               </Button>
             ))}
           </div>
