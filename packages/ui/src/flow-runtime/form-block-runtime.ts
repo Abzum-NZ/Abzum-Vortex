@@ -20,14 +20,21 @@ export type FormBlockRuntime = Readonly<{
   submit: (
     binding: ComponentFlowBinding,
     values: FormFieldAnswers,
-    selectedOwnerGroupId?: string,
+    selectedOwnerGroupId: string | undefined,
     /** Names included in the whole-record patch; individual answers remain complete. */
-    recordChanges?: readonly string[],
+    recordChanges: readonly string[] | undefined,
+    gestureId: string,
   ) => Promise<ServerDrivenResult | undefined>;
   /** The form's mount event, when the placement binds it. */
-  ready: (binding: ComponentFlowBinding) => Promise<ServerDrivenResult | undefined>;
+  ready: (
+    binding: ComponentFlowBinding,
+    gestureId: string,
+  ) => Promise<ServerDrivenResult | undefined>;
   /** The form's reset event, when the placement binds it. */
-  reset: (binding: ComponentFlowBinding) => Promise<ServerDrivenResult | undefined>;
+  reset: (
+    binding: ComponentFlowBinding,
+    gestureId: string,
+  ) => Promise<ServerDrivenResult | undefined>;
 }>;
 
 /**
@@ -38,10 +45,7 @@ export type FormBlockRuntime = Readonly<{
 const outcomeUnknown = (result: ServerDrivenResult): boolean =>
   result.kind === "unavailable" || result.kind === "abandoned";
 
-export function createFormBlockRuntime(
-  runtime: FlowRuntime,
-  newGestureId: () => string = () => crypto.randomUUID(),
-): FormBlockRuntime {
+export function createFormBlockRuntime(runtime: FlowRuntime): FormBlockRuntime {
   // The gesture identity of a submission whose outcome is still unknown, keyed by the binding and
   // the exact answers it carried. Sending the same answers again (a retry after a failed request)
   // reaches the same run, so the effect ledger replays its outcome instead of committing twice.
@@ -52,10 +56,11 @@ export function createFormBlockRuntime(
   const dispatchOnce = async (
     binding: ComponentFlowBinding,
     callerInputs: Readonly<Record<string, unknown>>,
+    eventGestureId: string,
     retryKey?: string,
   ): Promise<ServerDrivenResult | undefined> => {
     const gestureId =
-      (retryKey === undefined ? undefined : unsettled.get(retryKey)) ?? newGestureId();
+      (retryKey === undefined ? undefined : unsettled.get(retryKey)) ?? eventGestureId;
     let unknown = true;
     try {
       const result = await runtime.dispatch(binding, callerInputs, gestureId);
@@ -70,7 +75,7 @@ export function createFormBlockRuntime(
   };
 
   return Object.freeze({
-    submit: (binding, values, selectedOwnerGroupId, recordChanges) => {
+    submit: (binding, values, selectedOwnerGroupId, recordChanges, gestureId) => {
       if (binding.event !== "form_submit") return Promise.resolve(undefined);
       const callerInputs = {
         values,
@@ -80,12 +85,17 @@ export function createFormBlockRuntime(
       return dispatchOnce(
         binding,
         callerInputs,
+        gestureId,
         `${binding.bindingId}|${JSON.stringify(callerInputs)}`,
       );
     },
-    ready: (binding) =>
-      binding.event === "form_ready" ? dispatchOnce(binding, {}) : Promise.resolve(undefined),
-    reset: (binding) =>
-      binding.event === "form_reset" ? dispatchOnce(binding, {}) : Promise.resolve(undefined),
+    ready: (binding, gestureId) =>
+      binding.event === "form_ready"
+        ? dispatchOnce(binding, {}, gestureId)
+        : Promise.resolve(undefined),
+    reset: (binding, gestureId) =>
+      binding.event === "form_reset"
+        ? dispatchOnce(binding, {}, gestureId)
+        : Promise.resolve(undefined),
   });
 }

@@ -320,7 +320,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   useEffect(() => {
     if (context.inactive || readyRef.current) return;
     readyRef.current = true;
-    eventsRef.current?.form_ready?.({ event: "form_ready" });
+    eventsRef.current?.form_ready?.({ event: "form_ready", gestureId: crypto.randomUUID() });
   }, [context.inactive]);
 
   useEffect(() => {
@@ -366,6 +366,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     submission.track(
       events?.form_submit?.({
         event: "form_submit",
+        gestureId: crypto.randomUUID(),
         values: registry.values(),
         ...(selectedOwnerGroupId === undefined ? {} : { selectedOwnerGroupId }),
       }),
@@ -397,7 +398,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     validationAttemptedRef.current = false;
     setValidationErrors({});
     setGeneration((current) => current + 1);
-    events?.form_reset?.({ event: "form_reset" });
+    events?.form_reset?.({ event: "form_reset", gestureId: crypto.randomUUID() });
   };
 
   const title = context.accessibleName;

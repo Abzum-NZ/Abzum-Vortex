@@ -187,7 +187,8 @@ export function useRuntimeInputs({
     placementId: string,
     binding: PlacementFlowBinding,
     submittedValues: Readonly<Record<string, unknown>>,
-    selectedOwnerGroupId?: string,
+    selectedOwnerGroupId: string | undefined,
+    gestureId: string,
   ) => Promise<void>;
   advanceGuidedStep: (
     stepId: string,
@@ -740,6 +741,7 @@ export function useRuntimeInputs({
                 submitBinding,
                 event.values,
                 event.selectedOwnerGroupId,
+                event.gestureId,
               );
             }
             return advanceGuidedStep(model.guidedForm.activeStepId, event.values, requested);
@@ -786,6 +788,7 @@ export function useRuntimeInputs({
               baseline === undefined || !submitBinding.savesFormValues
                 ? undefined
                 : Object.keys(recordValues),
+              event.gestureId,
             ),
             placementId,
             undefined,
@@ -797,7 +800,7 @@ export function useRuntimeInputs({
         events.form_ready = (event: ControlSemanticEvent) => {
           if (event.event !== "form_ready") return;
           void applyDispatch(
-            formBlock.ready(asComponentBinding(placementId, readyBinding)),
+            formBlock.ready(asComponentBinding(placementId, readyBinding), event.gestureId),
             undefined,
             undefined,
             readyBinding.bindingId,
@@ -814,7 +817,7 @@ export function useRuntimeInputs({
             return next;
           });
           void applyDispatch(
-            formBlock.reset(asComponentBinding(placementId, resetBinding)),
+            formBlock.reset(asComponentBinding(placementId, resetBinding), event.gestureId),
             undefined,
             undefined,
             resetBinding.bindingId,

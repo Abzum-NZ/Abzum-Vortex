@@ -208,7 +208,8 @@ export function useGuidedFormSteps({
       placementId: string,
       binding: PlacementFlowBinding,
       submittedValues: Readonly<Record<string, unknown>>,
-      selectedOwnerGroupId?: string,
+      selectedOwnerGroupId: string | undefined,
+      gestureId: string,
     ) => {
       const guidedForm = model.guidedForm;
       if (
@@ -261,6 +262,8 @@ export function useGuidedFormSteps({
           asComponentBinding(placementId, binding),
           { $guidedFormConfirmation: confirmed.proof },
           selectedOwnerGroupId,
+          undefined,
+          gestureId,
         );
         await applyDispatch(dispatch, placementId, afterAccepted, binding.bindingId);
       } catch {

@@ -108,10 +108,11 @@ export type ControlSemanticEvent =
       /** For a dependent link field: the record chosen in the field it depends on, in the form's draft. */
       parentRecordId?: string;
     }>
-  | Readonly<{ event: "form_ready" }>
-  | Readonly<{ event: "form_reset" }>
+  | Readonly<{ event: "form_ready"; gestureId: string }>
+  | Readonly<{ event: "form_reset"; gestureId: string }>
   | Readonly<{
       event: "form_submit";
+      gestureId: string;
       values: Readonly<Record<string, TypedFieldValue>>;
       selectedOwnerGroupId?: string;
     }>
