@@ -246,34 +246,44 @@ type RecordChoicePageResult =
   | Readonly<{ kind: "refused"; cause: string }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
-/**
- * One page of the records a link field on the viewer's current page may point at. The page is
- * projected again under the viewer and the exact installed release, so only a link input the
- * viewer can use on that page is read for, and only its declared record types.
- */
-export const loadRecordChoicePage = async (
+type RecordChoicePageRequest = Readonly<{
+  placementId: string;
+  /** For a Records table's link picker: the declared field whose targets are offered. */
+  fieldId?: string;
+  /** Present exactly with `fieldId`: filtering by the records, or editing a cell. */
+  purpose?: "filter" | "edit";
+  installationRevision: number;
+  releaseKey: string;
+  subjectRecordId?: string;
+  /** For a dependent link field: the record chosen in the field it depends on, in the editor's draft. */
+  parentRecordId?: string;
+  search?: string;
+  pageSize?: number;
+  continuationToken?: string;
+}>;
+
+type ProjectedChoicePage = Extract<
+  Awaited<ReturnType<typeof projectReferenceChoicePage>>,
+  { kind: "available" }
+>;
+
+/** Derives the same installed targets and dependent narrowing for a picker or its exact recheck. */
+export const prepareLinkChoiceDescriptor = async (
   session: IdentitySession,
-  address: ReferenceChoiceAddress,
-  request: Readonly<{
-    placementId: string;
-    /** For a Records table's link picker: the declared field whose targets are offered. */
-    fieldId?: string;
-    /** Present exactly with `fieldId`: filtering by the records, or editing a cell. */
-    purpose?: "filter" | "edit";
-    installationRevision: number;
-    releaseKey: string;
-    subjectRecordId?: string;
-    /** For a dependent link field: the record chosen in the field it depends on, in the editor's draft. */
-    parentRecordId?: string;
-    search?: string;
-    pageSize?: number;
-    continuationToken?: string;
-  }>,
-): Promise<RecordChoicePageResult> => {
-  const projected = await projectReferenceChoicePage(session, address, request);
-  if (projected.kind === "reload" || projected.kind === "temporarily_unavailable") return projected;
-  if (projected.kind !== "available") return { kind: "refused", cause: "page_not_projected" };
-  const { context, selection, dependencies } = projected;
+  projected: ProjectedChoicePage,
+  request: RecordChoicePageRequest,
+  requests: ReturnType<typeof createHumanOrganizationRequestService>,
+  queries: ReturnType<typeof createProtectedQueryService>,
+  prepareDemand: typeof prepareRuntimePreviewChoices = prepareRuntimePreviewChoices,
+): Promise<
+  | Readonly<{
+      kind: "ready";
+      targets: RecordChoiceCommand["targets"];
+      narrowedBy?: RecordChoiceCommand["narrowedBy"];
+    }>
+  | Extract<RecordChoicePageResult, { kind: "refused" | "temporarily_unavailable" }>
+> => {
+  const { context, selection } = projected;
   const placements = collectPlacements(projected.page);
   const placement = placements.find((entry) => sameId(entry.placementId, request.placementId));
   if (placement === undefined) return { kind: "refused", cause: "placement_not_found" };
@@ -313,10 +323,8 @@ export const loadRecordChoicePage = async (
       };
     if (projectedUseAvailability(placement) !== "available")
       return { kind: "refused", cause: "placement_unavailable" };
-    const readable = await createHumanOrganizationRequestService(dependencies).run(
-      session,
-      selection,
-      (transaction) => readRecordTypeVisibleFieldIds(transaction, filtered.sourceRecordTypeId),
+    const readable = await requests.run(session, selection, (transaction) =>
+      readRecordTypeVisibleFieldIds(transaction, filtered.sourceRecordTypeId),
     );
     if (readable.kind === "temporarily_unavailable") return readable;
     if (readable.kind !== "available" || !readable.value.has(request.fieldId.toLowerCase()))
@@ -345,10 +353,8 @@ export const loadRecordChoicePage = async (
     const bound = isRecord(placement.settings.field) ? placement.settings.field.fieldId : undefined;
     const boundField = typeof bound === "string" ? installedLinkField(context, bound) : undefined;
     if (boundField?.dependency !== undefined) {
-      const readable = await createHumanOrganizationRequestService(dependencies).run(
-        session,
-        selection,
-        (transaction) => readRecordTypeVisibleFieldIds(transaction, boundField.sourceRecordTypeId),
+      const readable = await requests.run(session, selection, (transaction) =>
+        readRecordTypeVisibleFieldIds(transaction, boundField.sourceRecordTypeId),
       );
       if (readable.kind === "temporarily_unavailable") return readable;
       if (readable.kind !== "available") return { kind: "refused", cause: "link_field_withheld" };
@@ -376,7 +382,7 @@ export const loadRecordChoicePage = async (
     });
   }
   if (targets.length === 0) return { kind: "refused", cause: "no_targets" };
-  const demand = await prepareRuntimePreviewChoices(session, context, [
+  const demand = await prepareDemand(session, context, [
     ...targets.map((target) => target.recordTypeId),
     ...(dependency?.link.parentTarget === undefined
       ? []
@@ -387,10 +393,6 @@ export const loadRecordChoicePage = async (
       ? { kind: "temporarily_unavailable" }
       : { kind: "refused", cause: "preview_demand_refused" };
 
-  const queries = createProtectedQueryService({
-    ...dependencies,
-    continuationKey: getQueryContinuationKey(),
-  });
   let narrowedBy: RecordChoiceCommand["narrowedBy"];
   if (dependency !== undefined && dependency.link.parentTarget !== undefined) {
     const parentTarget = dependency.link.parentTarget;
@@ -432,6 +434,36 @@ export const loadRecordChoicePage = async (
       recordId: dependency.parentRecordId,
     } as RecordChoiceCommand["narrowedBy"];
   }
+  return { kind: "ready", targets, ...(narrowedBy === undefined ? {} : { narrowedBy }) };
+};
+
+/**
+ * One page of the records a link field on the viewer's current page may point at. The page is
+ * projected again under the viewer and the exact installed release, so only a link input the
+ * viewer can use on that page is read for, and only its declared record types.
+ */
+export const loadRecordChoicePage = async (
+  session: IdentitySession,
+  address: ReferenceChoiceAddress,
+  request: RecordChoicePageRequest,
+): Promise<RecordChoicePageResult> => {
+  const projected = await projectReferenceChoicePage(session, address, request);
+  if (projected.kind === "reload" || projected.kind === "temporarily_unavailable") return projected;
+  if (projected.kind !== "available") return { kind: "refused", cause: "page_not_projected" };
+  const { selection, dependencies } = projected;
+  const queries = createProtectedQueryService({
+    ...dependencies,
+    continuationKey: getQueryContinuationKey(),
+  });
+  const descriptor = await prepareLinkChoiceDescriptor(
+    session,
+    projected,
+    request,
+    createHumanOrganizationRequestService(dependencies),
+    queries,
+  );
+  if (descriptor.kind !== "ready") return descriptor;
+  const { targets, narrowedBy } = descriptor;
   const read = await createRecordChoiceReader(queries).read(session, selection, {
     targets,
     ...(narrowedBy === undefined ? {} : { narrowedBy }),
