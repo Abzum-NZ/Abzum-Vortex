@@ -11,6 +11,7 @@ import {
 } from "../access/human-organization-request";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
 import { jsonValueSchema } from "../catalogue/common";
+import { describeFailure } from "../catalogue/runtime-primitives";
 import { flowRefusalFeedbackCodeSchema } from "./flow-refusal-feedback";
 import type { FlowPlan, FlowServerSegment } from "./flow-plan";
 import type { FlowSegmentReplay, FlowTaskOutcome } from "../rules/flow-interpreter";
@@ -309,9 +310,21 @@ export const startFlow = async <Value>(
         return { kind: "rate_limited", retryAfterSeconds: rate.retry_after_seconds };
     }
     if (!segment.changes || replay !== undefined) {
-      const executed = await dependencies.execute(context, segment, replay, runId);
-      if (Object.keys(executed.effects).length > 0)
-        throw new Error("FLOW_SEGMENT_UNEXPECTED_EFFECT");
+      let executed: SegmentExecution<Value>;
+      try {
+        executed = hasCompletion
+          ? await requireRequestSavepoint(transaction).withSavepoint((child) =>
+              dependencies.execute({ ...context, transaction: child }, segment, replay, runId),
+            )
+          : await dependencies.execute(context, segment, replay, runId);
+        if (Object.keys(executed.effects).length > 0)
+          throw new Error("FLOW_SEGMENT_UNEXPECTED_EFFECT");
+      } catch (error) {
+        if (error instanceof HumanOrganizationRequestRestart || !hasCompletion) throw error;
+        console.error(`[flows] segment execution failed: ${describeFailure(error)}`);
+        await recordOutcome("failed");
+        return { kind: "refused" };
+      }
       await recordOutcome(executed.outcome);
       return { kind: "completed", value: executed.value, runId };
     }
@@ -360,6 +373,11 @@ export const startFlow = async <Value>(
       if (error === rollback && declined !== undefined) {
         await recordOutcome(declined.outcome);
         return { kind: "completed", value: declined.value, runId };
+      }
+      if (!(error instanceof HumanOrganizationRequestRestart) && hasCompletion) {
+        console.error(`[flows] segment execution failed: ${describeFailure(error)}`);
+        await recordOutcome("failed");
+        return { kind: "refused" };
       }
       throw error;
     }
