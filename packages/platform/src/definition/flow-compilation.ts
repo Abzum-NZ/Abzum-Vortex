@@ -734,10 +734,18 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
   for (const entry of compiled) {
     // Source validation sees readable projection aliases. Revalidate the canonical task map so
     // output paths acquire the compiler-resolved member types before publication.
-    const invalid = validateFlow(entry.flow, {
-      targetFlow: (reference) => compiledFlowsById.get(reference),
-      operationInputs: input.operationInputs,
-    })[0];
+    const bindings = input.referenceEnvironments?.(input.flows[entry.sourceIndex]!);
+    const contexts =
+      bindings !== undefined && bindings.length > 0
+        ? bindings.map((binding) => [binding])
+        : [bindings];
+    const invalid = contexts.flatMap((referenceEnvironments) =>
+      validateFlow(entry.flow, {
+        targetFlow: (reference) => compiledFlowsById.get(reference),
+        operationInputs: input.operationInputs,
+        referenceEnvironments,
+      }),
+    )[0];
     if (invalid !== undefined)
       throw new DefinitionCompilationError(
         invalid.ruleCode,
