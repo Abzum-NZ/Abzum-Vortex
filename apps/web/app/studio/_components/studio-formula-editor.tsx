@@ -153,11 +153,11 @@ const parseFormula = (text: string, references: readonly FormulaReferenceChoice[
     take("(");
     const args: FlowFormula[] = [];
     if (peek() !== ")") {
-      do {
-        args.push(expression());
-        if (peek() !== ",") break;
+      args.push(expression());
+      while (peek() === ",") {
         take(",");
-      } while (true);
+        args.push(expression());
+      }
     }
     take(")");
     if (token.text === "tree" || token.text === "ref") {
