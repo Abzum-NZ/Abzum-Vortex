@@ -142,6 +142,9 @@
         "required": false,
         "minLength": 1,
         "maxLength": 200
+      },
+      {
+        "shared": "display_value_source"
       }
     ],
     "slots": [],
@@ -267,6 +270,45 @@
       },
       {
         "shared": "awaiting_message"
+      },
+      {
+        "kind": "list",
+        "key": "value_sources",
+        "label": "Values",
+        "required": true,
+        "minimumItems": 0,
+        "maximumItems": 50,
+        "defaultValue": {
+          "kind": "list",
+          "items": []
+        },
+        "item": {
+          "kind": "group",
+          "key": "item",
+          "label": "Value",
+          "required": true,
+          "properties": [
+            {
+              "kind": "text",
+              "key": "key",
+              "label": "Key",
+              "required": true,
+              "minLength": 1,
+              "maxLength": 60
+            },
+            {
+              "kind": "text",
+              "key": "label",
+              "label": "Label",
+              "required": true,
+              "minLength": 1,
+              "maxLength": 120
+            },
+            {
+              "shared": "display_value_source"
+            }
+          ]
+        }
       }
     ],
     "slots": [],

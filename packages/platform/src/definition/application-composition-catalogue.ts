@@ -17,8 +17,8 @@ import sharedProperties from "../catalogue/catalogue/application-composition-sha
 /**
  * A property several blocks declare identically (a query-bound block's input bindings and its
  * waiting message) is written once in the shared properties file and named in each block's
- * properties as `{ "shared": "<key>" }`, at the top level or inside a group (a Records table's
- * related records bind their own query's inputs); each release holds the expanded property.
+ * properties as `{ "shared": "<key>" }`, at the top level or inside groups and list items;
+ * each release holds the expanded property.
  */
 const expandShared = (property: object): object => {
   if ("gridFeatures" in property) {
@@ -56,6 +56,8 @@ const expandShared = (property: object): object => {
       ...property,
       properties: (property.properties as readonly object[]).map(expandShared),
     };
+  if ("kind" in property && property.kind === "list" && "item" in property)
+    return { ...property, item: expandShared(property.item as object) };
   return property;
 };
 const sources = Object.fromEntries(

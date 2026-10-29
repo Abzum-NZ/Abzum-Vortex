@@ -209,5 +209,219 @@
     "required": false,
     "minLength": 1,
     "maxLength": 200
+  },
+  "display_value_source": {
+    "kind": "group",
+    "key": "value_source",
+    "label": "Value source",
+    "required": true,
+    "defaultValue": {
+      "kind": "group",
+      "properties": {
+        "source": {
+          "kind": "choice",
+          "value": "projection"
+        },
+        "format": {
+          "kind": "choice",
+          "value": "plain"
+        },
+        "thresholds": {
+          "kind": "list",
+          "items": []
+        }
+      }
+    },
+    "properties": [
+      {
+        "kind": "choice",
+        "key": "source",
+        "label": "Source",
+        "required": true,
+        "options": [
+          {
+            "key": "projection",
+            "label": "Projection"
+          },
+          {
+            "key": "page_value",
+            "label": "Page value"
+          }
+        ],
+        "defaultValue": {
+          "kind": "choice",
+          "value": "projection"
+        }
+      },
+      {
+        "kind": "text",
+        "key": "projection_key",
+        "label": "Projection key",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 120,
+        "showWhen": {
+          "property": "source",
+          "values": ["projection"]
+        }
+      },
+      {
+        "kind": "text",
+        "key": "page_value",
+        "label": "Page value",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 120,
+        "showWhen": {
+          "property": "source",
+          "values": ["page_value"]
+        }
+      },
+      {
+        "kind": "choice",
+        "key": "format",
+        "label": "Format",
+        "required": true,
+        "options": [
+          {
+            "key": "plain",
+            "label": "Plain"
+          },
+          {
+            "key": "number",
+            "label": "Number"
+          },
+          {
+            "key": "money",
+            "label": "Money"
+          },
+          {
+            "key": "percent",
+            "label": "Percent"
+          },
+          {
+            "key": "unit",
+            "label": "Unit"
+          }
+        ],
+        "defaultValue": {
+          "kind": "choice",
+          "value": "plain"
+        }
+      },
+      {
+        "kind": "text",
+        "key": "currency",
+        "label": "Currency",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 120,
+        "showWhen": {
+          "property": "format",
+          "values": ["money"]
+        }
+      },
+      {
+        "kind": "choice",
+        "key": "unit",
+        "label": "Unit",
+        "required": false,
+        "options": [
+          {
+            "key": "kg",
+            "label": "kg"
+          },
+          {
+            "key": "g",
+            "label": "g"
+          },
+          {
+            "key": "km",
+            "label": "km"
+          },
+          {
+            "key": "m",
+            "label": "m"
+          },
+          {
+            "key": "h",
+            "label": "h"
+          },
+          {
+            "key": "min",
+            "label": "min"
+          },
+          {
+            "key": "items",
+            "label": "items"
+          }
+        ],
+        "showWhen": {
+          "property": "format",
+          "values": ["unit"]
+        }
+      },
+      {
+        "kind": "number",
+        "key": "places",
+        "label": "Decimal places",
+        "required": false,
+        "integer": true,
+        "minimum": 0,
+        "maximum": 18
+      },
+      {
+        "kind": "list",
+        "key": "thresholds",
+        "label": "Colour thresholds",
+        "required": true,
+        "minimumItems": 0,
+        "maximumItems": 20,
+        "defaultValue": {
+          "kind": "list",
+          "items": []
+        },
+        "item": {
+          "kind": "group",
+          "key": "threshold",
+          "label": "Threshold",
+          "required": true,
+          "properties": [
+            {
+              "kind": "text",
+              "key": "minimum",
+              "label": "Minimum",
+              "required": true,
+              "minLength": 1,
+              "maxLength": 100
+            },
+            {
+              "kind": "choice",
+              "key": "severity",
+              "label": "Severity",
+              "required": true,
+              "options": [
+                {
+                  "key": "info",
+                  "label": "Information"
+                },
+                {
+                  "key": "success",
+                  "label": "Success"
+                },
+                {
+                  "key": "warning",
+                  "label": "Warning"
+                },
+                {
+                  "key": "error",
+                  "label": "Error"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
   }
 }

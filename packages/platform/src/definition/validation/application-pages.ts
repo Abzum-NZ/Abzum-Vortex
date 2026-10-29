@@ -36,6 +36,8 @@ import { queryTotalReferenceProblem } from "../module-query-edit";
 import { queryTotalLabel } from "../module-query-totals";
 import type { ApplicationScope } from "./application-scope";
 import { typedConditionTypesValid } from "./field-types";
+import { compareExactDecimals, parseExactDecimal } from "../../records/exact-decimal";
+import { isIsoCurrencyCode } from "../../catalogue/currencies";
 
 export function applicationPageRules(scope: ApplicationScope): void {
   const {
@@ -512,6 +514,77 @@ export function applicationPageRules(scope: ApplicationScope): void {
         `${String(block.blockId)}:${String(block.releaseVersion)}`,
       );
       const blockKey = release?.key;
+      if (blockKey === "platform.display.text" || blockKey === "platform.display.summary_values") {
+        const settings = object(placement.settings);
+        const sourceValues =
+          blockKey === "platform.display.text"
+            ? [settings.value_source]
+            : array(object(settings.value_sources).items).map(
+                (item) => object(object(item).properties).value_source,
+              );
+        const itemKeys =
+          blockKey === "platform.display.summary_values"
+            ? array(object(settings.value_sources).items).map((item) =>
+                String(object(object(item.properties).key).value),
+              )
+            : [];
+        let invalid = new Set(itemKeys).size !== itemKeys.length;
+        for (const sourceValue of sourceValues) {
+          const source = object(object(sourceValue).properties);
+          const kind = object(source.source).value;
+          const format = object(source.format).value;
+          if (
+            blockKey === "platform.display.summary_values" &&
+            kind === "projection" &&
+            source.projection_key === undefined
+          )
+            invalid = true;
+          if (
+            format === "money" &&
+            (source.currency === undefined ||
+              !isIsoCurrencyCode(String(object(source.currency).value)))
+          )
+            invalid = true;
+          if (format === "unit" && source.unit === undefined) invalid = true;
+          const thresholds = array(object(source.thresholds).items);
+          if (kind === "page_value") {
+            const name = String(
+              source.page_value === undefined ? "" : object(source.page_value).value,
+            );
+            const type = pageValues.get(name);
+            if (
+              type === undefined ||
+              (["number", "percent", "unit"].includes(String(format)) &&
+                type !== "decimal_number") ||
+              (format === "money" && type !== "money" && type !== "decimal_number") ||
+              (thresholds.length > 0 && type !== "money" && type !== "decimal_number")
+            )
+              invalid = true;
+          }
+          let previous: ReturnType<typeof parseExactDecimal>;
+          for (const threshold of thresholds) {
+            const properties = object(threshold.properties);
+            const minimum = parseExactDecimal(object(properties.minimum).value);
+            if (
+              minimum === undefined ||
+              (previous !== undefined && compareExactDecimals(previous, minimum) >= 0)
+            )
+              invalid = true;
+            previous = minimum;
+          }
+        }
+        if (invalid)
+          failures.push(
+            placementFailure(
+              output,
+              "vortex.definition.application_block_settings",
+              "invalid_value",
+              undefined,
+              undefined,
+              `Placement ${alias ?? String(placement.props.id)} on page ${String(page.key)} has an invalid value source, format or threshold`,
+            ),
+          );
+      }
       const totalRecord =
         bound === undefined
           ? undefined
