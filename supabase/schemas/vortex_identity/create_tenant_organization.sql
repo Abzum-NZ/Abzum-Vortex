@@ -1,6 +1,5 @@
 create or replace function vortex_identity.create_tenant_organization(
   p_duplicate_key uuid,
-  p_command_fingerprint text,
   p_tenant_id uuid,
   p_parent_organization_id uuid,
   p_organization_short_name text,
@@ -60,8 +59,6 @@ begin
       and not vortex_platform.is_non_nil_uuid(p_parent_organization_id::text))
     or p_organization_steward_identity_id is null
     or not vortex_platform.is_non_nil_uuid(p_organization_steward_identity_id::text)
-    or p_command_fingerprint is null
-    or p_command_fingerprint !~ '^sha256:[0-9a-f]{64}$'
     or p_organization_short_name is null
     or pg_catalog.char_length(p_organization_short_name) not between 1 and 40
     or p_organization_short_name !~ '^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$'
@@ -75,15 +72,6 @@ begin
       errcode = '22023',
       message = 'Tenant organisation creation command is invalid';
   end if;
-
-  perform vortex_identity.assert_organization_runtime_settings_values(
-    p_runtime_language, p_runtime_time_zone, p_runtime_currency,
-    p_runtime_date_format, p_runtime_number_format
-  );
-  perform vortex_identity.assert_organization_runtime_settings_values(
-    p_account_language, p_account_time_zone, p_runtime_currency,
-    p_runtime_date_format, p_runtime_number_format
-  );
 
   actor_identity_id := vortex_identity.tenant_request_actor_id();
 
@@ -137,13 +125,8 @@ begin
     select r.* into stored
     from pg_catalog.jsonb_to_record(claimed) as r(
       "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
-      "subjectRevisions" bigint[], "fingerprint" text, "clusterId" uuid
+      "subjectRevisions" bigint[]
     );
-    if stored."fingerprint" <> p_command_fingerprint then
-      raise exception using
-        errcode = 'V3001',
-        message = 'Administration duplicate conflicts';
-    end if;
     select organization.organization_id
     into replay_organization_id
     from vortex_identity.organizations as organization
@@ -171,6 +154,16 @@ begin
       stored."acceptedAt";
     return;
   end if;
+
+  perform vortex_identity.assert_organization_runtime_settings_values(
+    p_runtime_language, p_runtime_time_zone, p_runtime_currency,
+    p_runtime_date_format, p_runtime_number_format
+  );
+  perform vortex_identity.assert_organization_runtime_settings_values(
+    p_account_language, p_account_time_zone, p_runtime_currency,
+    p_runtime_date_format, p_runtime_number_format
+  );
+
 
   select pg_catalog.count(distinct nominated.identity_id)
   into required_projection_count
@@ -287,8 +280,7 @@ begin
     pg_catalog.jsonb_build_object(
       'receiptId', new_correlation_id, 'acceptedAt', evaluated_at,
       'subjectIds', pg_catalog.to_jsonb(result_subject_ids),
-      'subjectRevisions', pg_catalog.to_jsonb(result_subject_revisions),
-      'fingerprint', p_command_fingerprint, 'clusterId', null::uuid
+      'subjectRevisions', pg_catalog.to_jsonb(result_subject_revisions)
     )
   );
 
@@ -305,14 +297,14 @@ begin
 end
 $function$;
 
-revoke execute on function vortex_identity.create_tenant_organization(uuid, text, uuid, uuid, text, text, uuid, text, text, text, text, text, text, text, text)
+revoke execute on function vortex_identity.create_tenant_organization(uuid, uuid, uuid, text, text, uuid, text, text, text, text, text, text, text, text)
   from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
-grant execute on function vortex_identity.create_tenant_organization(uuid, text, uuid, uuid, text, text, uuid, text, text, text, text, text, text, text, text)
+grant execute on function vortex_identity.create_tenant_organization(uuid, uuid, uuid, text, text, uuid, text, text, text, text, text, text, text, text)
   to vortex_runtime;
 
-comment on function vortex_identity.create_tenant_organization(uuid, text, uuid, uuid, text, text, uuid, text, text, text, text, text, text, text, text) is
+comment on function vortex_identity.create_tenant_organization(uuid, uuid, uuid, text, text, uuid, text, text, text, text, text, text, text, text) is
   'Creates one tenant organisation for the bound request context person with an explicit existing steward, runtime settings, delivered Access composition and an initial current owner Group membership for that steward.';
 
-alter function vortex_identity.create_tenant_organization(p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_parent_organization_id uuid, p_organization_short_name text, p_organization_display_name text, p_organization_steward_identity_id uuid, p_account_display_name text, p_account_language text, p_account_time_zone text, p_runtime_language text, p_runtime_time_zone text, p_runtime_currency text, p_runtime_date_format text, p_runtime_number_format text) owner to vortex_owner;
+alter function vortex_identity.create_tenant_organization(p_duplicate_key uuid, p_tenant_id uuid, p_parent_organization_id uuid, p_organization_short_name text, p_organization_display_name text, p_organization_steward_identity_id uuid, p_account_display_name text, p_account_language text, p_account_time_zone text, p_runtime_language text, p_runtime_time_zone text, p_runtime_currency text, p_runtime_date_format text, p_runtime_number_format text) owner to vortex_owner;
 
-grant execute on function vortex_identity.create_tenant_organization(p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_parent_organization_id uuid, p_organization_short_name text, p_organization_display_name text, p_organization_steward_identity_id uuid, p_account_display_name text, p_account_language text, p_account_time_zone text, p_runtime_language text, p_runtime_time_zone text, p_runtime_currency text, p_runtime_date_format text, p_runtime_number_format text) to postgres;
+grant execute on function vortex_identity.create_tenant_organization(p_duplicate_key uuid, p_tenant_id uuid, p_parent_organization_id uuid, p_organization_short_name text, p_organization_display_name text, p_organization_steward_identity_id uuid, p_account_display_name text, p_account_language text, p_account_time_zone text, p_runtime_language text, p_runtime_time_zone text, p_runtime_currency text, p_runtime_date_format text, p_runtime_number_format text) to postgres;
