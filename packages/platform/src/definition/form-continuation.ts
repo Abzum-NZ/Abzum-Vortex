@@ -101,6 +101,7 @@ export const createFormContinuationService = (
     }>,
   ): FormContinuationOutcome => {
     if (response.kind === "refused") return refuse("not_resumable");
+    if (response.kind === "reload" || response.kind === "rate_limited") return response;
 
     if (response.kind === "suspended") {
       const formId = response.awaiting === "form" ? formIdOf(response) : undefined;

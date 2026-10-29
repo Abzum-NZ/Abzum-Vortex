@@ -181,6 +181,8 @@ export const formContinuationOutcomeSchema = z.discriminatedUnion("kind", [
       draft: formContinuationDraftEvidenceSchema.optional(),
     })
     .strict(),
+  z.object({ kind: z.literal("reload") }).strict(),
+  z.object({ kind: z.literal("rate_limited"), retryAfterSeconds: z.number().int().nonnegative() }).strict(),
   z.object({ kind: z.literal("refused"), reason: formContinuationRefusalReasonSchema }).strict(),
 ]);
 

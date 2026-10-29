@@ -328,6 +328,8 @@ export type FlowOrchestratorResponse =
       expiresAt: string;
       unavailable: readonly FlowUnavailableNotice[];
     }>
+  | Readonly<{ kind: "reload" }>
+  | Readonly<{ kind: "rate_limited"; retryAfterSeconds: number }>
   | Readonly<{ kind: "refused" }>;
 
 type RunAuthority = Readonly<{

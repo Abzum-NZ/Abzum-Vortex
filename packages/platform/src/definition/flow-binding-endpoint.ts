@@ -678,6 +678,10 @@ const toResult = (
   }>,
 ): FlowBindingEndpointResult => {
   switch (response.kind) {
+    case "reload":
+      return { kind: "reload", installationRevision: context.installationRevision };
+    case "rate_limited":
+      return response;
     case "finished":
       return finishedResult(response, context);
     case "suspended": {
@@ -714,6 +718,10 @@ const continuationResult = (
   }>,
 ): FlowBindingEndpointResult => {
   switch (outcome.kind) {
+    case "reload":
+      return { kind: "reload", installationRevision };
+    case "rate_limited":
+      return outcome;
     case "finished": {
       const diagnostic = surfaceDiagnostic(
         outcome.failure?.diagnostic,
