@@ -115,6 +115,47 @@ type StartFlowDependencies<Value> = Readonly<{
   ) => Promise<SegmentExecution<Value>>;
 }>;
 
+/** Opens completion evidence only for a flow that can reach another server segment first. */
+export const openFlowAdmissionRun = async <Value>(
+  dependencies: StartFlowDependencies<Value>,
+  request: Readonly<{
+    session: IdentitySession;
+    selection: OrganizationSelectionCandidate;
+    plan: FlowPlan;
+    bindingId: string;
+  }>,
+): Promise<Readonly<{ kind: "opened"; runId: string }> | Readonly<{ kind: "refused" }>> => {
+  const bindingId = z.uuid().safeParse(request.bindingId);
+  const serverSegments = request.plan.segments.filter((part) => part.kind === "server");
+  if (
+    !bindingId.success ||
+    !serverSegments.some((part) => part.tasks.length === 0) ||
+    !serverSegments.some((part) => part.tasks.length > 0)
+  )
+    return { kind: "refused" };
+  const requests = createHumanOrganizationRequestService(dependencies.requests);
+  const result = await requests.run(request.session, request.selection, async (transaction, scope, issuedAt) => {
+    const context: SegmentContext = {
+      transaction,
+      scope,
+      issuedAt,
+      mode: "shared",
+      session: request.session,
+      selection: request.selection,
+    };
+    if (!(await dependencies.authorizeBinding(context))) return { kind: "refused" } as const;
+    if (
+      request.plan.definition.invocationPermissionId !== undefined &&
+      !(await dependencies.authorizeInvocation(context))
+    )
+      return { kind: "refused" } as const;
+    const rows = await transaction.query`select vortex_access.flow_run_evidence(${'start'}::text, ${null}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data}::uuid, ${null}::uuid) as result`;
+    const opened = z.object({ state: z.literal("started"), runId: z.uuid() }).strict().parse(rows[0]?.result);
+    return { kind: "opened", runId: opened.runId } as const;
+  });
+  return result.kind === "available" ? result.value : { kind: "refused" };
+};
+
 /** Admits and executes one server segment under the same current human request transaction. */
 export const startFlow = async <Value>(
   dependencies: StartFlowDependencies<Value>,
