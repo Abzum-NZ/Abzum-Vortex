@@ -180,6 +180,70 @@ const gateDecision = (
 
 const sameKey = (left: string, right: string): boolean => left === right;
 
+/** The shared view, use, visibility and action decision for one placement. */
+const evaluatePlacement = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  page: PageDefinition,
+  required: RequiredPlacement,
+  binding: FixedAuthenticatedPageCapability["placements"][string],
+  pageAccess: GateDecision,
+  ancestorHidden: boolean,
+  decide: (binding: PermissionBinding | PlacementPermissionBinding) => Promise<GateDecision>,
+  evaluators: PageCapabilityEvaluators,
+) => {
+  const view =
+    required.viewPermissionKey === undefined
+      ? { allowed: true, correlationId: pageAccess.correlationId, validUntil: undefined }
+      : binding.viewPermission !== undefined &&
+          sameKey(binding.viewPermission.permissionKey, required.viewPermissionKey)
+        ? await decide(binding.viewPermission)
+        : undefined;
+  const use =
+    required.usePermissionKey === undefined
+      ? { allowed: true, correlationId: pageAccess.correlationId, validUntil: undefined }
+      : binding.usePermission !== undefined &&
+          sameKey(binding.usePermission.permissionKey, required.usePermissionKey)
+        ? await decide(binding.usePermission)
+        : undefined;
+  if (view === undefined || use === undefined)
+    throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
+  const conditionAllowed =
+    required.visibilityCondition === undefined
+      ? binding.visibilityConditionAllowed
+      : !view.allowed || ancestorHidden
+        ? false
+        : await evaluators.evaluateVisibilityCondition(
+            transaction,
+            scope,
+            page,
+            required.visibilityCondition,
+          );
+  const actionAvailable =
+    ancestorHidden || !view.allowed
+      ? undefined
+      : await evaluators.evaluateActionAvailability(transaction, scope, page, required.placementId);
+  return {
+    view,
+    use,
+    hidden:
+      ancestorHidden ||
+      !view.allowed ||
+      (required.visibilityCondition !== undefined && conditionAllowed !== true) ||
+      actionAvailable === false,
+    state: {
+      viewAllowed: view.allowed,
+      useAllowed: use.allowed,
+      ...(binding.operationRequired === undefined
+        ? {}
+        : { operationRequired: binding.operationRequired }),
+      operationBound: binding.operationBound,
+      ...(conditionAllowed === undefined ? {} : { conditionAllowed }),
+      ...(actionAvailable === undefined ? {} : { actionAvailable }),
+    },
+  };
+};
+
 /**
  * Projects one loaded page capability for the viewer: the page gate, then each placement's view and
  * use gates, visibility condition and bound action, all decided in this one verified transaction.
@@ -276,64 +340,24 @@ export const projectAuthenticatedPageCapability = async (
     if (states[required.placementId] !== undefined) continue;
     const binding = loaded.placements[required.placementId];
     if (binding === undefined) throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
-    const view =
-      required.viewPermissionKey === undefined
-        ? { allowed: true, correlationId: pageAccess.correlationId, validUntil: undefined }
-        : binding.viewPermission !== undefined &&
-            sameKey(binding.viewPermission.permissionKey, required.viewPermissionKey)
-          ? await decide(binding.viewPermission)
-          : undefined;
-    const use =
-      required.usePermissionKey === undefined
-        ? { allowed: true, correlationId: pageAccess.correlationId, validUntil: undefined }
-        : binding.usePermission !== undefined &&
-            sameKey(binding.usePermission.permissionKey, required.usePermissionKey)
-          ? await decide(binding.usePermission)
-          : undefined;
-    if (view === undefined || use === undefined)
-      throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
-    retainEarliestAccessEligibility(view.validUntil);
-    retainEarliestAccessEligibility(use.validUntil);
-    correlations.add(view.correlationId.toLowerCase());
-    correlations.add(use.correlationId.toLowerCase());
     const ancestorHidden = required.ancestorPlacementIds.some((id) => hiddenPlacements.has(id));
-    const conditionAllowed =
-      required.visibilityCondition === undefined
-        ? binding.visibilityConditionAllowed
-        : !view.allowed || ancestorHidden
-          ? false
-          : await evaluators.evaluateVisibilityCondition(
-              transaction,
-              scope,
-              page,
-              required.visibilityCondition,
-            );
-    const actionAvailable =
-      ancestorHidden || !view.allowed
-        ? undefined
-        : await evaluators.evaluateActionAvailability(
-            transaction,
-            scope,
-            page,
-            required.placementId,
-          );
-    if (
-      ancestorHidden ||
-      !view.allowed ||
-      (required.visibilityCondition !== undefined && conditionAllowed !== true) ||
-      actionAvailable === false
-    )
-      hiddenPlacements.add(required.placementId);
-    states[required.placementId] = {
-      viewAllowed: view.allowed,
-      useAllowed: use.allowed,
-      ...(binding.operationRequired === undefined
-        ? {}
-        : { operationRequired: binding.operationRequired }),
-      operationBound: binding.operationBound,
-      ...(conditionAllowed === undefined ? {} : { conditionAllowed }),
-      ...(actionAvailable === undefined ? {} : { actionAvailable }),
-    };
+    const evaluated = await evaluatePlacement(
+      transaction,
+      scope,
+      page,
+      required,
+      binding,
+      pageAccess,
+      ancestorHidden,
+      decide,
+      evaluators,
+    );
+    retainEarliestAccessEligibility(evaluated.view.validUntil);
+    retainEarliestAccessEligibility(evaluated.use.validUntil);
+    correlations.add(evaluated.view.correlationId.toLowerCase());
+    correlations.add(evaluated.use.correlationId.toLowerCase());
+    if (evaluated.hidden) hiddenPlacements.add(required.placementId);
+    states[required.placementId] = evaluated.state;
   }
   if (correlations.size !== 1) throw new Error("PAGE_CAPABILITY_EVIDENCE_UNAVAILABLE");
   const projected = projectPageCapability(resolved, {
