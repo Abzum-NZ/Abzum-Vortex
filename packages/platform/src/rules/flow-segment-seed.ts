@@ -1,5 +1,6 @@
 import type { JsonValue } from "../catalogue/common";
 import type { FlowDefinition } from "../workflows/flow-contracts";
+import type { FlowServerSegment } from "../workflows/flow-plan";
 import { typedValueMatchesType } from "./condition-types";
 import { failed, initialVariables } from "./flow-interpreter-state";
 import type { FlowRuntimeValue } from "./flow-formula";
@@ -7,9 +8,12 @@ import type { FlowRuntimeValue } from "./flow-formula";
 /** Parse exactly the page-held reads declared by this segment; server inputs stay with the host. */
 export const parseFlowSegmentSeed = (
   flow: FlowDefinition,
-  declarations: Readonly<Record<string, string>>,
+  segment: FlowServerSegment,
   seed: Readonly<Record<string, unknown>>,
-  pageInputNames: ReadonlySet<string>,
+  start: Readonly<{
+    pageResolvedInputs?: readonly string[];
+    carriedValues?: Readonly<Record<string, FlowRuntimeValue>>;
+  }>,
 ): Readonly<{
   inputs: Record<string, unknown>;
   variables: Record<string, FlowRuntimeValue>;
@@ -23,17 +27,26 @@ export const parseFlowSegmentSeed = (
   );
   const outputs: Record<string, Record<string, FlowRuntimeValue>> = Object.create(null);
   const forms: Record<string, Record<string, FlowRuntimeValue>> = Object.create(null);
+  const declarations = segment.inputs;
+  const carriedDeclarations = segment.carriedInputs;
+  const carried = start.carriedValues ?? {};
+  const pageInputNames = new Set(start.pageResolvedInputs ?? []);
   const expected = Object.entries(declarations).filter(
     ([name]) =>
-      ["vars.", "outputs.", "forms."].some((prefix) => name.startsWith(prefix)) ||
-      (name.startsWith("inputs.") && pageInputNames.has(name.slice("inputs.".length))),
+      !Object.hasOwn(carriedDeclarations, name) &&
+      (["vars.", "outputs.", "forms."].some((prefix) => name.startsWith(prefix)) ||
+        (name.startsWith("inputs.") && pageInputNames.has(name.slice("inputs.".length)))),
   );
   if (
     Object.keys(seed).length !== expected.length ||
     Object.keys(seed).some((name) => !expected.some(([key]) => key === name))
   )
     failed("inputs_invalid", "refused", undefined, "segment seed has undeclared or missing values");
-  for (const [name, type] of expected) {
+  for (const [name, type] of Object.entries(carriedDeclarations)) {
+    if (declarations[name] !== type || carried[name]?.type !== type)
+      failed("inputs_invalid", "refused", undefined, `carried input ${name} is invalid`);
+  }
+  for (const [name, type] of [...expected, ...Object.entries(carriedDeclarations)]) {
     const parts = name.split(".");
     if (
       parts.some((part) => part.length === 0) ||
@@ -45,7 +58,7 @@ export const parseFlowSegmentSeed = (
       (!Object.hasOwn(flow.inputs, parts[1]!) || flow.inputs[parts[1]!]!.type !== type)
     )
       failed("inputs_invalid", "refused", undefined, `segment input ${name} has an invalid type`);
-    const candidate = seed[name];
+    const candidate = Object.hasOwn(carriedDeclarations, name) ? carried[name]!.value : seed[name];
     if (candidate !== null && !typedValueMatchesType(candidate, type, "flow"))
       failed(
         "inputs_invalid",

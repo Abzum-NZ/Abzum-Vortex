@@ -274,6 +274,7 @@ export type FlowRunStart = Readonly<{
   verifiedInputs?: FlowRuntimeValues;
   /** Binding input names the trusted host resolves in the page, never from a caller's claim. */
   pageResolvedInputs?: readonly string[];
+  carriedValues?: Readonly<Record<string, FlowRuntimeValue>>; // Trusted values opened by the host.
 }>;
 
 export type FlowRunResume =
@@ -1232,8 +1233,7 @@ export const startFlowSegment = (
   if (flow.execution !== "interactive")
     return failedStep(machine, { outcome: "refused", code: "flow_not_runnable" });
   try {
-    const pageInputNames = new Set(start.pageResolvedInputs ?? []);
-    const parsed = parseFlowSegmentSeed(flow, segment.inputs, seed, pageInputNames);
+    const parsed = parseFlowSegmentSeed(flow, segment, seed, start);
     if (Object.keys(parsed.inputs).some((name) => Object.hasOwn(start.inputs, name)))
       failed("inputs_invalid", "refused", undefined, "page input overrides a server binding");
     const requiredInputs = new Set(
