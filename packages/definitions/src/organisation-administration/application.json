@@ -2200,7 +2200,7 @@
                   },
                   "role_id": {
                     "kind": "literal",
-                    "literal": { "type": "text", "value": "" }
+                    "literal": { "type": "json", "value": null }
                   },
                   "expires_at": {
                     "kind": "formula",
@@ -2271,12 +2271,18 @@
                     "kind": "array",
                     "items": [
                       {
-                        "kind": "reference",
-                        "reference": {
-                          "source": "task_output",
-                          "task": "form",
-                          "key": "values",
-                          "path": ["role_id"]
+                        "kind": "formula",
+                        "formula": {
+                          "op": "record_id",
+                          "arg": {
+                            "op": "reference",
+                            "reference": {
+                              "source": "task_output",
+                              "task": "form",
+                              "key": "values",
+                              "path": ["role_id"]
+                            }
+                          }
                         }
                       }
                     ]

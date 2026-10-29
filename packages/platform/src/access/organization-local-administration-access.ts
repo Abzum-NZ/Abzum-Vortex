@@ -675,7 +675,7 @@ export const createOrganizationLocalAdministrationService = (
                 ${command.data.duplicateKey}::uuid,
                 ${command.data.invitedEmail}::text,
                 ${command.data.expiresAt}::timestamptz,
-                array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(command.data.roleIds)}::jsonb)::uuid)
+                array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(command.data.roleIds)}::text::jsonb)::uuid)
               )
             `,
           );
