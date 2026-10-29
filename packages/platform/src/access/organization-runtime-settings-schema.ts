@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isIsoCurrencyCode } from "../catalogue/currencies";
+import { currentIso4217Alpha3CodeSetV2026_01_01 } from "../catalogue/currencies";
 import { organizationIdSchema, revisionSchema } from "../catalogue/identifiers";
 
 export const organizationRuntimeSettingsDateFormats = ["short", "medium", "long", "full"] as const;
@@ -485,7 +485,10 @@ export const organizationRuntimeSettingsSchema = z
     currency: z
       .string()
       .length(3)
-      .refine(isIsoCurrencyCode, "Currency must be a current ISO-4217 code"),
+      .refine(
+        (value) => currentIso4217Alpha3CodeSetV2026_01_01.has(value),
+        "Currency must be a current ISO-4217 code",
+      ),
     dateFormat: z.enum(organizationRuntimeSettingsDateFormats),
     // Closed serialization of ECMA-402 `useGrouping`; `never` maps to false.
     numberFormat: z.enum(organizationRuntimeSettingsNumberFormats),
