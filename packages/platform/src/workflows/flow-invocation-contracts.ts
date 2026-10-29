@@ -14,6 +14,8 @@ const bindingInvocationSchema = z
     releaseKey: releaseKeySchema,
     bindingId: containedComponentIdSchema,
     flowId: flowIdSchema,
+    /** A row form's source table; the gate revalidates it and the subject against that table. */
+    sourceTablePlacementId: containedComponentIdSchema.optional(),
     segment: z.union([
       z.object({ segmentId: z.null() }).strict(),
       z
@@ -44,6 +46,8 @@ const continuationInvocationSchema = z
     installationRevision: installationRevisionSchema,
     releaseKey: releaseKeySchema,
     flowId: flowIdSchema,
+    /** The row form's source table, supplied by the page and revalidated by the gate. */
+    sourceTablePlacementId: containedComponentIdSchema.optional(),
     continuation: z.string().min(16).max(128),
     answer: formContinuationAnswerSchema,
     /**
