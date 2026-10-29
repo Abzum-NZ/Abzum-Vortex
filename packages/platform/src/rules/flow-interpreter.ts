@@ -27,6 +27,7 @@ import {
   type FlowValue,
 } from "../workflows/flow-values";
 import type { FormContinuationAnswer } from "../workflows/form-continuation-answer";
+import type { FlowPlan, FlowServerSegment } from "../workflows/flow-plan";
 import {
   evaluateFlowFormula,
   flowRuntimeValuesEqual,
@@ -534,6 +535,7 @@ type Machine = {
     -readonly [Key in keyof FlowRunState]: FlowRunState[Key];
   };
   library: FlowLibrary;
+  segment?: FlowServerSegment;
 };
 
 const topOf = (machine: Machine) =>
@@ -590,6 +592,23 @@ const finishActivation = (machine: Machine, activation: Activation): FlowRunResu
   const flow = flowOf(machine, activation);
   if (activation.failure !== undefined) return { status: "failed", failure: activation.failure };
   const outputs: Record<string, FlowRuntimeValue> = {};
+  if (machine.segment !== undefined && machine.state.activations.length === 1) {
+    for (const name of Object.keys(machine.segment.outputs)) {
+      const [task, key] = name.split(".");
+      const value =
+        task === "final"
+          ? flow.outputs[key!] === undefined
+            ? undefined
+            : evaluateValue(flow.outputs[key!]!.value, machine.state, activation, flow, name)
+          : activation.outputs[task!]?.[key!];
+      if (value !== undefined) outputs[name] = value;
+    }
+    return {
+      status: "completed",
+      outputs,
+      ...(activation.stopped === undefined ? {} : { stopped: activation.stopped }),
+    };
+  }
   for (const [name, declaration] of Object.entries(flow.outputs))
     outputs[name] = evaluateValue(declaration.value, machine.state, activation, flow, name);
   return {
@@ -1028,7 +1047,10 @@ const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep =>
     const frame = activation.frames[activation.frames.length - 1];
 
     if (frame === undefined) {
-      const following = nextPhase(machine, activation);
+      const following =
+        machine.segment !== undefined && machine.state.activations.length === 1
+          ? undefined
+          : nextPhase(machine, activation);
       if (following !== undefined) {
         replaceTop(machine, following);
         continue;
@@ -1083,6 +1105,21 @@ const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep =>
 
     const taskPath = [...frame.path, frame.index];
     const task = list[frame.index]!;
+    if (
+      machine.segment !== undefined &&
+      machine.state.activations.length === 1 &&
+      !machine.segment.tasks.some(
+        (root) =>
+          root.id === task.id ||
+          findTask(
+            flowTaskChildLists(root).flatMap((child) => child.tasks),
+            task.id,
+          ) !== undefined,
+      )
+    ) {
+      replaceTop(machine, withFrames(activation, []));
+      continue;
+    }
     const observation = {
       flowId: activation.flowId,
       taskId: task.id,
@@ -1149,25 +1186,27 @@ const drive = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep 
  * inputs the binding supplied and are checked against the flow's declarations; the host supplies
  * the run id, the instant and the actor from its own trusted context.
  */
+const initialState = (start: FlowRunStart): FlowRunState => ({
+  version: flowRunStateVersion,
+  runId: start.runId,
+  now: start.now,
+  ...(start.actor === undefined ? {} : { actor: start.actor }),
+  ...(start.subject === undefined ? {} : { subject: start.subject }),
+  activations: [],
+  protectedOperations: 0,
+  committedEffects: 0,
+  steps: 0,
+  pendingIntents: [],
+  ...(start.triggerRecord === undefined ? {} : { triggerRecord: start.triggerRecord }),
+  ...(start.previousRecord === undefined ? {} : { previousRecord: start.previousRecord }),
+});
+
 export const startFlowRun = (
   start: FlowRunStart,
   library: FlowLibrary,
   observer?: FlowTaskTraceObserver,
 ): FlowRunStep => {
-  const state: FlowRunState = {
-    version: flowRunStateVersion,
-    runId: start.runId,
-    now: start.now,
-    ...(start.actor === undefined ? {} : { actor: start.actor }),
-    ...(start.subject === undefined ? {} : { subject: start.subject }),
-    activations: [],
-    protectedOperations: 0,
-    committedEffects: 0,
-    steps: 0,
-    pendingIntents: [],
-    ...(start.triggerRecord === undefined ? {} : { triggerRecord: start.triggerRecord }),
-    ...(start.previousRecord === undefined ? {} : { previousRecord: start.previousRecord }),
-  };
+  const state = initialState(start);
   const machine: Machine = { state: { ...state }, library };
   const flow = library(start.flowId);
   if (flow === undefined)
@@ -1185,6 +1224,108 @@ export const startFlowRun = (
   return drive(machine, observer);
 };
 
+/** Starts the admitted server segment with the host's binding inputs and validated page values. */
+export const startFlowSegment = (
+  plan: FlowPlan,
+  segmentId: string,
+  start: FlowRunStart,
+  seed: Readonly<Record<string, unknown>>,
+  library: FlowLibrary,
+): FlowRunStep => {
+  const state = initialState(start);
+  const machine: Machine = { state: { ...state }, library };
+  const segment = plan.segments.find((part) => part.kind === "server" && part.id === segmentId);
+  if (
+    segment === undefined ||
+    segment.kind !== "server" ||
+    start.flowId !== plan.flowId ||
+    library(start.flowId) !== plan.definition
+  )
+    return failedStep(machine, { outcome: "refused", code: "flow_unavailable" });
+  const flow = plan.definition;
+  if (flow.execution !== "interactive")
+    return failedStep(machine, { outcome: "refused", code: "flow_not_runnable" });
+  try {
+    const inputs = buildInputs(flow, start.inputs);
+    const variables: Record<string, FlowRuntimeValue> = { ...initialVariables(flow) };
+    const outputs: Record<string, Record<string, FlowRuntimeValue>> = {};
+    const expected = Object.entries(segment.inputs).filter(
+      ([name]) => name.startsWith("vars.") || name.startsWith("outputs."),
+    );
+    if (
+      Object.keys(seed).length !== expected.length ||
+      Object.keys(seed).some((name) => !expected.some(([key]) => key === name))
+    )
+      failed(
+        "inputs_invalid",
+        "refused",
+        undefined,
+        "segment seed has undeclared or missing values",
+      );
+    for (const [name, type] of expected) {
+      const candidate = seed[name];
+      if (candidate !== null && !typedValueMatchesType(candidate, type, "flow"))
+        failed(
+          "inputs_invalid",
+          "refused",
+          undefined,
+          `segment input ${name} is not a valid ${type} value`,
+        );
+      const value = typed(type, candidate as JsonValue);
+      const parts = name.split(".");
+      if (parts[0] === "vars") variables[parts[1]!] = value;
+      else (outputs[parts[1]!] ??= {})[parts[2]!] = value;
+    }
+    const taskPath = segment.firstTaskPath;
+    const index = taskPath.at(-1);
+    if (typeof index !== "number")
+      return failedStep(machine, { outcome: "refused", code: "flow_unavailable" });
+    if (taskPath[0] !== segment.section || at(flow, taskPath) !== segment.tasks[0])
+      failed("flow_unavailable", "refused", undefined, "segment location is invalid");
+    const activation: Activation = {
+      ...newActivation(flow, inputs, ""),
+      variables,
+      outputs,
+      phase: segment.section,
+      frames: [{ path: taskPath.slice(0, -1), index }],
+    };
+    machine.state.activations = [activation];
+    machine.segment = segment;
+    for (const condition of segment.guard) {
+      const scope = scopeOf(machine.state, activation, flow);
+      if (condition.kind === "if") {
+        const result = evaluateFlowFormula(condition.condition, scope);
+        if (
+          result?.type !== "yes_no" ||
+          typeof result.value !== "boolean" ||
+          result.value !== (condition.branch === "then")
+        )
+          failed("inputs_invalid", "refused", condition.taskId, "segment path does not match");
+      } else {
+        const value = evaluateValue(
+          condition.value,
+          machine.state,
+          activation,
+          flow,
+          condition.taskId,
+        );
+        const matches = ("cases" in condition ? condition.cases : [condition.when]).map((literal) =>
+          flowRuntimeValuesEqual(value, literal),
+        );
+        if (
+          matches.some((match) => match === undefined) ||
+          ("cases" in condition ? matches.some(Boolean) : matches[0] !== true)
+        )
+          failed("inputs_invalid", "refused", condition.taskId, "segment path does not match");
+      }
+    }
+    return drive(machine);
+  } catch (error) {
+    if (error instanceof Failed) return failedStep(machine, error.failure);
+    throw error;
+  }
+};
+
 /**
  * Resumes a suspended run with what the host obtained: the safe outcome of the protected task it
  * ran, or the person's answer to the form or confirmation. A resume of the wrong kind is refused,
@@ -1195,8 +1336,13 @@ export const resumeFlowRun = (
   resume: FlowRunResume,
   library: FlowLibrary,
   observer?: FlowTaskTraceObserver,
+  segment?: FlowServerSegment,
 ): FlowRunStep => {
-  const machine: Machine = { state: clone(previous), library };
+  const machine: Machine = {
+    state: clone(previous),
+    library,
+    ...(segment === undefined ? {} : { segment }),
+  };
   const awaiting = machine.state.awaiting;
   const mismatch = () => failedStep(machine, { outcome: "failed", code: "resume_mismatch" });
   if (awaiting === undefined || previous.version !== flowRunStateVersion) return mismatch();

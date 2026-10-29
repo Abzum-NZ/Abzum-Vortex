@@ -248,7 +248,9 @@ const inputTypes = (
           (step) => step.id === reference.task,
         );
         types[`outputs.${key}`] =
-          (producer === undefined ? undefined : outputTypes([producer])[key]) ?? "json";
+          reference.key === "outcome"
+            ? "text"
+            : ((producer === undefined ? undefined : outputTypes([producer])[key]) ?? "json");
         break;
       }
       case "trigger_record":
