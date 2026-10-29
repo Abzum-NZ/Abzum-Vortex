@@ -186,17 +186,17 @@ const historyLimit = 10_000;
 export const applicationVersionImpactRequestSchema = z
   .object({
     kind: z.literal("application"),
-    validationContractVersion: z.literal("4.0.0"),
+    validationContractVersion: z.literal("4.1.0"),
     history: z.array(publishedApplicationDefinitionSchema).max(historyLimit),
     candidate: applicationDraftSchema,
   })
   .strict();
 
-/** Immutable Module history evidence; publication dispatch requires the exact 4.0.0 pair. */
+/** Immutable Module history evidence; publication dispatch requires the exact 4.1.0 pair. */
 export const moduleVersionImpactHistoryEntrySchema = z
   .object({
     publication: publishedModuleReferenceSchema.extend({
-      validationContractVersion: z.literal("4.0.0"),
+      validationContractVersion: z.literal("4.1.0"),
     }),
     content: moduleContentSchema,
     dependencyManifest: z.array(publishedDefinitionReferenceSchema),
