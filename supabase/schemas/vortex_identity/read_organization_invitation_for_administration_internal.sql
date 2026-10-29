@@ -27,6 +27,7 @@ begin
     'organizationId', invitation.organization_id,
     'invitedEmail', invitation.invited_email,
     'invitedBy', invitation.invited_by_organization_account_id,
+    'roleIntents', invitation.role_intents,
     'createdAt', invitation.created_at,
     'invitedAt', invitation.invited_at,
     'expiresAt', invitation.expires_at,

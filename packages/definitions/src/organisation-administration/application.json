@@ -116,6 +116,26 @@
           ],
           "changeable_fields": []
         }
+      },
+      {
+        "id": "app_permission_role_read",
+        "key": "vortex.organisation_administration.role.read",
+        "label": "Read roles",
+        "description": "Allows reading the role names an invitation can carry.",
+        "record_type": "vortex.system_directory:role",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": ["organization_id", "revision", "key", "label", "lifecycle"],
+          "changeable_fields": []
+        }
       }
     ],
     "roles": [
@@ -150,6 +170,7 @@
           "vortex.organisation_administration.privacy_request_case.refuse",
           "vortex.organisation_administration.person.read",
           "vortex.organisation_administration.organization_invitation.read",
+          "vortex.organisation_administration.role.read",
           "vortex.organisation_administration.organization_settings.read",
           "vortex.organisation_administration.activity_entry.read"
         ]
@@ -774,7 +795,7 @@
                   "type": "platform.renderer.text",
                   "props": {
                     "id": "invitations_text_description",
-                    "text": "Pending and past invitations. To give an invited person roles, use the IAM application.",
+                    "text": "Pending and past invitations. Choose a role when inviting a person.",
                     "vortex": {
                       "block": {
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
@@ -896,6 +917,32 @@
                                 "height": {
                                   "kind": "content"
                                 }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.choice_input",
+                        "props": {
+                          "id": "input_create_invitation_role",
+                          "name": "role_id",
+                          "label": "Role",
+                          "required": true,
+                          "choice_source": {
+                            "query": "vortex.system_directory:roles",
+                            "label_field": "vortex.system_directory:role.label"
+                          },
+                          "vortex": {
+                            "block": {
+                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
+                              "release_version": "1.2.0"
+                            },
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": { "kind": "fill" },
+                                "height": { "kind": "content" }
                               }
                             }
                           }
@@ -2151,6 +2198,10 @@
                       "value": ""
                     }
                   },
+                  "role_id": {
+                    "kind": "literal",
+                    "literal": { "type": "json", "value": null }
+                  },
                   "expires_at": {
                     "kind": "formula",
                     "formula": {
@@ -2215,6 +2266,26 @@
                       "key": "values",
                       "path": ["invited_email"]
                     }
+                  },
+                  "role_ids": {
+                    "kind": "array",
+                    "items": [
+                      {
+                        "kind": "formula",
+                        "formula": {
+                          "op": "record_id",
+                          "arg": {
+                            "op": "reference",
+                            "reference": {
+                              "source": "task_output",
+                              "task": "form",
+                              "key": "values",
+                              "path": ["role_id"]
+                            }
+                          }
+                        }
+                      }
+                    ]
                   },
                   "expires_at": {
                     "kind": "reference",

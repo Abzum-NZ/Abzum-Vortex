@@ -20,6 +20,7 @@ export const flowRefusalFeedbackCodeSchema = z.enum([
   "installation_delegation_required",
   "assignments_manage_required",
   "invitation_already_pending",
+  "invitation_role_not_delegable",
 ]);
 
 export type FlowRefusalFeedbackCode = z.infer<typeof flowRefusalFeedbackCodeSchema>;
@@ -48,6 +49,7 @@ export const flowRefusalFeedbackSentences: Readonly<Record<FlowRefusalFeedbackCo
     "Installing this application needs app-installation authority over the permissions its roles grant. An organisation steward can grant you app-installation authority.",
   assignments_manage_required:
     "Taking this application's role yourself needs the Manage access assignments permission. Install without taking the role, or ask an organisation steward for that permission.",
+  invitation_role_not_delegable: "You can't give this role.",
   invitation_already_pending:
     "An invitation to this email is already waiting to be accepted. Revoke it first to send a new one.",
 };
@@ -66,6 +68,7 @@ const platformGuidanceCodes: ReadonlySet<string> = new Set<FlowRefusalFeedbackCo
   "installation_delegation_required",
   "assignments_manage_required",
   "invitation_already_pending",
+  "invitation_role_not_delegable",
 ]);
 
 export const refusalKeepsPlatformGuidance = (code: string | undefined): boolean =>

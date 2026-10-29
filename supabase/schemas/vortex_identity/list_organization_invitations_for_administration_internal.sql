@@ -32,7 +32,7 @@ begin
       invitation.created_at, invitation.invited_at, invitation.expires_at,
       invitation.revoked_at, invitation.revoked_by_organization_account_id,
       invitation.accepted_at, invitation.accepted_organization_account_id,
-      invitation.changed_at, invitation.revision,
+      invitation.changed_at, invitation.revision, invitation.role_intents,
       pg_catalog.row_number() over (order by invitation.invitation_id) as ordinal
     from vortex_identity.organization_invitations as invitation
     where invitation.organization_id = p_organization_id
@@ -50,6 +50,7 @@ begin
           'organizationId', candidate.organization_id,
           'invitedEmail', candidate.invited_email,
           'invitedBy', candidate.invited_by_organization_account_id,
+          'roleIntents', candidate.role_intents,
           'createdAt', candidate.created_at,
           'invitedAt', candidate.invited_at,
           'expiresAt', candidate.expires_at,

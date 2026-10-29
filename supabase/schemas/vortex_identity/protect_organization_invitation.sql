@@ -9,7 +9,8 @@ begin
     or new.invited_by_organization_account_id is distinct from old.invited_by_organization_account_id
     or new.created_at is distinct from old.created_at
     or new.invited_at is distinct from old.invited_at
-    or new.expires_at is distinct from old.expires_at then
+    or new.expires_at is distinct from old.expires_at
+    or new.role_intents is distinct from old.role_intents then
     raise exception using errcode = '23514', message = 'Invitation identity and scope are permanent';
   end if;
 
