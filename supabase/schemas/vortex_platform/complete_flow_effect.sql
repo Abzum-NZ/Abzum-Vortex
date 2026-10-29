@@ -21,7 +21,7 @@ begin
     or p_organization_id is null
     or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
     or p_principal_kind is null
-    or p_principal_kind not in ('person', 'specified_account', 'system')
+    or p_principal_kind not in ('person', 'system')
     or p_principal_id is null
     or not vortex_platform.is_non_nil_uuid(p_principal_id::text)
     or p_origin_kind is null
