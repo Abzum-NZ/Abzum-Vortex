@@ -12,9 +12,7 @@ import {
 import { readBoundedRequestText } from "../../_lib/bounded-request-body";
 import { privateJsonResponse as privateResponse } from "../../../_lib/private-response";
 
-// One protected wake-up endpoint serves both callers: a database webhook hint
-// and a scheduled Kestra recovery tick. Both authenticate with the same
-// configured dispatcher bearer credential and run the same bounded dispatcher.
+// The scheduled recovery tick uses the protected bounded dispatcher.
 const wakeup = createEventDispatcherWakeup({
   consumers: [
     createDerivedFieldBackfillConsumer(),
@@ -55,13 +53,6 @@ const readBody = async (request: NextRequest): Promise<ReadBodyResult> => {
 };
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  if (process.env.VORTEX_EVENT_DELIVERY_MODE !== "external") {
-    logRefusal("events-dispatch", "wake-up", "external_delivery_disabled");
-    return privateResponse(
-      { outcome: "refused", reason: "External event delivery is not enabled for this deployment." },
-      409,
-    );
-  }
   const authentication = authenticateEventDispatcher(request.headers.get("authorization"));
   if (authentication.outcome === "refused") {
     logRefusal("events-dispatch", "wake-up", `authentication_${authentication.reason}`);
