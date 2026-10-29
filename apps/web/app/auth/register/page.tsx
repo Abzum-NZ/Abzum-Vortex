@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { readPrivacyNotice } from "@vortex/platform/server";
+import { newPasswordPolicy, readPrivacyNotice } from "@vortex/platform/server";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Field, FieldDescription } from "@vortex/ui/components/field";
 import { Input } from "@vortex/ui/components/input";
@@ -54,13 +54,11 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
               name="password"
               type="password"
               autoComplete="new-password"
-              minLength={8}
-              pattern="(?=.*[A-Za-z])(?=.*\d).{8,1024}"
+              minLength={newPasswordPolicy.minimumLength}
+              pattern={newPasswordPolicy.pattern}
               required
             />
-            <FieldDescription>
-              Use at least 8 characters, including a letter and a number.
-            </FieldDescription>
+            <FieldDescription>{newPasswordPolicy.description}</FieldDescription>
           </Field>
           <Field orientation="horizontal">
             <Checkbox id="privacy-notice" name="privacy_notice_acknowledged" required />

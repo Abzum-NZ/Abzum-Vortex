@@ -12,6 +12,15 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 const MINIMUM_PASSWORD_LENGTH = 8;
 const EMAIL_OTP_PATTERN = /^\d{6}$/u;
 
+const newPasswordMinimumLength = 12;
+const newPasswordMaximumLength = 1_024;
+export const newPasswordPolicy = Object.freeze({
+  minimumLength: newPasswordMinimumLength,
+  maximumLength: newPasswordMaximumLength,
+  pattern: `(?=.*[A-Za-z])(?=.*\\d).{${newPasswordMinimumLength},${newPasswordMaximumLength}}`,
+  description: `Use at least ${newPasswordMinimumLength} characters, including a letter and a number.`,
+});
+
 export type IdentityJourneyConfiguration = Readonly<{
   supabaseUrl: string;
   publishableKey: string;
@@ -100,7 +109,10 @@ const validPasswordLength = (value: string): boolean =>
   value.length >= MINIMUM_PASSWORD_LENGTH && value.length <= 1_024;
 
 const validNewPassword = (value: string): boolean =>
-  validPasswordLength(value) && /[A-Za-z]/u.test(value) && /\d/u.test(value);
+  value.length >= newPasswordPolicy.minimumLength &&
+  value.length <= newPasswordPolicy.maximumLength &&
+  /[A-Za-z]/u.test(value) &&
+  /\d/u.test(value);
 
 const validAccessToken = (value: string): boolean =>
   value.length >= 64 &&

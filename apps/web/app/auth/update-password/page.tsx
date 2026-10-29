@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { newPasswordPolicy } from "@vortex/platform/server";
 import { Field, FieldDescription } from "@vortex/ui/components/field";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
@@ -48,13 +49,11 @@ export default function UpdatePasswordPage() {
             name="password"
             type="password"
             autoComplete="new-password"
-            minLength={8}
-            pattern="(?=.*[A-Za-z])(?=.*\d).{8,1024}"
+            minLength={newPasswordPolicy.minimumLength}
+            pattern={newPasswordPolicy.pattern}
             required
           />
-          <FieldDescription>
-            Use at least 8 characters, including a letter and a number.
-          </FieldDescription>
+          <FieldDescription>{newPasswordPolicy.description}</FieldDescription>
         </Field>
         <SubmitButton pendingLabel="Updating password…">Update password</SubmitButton>
       </form>
