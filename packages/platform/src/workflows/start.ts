@@ -110,6 +110,33 @@ export type SegmentExecution<Value> = Readonly<{
   >;
   warnings: Readonly<Record<string, readonly BeforeSaveRuleWarning[]>>;
 }>;
+/** Records all effects of an admitted segment in one statement and builds its replay receipt. */
+const recordSegmentEffects = async <Value>(
+  transaction: SegmentContext["transaction"],
+  runId: string,
+  executed: SegmentExecution<Value>,
+): Promise<FlowSegmentReceipt> => {
+  const safeEffects: Record<string, FlowSegmentReplay[string]> = {};
+  const entries = Object.entries(executed.effects).map(([key, effect]) => {
+    const [taskPath, iteration] = z
+      .tuple([z.string().min(1).max(1000), z.string().min(1).max(200)])
+      .parse(JSON.parse(key));
+    if (effect.replay !== null && effect.replay.outcome !== effect.outcome)
+      throw new Error("FLOW_SEGMENT_EFFECT_OUTCOME_MISMATCH");
+    safeEffects[key] = effect.replay;
+    return { taskPath, iteration, outcome: effect.outcome, outputs: effect.replay?.outputs ?? {} };
+  });
+  if (entries.length > 0)
+    await transaction.query`select vortex_platform.record_flow_segment_effect(
+      ${runId}::uuid, entry."taskPath", entry.iteration, entry.outcome, entry.outputs
+    ) from pg_catalog.jsonb_to_recordset(${JSON.stringify(entries)}::text::jsonb)
+      as entry("taskPath" text, iteration text, outcome text, outputs jsonb)`;
+  const warnings = Object.fromEntries(
+    Object.entries(executed.warnings).map(([key, entries]) => [key, entries.map(storeFlowWarning)]),
+  );
+  return receiptSchema.parse({ effects: safeEffects, warnings });
+};
+
 export type StartFlowResult<Value> =
   | Readonly<{ kind: "completed"; value: Value; runId: string }>
   | Readonly<{ kind: "reload" }>
@@ -583,24 +610,7 @@ export const startFlow = async <Value>(
           declined = { value: executed.value, outcome: executed.outcome };
           throw rollback;
         }
-        const safeEffects: Record<string, FlowSegmentReplay[string]> = {};
-        for (const [key, effect] of Object.entries(executed.effects)) {
-          const [taskPath, iteration] = z
-            .tuple([z.string().min(1).max(1000), z.string().min(1).max(200)])
-            .parse(JSON.parse(key));
-          if (effect.replay !== null && effect.replay.outcome !== effect.outcome)
-            throw new Error("FLOW_SEGMENT_EFFECT_OUTCOME_MISMATCH");
-          safeEffects[key] = effect.replay;
-          const outputs = effect.replay?.outputs ?? {};
-          await child.query`select vortex_platform.record_flow_segment_effect(${runId}::uuid, ${taskPath}::text, ${iteration}::text, ${effect.outcome}::text, ${JSON.stringify(outputs)}::text::jsonb)`;
-        }
-        const warnings = Object.fromEntries(
-          Object.entries(executed.warnings).map(([key, entries]) => [
-            key,
-            entries.map(storeFlowWarning),
-          ]),
-        );
-        const receipt = receiptSchema.parse({ effects: safeEffects, warnings });
+        const receipt = await recordSegmentEffects(child, runId, executed);
         await child.query`select vortex_record.complete_flow_segment_receipt(${commandId}::uuid, ${JSON.stringify(receipt)}::text::jsonb)`;
         return executed.value;
       });
@@ -644,20 +654,7 @@ export const startFlow = async <Value>(
           const claim = claimSchema.parse(rows[0]?.result);
           if (claim.status === "completed") return true;
           if (claim.status !== "pending") return false;
-          const safeEffects: Record<string, FlowSegmentReplay[string]> = {};
-          for (const [key, effect] of Object.entries(executed.effects)) {
-            const [taskPath, iteration] = z
-              .tuple([z.string().min(1).max(1000), z.string().min(1).max(200)])
-              .parse(JSON.parse(key));
-            if (effect.replay !== null && effect.replay.outcome !== effect.outcome)
-              throw new Error("FLOW_SEGMENT_EFFECT_OUTCOME_MISMATCH");
-            safeEffects[key] = effect.replay;
-            await transaction.query`select vortex_platform.record_flow_segment_effect(${pending.runId}::uuid, ${taskPath}::text, ${iteration}::text, ${effect.outcome}::text, ${JSON.stringify(effect.replay?.outputs ?? {})}::text::jsonb)`;
-          }
-          const warnings = Object.fromEntries(
-            Object.entries(executed.warnings).map(([key, entries]) => [key, entries.map(storeFlowWarning)]),
-          );
-          const receipt = receiptSchema.parse({ effects: safeEffects, warnings });
+          const receipt = await recordSegmentEffects(transaction, pending.runId, executed);
           await transaction.query`select vortex_record.complete_flow_segment_receipt(${pending.commandId}::uuid, ${JSON.stringify(receipt)}::text::jsonb)`;
           return true;
         });
