@@ -73,7 +73,6 @@ import { openFlowCarriedValues, sealFlowCarriedValues } from "../workflows/flow-
 import { createInstalledContextLoader } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
 import { installedNamedActionDescriptors, installedNamedActions } from "./installed-named-actions";
-import { runtimeContextSelection } from "./runtime-preview";
 import { createProtectedOperationExecutor } from "./protected-operation-executor";
 import type { ApplicationStoreService } from "./installation-application-store";
 import { createViewerSafeRecordLinkService } from "./viewer-safe-record-link";
@@ -441,19 +440,14 @@ export async function invokeInstalledFlow(
       invocation,
       installationOf: installedFlowBindings,
       pageAccess: async (context, bound) => {
-        const page = context.releaseSet.application.content.pages.find(
-          (candidate) => candidate.key === body.pageKey,
-        );
-        if (page === undefined) return false;
-        const capability = createStoredPageCapabilityService({
-          ...requestDependencies,
-          context,
-          permissions: dependencies.releaseCatalogue.permissions,
-          selection: { pageId: String(page.pageId) },
-        });
-        return (
-          (await capability.projectInTransaction(bound.transaction, bound.scope)) !== undefined
-        );
+        const binding =
+          invocation.kind === "binding"
+            ? context.releaseSet.application.content.flowBindings.find((candidate) =>
+                sameId(candidate.bindingId, invocation.bindingId),
+              )
+            : undefined;
+        if (invocation.kind === "binding" && binding === undefined) return false;
+        return gateBindingToAddressedPage(context, binding?.controlId, bound);
       },
       pageGate: async (context, binding, bound, currentInstallation, state) => {
         if (!(await gateBindingToAddressedPage(context, binding.controlId, bound))) return false;
@@ -1032,8 +1026,8 @@ export async function invokeInstalledFlow(
    */
   const gateBindingToAddressedPage = async (
     context: InstalledRuntimeContext,
-    controlId: string,
-    bound?: BoundHumanOrganizationRequest,
+    controlId: string | undefined,
+    bound: BoundHumanOrganizationRequest,
   ): Promise<boolean> => {
     const page = context.releaseSet.application.content.pages.find(
       (candidate) => candidate.key === body.pageKey,
@@ -1054,7 +1048,6 @@ export async function invokeInstalledFlow(
       },
     });
     if (
-      bound !== undefined &&
       admittedProjection !== undefined &&
       (admittedProjection.accessVersion !== bound.scope.accessVersion ||
         admittedProjection.installationRevision !== context.applicationReleaseRevision)
@@ -1063,25 +1056,20 @@ export async function invokeInstalledFlow(
       return false;
     }
     const projected =
-      bound === undefined
-        ? await capability.project(identity.session, runtimeContextSelection(context))
-        : {
-            kind: "available" as const,
-            value:
-              admittedProjection?.page ??
-              (await capability.projectInTransaction(bound.transaction, bound.scope)),
-          };
-    if (projected.kind !== "available" || projected.value === undefined) {
-      logFlowRefusal(`BINDING_CONTROL_NOT_ON_PAGE page_projection_${projected.kind}`);
+      admittedProjection?.page ??
+      (await capability.projectInTransaction(bound.transaction, bound.scope));
+    if (projected === undefined) {
+      logFlowRefusal("BINDING_CONTROL_NOT_ON_PAGE page_projection_unavailable");
       return false;
     }
-    if (bound !== undefined && admittedProjection === undefined)
+    if (admittedProjection === undefined)
       admittedProjection = {
         accessVersion: bound.scope.accessVersion,
         installationRevision: context.applicationReleaseRevision,
-        page: projected.value,
+        page: projected,
       };
-    const gate = requireProjectedPlacement(projected.value, controlId);
+    if (controlId === undefined) return true;
+    const gate = requireProjectedPlacement(projected, controlId);
     if (gate.kind === "refused") {
       logFlowRefusal(`BINDING_CONTROL_NOT_ON_PAGE ${gate.reason}`);
       return false;
@@ -1135,13 +1123,6 @@ export async function invokeInstalledFlow(
     const binding = bindingInstallation.bindings.find(
       (candidate) => candidate.bindingId.toLowerCase() === invocation.bindingId.toLowerCase(),
     );
-    // The control must be on the addressed page as projected for this person now: a binding of
-    // another page, or of a control a visibility condition or permission removed for them, never
-    // runs from this page's address.
-    if (binding !== undefined) {
-      if (!(await gateBindingToAddressedPage(bindingContext, binding.controlId)))
-        return { kind: "refused" };
-    }
     const guided =
       binding === undefined ? undefined : guidedControls.get(binding.controlId.toLowerCase());
     if (
