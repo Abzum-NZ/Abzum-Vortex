@@ -12,7 +12,6 @@ import {
 import { describeFailure, sameId, isRecord } from "../catalogue/runtime-primitives";
 import {
   flowTaskChildLists,
-  flowSchema,
   flowReadFieldsProjectionSchema,
   flowReadFieldsTypeMapSchema,
   type FlowDefinition,
@@ -52,6 +51,7 @@ import { createFlowOrchestrator } from "./flow-orchestrator";
 import type { FlowNamedAction, FlowRecordType, FlowRelease } from "./flow-orchestrator-types";
 import { createFormContinuationService } from "./form-continuation";
 import { flowReadFieldsScalarTypeForField } from "./flow-compilation";
+import { flowPlansOf } from "../workflows/flow-plan";
 import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
 import { installedNamedActionDescriptors, installedNamedActions } from "./installed-named-actions";
@@ -756,11 +756,11 @@ export async function invokeInstalledFlow(
             ),
           ].filter((candidate) => sameId(String(candidate.flow.id), String(flow.id)));
           const capturedOwner = capturedOwners.length === 1 ? capturedOwners[0] : undefined;
+          // Every flow here was validated with its release; the comparison needs no parse.
           if (
             capturedOwner === undefined ||
-            canonicalJson(flowSchema.parse(capturedOwner.flow)) !== canonicalJson(flow) ||
-            canonicalJson(flowSchema.parse(installation.flows.get(String(flow.id)))) !==
-              canonicalJson(flow)
+            canonicalJson(capturedOwner.flow) !== canonicalJson(flow) ||
+            canonicalJson(installation.flows.get(String(flow.id))) !== canonicalJson(flow)
           )
             return false;
 
@@ -831,7 +831,7 @@ export async function invokeInstalledFlow(
               currentOwner === undefined ||
               currentOwner.ownerKind !== capturedOwner.ownerKind ||
               !sameId(currentOwner.ownerId, capturedOwner.ownerId) ||
-              canonicalJson(flowSchema.parse(currentOwner.flow)) !== canonicalJson(flow)
+              canonicalJson(currentOwner.flow) !== canonicalJson(flow)
             )
               return false;
 
@@ -935,16 +935,9 @@ export async function invokeInstalledFlow(
         );
       }
     }
-    const flows = new Map<string, unknown>();
-    for (const flow of [
-      ...application.content.flows,
-      ...releaseSet.modules.flatMap((module) => module.content.flows),
-    ]) {
-      // One flow per identity: a Module flow never shadows an Application flow, and an
-      // ambiguous release is refused rather than run.
-      if (flows.has(String(flow.id))) throw new Error("FLOW_IDENTITY_AMBIGUOUS");
-      flows.set(String(flow.id), flow);
-    }
+    // The release's plans, built once per installed release: one flow per identity (a Module flow
+    // never shadows an Application flow; an ambiguous release is refused rather than run).
+    const flows = flowPlansOf(releaseSet).flows;
     const selectedReadContext = installedSelectedRecordReadContext(application, releaseSet.modules);
     if (selectedReadContext === undefined)
       throw new Error("SELECTED_RECORD_READ_BINDING_UNAVAILABLE");

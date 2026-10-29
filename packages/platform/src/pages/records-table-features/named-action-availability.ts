@@ -13,7 +13,8 @@ import {
 import { createHumanInstalledPageBundleContextLoader } from "../../definition/installed-page-bundle-context";
 import { installedNamedActions } from "../../definition/installed-named-actions";
 import { recordsTableBulkActions } from "../../definition/application-composition/records-table-features/bulk-actions";
-import { collectActionFlowTasks, flowLibraryOf } from "../../rules/action-flow-run";
+import { collectActionFlowTasks } from "../../rules/action-flow-run";
+import { flowPlansOf } from "../../workflows/flow-plan";
 import type {
   NamedActionAvailability,
   NamedActionAvailabilityRequest,
@@ -120,13 +121,7 @@ export const readRecordsTableNamedActionAvailability = async (
       const recordTypeId = String(query.recordType.recordTypeId);
       const application = installed.releaseSet.application;
       const named = installedNamedActions(application, installed.releaseSet.modules);
-      const flows = new Map<string, unknown>();
-      for (const flow of [
-        ...application.content.flows,
-        ...installed.releaseSet.modules.flatMap((module) => module.content.flows),
-      ])
-        flows.set(String(flow.id), flow);
-      const library = flowLibraryOf(flows);
+      const library = flowPlansOf(installed.releaseSet).library;
       const actions: (NamedActionEligibilityAction & { key: string })[] = [];
       for (const declaration of declared) {
         const action = named.get(declaration.action);

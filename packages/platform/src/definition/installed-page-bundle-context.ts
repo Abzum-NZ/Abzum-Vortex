@@ -41,6 +41,7 @@ import {
   type InstalledRuntimeContext,
 } from "./installed-runtime-context";
 import { readInstalledRecordContributions } from "./installed-record-contributions";
+import { flowPlansOf } from "../workflows/flow-plan";
 
 type InstalledPageBundleIdentityEvidence = Readonly<{
   organizationId: ActiveInstallationBundleState["identity"]["organizationId"];
@@ -161,6 +162,8 @@ const bundleFromSections = (
     if (compositions.has(key)) throw new Error("INSTALLED_PAGE_BUNDLE_COMPOSITION_UNAVAILABLE");
     compositions.set(key, deepFreeze({ page, roots: composition.roots }));
   }
+  // The release's flow plans are built once, with the bundle, and shared by every request.
+  flowPlansOf(releaseSet);
   return Object.freeze({ releaseSet, compositions });
 };
 

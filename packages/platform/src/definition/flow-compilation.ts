@@ -15,6 +15,7 @@ import {
 } from "../workflows/flow-source-contracts";
 import { flowTaskRegistry, type FlowTaskTypeKey } from "../workflows/flow-task-registry";
 import type { FlowValue } from "../workflows/flow-values";
+import { compileFlowPlans, FlowPlanError } from "../workflows/flow-plan";
 import type { DefinitionProvenanceEntry } from "./definition-provenance";
 import { canonicalJson, compareCanonicalStrings } from "./canonical-json-definition";
 import {
@@ -763,6 +764,21 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
       called.ruleCode,
       called.family,
       caller === undefined ? undefined : resolver.locate?.(input.flows[caller.sourceIndex]!.key),
+    );
+  }
+  // Publication compiles the plan the runtime builds, and refuses a flow it cannot plan, naming
+  // the step. The plan itself is never stored.
+  try {
+    compileFlowPlans(compiled.map(({ flow }) => flow));
+  } catch (error) {
+    if (!(error instanceof FlowPlanError)) throw error;
+    const planned = compiled.find(({ flow }) => flow.id === error.flowId);
+    throw new DefinitionCompilationError(
+      "vortex.definition.unsupported_workflow_node",
+      "unsupported_choice",
+      planned === undefined ? undefined : resolver.locate?.(input.flows[planned.sourceIndex]!.key),
+      undefined,
+      error.reason,
     );
   }
   const provenance = compiled.flatMap(({ flow, sourceIndex, resolved }, canonicalIndex) =>

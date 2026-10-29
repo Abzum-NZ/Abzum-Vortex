@@ -15,8 +15,8 @@ import {
  */
 
 /** Where a message shows. `dialog` blocks until read; the others are part of the page. */
-export const flowMessageTargets = ["dialog", "toast", "banner", "inline", "slot"] as const;
-export const flowMessageSeverities = ["info", "success", "warning", "error"] as const;
+const flowMessageTargets = ["dialog", "toast", "banner", "inline", "slot"] as const;
+const flowMessageSeverities = ["info", "success", "warning", "error"] as const;
 /** The message targets the page shows today. */
 const runnableMessageTargets: ReadonlySet<string> = new Set(["dialog"]);
 

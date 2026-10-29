@@ -29,11 +29,8 @@ import {
   createNamedActionRecordPort,
   namedActionBatchMaximum,
 } from "../../records/action-record-port";
-import {
-  collectActionFlowTasks,
-  flowLibraryOf,
-  type ActionFlowRunner,
-} from "../../rules/action-flow-run";
+import { collectActionFlowTasks, type ActionFlowRunner } from "../../rules/action-flow-run";
+import { flowPlansOf } from "../../workflows/flow-plan";
 import {
   fieldChoiceLabelsOf,
   fieldDateTypesOf,
@@ -308,13 +305,7 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
         return report({ kind: "refused", reason: "not_available" });
       }
       // The action's own compiled transaction flow, from the exact installed release.
-      const flows = new Map<string, unknown>();
-      for (const flow of [
-        ...application.content.flows,
-        ...placement.installed.releaseSet.modules.flatMap((module) => module.content.flows),
-      ])
-        flows.set(String(flow.id), flow);
-      const library = flowLibraryOf(flows);
+      const library = flowPlansOf(placement.installed.releaseSet).library;
       const flowId = named.action.actionId;
       const flow = library(flowId);
       if (

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { sameId } from "../catalogue/runtime-primitives";
 import { flowSchema } from "../workflows/flow-contracts";
 import { componentFlowBindingSchema } from "./application-flow-bindings";
+import { defaultFlowBindingSettings } from "./component-semantic-events";
 import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import { DefinitionError } from "./definition-error";
@@ -39,7 +40,8 @@ const installedActionContributionSchema = z
     contributorReleaseRevision: z.number().int().min(1),
     contributorApplicationRootIds: z.array(z.uuid()).min(1),
     action: actionDefinitionSchema,
-    flow: flowSchema,
+    // The contributor's compiled transaction flow, validated once per immutable identity below.
+    flow: z.unknown(),
   })
   .strict();
 
@@ -98,6 +100,38 @@ const recordTypeKey = (moduleRootId: string, recordTypeId: string): string =>
 
 type ContributionRow = DatabaseRow & { readonly contributions: unknown };
 
+/** Keeps at most `limit` entries; the oldest leaves first. Nothing is replaced in place. */
+const remember = <Value>(cache: Map<string, Value>, key: string, value: Value, limit: number) => {
+  cache.set(key, value);
+  if (cache.size > limit) cache.delete(cache.keys().next().value!);
+  return value;
+};
+
+/**
+ * A contributed action's flow is the contributor's compiled flow in one immutable Module release,
+ * so (contributor root, release revision, contribution) names one flow forever: it is validated
+ * the first time it is read and reused after that.
+ */
+const contributedFlows = new Map<string, z.infer<typeof flowSchema>>();
+const contributedFlowOf = (
+  action: Readonly<{
+    contributionId: string;
+    contributorModuleRootId: string;
+    contributorReleaseRevision: number;
+    flow: unknown;
+  }>,
+): z.infer<typeof flowSchema> | undefined => {
+  const key = JSON.stringify([
+    action.contributorModuleRootId.toLowerCase(),
+    action.contributorReleaseRevision,
+    action.contributionId.toLowerCase(),
+  ]);
+  const known = contributedFlows.get(key);
+  if (known !== undefined) return known;
+  const parsed = flowSchema.safeParse(action.flow);
+  return parsed.success ? remember(contributedFlows, key, parsed.data, 2_000) : undefined;
+};
+
 /** Reads the contributions under the verified human request transaction, failing loudly on any malformed row. */
 export const readInstalledRecordContributions = async (
   transaction: RequestDatabaseTransaction,
@@ -125,7 +159,16 @@ export const readInstalledRecordContributions = async (
     const actions = entry.contributions.flatMap((contribution) =>
       contribution.kind === "action" ? [contribution] : [],
     );
-    for (const action of actions) actionFlows.set(action.contributionId.toLowerCase(), action.flow);
+    for (const action of actions) {
+      const flow = contributedFlowOf(action);
+      if (flow === undefined) {
+        console.error("[contributions] a contributed action flow is malformed");
+        throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED", {
+          cause: { part: "record_contributions", reason: "malformed" },
+        });
+      }
+      actionFlows.set(action.contributionId.toLowerCase(), flow);
+    }
     if (fields.length > 0)
       fieldsByRecordType.set(
         recordTypeKey(entry.moduleRootId, entry.recordTypeId),
@@ -226,7 +269,6 @@ const contributedActionFlows = (
         flows.set(
           ids.flowId,
           flowSchema.parse({
-            contractVersion: "1.0.0",
             id: ids.flowId,
             key: `contributed_action_${ids.flowId.replaceAll("-", "").slice(0, 16)}`,
             description: `Runs the contributed action ${action.label} on the record the page shows.`,
@@ -261,11 +303,92 @@ const contributedActionFlows = (
           eventId: ids.eventId,
           event: "action",
           flow: { flowId: ids.flowId, inputs: {} },
+          settings: defaultFlowBindingSettings("action"),
         }),
       );
     }
   }
   return { flows: [...flows.values()], bindings };
+};
+
+type ModuleContent = SystemApplicationBoundReleaseSetResult["modules"][number]["content"];
+type ContributedContents = Readonly<{
+  /** The Module contents these were built over, compared by identity. */
+  modules: readonly ModuleContent[];
+  application: Application["content"] | undefined;
+  contributed: ReadonlyMap<string, ModuleContent>;
+}>;
+
+/**
+ * The contents a set of contributions produces for one installed release, by the release's frozen
+ * application content and the identities of the contributions: the same inputs always serve the
+ * same content objects, so the flow plans built over them (`flowPlansOf`) are built once. A new
+ * release or a changed contribution is a new key; nothing is replaced in place.
+ */
+const contributedContents = new WeakMap<Application["content"], Map<string, ContributedContents>>();
+
+const contributionsKey = (contributions: InstalledRecordContributions): string =>
+  JSON.stringify(
+    contributions.recordTypes.map((entry) => [
+      entry.moduleRootId.toLowerCase(),
+      entry.recordTypeId.toLowerCase(),
+      entry.fields.map((field) => [
+        field.fieldId.toLowerCase(),
+        field.contributorModuleRootId.toLowerCase(),
+        field.contributorReleaseRevision,
+      ]),
+      entry.actions.map((action) => [
+        action.actionId.toLowerCase(),
+        action.contributorModuleRootId.toLowerCase(),
+        action.contributorReleaseRevision,
+      ]),
+    ]),
+  );
+
+const buildContributedContents = (
+  releaseSet: SystemApplicationBoundReleaseSetResult,
+  contributions: InstalledRecordContributions,
+): ContributedContents => {
+  const contributed = new Map<string, ModuleContent>();
+  for (const module of releaseSet.modules) {
+    const entries = contributions.recordTypes.filter((entry) =>
+      sameId(entry.moduleRootId, module.rootId),
+    );
+    if (entries.length === 0) continue;
+    const recordTypes = module.content.recordTypes.map((recordType) => {
+      const added = contributions.fieldsByRecordType.get(
+        recordTypeKey(module.rootId, recordType.recordTypeId),
+      );
+      return added === undefined
+        ? recordType
+        : Object.freeze({ ...recordType, fields: [...recordType.fields, ...added] });
+    });
+    contributed.set(module.rootId.toLowerCase(), Object.freeze({ ...module.content, recordTypes }));
+  }
+  const actions = contributedActionFlows(releaseSet.application, contributions.recordTypes);
+  // A contributor this application also binds already serves its action's transaction flow; the
+  // same flow identity is never listed twice.
+  const servedFlowIds = new Set(
+    [
+      ...releaseSet.application.content.flows,
+      ...releaseSet.modules.flatMap((module) => module.content.flows),
+    ].map((flow) => String(flow.id).toLowerCase()),
+  );
+  const actionFlows = contributions.actionFlows.filter(
+    (flow) => !servedFlowIds.has(String(flow.id).toLowerCase()),
+  );
+  return {
+    modules: releaseSet.modules.map((module) => module.content),
+    contributed,
+    application:
+      actions.bindings.length === 0
+        ? undefined
+        : Object.freeze({
+            ...releaseSet.application.content,
+            flows: [...releaseSet.application.content.flows, ...actionFlows, ...actions.flows],
+            flowBindings: [...releaseSet.application.content.flowBindings, ...actions.bindings],
+          }),
+  };
 };
 
 /**
@@ -281,46 +404,25 @@ export const withInstalledRecordContributions = (
   contributions: InstalledRecordContributions,
 ): SystemApplicationBoundReleaseSetResult => {
   if (contributions.recordTypes.length === 0) return releaseSet;
+  const byKey =
+    contributedContents.get(releaseSet.application.content) ??
+    new Map<string, ContributedContents>();
+  contributedContents.set(releaseSet.application.content, byKey);
+  const key = contributionsKey(contributions);
+  const known = byKey.get(key);
+  const contents =
+    known !== undefined &&
+    known.modules.length === releaseSet.modules.length &&
+    known.modules.every((content, index) => content === releaseSet.modules[index]!.content)
+      ? known
+      : remember(byKey, key, buildContributedContents(releaseSet, contributions), 20);
   const modules = releaseSet.modules.map((module) => {
-    const entries = contributions.recordTypes.filter((entry) =>
-      sameId(entry.moduleRootId, module.rootId),
-    );
-    if (entries.length === 0) return module;
-    const recordTypes = module.content.recordTypes.map((recordType) => {
-      const added = contributions.fieldsByRecordType.get(
-        recordTypeKey(module.rootId, recordType.recordTypeId),
-      );
-      return added === undefined
-        ? recordType
-        : Object.freeze({ ...recordType, fields: [...recordType.fields, ...added] });
-    });
-    return Object.freeze({
-      ...module,
-      content: Object.freeze({ ...module.content, recordTypes }),
-    });
+    const content = contents.contributed.get(module.rootId.toLowerCase());
+    return content === undefined ? module : Object.freeze({ ...module, content });
   });
-  const actions = contributedActionFlows(releaseSet.application, contributions.recordTypes);
-  // A contributor this application also binds already serves its action's transaction flow; the
-  // same flow identity is never listed twice.
-  const servedFlowIds = new Set(
-    [
-      ...releaseSet.application.content.flows,
-      ...releaseSet.modules.flatMap((module) => module.content.flows),
-    ].map((flow) => String(flow.id).toLowerCase()),
-  );
-  const actionFlows = contributions.actionFlows.filter(
-    (flow) => !servedFlowIds.has(String(flow.id).toLowerCase()),
-  );
   const application =
-    actions.bindings.length === 0
+    contents.application === undefined
       ? releaseSet.application
-      : Object.freeze({
-          ...releaseSet.application,
-          content: Object.freeze({
-            ...releaseSet.application.content,
-            flows: [...releaseSet.application.content.flows, ...actionFlows, ...actions.flows],
-            flowBindings: [...releaseSet.application.content.flowBindings, ...actions.bindings],
-          }),
-        });
+      : Object.freeze({ ...releaseSet.application, content: contents.application });
   return { application, modules };
 };

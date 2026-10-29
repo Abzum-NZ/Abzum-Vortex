@@ -16,3 +16,4 @@ export * from "./events/index";
 export * from "./search/index";
 export * from "./theme/index";
 export * from "./catalogue/platform-service-operation-catalogue";
+export * from "./workflows/flow-plan";

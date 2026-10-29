@@ -45,7 +45,8 @@ import { flowIdSchema } from "../catalogue/identifiers";
  */
 export type FlowRelease = Readonly<{
   releaseKey: string;
-  flows: ReadonlyMap<string, unknown>;
+  /** The release's planned flows (`flowPlansOf`), validated once per release. */
+  flows: ReadonlyMap<string, FlowDefinition>;
   /** The release's record types by lower-case record type id, for the values of a Save record task. */
   recordTypes?: ReadonlyMap<string, FlowRecordType>;
   /** The release's named actions by action key, for a Call protected operation task naming one. */
