@@ -259,12 +259,6 @@ type Operation = Readonly<{
   execute: OperationRunner;
 }>;
 
-/**
- * A stable administration duplicate key for one claimed effect: the same run, task path and
- * iteration always derive the same key, so a repeated execution of one effect is idempotent at the
- * database. With no claimed effect key a fresh key is generated; either way the caller never
- * supplies it from input.
- */
 const connectionChangeOutputs = (
   result: Awaited<ReturnType<ProtectedOperationServices["connectionAdministration"]>>,
 ): OperationResult => {
@@ -285,6 +279,12 @@ const connectionChangeOutputs = (
   };
 };
 
+/**
+ * A stable administration duplicate key for one claimed effect: the same run, task path and
+ * iteration always derive the same key, so a repeated execution of one effect is idempotent at the
+ * database. With no claimed effect key a fresh key is generated; either way the caller never
+ * supplies it from input.
+ */
 const duplicateKeyFor = (
   effectKey: ProtectedOperationEffectKey | undefined,
   generate: () => string,
