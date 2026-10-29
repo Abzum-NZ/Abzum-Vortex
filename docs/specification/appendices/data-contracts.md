@@ -965,7 +965,7 @@ A protected removal command has command identifier, tenant, one or more organisa
 
 An entitlement-check request has tenant, optional organisation attribution, namespaced capability key, positive requested quantity, unit and correlation identifier. A decision is `allowed` with an accepted quantity no greater than the requested quantity and an optional remaining quantity, or `refused` with a stable safe reason. Both outcomes identify the policy revision used.
 
-A metering event has event identifier, tenant, optional organisation, capability key, positive quantity, unit, occurrence time, optional source event, duplicate-protection key, correlation identifier and acceptance time. It contains no price, payment, subscription, invoice, plan, chargeable flag or active-person charging rule. See [Entitlements and metering](../15-entitlements-and-metering.md).
+A metering event has a caller-minted event identifier, tenant, optional organisation, capability key, positive quantity, unit, occurrence time, optional source event, correlation identifier and acceptance time. It contains no price, payment, subscription, invoice, plan, chargeable flag or active-person charging rule. See [Entitlements and metering](../15-entitlements-and-metering.md).
 
 ## Error response
 

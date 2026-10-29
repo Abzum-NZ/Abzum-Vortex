@@ -49,7 +49,7 @@ sequenceDiagram
 
 ## Metering events
 
-Each accepted event has a stable identifier, tenant, optional organisation, capability key, positive quantity, unit, occurrence time, optional source event, duplicate-protection key, correlation identifier and acceptance time. Replaying the same duplicate-protection key does not count consumption twice.
+Each accepted event has a caller-minted identifier, tenant, optional organisation, capability key, positive quantity, unit, occurrence time, optional source event, correlation identifier and acceptance time. Replaying the same event identifier returns the stored event without counting consumption twice.
 
 Metering is generic evidence. It may support capacity planning, fair-use controls or an ordinary commercial application, but the core ledger never marks consumption as chargeable and never creates an invoice.
 

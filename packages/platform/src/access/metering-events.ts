@@ -11,8 +11,8 @@ import {
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 
 /**
- * Exactly one immutable MeteringEvent per accepted command. A replayed duplicate
- * key returns the original stored event with `replayed`; it is never re-counted.
+ * Exactly one immutable MeteringEvent per event identity. A repeated identity
+ * returns the original stored event with `replayed`; it is never re-counted.
  */
 export const meteringEventRecordResultSchema = z
   .object({
@@ -75,7 +75,7 @@ const failureFor = (error: unknown): MeteringEventErrorCode => {
 };
 
 /**
- * Appends one immutable metering event for a final committed operation. The
+ * Appends one immutable metering event for an operation or attempt. The
  * command's tenant, organisation and correlation are cross-checked against the
  * established request context, so a caller cannot attribute usage elsewhere.
  */
@@ -101,7 +101,7 @@ export const recordMeteringEvent = async (
         ${JSON.stringify(value.dimensions)}::text::jsonb,
         ${value.occurredAt}::timestamptz,
         ${value.sourceEventId ?? null}::uuid,
-        ${value.duplicateProtectionKey}::text,
+        ${value.meteringEventId}::uuid,
         ${value.correlationId}::uuid,
         ${value.correctsMeteringEventId ?? null}::uuid,
         ${value.correctionDirection ?? null}::text

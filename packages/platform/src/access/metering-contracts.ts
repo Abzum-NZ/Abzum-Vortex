@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { correlationIdSchema, duplicateProtectionKeySchema } from "../catalogue/common";
+import { correlationIdSchema } from "../catalogue/common";
 import {
   builderKeySchema,
   eventIdSchema,
@@ -103,7 +103,9 @@ const meteringEventDimensionsSchema = z
   });
 
 const meteringEventFields = {
-  /** Final committed operation identity; one original event per capability and unit. */
+  /** Caller-minted identity; replay returns the stored event. */
+  meteringEventId: meteringEventIdSchema,
+  /** Metered operation or attempt identity; one original event per capability and unit. */
   operationId: platformIdSchema,
   tenantId: tenantIdSchema,
   organizationId: organizationIdSchema.optional(),
@@ -115,8 +117,6 @@ const meteringEventFields = {
   source: meteringEventSourceSchema,
   sourceEventId: eventIdSchema.optional(),
   dimensions: meteringEventDimensionsSchema,
-  /** Unique per tenant; a repeated key replays the one stored event. */
-  duplicateProtectionKey: duplicateProtectionKeySchema,
   correlationId: correlationIdSchema,
   correctsMeteringEventId: meteringEventIdSchema.optional(),
   correctionDirection: meteringCorrectionDirectionSchema.optional(),
@@ -144,7 +144,6 @@ const meteringCorrectionMessage = "A correction names both the corrected event a
 
 export const meteringEventSchema = z
   .object({
-    meteringEventId: meteringEventIdSchema,
     ...meteringEventFields,
     acceptedAt: timestampSchema,
   })
@@ -158,7 +157,7 @@ export const meteringEventSchema = z
     message: meteringCorrectionMessage,
   });
 
-/** The final committed operation supplies immutable metering input exactly once. */
+/** A metered operation or attempt supplies one immutable event identity. */
 export const recordMeteringEventCommandSchema = z
   .object(meteringEventFields)
   .strict()
