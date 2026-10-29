@@ -36,8 +36,8 @@ export {
   type FlowMessageIntent,
 } from "./intents";
 export type { ServerDrivenResult } from "./server-driven-run";
+export { createFlowInvokeClient } from "./lazy-flow-client";
 export {
-  createFlowInvokeClient,
   parseServerFlowResponse,
   type FlowApplicationAddress,
   type FlowInstallationContext,
