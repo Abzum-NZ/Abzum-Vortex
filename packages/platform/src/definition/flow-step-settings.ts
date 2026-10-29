@@ -125,8 +125,8 @@ export const flowStepSettingIssues = (
 /**
  * The first binding setting that does not run yet, by name. Field changes honour their configured
  * debounce and the events dispatched through the shared flow runtime honour their concurrency
- * setting. Other debounce settings, conditions, page-wide exclusive scope and a non-default
- * timeout still need their runtime implementations.
+ * setting. Other debounce settings, page-wide exclusive scope and a non-default timeout still
+ * need their runtime implementations. The plan check handles conditions that need the gate.
  */
 const scheduledEvents = new Set<ComponentSemanticEventKind>([
   "action",
@@ -148,7 +148,6 @@ export const flowBindingSettingNotYetRunnable = (
   settings: FlowBindingSettings,
 ): string | undefined => {
   const defaults = componentEventBindingDefaults[event];
-  if (settings.condition !== null) return "a start condition cannot run yet";
   if (event !== "field_changed" && settings.debounceMs !== defaults.debounceMs)
     return `a debounce other than ${defaults.debounceMs} ms cannot run yet`;
   if (
