@@ -69,8 +69,16 @@ export type FlowSegmentStub = Readonly<{
 /** The plan the page receives: page steps and segment stubs only. */
 export type BrowserFlowPlan = Readonly<{
   flowId: string;
-  inputs: FlowPlanValueTypes;
-  outputs: FlowPlanValueTypes;
+  inputs: Readonly<
+    Record<
+      string,
+      Pick<FlowDefinition["inputs"][string], "type" | "required" | "default" | "recordTypeIds">
+    >
+  >;
+  variables: Readonly<
+    Record<string, Pick<FlowDefinition["variables"][string], "type" | "default">>
+  >;
+  outputs: Readonly<Record<string, Pick<FlowDefinition["outputs"][string], "type" | "value">>>;
   segments: readonly (FlowPageSegment | FlowSegmentStub)[];
 }>;
 
@@ -182,7 +190,8 @@ const referencesIn = (value: unknown, found: FlowReference[] = []): FlowReferenc
       typeof (reference as { source?: unknown }).source === "string"
     )
       found.push(reference as FlowReference);
-    for (const [key, item] of Object.entries(record)) if (key !== "reference") referencesIn(item, found);
+    for (const [key, item] of Object.entries(record))
+      if (key !== "reference") referencesIn(item, found);
   }
   return found;
 };
@@ -376,8 +385,6 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
       }),
     };
   });
-  const declared = (record: Readonly<Record<string, { type: string }>>) =>
-    Object.fromEntries(Object.entries(record).map(([name, value]) => [name, value.type]));
   return {
     flowId: flow.id,
     definition: flow,
@@ -386,8 +393,28 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
     pageSteps: segments.some((segment) => segment.kind === "page"),
     browser: {
       flowId: flow.id,
-      inputs: declared(flow.inputs),
-      outputs: declared(flow.outputs),
+      inputs: Object.fromEntries(
+        Object.entries(flow.inputs).map(
+          ([name, { type, required, default: defaultValue, recordTypeIds }]) => [
+            name,
+            {
+              type,
+              required,
+              ...(defaultValue === undefined ? {} : { default: defaultValue }),
+              ...(recordTypeIds === undefined ? {} : { recordTypeIds }),
+            },
+          ],
+        ),
+      ),
+      variables: Object.fromEntries(
+        Object.entries(flow.variables).map(([name, { type, default: defaultValue }]) => [
+          name,
+          { type, ...(defaultValue === undefined ? {} : { default: defaultValue }) },
+        ]),
+      ),
+      outputs: Object.fromEntries(
+        Object.entries(flow.outputs).map(([name, { type, value }]) => [name, { type, value }]),
+      ),
       segments: segments.map((segment) =>
         segment.kind === "page"
           ? segment
