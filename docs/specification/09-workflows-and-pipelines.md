@@ -1,6 +1,6 @@
 # 9. Workflows and process pipelines
 
-This chapter specifies the product's workflow engine and process pipelines.
+This chapter specifies the intended workflow engine and process pipelines. Durable execution, start-intent dispatch and the Kestra callback described below are not currently implemented; a future backend will provide durable execution.
 
 [Previous: Forms, actions, rules and events](08-forms-actions-rules-and-events.md) · [Specification index](README.md) · Next: [Queries, reports, search and live updates](10-queries-reports-search.md)
 

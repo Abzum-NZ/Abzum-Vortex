@@ -50,7 +50,7 @@ services:
           memory: 1g
 
   kestra:
-    # The reviewed upstream image plus the Vortex ProtectedCallback plugin.
+    # The pinned upstream Kestra image.
     image: vortex/kestra-application:v1.0.57
     build:
       context: ../../..
@@ -64,15 +64,6 @@ services:
       - /tmp/kestra-application-wd:/tmp/kestra-wd
     environment:
       SERVICE_FQDN_KESTRA_8080: /
-      # A non-secret fixed Vortex route used only by the installed callback
-      # plugin. It is not exposed to flow templates or builder-controlled YAML.
-      VORTEX_PROTECTED_CALLBACK_URL: ${VORTEX_PROTECTED_CALLBACK_URL:?VORTEX_PROTECTED_CALLBACK_URL is required}
-      # The only flow secret on this instance. The callback signing key signs the
-      # protected-operation envelope Vortex verifies, and authorises nothing
-      # else. Kestra exposes a flow secret only when the instance variable begins
-      # with SECRET_ and its value is base64-encoded; base64 is not encryption,
-      # so the deployment host remains the protected boundary.
-      SECRET_VORTEX_WORKFLOW_CALLBACK_KEY: ${VORTEX_WORKFLOW_CALLBACK_KEY_BASE64}
       KESTRA_CONFIGURATION: |
         datasources:
           postgres:
