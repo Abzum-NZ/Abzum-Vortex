@@ -1,16 +1,3 @@
--- Refuse to discard pending asynchronous requests while relocating pg_net's
--- extension registration. The lock also prevents a concurrent enqueue.
-lock table net.http_request_queue in access exclusive mode;
-do $migration$
-begin
-  if exists (select 1 from net.http_request_queue) then
-    raise exception 'Cannot relocate pg_net while HTTP requests are pending';
-  end if;
-end
-$migration$;
-drop extension pg_net;
-create extension pg_net with schema extensions;
-
 -- Governance changes require recent multi-factor authentication.
 set role vortex_owner;
 
