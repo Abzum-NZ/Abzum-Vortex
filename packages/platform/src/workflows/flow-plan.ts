@@ -260,10 +260,15 @@ const serverOnlyReference = (reference: FlowReference, serverInputs: ReadonlySet
 const outputTypes = (steps: readonly FlowTask[]): Record<string, string> =>
   Object.fromEntries(
     steps.flatMap((step) =>
-      (registered(step)?.outputs ?? []).map((output) => [
-        `outputs.${step.id}.${output.key}`,
-        output.type,
-      ]),
+      (registered(step)?.outputs ?? []).map((output) => {
+        if (step.type === "data.calculate" && output.key === "value" && "properties" in step) {
+          const result = step.properties.result_type;
+          if (result?.kind !== "literal" || typeof result.literal.value !== "string")
+            throw new Error("FLOW_CALCULATE_RESULT_TYPE_INVALID");
+          return [`outputs.${step.id}.${output.key}`, result.literal.value];
+        }
+        return [`outputs.${step.id}.${output.key}`, output.type];
+      }),
     ),
   );
 
