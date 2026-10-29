@@ -140,7 +140,7 @@ export type InvocationDependencies = Readonly<{
     pageId: string,
     formId: string,
     subject: Readonly<{ moduleRootId: string; recordTypeId: string; recordId: string }>,
-  ) => Promise<ProjectedForm | undefined>;
+  ) => Promise<(ProjectedForm & Readonly<{ visibleFieldKeys: ReadonlySet<string> }>) | undefined>;
   guidedFormControls: (
     page: unknown,
     shells?: unknown,

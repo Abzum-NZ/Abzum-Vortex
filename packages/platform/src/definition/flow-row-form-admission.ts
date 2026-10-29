@@ -61,6 +61,13 @@ export const admitRowForm = async (
     return false;
   }
   const callerInputs = request.invocation.callerInputs ?? {};
+  if (
+    !isRecord(callerInputs.values) ||
+    Object.keys(callerInputs.values).some((name) => !form.visibleFieldKeys.has(name))
+  ) {
+    console.error("[flows] row form contains a field not visible on the projected form");
+    return false;
+  }
   const values = await dependencies.resolveFormValues({
     service: createReferenceChoiceService({
       ...requests,

@@ -10,6 +10,8 @@ import {
   LINK_INPUT_BLOCK_RELEASE,
   TEXT_INPUT_BLOCK_RELEASE,
   DATE_INPUT_BLOCK_RELEASE,
+  FIELD_INPUT_BLOCK_RELEASE,
+  FIELD_INPUT_CONTROL_RELEASES,
   placementSettings,
   fieldControl,
   planChoiceOptionGates,
@@ -27,6 +29,7 @@ import { loadInstalledContext, requestDependencies } from "./installed-context";
 import { getQueryContinuationKey } from "../query-continuation-key";
 import { platformPermissionSource } from "../platform-permission-source";
 import { withContributedFormPlacements, withContributedPlacements } from "./contributed-placements";
+import { collectPlacements } from "./placement-helpers";
 import {
   projectedReferenceChoiceForm,
   hasReferenceChoiceSource,
@@ -164,7 +167,9 @@ export const projectRowReferenceChoiceForm = async (
   pageId: string,
   formId: string,
   subject: Readonly<{ moduleRootId: string; recordTypeId: string; recordId: string }>,
-): Promise<ProjectedReferenceChoiceForm | undefined> => {
+): Promise<
+  (ProjectedReferenceChoiceForm & Readonly<{ visibleFieldKeys: ReadonlySet<string> }>) | undefined
+> => {
   const service = createStoredPageCapabilityService({
     ...requestDependencies(),
     context,
@@ -189,11 +194,34 @@ export const projectRowReferenceChoiceForm = async (
     return undefined;
   });
   if (!replaced) return undefined;
-  return projectedReferenceChoiceForm(
-    withContributedFormPlacements(page, context, subject, formId),
-    context.releaseSet.modules,
-    formId,
-  );
+  const enriched = withContributedFormPlacements(page, context, subject, formId);
+  const projected = projectedReferenceChoiceForm(enriched, context.releaseSet.modules, formId);
+  if (projected === undefined) return undefined;
+  const visibleFieldKeys = new Set<string>();
+  for (const placement of collectPlacements(enriched)) {
+    if (placement.formId === undefined || !sameId(placement.formId, formId)) continue;
+    const block = placement.vortex.block;
+    const blockId =
+      isRecord(block) && typeof block.blockId === "string" ? block.blockId : undefined;
+    if (
+      blockId === undefined ||
+      (!sameId(blockId, FIELD_INPUT_BLOCK_RELEASE.blockId) &&
+        !Object.values(FIELD_INPUT_CONTROL_RELEASES).some((release) =>
+          sameId(blockId, release.blockId),
+        ))
+    )
+      continue;
+    const name = placement.settings.name;
+    if (
+      !isRecord(name) ||
+      name.kind !== "text" ||
+      typeof name.value !== "string" ||
+      visibleFieldKeys.has(name.value)
+    )
+      return undefined;
+    visibleFieldKeys.add(name.value);
+  }
+  return { ...projected, visibleFieldKeys };
 };
 
 /** Reprojects the current addressed page under the actor and the exact installed release. */
