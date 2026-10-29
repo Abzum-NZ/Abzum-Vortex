@@ -117,15 +117,15 @@ export type FlowRuntime = Readonly<{
    */
   dispatch: (
     binding: ComponentFlowBinding,
-    callerInputs?: Readonly<Record<string, unknown>>,
-    clickId?: string,
+    callerInputs: Readonly<Record<string, unknown>> | undefined,
+    clickId: string,
     subject?: FlowSubjectContext,
   ) => Promise<ServerDrivenResult>;
   /** Starts one exact server binding and drives its normal intents and continuations. */
   dispatchReference: (
     binding: FlowBindingReference,
-    callerInputs?: Readonly<Record<string, unknown>>,
-    clickId?: string,
+    callerInputs: Readonly<Record<string, unknown>> | undefined,
+    clickId: string,
     signal?: AbortSignal,
     subject?: FlowSubjectContext,
   ) => Promise<ServerDrivenResult>;
@@ -134,8 +134,8 @@ export type FlowRuntime = Readonly<{
 export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
   const dispatchReference = async (
     binding: FlowBindingReference,
-    callerInputs: Readonly<Record<string, unknown>> = {},
-    clickId?: string,
+    callerInputs: Readonly<Record<string, unknown>> | undefined,
+    clickId: string,
     signal?: AbortSignal,
     subject?: FlowSubjectContext,
   ): Promise<ServerDrivenResult> => {
@@ -144,7 +144,6 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
       console.error(`[flow] binding ${binding.bindingId} has no projected settings`);
       return { kind: "refused" };
     }
-    const gestureId = clickId ?? crypto.randomUUID();
     return options.state.run(
       binding.bindingId,
       settings.controlId,
@@ -153,8 +152,8 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
       async (runSignal) => {
         const first = await options.client.startBinding(
           { bindingId: binding.bindingId, flowId: binding.flowId },
-          callerInputs,
-          gestureId,
+          callerInputs ?? {},
+          clickId,
           runSignal,
           subject,
         );

@@ -110,7 +110,7 @@ export function usePlacementActions({
           Object.fromEntries(
             Object.entries(callerInputs).filter(([name]) => binding.callerInputs.includes(name)),
           ),
-          clickId,
+          clickId ?? crypto.randomUUID(),
           gestureSubject,
         ),
         formOwners[placementId],

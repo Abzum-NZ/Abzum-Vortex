@@ -371,7 +371,7 @@ export function ApplicationPageViewContent({
         const result = await webMcpRuntime.dispatchReference(
           tool.binding,
           input,
-          undefined,
+          crypto.randomUUID(),
           signal,
         );
         await applyDispatch(Promise.resolve(result), undefined, undefined, tool.binding.bindingId);
