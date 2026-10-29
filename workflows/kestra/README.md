@@ -39,8 +39,8 @@ Every secret is supplied by the environment. Nothing in this directory holds one
 | `KESTRA_BASIC_AUTH_USERNAME` | The account the API and interface demand |
 | `KESTRA_BASIC_AUTH_PASSWORD` | Its password |
 | `KESTRA_PUBLIC_URL` | The public Kestra address used in generated links |
-| `VORTEX_EVENT_DISPATCH_WAKEUP_URL_BASE64` | Base64 encoding of the protected Vercel dispatch route address for scheduled event recovery |
-| `VORTEX_EVENT_DISPATCH_WAKEUP_CREDENTIAL_BASE64` | Base64 encoding of the dispatcher route bearer credential, the same value whose SHA-256 digest is configured in Vercel and whose raw value is a database server setting |
+| `VORTEX_EVENT_DISPATCH_RECOVERY_URL_BASE64` | Base64 encoding of the protected Vercel dispatch route address for scheduled event recovery |
+| `VORTEX_EVENT_DISPATCH_RECOVERY_CREDENTIAL_BASE64` | Base64 encoding of the dispatcher route bearer credential, whose SHA-256 digest is configured in Vercel |
 | `VORTEX_RUNTIME_BUNDLE_CLEANUP_URL_BASE64` | Base64 encoding of the protected Vercel runtime-bundle cleanup route address |
 | `VORTEX_RUNTIME_BUNDLE_CLEANUP_CREDENTIAL_BASE64` | Base64 encoding of the cleanup route bearer credential; its SHA-256 digest is configured on the Vercel route |
 
@@ -49,7 +49,7 @@ only the route URL and credential for each scheduled flow; it has no database-de
 
 `event_dispatch_recovery` is the scheduled recovery half of the event dispatch boundary. Its
 schedule trigger calls the protected Vercel dispatch route every minute, so an event
-occurrence committed while a database-webhook hint or a web deployment was unavailable is still
+occurrence committed while a web deployment was unavailable is still
 delivered. After a Kestra outage it runs one catch-up tick rather than every missed interval, and an
 overlapping tick is cancelled because the running one already covers it. The flow holds only two
 values: the route address and the route bearer credential. It never receives a database URL,
@@ -80,16 +80,8 @@ keep their claims and become eligible for retry after five minutes; active attac
 files are excluded. Provision the existing scheduled flow and route credential in every environment
 that accepts uploads; without scheduled maintenance abandoned objects are not reclaimed.
 
-The event-dispatch route credential also authenticates the normal database-webhook hint. The database
-server carries the raw credential as the `vortex.event_dispatch_wakeup_bearer` setting while Vercel carries
-only its SHA-256 digest in `VORTEX_EVENT_DISPATCHER_CREDENTIAL_SHA256`. Set
-`VORTEX_EVENT_DELIVERY_MODE=external` on the web deployment to select this trigger explicitly. Database sessions can read
-that setting, so the credential must authorise nothing beyond the bounded dispatcher wake-up. The
-database hint, `vortex_platform.request_event_dispatch_wakeup`, reads
-`vortex.event_dispatch_wakeup_url` and `vortex.event_dispatch_wakeup_bearer` at runtime, queues at
-most one request per appending transaction and sends it only after that transaction commits. It
-sends nothing when either setting is absent or unusable, so missing configuration fails closed
-without breaking a committed record save.
+The event-dispatch recovery route requires the configured bearer credential. Vercel holds only its
+SHA-256 digest in `VORTEX_EVENT_DISPATCHER_CREDENTIAL_SHA256`.
 
 Kestra open source recognises sensitive flow values only when the container variable begins
 `SECRET_` and its value is base64-encoded. Coolify therefore stores the `_BASE64` values above;

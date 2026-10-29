@@ -202,7 +202,6 @@ switch (command) {
         `VORTEX_RUNTIME_DATABASE_URL=${runtimeDatabaseUrl(status)}`,
         `VORTEX_DEV_SERVICE_ROLE_KEY=${status.SECRET_KEY}`,
         `VORTEX_SUPABASE_WORKDIR=${laneDirectory(lane).replaceAll("\\", "/")}`,
-        "VORTEX_EVENT_DELIVERY_MODE=in_process",
         "",
       ].join("\n"),
     );

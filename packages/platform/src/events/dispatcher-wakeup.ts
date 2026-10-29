@@ -13,12 +13,10 @@ import {
 } from "./dispatcher";
 
 /**
- * The two mutually exclusive wake-up callers. A database webhook hint fires
- * after a committed outbox append; a scheduled recovery tick re-runs the same
- * bounded dispatch after a missed hint. The source is a caller-supplied label
- * only: it never selects consumers and never changes authority.
+ * The scheduled recovery source is a caller-supplied label only: it never
+ * selects consumers and never changes authority.
  */
-export const eventDispatcherWakeupSources = ["database_webhook", "scheduled_recovery"] as const;
+export const eventDispatcherWakeupSources = ["scheduled_recovery"] as const;
 
 export type EventDispatcherWakeupSource = (typeof eventDispatcherWakeupSources)[number];
 
@@ -125,17 +123,18 @@ type ParsedWakeupRequest =
 
 /**
  * Reads the advisory source label. An absent body, empty object or absent
- * label is the database-webhook path. Any other field, including batch or
+ * label is the scheduled recovery path. Any other field, including batch or
  * consumer tuning, or an unknown label is refused closed before any dispatch,
  * so a caller can never tune the bounded operation.
  */
 const parseWakeupRequest = (body: unknown): ParsedWakeupRequest => {
-  if (body === undefined || body === null) return { kind: "accepted", source: "database_webhook" };
+  if (body === undefined || body === null)
+    return { kind: "accepted", source: "scheduled_recovery" };
   const fields = asRecord(body);
   if (fields === undefined || Object.keys(fields).some((key) => key !== "source"))
     return { kind: "invalid", source: null };
   const source = fields.source;
-  if (source === undefined) return { kind: "accepted", source: "database_webhook" };
+  if (source === undefined) return { kind: "accepted", source: "scheduled_recovery" };
   if (!wakeupSourceMatches(source)) return { kind: "invalid", source: null };
   return { kind: "accepted", source };
 };
@@ -208,9 +207,8 @@ export const createEventDispatchBacklogReader = (
   });
 
 /**
- * Wake-up and recovery entry over the same bounded event dispatcher route. Both
- * a database webhook hint and a scheduled recovery tick authenticate with the
- * same configured dispatcher credential and run the identical claim, deliver,
+ * Recovery entry over the bounded event dispatcher route. The scheduled tick
+ * authenticates with its configured dispatcher credential and runs the claim, deliver,
  * acknowledge and retry operation. Successful nonempty batches are claimed
  * again within a fixed budget, with authority resolved afresh for each dispatch.
  * An in-flight batch finishes normally; no timeout races a consumer's commit.
