@@ -66,6 +66,15 @@ begin
       return result_value;
     end if;
   end if;
+  if p_operation in ('create', 'edit') and exists (
+    select 1 from vortex_platform.connection_instances as other
+    where other.organization_id = organization_value and other.destination_key = p_destination_key
+      and other.connection_instance_id <> p_instance_id
+  ) then
+    result_value := pg_catalog.jsonb_build_object('outcome', 'key_in_use');
+    perform vortex_record.complete_scoped_command_receipt_internal(p_command_id, result_value);
+    return result_value;
+  end if;
   if p_secret_reference_id is not null then
     select reference.* into reference_row
     from vortex_platform.connection_secret_references as reference

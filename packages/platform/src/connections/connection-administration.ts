@@ -50,6 +50,7 @@ export type ConnectionCommand =
 
 const resultSchema = z.discriminatedUnion("outcome", [
   z.object({ outcome: z.literal("conflict") }).strict(),
+  z.object({ outcome: z.literal("key_in_use") }).strict(),
   z
     .object({
       outcome: z.literal("completed"),

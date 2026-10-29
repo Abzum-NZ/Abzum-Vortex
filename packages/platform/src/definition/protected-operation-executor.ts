@@ -265,6 +265,26 @@ type Operation = Readonly<{
  * database. With no claimed effect key a fresh key is generated; either way the caller never
  * supplies it from input.
  */
+const connectionChangeOutputs = (
+  result: Awaited<ReturnType<ProtectedOperationServices["connectionAdministration"]>>,
+): OperationResult => {
+  if (result.kind !== "available") return result;
+  if (result.value.outcome === "conflict") return "conflict";
+  if (result.value.outcome === "key_in_use")
+    return {
+      kind: "confirmed_failure",
+      outcome: "refused",
+      diagnostic: flowRefusalFeedbackSchema.parse({ code: "connection_key_in_use" }),
+    };
+  return {
+    kind: "available",
+    value: {
+      connection_instance_id: result.value.connectionInstanceId,
+      revision: result.value.revision,
+    },
+  };
+};
+
 const duplicateKeyFor = (
   effectKey: ProtectedOperationEffectKey | undefined,
   generate: () => string,
@@ -1111,15 +1131,7 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         operation: "create",
         command,
       });
-      if (result.kind !== "available") return result;
-      if (result.value.outcome === "conflict") return "conflict";
-      return {
-        kind: "available",
-        value: {
-          connection_instance_id: result.value.connectionInstanceId,
-          revision: result.value.revision,
-        },
-      };
+      return connectionChangeOutputs(result);
     },
   }),
   edit_connection_instance: operation({
@@ -1138,15 +1150,7 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         operation: "edit",
         command,
       });
-      if (result.kind !== "available") return result;
-      if (result.value.outcome === "conflict") return "conflict";
-      return {
-        kind: "available",
-        value: {
-          connection_instance_id: result.value.connectionInstanceId,
-          revision: result.value.revision,
-        },
-      };
+      return connectionChangeOutputs(result);
     },
   }),
   revoke_connection_instance: operation({
@@ -1161,15 +1165,7 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         operation: "revoke",
         command,
       });
-      if (result.kind !== "available") return result;
-      if (result.value.outcome === "conflict") return "conflict";
-      return {
-        kind: "available",
-        value: {
-          connection_instance_id: result.value.connectionInstanceId,
-          revision: result.value.revision,
-        },
-      };
+      return connectionChangeOutputs(result);
     },
   }),
   health_check_connection_instance: operation({
