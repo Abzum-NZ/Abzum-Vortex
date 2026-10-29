@@ -17,6 +17,8 @@ export const getQueryContinuationKey = (): QueryContinuationKey => {
   // 32 bytes encode to exactly 43 base64 characters plus one padding character.
   const key = Buffer.from(encoded, "base64");
   if (!/^[A-Za-z0-9+/]{43}=$/.test(encoded) || key.length !== keyByteLength)
-    throw new Error(`Invalid server configuration: ${environmentName} must be 32 bytes, base64 encoded`);
+    throw new Error(
+      `Invalid server configuration: ${environmentName} must be 32 bytes, base64 encoded`,
+    );
   return { key: new Uint8Array(key) };
 };

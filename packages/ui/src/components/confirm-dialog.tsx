@@ -53,20 +53,27 @@ export function useConfirm(): readonly [(prompt: ConfirmPrompt) => Promise<boole
     setOpen(next);
   }, []);
 
-  const answer = useCallback((confirmed: boolean) => {
-    const current = openPrompt.current;
-    if (current === null || current.settled) return;
-    current.settled = true;
-    show(waiting.current[0] ?? null);
-    waiting.current = waiting.current.slice(1);
-    current.answer(confirmed);
-  }, [show]);
+  const answer = useCallback(
+    (confirmed: boolean) => {
+      const current = openPrompt.current;
+      if (current === null || current.settled) return;
+      current.settled = true;
+      show(waiting.current[0] ?? null);
+      waiting.current = waiting.current.slice(1);
+      current.answer(confirmed);
+    },
+    [show],
+  );
 
-  const confirm = useCallback((prompt: ConfirmPrompt) => new Promise<boolean>((resolve) => {
-    const pending: PendingPrompt = { prompt, answer: resolve, settled: false };
-    if (openPrompt.current === null || openPrompt.current.settled) show(pending);
-    else waiting.current = [...waiting.current, pending];
-  }), [show]);
+  const confirm = useCallback(
+    (prompt: ConfirmPrompt) =>
+      new Promise<boolean>((resolve) => {
+        const pending: PendingPrompt = { prompt, answer: resolve, settled: false };
+        if (openPrompt.current === null || openPrompt.current.settled) show(pending);
+        else waiting.current = [...waiting.current, pending];
+      }),
+    [show],
+  );
 
   // A button press answers the prompt itself; only Escape or an outside press asks for
   // the answer here, and both arrive as one close request after the press.
@@ -78,40 +85,60 @@ export function useConfirm(): readonly [(prompt: ConfirmPrompt) => Promise<boole
     answer(false);
   }, [answer]);
 
-  const answerByPress = useCallback((confirmed: boolean) => {
-    answeredByPress.current = true;
-    answer(confirmed);
-  }, [answer]);
+  const answerByPress = useCallback(
+    (confirmed: boolean) => {
+      answeredByPress.current = true;
+      answer(confirmed);
+    },
+    [answer],
+  );
 
   // An editor that unmounts with a prompt open must not leave its caller waiting for an answer.
-  useEffect(() => () => {
-    for (const pending of [openPrompt.current, ...waiting.current]) {
-      if (pending !== null && !pending.settled) {
-        pending.settled = true;
-        pending.answer(false);
+  useEffect(
+    () => () => {
+      for (const pending of [openPrompt.current, ...waiting.current]) {
+        if (pending !== null && !pending.settled) {
+          pending.settled = true;
+          pending.answer(false);
+        }
       }
-    }
-    openPrompt.current = null;
-    waiting.current = [];
-  }, []);
+      openPrompt.current = null;
+      waiting.current = [];
+    },
+    [],
+  );
 
   const prompt = open?.prompt;
-  const dialog: ReactElement = <AlertDialog
-    open={open !== null}
-    onOpenChange={(nextOpen) => { if (!nextOpen) requestDismiss(); }}>
-    <AlertDialogContent>
-      <AlertDialogHeader>
-        <AlertDialogTitle>{prompt?.title ?? ""}</AlertDialogTitle>
-        <AlertDialogDescription className="whitespace-pre-line">{prompt?.description ?? ""}</AlertDialogDescription>
-      </AlertDialogHeader>
-      {prompt?.details !== undefined && <div className="max-h-80 space-y-2 overflow-y-auto text-sm">{prompt.details}</div>}
-      <AlertDialogFooter>
-        <AlertDialogCancel onClick={() => answerByPress(false)}>{prompt?.cancelLabel ?? "Cancel"}</AlertDialogCancel>
-        <AlertDialogAction
-          render={<Button variant={prompt?.destructive === true ? "destructive" : "default"} />}
-          onClick={() => answerByPress(true)}>{prompt?.confirmLabel ?? ""}</AlertDialogAction>
-      </AlertDialogFooter>
-    </AlertDialogContent>
-  </AlertDialog>;
+  const dialog: ReactElement = (
+    <AlertDialog
+      open={open !== null}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) requestDismiss();
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{prompt?.title ?? ""}</AlertDialogTitle>
+          <AlertDialogDescription className="whitespace-pre-line">
+            {prompt?.description ?? ""}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {prompt?.details !== undefined && (
+          <div className="max-h-80 space-y-2 overflow-y-auto text-sm">{prompt.details}</div>
+        )}
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => answerByPress(false)}>
+            {prompt?.cancelLabel ?? "Cancel"}
+          </AlertDialogCancel>
+          <AlertDialogAction
+            render={<Button variant={prompt?.destructive === true ? "destructive" : "default"} />}
+            onClick={() => answerByPress(true)}
+          >
+            {prompt?.confirmLabel ?? ""}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
   return [confirm, dialog];
 }

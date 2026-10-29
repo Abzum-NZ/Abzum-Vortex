@@ -28,11 +28,7 @@ export const telemetryCountersSchema = z
 /** Telemetry measures a single bounded operation, never an open-ended span. */
 export const telemetryMaximumDurationMs = 86_400_000;
 
-const telemetryDurationMillisecondsSchema = z
-  .number()
-  .int()
-  .min(0)
-  .max(telemetryMaximumDurationMs);
+const telemetryDurationMillisecondsSchema = z.number().int().min(0).max(telemetryMaximumDurationMs);
 
 export const telemetryOutcomeSchema = z.enum([
   "success",

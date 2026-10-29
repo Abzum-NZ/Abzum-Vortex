@@ -408,14 +408,15 @@ export function StudioFlowValueControl({
     typed === true && valueType !== undefined
       ? operationInputAccepts(choice.type, valueType)
       : referenceCompatible !== undefined
-      ? referenceCompatible(choice.reference)
-      : valueType === undefined ||
-        choice.type === undefined ||
-        choice.type === "json" ||
-        choice.type === valueType ||
-        (valueType === "text" && (choice.type === "choice" || choice.type === "formatted_text")) ||
-        (valueType === "choice" && choice.type === "text") ||
-        valueType === "json",
+        ? referenceCompatible(choice.reference)
+        : valueType === undefined ||
+          choice.type === undefined ||
+          choice.type === "json" ||
+          choice.type === valueType ||
+          (valueType === "text" &&
+            (choice.type === "choice" || choice.type === "formatted_text")) ||
+          (valueType === "choice" && choice.type === "text") ||
+          valueType === "json",
   );
   const token =
     value === null

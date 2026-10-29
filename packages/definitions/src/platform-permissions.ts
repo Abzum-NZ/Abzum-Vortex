@@ -47,5 +47,4 @@ const platformPermissionIndex: ReadonlyMap<string, PlatformPermissionDeclaration
 export const platformPermissionFor = (key: string): PlatformPermissionDeclaration | undefined =>
   platformPermissionIndex.get(key);
 
-export const isPlatformPermissionKey = (key: string): boolean =>
-  platformPermissionIndex.has(key);
+export const isPlatformPermissionKey = (key: string): boolean => platformPermissionIndex.has(key);

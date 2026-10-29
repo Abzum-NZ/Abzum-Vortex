@@ -2,7 +2,7 @@ import type { StudioRailTab } from "./studio-frame";
 
 /** Studio's rail: one tab per area of an application, in the order a builder works through them. */
 export type StudioRailKey =
-  | "structure" | "outline" | "blocks" | "menu" | "data" | "flows" | "theme" | "access" | "releases";
+  "structure" | "outline" | "blocks" | "menu" | "data" | "flows" | "theme" | "access" | "releases";
 
 export const studioRailTabs: readonly StudioRailTab<StudioRailKey>[] = [
   { key: "structure", label: "Structure", icon: "sitemap", width: 17, group: "build" },
@@ -25,10 +25,27 @@ export const railShowsCanvas = (key: StudioRailKey): boolean =>
 
 /** What the Releases tab can open in the centre. */
 export type StudioReleasesSection = "history" | "page-adoption" | "import";
-export const studioReleasesSections: readonly Readonly<{ value: StudioReleasesSection; label: string; description: string }>[] = [
-  { value: "history", label: "Published versions", description: "Every published version: when, by whom and what changed. Restore one into the draft." },
-  { value: "page-adoption", label: "Page adoption", description: "Keep your own page or adopt the standard one after an upgrade." },
-  { value: "import", label: "Import from source", description: "Advanced: replace the draft with a source document." },
+export const studioReleasesSections: readonly Readonly<{
+  value: StudioReleasesSection;
+  label: string;
+  description: string;
+}>[] = [
+  {
+    value: "history",
+    label: "Published versions",
+    description:
+      "Every published version: when, by whom and what changed. Restore one into the draft.",
+  },
+  {
+    value: "page-adoption",
+    label: "Page adoption",
+    description: "Keep your own page or adopt the standard one after an upgrade.",
+  },
+  {
+    value: "import",
+    label: "Import from source",
+    description: "Advanced: replace the draft with a source document.",
+  },
 ];
 export const isStudioReleasesSection = (value: unknown): value is StudioReleasesSection =>
   studioReleasesSections.some((section) => section.value === value);

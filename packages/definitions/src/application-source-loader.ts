@@ -33,18 +33,16 @@ export const loadApplicationSource = (
 ): ApplicationSourceDocument => {
   const sourceObject = authoredSource as JsonObject;
   const body = sourceObject.body as JsonObject;
-  const dependencies = [...collectBlockReleases(body)]
-    .sort()
-    .map((releaseKey) => {
-      const separator = releaseKey.lastIndexOf("@");
-      if (separator < 1 || separator === releaseKey.length - 1)
-        throw new TypeError(`Invalid platform block release identity: ${releaseKey}`);
-      return {
-        kind: "platform_block" as const,
-        block_id: releaseKey.slice(0, separator),
-        release_version: releaseKey.slice(separator + 1),
-      };
-    });
+  const dependencies = [...collectBlockReleases(body)].sort().map((releaseKey) => {
+    const separator = releaseKey.lastIndexOf("@");
+    if (separator < 1 || separator === releaseKey.length - 1)
+      throw new TypeError(`Invalid platform block release identity: ${releaseKey}`);
+    return {
+      kind: "platform_block" as const,
+      block_id: releaseKey.slice(0, separator),
+      release_version: releaseKey.slice(separator + 1),
+    };
+  });
 
   const theme = {
     base: {

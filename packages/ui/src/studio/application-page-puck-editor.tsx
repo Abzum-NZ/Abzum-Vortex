@@ -2,7 +2,7 @@
 
 import { Puck, type Data, type PuckAction } from "@puckeditor/core";
 import { createPortal } from "react-dom";
-import "@puckeditor/core/puck.css";
+import "@puckeditor/core/no-external.css";
 import {
   applicationSourceDocumentSchema,
   canonicalJson,

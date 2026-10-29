@@ -67,7 +67,10 @@ function AlertDialogFooter({ className, ...props }: React.ComponentProps<"div">)
   return (
     <div
       data-slot="alert-dialog-footer"
-      className={cn("cn-dialog-footer flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className)}
+      className={cn(
+        "cn-dialog-footer flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+        className,
+      )}
       {...props}
     />
   );
@@ -96,11 +99,7 @@ function AlertDialogDescription({ className, ...props }: AlertDialogPrimitive.De
 /** Closes the dialog; the confirming button supplies its own click handler. */
 function AlertDialogAction({ ...props }: AlertDialogPrimitive.Close.Props) {
   return (
-    <AlertDialogPrimitive.Close
-      data-slot="alert-dialog-action"
-      render={<Button />}
-      {...props}
-    />
+    <AlertDialogPrimitive.Close data-slot="alert-dialog-action" render={<Button />} {...props} />
   );
 }
 

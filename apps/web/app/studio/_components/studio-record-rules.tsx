@@ -167,8 +167,13 @@ export function StudioRecordRules({
           </div>
           <div className="space-y-2">
             <Label htmlFor="record-rule-message">Warning message</Label>
-            <Textarea id="record-rule-message" required value={message} disabled={disabled}
-              onChange={(event) => setMessage(event.target.value)} />
+            <Textarea
+              id="record-rule-message"
+              required
+              value={message}
+              disabled={disabled}
+              onChange={(event) => setMessage(event.target.value)}
+            />
           </div>
           <div className="flex items-center gap-2">
             <Checkbox

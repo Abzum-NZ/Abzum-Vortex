@@ -8,7 +8,10 @@ import type { ApplicationWebMcpRuntime } from "@vortex/ui";
 export type WebMcpToolDescriptor = Readonly<{
   name: string;
   description: string;
-  inputSchema: Readonly<{ properties: Readonly<Record<string, unknown>>; required: readonly string[] }>;
+  inputSchema: Readonly<{
+    properties: Readonly<Record<string, unknown>>;
+    required: readonly string[];
+  }>;
   /** A tool that only reads is announced as such; every other tool is announced as consequential. */
   readOnly?: boolean | undefined;
 }>;
@@ -56,7 +59,12 @@ const matchesToolInputKeys = (tool: WebMcpToolDescriptor, candidate: unknown): b
   );
 };
 
-export function WebMcpAdapter<Tool extends WebMcpToolDescriptor>({ contextKey, tools, onInvoke, onStatusChange }: Props<Tool>) {
+export function WebMcpAdapter<Tool extends WebMcpToolDescriptor>({
+  contextKey,
+  tools,
+  onInvoke,
+  onStatusChange,
+}: Props<Tool>) {
   const [modelContext, setModelContext] = useState<ModelContext>();
   const [disabled, setDisabled] = useState(false);
   const [status, setStatus] = useState<"checking" | ApplicationWebMcpRuntime["status"]>("checking");
@@ -117,7 +125,8 @@ export function WebMcpAdapter<Tool extends WebMcpToolDescriptor>({ contextKey, t
             name: tool.name,
             description: tool.description,
             inputSchema: tool.inputSchema,
-            annotations: tool.readOnly === true ? { readOnlyHint: true } : { consequentialHint: true },
+            annotations:
+              tool.readOnly === true ? { readOnlyHint: true } : { consequentialHint: true },
             execute: async (input, options) => {
               const signals = [
                 controller.signal,
@@ -149,7 +158,9 @@ export function WebMcpAdapter<Tool extends WebMcpToolDescriptor>({ contextKey, t
                 if (changing) {
                   setWorking((current) => {
                     const index = current.indexOf(tool.name);
-                    return index < 0 ? current : current.filter((_, position) => position !== index);
+                    return index < 0
+                      ? current
+                      : current.filter((_, position) => position !== index);
                   });
                 }
                 signals.forEach((signal) => signal.removeEventListener("abort", abortExecution));
@@ -178,8 +189,23 @@ export function WebMcpAdapter<Tool extends WebMcpToolDescriptor>({ contextKey, t
       onStatusChange(undefined);
       return;
     }
-    onStatusChange({ status, turnOff, turnOn, retry: retryRegistration, ...(working[0] === undefined ? {} : { working: working[0] }) });
-  }, [modelContext, onStatusChange, retryRegistration, status, tools.length, turnOff, turnOn, working]);
+    onStatusChange({
+      status,
+      turnOff,
+      turnOn,
+      retry: retryRegistration,
+      ...(working[0] === undefined ? {} : { working: working[0] }),
+    });
+  }, [
+    modelContext,
+    onStatusChange,
+    retryRegistration,
+    status,
+    tools.length,
+    turnOff,
+    turnOn,
+    working,
+  ]);
 
   return null;
 }

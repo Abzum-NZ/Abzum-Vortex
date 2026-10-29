@@ -5,7 +5,10 @@ import {
   type IdentitySession,
   type SessionContext,
 } from "@vortex/platform/schema";
-import { withResolvedRequestTransaction, type RequestDatabaseTransaction } from "@vortex/platform/server";
+import {
+  withResolvedRequestTransaction,
+  type RequestDatabaseTransaction,
+} from "@vortex/platform/server";
 import type { BuilderAuthority } from "@vortex/platform/server";
 
 /**

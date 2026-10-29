@@ -9,18 +9,22 @@ import type { PrivateInvalidationSubscriptionSource } from "@vortex/platform/sch
 import { z } from "zod";
 
 /** Shared, content-free wire contract; this module has no server imports. */
-export const privateInvalidationSelectorsSchema = z.object({
-  tenantShortName: builderKeySchema,
-  organizationShortName: builderKeySchema,
-  applicationKey: namespacedKeySchema,
-  pageKey: builderKeySchema,
-  targetApplicationKey: namespacedKeySchema,
-}).strict();
+export const privateInvalidationSelectorsSchema = z
+  .object({
+    tenantShortName: builderKeySchema,
+    organizationShortName: builderKeySchema,
+    applicationKey: namespacedKeySchema,
+    pageKey: builderKeySchema,
+    targetApplicationKey: namespacedKeySchema,
+  })
+  .strict();
 
-const privateInvalidationScopeSchema = z.object({
-  organizationId: organizationIdSchema,
-  applicationRootId: applicationRootIdSchema,
-}).strict();
+const privateInvalidationScopeSchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema,
+  })
+  .strict();
 
 const privateInvalidationControlSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("ready"), scope: privateInvalidationScopeSchema }).strict(),
@@ -48,8 +52,12 @@ type WebPrivateInvalidationConnection =
   | Readonly<{ kind: "gap" | "unavailable" | "disposed" }>;
 
 export type WebPrivateInvalidationSourceResult =
-  | Readonly<{ kind: "available"; scope: WebPrivateInvalidationScope;
-      source: PrivateInvalidationSubscriptionSource; dispose(): void }>
+  | Readonly<{
+      kind: "available";
+      scope: WebPrivateInvalidationScope;
+      source: PrivateInvalidationSubscriptionSource;
+      dispose(): void;
+    }>
   | Readonly<{ kind: "unavailable" }>;
 
 const sameScope = (left: WebPrivateInvalidationScope, right: WebPrivateInvalidationScope) =>
@@ -73,8 +81,12 @@ export const openWebPrivateInvalidationSource = (
   let selectors: WebPrivateInvalidationSelectors;
   try {
     const parsed = privateInvalidationSelectorsSchema.safeParse(selectorsInput);
-    if (!parsed.success || typeof options.onConnection !== "function" ||
-        typeof EventSource === "undefined" || options.signal?.aborted)
+    if (
+      !parsed.success ||
+      typeof options.onConnection !== "function" ||
+      typeof EventSource === "undefined" ||
+      options.signal?.aborted
+    )
       return Promise.resolve(unavailable);
     selectors = parsed.data;
     // guard-allow: silent-catch Hostile caller inputs are refused as unavailable without inspecting the exception.
@@ -105,8 +117,12 @@ export const openWebPrivateInvalidationSource = (
     const signal = options.signal;
 
     const report = (state: WebPrivateInvalidationConnection): void => {
-      // guard-allow: silent-catch A consumer callback failure must not reveal transport details or stop delivery.
-      try { notify(state); } catch { /* Consumer failures reveal no transport details. */ }
+      try {
+        notify(state);
+        // guard-allow: silent-catch A consumer callback failure must not reveal transport details or stop delivery.
+      } catch {
+        /* Consumer failures reveal no transport details. */
+      }
     };
     const clearAttempt = (): void => {
       if (attemptTimer !== undefined) clearTimeout(attemptTimer);
@@ -139,7 +155,10 @@ export const openWebPrivateInvalidationSource = (
       receiver = undefined;
       report({ kind });
       notify = () => undefined;
-      if (!settled) { settled = true; resolve(unavailable); }
+      if (!settled) {
+        settled = true;
+        resolve(unavailable);
+      }
     };
     const onAbort = (): void => finish("disposed");
     const reportGap = (): void => {
@@ -152,20 +171,33 @@ export const openWebPrivateInvalidationSource = (
       reportGap();
       if (closed) return; // A consumer may dispose from its callback.
       const delay = privateInvalidationTransportLimits.reconnectDelaysMilliseconds[retries++];
-      if (delay === undefined) { finish("unavailable"); return; }
+      if (delay === undefined) {
+        finish("unavailable");
+        return;
+      }
       retryTimer = setTimeout(() => {
         retryTimer = undefined;
         connect();
       }, delay);
     };
     const parseData = (event: Event): unknown => {
-      if (!(event instanceof MessageEvent) || typeof event.data !== "string" ||
-          event.data.length > privateInvalidationTransportLimits.maximumFrameBytes)
+      if (
+        !(event instanceof MessageEvent) ||
+        typeof event.data !== "string" ||
+        event.data.length > privateInvalidationTransportLimits.maximumFrameBytes
+      )
         return undefined;
-      if (new TextEncoder().encode(event.data).byteLength >
-          privateInvalidationTransportLimits.maximumFrameBytes) return undefined;
-      // guard-allow: silent-catch A malformed server frame is dropped; the schema check below refuses it.
-      try { return JSON.parse(event.data) as unknown; } catch { return undefined; }
+      if (
+        new TextEncoder().encode(event.data).byteLength >
+        privateInvalidationTransportLimits.maximumFrameBytes
+      )
+        return undefined;
+      try {
+        return JSON.parse(event.data) as unknown;
+        // guard-allow: silent-catch A malformed server frame is dropped; the schema check below refuses it.
+      } catch {
+        return undefined;
+      }
     };
     const source: PrivateInvalidationSubscriptionSource = Object.freeze({
       subscribe(onMessage: (message: unknown) => void): () => void {
@@ -185,26 +217,46 @@ export const openWebPrivateInvalidationSource = (
     function onControl(event: Event): void {
       if (closed || event.currentTarget !== socket) return;
       const parsed = privateInvalidationControlSchema.safeParse(parseData(event));
-      if (!parsed.success) { finish("unavailable"); return; }
-      if (parsed.data.kind === "unavailable") { finish("unavailable"); return; }
-      if (parsed.data.kind === "gap") { retry(); return; }
-      if (ready) { finish("unavailable"); return; }
+      if (!parsed.success) {
+        finish("unavailable");
+        return;
+      }
+      if (parsed.data.kind === "unavailable") {
+        finish("unavailable");
+        return;
+      }
+      if (parsed.data.kind === "gap") {
+        retry();
+        return;
+      }
+      if (ready) {
+        finish("unavailable");
+        return;
+      }
       const next = Object.freeze(parsed.data.scope);
-      if (scope !== undefined && !sameScope(scope, next)) { finish("unavailable"); return; }
+      if (scope !== undefined && !sameScope(scope, next)) {
+        finish("unavailable");
+        return;
+      }
       const reconnected = scope !== undefined;
       scope = scope ?? next;
       ready = true;
       clearAttempt();
       // A lost FIN or half-open network must not retain this source forever.
-      connectionTimer = setTimeout(retry,
+      connectionTimer = setTimeout(
+        retry,
         privateInvalidationTransportLimits.maximumStreamMilliseconds +
-        privateInvalidationTransportLimits.joinMilliseconds);
+          privateInvalidationTransportLimits.joinMilliseconds,
+      );
       if (!settled) {
         settled = true;
-        subscriberTimer = setTimeout(() => finish("disposed"),
-          privateInvalidationTransportLimits.subscriberMilliseconds);
-        resolve(Object.freeze({ kind: "available", scope, source,
-          dispose: () => finish("disposed") }));
+        subscriberTimer = setTimeout(
+          () => finish("disposed"),
+          privateInvalidationTransportLimits.subscriberMilliseconds,
+        );
+        resolve(
+          Object.freeze({ kind: "available", scope, source, dispose: () => finish("disposed") }),
+        );
       }
       report({ kind: "ready", scope, reconnected });
     }
@@ -212,9 +264,16 @@ export const openWebPrivateInvalidationSource = (
       if (closed || !ready || scope === undefined || event.currentTarget !== socket) return;
       const parsed = liveInvalidationSchema.safeParse(parseData(event));
       if (!parsed.success || !sameScope(scope, parsed.data)) return;
-      if (receiver === undefined) { reportGap(); return; }
-      // guard-allow: silent-catch A receiver failure is reported to the page as a delivery gap.
-      try { receiver(parsed.data); } catch { reportGap(); }
+      if (receiver === undefined) {
+        reportGap();
+        return;
+      }
+      try {
+        receiver(parsed.data);
+        // guard-allow: silent-catch A receiver failure is reported to the page as a delivery gap.
+      } catch {
+        reportGap();
+      }
     }
     function connect(): void {
       if (closed) return;
@@ -226,7 +285,9 @@ export const openWebPrivateInvalidationSource = (
         socket.onmessage = () => finish("unavailable");
         attemptTimer = setTimeout(retry, privateInvalidationTransportLimits.joinMilliseconds);
         // guard-allow: silent-catch A failed EventSource construction is retried through the same backoff as a dropped connection.
-      } catch { retry(); }
+      } catch {
+        retry();
+      }
     }
     signal?.addEventListener("abort", onAbort, { once: true });
     if (signal?.aborted) onAbort();

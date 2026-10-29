@@ -1,4 +1,10 @@
-import { decodePreset, encodePreset, generateRandomConfig, isPresetCode, type PresetConfig } from "shadcn/preset";
+import {
+  decodePreset,
+  encodePreset,
+  generateRandomConfig,
+  isPresetCode,
+  type PresetConfig,
+} from "shadcn/preset";
 import type { SourceApplicationThemeSelection } from "@vortex/platform/schema";
 
 /**
@@ -9,7 +15,9 @@ import type { SourceApplicationThemeSelection } from "@vortex/platform/schema";
  */
 
 /** The preset's settings in the application selection's own keys. */
-const fromPreset = (config: PresetConfig & { chartColor: string }): SourceApplicationThemeSelection => ({
+const fromPreset = (
+  config: PresetConfig & { chartColor: string },
+): SourceApplicationThemeSelection => ({
   style: config.style,
   base_color: config.baseColor,
   theme: config.theme,
@@ -33,12 +41,19 @@ export type StudioThemePresetResult =
  */
 export const decodeStudioThemePreset = (code: string): StudioThemePresetResult => {
   const trimmed = code.trim();
-  if (trimmed.length === 0) return { kind: "refused", message: "Paste a preset code, for example b5eFaVxg0." };
+  if (trimmed.length === 0)
+    return { kind: "refused", message: "Paste a preset code, for example b5eFaVxg0." };
   if (!isPresetCode(trimmed))
-    return { kind: "refused", message: `“${trimmed}” is not a shadcn preset code. A code starts with “b” and has at most 10 letters and digits.` };
+    return {
+      kind: "refused",
+      message: `“${trimmed}” is not a shadcn preset code. A code starts with “b” and has at most 10 letters and digits.`,
+    };
   const decoded = decodePreset(trimmed);
   if (decoded === null || decoded.chartColor === undefined || encodePreset(decoded) !== trimmed)
-    return { kind: "refused", message: `The preset code “${trimmed}” is not one shadcn 4.21.0 create produces. Copy the code again from shadcn create.` };
+    return {
+      kind: "refused",
+      message: `The preset code “${trimmed}” is not one shadcn 4.21.0 create produces. Copy the code again from shadcn create.`,
+    };
   return { kind: "decoded", selection: fromPreset({ ...decoded, chartColor: decoded.chartColor }) };
 };
 

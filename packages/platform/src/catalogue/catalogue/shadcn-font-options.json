@@ -1,1 +1,32 @@
-{"defaults":{"bodyFont":"inter","headingFont":"inherit"},"headingInherit":"inherit","fonts":[{"id":"inter","family":"Inter Variable","category":"sans-serif"},{"id":"noto-sans","family":"Noto Sans Variable","category":"sans-serif"},{"id":"nunito-sans","family":"Nunito Sans Variable","category":"sans-serif"},{"id":"figtree","family":"Figtree Variable","category":"sans-serif"},{"id":"roboto","family":"Roboto Variable","category":"sans-serif"},{"id":"raleway","family":"Raleway Variable","category":"sans-serif"},{"id":"dm-sans","family":"DM Sans Variable","category":"sans-serif"},{"id":"public-sans","family":"Public Sans Variable","category":"sans-serif"},{"id":"outfit","family":"Outfit Variable","category":"sans-serif"},{"id":"jetbrains-mono","family":"JetBrains Mono Variable","category":"monospace"},{"id":"geist","family":"Geist Variable","category":"sans-serif"},{"id":"geist-mono","family":"Geist Mono Variable","category":"monospace"},{"id":"lora","family":"Lora Variable","category":"serif"},{"id":"merriweather","family":"Merriweather Variable","category":"serif"},{"id":"playfair-display","family":"Playfair Display Variable","category":"serif"},{"id":"noto-serif","family":"Noto Serif Variable","category":"serif"},{"id":"roboto-slab","family":"Roboto Slab Variable","category":"serif"},{"id":"oxanium","family":"Oxanium Variable","category":"display"},{"id":"manrope","family":"Manrope Variable","category":"sans-serif"},{"id":"space-grotesk","family":"Space Grotesk Variable","category":"sans-serif"},{"id":"montserrat","family":"Montserrat Variable","category":"sans-serif"},{"id":"ibm-plex-sans","family":"IBM Plex Sans Variable","category":"sans-serif"},{"id":"source-sans-3","family":"Source Sans 3 Variable","category":"sans-serif"},{"id":"instrument-sans","family":"Instrument Sans Variable","category":"sans-serif"},{"id":"eb-garamond","family":"EB Garamond Variable","category":"serif"},{"id":"instrument-serif","family":"Instrument Serif","category":"serif"}]}
+{
+  "defaults": { "bodyFont": "inter", "headingFont": "inherit" },
+  "headingInherit": "inherit",
+  "fonts": [
+    { "id": "inter", "family": "Inter Variable", "category": "sans-serif" },
+    { "id": "noto-sans", "family": "Noto Sans Variable", "category": "sans-serif" },
+    { "id": "nunito-sans", "family": "Nunito Sans Variable", "category": "sans-serif" },
+    { "id": "figtree", "family": "Figtree Variable", "category": "sans-serif" },
+    { "id": "roboto", "family": "Roboto Variable", "category": "sans-serif" },
+    { "id": "raleway", "family": "Raleway Variable", "category": "sans-serif" },
+    { "id": "dm-sans", "family": "DM Sans Variable", "category": "sans-serif" },
+    { "id": "public-sans", "family": "Public Sans Variable", "category": "sans-serif" },
+    { "id": "outfit", "family": "Outfit Variable", "category": "sans-serif" },
+    { "id": "jetbrains-mono", "family": "JetBrains Mono Variable", "category": "monospace" },
+    { "id": "geist", "family": "Geist Variable", "category": "sans-serif" },
+    { "id": "geist-mono", "family": "Geist Mono Variable", "category": "monospace" },
+    { "id": "lora", "family": "Lora Variable", "category": "serif" },
+    { "id": "merriweather", "family": "Merriweather Variable", "category": "serif" },
+    { "id": "playfair-display", "family": "Playfair Display Variable", "category": "serif" },
+    { "id": "noto-serif", "family": "Noto Serif Variable", "category": "serif" },
+    { "id": "roboto-slab", "family": "Roboto Slab Variable", "category": "serif" },
+    { "id": "oxanium", "family": "Oxanium Variable", "category": "display" },
+    { "id": "manrope", "family": "Manrope Variable", "category": "sans-serif" },
+    { "id": "space-grotesk", "family": "Space Grotesk Variable", "category": "sans-serif" },
+    { "id": "montserrat", "family": "Montserrat Variable", "category": "sans-serif" },
+    { "id": "ibm-plex-sans", "family": "IBM Plex Sans Variable", "category": "sans-serif" },
+    { "id": "source-sans-3", "family": "Source Sans 3 Variable", "category": "sans-serif" },
+    { "id": "instrument-sans", "family": "Instrument Sans Variable", "category": "sans-serif" },
+    { "id": "eb-garamond", "family": "EB Garamond Variable", "category": "serif" },
+    { "id": "instrument-serif", "family": "Instrument Serif", "category": "serif" }
+  ]
+}

@@ -38,7 +38,9 @@ export function createPlatformComponentRegistryForReleases(
       identity !== undefined && releaseIdentities.has(`${identity.key}:${identity.releaseVersion}`)
     );
   });
-  const customReleases = platformReleases.filter((release) => release.customComponent !== undefined);
+  const customReleases = platformReleases.filter(
+    (release) => release.customComponent !== undefined,
+  );
   return createPlatformComponentRegistry(
     [...registrations, ...createCustomComponentRegistrations(customReleases)],
     platformReleases,

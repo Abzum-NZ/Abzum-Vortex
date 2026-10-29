@@ -9,17 +9,8 @@ const nextConfig: NextConfig = {
     // is Next's default, stated here because hover prefetch and navigation rely on it.
     staleTimes: { dynamic: 0 },
   },
-  transpilePackages: [
-    "@vortex/platform",
-    "@vortex/definitions",
-    "@vortex/ui",
-  ],
-  // No other origin may frame a Vortex page or response (clickjacking); same-origin framing stays
-  // allowed. The component host under /api/components/ is excluded: it answers on the dedicated
-  // component origin, and its bootstrap document already names the site origin as its only frame
-  // ancestor. Next keeps a header configured here over the same header a route sets, so the
-  // Content-Security-Policy form is applied to pages only: API routes such as the private file read
-  // set their own policy, which must not be replaced, and X-Frame-Options covers them.
+  transpilePackages: ["@vortex/platform", "@vortex/definitions", "@vortex/ui"],
+  // The component host supplies its own framing policy on its dedicated origin.
   async headers() {
     return [
       {
@@ -28,7 +19,11 @@ const nextConfig: NextConfig = {
       },
       {
         source: "/:path((?!api/).*)",
-        headers: [{ key: "Content-Security-Policy", value: "frame-ancestors 'self'" }],
+        headers: [
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+        ],
       },
     ];
   },

@@ -196,21 +196,10 @@
         "provider": "Microsoft Graph",
         "authentication": {
           "kind": "oauth2",
-          "secret_fields": [
-            "client_id",
-            "client_secret",
-            "refresh_token"
-          ],
-          "scopes": [
-            "offline_access",
-            "User.Read",
-            "Mail.Send"
-          ]
+          "secret_fields": ["client_id", "client_secret", "refresh_token"],
+          "scopes": ["offline_access", "User.Read", "Mail.Send"]
         },
-        "allowed_hosts": [
-          "graph.microsoft.com",
-          "login.microsoftonline.com"
-        ],
+        "allowed_hosts": ["graph.microsoft.com", "login.microsoftonline.com"],
         "allow_redirects": false,
         "shapes": [
           {
@@ -349,21 +338,10 @@
         "provider": "Microsoft Graph",
         "authentication": {
           "kind": "oauth2",
-          "secret_fields": [
-            "client_id",
-            "client_secret",
-            "refresh_token"
-          ],
-          "scopes": [
-            "offline_access",
-            "User.Read",
-            "Calendars.ReadWrite"
-          ]
+          "secret_fields": ["client_id", "client_secret", "refresh_token"],
+          "scopes": ["offline_access", "User.Read", "Calendars.ReadWrite"]
         },
-        "allowed_hosts": [
-          "graph.microsoft.com",
-          "login.microsoftonline.com"
-        ],
+        "allowed_hosts": ["graph.microsoft.com", "login.microsoftonline.com"],
         "allow_redirects": false,
         "shapes": [
           {

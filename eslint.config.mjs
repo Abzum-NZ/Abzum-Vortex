@@ -44,7 +44,10 @@ export default tseslint.config(
   },
   // These closures retain the owning instance while another object's callbacks use their own `this`.
   {
-    files: ["apps/web/app/_lib/private-invalidation-socket.ts", "packages/platform/src/db/request-lifetime.ts"],
+    files: [
+      "apps/web/app/_lib/private-invalidation-socket.ts",
+      "packages/platform/src/db/request-lifetime.ts",
+    ],
     rules: { "@typescript-eslint/no-this-alias": "off" },
   },
   // These expressions deliberately reject ASCII control characters in user supplied text.

@@ -1,10 +1,5 @@
-import {
-  PLATFORM_BLOCK_RELEASE_IDENTITIES,
-} from "@vortex/platform/schema";
-import {
-  noRuntimeInputs,
-  type PlatformComponentRegistration,
-} from "../registry";
+import { PLATFORM_BLOCK_RELEASE_IDENTITIES } from "@vortex/platform/schema";
+import { noRuntimeInputs, type PlatformComponentRegistration } from "../registry";
 
 /**
  * Exact registrations pairing each general layout block release with its React renderer. A layout

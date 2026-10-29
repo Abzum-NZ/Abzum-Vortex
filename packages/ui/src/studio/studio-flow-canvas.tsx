@@ -77,14 +77,22 @@ import { cn } from "../lib/utils";
 import type { ThemeMode } from "../theme";
 import type { StudioFlowNewStepSettings } from "./application-flow-commands";
 import type { StudioFlowPath, StudioFlowTaskListOutline } from "./application-flow-model";
-import { StudioFlowStepPicker, type StudioFlowStepChoice, type StudioFlowStepPickerContext } from "./studio-flow-step-picker";
+import {
+  StudioFlowStepPicker,
+  type StudioFlowStepChoice,
+  type StudioFlowStepPickerContext,
+} from "./studio-flow-step-picker";
 
 /** The graph is a view of the authored lists; no canvas positions or graph state are stored. */
 type NodeKind = "start" | "step" | "group" | "end";
 type FlowNodeData = Readonly<{ title: string; caption: string; kind: NodeKind; taskType?: string }>;
 type Insertion = Readonly<{ listPath: StudioFlowPath; index: number }>;
 type FlowEdge = Edge<Readonly<{ insertion: Insertion; label: string }>, "studio">;
-type AddStep = (insertion: Insertion, taskType: string, settings: StudioFlowNewStepSettings) => true | string;
+type AddStep = (
+  insertion: Insertion,
+  taskType: string,
+  settings: StudioFlowNewStepSettings,
+) => true | string;
 type CanvasActions = Readonly<{
   types: readonly StudioFlowStepChoice[];
   disabled: boolean;
