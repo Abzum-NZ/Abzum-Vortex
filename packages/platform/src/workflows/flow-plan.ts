@@ -431,6 +431,24 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
       }),
     };
   });
+  // A declaration belongs in the page only when a page step, a path guard, or a final output
+  // reads it. Server-only declarations stay with the server even when the same flow is bound to
+  // a page. Defaults are validated literals, so they cannot introduce further references.
+  const pageReferences = referencesIn([
+    ...segments.flatMap((segment) => [
+      segment.guard,
+      ...(segment.kind === "page" ? [segment.tasks] : []),
+    ]),
+    ...Object.values(flow.outputs).map((output) => output.value),
+  ]);
+  const pageInputs = new Set(
+    pageReferences.flatMap((reference) => (reference.source === "input" ? [reference.name] : [])),
+  );
+  const pageVariables = new Set(
+    pageReferences.flatMap((reference) =>
+      reference.source === "variable" ? [reference.name] : [],
+    ),
+  );
   return {
     flowId: flow.id,
     definition: flow,
@@ -440,8 +458,9 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
     browser: {
       flowId: flow.id,
       inputs: Object.fromEntries(
-        Object.entries(flow.inputs).map(
-          ([name, { type, required, default: defaultValue, recordTypeIds }]) => [
+        Object.entries(flow.inputs)
+          .filter(([name]) => pageInputs.has(name))
+          .map(([name, { type, required, default: defaultValue, recordTypeIds }]) => [
             name,
             {
               type,
@@ -449,14 +468,15 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
               ...(defaultValue === undefined ? {} : { default: defaultValue }),
               ...(recordTypeIds === undefined ? {} : { recordTypeIds }),
             },
-          ],
-        ),
+          ]),
       ),
       variables: Object.fromEntries(
-        Object.entries(flow.variables).map(([name, { type, default: defaultValue }]) => [
-          name,
-          { type, ...(defaultValue === undefined ? {} : { default: defaultValue }) },
-        ]),
+        Object.entries(flow.variables)
+          .filter(([name]) => pageVariables.has(name))
+          .map(([name, { type, default: defaultValue }]) => [
+            name,
+            { type, ...(defaultValue === undefined ? {} : { default: defaultValue }) },
+          ]),
       ),
       outputs: Object.fromEntries(
         Object.entries(flow.outputs).map(([name, { type, value }]) => [name, { type, value }]),
