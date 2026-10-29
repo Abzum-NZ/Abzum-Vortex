@@ -5826,4 +5826,549 @@ REVOKE ALL ON FUNCTION vortex_identity.protect_identity_disablement_command() FR
 
 grant execute on function vortex_identity.protect_identity_disablement_command() to postgres;
 
+-- Administration receipts already store the organisation and original subject.
+reset role;
+set local role vortex_record_adapter;
+update vortex_record.command_receipts as receipt
+set result = receipt.result - 'fingerprint' - 'clusterId'
+where receipt.command_kind in ('create_organization_invitation', 'revoke_organization_invitation', 'close_organization_account', 'reactivate_organization_account', 'suspend_organization_account');
+reset role;
+set local role vortex_owner;
+
+CREATE OR REPLACE FUNCTION vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_expires_at timestamp with time zone, p_role_ids uuid[]) RETURNS TABLE(outcome text, operation text, organization_id uuid, invitation_id uuid, revision bigint, correlation_id uuid, accepted_at timestamp with time zone, access_version bigint)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $_$
+declare
+  scope record;
+  stored record; claimed jsonb;
+  new_receipt_id uuid; new_accepted_at timestamptz;
+  created record; target_invitation_id uuid;
+  subject_ids uuid[]; subject_revisions bigint[];
+  operation_at timestamptz;
+  role_item record; role_intents jsonb := '[]'::jsonb;
+  locked_version bigint;
+begin
+  if p_duplicate_key is null or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
+    or p_invited_email is null
+    or p_invited_email <> pg_catalog.lower(pg_catalog.btrim(p_invited_email))
+    or pg_catalog.char_length(p_invited_email) not between 3 and 320
+    or p_invited_email !~ '^[^[:space:]@]+@[^[:space:]@]+$'
+    or p_expires_at is null
+    or p_expires_at in ('-infinity'::timestamptz, 'infinity'::timestamptz)
+    or p_role_ids is null or pg_catalog.cardinality(p_role_ids) = 0
+    or exists (select 1 from pg_catalog.unnest(p_role_ids) as id where id is null or not vortex_platform.is_non_nil_uuid(id::text))
+    or pg_catalog.cardinality(p_role_ids) <> (select pg_catalog.count(distinct id) from pg_catalog.unnest(p_role_ids) as id) then
+    raise exception using errcode = '22023', message = 'Invitation creation command is invalid';
+  end if;
+  select authorized.* into strict scope
+  from vortex_access.organization_invitations_administration_change_scope() as authorized;
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'create_organization_invitation', p_duplicate_key, scope.organization_id,
+    scope.tenant_id, scope.organization_account_id, 'Administration duplicate conflicts');
+  if claimed is not null then
+    select r.* into stored from pg_catalog.jsonb_to_record(claimed) as r(
+      "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
+      "subjectRevisions" bigint[]);
+    if pg_catalog.cardinality(stored."subjectIds") is distinct from 2
+      or pg_catalog.cardinality(stored."subjectRevisions") is distinct from 2
+      or pg_catalog.array_position(stored."subjectIds", null) is not null
+      or stored."subjectIds"[1] = stored."subjectIds"[2]
+      or not scope.organization_id = any(stored."subjectIds") then
+      raise exception using errcode = '42501', message = 'Invitation creation receipt is unavailable';
+    end if;
+    target_invitation_id := case when stored."subjectIds"[1] = scope.organization_id
+      then stored."subjectIds"[2] else stored."subjectIds"[1] end;
+    return query select 'replayed'::text, 'create_organization_invitation'::text,
+      scope.organization_id, target_invitation_id,
+      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", target_invitation_id)],
+      stored."receiptId", stored."acceptedAt",
+      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", scope.organization_id)];
+    return;
+  end if;
+  operation_at := pg_catalog.clock_timestamp();
+  if p_expires_at <= operation_at then
+    raise exception using errcode = '40001', message = 'Invitation creation is stale or unavailable';
+  end if;
+  select version.current_version into locked_version
+  from vortex_access.organization_access_versions as version
+  where version.organization_id = scope.organization_id for update;
+  if locked_version is distinct from scope.access_version then
+    raise exception using errcode = '40001', message = 'Invitation authority is stale';
+  end if;
+  for role_item in
+    select role.role_id, role.live_revision, revision.lifecycle, revision.assignment_policy
+    from vortex_access.organization_roles as role
+    join vortex_access.organization_role_revisions as revision
+      on revision.organization_id = role.organization_id and revision.role_id = role.role_id
+      and revision.revision = role.live_revision
+    where role.organization_id = scope.organization_id and role.role_id = any(p_role_ids)
+    order by role.role_id for update of role
+  loop
+    if role_item.lifecycle <> 'active' or role_item.assignment_policy not in ('standing', 'activation_required')
+      or not vortex_access.check_organization_invitation_role_authority_internal(
+        scope.organization_id, scope.organization_account_id, role_item.role_id, operation_at
+      ) then
+      raise exception using errcode = 'V3145', message = 'You cannot give this role';
+    end if;
+    role_intents := role_intents || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'roleId', role_item.role_id, 'roleRevision', role_item.live_revision
+    ));
+  end loop;
+  if pg_catalog.jsonb_array_length(role_intents) <> pg_catalog.cardinality(p_role_ids) then
+    raise exception using errcode = 'V3145', message = 'You cannot give this role';
+  end if;
+  select result.* into strict created
+  from vortex_identity.create_organization_invitation(
+    p_invited_email, p_expires_at, role_intents
+  ) as result;
+  if created.organization_id <> scope.organization_id or created.revision <> 1
+    or created.invited_email <> p_invited_email or created.expires_at <> p_expires_at
+    or created.invited_by <> scope.organization_account_id then
+    raise exception using errcode = '42501', message = 'Invitation creation result is unavailable';
+  end if;
+  if scope.organization_id < created.invitation_id then
+    subject_ids := array[scope.organization_id, created.invitation_id];
+    subject_revisions := array[scope.access_version, created.revision];
+  else
+    subject_ids := array[created.invitation_id, scope.organization_id];
+    subject_revisions := array[created.revision, scope.access_version];
+  end if;
+  new_receipt_id := (vortex_access.validated_human_request_context() ->> 'correlationId')::uuid;
+  new_accepted_at := created.created_at;
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key,
+    pg_catalog.jsonb_build_object('receiptId', new_receipt_id,
+      'acceptedAt', new_accepted_at, 'subjectIds', pg_catalog.to_jsonb(subject_ids),
+      'subjectRevisions', pg_catalog.to_jsonb(subject_revisions)));
+  return query select 'accepted'::text, 'create_organization_invitation'::text,
+    scope.organization_id, created.invitation_id, created.revision,
+    new_receipt_id, new_accepted_at, scope.access_version;
+end
+$_$;
+
+alter function vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_expires_at timestamp with time zone, p_role_ids uuid[]) owner to vortex_owner;
+
+COMMENT ON FUNCTION vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_expires_at timestamp with time zone, p_role_ids uuid[]) IS 'Protected role-intent invitation creation; replay returns receipt evidence. The invited person accepts it after signing in with that verified email.';
+
+REVOKE ALL ON FUNCTION vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_expires_at timestamp with time zone, p_role_ids uuid[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_expires_at timestamp with time zone, p_role_ids uuid[]) TO vortex_request;
+
+grant execute on function vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_expires_at timestamp with time zone, p_role_ids uuid[]) to postgres;
+
+
+CREATE OR REPLACE FUNCTION vortex_access.revoke_organization_invitation_for_administration(p_duplicate_key uuid, p_invitation_id uuid, p_expected_revision bigint) RETURNS TABLE(outcome text, operation text, organization_id uuid, invitation_id uuid, revision bigint, correlation_id uuid, accepted_at timestamp with time zone, access_version bigint)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  scope record;
+  stored record; claimed jsonb;
+  replay_target_id uuid;
+  new_receipt_id uuid; new_accepted_at timestamptz;
+  revoked record;
+  subject_ids uuid[]; subject_revisions bigint[];
+begin
+  if p_duplicate_key is null or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
+    or p_invitation_id is null or not vortex_platform.is_non_nil_uuid(p_invitation_id::text)
+    or p_expected_revision is null
+    or p_expected_revision not between 1 and 9007199254740991 then
+    raise exception using errcode = '22023', message = 'Invitation revocation command is invalid';
+  end if;
+  select authorized.* into strict scope
+  from vortex_access.organization_invitations_administration_change_scope() as authorized;
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'revoke_organization_invitation', p_duplicate_key, scope.organization_id,
+    scope.tenant_id, scope.organization_account_id, 'Administration duplicate conflicts');
+  if claimed is not null then
+    select r.* into stored from pg_catalog.jsonb_to_record(claimed) as r(
+      "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
+      "subjectRevisions" bigint[]);
+    if pg_catalog.cardinality(stored."subjectIds") is distinct from 2
+      or pg_catalog.cardinality(stored."subjectRevisions") is distinct from 2
+      or pg_catalog.array_position(stored."subjectIds", null) is not null
+      or stored."subjectIds"[1] = stored."subjectIds"[2]
+      or not scope.organization_id = any(stored."subjectIds")
+      then
+      raise exception using errcode = '42501', message = 'Invitation revocation receipt is unavailable';
+    end if;
+    replay_target_id := case when stored."subjectIds"[1] = scope.organization_id
+      then stored."subjectIds"[2] else stored."subjectIds"[1] end;
+    return query select 'replayed'::text, 'revoke_organization_invitation'::text,
+      scope.organization_id, replay_target_id,
+      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", replay_target_id)],
+      stored."receiptId", stored."acceptedAt",
+      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", scope.organization_id)];
+    return;
+  end if;
+  if p_expected_revision = 9007199254740991 then
+    raise exception using errcode = '40001', message = 'Invitation revocation is stale or unavailable';
+  end if;
+  select result.* into strict revoked
+  from vortex_identity.revoke_organization_invitation(
+    p_invitation_id, p_expected_revision
+  ) as result;
+  if revoked.organization_id <> scope.organization_id
+    or revoked.invitation_id <> p_invitation_id
+    or revoked.revision <> p_expected_revision + 1
+    or revoked.accepted_at is not null or revoked.revoked_at is null
+    or revoked.revoked_by <> scope.organization_account_id then
+    raise exception using errcode = '42501', message = 'Invitation revocation result is unavailable';
+  end if;
+  if scope.organization_id < p_invitation_id then
+    subject_ids := array[scope.organization_id, p_invitation_id];
+    subject_revisions := array[scope.access_version, revoked.revision];
+  else
+    subject_ids := array[p_invitation_id, scope.organization_id];
+    subject_revisions := array[revoked.revision, scope.access_version];
+  end if;
+  new_receipt_id := (vortex_access.validated_human_request_context() ->> 'correlationId')::uuid;
+  new_accepted_at := revoked.changed_at;
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key,
+    pg_catalog.jsonb_build_object('receiptId', new_receipt_id,
+      'acceptedAt', new_accepted_at, 'subjectIds', pg_catalog.to_jsonb(subject_ids),
+      'subjectRevisions', pg_catalog.to_jsonb(subject_revisions)));
+  return query select 'accepted'::text, 'revoke_organization_invitation'::text,
+    scope.organization_id, p_invitation_id, revoked.revision,
+    new_receipt_id, new_accepted_at, scope.access_version;
+end
+$$;
+
+alter function vortex_access.revoke_organization_invitation_for_administration(p_duplicate_key uuid, p_invitation_id uuid, p_expected_revision bigint) owner to vortex_owner;
+
+COMMENT ON FUNCTION vortex_access.revoke_organization_invitation_for_administration(p_duplicate_key uuid, p_invitation_id uuid, p_expected_revision bigint) IS 'Protected pending invitation revocation, including expired invitations, using the existing Identity owner.';
+
+REVOKE ALL ON FUNCTION vortex_access.revoke_organization_invitation_for_administration(p_duplicate_key uuid, p_invitation_id uuid, p_expected_revision bigint) FROM PUBLIC;
+GRANT ALL ON FUNCTION vortex_access.revoke_organization_invitation_for_administration(p_duplicate_key uuid, p_invitation_id uuid, p_expected_revision bigint) TO vortex_request;
+
+grant execute on function vortex_access.revoke_organization_invitation_for_administration(p_duplicate_key uuid, p_invitation_id uuid, p_expected_revision bigint) to postgres;
+
+
+create or replace function vortex_access.close_organization_account_for_administration(
+  p_duplicate_key uuid, p_organization_account_id uuid,
+  p_expected_revision bigint
+)
+returns table (
+  outcome text, operation text, organization_id uuid,
+  organization_account_id uuid, revision bigint, correlation_id uuid,
+  accepted_at timestamptz, access_version bigint
+)
+language plpgsql volatile security definer set search_path = ''
+as $function$
+declare
+  scope record;
+  stored record; claimed jsonb;
+  replay_target_id uuid;
+  target record; changed record;
+  subject_ids uuid[]; subject_revisions bigint[];
+begin
+  if p_duplicate_key is null or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
+    or p_organization_account_id is null
+    or not vortex_platform.is_non_nil_uuid(p_organization_account_id::text)
+    or p_expected_revision is null
+    or p_expected_revision not between 1 and 9007199254740991 then
+    raise exception using errcode = '22023', message = 'Account closure command is invalid';
+  end if;
+  select authorized.* into strict scope
+  from vortex_access.organization_accounts_administration_change_scope() as authorized;
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'close_organization_account', p_duplicate_key, scope.organization_id,
+    scope.tenant_id, scope.organization_account_id, 'Administration duplicate conflicts');
+  if claimed is not null then
+    select r.* into stored from pg_catalog.jsonb_to_record(claimed) as r(
+      "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
+      "subjectRevisions" bigint[]);
+    if pg_catalog.cardinality(stored."subjectIds") is distinct from 2
+      or pg_catalog.cardinality(stored."subjectRevisions") is distinct from 2
+      or pg_catalog.array_position(stored."subjectIds", null) is not null
+      or stored."subjectIds"[1] = stored."subjectIds"[2]
+      or not scope.organization_id = any(stored."subjectIds")
+      then
+      raise exception using errcode = '42501', message = 'Account closure receipt is unavailable';
+    end if;
+    replay_target_id := case when stored."subjectIds"[1] = scope.organization_id
+      then stored."subjectIds"[2] else stored."subjectIds"[1] end;
+    return query select 'replayed'::text, 'close_organization_account'::text,
+      scope.organization_id, replay_target_id,
+      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", replay_target_id)],
+      stored."receiptId", stored."acceptedAt",
+      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", scope.organization_id)];
+    return;
+  end if;
+  -- Lock order: organization access version, then the account row, the same
+  -- order invitation acceptance uses.
+  perform 1
+  from vortex_access.organization_access_versions as version
+  where version.organization_id = scope.organization_id
+  for update;
+  select account.state, account.revision into target
+  from vortex_identity.organization_accounts as account
+  where account.organization_id = scope.organization_id
+    and account.organization_account_id = p_organization_account_id
+  for update;
+  if not found or target.state not in ('active', 'suspended')
+    or target.revision <> p_expected_revision
+    or p_expected_revision = 9007199254740991 then
+    raise exception using errcode = '40001', message = 'Account closure is stale or unavailable';
+  end if;
+  select result.* into strict changed
+  from vortex_access.change_organization_account_state(
+    p_organization_account_id, p_expected_revision, 'closed'
+  ) as result;
+  if changed.organization_id <> scope.organization_id
+    or changed.organization_account_id <> p_organization_account_id
+    or changed.state <> 'closed' or changed.revision <> p_expected_revision + 1
+    or changed.access_version <> scope.access_version + 1 then
+    raise exception using errcode = '42501', message = 'Account closure result is unavailable';
+  end if;
+  if scope.organization_id < p_organization_account_id then
+    subject_ids := array[scope.organization_id, p_organization_account_id];
+    subject_revisions := array[changed.access_version, changed.revision];
+  else
+    subject_ids := array[p_organization_account_id, scope.organization_id];
+    subject_revisions := array[changed.revision, changed.access_version];
+  end if;
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key,
+    pg_catalog.jsonb_build_object('receiptId', changed.state_change_correlation_id,
+      'acceptedAt', changed.changed_at, 'subjectIds', pg_catalog.to_jsonb(subject_ids),
+      'subjectRevisions', pg_catalog.to_jsonb(subject_revisions)));
+  return query select 'accepted'::text, 'close_organization_account'::text,
+    scope.organization_id, p_organization_account_id, changed.revision,
+    changed.state_change_correlation_id, changed.changed_at, changed.access_version;
+end
+$function$;
+
+comment on function vortex_access.close_organization_account_for_administration(uuid, uuid, bigint) is
+  'Protected active-or-suspended-to-closed account command; closure is not deletion.';
+
+revoke execute on function
+  vortex_access.close_organization_account_for_administration(uuid, uuid, bigint) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+
+grant execute on function
+  vortex_access.close_organization_account_for_administration(uuid, uuid, bigint) to vortex_request;
+
+alter function vortex_access.close_organization_account_for_administration(p_duplicate_key uuid, p_organization_account_id uuid, p_expected_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_access.close_organization_account_for_administration(p_duplicate_key uuid, p_organization_account_id uuid, p_expected_revision bigint) to postgres;
+
+
+create or replace function vortex_access.reactivate_organization_account_for_administration(
+  p_duplicate_key uuid, p_organization_account_id uuid,
+  p_expected_revision bigint
+)
+returns table (
+  outcome text, operation text, organization_id uuid,
+  organization_account_id uuid, revision bigint, correlation_id uuid,
+  accepted_at timestamptz, access_version bigint
+)
+language plpgsql volatile security definer set search_path = ''
+as $function$
+declare
+  scope record;
+  stored record; claimed jsonb;
+  replay_target_id uuid;
+  target record; changed record;
+  subject_ids uuid[]; subject_revisions bigint[];
+begin
+  if p_duplicate_key is null or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
+    or p_organization_account_id is null
+    or not vortex_platform.is_non_nil_uuid(p_organization_account_id::text)
+    or p_expected_revision is null
+    or p_expected_revision not between 1 and 9007199254740991 then
+    raise exception using errcode = '22023', message = 'Account reactivation command is invalid';
+  end if;
+  select authorized.* into strict scope
+  from vortex_access.organization_accounts_administration_change_scope() as authorized;
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'reactivate_organization_account', p_duplicate_key, scope.organization_id,
+    scope.tenant_id, scope.organization_account_id, 'Administration duplicate conflicts');
+  if claimed is not null then
+    select r.* into stored from pg_catalog.jsonb_to_record(claimed) as r(
+      "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
+      "subjectRevisions" bigint[]);
+    if pg_catalog.cardinality(stored."subjectIds") is distinct from 2
+      or pg_catalog.cardinality(stored."subjectRevisions") is distinct from 2
+      or pg_catalog.array_position(stored."subjectIds", null) is not null
+      or stored."subjectIds"[1] = stored."subjectIds"[2]
+      or not scope.organization_id = any(stored."subjectIds")
+      then
+      raise exception using errcode = '42501', message = 'Account reactivation receipt is unavailable';
+    end if;
+    replay_target_id := case when stored."subjectIds"[1] = scope.organization_id
+      then stored."subjectIds"[2] else stored."subjectIds"[1] end;
+    return query select 'replayed'::text, 'reactivate_organization_account'::text,
+      scope.organization_id, replay_target_id,
+      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", replay_target_id)],
+      stored."receiptId", stored."acceptedAt",
+      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", scope.organization_id)];
+    return;
+  end if;
+  -- Lock order: organization access version, then the account row, the same
+  -- order invitation acceptance uses.
+  perform 1
+  from vortex_access.organization_access_versions as version
+  where version.organization_id = scope.organization_id
+  for update;
+  select account.state, account.revision into target
+  from vortex_identity.organization_accounts as account
+  where account.organization_id = scope.organization_id
+    and account.organization_account_id = p_organization_account_id
+  for update;
+  if not found or target.state not in ('suspended', 'closed')
+    or target.revision <> p_expected_revision
+    or p_expected_revision = 9007199254740991 then
+    raise exception using errcode = '40001', message = 'Account reactivation is stale or unavailable';
+  end if;
+  select result.* into strict changed
+  from vortex_access.change_organization_account_state(
+    p_organization_account_id, p_expected_revision, 'active'
+  ) as result;
+  if changed.organization_id <> scope.organization_id
+    or changed.organization_account_id <> p_organization_account_id
+    or changed.state <> 'active' or changed.revision <> p_expected_revision + 1
+    or changed.access_version <> scope.access_version + 1 then
+    raise exception using errcode = '42501', message = 'Account reactivation result is unavailable';
+  end if;
+  if scope.organization_id < p_organization_account_id then
+    subject_ids := array[scope.organization_id, p_organization_account_id];
+    subject_revisions := array[changed.access_version, changed.revision];
+  else
+    subject_ids := array[p_organization_account_id, scope.organization_id];
+    subject_revisions := array[changed.revision, changed.access_version];
+  end if;
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key,
+    pg_catalog.jsonb_build_object('receiptId', changed.state_change_correlation_id,
+      'acceptedAt', changed.changed_at, 'subjectIds', pg_catalog.to_jsonb(subject_ids),
+      'subjectRevisions', pg_catalog.to_jsonb(subject_revisions)));
+  return query select 'accepted'::text, 'reactivate_organization_account'::text,
+    scope.organization_id, p_organization_account_id, changed.revision,
+    changed.state_change_correlation_id, changed.changed_at, changed.access_version;
+end
+$function$;
+
+comment on function vortex_access.reactivate_organization_account_for_administration(uuid, uuid, bigint) is
+  'Protected suspended-or-closed-to-active account command using the existing guarded owner and accepted receipt.';
+
+revoke execute on function
+  vortex_access.reactivate_organization_account_for_administration(uuid, uuid, bigint) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+
+grant execute on function
+  vortex_access.reactivate_organization_account_for_administration(uuid, uuid, bigint) to vortex_request;
+
+alter function vortex_access.reactivate_organization_account_for_administration(p_duplicate_key uuid, p_organization_account_id uuid, p_expected_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_access.reactivate_organization_account_for_administration(p_duplicate_key uuid, p_organization_account_id uuid, p_expected_revision bigint) to postgres;
+
+
+create or replace function vortex_access.suspend_organization_account_for_administration(
+  p_duplicate_key uuid, p_organization_account_id uuid,
+  p_expected_revision bigint
+)
+returns table (
+  outcome text, operation text, organization_id uuid,
+  organization_account_id uuid, revision bigint, correlation_id uuid,
+  accepted_at timestamptz, access_version bigint
+)
+language plpgsql volatile security definer set search_path = ''
+as $function$
+declare
+  scope record;
+  stored record; claimed jsonb;
+  replay_target_id uuid;
+  target record; changed record;
+  subject_ids uuid[]; subject_revisions bigint[];
+begin
+  if p_duplicate_key is null or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
+    or p_organization_account_id is null
+    or not vortex_platform.is_non_nil_uuid(p_organization_account_id::text)
+    or p_expected_revision is null
+    or p_expected_revision not between 1 and 9007199254740991 then
+    raise exception using errcode = '22023', message = 'Account suspension command is invalid';
+  end if;
+  select authorized.* into strict scope
+  from vortex_access.organization_accounts_administration_change_scope() as authorized;
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'suspend_organization_account', p_duplicate_key, scope.organization_id,
+    scope.tenant_id, scope.organization_account_id, 'Administration duplicate conflicts');
+  if claimed is not null then
+    select r.* into stored from pg_catalog.jsonb_to_record(claimed) as r(
+      "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
+      "subjectRevisions" bigint[]);
+    if pg_catalog.cardinality(stored."subjectIds") is distinct from 2
+      or pg_catalog.cardinality(stored."subjectRevisions") is distinct from 2
+      or pg_catalog.array_position(stored."subjectIds", null) is not null
+      or stored."subjectIds"[1] = stored."subjectIds"[2]
+      or not scope.organization_id = any(stored."subjectIds")
+      then
+      raise exception using errcode = '42501', message = 'Account suspension receipt is unavailable';
+    end if;
+    replay_target_id := case when stored."subjectIds"[1] = scope.organization_id
+      then stored."subjectIds"[2] else stored."subjectIds"[1] end;
+    return query select 'replayed'::text, 'suspend_organization_account'::text,
+      scope.organization_id, replay_target_id,
+      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", replay_target_id)],
+      stored."receiptId", stored."acceptedAt",
+      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", scope.organization_id)];
+    return;
+  end if;
+  -- Lock order: organization access version, then the account row, the same
+  -- order invitation acceptance uses.
+  perform 1
+  from vortex_access.organization_access_versions as version
+  where version.organization_id = scope.organization_id
+  for update;
+  select account.state, account.revision into target
+  from vortex_identity.organization_accounts as account
+  where account.organization_id = scope.organization_id
+    and account.organization_account_id = p_organization_account_id
+  for update;
+  if not found or target.state <> 'active' or target.revision <> p_expected_revision
+    or p_expected_revision = 9007199254740991 then
+    raise exception using errcode = '40001', message = 'Account suspension is stale or unavailable';
+  end if;
+  select result.* into strict changed
+  from vortex_access.change_organization_account_state(
+    p_organization_account_id, p_expected_revision, 'suspended'
+  ) as result;
+  if changed.organization_id <> scope.organization_id
+    or changed.organization_account_id <> p_organization_account_id
+    or changed.state <> 'suspended' or changed.revision <> p_expected_revision + 1
+    or changed.access_version <> scope.access_version + 1 then
+    raise exception using errcode = '42501', message = 'Account suspension result is unavailable';
+  end if;
+  if scope.organization_id < p_organization_account_id then
+    subject_ids := array[scope.organization_id, p_organization_account_id];
+    subject_revisions := array[changed.access_version, changed.revision];
+  else
+    subject_ids := array[p_organization_account_id, scope.organization_id];
+    subject_revisions := array[changed.revision, changed.access_version];
+  end if;
+  perform vortex_record.complete_scoped_command_receipt_internal(
+    p_duplicate_key,
+    pg_catalog.jsonb_build_object('receiptId', changed.state_change_correlation_id,
+      'acceptedAt', changed.changed_at, 'subjectIds', pg_catalog.to_jsonb(subject_ids),
+      'subjectRevisions', pg_catalog.to_jsonb(subject_revisions)));
+  return query select 'accepted'::text, 'suspend_organization_account'::text,
+    scope.organization_id, p_organization_account_id, changed.revision,
+    changed.state_change_correlation_id, changed.changed_at, changed.access_version;
+end
+$function$;
+
+comment on function vortex_access.suspend_organization_account_for_administration(uuid, uuid, bigint) is
+  'Protected active-to-suspended account command using the existing guarded owner and accepted receipt.';
+
+revoke execute on function
+  vortex_access.suspend_organization_account_for_administration(uuid, uuid, bigint) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+
+grant execute on function
+  vortex_access.suspend_organization_account_for_administration(uuid, uuid, bigint) to vortex_request;
+
+alter function vortex_access.suspend_organization_account_for_administration(p_duplicate_key uuid, p_organization_account_id uuid, p_expected_revision bigint) owner to vortex_owner;
+
+grant execute on function vortex_access.suspend_organization_account_for_administration(p_duplicate_key uuid, p_organization_account_id uuid, p_expected_revision bigint) to postgres;
+
+
 reset role;

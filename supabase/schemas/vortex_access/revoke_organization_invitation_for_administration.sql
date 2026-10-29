@@ -5,8 +5,9 @@ CREATE OR REPLACE FUNCTION vortex_access.revoke_organization_invitation_for_admi
 declare
   scope record;
   stored record; claimed jsonb;
+  replay_target_id uuid;
   new_receipt_id uuid; new_accepted_at timestamptz;
-  revoked record; command_fingerprint text;
+  revoked record;
   subject_ids uuid[]; subject_revisions bigint[];
 begin
   if p_duplicate_key is null or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
@@ -17,28 +18,26 @@ begin
   end if;
   select authorized.* into strict scope
   from vortex_access.organization_invitations_administration_change_scope() as authorized;
-  command_fingerprint := 'sha256:' || pg_catalog.encode(extensions.digest(
-    pg_catalog.convert_to(pg_catalog.concat_ws(E'\x1f', 'revoke_organization_invitation',
-      scope.organization_id::text, p_invitation_id::text,
-      p_expected_revision::text), 'UTF8'), 'sha256'), 'hex');
   claimed := vortex_record.claim_scoped_command_receipt_internal(
     'revoke_organization_invitation', p_duplicate_key, scope.organization_id,
     scope.tenant_id, scope.organization_account_id, 'Administration duplicate conflicts');
   if claimed is not null then
     select r.* into stored from pg_catalog.jsonb_to_record(claimed) as r(
       "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
-      "subjectRevisions" bigint[], "fingerprint" text, "clusterId" uuid);
-    if stored."fingerprint" <> command_fingerprint then
-      raise exception using errcode = 'V3001', message = 'Administration duplicate conflicts';
-    end if;
-    if pg_catalog.cardinality(stored."subjectIds") <> 2
+      "subjectRevisions" bigint[]);
+    if pg_catalog.cardinality(stored."subjectIds") is distinct from 2
+      or pg_catalog.cardinality(stored."subjectRevisions") is distinct from 2
+      or pg_catalog.array_position(stored."subjectIds", null) is not null
+      or stored."subjectIds"[1] = stored."subjectIds"[2]
       or not scope.organization_id = any(stored."subjectIds")
-      or not p_invitation_id = any(stored."subjectIds") then
+      then
       raise exception using errcode = '42501', message = 'Invitation revocation receipt is unavailable';
     end if;
+    replay_target_id := case when stored."subjectIds"[1] = scope.organization_id
+      then stored."subjectIds"[2] else stored."subjectIds"[1] end;
     return query select 'replayed'::text, 'revoke_organization_invitation'::text,
-      scope.organization_id, p_invitation_id,
-      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", p_invitation_id)],
+      scope.organization_id, replay_target_id,
+      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", replay_target_id)],
       stored."receiptId", stored."acceptedAt",
       stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", scope.organization_id)];
     return;
@@ -70,8 +69,7 @@ begin
     p_duplicate_key,
     pg_catalog.jsonb_build_object('receiptId', new_receipt_id,
       'acceptedAt', new_accepted_at, 'subjectIds', pg_catalog.to_jsonb(subject_ids),
-      'subjectRevisions', pg_catalog.to_jsonb(subject_revisions),
-      'fingerprint', command_fingerprint, 'clusterId', null));
+      'subjectRevisions', pg_catalog.to_jsonb(subject_revisions)));
   return query select 'accepted'::text, 'revoke_organization_invitation'::text,
     scope.organization_id, p_invitation_id, revoked.revision,
     new_receipt_id, new_accepted_at, scope.access_version;

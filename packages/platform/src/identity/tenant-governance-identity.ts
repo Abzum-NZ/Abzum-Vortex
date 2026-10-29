@@ -105,7 +105,8 @@ type OrganizationCreationRow = DatabaseRow & {
   correlation_id: unknown;
   accepted_at: unknown;
 };
-const transactionPoisonErrorName = "TenantGovernanceTransactionPoisoned";
+// A poisoned request-bound transaction is logged once by the request boundary that aborts on it.
+export const transactionPoisonErrorName = "TenantGovernanceTransactionPoisoned";
 const mutationCode = (error: unknown) => {
   // The database cause is logged where it is mapped to the safe code the caller receives.
   if (!(error instanceof Error && error.name === transactionPoisonErrorName))
