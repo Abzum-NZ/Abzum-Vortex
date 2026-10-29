@@ -1,5 +1,6 @@
 import {
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
+  APPLICATION_SEARCH_BLOCK_RELEASE,
   CONTAINER_BLOCK_RELEASE,
   HEADING_BLOCK_RELEASE,
 } from "../definition/application-composition-catalogue";
@@ -127,6 +128,10 @@ export const organizationLauncherPlacementId = "8f31d589-1897-4d31-b27c-e79ebda3
 export const applicationLauncherOpenEventId = "open_application";
 
 const launcherItems = [
+  platformPageItem(APPLICATION_SEARCH_BLOCK_RELEASE, "f0299e44-84f3-4ab1-a822-90b28584f002", {
+    placeholder: "Search applications and records",
+    submit_label: "Search",
+  }),
   platformPageItem(HEADING_BLOCK_RELEASE, "f0299e44-84f3-4ab1-a822-90b28584f001", {
     text: "Choose an application you can open",
     level: "two",
