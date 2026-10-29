@@ -124,6 +124,10 @@ begin
     return;
   end if;
 
+  if vortex_identity.tenant_short_name_reserved(p_tenant_short_name) then
+    raise exception using errcode = 'V3190', message = 'Tenant short name is reserved for a platform route';
+  end if;
+
   perform vortex_identity.assert_organization_runtime_settings_values(
     p_runtime_language, p_runtime_time_zone, p_runtime_currency,
     p_runtime_date_format, p_runtime_number_format

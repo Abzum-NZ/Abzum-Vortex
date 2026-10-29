@@ -163,6 +163,11 @@ const refusalCode = (error: unknown) => {
       return "operation_unavailable" as const;
   }
 };
+const provisionRefusalCode = (error: unknown) => {
+  if (databaseCode(error) !== "V3190") return refusalCode(error);
+  console.error(`[identity] configured operation refused: ${describeFailure(error)}`);
+  return "reserved_tenant_short_name" as const;
+};
 const lifecycleRefusalCode = (error: unknown) => {
   if (databaseCode(error) !== "V3102") return refusalCode(error);
   console.error(`[identity] configured operation refused: ${describeFailure(error)}`);
@@ -378,7 +383,11 @@ export const createConfiguredTenantAdministrationService = (
           return parsed.data;
         });
       } catch (error) {
-        return { outcome: "refused", operation: "provision_tenant", code: refusalCode(error) };
+        return {
+          outcome: "refused",
+          operation: "provision_tenant",
+          code: provisionRefusalCode(error),
+        };
       }
     },
 
