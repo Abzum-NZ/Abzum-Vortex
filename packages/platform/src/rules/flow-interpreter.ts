@@ -20,7 +20,7 @@ import {
   flowTaskRegistry,
   type PageStepType,
   type ServerStepType,
-} from "../workflows/flow-task-registry";
+} from "../workflows/flow-task-registry-data";
 import {
   flowMaximumTaskOutputPathDepth,
   type FlowReference,
