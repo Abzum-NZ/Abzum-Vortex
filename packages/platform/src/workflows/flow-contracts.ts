@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { flowRuntimeValuesEqual } from "../rules/flow-formula";
 import { workflowValueTypeSchema } from "../catalogue/catalogues";
 import { descriptionSchema, jsonValueSchema } from "../catalogue/common";
 import { builderKeySchema, flowIdSchema, namespacedKeySchema, permissionIdSchema, recordTypeIdSchema, stableDefinitionReleaseVersionSchema } from "../catalogue/identifiers";
@@ -370,7 +371,6 @@ const flowTaskTreeSchema: z.ZodType<FlowTask> = z.lazy(() => {
       .strict()
       .superRefine((task, context) => {
         const keys = new Set<string>();
-        const values = new Set<string>();
         task.cases.forEach((entry, index) => {
           if (keys.has(entry.key))
             context.addIssue({
@@ -379,14 +379,15 @@ const flowTaskTreeSchema: z.ZodType<FlowTask> = z.lazy(() => {
               message: "Switch case keys must be unique",
             });
           keys.add(entry.key);
-          const value = JSON.stringify(entry.when);
-          if (values.has(value))
+          const matching = task.cases.slice(0, index).find(
+            (previous) => flowRuntimeValuesEqual(previous.when, entry.when) === true,
+          );
+          if (matching !== undefined)
             context.addIssue({
               code: "custom",
               path: ["cases", index, "when"],
-              message: "Switch case values must be unique",
+              message: `Switch cases '${matching.key}' and '${entry.key}' match the same value`,
             });
-          values.add(value);
         });
       }),
     z
