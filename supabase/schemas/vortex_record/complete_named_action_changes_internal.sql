@@ -42,6 +42,8 @@ declare
   creation jsonb;
   created_records jsonb := '{}'::jsonb;
   public_created_records jsonb := '{}'::jsonb;
+  creation_storage_changes jsonb := '[]'::jsonb;
+  creation_edge_changes jsonb := '[]'::jsonb;
   created_record_tuples jsonb := '[]'::jsonb;
   first_created_record_tuples jsonb := '[]'::jsonb;
   inserted_value jsonb;
@@ -113,9 +115,8 @@ begin
         message = 'Named action creation plan is unavailable';
     end if;
 
-    -- Every insert, in authored task order, before any edge. Each allocates
-    -- its reference numbers (L4); keeping the whole set ahead of the edge pass
-    -- is what matches ordinary create's counter-before-edge order.
+    -- Prepare every create in authored order before writing any of them,
+    -- preserving reference allocation before edge locks.
     for creation in
       select item.value
       from pg_catalog.jsonb_array_elements(action_creations) with ordinality item(value, ordinality)
@@ -124,11 +125,13 @@ begin
       select coalesce(pg_catalog.array_agg(key::uuid order by key::uuid), array[]::uuid[])
       into submitted_field_ids
       from pg_catalog.jsonb_object_keys(creation -> 'values') as key;
-      inserted_value := vortex_record.insert_named_action_record_internal(
+      inserted_value := vortex_record.prepare_named_action_record_create_internal(
         (creation ->> 'recordTypeId')::uuid, creation -> 'finalValues', submitted_field_ids
       );
+      creation_storage_changes := creation_storage_changes ||
+        pg_catalog.jsonb_build_array(inserted_value -> 'storageChange');
       created_records := created_records || pg_catalog.jsonb_build_object(
-        creation ->> 'ordinal', inserted_value
+        creation ->> 'ordinal', inserted_value - 'storageChange'
       );
     end loop;
 
@@ -175,15 +178,19 @@ begin
       from pg_catalog.jsonb_array_elements(edge_plan) with ordinality item(value, ordinality)
       order by item.ordinality
     loop
-      perform vortex_record.write_named_action_relationship_value_internal(
-        (edge_entry ->> 'sourceRecordTypeId')::uuid,
-        (created_records -> (edge_entry ->> 'ordinal') ->> 'recordId')::uuid,
-        (edge_entry ->> 'relationshipId')::uuid,
-        edge_entry -> 'value',
-        action_owner_kind, action_owner_id, action_release_revision,
-        action_id_value, p_record_type_id, p_record_id
+      creation_edge_changes := creation_edge_changes || pg_catalog.jsonb_build_array(
+        vortex_record.prepare_named_action_relationship_value_internal(
+          (edge_entry ->> 'sourceRecordTypeId')::uuid,
+          (created_records -> (edge_entry ->> 'ordinal') ->> 'recordId')::uuid,
+          (edge_entry ->> 'relationshipId')::uuid,
+          edge_entry -> 'value',
+          action_owner_kind, action_owner_id, action_release_revision,
+          action_id_value, p_record_type_id, p_record_id
+        )
       );
     end loop;
+    perform vortex_record.apply_record_storage_changes_internal(creation_storage_changes);
+    perform vortex_record.apply_relationship_edges_internal(creation_edge_changes);
 
     -- Reauthorize the complete new graph before any created-row Activity or
     -- Event is visible. This barrier is intentionally whole-command, not per row.

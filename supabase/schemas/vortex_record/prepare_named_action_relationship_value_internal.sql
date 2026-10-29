@@ -1,6 +1,6 @@
 -- Private Record-adapter routine; migrations install the complete canonical body
 -- under its owner with schema CREATE granted only for that migration transaction.
-create or replace function vortex_record.write_named_action_relationship_value_internal(
+create or replace function vortex_record.prepare_named_action_relationship_value_internal(
   p_source_record_type_id uuid,
   p_source_record_id uuid,
   p_relationship_id uuid,
@@ -12,7 +12,7 @@ create or replace function vortex_record.write_named_action_relationship_value_i
   p_subject_record_type_id uuid,
   p_subject_record_id uuid
 )
-returns void
+returns jsonb
 language plpgsql
 volatile
 security invoker
@@ -37,8 +37,6 @@ declare
   mapping_row vortex_record.relationship_storage_mappings%rowtype;
   application_root_required boolean;
   existing_other boolean;
-  update_sql text;
-  changed_rows integer;
 begin
   if p_source_record_type_id is null or p_source_record_id is null
     or p_relationship_id is null
@@ -92,22 +90,14 @@ begin
         p_source_record_id, null, null
       )
     );
-    delete from vortex_record.relationship_edges as edge
-    where edge.relationship_id = p_relationship_id
-      and edge.from_organisation_id = (source_context ->> 'organizationId')::uuid
-      and edge.from_storage_contract_id = (source_meta ->> 'storageContractId')::uuid
-      and edge.from_record_id = p_source_record_id;
-    update_sql := pg_catalog.format(
-      'update record_data.%I as stored set %I = null
-       where stored.organisation_id = $1 and stored.record_id = $2',
-      source_meta ->> 'table', field_column ->> 'token'
+    return pg_catalog.jsonb_build_object(
+      'relationshipId', p_relationship_id, 'sourceRecordId', p_source_record_id,
+      'sourceStorageContractId', source_meta -> 'storageContractId',
+      'sourceApplicationRootId', case when source_meta ->> 'storageScope' = 'application_contained'
+        then source_context -> 'applicationRootId' else null end,
+      'table', source_meta -> 'table', 'column', field_column -> 'token',
+      'value', p_target_value, 'cardinality', mapping_row.cardinality
     );
-    execute update_sql using (source_context ->> 'organizationId')::uuid, p_source_record_id;
-    get diagnostics changed_rows = row_count;
-    if changed_rows <> 1 then
-      raise exception using errcode = '40001', message = 'Relationship source record changed';
-    end if;
-    return;
   end if;
 
   if pg_catalog.jsonb_typeof(p_target_value) <> 'object'
@@ -228,45 +218,27 @@ begin
     );
   end if;
 
-  delete from vortex_record.relationship_edges as edge
-  where edge.relationship_id = p_relationship_id
-    and edge.from_organisation_id = (source_context ->> 'organizationId')::uuid
-    and edge.from_storage_contract_id = (source_meta ->> 'storageContractId')::uuid
-    and edge.from_record_id = p_source_record_id;
-  insert into vortex_record.relationship_edges (
-    relationship_id, from_organisation_id, to_organisation_id,
-    from_application_root_id, to_application_root_id,
-    from_storage_contract_id, from_record_id, to_storage_contract_id, to_record_id
-  ) values (
-    p_relationship_id,
-    (source_context ->> 'organizationId')::uuid,
-    (source_context ->> 'organizationId')::uuid,
-    source_application_root_id, target_application_root_id,
-    (source_meta ->> 'storageContractId')::uuid, p_source_record_id,
-    (target_meta ->> 'storageContractId')::uuid, target_record_id
+  return pg_catalog.jsonb_build_object(
+    'relationshipId', p_relationship_id,
+    'sourceRecordId', p_source_record_id,
+    'sourceStorageContractId', source_meta -> 'storageContractId',
+    'sourceApplicationRootId', source_application_root_id,
+    'targetStorageContractId', target_meta -> 'storageContractId',
+    'targetRecordId', target_record_id,
+    'targetApplicationRootId', target_application_root_id,
+    'table', source_meta -> 'table', 'column', field_column -> 'token',
+    'value', p_target_value, 'cardinality', mapping_row.cardinality
   );
-
-  update_sql := pg_catalog.format(
-    'update record_data.%I as stored set %I = $3::jsonb
-     where stored.organisation_id = $1 and stored.record_id = $2',
-    source_meta ->> 'table', field_column ->> 'token'
-  );
-  execute update_sql using (source_context ->> 'organizationId')::uuid,
-    p_source_record_id, p_target_value;
-  get diagnostics changed_rows = row_count;
-  if changed_rows <> 1 then
-    raise exception using errcode = '40001', message = 'Relationship source record changed';
-  end if;
 end
 $function$;
 
-alter function vortex_record.write_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) owner to vortex_record_adapter;
+alter function vortex_record.prepare_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) owner to vortex_record_adapter;
 
 revoke all on function
-  vortex_record.write_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+  vortex_record.prepare_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 grant execute on function
-  vortex_record.write_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) to vortex_record_adapter;
+  vortex_record.prepare_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) to vortex_record_adapter;
 
-comment on function vortex_record.write_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) is
-  'Private named-action edge writer: checks current application access for flagged Person links, uses the ordinary or protected projection target lock and edge flow, and authorises the command subject by re-evaluating the exact installed named action rather than ordinary read.';
+comment on function vortex_record.prepare_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) is
+  'Private named-action edge preparation: checks current application access for flagged Person links, uses the ordinary or protected projection target lock and edge flow, and authorises the command subject by re-evaluating the exact installed named action rather than ordinary read.';

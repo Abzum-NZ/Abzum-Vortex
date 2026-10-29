@@ -1,4 +1,4 @@
-create or replace function vortex_record.insert_named_action_record_internal(
+create or replace function vortex_record.prepare_named_action_record_create_internal(
   p_record_type_id uuid,
   p_final_values jsonb,
   p_submitted_field_ids uuid[]
@@ -15,15 +15,6 @@ declare
   context_value jsonb;
   record_type_value jsonb;
   record_id_value uuid := pg_catalog.gen_random_uuid();
-  returned_record_id uuid;
-  returned_concurrency_number bigint;
-  returned_definition_revision bigint;
-  returned_organization_id uuid;
-  returned_module_root_id uuid;
-  returned_record_type_id uuid;
-  returned_storage_contract_id uuid;
-  returned_application_root_id uuid;
-  returned_created_by uuid;
   ownership_mode text;
   owner_account_id uuid;
   owner_group_id uuid;
@@ -33,11 +24,9 @@ declare
   column_value jsonb;
   input_value jsonb;
   final_values jsonb := p_final_values;
-  column_names text[] := array[]::text[];
-  column_values text[] := array[]::text[];
-  insert_sql text;
+  physical_values jsonb := '{}'::jsonb;
+  storage_change jsonb;
   app_scope uuid;
-  inserted_rows integer;
   organization_id_value uuid;
   module_root_id_value uuid;
   storage_contract_id_value uuid;
@@ -187,100 +176,53 @@ begin
       continue;
     end if;
 
-    column_names := pg_catalog.array_append(
-      column_names, pg_catalog.format('%I', column_value ->> 'token')
-    );
-    column_values := pg_catalog.array_append(column_values,
-      case when pg_catalog.jsonb_typeof(input_value) = 'null' then 'null'
-      else case column_value ->> 'databaseValueType'
-        when 'decimal' then pg_catalog.format('%L::numeric', input_value #>> '{}')
-        when 'timestamp_with_time_zone' then
-          pg_catalog.format('%L::timestamptz', input_value #>> '{}')
-        when 'date' then pg_catalog.format('%L::date', input_value #>> '{}')
-        when 'integer' then pg_catalog.format('%L::bigint', input_value #>> '{}')
-        when 'boolean' then pg_catalog.format('%L::boolean', input_value #>> '{}')
-        when 'json' then pg_catalog.format('%L::jsonb', input_value::text)
-        else pg_catalog.format('%L::text', input_value #>> '{}')
-      end end
+    physical_values := physical_values || pg_catalog.jsonb_build_object(
+      column_value ->> 'token', input_value
     );
   end loop;
 
-  insert_sql := pg_catalog.format(
-    'insert into record_data.%I (
-       organisation_id, module_root_id, record_type_id, storage_contract_id,
-       record_id, application_root_id, definition_revision,
-       owner_organisation_account_id, owner_group_id, lifecycle_state,
-       concurrency_number, created_at, created_by, updated_at, updated_by%s
-       ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, ''active'', 1,
-       pg_catalog.statement_timestamp(), $10, pg_catalog.statement_timestamp(), $10%s)
-     returning record_id, concurrency_number, definition_revision, organisation_id, module_root_id,
-       record_type_id, storage_contract_id, application_root_id, created_by',
-    meta ->> 'table',
-    case when pg_catalog.cardinality(column_names) = 0 then ''
-      else ', ' || pg_catalog.array_to_string(column_names, ', ') end,
-    case when pg_catalog.cardinality(column_values) = 0 then ''
-      else ', ' || pg_catalog.array_to_string(column_values, ', ') end
+  storage_change := pg_catalog.jsonb_build_object(
+    'storageContractId', storage_contract_id_value, 'recordId', record_id_value,
+    'expectedConcurrencyNumber', null,
+    'values', physical_values || pg_catalog.jsonb_build_object(
+      'module_root_id', module_root_id_value, 'record_type_id', p_record_type_id,
+      'storage_contract_id', storage_contract_id_value, 'application_root_id', app_scope,
+      'definition_revision', module_release_revision_value,
+      'owner_organisation_account_id', owner_account_id, 'owner_group_id', owner_group_id,
+      'lifecycle_state', 'active', 'created_at', pg_catalog.statement_timestamp(),
+      'created_by', actor_id_value
+    )
   );
-  execute insert_sql into returned_record_id, returned_concurrency_number,
-    returned_definition_revision,
-    returned_organization_id, returned_module_root_id, returned_record_type_id,
-    returned_storage_contract_id, returned_application_root_id, returned_created_by
-  using organization_id_value, module_root_id_value, p_record_type_id,
-    storage_contract_id_value, record_id_value, app_scope,
-    module_release_revision_value, owner_account_id, owner_group_id, actor_id_value;
-  get diagnostics inserted_rows = row_count;
-  if inserted_rows <> 1 or returned_record_id is null
-    or returned_record_id = nil_uuid or returned_record_id is distinct from record_id_value
-    or returned_concurrency_number is null
-    or returned_concurrency_number not between 1 and 9007199254740991
-    or returned_definition_revision is distinct from module_release_revision_value
-    or returned_organization_id is distinct from organization_id_value
-    or returned_module_root_id is distinct from module_root_id_value
-    or returned_record_type_id is distinct from p_record_type_id
-    or returned_storage_contract_id is distinct from storage_contract_id_value
-    or returned_application_root_id is distinct from app_scope
-    or returned_created_by is distinct from actor_id_value then
-    raise exception using errcode = '55000',
-      message = 'Named action creation insert result is unavailable';
-  end if;
 
   eligible_for_created_notice := storage_scope_value = 'application_contained';
-  if not eligible_for_created_notice then
-    perform vortex_record.bump_record_data_version_internal(
-      organization_id_value, storage_contract_id_value, app_scope
-    );
-  end if;
   return pg_catalog.jsonb_build_object(
-    'recordId', returned_record_id,
-    'storageContractId', returned_storage_contract_id,
-    'values', final_values,
+    'recordId', record_id_value,
+    'storageContractId', storage_contract_id_value,
+    'values', final_values, 'storageChange', storage_change,
     '_savedTuple', pg_catalog.jsonb_build_object(
-      'recordId', returned_record_id,
-      'concurrencyNumber', returned_concurrency_number,
-      'organizationId', returned_organization_id,
-      'applicationRootId', returned_application_root_id,
-      'moduleRootId', returned_module_root_id,
-      'recordTypeId', returned_record_type_id,
-      'storageContractId', returned_storage_contract_id,
+      'recordId', record_id_value,
+      'concurrencyNumber', 1,
+      'organizationId', organization_id_value,
+      'applicationRootId', app_scope,
+      'moduleRootId', module_root_id_value,
+      'recordTypeId', p_record_type_id,
+      'storageContractId', storage_contract_id_value,
       'moduleReleaseRevision', module_release_revision_value,
       'storageScope', storage_scope_value,
-      'actorId', returned_created_by,
+      'actorId', actor_id_value,
       'correlationId', (context_value ->> 'correlationId')::uuid,
       'eligible', eligible_for_created_notice
     )
   );
 end
 $function$;
-alter function vortex_record.insert_named_action_record_internal(uuid,jsonb,uuid[]) owner to vortex_record_adapter;
-
-
-alter function vortex_record.insert_named_action_record_internal(uuid,jsonb,uuid[])
+alter function vortex_record.prepare_named_action_record_create_internal(uuid,jsonb,uuid[])
   owner to vortex_record_adapter;
 
-revoke all on function vortex_record.insert_named_action_record_internal(uuid,jsonb,uuid[])
+revoke all on function vortex_record.prepare_named_action_record_create_internal(uuid,jsonb,uuid[])
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.insert_named_action_record_internal(uuid,jsonb,uuid[])
+grant execute on function vortex_record.prepare_named_action_record_create_internal(uuid,jsonb,uuid[])
   to vortex_record_adapter;
 
-comment on function vortex_record.insert_named_action_record_internal(uuid,jsonb,uuid[]) is
-  'Private named-action insert phase: validates current installed create metadata, allocates required reference values before all edges, captures the actual inserted row and revision with RETURNING, and returns a private tuple for whole-graph authorization and terminal created-notice emission.';
+comment on function vortex_record.prepare_named_action_record_create_internal(uuid,jsonb,uuid[]) is
+  'Private named-action create preparation: validates definition, typed values and derived ownership, allocates references, and returns a storage mutation and expected tuple for the whole-command authority check.';

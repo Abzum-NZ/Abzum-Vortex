@@ -3648,6 +3648,8 @@ declare
   creation jsonb;
   created_records jsonb := '{}'::jsonb;
   public_created_records jsonb := '{}'::jsonb;
+  creation_storage_changes jsonb := '[]'::jsonb;
+  creation_edge_changes jsonb := '[]'::jsonb;
   created_record_tuples jsonb := '[]'::jsonb;
   first_created_record_tuples jsonb := '[]'::jsonb;
   inserted_value jsonb;
@@ -3719,9 +3721,8 @@ begin
         message = 'Named action creation plan is unavailable';
     end if;
 
-    -- Every insert, in authored task order, before any edge. Each allocates
-    -- its reference numbers (L4); keeping the whole set ahead of the edge pass
-    -- is what matches ordinary create's counter-before-edge order.
+    -- Prepare every create in authored order before writing any of them,
+    -- preserving reference allocation before edge locks.
     for creation in
       select item.value
       from pg_catalog.jsonb_array_elements(action_creations) with ordinality item(value, ordinality)
@@ -3730,11 +3731,13 @@ begin
       select coalesce(pg_catalog.array_agg(key::uuid order by key::uuid), array[]::uuid[])
       into submitted_field_ids
       from pg_catalog.jsonb_object_keys(creation -> 'values') as key;
-      inserted_value := vortex_record.insert_named_action_record_internal(
+      inserted_value := vortex_record.prepare_named_action_record_create_internal(
         (creation ->> 'recordTypeId')::uuid, creation -> 'finalValues', submitted_field_ids
       );
+      creation_storage_changes := creation_storage_changes ||
+        pg_catalog.jsonb_build_array(inserted_value -> 'storageChange');
       created_records := created_records || pg_catalog.jsonb_build_object(
-        creation ->> 'ordinal', inserted_value
+        creation ->> 'ordinal', inserted_value - 'storageChange'
       );
     end loop;
 
@@ -3781,15 +3784,19 @@ begin
       from pg_catalog.jsonb_array_elements(edge_plan) with ordinality item(value, ordinality)
       order by item.ordinality
     loop
-      perform vortex_record.write_named_action_relationship_value_internal(
-        (edge_entry ->> 'sourceRecordTypeId')::uuid,
-        (created_records -> (edge_entry ->> 'ordinal') ->> 'recordId')::uuid,
-        (edge_entry ->> 'relationshipId')::uuid,
-        edge_entry -> 'value',
-        action_owner_kind, action_owner_id, action_release_revision,
-        action_id_value, p_record_type_id, p_record_id
+      creation_edge_changes := creation_edge_changes || pg_catalog.jsonb_build_array(
+        vortex_record.prepare_named_action_relationship_value_internal(
+          (edge_entry ->> 'sourceRecordTypeId')::uuid,
+          (created_records -> (edge_entry ->> 'ordinal') ->> 'recordId')::uuid,
+          (edge_entry ->> 'relationshipId')::uuid,
+          edge_entry -> 'value',
+          action_owner_kind, action_owner_id, action_release_revision,
+          action_id_value, p_record_type_id, p_record_id
+        )
       );
     end loop;
+    perform vortex_record.apply_record_storage_changes_internal(creation_storage_changes);
+    perform vortex_record.apply_relationship_edges_internal(creation_edge_changes);
 
     -- Reauthorize the complete new graph before any created-row Activity or
     -- Event is visible. This barrier is intentionally whole-command, not per row.
@@ -7669,6 +7676,483 @@ revoke all on function vortex_record.prepare_record_change_set_internal(uuid,jso
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_record.prepare_record_change_set_internal(uuid,jsonb) is
   'Private closed preparation of up to 200 record intents under one claimed set receipt; reuses create, update and lifecycle authority checks, gathers closure effects, and combines compatible deltas for one physical write per storage table.';
+
+drop function vortex_record.insert_named_action_record_internal(uuid,jsonb,uuid[]);
+drop function vortex_record.write_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid);
+
+create or replace function vortex_record.prepare_named_action_record_create_internal(
+  p_record_type_id uuid,
+  p_final_values jsonb,
+  p_submitted_field_ids uuid[]
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000'::uuid;
+  meta jsonb;
+  context_value jsonb;
+  record_type_value jsonb;
+  record_id_value uuid := pg_catalog.gen_random_uuid();
+  ownership_mode text;
+  owner_account_id uuid;
+  owner_group_id uuid;
+  owner_group_count integer;
+  field_item jsonb;
+  field_id_value uuid;
+  column_value jsonb;
+  input_value jsonb;
+  final_values jsonb := p_final_values;
+  physical_values jsonb := '{}'::jsonb;
+  storage_change jsonb;
+  app_scope uuid;
+  organization_id_value uuid;
+  module_root_id_value uuid;
+  storage_contract_id_value uuid;
+  module_release_revision_value bigint;
+  storage_scope_value text;
+  actor_id_value uuid;
+  eligible_for_created_notice boolean;
+begin
+  if p_record_type_id is null or p_record_type_id = nil_uuid
+    or pg_catalog.jsonb_typeof(p_final_values) is distinct from 'object'
+    or p_submitted_field_ids is null
+    or pg_catalog.array_position(p_submitted_field_ids, null::uuid) is not null
+    or pg_catalog.cardinality(p_submitted_field_ids) <> (
+      select pg_catalog.count(distinct value)
+      from pg_catalog.unnest(p_submitted_field_ids) as item(value)
+    ) then
+    raise exception using errcode = '22023', message = 'Named action creation is invalid';
+  end if;
+
+  meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'create');
+  if pg_catalog.jsonb_typeof(meta) is distinct from 'object'
+    or pg_catalog.jsonb_typeof(meta -> 'declaration') is distinct from 'object'
+    or pg_catalog.jsonb_typeof(meta -> 'context') is distinct from 'object'
+    or meta ? 'previewInstallationId'
+    or pg_catalog.jsonb_typeof(meta -> 'recordType') is distinct from 'object'
+    or pg_catalog.jsonb_typeof(meta -> 'recordType' -> 'recordTypeId') is distinct from 'string'
+    or coalesce(not pg_catalog.pg_input_is_valid(meta -> 'recordType' ->> 'recordTypeId', 'uuid'), true)
+    or pg_catalog.jsonb_typeof(meta -> 'recordType' -> 'fields') is distinct from 'array'
+    or pg_catalog.jsonb_typeof(meta -> 'columns') is distinct from 'object'
+    or pg_catalog.jsonb_typeof(meta -> 'table') is distinct from 'string'
+    or pg_catalog.jsonb_typeof(meta -> 'storageScope') is distinct from 'string'
+    or coalesce(not pg_catalog.pg_input_is_valid(meta ->> 'moduleRootId', 'uuid'), true)
+    or coalesce(not pg_catalog.pg_input_is_valid(meta ->> 'storageContractId', 'uuid'), true)
+    or coalesce(not pg_catalog.pg_input_is_valid(meta ->> 'moduleReleaseRevision', 'bigint'), true) then
+    raise exception using errcode = '55000',
+      message = 'Named action creation target is unavailable';
+  end if;
+  context_value := meta -> 'context';
+  if pg_catalog.jsonb_typeof(context_value -> 'organizationId') is distinct from 'string'
+    or pg_catalog.jsonb_typeof(context_value -> 'applicationRootId') is distinct from 'string'
+    or pg_catalog.jsonb_typeof(context_value -> 'organizationAccountId') is distinct from 'string'
+    or pg_catalog.jsonb_typeof(context_value -> 'correlationId') is distinct from 'string'
+    or coalesce(not pg_catalog.pg_input_is_valid(context_value ->> 'organizationId', 'uuid'), true)
+    or coalesce(not pg_catalog.pg_input_is_valid(context_value ->> 'applicationRootId', 'uuid'), true)
+    or coalesce(not pg_catalog.pg_input_is_valid(context_value ->> 'organizationAccountId', 'uuid'), true)
+    or coalesce(not pg_catalog.pg_input_is_valid(context_value ->> 'correlationId', 'uuid'), true) then
+    raise exception using errcode = '55000',
+      message = 'Named action creation context is unavailable';
+  end if;
+  organization_id_value := (context_value ->> 'organizationId')::uuid;
+  actor_id_value := (context_value ->> 'organizationAccountId')::uuid;
+  module_root_id_value := (meta ->> 'moduleRootId')::uuid;
+  storage_contract_id_value := (meta ->> 'storageContractId')::uuid;
+  module_release_revision_value := (meta ->> 'moduleReleaseRevision')::bigint;
+  storage_scope_value := meta ->> 'storageScope';
+  if organization_id_value = nil_uuid or (context_value ->> 'applicationRootId')::uuid = nil_uuid
+    or actor_id_value = nil_uuid
+    or module_root_id_value = nil_uuid or storage_contract_id_value = nil_uuid
+    or module_release_revision_value not between 1 and 9007199254740991
+    or record_id_value is null or record_id_value = nil_uuid
+    or storage_scope_value not in ('application_contained', 'organization_shared') then
+    raise exception using errcode = '55000',
+      message = 'Named action creation target is unavailable';
+  end if;
+  app_scope := case when storage_scope_value = 'application_contained'
+    then (context_value ->> 'applicationRootId')::uuid else null end;
+  if storage_scope_value = 'application_contained' and app_scope = nil_uuid then
+    raise exception using errcode = '55000',
+      message = 'Named action creation context is unavailable';
+  end if;
+  record_type_value := meta -> 'recordType';
+  if (record_type_value ->> 'recordTypeId')::uuid is distinct from p_record_type_id
+    or record_type_value ->> 'storageScope' is distinct from storage_scope_value then
+    raise exception using errcode = '55000',
+      message = 'Named action creation target is unavailable';
+  end if;
+  ownership_mode := record_type_value ->> 'ownershipMode';
+
+  if ownership_mode = 'organization_account' then
+    owner_account_id := actor_id_value;
+  elsif ownership_mode = 'group' then
+    select pg_catalog.count(*), (pg_catalog.array_agg(group_id))[1]
+    into owner_group_count, owner_group_id
+    from vortex_access.list_current_record_owner_groups();
+    if owner_group_count <> 1 then
+      raise exception using errcode = '42501',
+        message = case when owner_group_count = 0
+          then 'Named action creation owner is unavailable'
+          else 'Named action creation owner is ambiguous' end;
+    end if;
+    if not vortex_access.lock_current_record_owner_group_internal(owner_group_id) then
+      raise exception using errcode = '42501',
+        message = 'Named action creation owner is unavailable';
+    end if;
+  end if;
+
+  if exists (
+    select 1 from pg_catalog.jsonb_object_keys(final_values) as supplied(key)
+    where not (meta -> 'columns' ? pg_catalog.lower(supplied.key))
+  ) then
+    raise exception using errcode = '23514', message = 'Named action creation field is unknown';
+  end if;
+
+  for field_item in
+    select item.value from pg_catalog.jsonb_array_elements(record_type_value -> 'fields') as item(value)
+    order by item.value ->> 'fieldId'
+  loop
+    field_id_value := (field_item ->> 'fieldId')::uuid;
+    column_value := meta -> 'columns' -> pg_catalog.lower(field_id_value::text);
+    if pg_catalog.jsonb_typeof(column_value) is distinct from 'object'
+      or pg_catalog.jsonb_typeof(column_value -> 'token') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(column_value -> 'databaseValueType') is distinct from 'string' then
+      raise exception using errcode = '55000',
+        message = 'Named action creation storage is unavailable';
+    end if;
+    if field_item ->> 'type' = 'reference_number' then
+      if final_values ? pg_catalog.lower(field_id_value::text)
+        or field_id_value = any (p_submitted_field_ids) then
+        raise exception using errcode = '23514',
+          message = 'Named action creation cannot submit a generated field';
+      end if;
+      input_value := pg_catalog.to_jsonb(vortex_record.allocate_reference_number_internal(
+        organization_id_value, storage_contract_id_value, field_id_value, app_scope,
+        field_item -> 'settings'
+      ));
+      final_values := final_values || pg_catalog.jsonb_build_object(
+        pg_catalog.lower(field_id_value::text), input_value
+      );
+    elsif final_values ? pg_catalog.lower(field_id_value::text) then
+      input_value := final_values -> pg_catalog.lower(field_id_value::text);
+      if (field_item ->> 'required')::boolean
+        and pg_catalog.jsonb_typeof(input_value) = 'null' then
+        raise exception using errcode = '23514',
+          message = 'Named action creation is missing a required value';
+      end if;
+      if not vortex_record.canonical_record_value_matches(
+        input_value, field_item ->> 'type', column_value ->> 'databaseValueType'
+      ) then
+        raise exception using errcode = '23514',
+          message = 'Named action creation value is invalid';
+      end if;
+    else
+      if (field_item ->> 'required')::boolean then
+        raise exception using errcode = '23514',
+          message = 'Named action creation is missing a required value';
+      end if;
+      continue;
+    end if;
+
+    physical_values := physical_values || pg_catalog.jsonb_build_object(
+      column_value ->> 'token', input_value
+    );
+  end loop;
+
+  storage_change := pg_catalog.jsonb_build_object(
+    'storageContractId', storage_contract_id_value, 'recordId', record_id_value,
+    'expectedConcurrencyNumber', null,
+    'values', physical_values || pg_catalog.jsonb_build_object(
+      'module_root_id', module_root_id_value, 'record_type_id', p_record_type_id,
+      'storage_contract_id', storage_contract_id_value, 'application_root_id', app_scope,
+      'definition_revision', module_release_revision_value,
+      'owner_organisation_account_id', owner_account_id, 'owner_group_id', owner_group_id,
+      'lifecycle_state', 'active', 'created_at', pg_catalog.statement_timestamp(),
+      'created_by', actor_id_value
+    )
+  );
+
+  eligible_for_created_notice := storage_scope_value = 'application_contained';
+  return pg_catalog.jsonb_build_object(
+    'recordId', record_id_value,
+    'storageContractId', storage_contract_id_value,
+    'values', final_values, 'storageChange', storage_change,
+    '_savedTuple', pg_catalog.jsonb_build_object(
+      'recordId', record_id_value,
+      'concurrencyNumber', 1,
+      'organizationId', organization_id_value,
+      'applicationRootId', app_scope,
+      'moduleRootId', module_root_id_value,
+      'recordTypeId', p_record_type_id,
+      'storageContractId', storage_contract_id_value,
+      'moduleReleaseRevision', module_release_revision_value,
+      'storageScope', storage_scope_value,
+      'actorId', actor_id_value,
+      'correlationId', (context_value ->> 'correlationId')::uuid,
+      'eligible', eligible_for_created_notice
+    )
+  );
+end
+$function$;
+alter function vortex_record.prepare_named_action_record_create_internal(uuid,jsonb,uuid[])
+  owner to vortex_record_adapter;
+
+revoke all on function vortex_record.prepare_named_action_record_create_internal(uuid,jsonb,uuid[])
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.prepare_named_action_record_create_internal(uuid,jsonb,uuid[])
+  to vortex_record_adapter;
+
+comment on function vortex_record.prepare_named_action_record_create_internal(uuid,jsonb,uuid[]) is
+  'Private named-action create preparation: validates definition, typed values and derived ownership, allocates references, and returns a storage mutation and expected tuple for the whole-command authority check.';
+
+-- Private Record-adapter routine; migrations install the complete canonical body
+-- under its owner with schema CREATE granted only for that migration transaction.
+create or replace function vortex_record.prepare_named_action_relationship_value_internal(
+  p_source_record_type_id uuid,
+  p_source_record_id uuid,
+  p_relationship_id uuid,
+  p_target_value jsonb,
+  p_action_owner_kind text,
+  p_action_owner_id uuid,
+  p_action_release_revision bigint,
+  p_action_id uuid,
+  p_subject_record_type_id uuid,
+  p_subject_record_id uuid
+)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  source_meta jsonb;
+  source_context jsonb;
+  source_type jsonb;
+  relationship_value jsonb;
+  field_value jsonb;
+  field_column jsonb;
+  target_type_id uuid;
+  target_record_id uuid;
+  target_meta jsonb;
+  target_loaded jsonb;
+  target_decision jsonb;
+  target_record jsonb;
+  target_scope jsonb;
+  source_application_root_id uuid;
+  target_application_root_id uuid;
+  mapping_row vortex_record.relationship_storage_mappings%rowtype;
+  application_root_required boolean;
+  existing_other boolean;
+begin
+  if p_source_record_type_id is null or p_source_record_id is null
+    or p_relationship_id is null
+    or p_action_owner_kind not in ('application', 'module')
+    or p_action_owner_id is null or p_action_id is null
+    or p_action_release_revision not between 1 and 9007199254740991
+    or p_subject_record_type_id is null or p_subject_record_id is null then
+    raise exception using errcode = '22023', message = 'Relationship change is invalid';
+  end if;
+  source_meta := vortex_record.resolve_record_action_context_internal(
+    p_source_record_type_id, 'read'
+  );
+  source_context := source_meta -> 'context';
+  source_type := source_meta -> 'recordType';
+  select item.value into relationship_value
+  from pg_catalog.jsonb_array_elements(source_type -> 'relationships') as item(value)
+  where (item.value ->> 'relationshipId')::uuid = p_relationship_id;
+  if not found then
+    raise exception using errcode = '23514',
+      message = 'Relationship is not declared by the active record type';
+  end if;
+  select item.value into field_value
+  from pg_catalog.jsonb_array_elements(source_type -> 'fields') as item(value)
+  where (item.value ->> 'fieldId')::uuid = (relationship_value ->> 'fromFieldId')::uuid;
+  if not found or field_value ->> 'type' not in ('link', 'link_to_one_of_several') then
+    raise exception using errcode = '55000',
+      message = 'Relationship field definition is unavailable';
+  end if;
+  field_column := source_meta -> 'columns' -> pg_catalog.lower(field_value ->> 'fieldId');
+
+  select mapping.* into mapping_row
+  from vortex_record.relationship_storage_mappings as mapping
+  where mapping.relationship_id = p_relationship_id
+    and mapping.source_storage_contract_id = (source_meta ->> 'storageContractId')::uuid
+    and mapping.source_field_id = (field_value ->> 'fieldId')::uuid
+    and mapping.release_revision <= (source_meta ->> 'moduleReleaseRevision')::bigint;
+  if not found
+    or mapping_row.cardinality is distinct from (relationship_value ->> 'cardinality')
+    or mapping_row.on_parent_delete is distinct from (relationship_value ->> 'onParentDelete') then
+    raise exception using errcode = '55000',
+      message = 'Relationship storage disagrees with the active definition';
+  end if;
+
+  if pg_catalog.jsonb_typeof(p_target_value) = 'null' then
+    if (field_value ->> 'required')::boolean then
+      raise exception using errcode = '23514', message = 'Required relationship cannot be empty';
+    end if;
+    perform vortex_record.acquire_relationship_edge_locks_internal(
+      vortex_record.relationship_edge_lock_identities_internal(
+        p_relationship_id, (source_meta ->> 'storageContractId')::uuid,
+        p_source_record_id, null, null
+      )
+    );
+    return pg_catalog.jsonb_build_object(
+      'relationshipId', p_relationship_id, 'sourceRecordId', p_source_record_id,
+      'sourceStorageContractId', source_meta -> 'storageContractId',
+      'sourceApplicationRootId', case when source_meta ->> 'storageScope' = 'application_contained'
+        then source_context -> 'applicationRootId' else null end,
+      'table', source_meta -> 'table', 'column', field_column -> 'token',
+      'value', p_target_value, 'cardinality', mapping_row.cardinality
+    );
+  end if;
+
+  if pg_catalog.jsonb_typeof(p_target_value) <> 'object'
+    or not (p_target_value ?& array['recordTypeId', 'recordId'])
+    or p_target_value - array['recordTypeId', 'recordId'] <> '{}'::jsonb then
+    raise exception using errcode = '22023', message = 'Relationship target is invalid';
+  end if;
+  begin
+    target_type_id := (p_target_value ->> 'recordTypeId')::uuid;
+    target_record_id := (p_target_value ->> 'recordId')::uuid;
+  exception when invalid_text_representation then
+    raise exception using errcode = '22023', message = 'Relationship target is invalid';
+  end;
+  if target_type_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or target_record_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or target_type_id <> all (mapping_row.target_record_type_ids) then
+    raise exception using errcode = '23514', message = 'Relationship target is unavailable';
+  end if;
+
+  target_meta := vortex_record.resolve_record_action_context_internal(target_type_id, 'read');
+  source_application_root_id := case when source_meta ->> 'storageScope' = 'application_contained'
+    then (source_context ->> 'applicationRootId')::uuid else null end;
+  application_root_required := coalesce(
+    (field_value #>> '{settings,applicationRootIdRequired}')::boolean, false
+  );
+  if application_root_required
+    and (target_meta #>> '{recordType,systemProjection,protectedView}')
+      is distinct from 'organization_accounts' then
+    raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
+  end if;
+
+  perform vortex_record.lock_relationship_target_row_internal(
+    target_type_id, target_record_id,
+    (source_context ->> 'organizationId')::uuid
+  );
+
+  -- The one substitution. Executing a permitted named action must not require
+  -- ordinary read authority on its own subject, so when the
+  -- selected target is exactly this command's subject the decision is taken on
+  -- the installed named declaration instead. The loader re-resolves the active
+  -- installation, the owner kind/id/release revision, the action id and the
+  -- action's declared subject record type, and the Access evaluation binds the
+  -- organization, application, record type, record and the actor's current
+  -- authority. Every other target keeps the ordinary read check unchanged.
+  if target_type_id = p_subject_record_type_id and target_record_id = p_subject_record_id then
+    target_loaded := vortex_record.load_named_action_facts_internal(
+      p_action_owner_kind, p_action_owner_id, p_action_release_revision,
+      p_action_id, target_type_id, target_record_id, null
+    );
+  else
+    target_loaded := vortex_record.load_record_access_facts_internal(
+      target_type_id, 'read', target_record_id, null, null::jsonb
+    );
+  end if;
+  if target_loaded ->> 'outcome' <> 'loaded'
+    or pg_catalog.jsonb_typeof(target_loaded -> 'declaration') <> 'object' then
+    raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
+  end if;
+  target_decision := vortex_access.evaluate_organization_record_access_internal(
+    target_loaded -> 'declaration', target_record_id, target_loaded -> 'facts'
+  );
+  if target_decision ->> 'outcome' <> 'allowed' then
+    raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
+  end if;
+  select item.value into target_record
+  from pg_catalog.jsonb_array_elements(target_loaded -> 'facts' -> 'records') as item(value)
+  where (item.value -> 'recordScope' ->> 'recordId')::uuid = target_record_id;
+  target_scope := target_record -> 'recordScope';
+  target_application_root_id := case when target_meta ->> 'storageScope' = 'application_contained'
+    then (target_scope ->> 'applicationRootId')::uuid else null end;
+  if target_record is null or target_record ->> 'lifecycleState' <> 'active'
+    or (target_scope ->> 'organizationId')::uuid <>
+      (source_context ->> 'organizationId')::uuid
+    or (source_application_root_id is not null and target_application_root_id is not null
+      and source_application_root_id <> target_application_root_id) then
+    raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
+  end if;
+  if application_root_required
+    and not vortex_access.organization_account_has_current_application_access_internal(
+      (source_context ->> 'organizationId')::uuid,
+      target_record_id,
+      (source_context ->> 'applicationRootId')::uuid
+    ) then
+    raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
+  end if;
+
+  -- The target row is share-locked (the command preflight already holds every
+  -- link target) and eligible; the shared edge identities are taken last,
+  -- exactly as `write_relationship_value_internal` takes them.
+  perform vortex_record.acquire_relationship_edge_locks_internal(
+    vortex_record.relationship_edge_lock_identities_internal(
+      p_relationship_id, (source_meta ->> 'storageContractId')::uuid,
+      p_source_record_id, (target_meta ->> 'storageContractId')::uuid,
+      target_record_id
+    )
+  );
+  if mapping_row.cardinality = 'one_to_one' then
+    select exists (
+      select 1 from vortex_record.relationship_edges as edge
+      where edge.relationship_id = p_relationship_id
+        and edge.to_organisation_id = (source_context ->> 'organizationId')::uuid
+        and edge.to_storage_contract_id = (target_meta ->> 'storageContractId')::uuid
+        and edge.to_record_id = target_record_id
+        and edge.from_storage_contract_id = (source_meta ->> 'storageContractId')::uuid
+        and edge.from_record_id <> p_source_record_id
+    ) into existing_other;
+    if existing_other then
+      raise exception using errcode = '23514', message = 'Relationship cardinality is exceeded';
+    end if;
+  end if;
+
+  if mapping_row.cardinality = 'many_to_one' and target_type_id = p_source_record_type_id then
+    -- A record type's one-record link to itself is a parent link: it must never make a cycle.
+    perform vortex_record.assert_relationship_acyclic_internal(
+      p_relationship_id, (source_context ->> 'organizationId')::uuid,
+      (source_meta ->> 'storageContractId')::uuid, (field_value ->> 'fieldId')::uuid,
+      p_source_record_id, target_record_id
+    );
+  end if;
+
+  return pg_catalog.jsonb_build_object(
+    'relationshipId', p_relationship_id,
+    'sourceRecordId', p_source_record_id,
+    'sourceStorageContractId', source_meta -> 'storageContractId',
+    'sourceApplicationRootId', source_application_root_id,
+    'targetStorageContractId', target_meta -> 'storageContractId',
+    'targetRecordId', target_record_id,
+    'targetApplicationRootId', target_application_root_id,
+    'table', source_meta -> 'table', 'column', field_column -> 'token',
+    'value', p_target_value, 'cardinality', mapping_row.cardinality
+  );
+end
+$function$;
+
+alter function vortex_record.prepare_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) owner to vortex_record_adapter;
+
+revoke all on function
+  vortex_record.prepare_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+grant execute on function
+  vortex_record.prepare_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) to vortex_record_adapter;
+
+comment on function vortex_record.prepare_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) is
+  'Private named-action edge preparation: checks current application access for flagged Person links, uses the ordinary or protected projection target lock and edge flow, and authorises the command subject by re-evaluating the exact installed named action rather than ordinary read.';
 
 set role vortex_owner;
 revoke create on schema vortex_record from vortex_record_adapter;
