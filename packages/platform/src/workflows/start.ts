@@ -13,7 +13,7 @@ import type { IdentitySession, OrganizationSelectionCandidate } from "../access/
 import { jsonValueSchema } from "../catalogue/common";
 import { describeFailure } from "../catalogue/runtime-primitives";
 import { flowRefusalFeedbackCodeSchema } from "./flow-refusal-feedback";
-import type { FlowPlan, FlowServerSegment } from "./flow-plan";
+import { flowEntrySegmentsMatch, type FlowPlan, type FlowServerSegment } from "./flow-plan";
 import type { FlowSegmentReplay, FlowTaskOutcome } from "../rules/flow-interpreter";
 import type { BeforeSaveRuleWarning } from "../rules/before-save-flow-run";
 import { storedFlowWarningSchema, storeFlowWarning } from "./flow-warning-replay";
@@ -108,6 +108,8 @@ type StartFlowDependencies<Value> = Readonly<{
   requests: HumanOrganizationRequestDependencies;
   authorizeBinding: (context: SegmentContext) => Promise<boolean>;
   authorizeInvocation: (context: SegmentContext) => Promise<boolean>;
+  /** Resolve the installed plan under the same scope that authorizes this admission. */
+  currentPlan: (context: SegmentContext) => Promise<FlowPlan | undefined>;
   /** Rebuild the segment frame for each call: a restart rolls back the entire transaction. */
   execute: (
     context: SegmentContext,
@@ -166,6 +168,8 @@ export const startFlow = async <Value>(
     selection: OrganizationSelectionCandidate;
     plan: FlowPlan;
     expected: SegmentIdentity;
+    /** The entry set shown by the page, when this admission starts a binding. */
+    entrySegments?: readonly Readonly<{ segmentId: string; fingerprint: string }>[];
     gestureId: string;
     runId?: string;
     /** Required when the plan has a completion segment; resolved from the trusted binding. */
@@ -222,21 +226,42 @@ export const startFlow = async <Value>(
     };
     if (request.channel === "page" && !(await dependencies.authorizeBinding(context)))
       return { kind: "refused" };
-    if (request.plan.definition.invocationPermissionId === undefined) {
+    const currentPlan = await dependencies.currentPlan(context);
+    if (currentPlan === undefined || currentPlan.flowId !== request.plan.flowId)
+      return { kind: "refused" };
+    if (currentPlan.definition.invocationPermissionId === undefined) {
       if (request.channel === "headless") return { kind: "refused" };
     } else if (!(await dependencies.authorizeInvocation(context))) return { kind: "refused" };
+    if (
+      request.entrySegments !== undefined &&
+      !flowEntrySegmentsMatch(currentPlan, request.entrySegments)
+    )
+      return { kind: "reload" };
     if (request.expected === null) {
-      if (request.plan.segments.some((part) => part.kind === "server")) return { kind: "reload" };
+      if (currentPlan.segments.some((part) => part.kind === "server")) return { kind: "reload" };
       return {
         kind: "completed",
         value: (await dependencies.execute(context, null, undefined, suppliedRunId.data!)).value,
         runId: suppliedRunId.data!,
       };
     }
+    const currentSegment = currentPlan.segments.find(
+      (part): part is FlowServerSegment =>
+        part.kind === "server" && part.id === request.expected?.segmentId,
+    );
     if (
       segment === null ||
       segment === undefined ||
-      segment.fingerprint !== request.expected.fingerprint
+      currentSegment === undefined ||
+      segment.fingerprint !== request.expected.fingerprint ||
+      currentSegment.fingerprint !== request.expected.fingerprint
+    )
+      return { kind: "reload" };
+    // Completion evidence must agree with the captured run's plan before any lock or effect.
+    const currentServerSegments = currentPlan.segments.filter((part) => part.kind === "server");
+    if (
+      currentServerSegments.some((part) => part.tasks.length === 0) !== hasCompletion ||
+      (currentServerSegments.length === 1 && hasCompletion) !== completionOnly
     )
       return { kind: "reload" };
     if (segment.multiTransaction) return { kind: "refused" };
