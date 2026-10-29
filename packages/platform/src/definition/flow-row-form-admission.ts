@@ -7,6 +7,7 @@ import type {
 import { isRecord, sameId } from "../catalogue/runtime-primitives";
 import { createReferenceChoiceService } from "../queries/reference-choice-service";
 import { adaptPrivateFormSubmit } from "../pages/form-request";
+import { readPageSubjectInTransaction } from "../pages/page-subject-read";
 import { requireProjectedPlacement } from "../pages/projected-placement-gate";
 import { findModuleQuery } from "../pages/placement-read/shared";
 import type { FlowRunState } from "../rules/flow-interpreter";
@@ -19,7 +20,7 @@ import type { InstalledRuntimeContext } from "./installed-runtime-context";
 export const admitRowForm = async (
   dependencies: Pick<
     InvocationDependencies,
-    "projectRowForm" | "resolveFormValues" | "continuationKey"
+    "projectRowForm" | "resolveFormValues" | "continuationKey" | "validateControlOption"
   >,
   requests: HumanOrganizationRequestDependencies,
   bound: BoundHumanOrganizationRequest,
@@ -63,7 +64,7 @@ export const admitRowForm = async (
   const callerInputs = request.invocation.callerInputs ?? {};
   if (
     !isRecord(callerInputs.values) ||
-    Object.keys(callerInputs.values).some((name) => !form.visibleFieldKeys.has(name))
+    Object.keys(callerInputs.values).some((name) => !form.visibleFields.has(name))
   ) {
     console.error("[flows] row form contains a field not visible on the projected form");
     return false;
@@ -84,6 +85,50 @@ export const admitRowForm = async (
     ...(callerInputs.choiceEvidence === undefined ? {} : { evidence: callerInputs.choiceEvidence }),
   });
   if (values === undefined) return false;
+  const rowType = String(query.query.recordType.recordTypeId);
+  const row = await readPageSubjectInTransaction(bound.transaction, {
+    recordTypeId: rowType,
+    recordId,
+  });
+  if (row.kind !== "read") return false;
+  for (const [name, submitted] of Object.entries(callerInputs.values)) {
+    const field = form.visibleFields.get(name)!;
+    if (submitted === null || field.kind === "dynamic_choice" || field.kind === "other") continue;
+    const selections =
+      field.kind === "several_choices" && Array.isArray(submitted) ? submitted : [submitted];
+    if (
+      field.kind === "several_choices" &&
+      (!Array.isArray(submitted) || new Set(submitted).size !== submitted.length)
+    )
+      return false;
+    if (field.kind !== "choice" && field.kind !== "several_choices" && field.kind !== "link")
+      continue;
+    for (const value of selections) {
+      const raw =
+        typeof value === "string"
+          ? value
+          : isRecord(value) && typeof value.recordId === "string"
+            ? value.recordId
+            : undefined;
+      if (
+        raw === undefined ||
+        !(await dependencies.validateControlOption({
+          bound,
+          context,
+          page: form.projectedPage,
+          placementId: field.placementId,
+          raw,
+          parsed: value as import("../catalogue/common").JsonValue,
+          subject: { recordTypeId: rowType, recordId },
+          heldValues: row.row.values,
+          controls: request.pageInputs.controls,
+        }))
+      ) {
+        console.error("[flows] row form option unavailable");
+        return false;
+      }
+    }
+  }
   const adaptedInputs: Record<string, unknown> = { ...callerInputs };
   delete adaptedInputs.choiceEvidence;
   const adapted = adaptPrivateFormSubmit(binding, { ...adaptedInputs, values }, state.subject);

@@ -110,7 +110,7 @@ export const validateProjectedControlOption = async (
     vortex: gate.placement.vortex,
     settings: placementSettings(props),
   };
-  if (fieldControl(placement) === "choice") {
+  if (fieldControl(placement) === "choice" || fieldControl(placement) === "several_choices") {
     const plan = planChoiceOptionGates([placement], context);
     if (plan === undefined) return false;
     const allowed = await decideChoiceOptionGates(bound.transaction, plan, subject);
@@ -168,7 +168,12 @@ export const projectRowReferenceChoiceForm = async (
   formId: string,
   subject: Readonly<{ moduleRootId: string; recordTypeId: string; recordId: string }>,
 ): Promise<
-  (ProjectedReferenceChoiceForm & Readonly<{ visibleFieldKeys: ReadonlySet<string> }>) | undefined
+  | (ProjectedReferenceChoiceForm &
+      Readonly<{
+        visibleFields: ReadonlyMap<string, Readonly<{ placementId: string; kind: string }>>;
+        projectedPage: Readonly<Record<string, unknown>>;
+      }>)
+  | undefined
 > => {
   const service = createStoredPageCapabilityService({
     ...requestDependencies(),
@@ -197,7 +202,7 @@ export const projectRowReferenceChoiceForm = async (
   const enriched = withContributedFormPlacements(page, context, subject, formId);
   const projected = projectedReferenceChoiceForm(enriched, context.releaseSet.modules, formId);
   if (projected === undefined) return undefined;
-  const visibleFieldKeys = new Set<string>();
+  const visibleFields = new Map<string, Readonly<{ placementId: string; kind: string }>>();
   for (const placement of collectPlacements(enriched)) {
     if (placement.formId === undefined || !sameId(placement.formId, formId)) continue;
     const block = placement.vortex.block;
@@ -216,12 +221,21 @@ export const projectRowReferenceChoiceForm = async (
       !isRecord(name) ||
       name.kind !== "text" ||
       typeof name.value !== "string" ||
-      visibleFieldKeys.has(name.value)
+      visibleFields.has(name.value)
     )
       return undefined;
-    visibleFieldKeys.add(name.value);
+    const control = fieldControl(placement);
+    const kind = hasReferenceChoiceSource(placement)
+      ? "dynamic_choice"
+      : (control ??
+        (sameId(blockId, CHOICE_INPUT_BLOCK_RELEASE.blockId)
+          ? "choice"
+          : sameId(blockId, LINK_INPUT_BLOCK_RELEASE.blockId)
+            ? "link"
+            : "other"));
+    visibleFields.set(name.value, { placementId: placement.placementId, kind });
   }
-  return { ...projected, visibleFieldKeys };
+  return { ...projected, visibleFields, projectedPage: enriched };
 };
 
 /** Reprojects the current addressed page under the actor and the exact installed release. */
