@@ -265,7 +265,7 @@ export const flowTaskRuns = Object.freeze({
   "data.record_link": server,
   "data.set_values": nowhere,
   "data.set_variable": server,
-  "data.format": nowhere,
+  "data.format": server,
   "rule.require": server,
   "rule.warn": server,
   "rule.refuse": server,

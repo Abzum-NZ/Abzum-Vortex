@@ -10,13 +10,14 @@ import {
   observe,
   type PathSegment,
 } from "./flow-interpreter-state";
+import { formattedTaskValue, recordLinkTaskValue } from "./flow-data-tasks";
 import { typedValueMatchesType } from "./condition-types";
 import { flowPathGuardMatches } from "./flow-path-guard";
 import { findTask, validReadFieldsResume } from "./flow-read-fields-resume";
 import { flowSegmentValues, parseFlowSegmentSeed } from "./flow-segment-seed";
 import type { JsonValue } from "../catalogue/common";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
-import { moneyValueSchema, recordLinkValueSchema } from "../records/module-field-values";
+import { moneyValueSchema } from "../records/module-field-values";
 import { platformOperationKey } from "../catalogue/platform-service-operation-catalogue";
 import {
   flowReadFieldsTypeMapSchema,
@@ -636,6 +637,7 @@ export const serverStepRunners = {
   stop: "interpreter",
   "data.calculate": "interpreter",
   "data.record_link": "interpreter",
+  "data.format": "interpreter",
   "data.set_variable": "interpreter",
   "rule.require": "interpreter",
   "rule.warn": "interpreter",
@@ -776,44 +778,13 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
 
   if (definition.effect === "pure") {
     if (!serverRuns(registered.type, "interpreter")) failed("task_not_available", "failed", taskId);
-    if (registered.type === "data.record_link") {
-      const recordType = registered.properties.record_type;
-      const record = registered.properties.record;
-      if (
-        recordType?.kind !== "literal" ||
-        recordType.literal.type !== "text" ||
-        typeof recordType.literal.value !== "string" ||
-        record?.kind !== "reference" ||
-        record.reference.source !== "input"
-      )
-        return failed("value_unresolved", "failed", taskId);
-
-      const recordTypeId = recordType.literal.value;
-      const declaration = flow.inputs[record.reference.name];
-      if (
-        declaration === undefined ||
-        declaration.type !== "record_reference" ||
-        declaration.recordTypeIds?.length !== 1 ||
-        declaration.recordTypeIds[0] !== recordTypeId
-      )
-        return failed("value_unresolved", "failed", taskId);
-
-      const evaluatedType = properties.record_type;
-      const evaluatedRecord = properties.record;
-      if (
-        evaluatedType?.type !== "text" ||
-        evaluatedType.value !== recordTypeId ||
-        evaluatedRecord?.type !== "record_reference" ||
-        typeof evaluatedRecord.value !== "string"
-      )
-        return failed("value_unresolved", "failed", taskId);
-
-      const link = recordLinkValueSchema.safeParse({
-        recordTypeId,
-        recordId: evaluatedRecord.value,
-      });
-      if (!link.success) return failed("value_unresolved", "failed", taskId);
-      replaceTop(machine, storeTaskOutputs(next, taskId, { value: typed("json", link.data) }));
+    if (registered.type === "data.record_link" || registered.type === "data.format") {
+      const value =
+        registered.type === "data.record_link"
+          ? recordLinkTaskValue(registered, properties, flow)
+          : formattedTaskValue(properties);
+      if (value === undefined) return failed("value_unresolved", "failed", taskId);
+      replaceTop(machine, storeTaskOutputs(next, taskId, { value }));
       return { kind: "continue" };
     }
     if (registered.type === "data.calculate") {
