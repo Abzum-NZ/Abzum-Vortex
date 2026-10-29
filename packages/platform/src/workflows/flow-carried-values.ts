@@ -56,8 +56,8 @@ export const openFlowCarriedValues = (
   }
   for (const [name, type] of Object.entries(segment.carriedInputs)) {
     const value = values[name];
-    if (value === undefined || value.type !== type ||
-      (value.value !== null && !typedValueMatchesType(value.value, type, "flow")))
+    if (value !== undefined && (value.type !== type ||
+      (value.value !== null && !typedValueMatchesType(value.value, type, "flow"))))
       throw new FlowCarriedValuesError();
   }
   return values;

@@ -43,10 +43,16 @@ export const parseFlowSegmentSeed = (
   )
     failed("inputs_invalid", "refused", undefined, "segment seed has undeclared or missing values");
   for (const [name, type] of Object.entries(carriedDeclarations)) {
-    if (declarations[name] !== type || carried[name]?.type !== type)
+    if (
+      declarations[name] !== type ||
+      (carried[name] !== undefined && carried[name]?.type !== type)
+    )
       failed("inputs_invalid", "refused", undefined, `carried input ${name} is invalid`);
   }
-  for (const [name, type] of [...expected, ...Object.entries(carriedDeclarations)]) {
+  for (const [name, type] of [
+    ...expected,
+    ...Object.entries(carriedDeclarations).filter(([name]) => carried[name] !== undefined),
+  ]) {
     const parts = name.split(".");
     if (
       parts.some((part) => part.length === 0) ||
