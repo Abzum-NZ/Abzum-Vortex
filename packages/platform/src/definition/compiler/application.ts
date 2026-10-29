@@ -1,4 +1,5 @@
 import type { FlowFormTypes } from "../../workflows/flow-form-types";
+import type { FlowFormula } from "../../workflows/flow-values";
 import type { PlatformPermissionSource } from "../../access/platform-permissions";
 import type { applicationCompilationRequestSchema } from "../definition-compilation-contracts";
 import { inspectApplicationPageReplacements } from "../../pages/application-page-replacement";
@@ -586,6 +587,7 @@ function compileApplicationFlowBindings(
     string,
     Record<string, ReturnType<typeof flowBindingInputSchema.parse>>[]
   >();
+  const conditions = new Map<string, FlowFormula[]>();
   for (const binding of sourceBindings) {
     const flowId = resolution.id(definitionKey, "flow", String(binding.flow), "content");
     const inputs = resolveFlowFormReferences(
@@ -600,8 +602,18 @@ function compileApplicationFlowBindings(
     const held = inputsByFlow.get(flowId) ?? [];
     held.push(inputs);
     inputsByFlow.set(flowId, held);
+    const settings = flowBindingSettingsSchema.safeParse(binding.settings);
+    if (settings.success && settings.data.condition !== null) {
+      const heldConditions = conditions.get(flowId) ?? [];
+      heldConditions.push(
+        resolveFlowFormReferences(settings.data.condition, (form) =>
+          resolution.id(definitionKey, "block_placement", form),
+        ),
+      );
+      conditions.set(flowId, heldConditions);
+    }
   }
-  const plans = compileFlowPlans(flows, inputsByFlow, formTypes).plans;
+  const plans = compileFlowPlans(flows, inputsByFlow, formTypes, conditions).plans;
   return sourceBindings.map((binding) => {
     const flowId = resolution.id(definitionKey, "flow", String(binding.flow), "content");
     const flow = flowsById.get(flowId);

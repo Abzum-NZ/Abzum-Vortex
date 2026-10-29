@@ -461,6 +461,7 @@ export const compileFlowPlan = (
   flow: FlowDefinition,
   bindings: readonly FlowBindingInputs[] = [],
   formTypes: FlowFormTypes = {},
+  conditions: readonly FlowFormula[] = [],
 ): FlowPlan => {
   prepareFlowFormulas(flow);
   const drafts = [
@@ -507,6 +508,7 @@ export const compileFlowPlan = (
       ...(segment.kind === "page" ? [segment.tasks] : []),
     ]),
     ...Object.values(flow.outputs).map((output) => output.value),
+    ...conditions,
   ]);
   const pageInputs = new Set(
     pageReferences.flatMap((reference) => (reference.source === "input" ? [reference.name] : [])),
@@ -538,6 +540,7 @@ export const compileFlowPlan = (
       ...(segment.kind === "server" ? [segment.inputs] : []),
     ]),
     ...Object.values(flow.outputs).map((output) => output.value),
+    ...conditions,
     ...bindings.flatMap((inputs) =>
       Object.entries(inputs)
         .filter(([name]) => pageInputs.has(name))
@@ -648,12 +651,13 @@ export const compileFlowPlans = (
   flows: readonly FlowDefinition[],
   bindings: ReadonlyMap<string, readonly FlowBindingInputs[]> = new Map(),
   formTypes: ReadonlyMap<string, FlowFormTypes> = new Map(),
+  conditions: ReadonlyMap<string, readonly FlowFormula[]> = new Map(),
 ): FlowPlanSet => {
   const plans = new Map<string, FlowPlan>();
   for (const flow of flows) {
     const id = String(flow.id);
     if (plans.has(id)) throw new FlowPlanError(id, undefined, "two flows share one identity");
-    plans.set(id, compileFlowPlan(flow, bindings.get(id), formTypes.get(id)));
+    plans.set(id, compileFlowPlan(flow, bindings.get(id), formTypes.get(id), conditions.get(id)));
   }
   return planSet(plans);
 };
@@ -736,11 +740,17 @@ export const flowPlansOf = (releaseSet: PlannedReleaseSet): FlowPlanSet => {
   const plans = new Map<string, FlowPlan>();
   const ambiguous = new Set<string>();
   const bindings = new Map<string, FlowBindingInputs[]>();
+  const conditions = new Map<string, FlowFormula[]>();
   for (const binding of releaseSet.application.content.flowBindings ?? []) {
     const id = String(binding.flow.flowId);
     const held = bindings.get(id) ?? [];
     held.push(binding.flow.inputs);
     bindings.set(id, held);
+    if (binding.settings.condition !== null) {
+      const heldConditions = conditions.get(id) ?? [];
+      heldConditions.push(binding.settings.condition);
+      conditions.set(id, heldConditions);
+    }
   }
   let formTypes: FlowFormTypes | undefined;
   for (const flow of [
@@ -754,11 +764,19 @@ export const flowPlansOf = (releaseSet: PlannedReleaseSet): FlowPlanSet => {
       continue;
     }
     try {
-      const usesForm = referencesIn([flow, bindings.get(id)]).some(
+      const usesForm = referencesIn([flow, bindings.get(id), conditions.get(id)]).some(
         (reference) => reference.source === "form",
       );
       if (usesForm) formTypes ??= installedFlowFormTypes(releaseSet);
-      plans.set(id, compileFlowPlan(flow, bindings.get(id), usesForm ? formTypes : undefined));
+      plans.set(
+        id,
+        compileFlowPlan(
+          flow,
+          bindings.get(id),
+          usesForm ? formTypes : undefined,
+          conditions.get(id),
+        ),
+      );
     } catch (error) {
       if (!(error instanceof FlowPlanError)) throw error;
       console.error(`[flows] flow ${id} cannot be planned: ${error.reason}`);
