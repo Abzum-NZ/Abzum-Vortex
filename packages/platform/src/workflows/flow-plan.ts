@@ -139,13 +139,18 @@ export type FlowPlanSet = Readonly<{
   plans: ReadonlyMap<string, FlowPlan>;
   /** The validated flow of each planned flow, by flow identity. */
   flows: ReadonlyMap<string, FlowDefinition>;
+  /** Form placements reachable from each installed row-action source placement. */
+  rowFormsByTable: ReadonlyMap<string, ReadonlySet<string>>;
   /** The interpreter's flow library over `flows`. */
   library: (flowId: string) => FlowDefinition | undefined;
 }>;
 
-const planSet = (plans: ReadonlyMap<string, FlowPlan>): FlowPlanSet => {
+const planSet = (
+  plans: ReadonlyMap<string, FlowPlan>,
+  rowFormsByTable: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
+): FlowPlanSet => {
   const flows = new Map([...plans].map(([id, plan]) => [id, plan.definition]));
-  return { plans, flows, library: (flowId) => flows.get(flowId) };
+  return { plans, flows, rowFormsByTable, library: (flowId) => flows.get(flowId) };
 };
 
 /** A flow the compiler cannot plan, naming the step. Publication reports it; nothing runs it. */
@@ -727,6 +732,34 @@ export const compileFlowPlans = (flows: readonly FlowDefinition[]): FlowPlanSet 
   return planSet(new Map([...plans.keys()].map((id) => [id, link(id)])));
 };
 
+/** Derive the literal form placements reachable from a row-action flow. */
+export const rowActionFormTargets = (
+  flowId: string,
+  library: (id: string) => FlowDefinition | undefined,
+): ReadonlySet<string> => {
+  const forms = new Set<string>();
+  const visited = new Set<string>();
+  const visit = (id: string): void => {
+    if (visited.has(id)) return;
+    visited.add(id);
+    const flow = library(id);
+    if (flow === undefined) throw new FlowPlanError(id, undefined, "row-action flow is unavailable");
+    for (const task of allSteps([...flow.tasks, ...flow.errors, ...flow.finally])) {
+      if (task.type === "run_flow") {
+        visit(String((task as Extract<FlowTask, { type: "run_flow" }>).flowId));
+      } else if (task.type === "interface.show_form") {
+        const target = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>)
+          .properties.form;
+        if (target?.kind !== "literal" || typeof target.literal.value !== "string")
+          throw new FlowPlanError(id, task.id, "row-action form target must be a literal");
+        forms.add(target.literal.value);
+      }
+    }
+  };
+  visit(flowId);
+  return forms;
+};
+
 /** Why a binding's plan cannot run as bound, or undefined. Publication refuses it by name. */
 export const flowBindingPlanIssue = (
   plan: FlowPlan,
@@ -746,7 +779,15 @@ export const flowBindingPlanIssue = (
 /** The release set shape a plan set is built from: the cached, already-validated release content. */
 type PlannedContent = Readonly<{ flows: readonly FlowDefinition[] }>;
 type PlannedReleaseSet = Readonly<{
-  application: Readonly<{ content: PlannedContent }>;
+  application: Readonly<{
+    content: PlannedContent & Readonly<{
+      flowBindings: readonly Readonly<{
+        event: string;
+        controlId: string;
+        flow: Readonly<{ flowId: string }>;
+      }>[];
+    }>;
+  }>;
   modules: readonly Readonly<{ content: PlannedContent }>[];
 }>;
 
@@ -805,7 +846,23 @@ export const flowPlansOf = (releaseSet: PlannedReleaseSet): FlowPlanSet => {
       console.error(`[flows] flow ${id} cannot be planned: ${error.reason}`);
     }
   }
-  const set = planSet(available);
+  const rowFormsByTable = new Map<string, Set<string>>();
+  for (const binding of releaseSet.application.content.flowBindings) {
+    if (binding.event !== "row_action") continue;
+    const id = String(binding.flow.flowId);
+    try {
+      const forms = rowActionFormTargets(id, (flowId) => available.get(flowId)?.definition);
+      const table = String(binding.controlId);
+      const held = rowFormsByTable.get(table) ?? new Set<string>();
+      forms.forEach((form) => held.add(form));
+      rowFormsByTable.set(table, held);
+    } catch (error) {
+      if (!(error instanceof FlowPlanError)) throw error;
+      available.delete(id);
+      console.error(`[flows] row-action flow ${id} cannot be planned: ${error.reason}`);
+    }
+  }
+  const set = planSet(available, rowFormsByTable);
   releasePlans.set(releaseSet.application.content, { modules, set });
   return set;
 };
