@@ -27,7 +27,10 @@ type MinimumApplicationSourceResult =
 
 /** The key a new application gets from its name: `app.` and the name's words, `app.assets_hub`, cut to the 40-character segment limit. */
 export const applicationKeyFromName = (name: string): string => {
-  const words = name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^[_0-9]+|_+$/g, "");
+  const words = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^[_0-9]+|_+$/g, "");
   return words === "" ? "" : `app.${words.slice(0, 40).replace(/_+$/, "")}`;
 };
 
@@ -37,7 +40,13 @@ const inputForPath = (path: readonly PropertyKey[]): keyof MinimumApplicationInp
   if (head === "key") return "key";
   if (head !== "body") return undefined;
   if (section === "name" || section === "description") return section;
-  if (section === "modules" || section === "permissions" || section === "roles" || section === "pages") return "key";
+  if (
+    section === "modules" ||
+    section === "permissions" ||
+    section === "roles" ||
+    section === "pages"
+  )
+    return "key";
   return undefined;
 };
 
@@ -45,9 +54,10 @@ const invalid = (
   fieldErrors: Partial<Record<keyof MinimumApplicationInputs, string>>,
 ): MinimumApplicationSourceResult => ({
   kind: "invalid",
-  message: Object.keys(fieldErrors).length === 0
-    ? "The application could not be built from these inputs."
-    : "Fix the highlighted fields.",
+  message:
+    Object.keys(fieldErrors).length === 0
+      ? "The application could not be built from these inputs."
+      : "Fix the highlighted fields.",
   fieldErrors,
 });
 
@@ -69,7 +79,8 @@ export const minimumApplicationSource = (
       ...(name === "" ? { name: "Enter the application's name." } : {}),
       ...(description === "" ? { description: "Enter what people use this application for." } : {}),
     });
-  const applicationKey = inputs.key.trim() === "" ? applicationKeyFromName(name) : inputs.key.trim();
+  const applicationKey =
+    inputs.key.trim() === "" ? applicationKeyFromName(name) : inputs.key.trim();
   if (applicationKey === "")
     return invalid({ key: "The name has no letters to make a key from. Enter a key." });
   const permissionKey = `${applicationKey}.home.view`;
@@ -85,34 +96,40 @@ export const minimumApplicationSource = (
       home_page: "home",
       modules: [],
       uses: [],
-      permissions: [{
-        id: "permission_home",
-        key: permissionKey,
-        label: "View home",
-        description: "View the application's home page.",
-        action_kind: "named",
-        named_action: "view_home",
-        administrative: false,
-      }],
-      roles: [{
-        id: "role_member",
-        key: "member",
-        name: "Members",
-        home_page: "home",
-        permissions: [permissionKey],
-        default_member: true,
-      }],
-      pages: [{
-        id: "page_home",
-        key: "home",
-        name: "Home",
-        type: "dashboard",
-        permission: permissionKey,
-        composition: {
-          root: { props: { vortex: { shell: null, slot_orders: {} } } },
-          content: [],
+      permissions: [
+        {
+          id: "permission_home",
+          key: permissionKey,
+          label: "View home",
+          description: "View the application's home page.",
+          action_kind: "named",
+          named_action: "view_home",
+          administrative: false,
         },
-      }],
+      ],
+      roles: [
+        {
+          id: "role_member",
+          key: "member",
+          name: "Members",
+          home_page: "home",
+          permissions: [permissionKey],
+          default_member: true,
+        },
+      ],
+      pages: [
+        {
+          id: "page_home",
+          key: "home",
+          name: "Home",
+          type: "dashboard",
+          permission: permissionKey,
+          composition: {
+            root: { props: { vortex: { shell: null, slot_orders: {} } } },
+            content: [],
+          },
+        },
+      ],
       navigation: [],
       connection_bindings: [],
       interfaces: [],
@@ -137,7 +154,9 @@ export const minimumApplicationSource = (
     name: `${name} data`.slice(0, 120),
   });
   if (added.kind === "invalid")
-    return invalid({ key: "Use lowercase words separated by dots, at most 100 characters, for example team.workspace." });
+    return invalid({
+      key: "Use lowercase words separated by dots, at most 100 characters, for example team.workspace.",
+    });
   const parsed = applicationSourceDocumentSchema.safeParse(candidate);
   if (!parsed.success) {
     const fieldErrors: Partial<Record<keyof MinimumApplicationInputs, string>> = {};
@@ -145,16 +164,21 @@ export const minimumApplicationSource = (
       const input = inputForPath(issue.path);
       if (input === undefined || fieldErrors[input] !== undefined) continue;
       // Everything made from the key fails with the key: name the key's rule, not the made item.
-      fieldErrors[input] = input === "key"
-        ? "Use lowercase words separated by dots, at most 100 characters, for example team.workspace."
-        : issue.message;
+      fieldErrors[input] =
+        input === "key"
+          ? "Use lowercase words separated by dots, at most 100 characters, for example team.workspace."
+          : issue.message;
     }
     return invalid(fieldErrors);
   }
   const framed = studioStarterFrame(catalogue, parsed.data);
   if (framed.kind === "refused") {
     console.error("[studio] new application starter frame refused", framed.message);
-    return { kind: "invalid", message: `The application could not be built: ${framed.message}`, fieldErrors: {} };
+    return {
+      kind: "invalid",
+      message: `The application could not be built: ${framed.message}`,
+      fieldErrors: {},
+    };
   }
   return { kind: "valid", source: framed.source };
 };

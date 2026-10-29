@@ -97,10 +97,7 @@ export function Notice({
   const critical = severity === "critical";
 
   return (
-    <div
-      data-slot="notice"
-      data-vortex-severity={severity}
-    >
+    <div data-slot="notice" data-vortex-severity={severity}>
       <Alert
         role={critical ? "alert" : "status"}
         aria-live={critical ? "assertive" : "polite"}

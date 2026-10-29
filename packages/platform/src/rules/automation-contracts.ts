@@ -157,9 +157,7 @@ export type InstallationWorkflowReadinessRefusalReason =
 /** The idempotent schedule reconciliation steps taken after activation or withdrawal. */
 export const installationWorkflowScheduleActions = ["enable", "disable"] as const;
 
-export const installationWorkflowScheduleActionSchema = z.enum(
-  installationWorkflowScheduleActions,
-);
+export const installationWorkflowScheduleActionSchema = z.enum(installationWorkflowScheduleActions);
 
 export const installationWorkflowScheduleChangeSchema = z
   .object({

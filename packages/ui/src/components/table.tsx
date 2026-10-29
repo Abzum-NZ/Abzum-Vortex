@@ -30,23 +30,21 @@ function Table({
 }
 
 function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
-  return <thead
+  return (
+    <thead
       data-slot="table-header"
       className={cn("cn-table-header sticky top-0 z-10 bg-muted/60 backdrop-blur-sm", className)}
       {...props}
-    />;
+    />
+  );
 }
 
 function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
-  return (
-    <tbody data-slot="table-body" className={cn("cn-table-body", className)} {...props} />
-  );
+  return <tbody data-slot="table-body" className={cn("cn-table-body", className)} {...props} />;
 }
 
 function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
-  return (
-    <tfoot data-slot="table-footer" className={cn("cn-table-footer", className)} {...props} />
-  );
+  return <tfoot data-slot="table-footer" className={cn("cn-table-footer", className)} {...props} />;
 }
 
 function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
@@ -73,9 +71,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
 }
 
 function TableCell({ className, ...props }: React.ComponentProps<"td">) {
-  return (
-    <td data-slot="table-cell" className={cn("cn-table-cell", className)} {...props} />
-  );
+  return <td data-slot="table-cell" className={cn("cn-table-cell", className)} {...props} />;
 }
 
 function TableCaption({ className, ...props }: React.ComponentProps<"caption">) {

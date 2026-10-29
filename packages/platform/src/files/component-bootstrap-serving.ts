@@ -6,7 +6,10 @@ import {
   componentBundleAddressDigest,
   isSafeComponentBundlePath,
 } from "./component-bundle-storage";
-import { COMPONENT_BUNDLE_SERVING_PREFIX, componentBundleServingPath } from "./component-bundle-serving";
+import {
+  COMPONENT_BUNDLE_SERVING_PREFIX,
+  componentBundleServingPath,
+} from "./component-bundle-serving";
 
 /**
  * The Vortex-owned bootstrap document for one custom component bundle, served on the dedicated
@@ -69,8 +72,7 @@ export const parseComponentBootstrapTarget = (
     !ENTRY_FILE_PATTERN.test(entryFile)
   )
     return undefined;
-  const allowedHosts =
-    hostsValue === null || hostsValue.length === 0 ? [] : hostsValue.split(",");
+  const allowedHosts = hostsValue === null || hostsValue.length === 0 ? [] : hostsValue.split(",");
   if (allowedHosts.length > MAXIMUM_DECLARED_HOSTS) return undefined;
   if (new Set(allowedHosts).size !== allowedHosts.length) return undefined;
   for (const host of allowedHosts) if (!HOST_PATTERN.test(host)) return undefined;

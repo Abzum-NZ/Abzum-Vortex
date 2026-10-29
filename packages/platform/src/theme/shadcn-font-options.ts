@@ -52,6 +52,8 @@ export const resolveShadcnFontSelection = (
   };
   const body = requireFont(selection.bodyFont);
   const heading =
-    selection.headingFont === SHADCN_HEADING_FONT_INHERIT ? body : requireFont(selection.headingFont);
+    selection.headingFont === SHADCN_HEADING_FONT_INHERIT
+      ? body
+      : requireFont(selection.headingFont);
   return { body, heading };
 };

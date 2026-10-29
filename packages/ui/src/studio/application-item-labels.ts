@@ -1,4 +1,7 @@
-import { applicationSourceDocumentSchema, type ApplicationSourceDocument } from "@vortex/platform/schema";
+import {
+  applicationSourceDocumentSchema,
+  type ApplicationSourceDocument,
+} from "@vortex/platform/schema";
 import type { StudioSemanticSelection } from "./semantic-selection";
 
 export type StudioItemLabelResult =
@@ -9,7 +12,12 @@ export type StudioItemLabelResult =
 type Navigation = ApplicationSourceDocument["body"]["navigation"];
 
 /** Menu entries that follow a page's name (their label is the page's old name) take its new name. */
-const renameMenuEntries = (items: Navigation, pageKey: string, previous: string, next: string): void => {
+const renameMenuEntries = (
+  items: Navigation,
+  pageKey: string,
+  previous: string,
+  next: string,
+): void => {
   for (const item of items) {
     if (item.type === "page" && item.page === pageKey && item.label === previous) item.label = next;
     if (item.type === "heading") renameMenuEntries(item.children, pageKey, previous, next);
@@ -21,7 +29,10 @@ const renameMenuEntries = (items: Navigation, pageKey: string, previous: string,
  * rename tool all call it. A page's menu entries that still carry its name follow the new name.
  */
 export const applyStudioItemLabels = (
-  source: ApplicationSourceDocument, selection: StudioSemanticSelection | null, label: string, description: string,
+  source: ApplicationSourceDocument,
+  selection: StudioSemanticSelection | null,
+  label: string,
+  description: string,
 ): StudioItemLabelResult => {
   const candidate = applicationSourceDocumentSchema.parse(structuredClone(source));
   if (selection?.kind === "application") {
@@ -38,6 +49,13 @@ export const applyStudioItemLabels = (
     shell.name = label.trim();
   } else return { kind: "not_found" };
   const parsed = applicationSourceDocumentSchema.safeParse(candidate);
-  return parsed.success ? { kind: "applied", source: parsed.data }
-    : { kind: "invalid", issues: parsed.error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })) };
+  return parsed.success
+    ? { kind: "applied", source: parsed.data }
+    : {
+        kind: "invalid",
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path.join("."),
+          message: issue.message,
+        })),
+      };
 };

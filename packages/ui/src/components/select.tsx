@@ -109,9 +109,7 @@ function SelectContent({
           {...props}
         >
           <SelectScrollUpButton />
-          <SelectPrimitive.List data-slot="select-list">
-            {children}
-          </SelectPrimitive.List>
+          <SelectPrimitive.List data-slot="select-list">{children}</SelectPrimitive.List>
           <SelectScrollDownButton />
         </SelectPrimitive.Popup>
       </SelectPrimitive.Positioner>
@@ -142,9 +140,7 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.Item.Prop
       <SelectPrimitive.ItemText className="cn-select-item-text">
         {children}
       </SelectPrimitive.ItemText>
-      <SelectPrimitive.ItemIndicator
-        render={<span className="cn-select-item-indicator" />}
-      >
+      <SelectPrimitive.ItemIndicator render={<span className="cn-select-item-indicator" />}>
         <Icon name="check" className="cn-select-item-indicator-icon" />
       </SelectPrimitive.ItemIndicator>
     </SelectPrimitive.Item>

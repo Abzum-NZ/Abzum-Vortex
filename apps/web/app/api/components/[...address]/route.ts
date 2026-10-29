@@ -112,7 +112,10 @@ export async function GET(
     return refusal("storage_unavailable");
   }
   if (result.outcome === "refused") return refusal(result.reason, result.headers);
-  return new Response(Buffer.from(result.bytes), { status: result.statusCode, headers: result.headers });
+  return new Response(Buffer.from(result.bytes), {
+    status: result.statusCode,
+    headers: result.headers,
+  });
 }
 
 /** The sandboxed frame loads module scripts cross-origin, so preflight is open. */

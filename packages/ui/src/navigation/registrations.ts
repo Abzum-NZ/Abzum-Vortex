@@ -1,10 +1,5 @@
-import {
-  PLATFORM_BLOCK_RELEASE_IDENTITIES,
-} from "@vortex/platform/schema";
-import {
-  noRuntimeInputs,
-  type PlatformComponentRegistration,
-} from "../registry";
+import { PLATFORM_BLOCK_RELEASE_IDENTITIES } from "@vortex/platform/schema";
+import { noRuntimeInputs, type PlatformComponentRegistration } from "../registry";
 
 /**
  * Navigation, account, and search blocks read platform context from the signed-in page. None

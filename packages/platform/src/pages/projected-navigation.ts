@@ -16,7 +16,13 @@ export type ProjectedNavigationItem =
       children: readonly ProjectedNavigationItem[];
     }>
   | Readonly<{ type: "page"; id: string; label: string; icon: VortexIconName; pageId: string }>
-  | Readonly<{ type: "external"; id: string; label: string; icon: VortexIconName; address: string }>;
+  | Readonly<{
+      type: "external";
+      id: string;
+      label: string;
+      icon: VortexIconName;
+      address: string;
+    }>;
 
 export type ProjectedNavigation = readonly ProjectedNavigationItem[];
 
@@ -27,15 +33,19 @@ export type ProjectedNavigation = readonly ProjectedNavigationItem[];
 export type NavigationPermissionDecisions = Readonly<Record<string, boolean>>;
 
 /** Whether the decisions grant a key. A missing decision is a refusal, so the projections fail closed. */
-export const holdsPermission = (decisions: NavigationPermissionDecisions, permissionKey: string): boolean =>
-  Object.hasOwn(decisions, permissionKey) && decisions[permissionKey] === true;
+export const holdsPermission = (
+  decisions: NavigationPermissionDecisions,
+  permissionKey: string,
+): boolean => Object.hasOwn(decisions, permissionKey) && decisions[permissionKey] === true;
 
 /**
  * Whether a placement is shown for its view gate: an ungated placement always is, a gated one only
  * when its view permission is allowed. The page projection and Studio's preview both judge by it.
  */
-export const placementViewShown = (viewPermissionKey: unknown, viewAllowed: boolean | undefined): boolean =>
-  viewPermissionKey === undefined || viewAllowed === true;
+export const placementViewShown = (
+  viewPermissionKey: unknown,
+  viewAllowed: boolean | undefined,
+): boolean => viewPermissionKey === undefined || viewAllowed === true;
 
 const projectNavigationItem = (
   item: NavigationItem,
@@ -48,7 +58,13 @@ const projectNavigationItem = (
         : undefined;
     case "external":
       return holdsPermission(decisions, item.permissionKey)
-        ? { type: "external", id: item.id, label: item.label, icon: item.icon, address: item.address }
+        ? {
+            type: "external",
+            id: item.id,
+            label: item.label,
+            icon: item.icon,
+            address: item.address,
+          }
         : undefined;
     case "heading": {
       const children = item.children.flatMap((child) => {

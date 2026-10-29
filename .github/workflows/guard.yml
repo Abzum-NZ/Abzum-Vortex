@@ -23,9 +23,6 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm typecheck
+      - run: pnpm verify
       - run: pnpm guard
-      # `pnpm verify` currently stops at the pre-existing `format:check` failure on main.
-      # Keep lint and typecheck above, and still run the full workspace build here.
-      - run: pnpm build
+      - run: pnpm audit --audit-level high

@@ -13,14 +13,7 @@
       "storage_contract_id": "srt_operations_incident",
       "storage_scope": "application_contained",
       "ownership_mode": "none",
-      "standard_actions": [
-        "create",
-        "read",
-        "update",
-        "soft_delete",
-        "restore",
-        "export"
-      ],
+      "standard_actions": ["create", "read", "update", "soft_delete", "restore", "export"],
       "custom_actions": [
         "act_incident_attach",
         "act_incident_acknowledge",
@@ -167,12 +160,7 @@
           "public_display": "refused",
           "type": "formatted_text",
           "settings": {
-            "allowed_blocks": [
-              "paragraph",
-              "heading",
-              "list",
-              "link"
-            ]
+            "allowed_blocks": ["paragraph", "heading", "list", "link"]
           }
         },
         {
@@ -187,12 +175,7 @@
           "public_display": "refused",
           "type": "formatted_text",
           "settings": {
-            "allowed_blocks": [
-              "paragraph",
-              "heading",
-              "list",
-              "link"
-            ]
+            "allowed_blocks": ["paragraph", "heading", "list", "link"]
           }
         },
         {
@@ -207,12 +190,7 @@
           "public_display": "refused",
           "type": "formatted_text",
           "settings": {
-            "allowed_blocks": [
-              "paragraph",
-              "heading",
-              "list",
-              "link"
-            ]
+            "allowed_blocks": ["paragraph", "heading", "list", "link"]
           }
         },
         {
@@ -227,12 +205,7 @@
           "public_display": "refused",
           "type": "formatted_text",
           "settings": {
-            "allowed_blocks": [
-              "paragraph",
-              "heading",
-              "list",
-              "link"
-            ]
+            "allowed_blocks": ["paragraph", "heading", "list", "link"]
           }
         },
         {
@@ -247,12 +220,7 @@
           "public_display": "refused",
           "type": "formatted_text",
           "settings": {
-            "allowed_blocks": [
-              "paragraph",
-              "heading",
-              "list",
-              "link"
-            ]
+            "allowed_blocks": ["paragraph", "heading", "list", "link"]
           }
         },
         {
@@ -267,12 +235,7 @@
           "public_display": "refused",
           "type": "formatted_text",
           "settings": {
-            "allowed_blocks": [
-              "paragraph",
-              "heading",
-              "list",
-              "link"
-            ]
+            "allowed_blocks": ["paragraph", "heading", "list", "link"]
           }
         },
         {
@@ -287,12 +250,7 @@
           "public_display": "refused",
           "type": "formatted_text",
           "settings": {
-            "allowed_blocks": [
-              "paragraph",
-              "heading",
-              "list",
-              "link"
-            ]
+            "allowed_blocks": ["paragraph", "heading", "list", "link"]
           }
         },
         {
@@ -307,12 +265,7 @@
           "public_display": "refused",
           "type": "formatted_text",
           "settings": {
-            "allowed_blocks": [
-              "paragraph",
-              "heading",
-              "list",
-              "link"
-            ]
+            "allowed_blocks": ["paragraph", "heading", "list", "link"]
           }
         },
         {
@@ -327,12 +280,7 @@
           "public_display": "refused",
           "type": "formatted_text",
           "settings": {
-            "allowed_blocks": [
-              "paragraph",
-              "heading",
-              "list",
-              "link"
-            ]
+            "allowed_blocks": ["paragraph", "heading", "list", "link"]
           }
         },
         {
@@ -405,12 +353,7 @@
           "public_display": "refused",
           "type": "formatted_text",
           "settings": {
-            "allowed_blocks": [
-              "paragraph",
-              "heading",
-              "list",
-              "link"
-            ]
+            "allowed_blocks": ["paragraph", "heading", "list", "link"]
           }
         },
         {
@@ -694,11 +637,7 @@
           "attached_signal_evidence",
           "attached_at"
         ],
-        "changeable_fields": [
-          "attached_signal_key",
-          "attached_signal_evidence",
-          "attached_at"
-        ]
+        "changeable_fields": ["attached_signal_key", "attached_signal_evidence", "attached_at"]
       }
     },
     {
@@ -718,12 +657,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "state"
-        ],
-        "changeable_fields": [
-          "state"
-        ]
+        "readable_fields": ["state"],
+        "changeable_fields": ["state"]
       }
     },
     {
@@ -743,13 +678,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "state",
-          "severity"
-        ],
-        "changeable_fields": [
-          "severity"
-        ]
+        "readable_fields": ["state", "severity"],
+        "changeable_fields": ["severity"]
       }
     },
     {
@@ -769,12 +699,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "state"
-        ],
-        "changeable_fields": [
-          "state"
-        ]
+        "readable_fields": ["state"],
+        "changeable_fields": ["state"]
       }
     }
   ],
@@ -802,12 +728,7 @@
           "required": true,
           "type": "formatted_text",
           "validation": {
-            "allowed_blocks": [
-              "paragraph",
-              "heading",
-              "list",
-              "link"
-            ]
+            "allowed_blocks": ["paragraph", "heading", "list", "link"]
           }
         }
       ],
@@ -816,10 +737,7 @@
           {
             "field": "state",
             "operator": "not_in",
-            "value": [
-              "resolved",
-              "closed"
-            ]
+            "value": ["resolved", "closed"]
           },
           {
             "field": "deduplication_key",
@@ -876,10 +794,7 @@
       "precondition": {
         "field": "state",
         "operator": "not_in",
-        "value": [
-          "resolved",
-          "closed"
-        ]
+        "value": ["resolved", "closed"]
       },
       "tasks": [
         {
@@ -917,10 +832,7 @@
       "precondition": {
         "field": "state",
         "operator": "not_in",
-        "value": [
-          "resolved",
-          "closed"
-        ]
+        "value": ["resolved", "closed"]
       },
       "tasks": [
         {
@@ -958,10 +870,7 @@
       "precondition": {
         "field": "state",
         "operator": "not_in",
-        "value": [
-          "resolved",
-          "closed"
-        ]
+        "value": ["resolved", "closed"]
       },
       "tasks": [
         {
@@ -995,11 +904,7 @@
       "key": "vortex.operations.incidents.incident.created",
       "label": "Incident created",
       "record_type": "incident",
-      "carries": [
-        "incident_number",
-        "code",
-        "severity"
-      ],
+      "carries": ["incident_number", "code", "severity"],
       "personal_or_sensitive_values_allowed": false
     },
     {
@@ -1007,10 +912,7 @@
       "key": "vortex.operations.incidents.incident.attached",
       "label": "Incident attached",
       "record_type": "incident",
-      "carries": [
-        "incident_number",
-        "attached_signal_key"
-      ],
+      "carries": ["incident_number", "attached_signal_key"],
       "personal_or_sensitive_values_allowed": false
     },
     {
@@ -1018,10 +920,7 @@
       "key": "vortex.operations.incidents.incident.acknowledged",
       "label": "Incident acknowledged",
       "record_type": "incident",
-      "carries": [
-        "incident_number",
-        "state"
-      ],
+      "carries": ["incident_number", "state"],
       "personal_or_sensitive_values_allowed": false
     },
     {
@@ -1029,11 +928,7 @@
       "key": "vortex.operations.incidents.incident.escalated",
       "label": "Incident escalated",
       "record_type": "incident",
-      "carries": [
-        "incident_number",
-        "severity",
-        "owning_role"
-      ],
+      "carries": ["incident_number", "severity", "owning_role"],
       "personal_or_sensitive_values_allowed": false
     },
     {
@@ -1041,10 +936,7 @@
       "key": "vortex.operations.incidents.incident.resolved",
       "label": "Incident resolved",
       "record_type": "incident",
-      "carries": [
-        "incident_number",
-        "state"
-      ],
+      "carries": ["incident_number", "state"],
       "personal_or_sensitive_values_allowed": false
     }
   ],
@@ -1054,17 +946,13 @@
       "id": "ext_incident_fields",
       "key": "incident_fields",
       "record_type": "incident",
-      "accepts": [
-        "field"
-      ]
+      "accepts": ["field"]
     },
     {
       "id": "ext_incident_actions",
       "key": "incident_actions",
       "record_type": "incident",
-      "accepts": [
-        "action"
-      ]
+      "accepts": ["action"]
     }
   ],
   "sharing_conditions": [],
@@ -1089,10 +977,7 @@
       "filter": {
         "field": "state",
         "operator": "not_in",
-        "value": [
-          "resolved",
-          "closed"
-        ]
+        "value": ["resolved", "closed"]
       },
       "group_by": [],
       "aggregates": [],

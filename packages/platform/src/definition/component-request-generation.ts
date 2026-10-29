@@ -17,9 +17,7 @@ export const nextComponentRequestGeneration = (
   componentId,
   navigationKey,
   generation:
-    current !== undefined && sameId(current.componentId, componentId)
-      ? current.generation + 1
-      : 1,
+    current !== undefined && sameId(current.componentId, componentId) ? current.generation + 1 : 1,
 });
 
 /** A reread may update a placement only while both its navigation and generation are current. */

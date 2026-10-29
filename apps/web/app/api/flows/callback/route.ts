@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { NextResponse} from "next/server";
+import type { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { mapWebError } from "../../../_lib/web-error-mapper";
 import {
@@ -59,9 +59,11 @@ const readBoundedBody = async (request: NextRequest): Promise<string | undefined
       if (done) break;
       length += value.byteLength;
       if (length > maximumRequestBodyLength) {
-        await reader.cancel().catch((error: unknown) =>
-          callbackRefusalLog("CALLBACK_BODY_CANCEL_FAILED", "read-body", error),
-        );
+        await reader
+          .cancel()
+          .catch((error: unknown) =>
+            callbackRefusalLog("CALLBACK_BODY_CANCEL_FAILED", "read-body", error),
+          );
         return callbackRefusalLog("CALLBACK_BODY_TOO_LARGE", "read-body");
       }
       chunks.push(value);
@@ -89,7 +91,9 @@ const kestraExecutionState = async (
   binding: ProtectedNodeRunRecord["kestra"],
 ): Promise<unknown> => {
   const target = resolveApplicationKestraInstanceTarget({
-    [applicationKestraBaseUrlEnvironmentKey]: optionalEnvironmentValue(applicationKestraBaseUrlEnvironmentKey),
+    [applicationKestraBaseUrlEnvironmentKey]: optionalEnvironmentValue(
+      applicationKestraBaseUrlEnvironmentKey,
+    ),
   });
   const baseUrl = target.baseUrl.endsWith("/") ? target.baseUrl : `${target.baseUrl}/`;
   const path = [
@@ -129,10 +133,12 @@ const createCallbackService = () => {
         run: <Result>(
           session: IdentitySession,
           selection: OrganizationSelectionCandidate,
-          operation: (scope: Readonly<{
-            tenantId: TenantId;
-            operations: RequestBoundTenantGovernanceService;
-          }>) => Promise<Result>,
+          operation: (
+            scope: Readonly<{
+              tenantId: TenantId;
+              operations: RequestBoundTenantGovernanceService;
+            }>,
+          ) => Promise<Result>,
         ) =>
           durableRequests.runAccessChange(session, selection, (transaction, scope) =>
             operation({
@@ -146,7 +152,10 @@ const createCallbackService = () => {
   const services = createServices();
   const executor = createProtectedOperationExecutor({
     ...services,
-    durableOperations: (transaction: RequestDatabaseTransaction, scope: DurableActorRequestScope) => {
+    durableOperations: (
+      transaction: RequestDatabaseTransaction,
+      scope: DurableActorRequestScope,
+    ) => {
       if (scope.actor.kind !== "organization_account")
         throw new Error("DURABLE_OPERATION_ACTOR_UNAVAILABLE");
       const selectedScope: SelectedOrganizationScope = {
@@ -158,12 +167,15 @@ const createCallbackService = () => {
       };
       // The durable actor resolver established this exact request context on this transaction.
       // Service wrappers reuse it so the operation and effect record commit together.
-      const resolvedRequestTransaction: NonNullable<HumanOrganizationRequestDependencies["resolvedRequestTransaction"]> =
-        async <ResolvedScope, Result>(_resolve: unknown, operation: (
+      const resolvedRequestTransaction: NonNullable<
+        HumanOrganizationRequestDependencies["resolvedRequestTransaction"]
+      > = async <ResolvedScope, Result>(
+        _resolve: unknown,
+        operation: (
           transaction: RequestDatabaseTransaction,
           scope: ResolvedScope,
-        ) => Promise<Result>): Promise<Result> =>
-          operation(transaction, selectedScope as unknown as ResolvedScope);
+        ) => Promise<Result>,
+      ): Promise<Result> => operation(transaction, selectedScope as unknown as ResolvedScope);
       return createServices(resolvedRequestTransaction);
     },
     durableActorRequest: createDurableActorRequestService({ identityAuthorityId }),
@@ -185,44 +197,59 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const declaredLength = Number(request.headers.get("content-length") ?? 0);
     if (declaredLength > maximumRequestBodyLength) {
       callbackRefusalLog("CALLBACK_DECLARED_LENGTH_TOO_LARGE", "check-request");
-      return privateJsonResponse({
-        outcome: "permanent_refusal",
-        safeCode: "callback_refused",
-      }, 200);
+      return privateJsonResponse(
+        {
+          outcome: "permanent_refusal",
+          safeCode: "callback_refused",
+        },
+        200,
+      );
     }
     if (
       request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() !==
-        "application/json"
+      "application/json"
     ) {
       callbackRefusalLog("CALLBACK_CONTENT_TYPE_NOT_JSON", "check-request");
-      return privateJsonResponse({
-        outcome: "permanent_refusal",
-        safeCode: "callback_refused",
-      }, 200);
+      return privateJsonResponse(
+        {
+          outcome: "permanent_refusal",
+          safeCode: "callback_refused",
+        },
+        200,
+      );
     }
     const text = await readBoundedBody(request);
     if (text === undefined)
-      return privateJsonResponse({
-        outcome: "permanent_refusal",
-        safeCode: "callback_refused",
-      }, 200);
+      return privateJsonResponse(
+        {
+          outcome: "permanent_refusal",
+          safeCode: "callback_refused",
+        },
+        200,
+      );
     let candidate: unknown;
     try {
       candidate = JSON.parse(text);
     } catch (error) {
       callbackRefusalLog("CALLBACK_BODY_NOT_JSON", "parse-body", error);
-      return privateJsonResponse({
-        outcome: "permanent_refusal",
-        safeCode: "callback_refused",
-      }, 200);
+      return privateJsonResponse(
+        {
+          outcome: "permanent_refusal",
+          safeCode: "callback_refused",
+        },
+        200,
+      );
     }
     return privateJsonResponse(await createCallbackService().execute(candidate), 200);
   } catch (error) {
     callbackRefusalLog("CALLBACK_EXECUTION_FAILED", "execute-callback", error);
-    return privateJsonResponse({
-      outcome: "retryable_failure",
-      safeCode: "callback_unavailable",
-      nextPollAt: new Date(Date.now() + 1_000).toISOString(),
-    }, 200);
+    return privateJsonResponse(
+      {
+        outcome: "retryable_failure",
+        safeCode: "callback_unavailable",
+        nextPollAt: new Date(Date.now() + 1_000).toISOString(),
+      },
+      200,
+    );
   }
 }

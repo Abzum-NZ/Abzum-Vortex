@@ -189,12 +189,7 @@ const currentIso4217Alpha3CodeSetV2026_01_01 = new Set<string>(
   currentIso4217Alpha3CodesV2026_01_01,
 );
 
-export const organizationRuntimeSettingsDateFormats = [
-  "short",
-  "medium",
-  "long",
-  "full",
-] as const;
+export const organizationRuntimeSettingsDateFormats = ["short", "medium", "long", "full"] as const;
 const [shortDateFormat, mediumDateFormat, longDateFormat, fullDateFormat] =
   organizationRuntimeSettingsDateFormats;
 export const organizationRuntimeSettingsDateFormatOptions = [

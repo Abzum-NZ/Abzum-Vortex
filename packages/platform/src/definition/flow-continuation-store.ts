@@ -45,7 +45,6 @@ type FlowEffectClaim =
   | Readonly<{ kind: "in_progress" }>
   | Readonly<{ kind: "unavailable" }>;
 
-
 const expiryRowSchema = z.object({ expires_at: z.union([z.date(), z.string()]) });
 const consumeRowSchema = z.object({ result: z.unknown() });
 const consumeResultSchema = z.discriminatedUnion("kind", [

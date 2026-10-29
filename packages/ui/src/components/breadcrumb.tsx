@@ -19,10 +19,7 @@ function BreadcrumbList({ className, ...props }: React.ComponentProps<"ol">) {
   return (
     <ol
       data-slot="breadcrumb-list"
-      className={cn(
-        "cn-breadcrumb-list flex flex-wrap items-center wrap-break-word",
-        className,
-      )}
+      className={cn("cn-breadcrumb-list flex flex-wrap items-center wrap-break-word", className)}
       {...props}
     />
   );
@@ -41,10 +38,7 @@ function BreadcrumbItem({ className, ...props }: React.ComponentProps<"li">) {
 function BreadcrumbLink({ className, render, ...props }: useRender.ComponentProps<"a">) {
   return useRender({
     defaultTagName: "a",
-    props: mergeProps<"a">(
-      { className: cn("cn-breadcrumb-link", className) },
-      props,
-    ),
+    props: mergeProps<"a">({ className: cn("cn-breadcrumb-link", className) }, props),
     render,
     state: { slot: "breadcrumb-link" },
   });
