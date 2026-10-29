@@ -11,6 +11,7 @@ declare
   receipt vortex_record.command_receipts%rowtype;
   next_sequence integer;
   receipt_kind text;
+  effects jsonb;
 begin
   bound_command_id := nullif(
     pg_catalog.current_setting('vortex_record.lifecycle_command_id', true), ''
@@ -47,6 +48,32 @@ begin
   ) then
     raise exception using errcode = '22023', message = 'Record lifecycle effects are invalid';
   end if;
+  if exists (
+    select 1 from pg_catalog.jsonb_array_elements(p_effects) as item(value)
+    group by item.value -> 'effectKind', item.value -> 'storageContractId',
+      item.value -> 'recordId', item.value -> 'relationshipId'
+    having pg_catalog.count(distinct (item.value - 'deleteRoots')) > 1
+  ) then
+    raise exception using errcode = '40001', message = 'Shared lifecycle effects disagree';
+  end if;
+  -- One affected row/relationship has one journal effect, even when several
+  -- roots reached it. Keep every reaching root on that effect.
+  select pg_catalog.jsonb_agg(grouped.effect || pg_catalog.jsonb_build_object(
+    'deleteRoots', (
+      select pg_catalog.jsonb_agg(roots.value order by roots.value ->> 'recordTypeId', roots.value ->> 'recordId')
+      from (
+        select distinct root.value
+        from pg_catalog.jsonb_array_elements(p_effects) as item(value)
+        cross join lateral pg_catalog.jsonb_array_elements(item.value -> 'deleteRoots') as root(value)
+        where item.value - 'deleteRoots' = grouped.effect
+      ) as roots
+    )
+  ) order by grouped.position) into effects
+  from (
+    select item.value - 'deleteRoots' as effect, pg_catalog.min(item.ordinality) as position
+    from pg_catalog.jsonb_array_elements(p_effects) with ordinality as item(value, ordinality)
+    group by item.value - 'deleteRoots'
+  ) as grouped;
   context_value := vortex_access.validated_human_request_context();
   select stored.command_kind into receipt_kind
   from vortex_record.command_receipts as stored where stored.command_id = bound_command_id;
@@ -82,7 +109,7 @@ begin
     (item.value ->> 'preConcurrencyNumber')::bigint,
     (item.value ->> 'preConcurrencyNumber')::bigint + 1,
     nullif(item.value -> 'previousValue', 'null'::jsonb), item.value -> 'deleteRoots'
-  from pg_catalog.jsonb_array_elements(p_effects) with ordinality as item(value, ordinality);
+  from pg_catalog.jsonb_array_elements(effects) with ordinality as item(value, ordinality);
 end
 $function$;
 
