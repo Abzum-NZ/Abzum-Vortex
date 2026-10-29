@@ -76,7 +76,7 @@ export type FlowInvokeClient = Readonly<{
     sourceTablePlacementId?: string,
   ) => Promise<ServerFlowResponse>;
   startBinding: (
-    binding: Pick<PlacementFlowBinding, "bindingId" | "flowId" | "segment">,
+    binding: Pick<PlacementFlowBinding, "bindingId" | "flowId" | "entrySegments">,
     callerInputs: Readonly<Record<string, unknown>>,
     clickId: string,
     signal?: AbortSignal,
@@ -84,7 +84,11 @@ export type FlowInvokeClient = Readonly<{
     subject?: FlowSubjectContext,
     sourceTablePlacementId?: string,
     carriedValues?: string,
-    segmentValues?: Readonly<{ seed: Readonly<Record<string, JsonValue>>; iteration: string }>,
+    segmentValues?: Readonly<{
+      seed: Readonly<Record<string, JsonValue>>;
+      iteration: string;
+      segment?: Readonly<{ segmentId: string; fingerprint: string }>;
+    }>,
   ) => Promise<ServerFlowResponse>;
   resume: (
     flowId: string,
@@ -335,7 +339,8 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
           ...context,
           bindingId: binding.bindingId,
           flowId: binding.flowId,
-          segment: binding.segment,
+          entrySegments: [...binding.entrySegments],
+          ...(segmentValues?.segment === undefined ? {} : { segment: segmentValues.segment }),
           clickId,
           seed: segmentValues?.seed ?? {},
           iteration: segmentValues?.iteration ?? "0",

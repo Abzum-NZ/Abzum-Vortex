@@ -18,7 +18,7 @@ export type PlacementFlowBinding = Readonly<{
   eventId: string;
   flowId: string;
   event: string;
-  segment: Readonly<{ segmentId: string; fingerprint: string }> | Readonly<{ segmentId: null }>;
+  entrySegments: readonly Readonly<{ segmentId: string; fingerprint: string }>[];
   callerInputs: readonly string[];
   savesFormValues: boolean;
   recordTypeId?: string;
@@ -28,7 +28,7 @@ export type PlacementFlowBinding = Readonly<{
 /** The safe identity a tool receives for its projected binding. */
 export type FlowBindingReference = Pick<
   PlacementFlowBinding,
-  "bindingId" | "flowId" | "event" | "segment"
+  "bindingId" | "flowId" | "event" | "entrySegments"
 >;
 
 export type FlowRuntime = Readonly<{
@@ -67,7 +67,11 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
   ): Promise<ServerDrivenResult> => {
     if (signal?.aborted) return { kind: "abandoned", unanswered: true };
     const first = await options.client.startBinding(
-      { bindingId: binding.bindingId, flowId: binding.flowId, segment: binding.segment },
+      {
+        bindingId: binding.bindingId,
+        flowId: binding.flowId,
+        entrySegments: binding.entrySegments,
+      },
       callerInputs,
       clickId ?? crypto.randomUUID(),
       signal,

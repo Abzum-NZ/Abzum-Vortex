@@ -29,15 +29,14 @@ const bindingInvocationSchema = z
     flowId: flowIdSchema,
     /** A row form's source table; the gate revalidates it and the subject against that table. */
     sourceTablePlacementId: containedComponentIdSchema.optional(),
-    segment: z.union([
-      z.object({ segmentId: z.null() }).strict(),
-      z
-        .object({
-          segmentId: z.string().min(1).max(200),
-          fingerprint: z.string().regex(/^sha256:[0-9a-f]{64}$/),
-        })
-        .strict(),
-    ]),
+    entrySegments: z.array(z.object({
+      segmentId: z.string().min(1).max(200),
+      fingerprint: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+    }).strict()).max(500),
+    segment: z.object({
+      segmentId: z.string().min(1).max(200),
+      fingerprint: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+    }).strict().optional(),
     /** One identity per user gesture, so a repeated request for the same click is the same run. */
     clickId: z.uuid(),
     seed: z.record(z.string().min(1).max(300), jsonValueSchema),
