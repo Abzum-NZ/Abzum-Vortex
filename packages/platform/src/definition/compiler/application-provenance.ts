@@ -44,6 +44,29 @@ const isApplicationCompositionCanonicalPath = (path: Path): boolean =>
   ((path[1] === "shells" && path[3] === "layout") ||
     (path[1] === "pages" && path[3] === "composition"));
 
+/** A transformed shorthand reference can expand a single source leaf into several canonical ones. */
+const existingSourcePath = (source: unknown, path: Path): Path => {
+  const found: Path = [];
+  let current = source;
+  for (const segment of path) {
+    if (current === null || typeof current !== "object" || !Object.hasOwn(current, segment)) break;
+    found.push(segment);
+    current = (current as Record<string | number, unknown>)[segment];
+  }
+  return found;
+};
+
+const isFormIdentityLeaf = (value: unknown, path: Path): boolean => {
+  if (path.at(-1) !== "form" || path.at(-2) !== "reference") return false;
+  const reference = valueAtPath(value, path.slice(0, -1));
+  return (
+    typeof reference === "object" &&
+    reference !== null &&
+    "source" in reference &&
+    reference.source === "form"
+  );
+};
+
 const applicationSpecialRoot = (path: Path): boolean =>
   path[0] === "body" &&
   (path[1] === "platform_block_dependencies" ||
@@ -185,21 +208,33 @@ function applicationFlowProvenance(
       origin: "source",
       sourcePath: [...sourceBase, "event"],
     });
-    for (const leaf of leafPaths(binding.settings))
-      entries.push({
-        canonicalPath: [...canonicalBase, "settings", ...leaf],
-        origin: "source",
-        sourcePath: [...sourceBase, "settings", ...leaf],
-      });
+    for (const leaf of leafPaths(binding.settings)) {
+      const sourceLeaf = existingSourcePath(authored.settings, leaf);
+      const sourceValue = valueAtPath(authored.settings, sourceLeaf);
+      const canonicalValue = valueAtPath(binding.settings, leaf);
+      if (isFormIdentityLeaf(binding.settings, leaf))
+        resolved(["settings", ...leaf], ["settings", ...sourceLeaf]);
+      else
+        entries.push({
+          canonicalPath: [...canonicalBase, "settings", ...leaf],
+          origin: "source",
+          sourcePath: [...sourceBase, "settings", ...sourceLeaf],
+          ...(sameCanonicalValue(sourceValue, canonicalValue) ? {} : { ruleCode: TRANSFORM_RULE }),
+        });
+    }
     for (const leaf of leafPaths(binding.flow.inputs)) {
-      const sourceValue = valueAtPath(authored.inputs, leaf);
+      const sourceLeaf = existingSourcePath(authored.inputs, leaf);
+      const sourceValue = valueAtPath(authored.inputs, sourceLeaf);
       const canonicalValue = valueAtPath(binding.flow.inputs, leaf);
-      entries.push({
-        canonicalPath: [...canonicalBase, "flow", "inputs", ...leaf],
-        origin: "source",
-        sourcePath: [...sourceBase, "inputs", ...leaf],
-        ...(sameCanonicalValue(sourceValue, canonicalValue) ? {} : { ruleCode: TRANSFORM_RULE }),
-      });
+      if (isFormIdentityLeaf(binding.flow.inputs, leaf))
+        resolved(["flow", "inputs", ...leaf], ["inputs", ...sourceLeaf]);
+      else
+        entries.push({
+          canonicalPath: [...canonicalBase, "flow", "inputs", ...leaf],
+          origin: "source",
+          sourcePath: [...sourceBase, "inputs", ...sourceLeaf],
+          ...(sameCanonicalValue(sourceValue, canonicalValue) ? {} : { ruleCode: TRANSFORM_RULE }),
+        });
     }
   });
   return entries;

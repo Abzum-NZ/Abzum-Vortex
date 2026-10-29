@@ -2,6 +2,7 @@ import type { PlatformPermissionSource } from "../../access/platform-permissions
 import type { applicationCompilationRequestSchema } from "../definition-compilation-contracts";
 import { inspectApplicationPageReplacements } from "../../pages/application-page-replacement";
 import { flowBindingInputSchema, type FlowDefinition } from "../../workflows/flow-contracts";
+import { resolveFlowFormReferences } from "../flow-compilation";
 import { applicationDraftSchema } from "../application-contracts";
 import {
   applicationCompilationOutputSchema,
@@ -640,13 +641,21 @@ function compileApplicationFlowBindings(
         undefined,
         `Binding ${String(binding.id)}: ${notYet}`,
       );
+    const resolveForm = (form: string) => resolution.id(definitionKey, "block_placement", form);
+    const canonicalInputs = resolveFlowFormReferences(
+      Object.fromEntries(
+        Object.entries(inputs).map(([name, value]) => [name, flowBindingInputSchema.parse(value)]),
+      ),
+      resolveForm,
+    );
+    const canonicalSettings = resolveFlowFormReferences(settings.data, resolveForm);
     return {
       bindingId: resolution.id(definitionKey, "flow_binding", String(binding.id), "content"),
       controlId: resolution.id(definitionKey, "block_placement", String(binding.control)),
       eventId: resolution.id(definitionKey, "event", String(binding.event_id), "content"),
       event: binding.event,
-      flow: { flowId, inputs },
-      settings: asObject(binding.settings),
+      flow: { flowId, inputs: canonicalInputs },
+      settings: canonicalSettings,
     };
   });
 }
