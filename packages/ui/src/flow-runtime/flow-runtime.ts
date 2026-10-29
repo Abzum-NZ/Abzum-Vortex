@@ -265,7 +265,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
   };
   return Object.freeze({
     prefetch: async () => {
-      await Promise.all([import("./browser-flow-runner"), import("./flow-surface-view")]);
+      await import("./browser-flow-runner");
     },
     dispatchReference,
     dispatch: (binding, callerInputs = {}, clickId, subject, cycle) =>
