@@ -11,7 +11,6 @@ import type { usePlacementActions } from "./use-placement-actions";
 
 type BoardReadInput = Pick<
   Parameters<typeof usePlacementActions>[0],
-  | "busy"
   | "placementRequestsRef"
   | "navigationKey"
   | "currentPageKey"
@@ -26,7 +25,7 @@ type BoardReadInput = Pick<
 
 /**
  * The Board-only browser request path is loaded on the first visible-column read. It answers
- * "deferred" when the read cannot run yet (the page is busy or another read of this board is in
+ * "deferred" when another read of this board is in
  * flight): the board keeps the column and reads it again when idle. `false` is a real failure.
  */
 export async function readBoardColumns(
@@ -35,7 +34,6 @@ export async function readBoardColumns(
   event: DisplaySemanticEvent,
 ): Promise<boolean | "deferred"> {
   const {
-    busy,
     placementRequestsRef,
     navigationKey,
     currentPageKey,
@@ -48,7 +46,6 @@ export async function readBoardColumns(
     router,
   } = input;
   if (event.event !== "page_changed" || !("columns" in event)) return false;
-  if (busy) return "deferred";
   const parsedId = containedComponentIdSchema.safeParse(placementId);
   const columnRead = boardColumnReadRequestSchema.safeParse({
     columns: event.columns,

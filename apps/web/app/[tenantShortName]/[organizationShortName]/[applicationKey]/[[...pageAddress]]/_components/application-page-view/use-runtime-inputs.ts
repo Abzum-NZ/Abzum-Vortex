@@ -69,7 +69,6 @@ export function useRuntimeInputs({
   formOwners,
   recordDetailOwners,
   launcherPlacements,
-  busy,
   unsavedWork,
   onOpenApplication,
   runBinding,
@@ -106,7 +105,6 @@ export function useRuntimeInputs({
   navigationKey,
   currentTileDataRef,
   currentPageKey,
-  currentBusyRef,
   currentSearch,
   address,
   rereadTables,
@@ -126,7 +124,6 @@ export function useRuntimeInputs({
   /** The Record detail each placement sits in, whose record an action in its header acts on. */
   recordDetailOwners: Readonly<Record<string, string>>;
   launcherPlacements: ReturnType<typeof applicationLauncherPlacementIds>;
-  busy: boolean;
   unsavedWork: ReturnType<typeof useUnsavedWorkGuard>["guard"];
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
   runBinding: (
@@ -222,7 +219,6 @@ export function useRuntimeInputs({
   navigationKey: string;
   currentTileDataRef: RefObject<ApplicationPageModel["data"]>;
   currentPageKey: string | undefined;
-  currentBusyRef: RefObject<boolean>;
   currentSearch: string;
   address: PageAddress;
   rereadTables: (placementIds: readonly string[]) => void;
@@ -338,7 +334,7 @@ export function useRuntimeInputs({
           !bindings.some((binding) => binding.event === "row_action")
         )
           events.row_action = async (event: DisplaySemanticEvent) => {
-            if (event.event !== "row_action" || busy) return;
+            if (event.event !== "row_action") return;
             if (unsavedWork.hasUnsavedWork() && !(await unsavedWork.confirmDiscardUnsavedWork()))
               return;
             await onOpenApplication(event);
@@ -355,23 +351,22 @@ export function useRuntimeInputs({
               }
               if (event.event === "row_clicked")
                 pageParameters.rowClicked(placementId, event.recordId);
-              if (!busy)
-                return runBinding(
-                  placementId,
-                  binding,
-                  suppliedValues(event),
-                  event.event === "row_clicked" || event.event === "row_action"
-                    ? event.recordId
-                    : undefined,
-                  (tableData !== undefined || boardData !== undefined) &&
-                    event.event === "row_action" &&
-                    event.revision !== undefined
-                    ? { recordId: event.recordId, revision: event.revision }
-                    : undefined,
-                  undefined,
-                  undefined,
-                  tableData !== undefined && event.event === "row_action" ? "transient" : undefined,
-                );
+              return runBinding(
+                placementId,
+                binding,
+                suppliedValues(event),
+                event.event === "row_clicked" || event.event === "row_action"
+                  ? event.recordId
+                  : undefined,
+                (tableData !== undefined || boardData !== undefined) &&
+                  event.event === "row_action" &&
+                  event.revision !== undefined
+                  ? { recordId: event.recordId, revision: event.revision }
+                  : undefined,
+                undefined,
+                undefined,
+                tableData !== undefined && event.event === "row_action" ? "transient" : undefined,
+              );
             };
         // An inline edit commits one stored value through the bound flow at the revision the row
         // was displayed at. The cell shows what came of it: nothing is called saved until the
@@ -395,12 +390,6 @@ export function useRuntimeInputs({
                 console.error(`[page] ${editEvent} has no binding: EDIT_BINDING_MISSING`);
                 return { kind: "refused", message: unavailableNotice.text, changed: false };
               }
-              if (busy)
-                return {
-                  kind: "refused",
-                  message: "Another change is still saving. Try again in a moment.",
-                  changed: false,
-                };
               const outcome = await runBinding(
                 placementId,
                 binding,
@@ -436,7 +425,7 @@ export function useRuntimeInputs({
           bindings.some((binding) => binding.event === "card_moved")
         )
           events.card_moved = async (event: DisplaySemanticEvent): Promise<boolean> => {
-            if (event.event !== "card_moved" || busy) return false;
+            if (event.event !== "card_moved") return false;
             const binding = bindingFor(bindings, event);
             if (binding === undefined || event.revision === undefined) {
               console.error(
@@ -471,7 +460,7 @@ export function useRuntimeInputs({
           bindings.some((binding) => binding.event === "card_added")
         )
           events.card_added = async (event: DisplaySemanticEvent): Promise<boolean> => {
-            if (event.event !== "card_added" || busy) return false;
+            if (event.event !== "card_added") return false;
             const binding = bindingFor(bindings, event);
             if (binding === undefined) {
               console.error("[page] card add has no binding: BOARD_CARD_ADD_BINDING_MISSING");
@@ -694,7 +683,7 @@ export function useRuntimeInputs({
       const actionBinding = bindingOfEvent(bindings, "action");
       if (actionBinding !== undefined && model.guidedForm === undefined)
         events.action = (event: ControlSemanticEvent) => {
-          if (event.event !== "action" || event.intent !== "activate" || busy) return;
+          if (event.event !== "action" || event.intent !== "activate") return;
           const detailOwner = recordDetailOwners[placementId];
           const detail = detailOwner === undefined ? undefined : currentData[detailOwner];
           const recordId =
@@ -729,7 +718,7 @@ export function useRuntimeInputs({
         (model.guidedForm !== undefined && formOwners[placementId] === placementId)
       )
         events.form_submit = (event: ControlSemanticEvent) => {
-          if (event.event !== "form_submit" || busy || guidedFormCompleted) return;
+          if (event.event !== "form_submit" || guidedFormCompleted) return;
           if (model.guidedForm !== undefined) {
             const requested = requestedStepId.current;
             requestedStepId.current = undefined;
@@ -798,7 +787,7 @@ export function useRuntimeInputs({
       const readyBinding = bindings.find((binding) => binding.event === "form_ready");
       if (readyBinding !== undefined && model.guidedForm === undefined)
         events.form_ready = (event: ControlSemanticEvent) => {
-          if (event.event !== "form_ready" || busy) return;
+          if (event.event !== "form_ready") return;
           void applyDispatch(
             formBlock.ready(asComponentBinding(placementId, readyBinding)),
             undefined,
@@ -809,7 +798,7 @@ export function useRuntimeInputs({
       const resetBinding = bindings.find((binding) => binding.event === "form_reset");
       if (resetBinding !== undefined && model.guidedForm === undefined)
         events.form_reset = (event: ControlSemanticEvent) => {
-          if (event.event !== "form_reset" || busy) return;
+          if (event.event !== "form_reset") return;
           setFormFeedback((current) => {
             if (!Object.hasOwn(current, placementId)) return current;
             const next = { ...current };
@@ -873,7 +862,6 @@ export function useRuntimeInputs({
                 isVisible?: () => boolean,
               ): Promise<void> => {
                 if (
-                  busy ||
                   pinActivationInFlightRef.current ||
                   placementRequestsRef.current.key !== navigationKey ||
                   currentTileDataRef.current[placementId] !== data
@@ -895,7 +883,6 @@ export function useRuntimeInputs({
                 const currentSource = () => {
                   try {
                     return (
-                      !currentBusyRef.current &&
                       placementRequestsRef.current.key === navigationKey &&
                       placementRequestsRef.current.generations.get(placementId.toLowerCase()) ===
                         generation &&
@@ -993,7 +980,6 @@ export function useRuntimeInputs({
     return inputs;
   }, [
     applyDispatch,
-    busy,
     formBlock,
     formCancelledRef,
     formFeedback,

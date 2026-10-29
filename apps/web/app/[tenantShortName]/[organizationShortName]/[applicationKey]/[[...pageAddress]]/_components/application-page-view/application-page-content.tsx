@@ -160,9 +160,7 @@ export function ApplicationPageViewContent({
     frameRequested.current = true;
     router.refresh();
   }, [applicationFrame, router]);
-  const [busy, setBusy] = useState(false);
-  const currentBusyRef = useRef(busy);
-  currentBusyRef.current = busy;
+  const [guidedBusy, setGuidedBusy] = useState(false);
   const [completedGuidedNavigationKey, setCompletedGuidedNavigationKey] = useState<string>();
   const requestedStepId = useRef<string | undefined>(undefined);
   const guidedSubmitInFlight = useRef(false);
@@ -274,7 +272,7 @@ export function ApplicationPageViewContent({
   });
 
   useEffect(() => {
-    setBusy(false);
+    setGuidedBusy(false);
     setNotice(undefined);
     setFormFeedback({});
   }, [navigationKey]);
@@ -351,7 +349,6 @@ export function ApplicationPageViewContent({
   const { applyDispatch } = useApplyDispatch({
     placementRequestsRef,
     navigationKey,
-    setBusy,
     setNotice,
     setFormFeedback,
     router,
@@ -365,10 +362,7 @@ export function ApplicationPageViewContent({
   const invokeWebMcpTool = useCallback(
     async (tool: PageWebMcpTool, input: unknown, signal?: AbortSignal): Promise<unknown> => {
       if (signal?.aborted) return { outcome: "cancelled" };
-      if (currentBusyRef.current) return { outcome: "busy" };
       if (!isRecord(input)) return { outcome: "refused" };
-      currentBusyRef.current = true;
-      setBusy(true);
       setNotice(undefined);
       try {
         const result = await webMcpRuntime.dispatchReference(
@@ -388,9 +382,6 @@ export function ApplicationPageViewContent({
       } catch (error) {
         console.error(`[webmcp] flow dispatch failed for ${tool.name}: ${describeFailure(error)}`);
         return { outcome: "unavailable" };
-      } finally {
-        currentBusyRef.current = false;
-        setBusy(false);
       }
     },
     [applyDispatch, webMcpRuntime],
@@ -419,9 +410,9 @@ export function ApplicationPageViewContent({
     formOwners,
     application,
     subject,
-    busy,
+    busy: guidedBusy,
     guidedFormCompleted,
-    setBusy,
+    setBusy: setGuidedBusy,
     setNotice,
     guidedFormActions,
     searchParams,
@@ -455,7 +446,6 @@ export function ApplicationPageViewContent({
     applyDispatch,
     flowRuntime,
     formOwners,
-    busy,
     placementRequestsRef,
     navigationKey,
     currentPageKey,
@@ -513,7 +503,6 @@ export function ApplicationPageViewContent({
     formOwners,
     recordDetailOwners,
     launcherPlacements,
-    busy,
     unsavedWork,
     onOpenApplication,
     runBinding,
@@ -550,7 +539,6 @@ export function ApplicationPageViewContent({
     navigationKey,
     currentTileDataRef,
     currentPageKey,
-    currentBusyRef,
     currentSearch,
     address,
     rereadTables,
@@ -709,7 +697,7 @@ export function ApplicationPageViewContent({
             ? {}
             : {
                 guidedStepNavigation: {
-                  disabled: busy || guidedFormCompleted,
+                  disabled: guidedBusy || guidedFormCompleted,
                   onBack: () => {
                     if (guidedPreviousStepId !== undefined) requestGuidedStep(guidedPreviousStepId);
                   },

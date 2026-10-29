@@ -26,7 +26,6 @@ export function usePlacementActions({
   applyDispatch,
   flowRuntime,
   formOwners,
-  busy,
   placementRequestsRef,
   navigationKey,
   currentPageKey,
@@ -50,7 +49,6 @@ export function usePlacementActions({
   ) => Promise<DispatchOutcome>;
   flowRuntime: ReturnType<typeof createFlowRuntime>;
   formOwners: Readonly<Record<string, string>>;
-  busy: boolean;
   placementRequestsRef: RefObject<{
     base: string;
     key: string;
@@ -127,11 +125,9 @@ export function usePlacementActions({
   const readBoardColumns = useCallback(
     async (placementId: string, event: DisplaySemanticEvent): Promise<boolean | "deferred"> => {
       if (event.event !== "page_changed" || !("columns" in event)) return false;
-      if (busy) return "deferred";
       const board = await import("./board-column-read");
       return board.readBoardColumns(
         {
-          busy,
           placementRequestsRef,
           navigationKey,
           currentPageKey,
@@ -149,7 +145,6 @@ export function usePlacementActions({
     },
     [
       application,
-      busy,
       currentData,
       currentPageKey,
       currentSearch,
@@ -166,7 +161,6 @@ export function usePlacementActions({
       table: DisplayTablePayload,
     ): Promise<void> => {
       if (
-        busy ||
         event.event !== "page_changed" ||
         "columns" in event ||
         !Number.isSafeInteger(event.page) ||
@@ -225,7 +219,7 @@ export function usePlacementActions({
         scope.inFlight.delete(requestKey);
       }
     },
-    [busy, commitTablePage, currentSearch, navigationKey, tableQueryPending],
+    [commitTablePage, currentSearch, navigationKey, tableQueryPending],
   );
 
   return { runBinding, readBoardColumns, continueTablePage };
