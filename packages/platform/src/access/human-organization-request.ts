@@ -25,6 +25,7 @@ import {
   type SessionContext,
 } from "./identity-access";
 import {
+  requireRequestSavepoint,
   withResolvedRequestTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
@@ -42,6 +43,17 @@ type ChangePreparation = (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
 ) => Promise<void>;
+
+/** A scope already resolved and locked by the enclosing admitted segment. */
+export type BoundHumanOrganizationRequest = Readonly<{
+  transaction: RequestDatabaseTransaction;
+  session: IdentitySession;
+  selection: OrganizationSelectionCandidate;
+  scope: SelectedOrganizationScope;
+  issuedAt: string;
+  mode: "shared" | "access_change";
+  profileAccountId?: string;
+}>;
 
 export type HumanOrganizationRequestResult<Result> =
   | Readonly<{ kind: "available"; value: Result }>
@@ -67,6 +79,7 @@ export type HumanOrganizationRequestDependencies = Readonly<{
    */
   channel?: ProtectedOperationChannel;
   resolvedRequestTransaction?: ResolvedRequestTransactionRunner;
+  boundRequest?: BoundHumanOrganizationRequest;
   clock?: () => Date;
   correlationId?: () => string;
   telemetry?: ServiceTelemetryPort;
@@ -188,6 +201,42 @@ export const createHumanOrganizationRequestService = (
     }
 
     try {
+      const bound = dependencies.boundRequest;
+      if (bound !== undefined) {
+        const boundScope = selectedOrganizationScopeSchema.parse(bound.scope);
+        if (
+          JSON.stringify(verifiedSession.data) !==
+            JSON.stringify(identitySessionSchema.parse(bound.session)) ||
+          JSON.stringify(verifiedCandidate.data) !==
+            JSON.stringify(organizationSelectionCandidateSchema.parse(bound.selection)) ||
+          !representsSameUuid(boundScope.organizationId, verifiedCandidate.data.organizationId) ||
+          (boundScope.applicationRootId === undefined) !==
+            (verifiedCandidate.data.applicationRootId === undefined) ||
+          (boundScope.applicationRootId !== undefined &&
+            verifiedCandidate.data.applicationRootId !== undefined &&
+            !representsSameUuid(
+              boundScope.applicationRootId,
+              verifiedCandidate.data.applicationRootId,
+            )) ||
+          boundScope.previewInstallationId !== verifiedCandidate.data.previewInstallationId ||
+          !Number.isFinite(Date.parse(bound.issuedAt)) ||
+          Date.parse(bound.issuedAt) >= Date.parse(verifiedSession.data.accessTokenExpiresAt) ||
+          (mode === "access_change" && bound.mode !== "access_change") ||
+          (changedAccountId !== undefined &&
+            (bound.profileAccountId === undefined ||
+              !representsSameUuid(changedAccountId, bound.profileAccountId)))
+        )
+          throw new Error("BOUND_REQUEST_SCOPE_MISMATCH");
+        issuedAt = bound.issuedAt;
+        const value = await requireRequestSavepoint(bound.transaction).withSavepoint(
+          async (child) => {
+            if (prepare !== undefined) await prepare(child, boundScope);
+            return operation(child, boundScope, issuedAt);
+          },
+        );
+        appendTelemetry(correlationId, "success", startedAtMs);
+        return { kind: "available", value };
+      }
       const value = await runTransaction(
         async (transaction) => {
           // A preview request runs the preview's installation and registration in every read and
