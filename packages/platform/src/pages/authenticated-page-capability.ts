@@ -184,6 +184,14 @@ const gateDecision = (
 
 const sameKey = (left: string, right: string): boolean => left === right;
 
+/** A field operand of a row form is resolved only once its row has been proved. */
+const conditionReadsField = (condition: ConditionNode): boolean => {
+  if (condition.kind === "comparison")
+    return condition.left.source === "field" || condition.right?.source === "field";
+  if (condition.kind === "not") return conditionReadsField(condition.condition);
+  return condition.conditions.some(conditionReadsField);
+};
+
 /** The shared view, use, visibility and action decision for one placement. */
 const evaluatePlacement = async (
   transaction: RequestDatabaseTransaction,
@@ -195,6 +203,7 @@ const evaluatePlacement = async (
   ancestorHidden: boolean,
   decide: (binding: PermissionBinding | PlacementPermissionBinding) => Promise<GateDecision>,
   evaluators: PageCapabilityEvaluators,
+  deferRowCondition = false,
 ) => {
   const view =
     required.viewPermissionKey === undefined
@@ -215,14 +224,16 @@ const evaluatePlacement = async (
   const conditionAllowed =
     required.visibilityCondition === undefined
       ? binding.visibilityConditionAllowed
-      : !view.allowed || ancestorHidden
-        ? false
-        : await evaluators.evaluateVisibilityCondition(
-            transaction,
-            scope,
-            page,
-            required.visibilityCondition,
-          );
+      : deferRowCondition && conditionReadsField(required.visibilityCondition)
+        ? true
+        : !view.allowed || ancestorHidden
+          ? false
+          : await evaluators.evaluateVisibilityCondition(
+              transaction,
+              scope,
+              page,
+              required.visibilityCondition,
+            );
   const actionAvailable =
     ancestorHidden || !view.allowed
       ? undefined
@@ -315,6 +326,7 @@ export const projectAuthenticatedPageCapability = async (
   scope: SelectedOrganizationScope,
   loaded: FixedAuthenticatedPageCapability,
   evaluators: PageCapabilityEvaluators,
+  rowFormIds: ReadonlySet<string> = new Set(),
 ): Promise<ProjectedPageCapability | undefined> => {
   const page = pageDefinitionSchema.parse(loaded.page);
   if (
@@ -365,6 +377,9 @@ export const projectAuthenticatedPageCapability = async (
       ancestorHidden,
       decide,
       evaluators,
+      [required.placementId, ...required.ancestorPlacementIds].some((id) =>
+        rowFormIds.has(id.toLowerCase()),
+      ),
     );
     retainEarliestAccessEligibility(evaluated.view.validUntil);
     retainEarliestAccessEligibility(evaluated.use.validUntil);
