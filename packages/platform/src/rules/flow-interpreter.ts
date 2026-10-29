@@ -213,6 +213,8 @@ export type FlowRunResult =
   | Readonly<{
       status: "completed";
       outputs: FlowRuntimeValues;
+      /** Segment final outputs occupy a separate namespace from task outputs. */
+      finalOutputs?: FlowRuntimeValues;
       /** The outcome key of the Stop task that ended the flow early, when one did. */
       stopped?: string;
     }>
@@ -567,17 +569,20 @@ const finishActivation = (machine: Machine, activation: Activation): FlowRunResu
   if (machine.segment !== undefined && machine.state.activations.length === 1) {
     for (const name of Object.keys(machine.segment.outputs)) {
       const [task, key] = name.split(".");
-      const value =
-        task === "final"
-          ? flow.outputs[key!] === undefined
-            ? undefined
-            : evaluateValue(flow.outputs[key!]!.value, machine.state, activation, flow, name)
-          : activation.outputs[task!]?.[key!];
+      const value = activation.outputs[task!]?.[key!];
       if (value !== undefined) outputs[name] = value;
+    }
+    const finalOutputs: Record<string, FlowRuntimeValue> = {};
+    for (const [name, expression] of Object.entries(machine.segment.finalOutputExpressions)) {
+      const value = evaluateValue(expression, machine.state, activation, flow, name);
+      if (value.type !== machine.segment.finalOutputTypes[name])
+        failed("value_unresolved", "failed", name);
+      finalOutputs[name] = value;
     }
     return {
       status: "completed",
       outputs,
+      finalOutputs,
       ...(activation.stopped === undefined ? {} : { stopped: activation.stopped }),
     };
   }

@@ -75,12 +75,17 @@ export type FlowServerSegment = Readonly<{
   /** The values the segment reads from outside itself, and the outputs it produces. */
   inputs: FlowPlanValueTypes;
   outputs: FlowPlanValueTypes;
+  /** Server-only expressions for final outputs evaluated after the segment completes. */
+  finalOutputExpressions: Readonly<Record<string, FlowValue>>;
+  finalOutputTypes: FlowPlanValueTypes;
   /** Whether a step of the segment changes data or starts back-end work. */
   changes: boolean;
   /** Whether this segment needs an exclusive Access version lock. */
   accessChange: boolean;
   /** Whether an effect in this segment runs a multi-transaction workflow. */
   multiTransaction: boolean;
+  /** A target that must be locked before the Access version and scope. */
+  preScopeLock: "organization_account" | null;
   /** Each For each over record steps, which runs as one set-based change. */
   setBasedChanges: readonly Readonly<{
     taskId: string;
@@ -103,6 +108,7 @@ export type FlowSegmentStub = Readonly<{
   guard: readonly FlowPathCondition[];
   inputs: FlowPlanValueTypes;
   outputs: FlowPlanValueTypes;
+  finalOutputTypes: FlowPlanValueTypes;
   fingerprint: `sha256:${string}`;
   labels: readonly string[];
 }>;
@@ -522,6 +528,15 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
       (step) => operations.get(step.id)?.transaction === "access_change",
     );
     const multiTransaction = multi !== undefined;
+    const preScope = steps.find((step) => operations.get(step.id)?.preScopeLock !== undefined);
+    if (preScope !== undefined && effects.length > 1) {
+      const other = effects.find((step) => step.id !== preScope.id)!;
+      throw new FlowPlanError(
+        flow.id,
+        preScope.id,
+        `Pre-scope lock step ${preScope.id} cannot share a segment with effect ${other.id}`,
+      );
+    }
     return {
       kind: "server",
       id,
@@ -531,9 +546,12 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
       firstTaskPath: draft.firstTaskPath,
       inputs,
       outputs,
+      finalOutputExpressions: {},
+      finalOutputTypes: {},
       changes: effects.length > 0,
       accessChange,
       multiTransaction,
+      preScopeLock: preScope === undefined ? null : operations.get(preScope.id)!.preScopeLock!,
       setBasedChanges: setBasedChanges(steps),
       endsWithBackendRun: draft.tasks.at(-1)?.type === "backend.run",
       fingerprint: fingerprintCanonicalValue({
@@ -573,6 +591,7 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
               guard: segment.guard,
               inputs: segment.inputs,
               outputs: segment.outputs,
+              finalOutputTypes: segment.finalOutputTypes,
               fingerprint: segment.fingerprint,
               labels: segment.labels,
             },
@@ -609,6 +628,12 @@ const linkFlowPlans = (plans: ReadonlyMap<string, FlowPlan>) => {
             id,
             step.id,
             `Flow ${id} cannot run flow ${childId} with page steps on the server`,
+          );
+        if (child.segments.some((part) => part.kind === "server" && part.preScopeLock !== null))
+          throw new FlowPlanError(
+            id,
+            step.id,
+            `Flow ${id} cannot run flow ${childId} with a pre-scope lock operation`,
           );
         const childMulti = child.segments.find(
           (part) => part.kind === "server" && part.multiTransaction,

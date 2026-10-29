@@ -5,10 +5,14 @@ type ProtectedOperationMetadata = Readonly<{
   authorityKind: ProtectedOperationDescriptor["requiredAuthority"]["kind"];
   transaction: "read" | "change" | "access_change";
   workflow: "single" | "multi_transaction";
+  preScopeLock?: "organization_account";
 }>;
 
 /** Execution properties shared by the plan compiler and each registered runner. */
-export const protectedOperationMetadata = {
+export const protectedOperationMetadata: Record<
+  PlatformServiceOperationKey,
+  ProtectedOperationMetadata
+> = {
   create_group: { authorityKind: "permission", transaction: "access_change", workflow: "single" },
   create_tenant_organization: {
     authorityKind: "tenant_capability",
@@ -104,7 +108,12 @@ export const protectedOperationMetadata = {
     transaction: "change",
     workflow: "single",
   },
-  update_own_profile: { authorityKind: "permission", transaction: "change", workflow: "single" },
+  update_own_profile: {
+    authorityKind: "permission",
+    transaction: "change",
+    workflow: "single",
+    preScopeLock: "organization_account",
+  },
   read_own_profile: { authorityKind: "permission", transaction: "read", workflow: "single" },
   prepare_role_change_evidence: {
     authorityKind: "permission",
@@ -147,4 +156,4 @@ export const protectedOperationMetadata = {
     workflow: "multi_transaction",
   },
   prepare_role_assignment: { authorityKind: "permission", transaction: "read", workflow: "single" },
-} as const satisfies Record<PlatformServiceOperationKey, ProtectedOperationMetadata>;
+};
