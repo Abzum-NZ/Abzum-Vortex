@@ -1,5 +1,7 @@
 import type { FlowFormTypes } from "../../workflows/flow-form-types";
-import type { FlowFormula } from "../../workflows/flow-values";
+import type { FlowFormula, FlowReference } from "../../workflows/flow-values";
+import { valueTypesCompatible } from "../../catalogue/catalogues";
+import { flowFormulaHasUnroundedDivide } from "../../workflows/flow-formula-tree";
 import { checkFlowFormula } from "../../rules/flow-formula-check";
 import type { CompiledFlowBindingEnvironment } from "../flow-compilation";
 import type { PlatformPermissionSource } from "../../access/platform-permissions";
@@ -29,7 +31,12 @@ import {
 import { flowBindingSettingsSchema } from "../application-flow-bindings";
 import type { ComponentSemanticEventKind } from "../component-semantic-events";
 import { flowBindingSettingNotYetRunnable } from "../flow-step-settings";
-import { compileFlowPlans, flowBindingPlanIssue, FlowPlanError } from "../../workflows/flow-plan";
+import {
+  compileFlowPlans,
+  flowBindingPlanIssue,
+  flowValueReferences,
+  FlowPlanError,
+} from "../../workflows/flow-plan";
 import { applicationSearchSourceReferences } from "../source-identities";
 import {
   materialiseApplicationComposition,
@@ -661,49 +668,91 @@ function compileApplicationFlowBindings(
     const resolveForm = (form: string) => resolution.id(definitionKey, "block_placement", form);
     const canonicalSettings = resolveFlowFormReferences(settings.data, resolveForm);
     const controlId = resolution.id(definitionKey, "block_placement", String(binding.control));
-    if (canonicalSettings.condition !== null) {
-      const environments = (bindingEnvironments.get(flowId) ?? []).filter((environment) =>
-        environment.controls.some((control) => control.toLowerCase() === controlId.toLowerCase()),
-      );
-      let problem: string | undefined;
-      const type = checkFlowFormula(canonicalSettings.condition, {
-        nowAllowed: true,
-        reference: (reference) => {
-          if (reference.source === "input") {
-            const type = flow.inputs[reference.name]?.type;
-            if (type === undefined) problem ??= `Input ${reference.name} is not declared`;
-            return type;
-          }
-          if (reference.source === "execution_now") return "date_time";
-          if (reference.source === "form") {
-            const types = environments.map(
-              (environment) => environment.forms[reference.form]?.[reference.field],
-            );
-            if (types.length === 0 || types.some((candidate) => candidate === undefined)) {
-              problem ??= `Form field ${reference.form}.${reference.field} is not available on every bound page`;
-              return undefined;
-            }
-            if (types.some((candidate) => candidate !== types[0])) {
-              problem ??= `Form field ${reference.form}.${reference.field} has inconsistent types`;
-              return undefined;
-            }
-            return types[0];
-          }
-          problem ??= `A binding condition cannot read ${reference.source}`;
+    const canonicalInputs = resolveFlowFormReferences(
+      Object.fromEntries(
+        Object.entries(inputs).map(([name, value]) => [name, flowBindingInputSchema.parse(value)]),
+      ),
+      resolveForm,
+    );
+    const environments = (bindingEnvironments.get(flowId) ?? []).filter((environment) =>
+      environment.controls.some((control) => control.toLowerCase() === controlId.toLowerCase()),
+    );
+    let problem: string | undefined;
+    const referenceType = (reference: FlowReference): string | undefined => {
+      if (reference.source === "input") {
+        const type = flow.inputs[reference.name]?.type;
+        if (type === undefined) problem ??= `Input ${reference.name} is not declared`;
+        return type;
+      }
+      if (reference.source === "execution_now") return "date_time";
+      if (reference.source === "form") {
+        const types = environments.map(
+          (environment) => environment.forms[reference.form]?.[reference.field],
+        );
+        if (types.length === 0 || types.some((candidate) => candidate === undefined)) {
+          problem ??= `Form field ${reference.form}.${reference.field} is not available on every bound page`;
           return undefined;
-        },
+        }
+        if (types.some((candidate) => candidate !== types[0])) {
+          problem ??= `Form field ${reference.form}.${reference.field} has inconsistent types`;
+          return undefined;
+        }
+        return types[0];
+      }
+      problem ??= `A page expression cannot read ${reference.source}`;
+      return undefined;
+    };
+    const formulaType = (formula: FlowFormula): string | undefined =>
+      checkFlowFormula(formula, {
+        nowAllowed: true,
+        reference: referenceType,
         issue: (_path, _rule, _family, message) => {
           problem ??= message;
         },
       });
+    const refuse = (reason: string): never => {
+      throw new DefinitionCompilationError(
+        "vortex.definition.application_flow_binding_inputs",
+        "invalid_value",
+        location,
+        undefined,
+        `Binding ${String(binding.id)}: ${reason}`,
+      );
+    };
+    for (const [name, value] of Object.entries(canonicalInputs)) {
+      if (value.kind === "caller") continue;
+      const references = flowValueReferences(value);
+      if (references.some((reference) => reference.source === "page"))
+        refuse(`Input ${name} reads a page value, which cannot run yet`);
+      // Server-resolved binding inputs are checked by their own protected runtime path.
+      if (
+        references.some(
+          (reference) => reference.source !== "form" && reference.source !== "execution_now",
+        )
+      )
+        continue;
+      problem = undefined;
+      const type =
+        value.kind === "literal"
+          ? value.literal.type
+          : value.kind === "reference"
+            ? referenceType(value.reference)
+            : formulaType(value.formula);
+      if (
+        value.kind === "formula" &&
+        (type === "whole_number" || type === "decimal_number" || type === "money") &&
+        flowFormulaHasUnroundedDivide(value.formula)
+      )
+        problem ??= `Input ${name} must round division before returning a number`;
+      if (problem !== undefined) refuse(`Input ${name}: ${problem}`);
+      if (type === undefined || !valueTypesCompatible(type, flow.inputs[name]!.type, "flow"))
+        refuse(`Input ${name} has incompatible type ${type ?? "unknown"}`);
+    }
+    if (canonicalSettings.condition !== null) {
+      problem = undefined;
+      const type = formulaType(canonicalSettings.condition);
       if (problem !== undefined || type !== "yes_no")
-        throw new DefinitionCompilationError(
-          "vortex.definition.application_flow_binding_inputs",
-          "invalid_value",
-          location,
-          undefined,
-          `Binding ${String(binding.id)}: ${problem ?? "a start condition must return yes or no"}`,
-        );
+        refuse(problem ?? "a start condition must return yes or no");
     }
     // The binding's own plan: latest-wins only on a flow that changes nothing, and an options
     // flow only reads.
@@ -732,12 +781,6 @@ function compileApplicationFlowBindings(
         undefined,
         `Binding ${String(binding.id)}: ${notYet}`,
       );
-    const canonicalInputs = resolveFlowFormReferences(
-      Object.fromEntries(
-        Object.entries(inputs).map(([name, value]) => [name, flowBindingInputSchema.parse(value)]),
-      ),
-      resolveForm,
-    );
     return {
       bindingId: resolution.id(definitionKey, "flow_binding", String(binding.id), "content"),
       controlId,
