@@ -577,8 +577,14 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     summary: "Formats a value with a registered formatter.",
     runLocations: allLocations,
     effect: "pure",
-    properties: { formatter: required("builder_key"), input: required("any_value") },
-    outputs: [output("value", "json")],
+    properties: {
+      formatter: required("builder_key"),
+      input: required("any_value"),
+      places: optional("whole_number"),
+      currency: optional("text"),
+      unit: optional("builder_key"),
+    },
+    outputs: [output("value", "text")],
   },
   // Save rules give feedback in the browser and are authoritative in the save transaction.
   "rule.require": {

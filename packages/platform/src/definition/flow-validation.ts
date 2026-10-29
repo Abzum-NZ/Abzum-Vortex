@@ -1,5 +1,6 @@
 import { valueTypesCompatible, workflowValueTypeSchema } from "../catalogue/catalogues";
 import { checkFlowFormula } from "../rules/flow-formula";
+import { formatterCatalogue, unitCatalogue } from "../pages/value-format";
 import { recordTypeIdSchema } from "../catalogue/identifiers";
 import type {
   DefinitionRuleFailureFamily,
@@ -715,6 +716,51 @@ export function validateFlow(
     where: Where,
     path: Path,
   ) => {
+    if (task.type === "data.format" && name === "formatter" && isTextLiteral(value)) {
+      const formatter = (value as Extract<FlowValue, { kind: "literal" }>).literal.value;
+      const rejectFormat = (property: string, message: string) =>
+        add(
+          [...path.slice(0, -1), property],
+          "vortex.definition.workflow_node_values",
+          "invalid_value",
+          message,
+        );
+      if (typeof formatter !== "string" || !formatterCatalogue.some((entry) => entry === formatter))
+        rejectFormat("formatter", "Choose a registered formatter");
+      const currency = task.properties.currency;
+      const unit = task.properties.unit;
+      const input = task.properties.input;
+      const inputType =
+        input === undefined ? undefined : valueType(input, where, [...path.slice(0, -1), "input"]);
+      if (formatter === "money" && inputType !== "money" && currency === undefined)
+        rejectFormat("currency", "Money formatting needs a currency unless its input carries one");
+      if (
+        currency !== undefined &&
+        (!isTextLiteral(currency) ||
+          !/^[A-Z]{3}$/.test(
+            String((currency as Extract<FlowValue, { kind: "literal" }>).literal.value),
+          ))
+      )
+        rejectFormat("currency", "Use a literal uppercase three-letter currency code");
+      if (
+        formatter === "unit" &&
+        (!isTextLiteral(unit) ||
+          !Object.hasOwn(
+            unitCatalogue,
+            String((unit as Extract<FlowValue, { kind: "literal" }>).literal.value),
+          ))
+      )
+        rejectFormat("unit", "Choose a registered unit");
+      const places = task.properties.places;
+      if (
+        places?.kind === "literal" &&
+        (typeof places.literal.value !== "number" ||
+          !Number.isInteger(places.literal.value) ||
+          places.literal.value < 0 ||
+          places.literal.value > 18)
+      )
+        rejectFormat("places", "Decimal places must be a whole number from 0 to 18");
+    }
     if (
       task.type === "interface.show_form" &&
       name === "form" &&
