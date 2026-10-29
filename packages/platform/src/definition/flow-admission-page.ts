@@ -16,6 +16,7 @@ import { TABLE_BLOCK_RELEASE } from "./application-composition-catalogue";
 import { recordsTableInlineEditEvent } from "./application-composition/records-table-features/inline-edit";
 import { recordsTableRowEditEvent } from "./application-composition/records-table-features/row-edit";
 import type { ComponentFlowBinding } from "./application-flow-bindings";
+import { canonicalJson } from "./canonical-json";
 import type { InstalledFlowBindings } from "./flow-binding-endpoint";
 import type { FlowControlOptionRequest, FlowInvocationRequest } from "./flow-invocation";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
@@ -53,15 +54,27 @@ export const admitPageGesture = async (
   const sourceTableId = request.invocation.sourceTablePlacementId;
   let tableId: string | undefined;
   let recordId: string | undefined;
-  const inputs =
-    request.invocation.kind === "binding"
-      ? (request.invocation.callerInputs ?? {})
-      : Object.fromEntries(
-          Object.entries(state.activations[0]?.inputs ?? {}).map(([name, value]) => [
-            name,
-            value.value,
-          ]),
-        );
+  const inputs: Record<string, unknown> = Object.create(null);
+  if (request.invocation.kind === "binding") {
+    Object.assign(inputs, request.invocation.callerInputs ?? {});
+  } else {
+    // The stored run names flow inputs; table checks use the binding's caller names.
+    // Reconstruct only values the original binding actually accepted from the caller.
+    const activation = state.activations[0];
+    if (activation === undefined) return false;
+    for (const [name, source] of Object.entries(binding.flow.inputs)) {
+      if (!isRecord(source) || source.kind !== "caller" || typeof source.name !== "string")
+        continue;
+      const input = activation.inputs[name];
+      if (input === undefined) continue;
+      if (
+        source.name in inputs &&
+        canonicalJson(inputs[source.name]) !== canonicalJson(input.value)
+      )
+        return false;
+      inputs[source.name] = input.value;
+    }
+  }
   if (rowForm) {
     const source = [...plans.rowFormsByTable].find(
       ([id]) => sourceTableId !== undefined && sameId(id, sourceTableId),
