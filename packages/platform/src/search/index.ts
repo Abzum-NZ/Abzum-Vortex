@@ -7,6 +7,8 @@ export {
 } from "./application-search";
 export {
   searchInstalledApplication,
+  sealApplicationSearchCursor,
+  openApplicationSearchCursor,
   type InstalledSearchModule,
 } from "./installed-application-search";
 

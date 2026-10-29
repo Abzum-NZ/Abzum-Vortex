@@ -9,7 +9,11 @@ import {
   resolvePermittedApplicationAddress,
 } from "@vortex/platform/server";
 import { sameId, type IdentitySession } from "@vortex/platform/schema";
-import { searchInstalledApplication } from "@vortex/platform/server";
+import {
+  searchInstalledApplication,
+  sealApplicationSearchCursor,
+  openApplicationSearchCursor,
+} from "@vortex/platform/server";
 import { createApplicationPageLinkReader } from "./application-page-link";
 import { applicationPageAddressPath } from "./address-paths";
 import {
@@ -17,6 +21,7 @@ import {
   humanOrganizationRequestsFor,
 } from "./server-composition";
 import { mapWebError } from "./web-error-mapper";
+import { getQueryContinuationKey } from "./query-continuation-key";
 import { platformPermissionSource } from "./platform-permission-source";
 
 type ApplicationSearchView =
@@ -31,12 +36,24 @@ type ApplicationSearchView =
       cursor?: string;
     }>;
 const unavailable = { kind: "unavailable" } as const;
+const positionSchema = z.object({ score: z.number().int().nonnegative(), id: z.uuid() }).strict();
+const scanStateSchema = z
+  .object({
+    scan: positionSchema.nullable(),
+    held: z.array(positionSchema).max(200),
+    done: z.boolean(),
+  })
+  .strict();
 const cursorSchema = z
   .object({
     query: z.string(),
-    score: z.number(),
-    id: z.uuid(),
     count: z.number().int().min(0).max(199),
+    cursor: z
+      .object({
+        after: positionSchema.nullable(),
+        types: z.record(z.uuid(), scanStateSchema),
+      })
+      .strict(),
   })
   .strict();
 /** Only the expression comes from the browser; address, release and fields are server-bound. */
@@ -52,20 +69,25 @@ export const loadApplicationSearch = async (
 ): Promise<ApplicationSearchView> => {
   try {
     const query = createHash("sha256")
-      .update(JSON.stringify([address, expression]))
+      .update(JSON.stringify([session.identityId, address, expression]))
       .digest("hex");
     let after: z.infer<typeof cursorSchema> | undefined;
+    const invalidCursor = {
+      kind: "refused",
+      expression: expression ?? "",
+      reason: "The search continuation is invalid. Run the search again.",
+    } as const;
     if (cursor !== undefined) {
-      if (cursor.length > 1_000) return unavailable;
+      if (cursor.length > 1_000_000) return invalidCursor;
       try {
-        const parsed = cursorSchema.safeParse(
-          JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")),
-        );
-        if (!parsed.success || parsed.data.query !== query) return unavailable;
+        const opened = openApplicationSearchCursor(getQueryContinuationKey(), cursor);
+        if (opened.kind !== "opened") return invalidCursor;
+        const parsed = cursorSchema.safeParse(opened.payload);
+        if (!parsed.success || parsed.data.query !== query) return invalidCursor;
         after = parsed.data;
       } catch (error) {
         console.error("[application-search] invalid continuation", error);
-        return unavailable;
+        return invalidCursor;
       }
     }
     const dependencies = humanOrganizationRequestDependencies();
@@ -148,7 +170,8 @@ export const loadApplicationSearch = async (
         const result = await searchInstalledApplication({
           transaction,
           allowedRecordTypeIds,
-          ...(after === undefined ? {} : { after: { score: after.score, id: after.id } }),
+          ...(after === undefined ? {} : { cursor: after.cursor }),
+          limit: Math.min(40, 200 - (after?.count ?? 0)),
           scope,
           configuration,
           expression,
@@ -167,7 +190,7 @@ export const loadApplicationSearch = async (
         return {
           kind: "searched" as const,
           matches: result.matches,
-          ...(result.boundary === undefined ? {} : { boundary: result.boundary }),
+          ...(result.cursor === undefined ? {} : { cursor: result.cursor }),
           pages: application.content.pages,
           revision: application.releaseRevision,
           organizationId: context.organizationId,
@@ -188,13 +211,6 @@ export const loadApplicationSearch = async (
     const results: { href: string; title: string; subtitle?: string; score: number; id: string }[] =
       [];
     for (const match of result.matches) {
-      if (
-        result.boundary !== undefined &&
-        (match.rank < result.boundary.score ||
-          (match.rank === result.boundary.score &&
-            match.recordId.localeCompare(result.boundary.id) > 0))
-      )
-        break;
       const page = result.pages.find((candidate) => sameId(candidate.pageId, match.targetPageId));
       if (page === undefined) throw new Error("SEARCH_PAGE_MISSING");
       results.push({
@@ -204,23 +220,20 @@ export const loadApplicationSearch = async (
         id: match.recordId,
         ...(match.subtitle === undefined ? {} : { subtitle: match.subtitle }),
       });
-      if (results.length === 41) break;
     }
-    const page = results.slice(0, Math.min(40, 200 - (after?.count ?? 0)));
-    const count = (after?.count ?? 0) + page.length;
-    const last = page[page.length - 1];
-    const nextPosition =
-      results.length > page.length && last !== undefined ? last : result.boundary;
+    const count = (after?.count ?? 0) + results.length;
     const next =
-      count < 200 && nextPosition !== undefined
-        ? Buffer.from(
-            JSON.stringify({ query, score: nextPosition.score, id: nextPosition.id, count }),
-          ).toString("base64url")
+      count < 200 && result.cursor !== undefined
+        ? sealApplicationSearchCursor(getQueryContinuationKey(), {
+            query,
+            cursor: result.cursor,
+            count,
+          })
         : undefined;
     return {
       kind: "available",
       expression: expression!,
-      results: page.map((result) => ({
+      results: results.map((result) => ({
         href: result.href,
         title: result.title,
         ...(result.subtitle === undefined ? {} : { subtitle: result.subtitle }),

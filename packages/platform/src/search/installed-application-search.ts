@@ -10,7 +10,28 @@ import type { ModuleField } from "../definition/module-contracts";
 import { activeApplicationInstallationSchema } from "../files/storage";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import { protectedQueryRowCapabilitiesSchema } from "../queries/protected-query-contracts";
-import { searchConfiguredApplication, type ApplicationSearchResult } from "./application-search";
+import type { QueryContinuationKey } from "../queries/continuation-token";
+import { openToken, sealToken } from "../queries/sealed-token";
+import {
+  searchConfiguredApplication,
+  type ApplicationSearchResult,
+  type SearchCursor,
+} from "./application-search";
+
+/** The scan position can reference an unreadable record, so the browser receives an opaque token. */
+export const sealApplicationSearchCursor = (key: QueryContinuationKey, payload: unknown): string =>
+  sealToken(key, "application-search", payload);
+export const openApplicationSearchCursor = (key: QueryContinuationKey, token: string) =>
+  openToken(key, "application-search", token);
+
+const positionSchema = z.object({ score: z.number().int().nonnegative(), id: z.uuid() }).strict();
+const stateSchema = z
+  .object({
+    scan: positionSchema.nullable(),
+    held: z.array(positionSchema).max(200),
+    done: z.boolean(),
+  })
+  .strict();
 
 const recordSchema = z
   .object({
@@ -38,7 +59,8 @@ export const searchInstalledApplication = async (
     applicationReleaseRevision: number;
     modules: readonly InstalledSearchModule[];
     allowedRecordTypeIds: ReadonlySet<string>;
-    after?: Readonly<{ score: number; id: string }>;
+    cursor?: SearchCursor;
+    limit?: number;
   }>,
 ): Promise<ApplicationSearchResult> => {
   const { transaction, scope, configuration } = input;
@@ -49,7 +71,8 @@ export const searchInstalledApplication = async (
     configuration,
     expression: input.expression,
     allowedRecordTypeIds: input.allowedRecordTypeIds,
-    ...(input.after === undefined ? {} : { after: input.after }),
+    ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+    limit: input.limit ?? 40,
     fieldsByRecordType: new Map(
       input.modules.flatMap((module) =>
         module.recordTypeFields.map((record) => [record.recordTypeId.toLowerCase(), record.fields]),
@@ -83,17 +106,28 @@ export const searchInstalledApplication = async (
                 and binding.value ->> 'state' = 'active')
         )
         select active_installation.value as installation, verified_installation.value is not null as verified,
-          page.record_id, page.score, page.record, page.capabilities
+          page.record_id, page.score, page.record, page.capabilities, page.state, page.frontier_score, page.frontier_id
         from active_installation
         left join verified_installation on true
         left join lateral vortex_record.search_document_page(
           ${scope.organizationId}::uuid, ${applicationRootId}::uuid, ${request.recordTypeId}::uuid,
           ${JSON.stringify(request.fields)}::text::jsonb, ${request.titleFieldId}::uuid,
           ${JSON.stringify(request.terms)}::text::jsonb, ${JSON.stringify(request.filters)}::text::jsonb,
-          ${request.after?.score ?? null}::integer, ${request.after?.id ?? null}::uuid, ${request.limit}::integer
+          ${request.after?.score ?? null}::integer, ${request.after?.id ?? null}::uuid, ${request.limit}::integer,
+          ${JSON.stringify(request.state ?? null)}::text::jsonb
         ) page on verified_installation.value is not null
       `;
-      return rows.flatMap((row) => {
+      const first = rows[0];
+      if (first === undefined) throw new Error("SEARCH_PAGE_MISSING");
+      const state = stateSchema.parse(first.state);
+      const frontier =
+        first.frontier_score === null
+          ? undefined
+          : {
+              score: z.number().int().nonnegative().parse(first.frontier_score),
+              id: z.uuid().parse(first.frontier_id),
+            };
+      const page = rows.flatMap((row) => {
         const installation = activeApplicationInstallationSchema.parse(row.installation);
         if (
           row.verified !== true ||
@@ -109,6 +143,7 @@ export const searchInstalledApplication = async (
         if (!sameId(record.recordId, recordId)) throw new Error("SEARCH_RECORD_ID_MISMATCH");
         return [{ recordId, rank: z.number().int().nonnegative().parse(row.score), record }];
       });
+      return { rows: page, state, ...(frontier === undefined ? {} : { frontier }) };
     },
   });
 };
