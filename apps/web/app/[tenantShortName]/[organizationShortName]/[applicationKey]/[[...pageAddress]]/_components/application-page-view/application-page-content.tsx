@@ -221,6 +221,13 @@ export function ApplicationPageViewContent({
     currentSearch,
     application,
   });
+  // The flow client sits outside form scopes, so retain the controls' forwarded draft events.
+  const controlDraftsRef = useRef<{ scope: string; values: Record<string, unknown> }>({
+    scope: navigationKey,
+    values: {},
+  });
+  if (controlDraftsRef.current.scope !== navigationKey)
+    controlDraftsRef.current = { scope: navigationKey, values: {} };
 
   const guidedFormCompleted = completedGuidedNavigationKey === navigationKey;
   const subject =
@@ -308,6 +315,7 @@ export function ApplicationPageViewContent({
     model,
     platformComponentRegistry,
     runtimeInputsRef,
+    controlDraftsRef,
     choicePayloadFor,
     fieldInputControlReleases,
     setNotice,
@@ -557,6 +565,7 @@ export function ApplicationPageViewContent({
     router,
     requestChoicePage,
     runtimeInputsRef,
+    controlDraftsRef,
     setPanelRef,
   });
 

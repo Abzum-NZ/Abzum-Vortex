@@ -152,6 +152,12 @@ const projectItems = (
     ];
   });
 
+/** Projects one already-resolved placement subtree with the same rules as the page projection. */
+export const projectPlacementSubtree = (
+  item: unknown,
+  states: PageCapabilityState["placements"],
+): Readonly<Record<string, unknown>> | undefined => projectItems([item], states)[0];
+
 /** A breakpoint order keeping only the items the projection retained. */
 const filteredOrder = (order: unknown, items: readonly JsonObject[]): JsonObject => {
   const retained = new Set(items.map((item) => String(object(item.props).id)));

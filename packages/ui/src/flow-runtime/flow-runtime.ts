@@ -1,4 +1,3 @@
-import type { ComponentFlowBinding } from "@vortex/platform/schema";
 import type { FlowIntentHost } from "./intents";
 import { driveServerFlow, type ServerDrivenResult } from "./server-driven-run";
 import type { FlowInvokeClient, FlowSubjectContext } from "./server-flow-client";
@@ -13,12 +12,24 @@ export type FlowRuntimeOptions = Readonly<{
   committed?: (bindingId: string) => void;
 }>;
 
-/** The safe identity of a binding used by a surface that does not receive its input map. */
-export type FlowBindingReference = Readonly<{
+/** The installed binding projected to a page for one of its placements. */
+export type PlacementFlowBinding = Readonly<{
   bindingId: string;
+  eventId: string;
   flowId: string;
   event: string;
+  entrySegments: readonly Readonly<{ segmentId: string; fingerprint: string }>[];
+  callerInputs: readonly string[];
+  savesFormValues: boolean;
+  recordTypeId?: string;
+  selectedReadInputs?: readonly Readonly<{ callerInputName: string; recordTypeId: string }>[];
 }>;
+
+/** The safe identity a tool receives for its projected binding. */
+export type FlowBindingReference = Pick<
+  PlacementFlowBinding,
+  "bindingId" | "flowId" | "event" | "entrySegments"
+>;
 
 export type FlowRuntime = Readonly<{
   /**
@@ -28,10 +39,11 @@ export type FlowRuntime = Readonly<{
    * commits a second time.
    */
   dispatch: (
-    binding: ComponentFlowBinding,
+    binding: PlacementFlowBinding,
     callerInputs?: Readonly<Record<string, unknown>>,
     clickId?: string,
     subject?: FlowSubjectContext,
+    sourceTablePlacementId?: string,
   ) => Promise<ServerDrivenResult>;
   /** Starts one exact server binding and drives its normal intents and continuations. */
   dispatchReference: (
@@ -40,6 +52,7 @@ export type FlowRuntime = Readonly<{
     clickId?: string,
     signal?: AbortSignal,
     subject?: FlowSubjectContext,
+    sourceTablePlacementId?: string,
   ) => Promise<ServerDrivenResult>;
 }>;
 
@@ -50,14 +63,20 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
     clickId?: string,
     signal?: AbortSignal,
     subject?: FlowSubjectContext,
+    sourceTablePlacementId?: string,
   ): Promise<ServerDrivenResult> => {
     if (signal?.aborted) return { kind: "abandoned", unanswered: true };
     const first = await options.client.startBinding(
-      { bindingId: binding.bindingId, flowId: binding.flowId },
+      {
+        bindingId: binding.bindingId,
+        flowId: binding.flowId,
+        entrySegments: binding.entrySegments,
+      },
       callerInputs,
       clickId ?? crypto.randomUUID(),
       signal,
       subject,
+      sourceTablePlacementId,
     );
     return driveServerFlow(
       options.client,
@@ -66,17 +85,12 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
       options.host,
       signal,
       options.committed === undefined ? undefined : () => options.committed?.(binding.bindingId),
+      sourceTablePlacementId,
     );
   };
   return Object.freeze({
     dispatchReference,
-    dispatch: (binding, callerInputs = {}, clickId, subject) =>
-      dispatchReference(
-        { bindingId: binding.bindingId, flowId: binding.flow.flowId, event: binding.event },
-        callerInputs,
-        clickId,
-        undefined,
-        subject,
-      ),
+    dispatch: (binding, callerInputs = {}, clickId, subject, sourceTablePlacementId) =>
+      dispatchReference(binding, callerInputs, clickId, undefined, subject, sourceTablePlacementId),
   });
 }

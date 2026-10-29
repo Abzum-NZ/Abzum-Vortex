@@ -475,7 +475,70 @@ export const createViewerSafeRecordLinkService = (
     return { outcome: "read", labels };
   };
 
+  /** The same target checks for a request that already holds the target scope. */
+  const acquireIdentityInRequest = async (
+    transaction: RequestDatabaseTransaction,
+    scope: SelectedOrganizationScope,
+    sourceOrganizationId: string,
+    targetRoot: string,
+    selector: ReturnType<typeof viewerSafeRecordPinSelectorSchema.parse>,
+  ): Promise<ViewerSafeRecordPinAcquisitionResult> => {
+    const [moduleKey, recordTypeKey] = selector.recordTypeKey.split(":");
+    if (
+      !sameId(scope.organizationId, sourceOrganizationId) ||
+      scope.applicationRootId === undefined ||
+      !sameId(scope.applicationRootId, targetRoot)
+    )
+      return pinUnavailable;
+    const context = requireInstalledRuntimeContext(
+      await dependencies.createInstalledContextLoader(transaction, scope).load(),
+    );
+    if (context.releaseSet.application.definitionKey !== selector.applicationKey)
+      return pinUnavailable;
+    const modules = context.releaseSet.modules.filter(
+      (module) => module.definitionKey === moduleKey,
+    );
+    const module = modules[0];
+    if (modules.length !== 1 || module === undefined) return pinUnavailable;
+    const recordTypes = module.content.recordTypes.filter((record) => record.key === recordTypeKey);
+    const recordType = recordTypes[0];
+    if (recordTypes.length !== 1 || recordType === undefined) return pinUnavailable;
+    const identity = viewerSafeRecordLinkIdentitySchema.parse({
+      organizationId: scope.organizationId,
+      applicationRootId: targetRoot,
+      moduleRootId: module.rootId,
+      moduleReleaseRevision: module.releaseRevision,
+      recordTypeId: recordType.recordTypeId,
+      storageContractId: recordType.storageContractId,
+      recordId: selector.recordId,
+    });
+    if (!currentContextMatches(context, identity)) return pinUnavailable;
+    const page = matchingDetailPage(context, identity);
+    if (
+      page === undefined ||
+      !(await canOpenDetailPage(dependencies.permissions, transaction, scope, context, page))
+    )
+      return pinUnavailable;
+    const { recordId, ...titleIdentity } = identity;
+    const titleRead = await records.readTitles(transaction, scope, {
+      applicationReleaseRevision: context.applicationReleaseRevision,
+      targets: [
+        {
+          identity: titleIdentity,
+          titleFieldId: recordType.titleFieldId,
+          recordIds: [recordId],
+        },
+      ],
+    });
+    // The protected read proves the record is available. Its display value never leaves here.
+    return titleRead.outcome === "read" &&
+      titleRead.titles.has(viewerSafeRecordLinkTitleKey(identity.recordTypeId, identity.recordId))
+      ? viewerSafeRecordPinAcquisitionResultSchema.parse({ outcome: "available", identity })
+      : pinUnavailable;
+  };
+
   return Object.freeze({
+    acquireIdentityInRequest,
     async acquireIdentity(
       session: IdentitySession,
       sourceSelectionCandidate: unknown,
@@ -517,73 +580,14 @@ export const createViewerSafeRecordLinkService = (
         )
           return pinUnavailable;
         const targetRoot = target.data.applicationRootId;
-        const [moduleKey, recordTypeKey] = selector.data.recordTypeKey.split(":");
-        const request = await requests.run(
-          session,
-          target.data,
-          async (transaction, scope): Promise<ViewerSafeRecordPinAcquisitionResult> => {
-            if (
-              !sameId(scope.organizationId, source.data.organizationId) ||
-              scope.applicationRootId === undefined ||
-              !sameId(scope.applicationRootId, targetRoot)
-            )
-              return pinUnavailable;
-            const context = requireInstalledRuntimeContext(
-              await dependencies.createInstalledContextLoader(transaction, scope).load(),
-            );
-            if (context.releaseSet.application.definitionKey !== selector.data.applicationKey)
-              return pinUnavailable;
-            const modules = context.releaseSet.modules.filter(
-              (module) => module.definitionKey === moduleKey,
-            );
-            const module = modules[0];
-            if (modules.length !== 1 || module === undefined) return pinUnavailable;
-            const recordTypes = module.content.recordTypes.filter(
-              (record) => record.key === recordTypeKey,
-            );
-            const recordType = recordTypes[0];
-            if (recordTypes.length !== 1 || recordType === undefined) return pinUnavailable;
-            const identity = viewerSafeRecordLinkIdentitySchema.parse({
-              organizationId: scope.organizationId,
-              applicationRootId: targetRoot,
-              moduleRootId: module.rootId,
-              moduleReleaseRevision: module.releaseRevision,
-              recordTypeId: recordType.recordTypeId,
-              storageContractId: recordType.storageContractId,
-              recordId: selector.data.recordId,
-            });
-            if (!currentContextMatches(context, identity)) return pinUnavailable;
-            const page = matchingDetailPage(context, identity);
-            if (
-              page === undefined ||
-              !(await canOpenDetailPage(
-                dependencies.permissions,
-                transaction,
-                scope,
-                context,
-                page,
-              ))
-            )
-              return pinUnavailable;
-            const { recordId, ...titleIdentity } = identity;
-            const titleRead = await records.readTitles(transaction, scope, {
-              applicationReleaseRevision: context.applicationReleaseRevision,
-              targets: [
-                {
-                  identity: titleIdentity,
-                  titleFieldId: recordType.titleFieldId,
-                  recordIds: [recordId],
-                },
-              ],
-            });
-            // The protected read proves the record is available. Its display value never leaves here.
-            return titleRead.outcome === "read" &&
-              titleRead.titles.has(
-                viewerSafeRecordLinkTitleKey(identity.recordTypeId, identity.recordId),
-              )
-              ? viewerSafeRecordPinAcquisitionResultSchema.parse({ outcome: "available", identity })
-              : pinUnavailable;
-          },
+        const request = await requests.run(session, target.data, (transaction, scope) =>
+          acquireIdentityInRequest(
+            transaction,
+            scope,
+            source.data.organizationId,
+            targetRoot,
+            selector.data,
+          ),
         );
         return request.kind === "available"
           ? viewerSafeRecordPinAcquisitionResultSchema.parse(request.value)

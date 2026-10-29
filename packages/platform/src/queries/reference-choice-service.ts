@@ -5,6 +5,7 @@ import { z } from "zod";
 import { openToken, sealToken } from "./sealed-token";
 import {
   createHumanOrganizationRequestService,
+  type BoundHumanOrganizationRequest,
   type HumanOrganizationRequestResult,
 } from "../access/human-organization-request";
 import type {
@@ -188,7 +189,7 @@ const recordChoice = (
 };
 
 const recordChoices = async (
-  queries: ReturnType<typeof createProtectedQueryService>,
+  queries: Pick<ReturnType<typeof createProtectedQueryService>, "run">,
   session: IdentitySession,
   selection: OrganizationSelectionCandidate,
   command: RecordReferenceChoiceCommand,
@@ -407,6 +408,33 @@ export const createReferenceChoiceService = (dependencies: ReferenceChoiceServic
   const { continuationKey } = dependencies;
 
   return Object.freeze({
+    /** Resolves one selected record through the same protected query inside the gate transaction. */
+    async resolveExactInTransaction(
+      bound: BoundHumanOrganizationRequest,
+      commandCandidate: unknown,
+    ): Promise<HumanOrganizationRequestResult<ReferenceChoiceResult>> {
+      const command = referenceChoiceCommandSchema.safeParse(commandCandidate);
+      if (
+        !command.success ||
+        command.data.kind !== "record_reference" ||
+        command.data.exactRecordId === undefined ||
+        command.data.continuationToken !== undefined
+      )
+        return { kind: "available", value: refusal("request_invalid") };
+      return recordChoices(
+        {
+          run: async (caller, selection, candidate) => {
+            const prepared = queries.prepareRead(caller, selection, candidate);
+            return prepared.kind === "final"
+              ? prepared.result
+              : { kind: "available", value: await prepared.read(bound.transaction, bound.scope) };
+          },
+        },
+        bound.session,
+        bound.selection,
+        command.data,
+      );
+    },
     async run(
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
