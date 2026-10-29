@@ -18,6 +18,9 @@ import { object, array } from "./helpers";
 
 type PlacedApplicationBlock = Readonly<{ item: SourceItem; pageType: string | undefined }>;
 
+const boundedBindingName = (name: string): string =>
+  name.length <= 100 ? name : `${name.slice(0, 99)}…`;
+
 /**
  * Every block placed in an Application source by its application-unique alias: shell layouts,
  * page content and guided-form step content at any depth, with the type of the page that places
@@ -115,6 +118,8 @@ const containsSubmitButton = (item: SourceItem): boolean =>
 
 /**
  * Refuses, before an Application publishes, a control that would render enabled but run nothing.
+ * Each control event has at most one flow binding. Board move and add events also have one
+ * binding per semantic event because the board dispatches them without an event identity.
  * A form container with a submit path needs a `form_submit` binding: it holds a Submit button at
  * any depth, or it sits on a form or guided-form page. An action button needs an `action` binding
  * unless its `disabled` setting is the literal `true`.
@@ -135,13 +140,52 @@ export function applicationControlBindingRule(
     const source = parsed.data as ApplicationSourceDocument;
     const body = object(source.body);
     const boundEvents = new Map<string, Set<string>>();
+    const bindingsByEvent = new Map<string, string>();
+    const boardBindingsByEvent = new Map<string, string>();
+    const failures: DefinitionRuleFailure[] = [];
+    const eventOwners = new Map<string, string>();
+    for (const declared of array(body.events)) {
+      const id = String(declared.id);
+      eventOwners.set(id, id);
+      if (typeof declared.key === "string") eventOwners.set(declared.key, id);
+    }
     for (const binding of array(body.flow_bindings)) {
       const control = String(binding.control);
+      const event = String(binding.event);
+      const eventId = String(binding.event_id);
+      const bindingId = String(binding.id);
+      const key = JSON.stringify([control, eventOwners.get(eventId) ?? eventId]);
+      const boardKey = JSON.stringify([control, event]);
+      const boardEvent = event === "card_moved" || event === "card_added";
+      const previous =
+        bindingsByEvent.get(key) ?? (boardEvent ? boardBindingsByEvent.get(boardKey) : undefined);
+      if (previous !== undefined) {
+        const controlKey = builderKeySchema.safeParse(control);
+        const bindingKey = builderKeySchema.safeParse(bindingId);
+        failures.push({
+          ruleCode: "vortex.definition.application_control_binding",
+          family: "duplicate_key",
+          sentence: `Control ${boundedBindingName(control)} has two bindings for ${event} (${boundedBindingName(eventId)}): ${boundedBindingName(previous)} and ${boundedBindingName(bindingId)}.`,
+          location: {
+            documentKind: "application",
+            documentKey: source.key,
+            segments: [
+              { kind: "application", key: source.key },
+              ...(controlKey.success ? [{ kind: "block" as const, key: controlKey.data }] : []),
+              ...(bindingKey.success
+                ? [{ kind: "flow_binding" as const, key: bindingKey.data }]
+                : []),
+            ],
+          },
+        });
+      }
+      if (!bindingsByEvent.has(key)) bindingsByEvent.set(key, bindingId);
+      if (boardEvent && !boardBindingsByEvent.has(boardKey))
+        boardBindingsByEvent.set(boardKey, bindingId);
       const events = boundEvents.get(control) ?? new Set<string>();
-      events.add(String(binding.event));
+      events.add(event);
       boundEvents.set(control, events);
     }
-    const failures: DefinitionRuleFailure[] = [];
     for (const [alias, { item: placement, pageType }] of placedApplicationBlocks(source.body)) {
       const blockKey = sourceBlockKey(placement);
       const bound = boundEvents.get(alias) ?? new Set<string>();

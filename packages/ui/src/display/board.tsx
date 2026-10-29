@@ -91,6 +91,9 @@ type BoardMoveCard = Readonly<{
   bucketKey: string;
 }>;
 
+type PendingBoardMove = BoardMoveCard &
+  Readonly<{ targetKey: string; row: NonNullable<BoardBucketPayload["page"]>["rows"][number] }>;
+
 /** What a column needs to offer moves: the columns a card may go to and the move in flight. */
 type BoardMover = Readonly<{
   targets: readonly BoardBucket[];
@@ -153,6 +156,7 @@ function BoardColumn({
   choiceFieldId,
   onRetry,
   onAdd,
+  moving,
 }: Readonly<{
   bucket: BoardBucket;
   /** The cards the column should not exceed; undefined when the board sets no limit. */
@@ -175,8 +179,15 @@ function BoardColumn({
   onRetry: (bucket: BoardBucket) => void;
   /** Adds a card with this column's stage chosen; absent unless the board offers quick add. */
   onAdd: ((bucket: BoardBucket) => void) | undefined;
+  moving: PendingBoardMove | undefined;
 }>): ReactElement {
   const page = bucket.values.page;
+  const rows = (page?.rows ?? []).filter(
+    (row) =>
+      moving === undefined || bucket.key !== moving.bucketKey || row.recordId !== moving.recordId,
+  );
+  if (moving?.targetKey === bucket.key && !rows.some((row) => row.recordId === moving.recordId))
+    rows.unshift(moving.row);
   const canContinue =
     events?.page_changed !== undefined && page?.nextContinuationToken !== undefined;
   // While a card is dragged, every other column says whether the pipeline lets it go there.
@@ -288,13 +299,14 @@ function BoardColumn({
               Show cards
             </Button>
           )
-        ) : page.rows.length === 0 ? (
+        ) : null}
+        {rows.length === 0 && page !== null ? (
           <p className="text-sm text-muted-foreground" role="status">
             {emptyMessage}
           </p>
-        ) : (
+        ) : rows.length > 0 ? (
           <ul className="flex list-none flex-col gap-2 p-0">
-            {page.rows.map((row) => {
+            {rows.map((row) => {
               const fieldById = new Map(
                 row.fields.map((field) => [field.key.toLowerCase(), field] as const),
               );
@@ -412,7 +424,7 @@ function BoardColumn({
               );
             })}
           </ul>
-        )}
+        ) : null}
         {pending && page !== null ? (
           <p role="status" className="text-sm text-muted-foreground">
             Loading more cards…
@@ -557,7 +569,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
     ((event: DisplaySemanticEvent) => void | boolean | Promise<void | boolean>) | undefined;
   const cardAdded = events?.card_added as
     ((event: DisplaySemanticEvent) => void | boolean | Promise<void | boolean>) | undefined;
-  const [moving, setMoving] = useState<BoardMoveCard>();
+  const [moving, setMoving] = useState<PendingBoardMove>();
   const movingRef = useRef(false);
   const focusAfterMoveRef = useRef<string | undefined>(undefined);
   const draggedRef = useRef<BoardMoveCard | undefined>(undefined);
@@ -669,9 +681,29 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
       movingRef.current
     )
       return;
+    const row = buckets
+      .find((bucket) => bucket.key === card.bucketKey)
+      ?.values.page?.rows.find((candidate) => candidate.recordId === card.recordId);
+    if (row === undefined) return;
+    const targetValue = target.selector.value;
     movingRef.current = true;
     focusAfterMoveRef.current = card.recordId;
-    setMoving(card);
+    setMoving({
+      ...card,
+      targetKey: target.key,
+      row: {
+        ...row,
+        fields: row.fields.map((field) =>
+          field.key.toLowerCase() === values.choiceFieldId.toLowerCase() &&
+          (field.value.kind === "choice" || field.value.kind === "empty")
+            ? {
+                ...field,
+                value: { kind: "choice", key: targetValue, label: target.label },
+              }
+            : field,
+        ),
+      },
+    });
     try {
       const accepted = await Promise.resolve(
         cardMoved({
@@ -679,7 +711,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
           recordId: card.recordId,
           revision: card.revision,
           field: values.choiceFieldKey,
-          value: target.selector.value,
+          value: targetValue,
         }),
       );
       if (accepted !== true) releaseMove();
@@ -936,6 +968,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
                     onRetry={(bucket) => void readBuckets([bucket])}
                     onAdd={values.quickAdd && cardAdded !== undefined ? addCard : undefined}
                     mover={mover}
+                    moving={moving}
                     choiceFieldId={values.choiceFieldId}
                   />
                 ))}
