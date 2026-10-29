@@ -175,11 +175,11 @@ type GridExtensionKey = Exclude<RecordsTableFeatureKey, typeof recordsTableBoard
 
 /** Whole-grid views share the lazy registry but do not fill table extension points. */
 const viewLoaders = {
-  [recordsTableBoardFeature.key]: () => import("../board"),
+  [recordsTableBoardFeature.key]: () => import("../board").then((module) => module.BoardView),
 } satisfies Record<typeof recordsTableBoardFeature.key, () => Promise<unknown>>;
 
 export const GridBoardView = lazy(async () => ({
-  default: (await viewLoaders[recordsTableBoardFeature.key]()).BoardView,
+  default: await viewLoaders[recordsTableBoardFeature.key](),
 }));
 
 /**
@@ -225,7 +225,7 @@ type ComponentPoint = Exclude<keyof GridFeatureModule, "cellDecoration">;
  */
 type GridFeatureView = Readonly<{
   definition: Readonly<{ key: GridExtensionKey; property: string }>;
-  load: () => Promise<{ gridFeature: GridFeatureModule }>;
+  load: () => Promise<GridFeatureModule>;
   points: readonly ComponentPoint[];
   /** What a row opens to when the feature fills the row panel. */
   expansion?: RowExpansionKind;
@@ -236,59 +236,59 @@ type GridFeatureView = Readonly<{
 const gridFeatureViews: readonly GridFeatureView[] = [
   {
     definition: recordsTablePinningFeature,
-    load: () => import("./pinning"),
+    load: () => import("./pinning").then((module) => module.gridFeature),
     points: ["ColumnMenuItems"],
   },
   {
     definition: recordsTableSpreadsheetFeature,
-    load: () => import("./spreadsheet"),
+    load: () => import("./spreadsheet").then((module) => module.gridFeature),
     points: ["GridInteraction"],
   },
   {
     definition: recordsTableSearchFeature,
-    load: () => import("./search"),
+    load: () => import("./search").then((module) => module.gridFeature),
     points: ["ToolbarItems"],
   },
   {
     definition: recordsTableColumnFiltersFeature,
-    load: () => import("./column-filters"),
+    load: () => import("./column-filters").then((module) => module.gridFeature),
     points: ["ToolbarItems", "HeaderAdornment"],
   },
   {
     definition: recordsTableSavedViewsFeature,
-    load: () => import("./saved-views"),
+    load: () => import("./saved-views").then((module) => module.gridFeature),
     points: ["ToolbarItems"],
   },
   {
     definition: recordsTableBulkActionsFeature,
-    load: () => import("./bulk-actions"),
+    load: () => import("./bulk-actions").then((module) => module.gridFeature),
     points: ["SelectionBanner"],
   },
   {
     definition: recordsTableInlineEditFeature,
-    load: () => import("./inline-edit"),
+    load: () => import("./inline-edit").then((module) => module.gridFeature),
     points: ["CellEditor", "GridInteraction"],
   },
   {
     definition: recordsTableRowEditFeature,
-    load: () => import("./row-editor"),
+    load: () => import("./row-editor").then((module) => module.gridFeature),
     points: ["Scope", "CellEditor", "RowCommands", "RowEditor"],
   },
   {
     definition: recordsTableRowActionsFeature,
-    load: () => import("./row-actions"),
+    load: () => import("./row-actions").then((module) => module.gridFeature),
     points: ["RowCommands", "GridInteraction"],
   },
   {
     definition: recordsTableMasterDetailFeature,
-    load: () => import("./master-detail"),
+    load: () => import("./master-detail").then((module) => module.gridFeature),
     points: ["RowExpansion"],
     // A row opens to its related records, at most three at a time.
     expansion: { noun: "related records", maximum: 3, expandable: () => true },
   },
   {
     definition: recordsTableTreeFeature,
-    load: () => import("./tree"),
+    load: () => import("./tree").then((module) => module.gridFeature),
     points: ["SubRows"],
     // The rows beneath a row share the feature's row budget, so any number of rows may be open, and
     // only a row the server says has children offers the toggle.
@@ -296,27 +296,27 @@ const gridFeatureViews: readonly GridFeatureView[] = [
   },
   {
     definition: recordsTableGroupingFeature,
-    load: () => import("./grouping"),
+    load: () => import("./grouping").then((module) => module.gridFeature),
     points: ["ToolbarItems", "ColumnMenuItems"],
   },
   {
     definition: recordsTableTotalsFeature,
-    load: () => import("./totals"),
+    load: () => import("./totals").then((module) => module.gridFeature),
     points: ["ToolbarItems"],
   },
   {
     definition: recordsTableConditionalFormattingFeature,
-    load: () => import("./conditional-format"),
+    load: () => import("./conditional-format").then((module) => module.gridFeature),
     points: ["CellAdornment", "HeaderAdornment", "ColumnMenuItems"],
   },
   {
     definition: recordsTablePivotFeature,
-    load: () => import("./pivot"),
+    load: () => import("./pivot").then((module) => module.gridFeature),
     points: ["ToolbarItems", "ViewBody"],
   },
   {
     definition: recordsTableExportFeature,
-    load: () => import("./export"),
+    load: () => import("./export").then((module) => module.gridFeature),
     points: ["Scope", "OverflowItems", "SelectionBanner"],
   },
 ];
@@ -369,7 +369,7 @@ const featurePoint = <Props,>(
     held ??
     lazy(async () => {
       try {
-        return { default: pointComponentOf((await loaders[key]()).gridFeature, point) };
+        return { default: pointComponentOf(await loaders[key](), point) };
       } catch (error) {
         // A feature whose code cannot be downloaded leaves the grid usable without it; the next
         // render tries again.
@@ -471,13 +471,13 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
             const id = `${key}:${point}`;
             // Keep an already mounted editor's component identity and local edit state.
             if (!pointComponents.has(id))
-              pointComponents.set(id, pointComponentOf(module.gridFeature, point));
+              pointComponents.set(id, pointComponentOf(module, point));
           }
         });
         if (current)
           setLoadedDecorators({
             signature,
-            decorators: modules.flatMap((module) => module.gridFeature.cellDecoration ?? []),
+            decorators: modules.flatMap((module) => module.cellDecoration ?? []),
           });
       },
       (error: unknown) => {

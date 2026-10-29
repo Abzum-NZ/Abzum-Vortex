@@ -128,7 +128,7 @@ export const inlineEditFieldsSchema = z
   )
   .readonly();
 
-export const inlineEditProjectionSchema = z
+const inlineEditProjectionSchema = z
   .object({ eventId: textSchema, fields: inlineEditFieldsSchema })
   .strict()
   .readonly();

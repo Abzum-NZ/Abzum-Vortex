@@ -2,7 +2,7 @@ import { z } from "zod";
 import { recordsTableMasterDetailFeature } from "../master-detail";
 
 const positiveSchema = z.number().int().min(1);
-export const masterDetailProjectionSchema = z
+const masterDetailProjectionSchema = z
   .object({ pageSize: positiveSchema })
   .strict()
   .readonly();

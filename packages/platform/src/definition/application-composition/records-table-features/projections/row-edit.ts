@@ -3,7 +3,7 @@ import { recordsTableRowEditFeature } from "../row-edit";
 import { inlineEditFieldsSchema } from "./inline-edit";
 
 const textSchema = z.string().min(1);
-export const rowEditProjectionSchema = z
+const rowEditProjectionSchema = z
   .object({ eventId: textSchema, trigger: z.literal("button"), fields: inlineEditFieldsSchema })
   .strict()
   .readonly();
