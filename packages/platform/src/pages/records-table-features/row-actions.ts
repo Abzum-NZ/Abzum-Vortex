@@ -3,33 +3,30 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { sameId } from "../../catalogue/runtime-primitives";
 import type { ComponentFlowBinding } from "../../definition/application-flow-bindings";
-import { flowSchema, flowTaskChildLists } from "../../workflows/flow-contracts";
+import { flowTaskChildLists, type FlowDefinition } from "../../workflows/flow-contracts";
+import { flowPlansOf } from "../../workflows/flow-plan";
 import type { RecordsTableFeatureProjection } from "../records-table-feature-projection";
 import type { RequestDatabaseTransaction } from "../../db/request-transaction";
 import type { FlowNamedAction } from "../../definition/flow-orchestrator-types";
 import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
 import { installedNamedActions } from "../../definition/installed-named-actions";
-import { collectActionFlowTasks, flowLibraryOf } from "../../rules/action-flow-run";
+import { collectActionFlowTasks } from "../../rules/action-flow-run";
 import { projectNamedActionAvailability } from "./named-action-availability";
 
 type RowActions = NonNullable<RecordsTableFeatureProjection["rowActions"]>;
 type RowActionInstallation = Readonly<{
   bindings: readonly ComponentFlowBinding[];
-  flows: ReadonlyMap<string, unknown>;
+  flows: ReadonlyMap<string, FlowDefinition>;
   namedActions: ReadonlyMap<string, FlowNamedAction>;
 }>;
 
 /** The flow bindings, flows and named actions of the installed release a row's commands run in. */
 export const rowActionInstallationOf = ({
-  releaseSet: { application, modules },
+  releaseSet,
 }: Pick<InstalledRuntimeContext, "releaseSet">): RowActionInstallation => ({
-  bindings: application.content.flowBindings,
-  flows: new Map(
-    [...application.content.flows, ...modules.flatMap((module) => module.content.flows)].map(
-      (flow) => [String(flow.id), flow],
-    ),
-  ),
-  namedActions: installedNamedActions(application, modules),
+  bindings: releaseSet.application.content.flowBindings,
+  flows: flowPlansOf(releaseSet).flows,
+  namedActions: installedNamedActions(releaseSet.application, releaseSet.modules),
 });
 
 /**
@@ -49,7 +46,8 @@ const namedActionFor = (
       sameId(entry.eventId, eventId),
   );
   if (binding === undefined) throw new Error("ROW_ACTION_BINDING_MISSING");
-  const flow = flowSchema.parse(installed.flows.get(binding.flow.flowId));
+  const flow = installed.flows.get(binding.flow.flowId);
+  if (flow === undefined) throw new Error("ROW_ACTION_FLOW_MISSING");
   const pending = [...flow.tasks];
   const calls = [];
   while (pending.length > 0) {
@@ -85,7 +83,7 @@ export const projectRowActionAvailability = async (
   projection: RowActions,
   issuedAt: string,
 ): Promise<RowActions> => {
-  const library = flowLibraryOf(installed.flows);
+  const library = (flowId: string) => installed.flows.get(flowId);
   const named = projection.actions.flatMap((declaration) => {
     const action = namedActionFor(installed, placementId, declaration.eventId);
     if (action === undefined) return [];

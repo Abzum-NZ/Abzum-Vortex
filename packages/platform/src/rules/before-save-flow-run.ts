@@ -1,5 +1,9 @@
 import type { JsonValue } from "../catalogue/common";
-import type { FlowDefinition, FlowTask } from "../workflows/flow-contracts";
+import type {
+  FlowBeforeSaveOperation,
+  FlowDefinition,
+  FlowTask,
+} from "../workflows/flow-contracts";
 import { flowRuntimeValueOf, retypeTasks } from "./action-flow-run";
 import { startFlowRun, type FlowRuntimeValues } from "./flow-interpreter";
 
@@ -41,11 +45,14 @@ export class BeforeSaveFlowEvaluationError extends Error {
 }
 
 export type EvaluateBeforeSaveFlowsInput = Readonly<{
-  /** The compiled BeforeSave flows of the record type's Module release. */
+  /**
+   * The compiled BeforeSave flows of the record type's Module release, in the order of the record
+   * type's ordered rule list (`before_save_flows_for_record_type_internal` returns them so).
+   */
   flows: readonly FlowDefinition[];
   recordTypeId: string;
   fields: readonly Readonly<{ fieldId: string; key: string; type: string }>[];
-  operation: "create" | "update";
+  operation: FlowBeforeSaveOperation;
   /** The candidate values the save would write, keyed by field identity. */
   candidateValues: Readonly<Record<string, JsonValue>>;
   /** The stored values before an update, keyed by field identity. */
@@ -94,20 +101,17 @@ const guardedTasks = (flow: FlowDefinition, trigger: Trigger): FlowTask[] =>
         },
       ];
 
-/** Every (flow, trigger) pair that covers the record type and operation, in run order. */
+/** Every (flow, trigger) pair that covers the record type and operation, in the rule list's order. */
 const applicable = (input: EvaluateBeforeSaveFlowsInput) =>
-  input.flows
-    .flatMap((flow) =>
-      flow.triggers.flatMap((trigger) =>
-        trigger.type === "BeforeSave" &&
-        trigger.recordTypeId.toLowerCase() === input.recordTypeId.toLowerCase() &&
-        trigger.operations.some((operation) => operation.kind === input.operation)
-          ? [{ flow, trigger }]
-          : [],
-      ),
-    )
-    // Stable sort retains the compiler's source order for flows with equal priority.
-    .sort((left, right) => left.trigger.priority - right.trigger.priority);
+  input.flows.flatMap((flow) =>
+    flow.triggers.flatMap((trigger) =>
+      trigger.type === "BeforeSave" &&
+      trigger.recordTypeId.toLowerCase() === input.recordTypeId.toLowerCase() &&
+      trigger.operations.some((operation) => operation.kind === input.operation)
+        ? [{ flow, trigger }]
+        : [],
+    ),
+  );
 
 export const evaluateBeforeSaveFlows = (
   input: EvaluateBeforeSaveFlowsInput,

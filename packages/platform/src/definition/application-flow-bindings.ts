@@ -1,15 +1,18 @@
-import { componentSemanticEventKindSchema } from "./component-semantic-events";
+import {
+  componentSemanticEventKindSchema,
+  flowBindingConcurrencySchema,
+  flowBindingExclusiveScopeSchema,
+  flowBindingMaximumTimeoutMs,
+} from "./component-semantic-events";
 import { z } from "zod";
 import { workflowValueTypeSchema } from "../catalogue/catalogues";
 import { sourceAliasSchema } from "./definition-source-common";
-import {
-  flowBindingInputSchema,
-  flowBindingSchema,
-  flowIdSchema,
-} from "../workflows/flow-contracts";
+import { flowBindingInputSchema, flowBindingSchema } from "../workflows/flow-contracts";
 import { flowAliasSchema } from "../workflows/flow-source-contracts";
+import { flowFormulaSchema } from "../workflows/flow-values";
+import { flowTaskEffectClassSchema, safeFlowResultKindSchema } from "../workflows/flow-effects";
+import type { SafeFlowResultKind } from "../workflows/flow-effects";
 import {
-  actorIdSchema,
   applicationRootIdSchema,
   builderKeySchema,
   containedComponentIdSchema,
@@ -17,21 +20,14 @@ import {
   fingerprintSchema,
   moduleRootIdSchema,
   namespacedKeySchema,
-  organizationAccountIdSchema,
-  organizationIdSchema,
   permissionIdSchema,
   platformIdSchema,
   queryIdSchema,
   recordTypeIdSchema,
-  revisionSchema,
-  ruleIdSchema,
+  flowIdSchema,
   stableDefinitionReleaseVersionSchema,
-  timestampSchema,
-  workflowIdSchema,
-  workflowNodeIdSchema,
 } from "../catalogue/identifiers";
 import { versionRequirementSchema } from "./definitions";
-import { flowNodeRunAsSchema } from "../access/run-as-vocabulary";
 import { tenantStructuralCapabilitySchema } from "../access/identity-access";
 
 /** Flow bindings shared by compilation, publication, access and runtime contracts. */
@@ -59,23 +55,41 @@ export const flowValueDeclarationSchema = z
       });
   });
 
-export const flowEffectKindSchema = z.enum([
-  "pure",
-  "read",
-  "change",
-  "form_interaction",
-  "background_start",
-]);
-export const protectedOperationEffectKindSchema = flowEffectKindSchema.extract([
+/** What a protected operation may do: the read, change and background-start effects of a task. */
+export const protectedOperationEffectKindSchema = flowTaskEffectClassSchema.extract([
   "read",
   "change",
   "background_start",
 ]);
 
 /**
+ * The settings every binding carries, written into the definition with its event's defaults
+ * (`componentEventBindingDefaults`): a condition over page values that must hold for the event to
+ * start the flow, a debounce, the concurrency policy, the exclusive scope and a timeout. An
+ * exclusive binding must time out, so a flow can never block its form or page indefinitely.
+ */
+export const flowBindingSettingsSchema = z
+  .object({
+    condition: flowFormulaSchema.nullable(),
+    debounceMs: z.number().int().min(0).max(250),
+    concurrency: flowBindingConcurrencySchema,
+    exclusive: flowBindingExclusiveScopeSchema,
+    timeoutMs: z.number().int().min(100).max(flowBindingMaximumTimeoutMs).nullable(),
+  })
+  .strict()
+  .superRefine((settings, context) => {
+    if (settings.exclusive !== "none" && settings.timeoutMs === null)
+      context.addIssue({
+        code: "custom",
+        path: ["timeoutMs"],
+        message: "An exclusive binding needs a timeout",
+      });
+  });
+
+/**
  * A component placement's binding of one semantic event to one flow: the flow's permanent
- * identity plus a typed input map, and nothing else (architecture decision 1). The flow's own
- * declaration says what it needs, what it returns and what it may do, so a binding carries no
+ * identity plus a typed input map and the binding's settings (architecture decision 1). The flow's
+ * own declaration says what it needs, what it returns and what it may do, so a binding carries no
  * routing, result mapping or declared effect of its own. A value the surface itself supplies, such
  * as a form's answers or a selection, is a `caller` input named for the flow input it fills.
  */
@@ -86,6 +100,7 @@ export const componentFlowBindingSchema = z
     eventId: eventIdSchema,
     event: componentSemanticEventKindSchema,
     flow: flowBindingSchema,
+    settings: flowBindingSettingsSchema,
   })
   .strict();
 
@@ -250,30 +265,6 @@ export const flowTargetDependencySchema = z.discriminatedUnion("kind", [
       ...flowTargetDependencyCommon,
     })
     .strict(),
-  z
-    .object({
-      kind: z.literal("application_form"),
-      applicationRootId: applicationRootIdSchema,
-      formId: containedComponentIdSchema,
-      ...flowTargetDependencyCommon,
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("application_workflow"),
-      applicationRootId: applicationRootIdSchema,
-      workflowId: workflowIdSchema,
-      ...flowTargetDependencyCommon,
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("application_action"),
-      applicationRootId: applicationRootIdSchema,
-      actionId: containedComponentIdSchema,
-      ...flowTargetDependencyCommon,
-    })
-    .strict(),
 ]);
 
 export const platformServiceOperationReleaseSchema = z
@@ -298,18 +289,6 @@ export const protectedOperationRequiredAuthoritySchema = z.discriminatedUnion("k
       capability: tenantStructuralCapabilitySchema,
     })
     .strict(),
-]);
-
-export const safeFlowResultKindSchema = z.enum([
-  "completed",
-  "committed",
-  "refused",
-  "conflict",
-  "validation",
-  "partial",
-  "uncertain",
-  "background_pending",
-  "failed",
 ]);
 
 const fixedResultDescriptorSchema = <
@@ -498,157 +477,30 @@ export const protectedOperationDescriptorSchema = z
         });
   });
 
-/** Current user always means the original verified initiator. Other modes name Access-owned bindings. */
-export { flowNodeRunAsSchema };
-
 /**
  * The one channel vocabulary. It is the channel through which a protected operation, and the flow
  * surface that invoked it, was reached. The trusted server entry point sets the channel in the
- * request context; a caller never supplies it, and a context without one means `web`. Activity
- * source and flow execution binding surface are the same list, so a recorded source and a permitted
- * surface always agree.
+ * request context; a caller never supplies it, and a context without one means `web`. It is also
+ * the Activity source, so a recorded source always names the channel the change came through.
  *
  * - `web`: a signed-in person using the Vortex web application.
+ * - `webmcp`: an agent acting in the person's open page, under their session.
  * - `mcp`: an MCP client acting through the Vortex MCP surface.
  * - `programmatic_interface`: a caller of a published programmatic interface.
  * - `connection`: an external system reaching the organisation through an installed connection.
  *   Connection grants and administration changes are recorded under it as well.
  * - `federation`: another organisation reaching this one through federation.
- * - `durable_workflow`: a step of a durable workflow run.
  * - `system`: platform work with no outside caller, such as scheduled or maintenance work.
  */
 export const protectedOperationChannelSchema = z.enum([
   "web",
+  "webmcp",
   "mcp",
   "programmatic_interface",
   "connection",
   "federation",
-  "durable_workflow",
   "system",
 ]);
-
-/**
- * An execution binding is an Access-owned grant, separate from the editable run-as reference a
- * definition carries. It names one exact organisation, application release, flow node, protected
- * operation and effective actor, plus who may invoke it, on which surfaces, with which declared
- * inputs and until when. Editing, installing, copying or delegating a role never creates one.
- *
- * The surface is the same one channel vocabulary as the Activity source, so a binding's permitted
- * surface and the recorded source of the operation it invokes never diverge.
- */
-export const flowExecutionBindingSurfaceSchema = protectedOperationChannelSchema;
-
-export const flowExecutionInvokerSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("system") }).strict(),
-  z
-    .object({
-      kind: z.literal("organization_account"),
-      organizationAccountId: organizationAccountIdSchema,
-    })
-    .strict(),
-]);
-
-export const flowExecutionBindingActorSchema = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("specified_user"),
-      organizationAccountId: organizationAccountIdSchema,
-    })
-    .strict(),
-  z.object({ kind: z.literal("system"), systemActorId: actorIdSchema }).strict(),
-]);
-
-export const flowExecutionBindingStateSchema = z.enum(["active", "revoked"]);
-
-export const flowExecutionBindingEffectiveStateSchema = z.enum(["active", "revoked", "expired"]);
-
-const uniqueBy = <Value>(values: readonly Value[], identify: (value: Value) => string): boolean =>
-  new Set(values.map(identify)).size === values.length;
-
-export const flowExecutionPermittedInvokersSchema = z
-  .array(flowExecutionInvokerSchema)
-  .min(1)
-  .max(20)
-  .superRefine((value, context) => {
-    if (
-      !uniqueBy(value, (invoker) =>
-        invoker.kind === "system"
-          ? "system"
-          : `account:${invoker.organizationAccountId.toLowerCase()}`,
-      )
-    )
-      context.addIssue({ code: "custom", message: "Permitted invokers must be unique" });
-  });
-
-export const flowExecutionPermittedSurfacesSchema = z
-  .array(flowExecutionBindingSurfaceSchema)
-  .min(1)
-  .max(flowExecutionBindingSurfaceSchema.options.length)
-  .superRefine((value, context) => {
-    if (!uniqueBy(value, (surface) => surface))
-      context.addIssue({ code: "custom", message: "Permitted surfaces must be unique" });
-  });
-
-export const flowExecutionPermittedInputsSchema = z
-  .array(builderKeySchema)
-  .max(20)
-  .superRefine((value, context) => {
-    if (!uniqueBy(value, (input) => input))
-      context.addIssue({ code: "custom", message: "Permitted inputs must be unique" });
-  });
-
-/** A system actor runs only under the system origin; a specified person never does. */
-export const refineFlowExecutionActorInvokers = (
-  value: {
-    actor: z.infer<typeof flowExecutionBindingActorSchema>;
-    permittedInvokers: z.infer<typeof flowExecutionInvokerSchema>[];
-  },
-  context: z.RefinementCtx,
-): void => {
-  const permitsSystemOrigin = value.permittedInvokers.some((invoker) => invoker.kind === "system");
-  if (value.actor.kind === "system" && !permitsSystemOrigin)
-    context.addIssue({
-      code: "custom",
-      path: ["permittedInvokers"],
-      message: "A system execution binding must permit the system origin",
-    });
-  if (value.actor.kind === "specified_user" && permitsSystemOrigin)
-    context.addIssue({
-      code: "custom",
-      path: ["permittedInvokers"],
-      message: "A specified-user execution binding cannot permit the system origin",
-    });
-};
-
-export const flowExecutionBindingSchema = z
-  .object({
-    executionBindingId: containedComponentIdSchema,
-    organizationId: organizationIdSchema,
-    applicationRootId: applicationRootIdSchema,
-    releaseVersion: stableDefinitionReleaseVersionSchema,
-    flowId: ruleIdSchema,
-    nodeId: workflowNodeIdSchema,
-    operation: protectedOperationReferenceSchema,
-    actor: flowExecutionBindingActorSchema,
-    permittedInvokers: flowExecutionPermittedInvokersSchema,
-    permittedSurfaces: flowExecutionPermittedSurfacesSchema,
-    permittedInputs: flowExecutionPermittedInputsSchema,
-    expiresAt: timestampSchema.optional(),
-    state: flowExecutionBindingStateSchema,
-    revision: revisionSchema,
-    recordedAt: timestampSchema,
-    revokedAt: timestampSchema.optional(),
-  })
-  .strict()
-  .superRefine((value, context) => {
-    refineFlowExecutionActorInvokers(value, context);
-    if ((value.state === "revoked") !== (value.revokedAt !== undefined))
-      context.addIssue({
-        code: "custom",
-        path: ["revokedAt"],
-        message: "Exactly a revoked execution binding records its revocation time",
-      });
-  });
 
 // --- Source equivalent for a component's flow binding ---
 
@@ -664,6 +516,7 @@ export const sourceComponentFlowBindingSchema = z
     event_id: sourceAliasSchema,
     event: componentSemanticEventKindSchema,
     flow: flowAliasSchema,
+    settings: flowBindingSettingsSchema,
     inputs: z
       .record(builderKeySchema, flowBindingInputSchema)
       .refine((inputs) => Object.keys(inputs).length <= 100, {
@@ -673,13 +526,10 @@ export const sourceComponentFlowBindingSchema = z
   })
   .strict();
 
-export type FlowEffectKind = z.infer<typeof flowEffectKindSchema>;
 export type ProtectedOperationEffectKind = z.infer<typeof protectedOperationEffectKindSchema>;
 export type ComponentFlowBinding = z.infer<typeof componentFlowBindingSchema>;
 export type ProtectedOperationChannel = z.infer<typeof protectedOperationChannelSchema>;
 export type ProtectedOperationReference = z.infer<typeof protectedOperationReferenceSchema>;
 export type PlatformServiceOperationRelease = z.infer<typeof platformServiceOperationReleaseSchema>;
-export type SafeFlowResultKind = z.infer<typeof safeFlowResultKindSchema>;
 export type SafeFlowResultDescriptor = z.infer<typeof safeFlowResultDescriptorSchema>;
 export type ProtectedOperationDescriptor = z.infer<typeof protectedOperationDescriptorSchema>;
-export type FlowExecutionBinding = z.infer<typeof flowExecutionBindingSchema>;

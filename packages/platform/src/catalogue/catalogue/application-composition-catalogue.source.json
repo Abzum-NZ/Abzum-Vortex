@@ -27,7 +27,7 @@
         "kind": "field_reference",
         "key": "severity_field",
         "label": "Severity field",
-        "help": "Optional single-choice field with only info, success, warning and critical options",
+        "help": "Optional single-choice field with only info, success, warning and error options",
         "required": false
       },
       {
@@ -64,8 +64,8 @@
             "label": "Warning"
           },
           {
-            "key": "critical",
-            "label": "Critical"
+            "key": "error",
+            "label": "Error"
           }
         ],
         "defaultValue": {
@@ -4068,8 +4068,8 @@
             "label": "Warning"
           },
           {
-            "key": "critical",
-            "label": "Critical"
+            "key": "error",
+            "label": "Error"
           }
         ],
         "defaultValue": {

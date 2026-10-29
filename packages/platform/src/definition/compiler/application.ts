@@ -21,6 +21,10 @@ import {
   DefinitionCompilationError,
   type DefinitionCompilerRefusalCode,
 } from "../compilation-error";
+import { flowBindingSettingsSchema } from "../application-flow-bindings";
+import type { ComponentSemanticEventKind } from "../component-semantic-events";
+import { flowBindingSettingNotYetRunnable } from "../flow-step-settings";
+import { compileFlowPlans, flowBindingPlanIssue } from "../../workflows/flow-plan";
 import { applicationSearchSourceReferences } from "../source-identities";
 import {
   materialiseApplicationComposition,
@@ -78,8 +82,18 @@ function compileApplicationPages(
     const compiledComposition = composition.pages[index];
     if (compiledComposition === undefined)
       fail("vortex.definition.invalid_compilation_output", "invalid_value");
+    // Not yet runnable: page values arrive with the page runner's value store.
+    if (page.values !== undefined && Object.keys(asObject(page.values)).length > 0)
+      throw new DefinitionCompilationError(
+        "vortex.definition.unsupported_workflow_node",
+        "unsupported_choice",
+        resolution.location("page", String(page.id)),
+        undefined,
+        `Page ${String(page.key)}: page values cannot run yet`,
+      );
     const base = {
       pageId: pageId(String(page.id)),
+      ...(page.values === undefined ? {} : { values: page.values }),
       ...(page.replaces_page === undefined
         ? {}
         : { replacementOfPageId: pageId(String(page.replaces_page)) }),
@@ -563,6 +577,7 @@ function compileApplicationFlowBindings(
   const body = asObject(source.body);
   const definitionKey = String(source.key);
   const flowsById = new Map(flows.map((flow) => [String(flow.id), flow]));
+  const plans = compileFlowPlans(flows).plans;
   return compiledSourceFlowBindings(body).map((binding) => {
     const flowId = resolution.id(definitionKey, "flow", String(binding.flow), "content");
     const flow = flowsById.get(flowId);
@@ -578,12 +593,42 @@ function compileApplicationFlowBindings(
     for (const [name, declared] of Object.entries(flow.inputs))
       if (declared.required && !Object.hasOwn(inputs, name))
         fail("vortex.definition.application_flow_binding_inputs", "required_value", location);
+    const settings = flowBindingSettingsSchema.safeParse(binding.settings);
+    if (!settings.success)
+      fail("vortex.definition.application_flow_binding_inputs", "invalid_value", location);
+    // The binding's own plan: latest-wins only on a flow that changes nothing, and an options
+    // flow only reads.
+    const planIssue = flowBindingPlanIssue(plans.get(flowId)!, {
+      event: String(binding.event),
+      settings: settings.data,
+    });
+    if (planIssue !== undefined)
+      throw new DefinitionCompilationError(
+        "vortex.definition.unsupported_workflow_node",
+        "unsupported_choice",
+        location,
+        undefined,
+        `Binding ${String(binding.id)}: ${planIssue}`,
+      );
+    const notYet = flowBindingSettingNotYetRunnable(
+      binding.event as ComponentSemanticEventKind,
+      settings.data,
+    );
+    if (notYet !== undefined)
+      throw new DefinitionCompilationError(
+        "vortex.definition.unsupported_workflow_node",
+        "unsupported_choice",
+        location,
+        undefined,
+        `Binding ${String(binding.id)}: ${notYet}`,
+      );
     return {
       bindingId: resolution.id(definitionKey, "flow_binding", String(binding.id), "content"),
       controlId: resolution.id(definitionKey, "block_placement", String(binding.control)),
       eventId: resolution.id(definitionKey, "event", String(binding.event_id), "content"),
       event: binding.event,
       flow: { flowId, inputs },
+      settings: asObject(binding.settings),
     };
   });
 }
@@ -702,7 +747,7 @@ export function compileParsedApplicationRequest(
     };
     const output = applicationCompilationOutputSchema.safeParse({
       kind: "application",
-      validationContractVersion: "3.0.0",
+      validationContractVersion: "4.0.0",
       platformCompatibilityVersion: APPLICATION_PLATFORM_COMPATIBILITY_VERSION,
       canonical,
       artifact,

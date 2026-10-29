@@ -38,9 +38,10 @@ import {
   queryIdSchema,
   recordTypeIdSchema,
   revisionSchema,
-  ruleIdSchema,
+  flowIdSchema,
   semanticVersionSchema,
   timestampSchema,
+  stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
 import { applicationPlatformCompatibilityVersionSchema } from "./platform-compatibility";
 import { moduleVersionImpactHistoryEntrySchema } from "./version-impact";
@@ -128,7 +129,7 @@ export const resolvedDefinitionSchema = z.discriminatedUnion("kind", [
 
 export const definitionResolutionSnapshotSchema = z
   .object({
-    contractVersion: z.literal("3.0.0"),
+    contractVersion: z.literal("4.0.0"),
     fingerprint: fingerprintSchema,
     definitions: z.array(resolvedDefinitionSchema).min(1),
     identities: z.array(sourceIdentityAssignmentSchema),
@@ -262,7 +263,7 @@ export const applicationToolOperationReferenceSchema = z.discriminatedUnion("kin
       standardAction: z.enum(["create", "read", "update", "soft_delete", "restore", "export"]),
     })
     .strict(),
-  z.object({ kind: z.literal("flow"), key: builderKeySchema, flowId: ruleIdSchema }).strict(),
+  z.object({ kind: z.literal("flow"), key: builderKeySchema, flowId: flowIdSchema }).strict(),
   z
     .object({
       kind: z.literal("query"),
@@ -341,7 +342,7 @@ export const applicationToolSchema = z
  */
 export const applicationToolBundleSchema = z
   .object({
-    contractVersion: z.literal("1.0.0"),
+    contractVersion: z.literal("4.0.0"),
     applicationKey: namespacedKeySchema,
     tools: z.array(applicationToolSchema).max(10_000),
   })
@@ -436,6 +437,11 @@ export const publishedDefinitionHistorySchema = z.discriminatedUnion("kind", [
 const historyEvidenceCommon = {
   definitionKey: namespacedKeySchema,
   anchorReleaseRevision: revisionSchema.nullable(),
+  /**
+   * The version of the anchor release when it was published under an earlier definition contract:
+   * it is history only, so the next release follows its version but nothing compares its content.
+   */
+  supersededReleaseVersion: stableDefinitionReleaseVersionSchema.nullable(),
 };
 
 /** The latest immutable release of one definition, which the database anchors as current. */
@@ -459,7 +465,11 @@ export const definitionPublicationHistorySchema = z
       .strict(),
   ])
   .superRefine((value, context) => {
-    if ((value.anchorReleaseRevision === null) !== (value.latestRelease === null))
+    if (
+      (value.anchorReleaseRevision === null) !==
+        (value.latestRelease === null && value.supersededReleaseVersion === null) ||
+      (value.latestRelease !== null && value.supersededReleaseVersion !== null)
+    )
       context.addIssue({
         code: "custom",
         message: "History evidence anchor and latest release must agree",

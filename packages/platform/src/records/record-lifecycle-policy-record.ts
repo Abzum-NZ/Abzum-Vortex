@@ -9,7 +9,7 @@ import {
   organizationIdSchema,
   revisionSchema,
   storageContractIdSchema,
-  workflowIdSchema,
+  flowIdSchema,
   type ApplicationRootId,
   type OrganizationId,
   type StorageContractId,
@@ -172,7 +172,7 @@ const parseRecordTypeLifecyclePolicyActionInput = (
   }
 
   if (!hasOnlyKeys(candidate, archiveWorkflowPolicyKeys)) return undefined;
-  const archiveWorkflowId = workflowIdSchema.safeParse(candidate.archiveWorkflowId);
+  const archiveWorkflowId = flowIdSchema.safeParse(candidate.archiveWorkflowId);
   const expectedWorkflowRevision = parseSafeRevision(candidate.expectedWorkflowRevision);
   const archiveConnectionInstanceId = connectionInstanceIdSchema.safeParse(
     candidate.archiveConnectionInstanceId,

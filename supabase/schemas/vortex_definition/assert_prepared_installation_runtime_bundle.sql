@@ -62,7 +62,7 @@ begin
       message = 'Prepared runtime bundle source changed';
   end if;
   source_manifest := pg_catalog.jsonb_build_object(
-    'bundleFormatVersion', 2,
+    'bundleFormatVersion', 3,
     'application', pg_catalog.jsonb_build_object(
       'rootId', prepared_source #> '{application,rootId}',
       'definitionKey', prepared_source #> '{application,key}',
@@ -95,7 +95,7 @@ begin
   where stored.organization_id = selected_organization_id
     and stored.application_root_id = p_application_root_id
     and stored.application_release_revision = p_application_release_revision
-    and stored.bundle_format_version = 2;
+    and stored.bundle_format_version = 3;
   if stored_bundle.pin_fingerprint is distinct from p_pin_fingerprint
     or stored_bundle.source_manifest is distinct from source_manifest then
     raise exception using errcode = '23505',
@@ -122,7 +122,7 @@ begin
   where part.organization_id = selected_organization_id
     and part.application_root_id = p_application_root_id
     and part.application_release_revision = p_application_release_revision
-    and part.bundle_format_version = 2;
+    and part.bundle_format_version = 3;
   if metadata_count is distinct from stored_part_count then
     raise exception using errcode = '55000',
       message = 'Prepared runtime bundle part count differs';
@@ -163,7 +163,7 @@ begin
     where part.organization_id = selected_organization_id
       and part.application_root_id = p_application_root_id
       and part.application_release_revision = p_application_release_revision
-      and part.bundle_format_version = 2
+      and part.bundle_format_version = 3
       and part.section = section_value
       and part.ordinal = ordinal_value::integer;
     if pg_catalog.octet_length(part_item.content_bytes) is distinct from byte_size_value
@@ -223,7 +223,7 @@ begin
   where part.organization_id = selected_organization_id
     and part.application_root_id = p_application_root_id
     and part.application_release_revision = p_application_release_revision
-    and part.bundle_format_version = 2
+    and part.bundle_format_version = 3
     and part.section = 'access_plan';
   begin
     access_plan_value := access_plan_text::jsonb;
@@ -240,7 +240,7 @@ begin
     'organizationId', selected_organization_id,
     'applicationRootId', p_application_root_id,
     'applicationReleaseRevision', p_application_release_revision,
-    'bundleFormatVersion', 2,
+    'bundleFormatVersion', 3,
     'pinFingerprint', stored_bundle.pin_fingerprint,
     'sourceManifest', stored_bundle.source_manifest
   );

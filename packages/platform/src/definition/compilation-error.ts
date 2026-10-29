@@ -98,7 +98,6 @@ export const definitionCompilerRefusalCodes = Object.freeze([
   "vortex.definition.public_page_not_supported",
   "vortex.definition.public_address_not_supported",
   "vortex.definition.interface_operation_not_supported",
-  "vortex.definition.incoming_message_not_supported",
   "vortex.definition.workflow_action_inputs",
   "vortex.definition.workflow_child_acyclic",
   "vortex.definition.workflow_child_depth",

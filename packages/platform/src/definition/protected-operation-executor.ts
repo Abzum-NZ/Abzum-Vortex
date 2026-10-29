@@ -56,7 +56,6 @@ import {
   type SuspendTenantOrganizationCommand,
   type SuspendTenantOrganizationResult,
 } from "../identity/tenant-governance";
-import type { ExecutionAuthorityContext } from "../workflows/flow-contracts";
 import {
   flowRefusalFeedbackSchema,
   type FlowRefusalFeedback,
@@ -112,11 +111,8 @@ type ProtectedOperationExecutionRequestBase = Readonly<{
   effectKey?: ProtectedOperationEffectKey;
 }>;
 
-type ProtectedOperationExecutionRequest =
-  | (ProtectedOperationExecutionRequestBase &
-      Readonly<{ session: IdentitySession; executionAuthorityContext?: never }>)
-  | (ProtectedOperationExecutionRequestBase &
-      Readonly<{ session?: never; executionAuthorityContext: ExecutionAuthorityContext }>);
+type ProtectedOperationExecutionRequest = ProtectedOperationExecutionRequestBase &
+  Readonly<{ session: IdentitySession }>;
 
 /** A value a descriptor can declare for an input or output of a registered operation. */
 type ProtectedOperationValue = JsonValue;
@@ -1170,10 +1166,6 @@ export const createProtectedOperationExecutor = (
     };
     try {
       const identity = protectedOperationIdentitySchema.safeParse(request.operation);
-      if (request.executionAuthorityContext !== undefined) {
-        // The person-session executor must never downgrade a non-person authority.
-        return refuse("non_person_authority_context");
-      }
       const session = identitySessionSchema.safeParse(request.session);
       const selection = organizationSelectionCandidateSchema.safeParse(request.selection);
       if (!identity.success) return refuse("operation_identity_invalid", identity.error);

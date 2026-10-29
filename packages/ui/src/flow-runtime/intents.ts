@@ -46,9 +46,10 @@ export const surfaceCancellationError = (): Error => {
 export const isSurfaceCancellation = (error: unknown): boolean =>
   error instanceof Error && error.name === "AbortError";
 
+/** A message the page shows in a dialog: its text, severity and heading. */
 export type FlowMessageIntent = Readonly<{
   text: string;
-  tone: string | undefined;
+  severity: string | undefined;
   title: string;
 }>;
 /**
@@ -99,7 +100,7 @@ export const readMessageIntent = (intent: FlowIntent): FlowMessageIntent | undef
   const title = text(intent.properties.title);
   return message === undefined || title === undefined
     ? undefined
-    : { text: message, tone: text(intent.properties.tone), title };
+    : { text: message, severity: text(intent.properties.severity), title };
 };
 
 /**

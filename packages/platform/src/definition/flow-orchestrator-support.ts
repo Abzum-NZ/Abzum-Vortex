@@ -66,23 +66,6 @@ export const refusalOutcome = (code: string): FlowTaskOutcome =>
 export const requestOutcome = (kind: "unavailable" | "temporarily_unavailable"): FlowTaskOutcome =>
   kind === "unavailable" ? "refused" : "failed";
 
-/** Tasks the platform cannot run here yet, and the user-facing capability they need. */
-export const unavailableTaskMessages: Readonly<Record<string, string>> = Object.freeze({
-  "record.save": "This workflow can't save records.",
-  "record.create": "This workflow can't create records.",
-  "record.set_fields": "This workflow can't update records.",
-  "record.link": "This workflow can't link records.",
-  "record.delete": "This workflow can't delete records.",
-  "record.restore": "This workflow can't restore records.",
-  "record.changes": "This workflow can't read record history.",
-  "record.query": "This workflow can't search records.",
-  "flow.run_background": "This workflow can't start a background workflow.",
-  "event.announce": "This workflow can't send events.",
-  "message.acknowledge": "This workflow can't handle messages.",
-  "file.export": "This workflow can't export files.",
-  "connection.call": "This workflow can't use connected services.",
-});
-
 export const withinPayload = (candidate: unknown): boolean => {
   try {
     return (JSON.stringify(candidate) ?? "").length <= maximumPayloadCharacters;

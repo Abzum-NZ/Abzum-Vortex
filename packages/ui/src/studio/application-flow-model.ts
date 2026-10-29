@@ -150,8 +150,6 @@ const taskCaption = (
       return `Chooses one of ${"cases" in task ? task.cases.length : 0} cases`;
     case "for_each":
       return "Repeats its steps for each item";
-    case "parallel":
-      return "Runs its branches side by side";
     case "stop":
       return "Stops the flow";
     case "operation.call": {
@@ -231,19 +229,6 @@ export const studioFlowOutline = (
         case "sequential":
           if (!("tasks" in task)) return invalidOutline("a grouping task has no steps");
           children.push(list("Steps", task.tasks, [...taskPath, "tasks"], depth + 1));
-          break;
-        case "parallel":
-          if (!("branches" in task)) return invalidOutline("a Parallel task has no branches");
-          task.branches.forEach((branch, branchIndex) =>
-            children.push(
-              list(
-                `Branch ${branchIndex + 1}`,
-                branch,
-                [...taskPath, "branches", branchIndex],
-                depth + 1,
-              ),
-            ),
-          );
           break;
       }
       const definition = studioFlowDefinitionOf(task.type);
@@ -439,6 +424,8 @@ const eventWords: Readonly<Record<string, string>> = {
   action: "is used",
   row_clicked: "row is clicked",
   row_action: "row action is used",
+  bulk_action: "bulk action is used",
+  batch_edit: "values are pasted, filled or undone",
   [recordsTableRowEditEvent]: "row is saved",
   [recordsTableInlineEditEvent]: "value is edited",
   card_moved: "card is moved",
@@ -452,19 +439,23 @@ const eventWords: Readonly<Record<string, string>> = {
   page_changed: "page changes",
   selection_changed: "selection changes",
   field_changed: "field changes",
+  field_focus_lost: "field loses focus",
+  options_requested: "options are requested",
+  record_loaded: "record is loaded",
   form_ready: "form is ready",
   form_reset: "form is reset",
   form_submit: "is submitted",
+  form_cancel: "is cancelled",
   tab_changed: "tab changes",
   row_expanded: "row is expanded",
-
   guided_step_changed: "step changes",
 };
 
 const operationWords: Readonly<Record<string, string>> = {
   create: "created",
   update: "changed",
-  transition: "moved on",
+  delete: "deleted",
+  restore: "restored",
 };
 
 const recordWords = (recordTypeId: string): string =>
@@ -500,10 +491,6 @@ export const describeStudioFlowStarts = (
             ? studioWords(trigger.event.eventKind).toLowerCase()
             : studioWords(trigger.event.eventKey.split(".").pop() ?? "").toLowerCase()
         }`;
-      case "Schedule":
-        return "On a schedule";
-      case "IncomingMessage":
-        return "When a message arrives";
     }
   });
   const bindings =

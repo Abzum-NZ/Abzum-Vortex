@@ -15,7 +15,6 @@ import {
   recordTypeDefinitionSchema,
   isWritableSystemProjection,
 } from "../definition/module-contracts";
-import type { ExecutionAuthorityContext } from "../workflows/flow-contracts";
 import {
   saveRecordCommandSchema,
   saveRecordResultSchema,
@@ -35,7 +34,7 @@ import {
   beforeSaveRuleRefusedIssueCode,
   beforeSaveRuleUnavailableIssueCode,
   beginBeforeSaveRuleExecution,
-  parseBeforeSaveFlowSet,
+  beforeSaveFlowSetOf,
   type BeforeSaveRuleExecution,
 } from "./before-save-rules";
 import {
@@ -922,15 +921,10 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
 
   return Object.freeze({
     async save(
-      caller: IdentitySession | ExecutionAuthorityContext,
+      caller: IdentitySession,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
     ): Promise<RecordSaveServiceResult> {
-      // Do not turn a non-person authority into a person session on this adapter.
-      if (caller !== null && typeof caller === "object" && "kind" in caller) {
-        console.error("[record] save refused RECORD_SAVE_CALLER_NOT_A_PERSON");
-        return { kind: "unavailable" };
-      }
       const command = saveRecordCommandSchema.safeParse(commandCandidate);
       if (!command.success || selection.applicationRootId === undefined) {
         console.error(
@@ -1000,7 +994,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
             if (totalPreparation.outcome === "prepared") {
               closureRules = new Map();
               for (const record of totalPreparation.records) {
-                const ruleSet = parseBeforeSaveFlowSet(
+                const ruleSet = beforeSaveFlowSetOf(
                   record.beforeSaveFlows,
                   record.recordType.recordTypeId,
                 );
@@ -1015,7 +1009,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
               }
               attempted.rules = closureRules.get("root")!;
             } else {
-              const ruleSet = parseBeforeSaveFlowSet(
+              const ruleSet = beforeSaveFlowSetOf(
                 prepared.beforeSaveFlows,
                 prepared.recordType.recordTypeId,
               );
@@ -1260,7 +1254,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
             if (totals.outcome === "prepared") {
               const closureRules = new Map<string, BeforeSaveRuleExecution>();
               for (const record of totals.records) {
-                const ruleSet = parseBeforeSaveFlowSet(
+                const ruleSet = beforeSaveFlowSetOf(
                   record.beforeSaveFlows,
                   record.recordType.recordTypeId,
                 );
@@ -1290,7 +1284,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
                 continue;
               }
             } else {
-              const ruleSet = parseBeforeSaveFlowSet(
+              const ruleSet = beforeSaveFlowSetOf(
                 prepared.beforeSaveFlows,
                 prepared.recordType.recordTypeId,
               );

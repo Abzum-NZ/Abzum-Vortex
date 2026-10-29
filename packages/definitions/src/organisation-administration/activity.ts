@@ -13,6 +13,7 @@ const fields = [
     label: "Actor",
     type: "link",
     settings: {
+      options_source: { kind: "query" },
       target: "vortex.system_directory:person",
       reverse_key: "activity_entries",
       reverse_name: "Activity entries",
@@ -36,6 +37,7 @@ export const activityRecordType = {
   ownership_mode: "none",
   standard_actions: ["read"],
   custom_actions: [],
+  before_save_rules: [],
   system_projection: {
     protected_view: "activity_entry",
     organization_field: "organization_id",

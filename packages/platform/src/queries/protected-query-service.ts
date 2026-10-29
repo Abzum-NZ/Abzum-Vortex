@@ -5,7 +5,6 @@ import {
   type HumanOrganizationRequestResult,
 } from "../access/human-organization-request";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
-import type { ExecutionAuthorityContext } from "../workflows/flow-contracts";
 import {
   boardMembersCommand,
   boardColumnPagesCommandSchema,
@@ -70,7 +69,7 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
    * decide authority and read in one transaction (the export) shares this path with `run`.
    */
   const prepareRead = (
-    caller: IdentitySession | ExecutionAuthorityContext,
+    caller: IdentitySession,
     selection: OrganizationSelectionCandidate,
     commandCandidate: unknown,
   ):
@@ -83,9 +82,6 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
         ) => Promise<ProtectedQueryResult>;
       }>
     | Readonly<{ kind: "final"; result: HumanOrganizationRequestResult<ProtectedQueryResult> }> => {
-    // Do not turn a non-person authority into a person session on this adapter.
-    if (caller !== null && typeof caller === "object" && "kind" in caller)
-      return { kind: "final", result: { kind: "unavailable" } };
     const command = protectedQueryCommandSchema.safeParse(commandCandidate);
     if (!command.success)
       return {
@@ -103,7 +99,7 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
 
   return Object.freeze({
     async run(
-      caller: IdentitySession | ExecutionAuthorityContext,
+      caller: IdentitySession,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
       decide?: ProtectedReadDecider,
@@ -120,12 +116,10 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
     /** Validates a protected read for a caller that runs it inside its own request transaction. */
     prepareRead,
     async boardMembers(
-      caller: IdentitySession | ExecutionAuthorityContext,
+      caller: IdentitySession,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
     ): Promise<HumanOrganizationRequestResult<ProtectedQueryResult>> {
-      if (caller !== null && typeof caller === "object" && "kind" in caller)
-        return { kind: "unavailable" };
       const command = protectedQueryBoardMembersCommandSchema.safeParse(commandCandidate);
       if (!command.success)
         return { kind: "available", value: refuseInvalidCommand(command.error) };
@@ -135,7 +129,7 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       );
     },
     async boardColumnPages(
-      caller: IdentitySession | ExecutionAuthorityContext,
+      caller: IdentitySession,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
     ): Promise<
@@ -144,8 +138,6 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
         | Extract<ProtectedQueryResult, { outcome: "refused" }>
       >
     > {
-      if (caller !== null && typeof caller === "object" && "kind" in caller)
-        return { kind: "unavailable" };
       const command = boardColumnPagesCommandSchema.safeParse(commandCandidate);
       if (!command.success)
         return { kind: "available", value: refuseInvalidCommand(command.error) };
@@ -155,13 +147,11 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       );
     },
     async groupedMembers(
-      caller: IdentitySession | ExecutionAuthorityContext,
+      caller: IdentitySession,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
       decide?: ProtectedReadDecider,
     ): Promise<HumanOrganizationRequestResult<ProtectedQueryGroupedMembersResult>> {
-      if (caller !== null && typeof caller === "object" && "kind" in caller)
-        return { kind: "unavailable" };
       const personCaller: IdentitySession = caller;
       const command = protectedQueryGroupedMembersCommandSchema.safeParse(commandCandidate);
       if (!command.success)
@@ -181,13 +171,11 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       });
     },
     async treeLevel(
-      caller: IdentitySession | ExecutionAuthorityContext,
+      caller: IdentitySession,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
       decide?: ProtectedReadDecider,
     ): Promise<HumanOrganizationRequestResult<ProtectedQueryTreeLevelResult>> {
-      if (caller !== null && typeof caller === "object" && "kind" in caller)
-        return { kind: "unavailable" };
       const personCaller: IdentitySession = caller;
       const command = protectedQueryTreeLevelCommandSchema.safeParse(commandCandidate);
       if (!command.success)
@@ -207,13 +195,11 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       });
     },
     async summarise(
-      caller: IdentitySession | ExecutionAuthorityContext,
+      caller: IdentitySession,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
       decide?: ProtectedReadDecider,
     ): Promise<HumanOrganizationRequestResult<ProtectedQuerySummaryResult>> {
-      if (caller !== null && typeof caller === "object" && "kind" in caller)
-        return { kind: "unavailable" };
       const command = protectedQuerySummaryCommandSchema.safeParse(commandCandidate);
       if (!command.success)
         return { kind: "available", value: refuseInvalidCommand(command.error) };
@@ -226,12 +212,10 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       });
     },
     async boardSummary(
-      caller: IdentitySession | ExecutionAuthorityContext,
+      caller: IdentitySession,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
     ): Promise<HumanOrganizationRequestResult<ProtectedQueryBoardSummaryResult>> {
-      if (caller !== null && typeof caller === "object" && "kind" in caller)
-        return { kind: "unavailable" };
       const command = protectedQueryBoardSummaryCommandSchema.safeParse(commandCandidate);
       if (!command.success)
         return { kind: "available", value: refuseInvalidCommand(command.error) };

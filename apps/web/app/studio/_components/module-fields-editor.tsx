@@ -225,8 +225,9 @@ export function ModuleFieldsEditor({
     fields.map((item) => {
       const settings = item.settings as {
         target?: string;
-        depends_on?: { parent_field: string; filter_field?: string };
+        options_source?: { parent_field?: string; filter_field?: string };
       };
+      const narrowing = settings.options_source;
       return {
         id: item.key,
         label: item.label,
@@ -235,14 +236,12 @@ export function ModuleFieldsEditor({
         ...(settings.target === undefined
           ? {}
           : { target: qualifiedLinkTarget(owner, settings.target) }),
-        ...(settings.depends_on === undefined
+        ...(narrowing?.parent_field === undefined
           ? {}
           : {
               dependsOn: {
-                parent: settings.depends_on.parent_field,
-                ...(settings.depends_on.filter_field === undefined
-                  ? {}
-                  : { filter: settings.depends_on.filter_field }),
+                parent: narrowing.parent_field,
+                ...(narrowing.filter_field === undefined ? {} : { filter: narrowing.filter_field }),
               },
             }),
       };
@@ -256,7 +255,8 @@ export function ModuleFieldsEditor({
     const targetRecord = source.body.modules
       .find((item) => item.key === owner)
       ?.record_types.find((item) => item.key === local);
-    const dependency = settings.depends_on as
+    // The form edits the field that narrows the options as `narrowed_by`.
+    const dependency = settings.narrowed_by as
       { parent_field: string; filter_field?: string } | undefined;
     return {
       fields: dependencyFields(moduleKey, record?.fields ?? []),

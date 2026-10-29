@@ -13,7 +13,7 @@ import {
   viewerSafeRecordPinSelectorSchema,
 } from "../records/record-links";
 import { saveRecordCommandSchema, type SaveRecordCommand } from "../records/records";
-import { platformOperationKey } from "../workflows/default-flow-sources";
+import { platformOperationKey } from "../catalogue/platform-service-operation-catalogue";
 import {
   flowRefusalFeedbackSchema,
   flowRefusalGuidanceByCodeSchema,
@@ -37,7 +37,6 @@ import {
   carriesSensitive,
   dedupeFieldCorrections,
   effectCommandId,
-  unavailableTaskMessages,
   redactSensitiveOutputs,
   refusalOutcome,
   requestOutcome,
@@ -392,7 +391,7 @@ export const createFlowTaskRunner = (
       return notAvailable(
         run,
         call,
-        unavailableTaskMessages[call.taskType] ?? "This action can't be completed in a workflow.",
+        "This action can't be completed in a workflow.",
         "no server runner for this task type",
       );
 
@@ -759,26 +758,8 @@ export const createFlowTaskRunner = (
       }
     }
 
-    const principal: FlowEffectPrincipal =
-      run.authority.kind === "person"
-        ? { kind: "person", id: run.authority.session.identityId }
-        : run.authority.context.actor.kind === "specified_account"
-          ? {
-              kind: "specified_account",
-              id: run.authority.context.actor.organizationAccountId,
-            }
-          : { kind: "system", id: run.authority.context.actor.systemActorId };
-    const organizationId =
-      run.authority.kind === "person"
-        ? run.authority.selection.organizationId
-        : run.authority.organizationId;
-    if (run.authority.kind === "execution_authority")
-      return notAvailable(
-        run,
-        call,
-        "This step can't run in a background workflow.",
-        "per-task access grants are not resolved for execution authority runs",
-      );
+    const principal: FlowEffectPrincipal = { kind: "person", id: run.authority.session.identityId };
+    const organizationId = run.authority.selection.organizationId;
     const planned = planTask(run, state, call);
     if (!("plan" in planned)) return planned;
 

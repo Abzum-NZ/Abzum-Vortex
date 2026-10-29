@@ -300,6 +300,12 @@ export function explicitSourceTargets(
     )
       return [[...base, "customActionIds", sourcePath[4]]];
     if (
+      sourcePath[3] === "before_save_rules" &&
+      typeof sourcePath[4] === "number" &&
+      sourcePath.length === 5
+    )
+      return [[...base, "beforeSaveFlowIds", sourcePath[4]]];
+    if (
       sourcePath[3] === "relationships" &&
       typeof sourcePath[4] === "number" &&
       ((sourcePath[5] === "to_record_type" && sourcePath.length === 6) ||

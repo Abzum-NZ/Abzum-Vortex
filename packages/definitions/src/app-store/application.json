@@ -1,5 +1,5 @@
 {
-  "source_contract_version": "3.0.0",
+  "source_contract_version": "4.0.0",
   "root_alias": "app_app_store",
   "key": "vortex.app.app_store",
   "kind": "application",
@@ -539,7 +539,6 @@
     ],
     "flows": [
       {
-        "contractVersion": "1.0.0",
         "id": "flow_install_or_upgrade_application",
         "key": "install_or_upgrade_application",
         "description": "Reviews the latest published version of the selected application, then installs it for the first time or upgrades to it after the person confirms.",
@@ -1138,6 +1137,20 @@
                                           "type": "text",
                                           "value": "Install or upgrade"
                                         }
+                                      },
+                                      "target": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "dialog"
+                                        }
+                                      },
+                                      "severity": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "info"
+                                        }
                                       }
                                     }
                                   }
@@ -1167,6 +1180,20 @@
                                         "literal": {
                                           "type": "text",
                                           "value": "Install or upgrade"
+                                        }
+                                      },
+                                      "target": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "dialog"
+                                        }
+                                      },
+                                      "severity": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "info"
                                         }
                                       }
                                     }
@@ -1198,6 +1225,20 @@
                                           "type": "text",
                                           "value": "Install or upgrade"
                                         }
+                                      },
+                                      "target": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "dialog"
+                                        }
+                                      },
+                                      "severity": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "info"
+                                        }
                                       }
                                     }
                                   }
@@ -1222,6 +1263,20 @@
                                     "literal": {
                                       "type": "text",
                                       "value": "Install or upgrade"
+                                    }
+                                  },
+                                  "target": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "dialog"
+                                    }
+                                  },
+                                  "severity": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "info"
                                     }
                                   }
                                 }
@@ -1653,6 +1708,20 @@
                                           "type": "text",
                                           "value": "Install or upgrade"
                                         }
+                                      },
+                                      "target": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "dialog"
+                                        }
+                                      },
+                                      "severity": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "info"
+                                        }
                                       }
                                     }
                                   }
@@ -1682,6 +1751,20 @@
                                         "literal": {
                                           "type": "text",
                                           "value": "Install or upgrade"
+                                        }
+                                      },
+                                      "target": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "dialog"
+                                        }
+                                      },
+                                      "severity": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "info"
                                         }
                                       }
                                     }
@@ -1713,6 +1796,20 @@
                                           "type": "text",
                                           "value": "Install or upgrade"
                                         }
+                                      },
+                                      "target": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "dialog"
+                                        }
+                                      },
+                                      "severity": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "info"
+                                        }
                                       }
                                     }
                                   }
@@ -1737,6 +1834,20 @@
                                     "literal": {
                                       "type": "text",
                                       "value": "Install or upgrade"
+                                    }
+                                  },
+                                  "target": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "dialog"
+                                    }
+                                  },
+                                  "severity": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "info"
                                     }
                                   }
                                 }
@@ -2081,6 +2192,20 @@
                                           "type": "text",
                                           "value": "Install or upgrade"
                                         }
+                                      },
+                                      "target": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "dialog"
+                                        }
+                                      },
+                                      "severity": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "info"
+                                        }
                                       }
                                     }
                                   }
@@ -2110,6 +2235,20 @@
                                         "literal": {
                                           "type": "text",
                                           "value": "Install or upgrade"
+                                        }
+                                      },
+                                      "target": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "dialog"
+                                        }
+                                      },
+                                      "severity": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "info"
                                         }
                                       }
                                     }
@@ -2141,6 +2280,20 @@
                                           "type": "text",
                                           "value": "Install or upgrade"
                                         }
+                                      },
+                                      "target": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "dialog"
+                                        }
+                                      },
+                                      "severity": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "info"
+                                        }
                                       }
                                     }
                                   }
@@ -2165,6 +2318,20 @@
                                     "literal": {
                                       "type": "text",
                                       "value": "Install or upgrade"
+                                    }
+                                  },
+                                  "target": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "dialog"
+                                    }
+                                  },
+                                  "severity": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "info"
                                     }
                                   }
                                 }
@@ -2227,6 +2394,20 @@
                                   "type": "text",
                                   "value": "Install or upgrade"
                                 }
+                              },
+                              "target": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "dialog"
+                                }
+                              },
+                              "severity": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "info"
+                                }
                               }
                             }
                           }
@@ -2277,6 +2458,20 @@
                                           "type": "text",
                                           "value": "Install or upgrade"
                                         }
+                                      },
+                                      "target": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "dialog"
+                                        }
+                                      },
+                                      "severity": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "info"
+                                        }
                                       }
                                     }
                                   }
@@ -2306,6 +2501,20 @@
                                         "literal": {
                                           "type": "text",
                                           "value": "Install or upgrade"
+                                        }
+                                      },
+                                      "target": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "dialog"
+                                        }
+                                      },
+                                      "severity": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "info"
                                         }
                                       }
                                     }
@@ -2337,6 +2546,20 @@
                                           "type": "text",
                                           "value": "Install or upgrade"
                                         }
+                                      },
+                                      "target": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "dialog"
+                                        }
+                                      },
+                                      "severity": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "info"
+                                        }
                                       }
                                     }
                                   }
@@ -2367,6 +2590,20 @@
                                           "type": "text",
                                           "value": "Install or upgrade"
                                         }
+                                      },
+                                      "target": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "dialog"
+                                        }
+                                      },
+                                      "severity": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "info"
+                                        }
                                       }
                                     }
                                   }
@@ -2391,6 +2628,20 @@
                                     "literal": {
                                       "type": "text",
                                       "value": "Install or upgrade"
+                                    }
+                                  },
+                                  "target": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "dialog"
+                                    }
+                                  },
+                                  "severity": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "info"
                                     }
                                   }
                                 }
@@ -2418,6 +2669,20 @@
                             "literal": {
                               "type": "text",
                               "value": "Install or upgrade"
+                            }
+                          },
+                          "target": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "dialog"
+                            }
+                          },
+                          "severity": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "info"
                             }
                           }
                         }
@@ -2451,6 +2716,20 @@
                           "type": "text",
                           "value": "Install or upgrade"
                         }
+                      },
+                      "target": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "dialog"
+                        }
+                      },
+                      "severity": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "info"
+                        }
                       }
                     }
                   }
@@ -2476,6 +2755,20 @@
                       "type": "text",
                       "value": "Install or upgrade"
                     }
+                  },
+                  "target": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "dialog"
+                    }
+                  },
+                  "severity": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "info"
+                    }
                   }
                 }
               }
@@ -2487,7 +2780,6 @@
         "finally": []
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_open_store_application",
         "key": "open_store_application",
         "labels": {
@@ -2533,7 +2825,6 @@
         "finally": []
       },
       {
-        "contractVersion": "1.0.0",
         "id": "flow_remove_application",
         "key": "remove_application",
         "description": "Removes an installed ordinary application after confirming the retained records and withdrawn access.",
@@ -2946,6 +3237,20 @@
                                   "type": "text",
                                   "value": "Remove application"
                                 }
+                              },
+                              "target": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "dialog"
+                                }
+                              },
+                              "severity": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "info"
+                                }
                               }
                             }
                           }
@@ -2975,6 +3280,20 @@
                                 "literal": {
                                   "type": "text",
                                   "value": "Remove application"
+                                }
+                              },
+                              "target": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "dialog"
+                                }
+                              },
+                              "severity": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "info"
                                 }
                               }
                             }
@@ -3006,6 +3325,20 @@
                                   "type": "text",
                                   "value": "Remove application"
                                 }
+                              },
+                              "target": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "dialog"
+                                }
+                              },
+                              "severity": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "info"
+                                }
                               }
                             }
                           }
@@ -3030,6 +3363,20 @@
                             "literal": {
                               "type": "text",
                               "value": "Remove application"
+                            }
+                          },
+                          "target": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "dialog"
+                            }
+                          },
+                          "severity": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "info"
                             }
                           }
                         }
@@ -3063,6 +3410,20 @@
                           "type": "text",
                           "value": "Remove application"
                         }
+                      },
+                      "target": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "dialog"
+                        }
+                      },
+                      "severity": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "info"
+                        }
                       }
                     }
                   }
@@ -3088,6 +3449,20 @@
                       "type": "text",
                       "value": "Remove application"
                     }
+                  },
+                  "target": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "dialog"
+                    }
+                  },
+                  "severity": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "info"
+                    }
                   }
                 }
               }
@@ -3111,6 +3486,13 @@
             "kind": "caller",
             "name": "record_id"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -3124,6 +3506,13 @@
             "kind": "caller",
             "name": "record_id"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -3137,6 +3526,13 @@
             "kind": "caller",
             "name": "record_id"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -3150,6 +3546,13 @@
             "kind": "caller",
             "name": "record_id"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       }
     ]
