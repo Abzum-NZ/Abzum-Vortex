@@ -39,6 +39,11 @@ export type StudioFlowStepPickerContext = Readonly<{
   condition: StudioFlowConditionContext;
   fields: readonly Readonly<{ value: string; label: string }>[];
   flows?: readonly SourceFlow[];
+  /** The step types a control can hold as its first step, by the control's own implementations. */
+  firstStepTypes: (
+    control: string,
+    types: readonly StudioFlowStepChoice[],
+  ) => readonly StudioFlowStepChoice[];
   renderExpression?: (
     props: Readonly<{
       id: string;
@@ -282,13 +287,13 @@ export function StudioFlowStepPicker({
             <StudioFlowStepPicker
               id={`${id}-first`}
               label="Kind of first step"
-              types={
-                depth + 1 >= flowMaximumTaskNestingDepth
-                  ? types.filter(
-                      (entry) => !["if", "switch", "for_each", "sequential"].includes(entry.type),
-                    )
-                  : types
-              }
+              types={context
+                .firstStepTypes(chosen.type, types)
+                .filter(
+                  (entry) =>
+                    depth + 1 < flowMaximumTaskNestingDepth ||
+                    !["if", "switch", "for_each", "sequential"].includes(entry.type),
+                )}
               disabled={disabled}
               action="Choose first step"
               context={context}

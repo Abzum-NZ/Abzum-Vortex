@@ -683,7 +683,34 @@ export const projectStudioFlowStepTypes = (
 ): readonly StudioFlowStepType[] =>
   projectStudioFlowStepActions(context, selection, null).stepTypes;
 
-/** A loop runs in one place: its body cannot mix page and server implementations. */
+/** A step is offered inside a control only where the control and the step share an implementation. */
+export const studioFlowStepTypesUnder = (
+  types: readonly StudioFlowStepType[],
+  flow: SourceFlow,
+  controlTypes: readonly string[],
+): readonly StudioFlowStepType[] => {
+  const controls = controlTypes.map((type) => studioFlowDefinitionOf(type));
+  return types.filter((entry) => {
+    const definition = studioFlowDefinitionOf(entry.type);
+    return (
+      definition !== undefined &&
+      controls.every(
+        (control) =>
+          control !== undefined &&
+          (["page", "server", "backend"] as const).some(
+            (location) =>
+              supportsPlacement(control, flow, location) &&
+              supportsPlacement(definition, flow, location),
+          ),
+      )
+    );
+  });
+};
+
+/**
+ * The step types offered in one list: those every enclosing control can run, and inside a loop
+ * only those its compiled placement can run, as a loop body cannot mix page and server steps.
+ */
 export const studioFlowStepTypesAt = (
   types: readonly StudioFlowStepType[],
   flow: SourceFlow,
@@ -691,16 +718,21 @@ export const studioFlowStepTypesAt = (
   listPath: StudioFlowPath,
   placements: Readonly<Record<string, "page" | "server" | "backend">> | null,
 ): readonly StudioFlowStepType[] => {
-  const loop = entries.find(
+  const enclosing = entries.filter(
     (entry) =>
-      entry.task.type === "for_each" &&
       listPath.length > entry.path.length &&
       samePath(listPath.slice(0, entry.path.length), entry.path),
   );
-  if (loop === undefined) return types;
+  const offered = studioFlowStepTypesUnder(
+    types,
+    flow,
+    enclosing.map((entry) => entry.task.type),
+  );
+  const loop = enclosing.find((entry) => entry.task.type === "for_each");
+  if (loop === undefined) return offered;
   const location = placements?.[loop.task.id];
   if (location === undefined) return [];
-  return types.filter((entry) => {
+  return offered.filter((entry) => {
     const definition = studioFlowDefinitionOf(entry.type);
     return definition !== undefined && supportsPlacement(definition, flow, location);
   });

@@ -25,6 +25,7 @@ import {
   studioFlowReferenceChoices,
   studioFlowFieldOptions,
   studioFlowStepTypesAt,
+  studioFlowStepTypesUnder,
   studioFixedLiteralType,
   studioFlowValueOf,
   studioFlowValueSourceOf,
@@ -355,6 +356,7 @@ export function useStudioFlowsTab({
       condition: studioFlowConditionContext(references),
       fields: studioFlowFieldOptions(source, outline.flow, flowSelection.moduleKey, {}) ?? [],
       flows: outline.siblings.filter((flow) => flow.id !== outline.flow.id),
+      firstStepTypes: (control, types) => studioFlowStepTypesUnder(types, outline.flow, [control]),
       renderExpression: ({ id, value, onChange }) => (
         <StudioFormulaEditor
           id={id}
