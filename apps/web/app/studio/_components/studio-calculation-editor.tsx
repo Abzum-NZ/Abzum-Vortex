@@ -22,6 +22,7 @@ export function StudioCalculationEditor({
   settings,
   fields,
   disabled,
+  shapeLocked,
   onChange,
 }: Readonly<{
   idPrefix: string;
@@ -29,11 +30,15 @@ export function StudioCalculationEditor({
   fields: readonly FormulaField[];
   compiled: readonly ModuleField[] | undefined;
   disabled: boolean;
+  shapeLocked: boolean;
   onChange: (settings: CalculationSettings, conditionValid: boolean) => void;
 }>) {
   const byKey = useMemo(() => new Map(fields.map((field) => [field.key, field])), [fields]);
   const set = (next: Partial<CalculationSettings>) =>
-    onChange(settledCalculation({ ...settings, ...next }, byKey), true);
+    onChange(
+      shapeLocked ? { ...settings, ...next } : settledCalculation({ ...settings, ...next }, byKey),
+      true,
+    );
   const results = calculationResultChoices(settings.expression, byKey);
   const forced = calculationForcedReadTime(settings.expression, byKey);
   const references = fields.map((field) => {
@@ -66,9 +71,14 @@ export function StudioCalculationEditor({
         <Label htmlFor={`${idPrefix}-result`}>Result</Label>
         <StudioOptionControl
           id={`${idPrefix}-result`}
-          disabled={disabled}
+          disabled={disabled || shapeLocked}
           value={settings.result_type}
-          options={(results.length ? results : [settings.result_type]).map((type) => ({
+          options={(shapeLocked
+            ? [settings.result_type]
+            : results.length
+              ? results
+              : [settings.result_type]
+          ).map((type) => ({
             value: type,
             label: calculationResultTypeLabels[type],
           }))}
@@ -83,7 +93,7 @@ export function StudioCalculationEditor({
             <Label htmlFor={`${idPrefix}-places`}>Result decimal places</Label>
             <Input
               id={`${idPrefix}-places`}
-              disabled={disabled}
+              disabled={disabled || shapeLocked}
               type="number"
               min={0}
               max={12}
@@ -112,7 +122,7 @@ export function StudioCalculationEditor({
         <Label htmlFor={`${idPrefix}-evaluation`}>When it is worked out</Label>
         <StudioOptionControl
           id={`${idPrefix}-evaluation`}
-          disabled={disabled || forced}
+          disabled={disabled || shapeLocked || forced}
           value={settings.evaluation ?? "stored"}
           options={[
             { value: "stored", label: "When saved" },
