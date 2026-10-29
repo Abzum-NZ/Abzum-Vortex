@@ -8,6 +8,7 @@ import type { ConditionNode } from "../definition/module-foundation-contracts";
 import type { FlowFormula } from "../workflows/flow-values";
 import { moneyValueSchema } from "./module-field-values";
 import { compareFlowText, evaluateFlowFormula } from "../rules/flow-formula";
+import { flowRuntimeValueOf } from "../rules/action-flow-run";
 import { evaluateTypedCondition } from "../rules/typed-condition";
 import { persistedRecordFieldValueMatches } from "./field-values";
 import { isRecord } from "../catalogue/runtime-primitives";
@@ -76,28 +77,6 @@ const fieldResultType = (field: ModuleField | undefined): string | undefined =>
   field?.type === "calculation" || field?.type === "total"
     ? field.settings.resultType
     : field?.type;
-
-const formulaTypeOf = (field: ModuleField): string => {
-  const type = fieldResultType(field);
-  switch (type) {
-    case "yes_no":
-      return "yes_no";
-    case "long_text":
-    case "reference_number":
-    case "email_address":
-    case "phone_number":
-    case "web_address":
-      return "text";
-    case "link":
-    case "link_to_one_of_several":
-      return "record_reference";
-    case "table":
-    case "attachment":
-      return "json";
-    default:
-      return type ?? "json";
-  }
-};
 
 const literal = (type: string, value: JsonValue): FlowFormula =>
   ({ op: "literal", type, value }) as unknown as FlowFormula;
@@ -244,7 +223,7 @@ const totalResult = (
   )
     return { issue: issue("money_dimension_mismatch", field.fieldId) };
 
-  const sourceType = formulaTypeOf(sourceField);
+  const sourceType = flowRuntimeValueOf(fieldResultType(sourceField) ?? "json", null).type;
   const operands = values.map((value) => literal(sourceType, value));
   if (operation === "minimum" || operation === "maximum") {
     let selected: JsonValue = values[0]!;

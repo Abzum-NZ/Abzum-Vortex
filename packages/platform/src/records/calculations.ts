@@ -10,6 +10,7 @@ import type { FlowFormula } from "../workflows/flow-values";
 import { formatExactDecimal, parseExactDecimal } from "./exact-decimal";
 import { moneyValueSchema } from "./module-field-values";
 import { evaluateFlowFormula, type FlowFormulaScope } from "../rules/flow-formula";
+import { flowRuntimeValueOf } from "../rules/action-flow-run";
 import { persistedRecordFieldValueMatches } from "./field-values";
 import { isRecord } from "../catalogue/runtime-primitives";
 
@@ -71,28 +72,6 @@ const validCalendarDate = (candidate: string): boolean => {
 
 const resultTypeOf = (field: ModuleField): string =>
   field.type === "calculation" || field.type === "total" ? field.settings.resultType : field.type;
-
-const formulaTypeOf = (field: ModuleField): string => {
-  const type = resultTypeOf(field);
-  switch (type) {
-    case "yes_no":
-      return "yes_no";
-    case "long_text":
-    case "reference_number":
-    case "email_address":
-    case "phone_number":
-    case "web_address":
-      return "text";
-    case "link":
-    case "link_to_one_of_several":
-      return "record_reference";
-    case "table":
-    case "attachment":
-      return "json";
-    default:
-      return type;
-  }
-};
 
 const issue = (
   code: RecordCalculationIssueCode,
@@ -287,7 +266,7 @@ export const evaluateRecordCalculations = (
         const dependency = fields.get(reference.fieldId);
         if (dependency === undefined) return undefined;
         return {
-          type: formulaTypeOf(dependency),
+          type: flowRuntimeValueOf(resultTypeOf(dependency), null).type,
           value: values.get(reference.fieldId) ?? null,
         };
       },
