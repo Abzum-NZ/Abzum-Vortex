@@ -2,8 +2,8 @@
 
 import { readCompiledItemSettings } from "@vortex/platform/schema";
 import type { ReactElement } from "react";
-import { useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import type {
   ApplicationShell,
   PageDefinition,
@@ -18,9 +18,11 @@ import {
   type FieldInputControlReleaseMap,
   type PlatformThemeTokens,
   type DisplaySemanticEvent,
+  type PagePuckRendererProps,
 } from "@vortex/ui";
 import type { permittedApplicationsToListValues } from "@vortex/ui";
 import { signOut } from "../../../auth/actions";
+import { searchLauncherAction } from "../[applicationKey]/frame-actions";
 
 type OrganizationShellPageProps = Readonly<{
   page: PageDefinition;
@@ -33,6 +35,7 @@ type OrganizationShellPageProps = Readonly<{
   platformBlockReleases: readonly PlatformBlockRelease[];
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
+  applicationSearch?: PagePuckRendererProps["applicationSearch"];
 }>;
 
 /**
@@ -49,6 +52,7 @@ function OrganizationShellPage({
   platformBlockReleases,
   fieldInputControlReleases,
   platformThemeTokens,
+  applicationSearch,
   runtimeInputs,
 }: OrganizationShellPageProps &
   Readonly<{
@@ -88,6 +92,7 @@ function OrganizationShellPage({
           pageName: page.name,
         }}
         runtimeInputs={runtimeInputs(router)}
+        {...(applicationSearch === undefined ? {} : { applicationSearch })}
       />
     </ApplicationAccountActionsProvider>
   );
@@ -109,9 +114,90 @@ export function OrganizationLauncherPage({
     openEventId: string;
     studio?: Readonly<{ href: string; tileId: string }>;
   }>): ReactElement {
+  const params = useSearchParams();
+  const expression = params.get("q") ?? "";
+  const [search, setSearch] = useState<Awaited<ReturnType<typeof searchLauncherAction>>>({
+    kind: "available",
+    groups: [],
+  });
+  useEffect(() => {
+    if (expression === "") return;
+    let active = true;
+    void searchLauncherAction(
+      shellPage.organizationShortName === ""
+        ? ""
+        : decodeURIComponent(shellPage.launcherHref.split("/")[1] ?? ""),
+      shellPage.organizationShortName,
+      expression,
+    )
+      .then((result) => {
+        if (active) setSearch(result);
+      })
+      .catch((error: unknown) => {
+        console.error("[launcher] search failed", error);
+        if (active) setSearch({ kind: "unavailable" });
+      });
+    return () => {
+      active = false;
+    };
+  }, [expression, shellPage.launcherHref, shellPage.organizationShortName]);
+  const tenant = decodeURIComponent(shellPage.launcherHref.split("/")[1] ?? "");
+  const applicationSearch: PagePuckRendererProps["applicationSearch"] =
+    expression === ""
+      ? { kind: "available", expression: "", results: [], more: false, groups: [] }
+      : search.kind === "available"
+        ? {
+            kind: "available",
+            expression,
+            results: [],
+            more: false,
+            groups: search.groups.map((group) => ({
+              ...group,
+              ...(group.cursor === undefined
+                ? {}
+                : {
+                    showMore: () => {
+                      void searchLauncherAction(
+                        tenant,
+                        shellPage.organizationShortName,
+                        expression,
+                        group.key,
+                        group.cursor,
+                      )
+                        .then((next) => {
+                          if (next.kind !== "available") return;
+                          const addition = next.groups[0];
+                          if (addition === undefined) return;
+                          setSearch((previous) =>
+                            previous.kind !== "available"
+                              ? previous
+                              : {
+                                  kind: "available",
+                                  groups: previous.groups.map((old) =>
+                                    old.key === group.key && old.cursor === group.cursor
+                                      ? {
+                                          ...addition,
+                                          results: [...old.results, ...addition.results],
+                                        }
+                                      : old,
+                                  ),
+                                },
+                          );
+                        })
+                        .catch((error: unknown) =>
+                          console.error("[launcher] continuation failed", error),
+                        );
+                    },
+                  }),
+            })),
+          }
+        : search.kind === "refused"
+          ? { kind: "refused", expression, reason: search.reason }
+          : { kind: "unavailable" };
   return (
     <OrganizationShellPage
       {...shellPage}
+      applicationSearch={applicationSearch}
       runtimeInputs={(router) => ({
         [placementId]: {
           data: { status: "ready", values },

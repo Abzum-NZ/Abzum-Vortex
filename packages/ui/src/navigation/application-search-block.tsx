@@ -10,11 +10,21 @@ import { Label } from "../components/label";
 export type ApplicationSearchRuntime =
   | Readonly<{ kind: "disabled" }>
   | Readonly<{ kind: "unavailable" }>
+  | Readonly<{ kind: "refused"; expression: string; reason: string }>
   | Readonly<{
       kind: "available";
       expression: string;
       results: readonly Readonly<{ href: string; title: string; subtitle?: string }>[];
       more: boolean;
+      cursor?: string;
+      showMore?: () => void;
+      groups?: readonly Readonly<{
+        key: string;
+        title: string;
+        results: readonly Readonly<{ href: string; title: string; subtitle?: string }>[];
+        cursor?: string;
+        showMore?: () => void;
+      }>[];
     }>;
 
 type Settings = Readonly<Record<string, BlockPropertyValueContract>>;
@@ -55,7 +65,11 @@ export function ApplicationSearchBlock({
           name="q"
           type="search"
           maxLength={2_000}
-          defaultValue={applicationSearch.kind === "available" ? applicationSearch.expression : ""}
+          defaultValue={
+            applicationSearch.kind === "available" || applicationSearch.kind === "refused"
+              ? applicationSearch.expression
+              : ""
+          }
           placeholder={placeholder}
         />
         <Button type="submit" variant="outline">
@@ -66,10 +80,44 @@ export function ApplicationSearchBlock({
         <p role="status" className="text-sm text-muted-foreground">
           Search is unavailable. Try again.
         </p>
+      ) : applicationSearch.kind === "refused" ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          {applicationSearch.reason}
+        </p>
       ) : applicationSearch.expression === "" ? null : (
         <Card size="sm">
           <CardContent className="flex flex-col gap-2 text-sm">
-            {applicationSearch.results.length === 0 ? (
+            {applicationSearch.groups !== undefined ? (
+              applicationSearch.groups.length === 0 ? (
+                <p role="status">No results.</p>
+              ) : (
+                applicationSearch.groups.map((group) => (
+                  <section key={group.key} className="flex flex-col gap-2">
+                    <h2 className="font-semibold">{group.title}</h2>
+                    <ul className="flex flex-col gap-2">
+                      {group.results.map((result) => (
+                        <li key={result.href}>
+                          <a
+                            href={result.href}
+                            className="font-medium underline-offset-4 hover:underline"
+                          >
+                            {result.title}
+                          </a>
+                          {result.subtitle === undefined ? null : (
+                            <p className="text-muted-foreground">{result.subtitle}</p>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                    {group.cursor !== undefined && group.showMore !== undefined ? (
+                      <Button type="button" variant="outline" onClick={group.showMore}>
+                        Show more
+                      </Button>
+                    ) : null}
+                  </section>
+                ))
+              )
+            ) : applicationSearch.results.length === 0 ? (
               <p role="status" className="text-muted-foreground">
                 No results.
               </p>
@@ -90,10 +138,10 @@ export function ApplicationSearchBlock({
                 ))}
               </ul>
             )}
-            {applicationSearch.more ? (
-              <p className="text-muted-foreground">
-                More results are available. Refine your search.
-              </p>
+            {applicationSearch.more && applicationSearch.showMore !== undefined ? (
+              <Button type="button" variant="outline" onClick={applicationSearch.showMore}>
+                Show more
+              </Button>
             ) : null}
           </CardContent>
         </Card>

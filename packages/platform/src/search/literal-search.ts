@@ -37,6 +37,8 @@ export type LiteralSearchRefusalReasonCode = (typeof literalSearchRefusalReasonC
 export type LiteralSearchInput = Readonly<{
   expression: string;
   expressionMode?: "literal" | "or";
+  /** Filter-only searches still need the current permitted candidate projection. */
+  matchAll?: boolean;
   search: PermittedSearchInput;
 }>;
 
@@ -69,6 +71,7 @@ export type LiteralSearchResult = LiteralSearchCompleted | LiteralSearchRefusal;
 
 type LiteralSearchTerm = Readonly<{
   tokens: readonly string[];
+  excluded: boolean;
 }>;
 
 type ParseExpressionResult =
@@ -90,8 +93,9 @@ const hasOnlyKeys = (value: Readonly<Record<string, unknown>>, keys: readonly st
 
 const isLiteralSearchInput = (value: unknown): value is LiteralSearchInput =>
   isRecord(value) &&
-  hasOnlyKeys(value, ["expression", "expressionMode", "search"]) &&
+  hasOnlyKeys(value, ["expression", "expressionMode", "matchAll", "search"]) &&
   typeof value.expression === "string" &&
+  (value.matchAll === undefined || typeof value.matchAll === "boolean") &&
   (value.expressionMode === undefined ||
     value.expressionMode === "literal" ||
     value.expressionMode === "or") &&
@@ -111,7 +115,8 @@ const whitespaceTokens = (value: string): readonly string[] =>
 const isWhitespace = (value: string): boolean => /[\s\p{White_Space}]/u.test(value);
 
 /**
- * Parses bare whitespace-delimited tokens and whole-token quoted phrases.
+ * Parses bare whitespace-delimited tokens and whole-token quoted phrases. A leading
+ * minus excludes a word or phrase from its AND group.
  * In or mode, exact uppercase unquoted OR tokens separate nonempty AND groups.
  * Quotes have no escape syntax and are only valid at token boundaries.
  */
@@ -128,6 +133,13 @@ const parseExpression = (
     while (offset < expression.length && isWhitespace(expression[offset]!)) offset += 1;
     if (offset >= expression.length) break;
 
+    const excluded = expression[offset] === "-";
+    if (excluded) {
+      offset += 1;
+      if (offset >= expression.length || isWhitespace(expression[offset]!))
+        return { success: false, reasonCode: "invalid_expression" };
+    }
+
     if (expression[offset] === '"') {
       offset += 1;
       const phraseStart = offset;
@@ -142,7 +154,7 @@ const parseExpression = (
       offset += 1;
       if (offset < expression.length && !isWhitespace(expression[offset]!))
         return { success: false, reasonCode: "invalid_expression" };
-      terms.push(Object.freeze({ tokens }));
+      terms.push(Object.freeze({ tokens, excluded }));
     } else {
       const termStart = offset;
       while (offset < expression.length && !isWhitespace(expression[offset]!)) {
@@ -151,7 +163,7 @@ const parseExpression = (
       }
 
       const rawTerm = expression.slice(termStart, offset);
-      if (expressionMode === "or" && rawTerm === "OR") {
+      if (!excluded && expressionMode === "or" && rawTerm === "OR") {
         if (group.length === 0) return { success: false, reasonCode: "invalid_expression" };
         groups.push(group);
         group = [];
@@ -160,7 +172,7 @@ const parseExpression = (
 
       const tokens = whitespaceTokens(rawTerm);
       if (tokens.length !== 1) return { success: false, reasonCode: "invalid_expression" };
-      terms.push(Object.freeze({ tokens }));
+      terms.push(Object.freeze({ tokens, excluded }));
     }
 
     if (terms.length > literalSearchLimits.terms)
@@ -187,7 +199,9 @@ export const literalSearchRequiredTokens = (expression: string): readonly string
   if (expression.length > literalSearchLimits.expressionLength) return undefined;
   const parsed = parseExpression(expression, "literal");
   if (!parsed.success) return undefined;
-  return Object.freeze([...new Set(parsed.terms.flatMap((term) => term.tokens))]);
+  return Object.freeze([
+    ...new Set(parsed.terms.filter((term) => !term.excluded).flatMap((term) => term.tokens)),
+  ]);
 };
 
 /** Builds a token-level Aho-Corasick matcher for all bounded terms. */
@@ -250,7 +264,7 @@ const matchCandidate = (
       state = matcher[state]!.next.get(token) ?? 0;
 
       for (const termIndex of matcher[state]!.termIndices) {
-        fieldTermIndices.add(termIndex);
+        if (!terms[termIndex]!.excluded) fieldTermIndices.add(termIndex);
         matchedTermIndices.add(termIndex);
       }
 
@@ -267,9 +281,31 @@ const matchCandidate = (
     }
   }
 
-  if (!groups.some((group) => group.every((termIndex) => matchedTermIndices.has(termIndex))))
+  if (
+    !groups.some((group) =>
+      group.every((termIndex) => matchedTermIndices.has(termIndex) !== terms[termIndex]!.excluded),
+    )
+  )
     return undefined;
   return Object.freeze({ candidate, matchedFields: Object.freeze(matchedFields) });
+};
+
+/** Apply the same literal grammar to a permitted application name. */
+export const matchesLiteralSearchText = (expression: string, text: string): boolean | undefined => {
+  if (expression.length > literalSearchLimits.expressionLength) return undefined;
+  const parsed = parseExpression(expression, "literal");
+  if (!parsed.success) return undefined;
+  const matcher = createTokenMatcher(parsed.terms);
+  const found = new Set<number>();
+  let state = 0;
+  for (const token of whitespaceTokens(text)) {
+    while (state !== 0 && !matcher[state]!.next.has(token)) state = matcher[state]!.failure;
+    state = matcher[state]!.next.get(token) ?? 0;
+    for (const index of matcher[state]!.termIndices) found.add(index);
+  }
+  return parsed.groups.some((group) =>
+    group.every((index) => found.has(index) !== parsed.terms[index]!.excluded),
+  );
 };
 
 /**
@@ -287,7 +323,10 @@ export const matchLiteralSearch = async (
   if (input.expression.length > literalSearchLimits.expressionLength)
     return refusal("expression_too_long");
 
-  const parsed = parseExpression(input.expression, input.expressionMode ?? "literal");
+  const parsed =
+    input.matchAll === true && input.expression === ""
+      ? ({ success: true, terms: [], groups: [[]] } as const)
+      : parseExpression(input.expression, input.expressionMode ?? "literal");
   if (!parsed.success) return refusal(parsed.reasonCode);
 
   // Validate only the bounded expression above; filter before reading candidate text.
