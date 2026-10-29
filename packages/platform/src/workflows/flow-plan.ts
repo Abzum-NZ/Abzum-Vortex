@@ -3,7 +3,7 @@ import { flowOperationOutputMembers } from "./flow-operation-output-members";
 import type { FlowBindingInput, FlowDefinition, FlowTask } from "./flow-contracts";
 import { flowTaskChildLists, isFlowControlTask } from "./flow-contracts";
 import { flowTaskRegistry, type FlowTaskTypeKey } from "./flow-task-registry";
-import { parseFlowReference, type FlowFormula, type FlowReference } from "./flow-values";
+import type { FlowFormula, FlowReference } from "./flow-values";
 
 /**
  * The compiled plan of one flow: its tasks cut into page segments (steps the page performs, no
@@ -198,13 +198,12 @@ const allSteps = (tasks: readonly FlowTask[]): FlowTask[] =>
 
 /** Every reference a task's values and conditions read. */
 const referencesIn = (value: unknown, found: FlowReference[] = []): FlowReference[] => {
-  if (typeof value === "string") {
-    const reference = parseFlowReference(value);
-    if (reference !== undefined) found.push(reference);
-  } else if (Array.isArray(value)) {
+  if (Array.isArray(value)) {
     for (const item of value) referencesIn(item, found);
   } else if (typeof value === "object" && value !== null) {
     const record = value as Record<string, unknown>;
+    // Validated literals are data, even when their text or JSON resembles a reference.
+    if (record.kind === "literal" || record.op === "literal") return found;
     const reference = record.reference;
     if (
       typeof reference === "object" &&
@@ -213,9 +212,31 @@ const referencesIn = (value: unknown, found: FlowReference[] = []): FlowReferenc
     )
       found.push(reference as FlowReference);
     for (const [key, item] of Object.entries(record))
-      if (key !== "reference") referencesIn(item, found);
+      if (
+        key !== "reference" &&
+        key !== "when" &&
+        key !== "terminalStatusValues" &&
+        !(record.kind === "switch" && key === "cases")
+      )
+        referencesIn(item, found);
   }
   return found;
+};
+
+/** Clock-dependent formulas are server-resolved, including operators without a reference node. */
+const readsServerTime = (value: unknown): boolean => {
+  if (Array.isArray(value)) return value.some(readsServerTime);
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Record<string, unknown>;
+  if (record.kind === "literal" || record.op === "literal") return false;
+  if (record.op === "now" || record.op === "deadline_passed") return true;
+  return Object.entries(record).some(
+    ([key, child]) =>
+      key !== "terminalStatusValues" &&
+      key !== "when" &&
+      !(record.kind === "switch" && key === "cases") &&
+      readsServerTime(child),
+  );
 };
 
 type FlowBindingInputs = Readonly<Record<string, FlowBindingInput>>;
@@ -226,7 +247,10 @@ const serverResolvedInputs = (bindings: readonly FlowBindingInputs[]): ReadonlyS
   for (const inputs of bindings)
     for (const [name, input] of Object.entries(inputs)) {
       if (input.kind === "caller" || input.kind === "literal") continue;
-      if (referencesIn(input).some((item) => item.source !== "page" && item.source !== "form"))
+      if (
+        readsServerTime(input) ||
+        referencesIn(input).some((item) => item.source !== "page" && item.source !== "form")
+      )
         names.add(name);
     }
   return names;
@@ -538,6 +562,17 @@ export const flowBindingPlanIssue = (
     settings?: Readonly<{ concurrency?: string }> | undefined;
   }>,
 ): string | undefined => {
+  if (
+    plan.definition.execution === "interactive" &&
+    referencesIn([
+      plan.definition.tasks,
+      plan.definition.errors,
+      plan.definition.finally,
+      plan.definition.outputs,
+      binding.inputs,
+    ]).some((reference) => reference.source === "trigger_previous")
+  )
+    return `Flow ${plan.definition.key} reads a previous record, which is unavailable to a page binding`;
   // An aborted request does not stop the server: an earlier change can still commit.
   if (binding.settings?.concurrency === "latest_wins" && plan.changes)
     return "Latest wins cannot be used on a flow that changes data; use Queue";
