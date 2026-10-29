@@ -115,7 +115,7 @@ const recordSegmentEffects = async <Value>(
   transaction: SegmentContext["transaction"],
   runId: string,
   executed: SegmentExecution<Value>,
-): Promise<FlowSegmentReceipt> => {
+): Promise<z.infer<typeof receiptSchema>> => {
   const safeEffects: Record<string, FlowSegmentReplay[string]> = {};
   const entries = Object.entries(executed.effects).map(([key, effect]) => {
     const [taskPath, iteration] = z
