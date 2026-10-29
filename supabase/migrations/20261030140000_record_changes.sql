@@ -4027,7 +4027,7 @@ revoke all on function vortex_record.complete_relationship_total_parent_internal
 comment on function vortex_record.complete_relationship_total_parent_internal(jsonb) is
   'Appends the Activity, standard Event and invalidation for a protected generated-field update after the shared record storage writer has applied it.';
 
-create or replace function vortex_record.create_record_internal(
+create or replace function vortex_record.prepare_record_create_internal(
   p_record_type_id uuid,
   p_final_values jsonb,
   p_submitted_field_ids uuid[],
@@ -4054,21 +4054,11 @@ declare
   final_values jsonb := coalesce(p_final_values, '{}'::jsonb);
   physical_values jsonb := '{}'::jsonb;
   edge_changes jsonb := '[]'::jsonb;
-  loaded jsonb;
-  facts jsonb;
-  decision jsonb;
-  bounds jsonb;
+  storage_change jsonb;
   preview_installation jsonb;
-  preview_bounds jsonb;
-  changeable text[];
-  submitted_id uuid;
   relationship_value jsonb;
   app_scope uuid;
   refusal_reason text := 'record_create_refused';
-  exact_create_notice boolean := false;
-  saved_record_id uuid;
-  saved_concurrency_number bigint;
-  notice_sequence bigint;
 begin
   if p_record_type_id is null
     or p_record_type_id = '00000000-0000-0000-0000-000000000000'::uuid
@@ -4098,12 +4088,6 @@ begin
     ownership_mode := record_type_value ->> 'ownershipMode';
     app_scope := case when meta ->> 'storageScope' = 'application_contained'
       then (context_value ->> 'applicationRootId')::uuid else null end;
-    exact_create_notice := preview_installation is null
-      and meta ->> 'storageScope' = 'application_contained'
-      and case when pg_catalog.jsonb_typeof(record_type_value -> 'relationships') = 'array'
-        then true
-        else false end;
-
     if ownership_mode = 'organization_account' then
       if p_selected_group_id is not null then
         refusal_reason := 'owner_invalid';
@@ -4183,8 +4167,7 @@ begin
       );
     end loop;
 
-    perform vortex_record.apply_record_storage_changes_internal(pg_catalog.jsonb_build_array(
-      pg_catalog.jsonb_build_object(
+    storage_change := pg_catalog.jsonb_build_object(
         'storageContractId', meta -> 'storageContractId', 'recordId', record_id_value,
         'expectedConcurrencyNumber', null,
         'values', physical_values || pg_catalog.jsonb_build_object(
@@ -4195,32 +4178,16 @@ begin
           'lifecycle_state', 'active', 'created_at', pg_catalog.statement_timestamp(),
           'created_by', context_value -> 'organizationAccountId'
         )
-      )
-    ));
-    saved_record_id := record_id_value;
-    saved_concurrency_number := 1;
+    );
 
     -- The canonical link-target share-lock prelude is written once in
     -- lock_record_change_targets_internal. Every created link's target row is
-    -- locked here, before the data-version bump and edge pass below, so a
-    -- multi-link create takes all its row locks before its data version and any
-    -- edge identity, as the update writer does. A malformed or undeclared link
+    -- locked here before any edge identity, so a multi-link create uses the
+    -- same lock order as the update writer. A malformed or undeclared link
     -- is left to the writer's own validation.
     perform vortex_record.lock_record_change_targets_internal(
       record_type_value, (context_value ->> 'organizationId')::uuid, final_values
     );
-    -- The new record's data version is taken before any relationship edge
-    -- identity, as every other relationship writer takes it.
-    if exact_create_notice then
-      notice_sequence := pg_catalog.nextval(
-        'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
-      );
-    else
-      perform vortex_record.bump_record_data_version_internal(
-        (context_value ->> 'organizationId')::uuid,
-        (meta ->> 'storageContractId')::uuid, app_scope
-      );
-    end if;
     for relationship_value in
       select item.value from pg_catalog.jsonb_array_elements(record_type_value -> 'relationships') as item(value)
       order by (item.value ->> 'relationshipId')::uuid
@@ -4242,71 +4209,11 @@ begin
       end if;
     end loop;
 
-    perform vortex_record.apply_relationship_edges_internal(edge_changes);
-
-    loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'create', record_id_value, null, null::jsonb
-    );
-    if loaded ->> 'outcome' <> 'loaded' then
-      refusal_reason := 'record_unavailable';
-      raise exception using errcode = 'P4020', message = refusal_reason;
-    end if;
-    facts := (loaded -> 'facts') || pg_catalog.jsonb_build_object(
-      'binding', meta -> 'declaration' -> 'recordBinding'
-    );
-    if preview_installation is null then
-      decision := vortex_access.evaluate_organization_record_access_internal(
-        meta -> 'declaration', record_id_value, facts
-      );
-      if decision ->> 'outcome' <> 'allowed' then
-        refusal_reason := 'access_refused';
-        raise exception using errcode = 'P4020', message = refusal_reason;
-      end if;
-      bounds := vortex_access.resolve_record_field_bounds_internal(decision);
-    else
-      preview_bounds := vortex_record.preview_record_field_bounds_internal(
-        p_record_type_id, (meta ->> 'storageContractId')::uuid,
-        meta -> 'recordType'
-      );
-      if preview_bounds is null then
-        refusal_reason := 'record_unavailable';
-        raise exception using errcode = 'P4020', message = refusal_reason;
-      end if;
-      bounds := preview_bounds;
-    end if;
-    select coalesce(pg_catalog.array_agg(item.value #>> '{}'), array[]::text[])
-    into changeable
-    from pg_catalog.jsonb_array_elements(bounds -> 'changeableFieldIds') as item(value);
-    foreach submitted_id in array p_submitted_field_ids loop
-      if not (meta -> 'columns' ? pg_catalog.lower(submitted_id::text)) then
-        refusal_reason := 'unknown_field';
-        raise exception using errcode = 'P4020', message = refusal_reason;
-      end if;
-      if not (pg_catalog.lower(submitted_id::text) = any (changeable)) then
-        refusal_reason := 'field_not_changeable';
-        raise exception using errcode = 'P4020', message = refusal_reason;
-      end if;
-    end loop;
-
-    if exact_create_notice then
-      begin
-        perform vortex_platform.publish_change_notice(
-          (context_value ->> 'organizationId')::uuid, app_scope, p_record_type_id,
-          saved_record_id, saved_concurrency_number, 'created',
-          notice_sequence, notice_sequence,
-          (context_value ->> 'correlationId')::uuid
-        );
-      exception
-        when others then
-          -- Invalidation is advisory; a lost notice must not refuse the create.
-          null;
-      end;
-    end if;
-
     return pg_catalog.jsonb_build_object(
-      'outcome', 'completed', 'recordId', record_id_value,
-      'concurrencyNumber', case when exact_create_notice
-        then saved_concurrency_number else 1 end, 'values', final_values
+      'outcome', 'prepared', 'recordTypeId', p_record_type_id,
+      'recordId', record_id_value, 'values', final_values,
+      'submittedFieldIds', pg_catalog.to_jsonb(p_submitted_field_ids),
+      'storageChange', storage_change, 'edgeChanges', edge_changes
     );
   exception
     when sqlstate 'P4020' then
@@ -4321,13 +4228,151 @@ begin
 end
 $function$;
 
-alter function vortex_record.create_record_internal(uuid,jsonb,uuid[],uuid) owner to vortex_record_adapter;
+alter function vortex_record.prepare_record_create_internal(uuid,jsonb,uuid[],uuid) owner to vortex_record_adapter;
 
-revoke all on function vortex_record.create_record_internal(uuid, jsonb, uuid[], uuid)
+revoke all on function vortex_record.prepare_record_create_internal(uuid, jsonb, uuid[], uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
-comment on function vortex_record.create_record_internal(uuid, jsonb, uuid[], uuid) is
-  'Private fixed create primitive: derives scope, definition and human ownership, generates references, writes typed values and relationships, and decides create authority over the proposed record in one rollback-safe transaction.';
+comment on function vortex_record.prepare_record_create_internal(uuid, jsonb, uuid[], uuid) is
+  'Private create preparation: derives trusted scope, ownership and generated references, validates typed fields and relationship targets, and returns storage and edge mutations without inserting the record.';
+
+create or replace function vortex_record.complete_record_create_internal(p_prepared jsonb)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  p_record_type_id uuid := (p_prepared ->> 'recordTypeId')::uuid;
+  record_id_value uuid := (p_prepared ->> 'recordId')::uuid;
+  p_submitted_field_ids uuid[];
+  meta jsonb;
+  context_value jsonb;
+  loaded jsonb;
+  facts jsonb;
+  decision jsonb;
+  bounds jsonb;
+  preview_installation jsonb;
+  preview_bounds jsonb;
+  changeable text[];
+  submitted_id uuid;
+  refusal_reason text;
+  notice_sequence bigint;
+begin
+  meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'create');
+  context_value := meta -> 'context';
+  preview_installation := vortex_record.read_current_preview_installation_internal();
+  select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[])
+  into p_submitted_field_ids
+  from pg_catalog.jsonb_array_elements_text(p_prepared -> 'submittedFieldIds') item(value);
+  loaded := vortex_record.load_record_access_facts_internal(
+    p_record_type_id, 'create', record_id_value, null, null::jsonb
+  );
+  if loaded ->> 'outcome' <> 'loaded' then
+    refusal_reason := 'record_unavailable';
+    raise exception using errcode = 'P4020', message = refusal_reason;
+  end if;
+  facts := (loaded -> 'facts') || pg_catalog.jsonb_build_object(
+    'binding', meta -> 'declaration' -> 'recordBinding'
+  );
+  if preview_installation is null then
+    decision := vortex_access.evaluate_organization_record_access_internal(
+      meta -> 'declaration', record_id_value, facts
+    );
+    if decision ->> 'outcome' <> 'allowed' then
+      refusal_reason := 'access_refused';
+      raise exception using errcode = 'P4020', message = refusal_reason;
+    end if;
+    bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+  else
+    preview_bounds := vortex_record.preview_record_field_bounds_internal(
+      p_record_type_id, (meta ->> 'storageContractId')::uuid,
+      meta -> 'recordType'
+    );
+    if preview_bounds is null then
+      refusal_reason := 'record_unavailable';
+      raise exception using errcode = 'P4020', message = refusal_reason;
+    end if;
+    bounds := preview_bounds;
+  end if;
+  select coalesce(pg_catalog.array_agg(item.value #>> '{}'), array[]::text[])
+  into changeable
+  from pg_catalog.jsonb_array_elements(bounds -> 'changeableFieldIds') as item(value);
+  foreach submitted_id in array p_submitted_field_ids loop
+    if not (meta -> 'columns' ? pg_catalog.lower(submitted_id::text)) then
+      refusal_reason := 'unknown_field';
+      raise exception using errcode = 'P4020', message = refusal_reason;
+    end if;
+    if not (pg_catalog.lower(submitted_id::text) = any (changeable)) then
+      refusal_reason := 'field_not_changeable';
+      raise exception using errcode = 'P4020', message = refusal_reason;
+    end if;
+  end loop;
+
+  if preview_installation is null and meta ->> 'storageScope' = 'application_contained' then
+    begin
+      notice_sequence := pg_catalog.nextval('vortex_record.record_invalidation_sequence'::pg_catalog.regclass);
+      perform vortex_platform.publish_change_notice(
+        (context_value ->> 'organizationId')::uuid,
+        (context_value ->> 'applicationRootId')::uuid, p_record_type_id,
+        record_id_value, 1, 'created', notice_sequence, notice_sequence,
+        (context_value ->> 'correlationId')::uuid
+      );
+    exception when others then
+      raise warning 'Record create notice failed: [%] %', sqlstate, sqlerrm;
+    end;
+  end if;
+  return pg_catalog.jsonb_build_object(
+    'outcome', 'completed', 'recordId', record_id_value,
+    'concurrencyNumber', 1, 'values', p_prepared -> 'values'
+  );
+end
+$function$;
+alter function vortex_record.complete_record_create_internal(jsonb) owner to vortex_record_adapter;
+revoke all on function vortex_record.complete_record_create_internal(jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+comment on function vortex_record.complete_record_create_internal(jsonb) is
+  'Private create finalisation: evaluates create authority and submitted field bounds over the persisted proposed graph, raises a refusal to roll back the set, and publishes its advisory invalidation.';
+
+create or replace function vortex_record.create_record_internal(
+  p_record_type_id uuid,
+  p_final_values jsonb,
+  p_submitted_field_ids uuid[],
+  p_selected_group_id uuid default null
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  prepared jsonb;
+begin
+  prepared := vortex_record.prepare_record_create_internal(
+    p_record_type_id, p_final_values, p_submitted_field_ids, p_selected_group_id
+  );
+  if prepared ->> 'outcome' is distinct from 'prepared' then
+    return prepared;
+  end if;
+  perform vortex_record.apply_record_storage_changes_internal(
+    pg_catalog.jsonb_build_array(prepared -> 'storageChange')
+  );
+  perform vortex_record.apply_relationship_edges_internal(prepared -> 'edgeChanges');
+  return vortex_record.complete_record_create_internal(prepared);
+exception
+  when sqlstate 'P4020' then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', sqlerrm);
+  when no_data_found or too_many_rows or object_not_in_prerequisite_state then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'record_unavailable');
+end
+$function$;
+alter function vortex_record.create_record_internal(uuid,jsonb,uuid[],uuid) owner to vortex_record_adapter;
+revoke all on function vortex_record.create_record_internal(uuid,jsonb,uuid[],uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+comment on function vortex_record.create_record_internal(uuid,jsonb,uuid[],uuid) is
+  'Private single-create composition of the shared set preparation, storage write, edge write and authority finalisation, with rollback on refusal.';
 
 create or replace function vortex_record.named_action_deleted_subject_replay_internal(
   p_command_id uuid,
