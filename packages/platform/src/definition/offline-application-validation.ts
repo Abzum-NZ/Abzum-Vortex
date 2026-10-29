@@ -225,7 +225,7 @@ const compileApplication = async (
   ].map((output) => definitionCompilationOutputSchema.parse(output));
   const parsedRequest = applicationCompilationRequestSchema.safeParse({
     sourceContractVersion: applicationSourceContractVersion,
-    validationContractVersion: "4.0.0",
+    validationContractVersion: "4.1.0",
     source,
     resolution: createApplicationResolutionSnapshot({
       definitions: definitions.sort((left, right) =>

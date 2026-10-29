@@ -80,6 +80,7 @@ export const platformBlockReleaseContentHash = (definition: {
   icon: unknown;
   paletteGroup: unknown;
   rendererKey: unknown;
+  value_type?: unknown;
   properties: unknown;
   derivedProperties?: unknown;
   slots: unknown;
@@ -94,6 +95,7 @@ export const platformBlockReleaseContentHash = (definition: {
     icon: definition.icon,
     paletteGroup: definition.paletteGroup,
     rendererKey: definition.rendererKey,
+    ...(definition.value_type === undefined ? {} : { value_type: definition.value_type }),
     properties: definition.properties,
     // The settings the compiler derives are part of what a placement of the release carries.
     ...(definition.derivedProperties === undefined

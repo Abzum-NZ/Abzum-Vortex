@@ -3,13 +3,15 @@ import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@vortex/ui";
 
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
-import { describeFailure, type SourceFlow } from "@vortex/platform/schema";
+import { Button } from "@vortex/ui/components/button";
+import { checkFlowFormula, describeFailure, type SourceFlow } from "@vortex/platform/schema";
 import {
   StudioField,
   StudioReferencePicker,
   StudioHelp,
   StudioInspectorGroup,
   StudioInspectorActions,
+  StudioOptionControl,
   StudioFlowStepPicker,
   projectStudioFlowStepActions,
   projectStudioFlowStepForm,
@@ -20,6 +22,7 @@ import {
   studioFlowReferenceChoices,
   studioFlowFieldOptions,
   type StudioFlowCommand,
+  type StudioFlowCreateCommand,
   type StudioFlowContext,
   type StudioFlowDraftChoices,
   type StudioFlowEditResult,
@@ -108,6 +111,7 @@ export function StudioFlowInspector({
   onCommand,
   onStart,
   onSelectStep,
+  onCreate,
 }: Readonly<{
   context: StudioFlowContext;
   selection: StudioFlowSelection;
@@ -127,6 +131,7 @@ export function StudioFlowInspector({
     merge?: string,
   ) => StudioFlowEditResult;
   onSelectStep: (path: StudioFlowPath | null) => void;
+  onCreate: (command: StudioFlowCreateCommand, stayOnPlacement?: boolean) => string | true;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
   const step = stepPath === null ? undefined : findStep(lists, stepPath);
@@ -179,6 +184,27 @@ export function StudioFlowInspector({
     [context.source, outline, selection.moduleKey, step, choices.forms],
   );
   const condition = useMemo(() => studioFlowConditionContext(references), [references]);
+  const formula =
+    task?.type === "data.calculate" &&
+    "properties" in task &&
+    task.properties.formula?.kind === "formula"
+      ? task.properties.formula.formula
+      : undefined;
+  let formulaHasErrors = false;
+  const formulaType =
+    formula === undefined
+      ? undefined
+      : checkFlowFormula(formula, {
+          nowAllowed: true,
+          reference: (reference) =>
+            references.find(
+              (choice) => JSON.stringify(choice.reference) === JSON.stringify(reference),
+            )?.type,
+          issue: () => {
+            formulaHasErrors = true;
+          },
+        });
+  const canEnforceFormula = formulaType === "yes_no" && !formulaHasErrors;
   /**
    * The settings as typed, on the draft snapshot they stand on: what the draft took (which it may
    * hold trimmed, so the typing is shown as typed), or input it refused, shown with its problem and
@@ -194,6 +220,7 @@ export function StudioFlowInspector({
   const [problem, setProblem] = useState("");
   const [status, setStatus] = useState("");
   const [focusId, setFocusId] = useState<string | null>(null);
+  const [saveRecordType, setSaveRecordType] = useState("");
 
   useEffect(() => {
     if (form?.kind === "unavailable")
@@ -468,7 +495,6 @@ export function StudioFlowInspector({
               fields={fields}
               draft={draft}
               controlEntries={form.controlEntries}
-              calculationReferences={form.calculationReferences}
               references={references}
               condition={condition}
               choices={choices}
@@ -476,6 +502,67 @@ export function StudioFlowInspector({
               disabled={disabled}
               onChange={change}
             />
+            {outline?.flow.execution === "interactive" &&
+              task?.type === "data.calculate" &&
+              "properties" in task &&
+              task.properties.formula?.kind === "formula" && (
+                <div className="space-y-2">
+                  <StudioOptionControl
+                    id={`flow-step-${step.id}-save-record`}
+                    disabled={disabled}
+                    value={saveRecordType}
+                    options={[
+                      { value: "", label: "Choose a record type" },
+                      ...choices.recordTypes.map((record) => ({
+                        value: record.key,
+                        label: record.label,
+                      })),
+                    ]}
+                    onChange={setSaveRecordType}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={
+                      disabled ||
+                      saveRecordType === "" ||
+                      local?.problem != null ||
+                      !canEnforceFormula
+                    }
+                    onClick={() => {
+                      const formula = task.properties.formula;
+                      if (formula?.kind !== "formula") return;
+                      const separator = saveRecordType.lastIndexOf(":");
+                      const result = onCreate(
+                        {
+                          kind: "before_save",
+                          moduleKey: saveRecordType.slice(0, separator),
+                          recordTypeKey: saveRecordType.slice(separator + 1),
+                          name: `${outline.flow.labels.name ?? outline.flow.key} save rule`,
+                          message: "This record does not meet the required condition.",
+                          operations: ["create", "update"],
+                          condition: formula.formula,
+                        },
+                        true,
+                      );
+                      if (result === true) {
+                        setProblem("");
+                        setStatus("Save rule added.");
+                      } else {
+                        setStatus("");
+                        setProblem(result);
+                      }
+                    }}
+                  >
+                    Also enforce on save
+                  </Button>
+                  {canEnforceFormula ? null : (
+                    <p className="text-sm text-muted-foreground">
+                      Only a yes/no formula can be enforced on save.
+                    </p>
+                  )}
+                </div>
+              )}
             {local?.problem == null ? null : (
               <p role="alert" className="text-sm text-destructive">
                 {local.problem} The step keeps its last valid settings until this is fixed.

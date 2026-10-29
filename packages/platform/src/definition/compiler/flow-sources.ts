@@ -1,5 +1,10 @@
+import { flowRuntimeValueOf } from "../../rules/flow-runtime-value";
 import { sourceFlowCollectionSchema } from "../../workflows/flow-source-contracts";
-import { sourcePageItems } from "../application-composition/source-composition";
+import {
+  sourceItemTree,
+  sourcePageItems,
+  sourcePageShell,
+} from "../application-composition/source-composition";
 import type {
   ModuleCompilationOutput,
   DefinitionCompilationOutput,
@@ -30,7 +35,10 @@ import {
   type JsonObject,
 } from "./shared";
 import { moduleDependencies } from "../module-dependencies";
-import { FORM_CONTAINER_BLOCK_RELEASE } from "../application-composition-catalogue";
+import {
+  CONTROL_BLOCK_RELEASES,
+  FORM_CONTAINER_BLOCK_RELEASE,
+} from "../application-composition-catalogue";
 
 /**
  * Compiles the flows a module or application owns to permanent identities, refusing an
@@ -116,6 +124,9 @@ function compileOwnedFlowSources(
         identifier: resolution.field(qualifiedRecordType, String(field.id)),
         recordTypeId,
         type: String(field.type),
+        ...(["calculation", "total"].includes(String(field.type))
+          ? { valueType: String(asObject(field.settings).result_type) }
+          : {}),
       });
   }
   for (const output of dependencyOutputs) {
@@ -127,6 +138,9 @@ function compileOwnedFlowSources(
           identifier: String(field.fieldId),
           recordTypeId: String(recordType.recordTypeId),
           type: String(field.type),
+          ...(["calculation", "total"].includes(String(field.type))
+            ? { valueType: String(asObject(field.settings).resultType) }
+            : {}),
         });
   }
   const owned = (kind: string, alias: string): ResolvedFlowIdentity => {
@@ -141,6 +155,23 @@ function compileOwnedFlowSources(
     reference.includes(":") ? reference : `${ownKey}:${reference}`;
   const recordOwner = (reference: string) => qualifiedRecord(reference).split(":")[0]!;
   const formTitles = new Map<string, string>();
+  const recordsByReference = new Map<string, Readonly<Record<string, string>>>();
+  for (const output of dependencyOutputs) {
+    if (output.kind !== "module" || !declaredDefinitionKeySet.has(output.artifact.definitionKey))
+      continue;
+    for (const record of output.canonical.content.recordTypes as unknown as JsonObject[]) {
+      const fields: Record<string, string> = {};
+      for (const field of record.fields as JsonObject[]) {
+        const settings = asObject(field.settings);
+        fields[String(field.key)] = flowRuntimeValueOf(
+          String(field.type),
+          null,
+          typeof settings.resultType === "string" ? settings.resultType : undefined,
+        ).type;
+      }
+      recordsByReference.set(`${output.artifact.definitionKey}:${String(record.key)}`, fields);
+    }
+  }
   if (source.kind === "application")
     for (const page of (body as unknown as ApplicationSourceDocument["body"]).pages)
       for (const item of sourcePageItems(page.composition))
@@ -154,6 +185,77 @@ function compileOwnedFlowSources(
           );
   return compileFlowSources({
     formTitle: source.kind === "application" ? (reference) => formTitles.get(reference) : undefined,
+    referenceEnvironments:
+      source.kind !== "application"
+        ? undefined
+        : (flow) => {
+            const application = body as unknown as ApplicationSourceDocument["body"];
+            const controls = new Set(
+              application.flow_bindings
+                .filter((binding) => binding.flow === flow.id || binding.flow === flow.key)
+                .map((binding) => binding.control),
+            );
+            return application.pages.flatMap((page) => {
+              const shellAlias = sourcePageShell(page.composition);
+              const shell = application.shells.find((candidate) => candidate.id === shellAlias);
+              const items = [
+                ...sourcePageItems(page.composition),
+                ...(shell === undefined ? [] : sourceItemTree(shell.layout.content)),
+              ];
+              if (!items.some((item) => controls.has(item.props.id))) return [];
+              const forms: Record<string, Readonly<Record<string, string>>> = {};
+              for (const form of items) {
+                if (
+                  form.props.vortex.block.block_id !== FORM_CONTAINER_BLOCK_RELEASE.blockId ||
+                  form.props.vortex.block.release_version !==
+                    FORM_CONTAINER_BLOCK_RELEASE.releaseVersion
+                )
+                  continue;
+                const fields: Record<string, string> = {};
+                for (const control of sourceItemTree([form])) {
+                  const release = CONTROL_BLOCK_RELEASES.find(
+                    (candidate) => candidate.rendererKey === control.type,
+                  );
+                  if (release === undefined) continue;
+                  const reference = control.props.field;
+                  const dot = typeof reference === "string" ? reference.lastIndexOf(".") : -1;
+                  const record =
+                    dot > 0 && typeof reference === "string"
+                      ? recordsByReference.get(reference.slice(0, dot))
+                      : undefined;
+                  const field =
+                    dot > 0 && typeof reference === "string" ? reference.slice(dot + 1) : undefined;
+                  const name =
+                    typeof control.props.name === "string" && control.props.name !== ""
+                      ? control.props.name
+                      : field;
+                  if (name === undefined) continue;
+                  const declared = release.value_type;
+                  const type =
+                    record !== undefined && field !== undefined
+                      ? record[field]
+                      : declared?.kind === "fixed"
+                        ? declared.type
+                        : declared?.kind === "boolean_setting"
+                          ? control.props[declared.setting] === true
+                            ? declared.when_true
+                            : declared.when_false
+                          : undefined;
+                  if (type !== undefined) fields[name] = type;
+                }
+                forms[form.props.id] = fields;
+              }
+              return [
+                {
+                  page: page.name,
+                  values: Object.fromEntries(
+                    Object.entries(page.values ?? {}).map(([key, value]) => [key, value.type]),
+                  ),
+                  forms,
+                },
+              ];
+            });
+          },
     flows: parsed.data,
     declaredDefinitionKeys,
     operationInputs: callableOperation,

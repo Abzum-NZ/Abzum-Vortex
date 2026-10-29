@@ -6,7 +6,7 @@ import type { RecordLinkReference } from "../definition/viewer-safe-record-link"
 import { richTextDocumentSchema } from "../records/rich-text";
 import type { displayScalarCellSchema } from "./display-payload-parts";
 import type { RecordsTableInlineEditor } from "./records-table-feature-projection";
-import { formatDecimal, formatMoney, isExactDecimal } from "./value-format";
+import { formatDecimal, formatPageValue, isExactDecimal } from "./value-format";
 
 /*
  * The one rule that turns a stored field value into the closed display value a cell shows. The
@@ -152,15 +152,22 @@ export const projectCell = (
     !Array.isArray(value) &&
     typeof value.amount === "string" &&
     typeof value.currency === "string"
-  )
-    return { kind: "text", text: formatMoney({ currency: value.currency, amount: value.amount }) };
+  ) {
+    const text = formatPageValue("money", { currency: value.currency, amount: value.amount });
+    if (text === undefined) throw new Error("Invalid stored money value in a display cell");
+    return { kind: "text", text };
+  }
   switch (format) {
     case "number":
     case "currency":
     case "percent":
       if (typeof value === "number" && Number.isFinite(value)) return numberCell(value, true);
-      if (typeof value === "string" && isExactDecimal(value))
-        return { kind: "number", value: Number(value), formatted: formatDecimal(value) };
+      if (typeof value === "string" && isExactDecimal(value)) {
+        const formatted = formatPageValue("number", value);
+        if (formatted === undefined)
+          throw new Error("Invalid stored number value in a display cell");
+        return { kind: "number", value: Number(value), formatted };
+      }
       break;
     case "boolean":
       if (typeof value === "boolean") return { kind: "boolean", value };

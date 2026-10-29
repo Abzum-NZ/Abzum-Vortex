@@ -81,6 +81,7 @@ const describeFlowFailure = (
       : findTask([...flow.tasks, ...flow.errors, ...flow.finally], failure.taskId);
   const where =
     task === undefined ? `Flow ${flowName}` : `Flow ${flowName}, step ${stepName(source, task)}`;
+  if (failure.sentence !== undefined) return `${where}: ${failure.sentence}`;
   if (
     failure.reasonCode === "vortex.definition.workflow_action_inputs" &&
     flow !== undefined &&
@@ -115,10 +116,10 @@ export const describeStudioCompileFailure = (
   failure: StudioCompileFailure,
   source: ApplicationSourceDocument,
 ): StudioCompileProblem => {
-  // A rule with its own business sentence says it as it is, exactly as Studio showed it beforehand.
-  if (failure.sentence !== undefined) return { message: failure.sentence, selection: null };
   if (failure.flowKey !== undefined)
     return { message: describeFlowFailure(failure, source), selection: null };
+  // A rule with its own business sentence says it as it is, exactly as Studio showed it beforehand.
+  if (failure.sentence !== undefined) return { message: failure.sentence, selection: null };
   if (failure.reasonCode === "vortex.definition.application_query_exposure") {
     const reference = failure.queryKey ?? "";
     const separator = reference.indexOf(":");

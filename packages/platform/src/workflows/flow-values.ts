@@ -1,3 +1,7 @@
+import { flowFormulaChildren } from "./flow-formula-tree";
+import type { FlowFormula } from "./flow-formula-tree";
+export { flowFormulaChildren, flowFormulaHasUnroundedDivide } from "./flow-formula-tree";
+export type { FlowFormula } from "./flow-formula-tree";
 import { z } from "zod";
 import { workflowValueTypeSchema } from "../catalogue/catalogues";
 import {
@@ -179,34 +183,6 @@ export const flowDateUnitSchema = z.enum(["minutes", "hours", "days", "weeks", "
 export type FlowRoundingMode = z.infer<typeof flowRoundingModeSchema>;
 export type FlowDateUnit = z.infer<typeof flowDateUnitSchema>;
 
-type ArithmeticPrecision = { scale: number; rounding: FlowRoundingMode };
-export type FlowFormula =
-  | { op: "literal"; type: FlowLiteral["type"]; value: JsonValue }
-  | { op: "reference"; reference: FlowReference }
-  | { op: "now" }
-  | {
-      op: "deadline_passed";
-      due: FlowFormula;
-      status?: FlowFormula | undefined;
-      terminalStatusValues: JsonValue[];
-    }
-  | { op: "record_id"; arg: FlowFormula }
-  | ({ op: "add" | "multiply"; args: FlowFormula[] } & ArithmeticPrecision)
-  | ({ op: "subtract" | "divide"; args: [FlowFormula, FlowFormula] } & ArithmeticPrecision)
-  | ({ op: "round"; arg: FlowFormula } & ArithmeticPrecision)
-  | {
-      op: "eq" | "neq" | "lt" | "lte" | "gt" | "gte" | "contains" | "starts_with" | "ends_with";
-      left: FlowFormula;
-      right: FlowFormula;
-    }
-  | { op: "is_empty" | "is_not_empty"; arg: FlowFormula }
-  | { op: "in"; value: FlowFormula; options: FlowFormula[] }
-  | { op: "and" | "or"; args: FlowFormula[] }
-  | { op: "not"; arg: FlowFormula }
-  | { op: "if"; condition: FlowFormula; then: FlowFormula; else: FlowFormula }
-  | { op: "join"; parts: FlowFormula[]; separator?: string | undefined }
-  | { op: "date_add"; date: FlowFormula; amount: FlowFormula; unit: FlowDateUnit }
-  | { op: "date_diff"; from: FlowFormula; to: FlowFormula; unit: FlowDateUnit };
 
 const precisionShape = {
   scale: z.number().int().min(0).max(18),
@@ -251,31 +227,31 @@ const flowFormulaTreeSchema: z.ZodType<FlowFormula> = z.lazy(() =>
       .object({
         op: z.literal("add"),
         args: z.array(flowFormulaTreeSchema).min(2).max(10),
-        ...precisionShape,
       })
       .strict(),
     z
       .object({
         op: z.literal("multiply"),
         args: z.array(flowFormulaTreeSchema).min(2).max(10),
-        ...precisionShape,
       })
       .strict(),
     z
       .object({
         op: z.literal("subtract"),
         args: z.tuple([flowFormulaTreeSchema, flowFormulaTreeSchema]),
-        ...precisionShape,
       })
       .strict(),
     z
       .object({
         op: z.literal("divide"),
         args: z.tuple([flowFormulaTreeSchema, flowFormulaTreeSchema]),
-        ...precisionShape,
       })
       .strict(),
     z.object({ op: z.literal("round"), arg: flowFormulaTreeSchema, ...precisionShape }).strict(),
+    z.object({ op: z.literal("min"), args: z.array(flowFormulaTreeSchema).min(1).max(20) }).strict(),
+    z.object({ op: z.literal("max"), args: z.array(flowFormulaTreeSchema).min(1).max(20) }).strict(),
+    z.object({ op: z.literal("coalesce"), args: z.array(flowFormulaTreeSchema).min(1).max(20) }).strict(),
+    z.object({ op: z.literal("percent"), args: z.tuple([flowFormulaTreeSchema, flowFormulaTreeSchema]), ...precisionShape }).strict(),
     z
       .object({
         op: z.enum(["eq", "neq", "lt", "lte", "gt", "gte", "contains", "starts_with", "ends_with"]),
@@ -331,41 +307,6 @@ const flowFormulaTreeSchema: z.ZodType<FlowFormula> = z.lazy(() =>
   ]),
 );
 
-export const flowFormulaChildren = (formula: FlowFormula): readonly FlowFormula[] => {
-  switch (formula.op) {
-    case "literal":
-    case "reference":
-    case "now":
-      return [];
-    case "add":
-    case "multiply":
-    case "subtract":
-    case "divide":
-    case "and":
-    case "or":
-      return formula.args;
-    case "round":
-    case "record_id":
-    case "is_empty":
-    case "is_not_empty":
-    case "not":
-      return [formula.arg];
-    case "in":
-      return [formula.value, ...formula.options];
-    case "if":
-      return [formula.condition, formula.then, formula.else];
-    case "join":
-      return formula.parts;
-    case "deadline_passed":
-      return [formula.due, ...(formula.status === undefined ? [] : [formula.status])];
-    case "date_add":
-      return [formula.date, formula.amount];
-    case "date_diff":
-      return [formula.from, formula.to];
-    default:
-      return [formula.left, formula.right];
-  }
-};
 
 const inspectFormula = (
   formula: FlowFormula,
@@ -385,6 +326,7 @@ const inspectFormula = (
 /** True when the formula reads the current time through the `now` operator. */
 export const flowFormulaUsesNow = (formula: FlowFormula): boolean =>
   inspectFormula(formula).usesNow;
+
 
 /**
  * A formula bounded in depth and size. Whether `now` may appear depends on where the formula

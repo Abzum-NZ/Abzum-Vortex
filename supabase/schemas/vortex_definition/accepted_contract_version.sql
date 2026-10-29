@@ -9,11 +9,11 @@ as $function$
 begin
   case p_kind
     when 'application' then
-      return array['4.0.0'];
+      return array['4.1.0'];
     when 'module' then
-      return array['4.0.0'];
+      return array['4.1.0'];
     when 'record_type' then
-      return array['4.0.0'];
+      return array['4.1.0'];
     else
       raise exception using errcode = '22023',
         message = 'Accepted contract version kind is unknown';

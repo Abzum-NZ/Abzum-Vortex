@@ -1,4 +1,5 @@
 import { fingerprintCanonicalValue } from "../definition/canonical-json-definition";
+import { prepareFlowFormulas } from "../rules/flow-formula-preparation";
 import type { FlowDefinition, FlowTask } from "./flow-contracts";
 import { flowTaskChildLists, isFlowControlTask } from "./flow-contracts";
 import { flowTaskRegistry, type FlowTaskTypeKey } from "./flow-task-registry";
@@ -342,6 +343,7 @@ const cut = (flow: FlowDefinition, section: FlowPlanSection, tasks: readonly Flo
 
 /** Compiles one validated flow into its plan. Throws `FlowPlanError` naming the step it refuses. */
 export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
+  prepareFlowFormulas(flow);
   const drafts = [
     ...cut(flow, "tasks", flow.tasks),
     ...cut(flow, "errors", flow.errors),

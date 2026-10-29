@@ -31,7 +31,10 @@ as $$
         from pg_catalog.jsonb_array_elements(
           coalesce(p_field #> '{settings,columns}', '[]'::jsonb)
         ) with ordinality as column_item(value, ordinality)))
-      when 'calculation' then p_field -> 'settings'
+      when 'calculation' then pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
+        'resultType', p_field #> '{settings,resultType}',
+        'decimalPlaces', p_field #> '{settings,decimalPlaces}',
+        'evaluation', p_field #> '{settings,evaluation}'))
       when 'total' then p_field -> 'settings'
       when 'reference_number' then p_field -> 'settings'
       else '{}'::jsonb end

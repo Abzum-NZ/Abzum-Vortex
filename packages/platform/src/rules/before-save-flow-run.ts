@@ -4,7 +4,8 @@ import type {
   FlowDefinition,
   FlowTask,
 } from "../workflows/flow-contracts";
-import { flowRuntimeValueOf, retypeTasks } from "./action-flow-run";
+import { retypeTasks } from "./action-flow-run";
+import { flowRuntimeValueOf } from "./flow-runtime-value";
 import { startFlowRun, type FlowRuntimeValues } from "./flow-interpreter";
 
 /**
@@ -51,7 +52,7 @@ export type EvaluateBeforeSaveFlowsInput = Readonly<{
    */
   flows: readonly FlowDefinition[];
   recordTypeId: string;
-  fields: readonly Readonly<{ fieldId: string; key: string; type: string }>[];
+  fields: readonly Readonly<{ fieldId: string; key: string; type: string; settings?: unknown }>[];
   operation: FlowBeforeSaveOperation;
   /** The candidate values the save would write, keyed by field identity. */
   candidateValues: Readonly<Record<string, JsonValue>>;
@@ -84,6 +85,9 @@ const recordView = (
       flowRuntimeValueOf(
         field.type,
         values !== undefined && Object.hasOwn(values, field.fieldId) ? values[field.fieldId] : null,
+        field.type === "calculation" || field.type === "total"
+          ? (field.settings as { resultType?: string } | undefined)?.resultType
+          : undefined,
       ),
     ]),
   );

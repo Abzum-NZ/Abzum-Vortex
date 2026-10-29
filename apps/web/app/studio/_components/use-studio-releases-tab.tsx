@@ -89,10 +89,13 @@ const publicationProblemText = (
   blockAlias?: string,
   compileProblem?: string,
   sentence?: string,
+  flowProblem?: string,
 ): string => {
   if (reason === "identity_retired" && sentence !== undefined) return sentence;
   // A compilation refusal names what it is about (the field, query or block) so it can be fixed.
   if (reason?.startsWith("compilation_") === true) {
+    if (flowProblem !== undefined)
+      return `This draft cannot be published: ${flowProblem} Change it and try again.`;
     // A rule with its own business sentence (a Records table feature check) says it as Studio does.
     if (sentence !== undefined)
       return `This draft cannot be published: ${sentence} Change it and try again.`;
@@ -193,7 +196,13 @@ export function useStudioReleasesTab({
 
   /** A flow refusal the platform reported when publishing, in the words Studio shows for it. */
   const flowRefusalOf = (
-    result: Readonly<{ reason?: string; flowKey?: string; taskId?: string; family?: string }>,
+    result: Readonly<{
+      reason?: string;
+      flowKey?: string;
+      taskId?: string;
+      family?: string;
+      sentence?: string;
+    }>,
   ): string | undefined =>
     result.flowKey === undefined || result.reason === undefined
       ? undefined
@@ -203,6 +212,7 @@ export function useStudioReleasesTab({
             family: result.family ?? "unknown",
             flowKey: result.flowKey,
             ...(result.taskId === undefined ? {} : { taskId: result.taskId }),
+            ...(result.sentence === undefined ? {} : { sentence: result.sentence }),
           },
           latest.current.parsed(latest.current.view.source),
         ).message;
@@ -321,8 +331,9 @@ export function useStudioReleasesTab({
             result.kind,
             result.reason,
             "blockAlias" in result ? result.blockAlias : undefined,
-            flowRefusalOf(result) ?? compileProblemOf(snapshot.draftRevision),
+            compileProblemOf(snapshot.draftRevision),
             "sentence" in result ? result.sentence : undefined,
+            flowRefusalOf(result),
           ),
         );
         return { kind: "declined", result: result.kind, reason: result.reason };
@@ -365,8 +376,9 @@ export function useStudioReleasesTab({
           result.kind,
           result.reason,
           "blockAlias" in result ? result.blockAlias : undefined,
-          flowRefusalOf(result) ?? compileProblemOf(snapshot.draftRevision),
+          compileProblemOf(snapshot.draftRevision),
           "sentence" in result ? result.sentence : undefined,
+          flowRefusalOf(result),
         ),
       );
       // A transient failure of the append may still have completed.

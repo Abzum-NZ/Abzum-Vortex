@@ -416,6 +416,7 @@ export function useStudioFlowsTab({
             : `This flow belongs to the module ${owner.name}, which this application owns.`
         }
         onCommand={command}
+        onCreate={create}
         onSelectStep={selectStep}
       />
     );
