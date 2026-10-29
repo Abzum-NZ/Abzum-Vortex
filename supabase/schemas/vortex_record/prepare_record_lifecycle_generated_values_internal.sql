@@ -1,7 +1,8 @@
-create or replace function vortex_record.apply_record_lifecycle_generated_values_internal(
+create or replace function vortex_record.prepare_record_lifecycle_generated_values_internal(
   p_preparation jsonb,
   p_include_root boolean,
-  p_mutations jsonb
+  p_mutations jsonb,
+  p_proposed_records jsonb
 )
 returns jsonb
 language plpgsql
@@ -15,8 +16,10 @@ declare
   mutation_value jsonb;
   prepared_record jsonb;
   reduced_final_values jsonb;
-  final_revision bigint;
-  revisions jsonb := '[]'::jsonb;
+  catalogue jsonb;
+  parent_plan jsonb;
+  parent_plans jsonb := '[]'::jsonb;
+  storage_changes jsonb := '[]'::jsonb;
 begin
   if pg_catalog.jsonb_typeof(p_mutations) is distinct from 'array'
     or p_include_root is null then
@@ -24,6 +27,8 @@ begin
       message = 'Record lifecycle generated values are invalid';
   end if;
   perform vortex_access.validated_human_request_context();
+  catalogue := vortex_record.relationship_total_catalogue_internal()
+    || pg_catalog.jsonb_build_object('proposedRecords', p_proposed_records);
 
   select coalesce(pg_catalog.jsonb_agg(
     pg_catalog.jsonb_build_object(
@@ -84,30 +89,28 @@ begin
     where entry.value is distinct from coalesce(
       prepared_record -> 'existingValues' -> pg_catalog.lower(entry.key), 'null'::jsonb
     );
-    perform vortex_record.apply_relationship_total_parent_internal(
+    parent_plan := vortex_record.prepare_relationship_total_parent_internal(
       (mutation_value ->> 'recordTypeId')::uuid,
       (mutation_value ->> 'recordId')::uuid,
       (mutation_value ->> 'expectedConcurrencyNumber')::bigint,
-      reduced_final_values
+      reduced_final_values, catalogue
     );
-    final_revision := (mutation_value ->> 'expectedConcurrencyNumber')::bigint
-      + case when reduced_final_values = '{}'::jsonb then 0 else 1 end;
-    revisions := revisions || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-      'recordKey', prepared_record ->> 'recordKey',
-      'concurrencyNumber', final_revision
-    ));
+    if parent_plan is not null then
+      parent_plans := parent_plans || pg_catalog.jsonb_build_array(parent_plan);
+      storage_changes := storage_changes || pg_catalog.jsonb_build_array(parent_plan -> 'storageChange');
+    end if;
   end loop;
-  return revisions;
+  return pg_catalog.jsonb_build_object('storageChanges', storage_changes, 'parentPlans', parent_plans);
 end
 $function$;
 
-alter function vortex_record.apply_record_lifecycle_generated_values_internal(jsonb,boolean,jsonb) owner to vortex_record_adapter;
+alter function vortex_record.prepare_record_lifecycle_generated_values_internal(jsonb,boolean,jsonb,jsonb) owner to vortex_record_adapter;
 
-revoke all on function vortex_record.apply_record_lifecycle_generated_values_internal(
-  jsonb, boolean, jsonb
+revoke all on function vortex_record.prepare_record_lifecycle_generated_values_internal(
+  jsonb, boolean, jsonb, jsonb
 )
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-comment on function vortex_record.apply_record_lifecycle_generated_values_internal(
-  jsonb, boolean, jsonb
+comment on function vortex_record.prepare_record_lifecycle_generated_values_internal(
+  jsonb, boolean, jsonb, jsonb
 ) is
-  'Private lifecycle writer step: applies each locked closure record''s generated values at the revision the shared parent writer reached.';
+  'Private lifecycle generated-field preparation: checks the complete locked closure and returns its physical changes and parent effects for one set-based write.';

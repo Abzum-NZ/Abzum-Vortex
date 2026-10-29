@@ -1,4 +1,4 @@
-create or replace function vortex_record.change_record(
+create or replace function vortex_record.prepare_record_change_internal(
   p_record_type_id uuid,
   p_record_id uuid,
   p_expected_concurrency_number bigint,
@@ -28,10 +28,7 @@ declare
   field_type text;
   storage_type text;
   submitted_id uuid;
-  assignments text[] := array[]::text[];
-  update_sql text;
-  changed_rows integer;
-  new_concurrency_number bigint;
+  physical_values jsonb := '{}'::jsonb;
   values_value jsonb := '{}'::jsonb;
   field_id text;
 begin
@@ -135,25 +132,8 @@ begin
     end if;
 
     proposed_values := proposed_values || pg_catalog.jsonb_build_object(entry_key, entry_value);
-    assignments := pg_catalog.array_append(
-      assignments,
-      pg_catalog.format(
-        '%I = %s',
-        column_entry ->> 'token',
-        case
-          when pg_catalog.jsonb_typeof(entry_value) = 'null' then 'null'
-          else case storage_type
-            when 'decimal' then pg_catalog.format('%L::numeric', entry_value #>> '{}')
-            when 'timestamp_with_time_zone' then
-              pg_catalog.format('%L::timestamptz', entry_value #>> '{}')
-            when 'date' then pg_catalog.format('%L::date', entry_value #>> '{}')
-            when 'integer' then pg_catalog.format('%L::bigint', entry_value #>> '{}')
-            when 'boolean' then pg_catalog.format('%L::boolean', entry_value #>> '{}')
-            when 'json' then pg_catalog.format('%L::jsonb', entry_value::text)
-            else pg_catalog.format('%L::text', entry_value #>> '{}')
-          end
-        end
-      )
+    physical_values := physical_values || pg_catalog.jsonb_build_object(
+      column_entry ->> 'token', entry_value
     );
   end loop;
 
@@ -185,31 +165,6 @@ begin
     bounds := vortex_record.decide_record_field_bounds_internal(decision);
   end if;
 
-  update_sql := pg_catalog.format(
-    'update record_data.%I as stored set %s%sconcurrency_number = stored.concurrency_number + 1,
-       updated_at = pg_catalog.statement_timestamp(), updated_by = $3,
-       definition_revision = $4
-     where stored.organisation_id = $1 and stored.record_id = $2
-       and stored.concurrency_number = $5
-     returning stored.concurrency_number',
-    loaded ->> 'table',
-    pg_catalog.array_to_string(assignments, ','),
-    case when pg_catalog.cardinality(assignments) = 0 then '' else ', ' end
-  );
-
-  execute update_sql
-  into new_concurrency_number
-  using (context_value ->> 'organizationId')::uuid, p_record_id,
-    (context_value ->> 'organizationAccountId')::uuid,
-    (loaded ->> 'moduleReleaseRevision')::bigint,
-    p_expected_concurrency_number;
-
-  get diagnostics changed_rows = row_count;
-  if changed_rows <> 1 then
-    raise exception using errcode = '40001',
-      message = 'Record change did not apply to exactly one row';
-  end if;
-
   for field_id in
     select item.value #>> '{}'
     from pg_catalog.jsonb_array_elements(bounds -> 'readableFieldIds') as item(value)
@@ -224,18 +179,25 @@ begin
   return pg_catalog.jsonb_build_object(
     'outcome', 'allowed',
     'recordId', p_record_id,
-    'concurrencyNumber', new_concurrency_number,
-    'values', values_value
+    'concurrencyNumber', p_expected_concurrency_number + 1,
+    'values', values_value,
+    'storageChange', pg_catalog.jsonb_build_object(
+      'storageContractId', loaded #> '{recordTypeMeta,storageContractId}',
+      'recordId', p_record_id, 'expectedConcurrencyNumber', p_expected_concurrency_number,
+      'values', physical_values || pg_catalog.jsonb_build_object(
+        'definition_revision', loaded -> 'moduleReleaseRevision'
+      )
+    )
   );
 end
 $function$;
-alter function vortex_record.change_record(uuid,uuid,bigint,jsonb,uuid[]) owner to vortex_record_adapter;
+alter function vortex_record.prepare_record_change_internal(uuid,uuid,bigint,jsonb,uuid[]) owner to vortex_record_adapter;
 
 
-alter function vortex_record.change_record(uuid, uuid, bigint, jsonb, uuid[])
+alter function vortex_record.prepare_record_change_internal(uuid, uuid, bigint, jsonb, uuid[])
   owner to vortex_record_adapter;
 
-revoke all on function vortex_record.change_record(uuid, uuid, bigint, jsonb, uuid[])
+revoke all on function vortex_record.prepare_record_change_internal(uuid, uuid, bigint, jsonb, uuid[])
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-comment on function vortex_record.change_record(uuid, uuid, bigint, jsonb, uuid[]) is
-  'Fixed owner-only record update primitive. It checks one live record decision or the exact owner preview address, validates values and field bounds before writing, enforces concurrency, and returns only its permitted field projection.';
+comment on function vortex_record.prepare_record_change_internal(uuid, uuid, bigint, jsonb, uuid[]) is
+  'Private record update preparation. Locks the current revision, checks current and proposed authority and field bounds, and returns the storage mutation and permitted projection for the set writer.';

@@ -87,7 +87,7 @@ begin
       );
     end if;
     projection := (vortex_record.read_record(
-      p_record_type_id, (receipt_claim ->> 'recordId')::uuid
+      p_record_type_id, (receipt_claim -> 'result' ->> 'recordId')::uuid
     )) -> 'record';
     if projection ->> 'outcome' <> 'allowed' then
       return pg_catalog.jsonb_build_object(

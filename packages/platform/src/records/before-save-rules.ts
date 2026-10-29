@@ -4,7 +4,11 @@ import { z } from "zod";
 import type { JsonValue } from "../catalogue/common";
 import { describeFailure, isRecord } from "../catalogue/runtime-primitives";
 import type { RecordTypeDefinition } from "../definition/module-contracts";
-import { flowSchema, type FlowDefinition } from "../workflows/flow-contracts";
+import {
+  flowSchema,
+  type FlowBeforeSaveOperation,
+  type FlowDefinition,
+} from "../workflows/flow-contracts";
 import { compileFlowPlans, FlowPlanError } from "../workflows/flow-plan";
 import {
   BeforeSaveFlowEvaluationError,
@@ -204,14 +208,65 @@ export const applyBeforeSaveRules = (input: {
     previousValues = previous.candidate.candidateValues;
   }
 
+  return evaluateRuleExecution({
+    execution,
+    recordType,
+    operation: initialCandidate.operation,
+    candidateValues: initialCandidate.candidateValues,
+    ...(previousValues === undefined ? {} : { previousValues }),
+  });
+};
+
+/** Lifecycle rules inspect the stored values without producing a field mutation. */
+export const applyBeforeSaveLifecycleRules = (input: {
+  execution: BeforeSaveRuleExecution;
+  recordType: RecordTypeDefinition;
+  operation: "delete" | "restore";
+  existingValues: Readonly<Record<string, unknown>>;
+  organizationCurrency?: string;
+}): BeforeSaveRuleApplication => {
+  const prepared = prepareInitialRecordFieldCandidate({
+    operation: "update",
+    recordType: input.recordType,
+    submittedValues: {},
+    existingValues: input.existingValues,
+    ...(input.organizationCurrency === undefined
+      ? {}
+      : { organizationCurrency: input.organizationCurrency }),
+  });
+  if (!prepared.success) {
+    console.error("[before-save-flow] lifecycle record normalization failed", {
+      cause: { part: input.recordType.recordTypeId, reason: "invalid_stored_values" },
+      issues: prepared.issues.map(({ code, path }) => ({ code, path })),
+    });
+    return { success: false, reason: "unavailable" };
+  }
+  return evaluateRuleExecution({
+    execution: input.execution,
+    recordType: input.recordType,
+    operation: input.operation,
+    candidateValues: prepared.candidate.candidateValues,
+    previousValues: prepared.candidate.candidateValues,
+  });
+};
+
+const evaluateRuleExecution = (input: {
+  execution: BeforeSaveRuleExecution;
+  recordType: RecordTypeDefinition;
+  operation: FlowBeforeSaveOperation;
+  candidateValues: Readonly<Record<string, JsonValue>>;
+  previousValues?: Readonly<Record<string, JsonValue>>;
+}): BeforeSaveRuleApplication => {
+  const { execution, recordType, previousValues } = input;
+  execution.warnings.length = 0;
   let result;
   try {
     result = evaluateBeforeSaveFlows({
       flows: execution.ruleSet.flows,
       recordTypeId: recordType.recordTypeId,
       fields: recordType.fields,
-      operation: initialCandidate.operation,
-      candidateValues: initialCandidate.candidateValues,
+      operation: input.operation,
+      candidateValues: input.candidateValues,
       ...(previousValues === undefined ? {} : { previousValues }),
       now: new Date().toISOString(),
     });
@@ -238,7 +293,7 @@ export const applyBeforeSaveRules = (input: {
   execution.warnings.push(...result.warnings);
   return {
     success: true,
-    candidateValues: initialCandidate.candidateValues,
+    candidateValues: input.candidateValues,
     requirements: result.requirements,
   };
 };

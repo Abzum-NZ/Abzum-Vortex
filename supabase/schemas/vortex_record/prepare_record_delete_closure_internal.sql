@@ -1,10 +1,10 @@
-create or replace function vortex_record.soft_delete_record_recursive_internal(
+create or replace function vortex_record.prepare_record_delete_closure_internal(
   p_record_type_id uuid,
   p_record_id uuid,
   p_expected_concurrency_number bigint,
   p_visited text[]
 )
-returns void
+returns jsonb
 language plpgsql
 volatile
 security invoker
@@ -32,10 +32,11 @@ declare
   source_link_value jsonb;
   source_identity text;
   source_action_kind text;
-  changed_rows integer;
-  application_scope uuid;
-  saved_record_id uuid;
-  saved_concurrency_number bigint;
+  storage_changes jsonb := '[]'::jsonb;
+  edge_changes jsonb := '[]'::jsonb;
+  effects jsonb := '[]'::jsonb;
+  dependent_plan jsonb;
+  edge_change jsonb;
 begin
   meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'delete');
   context_value := meta -> 'context';
@@ -113,6 +114,7 @@ begin
         source_catalogue.record_type_id, source_action_kind
       );
     exception when others then
+      raise warning 'Delete relationship declaration unavailable: [%] %', sqlstate, sqlerrm;
       raise exception using errcode = '23514', message = 'Parent deletion is blocked';
     end;
     if (source_meta ->> 'storageContractId')::uuid is distinct from
@@ -135,7 +137,7 @@ begin
       source_link_column, source_meta ->> 'table'
     ) into source_concurrency, source_link_value using
       (context_value ->> 'organizationId')::uuid, incoming.from_record_id;
-    if not found then
+    if source_concurrency is null then
       continue;
     end if;
     -- The incoming-edge cursor may have been opened before a concurrent link
@@ -177,15 +179,24 @@ begin
     end if;
 
     if on_parent_delete = 'empty_optional' then
-      perform vortex_record.write_relationship_value_internal(
+      effects := effects || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'effectKind', 'optional_cleared', 'storageContractId', incoming.from_storage_contract_id,
+        'recordTypeId', source_catalogue.record_type_id, 'recordId', incoming.from_record_id,
+        'preConcurrencyNumber', source_concurrency, 'relationshipId', incoming.relationship_id,
+        'previousValue', source_link_value
+      ));
+      edge_change := vortex_record.prepare_relationship_value_internal(
         source_catalogue.record_type_id, incoming.from_record_id,
-        incoming.relationship_id, 'null'::jsonb, true
+        incoming.relationship_id, 'null'::jsonb, false
       );
-      perform vortex_record.append_record_lifecycle_effect_internal(
-        'optional_cleared', incoming.from_storage_contract_id,
-        source_catalogue.record_type_id, incoming.from_record_id,
-        source_concurrency, incoming.relationship_id
-      );
+      edge_changes := edge_changes || pg_catalog.jsonb_build_array(edge_change);
+      storage_changes := storage_changes || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'storageContractId', incoming.from_storage_contract_id, 'recordId', incoming.from_record_id,
+        'expectedConcurrencyNumber', source_concurrency,
+        'values', pg_catalog.jsonb_build_object(
+          source_link_column, null, 'definition_revision', source_meta -> 'moduleReleaseRevision'
+        )
+      ));
     elsif on_parent_delete = 'soft_delete_dependent' then
       source_record_type := source_meta -> 'recordType';
       if source_record_type ->> 'ownershipMode' <> 'inherited'
@@ -194,57 +205,42 @@ begin
           incoming.relationship_id then
         raise exception using errcode = '23514', message = 'Dependent deletion is not declared';
       end if;
-      perform vortex_record.soft_delete_record_recursive_internal(
+      dependent_plan := vortex_record.prepare_record_delete_closure_internal(
         source_catalogue.record_type_id, incoming.from_record_id,
         source_concurrency, p_visited
       );
+      storage_changes := storage_changes || (dependent_plan -> 'storageChanges');
+      edge_changes := edge_changes || (dependent_plan -> 'edgeChanges');
+      effects := effects || (dependent_plan -> 'effects');
     else
       raise exception using errcode = '23514', message = 'Parent deletion behavior is invalid';
     end if;
   end loop;
 
-  execute pg_catalog.format(
-    'update record_data.%I as stored
-     set lifecycle_state = ''soft_deleted'',
-       concurrency_number = concurrency_number + 1,
-       updated_at = pg_catalog.statement_timestamp(), updated_by = $3,
-       deleted_at = pg_catalog.statement_timestamp(), deleted_by = $3,
-       removal_due_at = null, definition_revision = $4
-     where organisation_id = $1 and record_id = $2
-       and lifecycle_state = ''active'' and concurrency_number = $5
-     returning stored.record_id, stored.concurrency_number',
-    meta ->> 'table'
-  ) into saved_record_id, saved_concurrency_number using
-    (context_value ->> 'organizationId')::uuid, p_record_id,
-    (context_value ->> 'organizationAccountId')::uuid,
-    (meta ->> 'moduleReleaseRevision')::bigint, p_expected_concurrency_number;
-  get diagnostics changed_rows = row_count;
-  if changed_rows <> 1 then
-    raise exception using errcode = '40001', message = 'Record delete revision changed';
-  end if;
-  if saved_record_id is distinct from p_record_id
-    or saved_concurrency_number is null
-    or saved_concurrency_number not between 1 and 9007199254740991 then
-    raise exception using errcode = '55000', message = 'Record delete saved identity is unavailable';
-  end if;
-  perform vortex_record.append_record_lifecycle_effect_internal(
-    'soft_deleted', (meta ->> 'storageContractId')::uuid,
-    p_record_type_id, p_record_id, p_expected_concurrency_number, null
+  storage_changes := storage_changes || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+    'storageContractId', meta -> 'storageContractId', 'recordId', p_record_id,
+    'expectedConcurrencyNumber', p_expected_concurrency_number,
+    'values', pg_catalog.jsonb_build_object(
+      'lifecycle_state', 'soft_deleted',
+      'deleted_at', pg_catalog.statement_timestamp(), 'deleted_by', context_value -> 'organizationAccountId',
+      'removal_due_at', null, 'definition_revision', meta -> 'moduleReleaseRevision'
+    )
+  ));
+  effects := effects || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+    'effectKind', 'soft_deleted', 'storageContractId', meta -> 'storageContractId',
+    'recordTypeId', p_record_type_id, 'recordId', p_record_id,
+    'preConcurrencyNumber', p_expected_concurrency_number, 'relationshipId', null, 'previousValue', null
+  ));
+  return pg_catalog.jsonb_build_object(
+    'storageChanges', storage_changes, 'edgeChanges', edge_changes, 'effects', effects
   );
-  application_scope := case when meta ->> 'storageScope' = 'application_contained'
-    then (context_value ->> 'applicationRootId')::uuid else null end;
-  if meta ->> 'storageScope' <> 'application_contained' then
-    perform vortex_record.bump_record_data_version_internal(
-      (context_value ->> 'organizationId')::uuid,
-      (meta ->> 'storageContractId')::uuid, application_scope
-    );
-  end if;
 end
 $function$;
 
-alter function vortex_record.soft_delete_record_recursive_internal(uuid,uuid,bigint,text[]) owner to vortex_record_adapter;
+alter function vortex_record.prepare_record_delete_closure_internal(uuid,uuid,bigint,text[]) owner to vortex_record_adapter;
 
-revoke all on function vortex_record.soft_delete_record_recursive_internal(uuid,uuid,bigint,text[])
+revoke all on function vortex_record.prepare_record_delete_closure_internal(uuid,uuid,bigint,text[])
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
-comment on function vortex_record.soft_delete_record_recursive_internal(uuid,uuid,bigint,text[]) is null;
+comment on function vortex_record.prepare_record_delete_closure_internal(uuid,uuid,bigint,text[]) is
+  'Private delete closure preparation: locks and authorizes the root, dependent records and cleared optional links, returning their complete storage, edge and journal changes without writing records.';

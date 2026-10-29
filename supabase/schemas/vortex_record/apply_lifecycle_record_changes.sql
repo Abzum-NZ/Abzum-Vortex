@@ -25,7 +25,7 @@ begin
   if p_operation is null
     or p_operation not in ('delete', 'restore', 'transfer_ownership')
     or (pg_catalog.jsonb_typeof(p_mutations) is distinct from 'array'
-      and not (p_operation = 'delete' and p_mutations is null))
+      and not (p_operation in ('delete', 'restore') and p_mutations is null))
     or coalesce(pg_catalog.jsonb_path_exists(
       p_mutations, '$[*] ? (@.kind == "offboarding_transfer")'
     ), false) then

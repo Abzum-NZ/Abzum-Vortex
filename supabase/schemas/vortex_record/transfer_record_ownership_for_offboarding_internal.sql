@@ -56,8 +56,8 @@ begin
     if receipt_claim ->> 'status' is distinct from 'completed' then
       return pg_catalog.jsonb_build_object('outcome','conflict','correlationId',context_value -> 'correlationId');
     end if;
-    return pg_catalog.jsonb_build_object('outcome','transferred','recordId',(receipt_claim ->> 'recordId')::uuid,
-      'concurrencyNumber',(receipt_claim ->> 'concurrencyNumber')::bigint,'correlationId',context_value -> 'correlationId','replayed',true);
+    return pg_catalog.jsonb_build_object('outcome','transferred','recordId',(receipt_claim -> 'result' ->> 'recordId')::uuid,
+      'concurrencyNumber',(receipt_claim -> 'result' ->> 'concurrencyNumber')::bigint,'correlationId',context_value -> 'correlationId','replayed',true);
   end if;
   loaded := vortex_record.load_offboarding_ownership_transfer_facts_internal(
     p_record_type_id,p_record_id,p_expected_concurrency_number);
@@ -195,7 +195,8 @@ begin
   end if;
   if pg_catalog.jsonb_array_length(event_result) <> 1 then raise exception using errcode='55000',message='Offboarding ownership transfer Event append failed'; end if;
   perform vortex_record.complete_command_receipt_internal(
-    'record_save', p_command_id, updated_record_id, updated_concurrency,
+    'record_save', p_command_id,
+    pg_catalog.jsonb_build_object('recordId', updated_record_id, 'concurrencyNumber', updated_concurrency),
     'Offboarding ownership transfer receipt is stale'
   );
   if exact_notice then

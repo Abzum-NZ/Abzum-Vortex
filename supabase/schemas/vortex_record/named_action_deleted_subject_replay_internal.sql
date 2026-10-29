@@ -48,8 +48,8 @@ begin
   end if;
   return pg_catalog.jsonb_build_object(
     'outcome', 'completed',
-    'recordId', receipt_claim -> 'recordId',
-    'concurrencyNumber', receipt_claim -> 'concurrencyNumber',
+    'recordId', receipt_claim -> 'result' -> 'recordId',
+    'concurrencyNumber', receipt_claim -> 'result' -> 'concurrencyNumber',
     'values', '{}'::jsonb,
     'correlationId', vortex_access.validated_human_request_context() -> 'correlationId',
     'backgroundDelivery', 'pending',

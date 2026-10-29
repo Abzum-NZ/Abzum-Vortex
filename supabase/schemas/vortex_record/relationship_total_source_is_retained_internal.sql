@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.relationship_total_source_is_retained_internal(p_catalogue jsonb, p_record_type_id uuid, p_record_id uuid, p_organization_id uuid, p_application_root_id uuid) RETURNS boolean
+CREATE OR REPLACE FUNCTION vortex_record.relationship_total_source_is_retained_internal(p_catalogue jsonb, p_record_type_id uuid, p_record_id uuid, p_organization_id uuid, p_application_root_id uuid) RETURNS boolean
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $_$
@@ -17,6 +17,11 @@ begin
   if record_type is null then
     return false;
   end if;
+  select item.value ->> 'lifecycleState' into lifecycle_state_value
+  from pg_catalog.jsonb_array_elements(coalesce(p_catalogue -> 'proposedRecords', '[]'::jsonb)) as item(value)
+  where item.value ->> 'recordTypeId' = p_record_type_id::text
+    and item.value ->> 'recordId' = p_record_id::text;
+  if found then return lifecycle_state_value <> 'active'; end if;
   select stored.* into catalogue_row
   from vortex_record.storage_catalogue as stored
   where stored.storage_contract_id = (record_type ->> 'storageContractId')::uuid

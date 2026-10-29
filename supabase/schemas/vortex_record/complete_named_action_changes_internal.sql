@@ -401,12 +401,14 @@ begin
           message = 'Named action receipt completion tuple is unavailable';
       end if;
       perform vortex_record.complete_command_receipt_internal(
-        'named_action', effective_command_id, saved_record_id, saved_concurrency_number,
+        'named_action', effective_command_id,
+        pg_catalog.jsonb_build_object('recordId', saved_record_id, 'concurrencyNumber', saved_concurrency_number),
         'Record save receipt is stale'
       );
     else
       perform vortex_record.complete_command_receipt_internal(
-        'named_action', effective_command_id, p_record_id, p_expected_concurrency_number,
+        'named_action', effective_command_id,
+        pg_catalog.jsonb_build_object('recordId', p_record_id, 'concurrencyNumber', p_expected_concurrency_number),
         'Named action receipt is stale'
       );
     end if;

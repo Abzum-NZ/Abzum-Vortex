@@ -3,7 +3,8 @@ create or replace function vortex_record.prepare_record_lifecycle_totals_interna
   p_record_type_id uuid,
   p_record_id uuid,
   p_command_id uuid,
-  p_root_snapshot jsonb
+  p_root_snapshot jsonb,
+  p_proposed_records jsonb
 )
 returns jsonb
 language plpgsql
@@ -31,16 +32,23 @@ declare
   rule_module_root_id uuid;
   rule_release_revision bigint;
   parent_read jsonb;
+  lifecycle_effect record;
+  lifecycle_loaded jsonb;
+  lifecycle_type jsonb;
+  lifecycle_proposed jsonb;
+  lifecycle_records jsonb := '[]'::jsonb;
 begin
   if p_operation is null or p_operation not in ('delete', 'restore')
-    or (p_operation = 'restore' and p_root_snapshot is not null) then
+    or (p_operation = 'restore' and p_root_snapshot is not null)
+    or pg_catalog.jsonb_typeof(p_proposed_records) is distinct from 'array' then
     raise exception using errcode = '22023',
       message = 'Record lifecycle total preparation is invalid';
   end if;
   context_value := vortex_access.validated_human_request_context();
   context_organization_id := (context_value ->> 'organizationId')::uuid;
   context_application_id := (context_value ->> 'applicationRootId')::uuid;
-  catalogue := vortex_record.relationship_total_catalogue_internal();
+  catalogue := vortex_record.relationship_total_catalogue_internal()
+    || pg_catalog.jsonb_build_object('proposedRecords', p_proposed_records);
 
   before_closure := vortex_record.record_lifecycle_total_closure_internal(
     catalogue, p_operation, p_record_type_id, p_record_id, p_command_id
@@ -181,20 +189,41 @@ begin
       end if;
       source_records := '[]'::jsonb;
       for edge_value in
-        select edge.* from vortex_record.relationship_edges as edge
-        where edge.relationship_id = (relationship_value ->> 'relationshipId')::uuid
-          and edge.from_storage_contract_id = (source_type ->> 'storageContractId')::uuid
-          and edge.to_storage_contract_id = (prepared_record ->> 'storageContractId')::uuid
-          and edge.to_record_id = (prepared_record ->> 'recordId')::uuid
-          and edge.from_organisation_id = context_organization_id
-          and edge.to_organisation_id = context_organization_id
-          and edge.from_application_root_id is not distinct from case
-            when source_type ->> 'storageScope' = 'application_contained'
-              then context_application_id else null end
-          and edge.to_application_root_id is not distinct from case
-            when prepared_record #>> '{recordType,storageScope}' = 'application_contained'
-              then context_application_id else null end
-        order by edge.from_storage_contract_id, edge.from_record_id
+        select distinct candidate.* from (
+          select edge.* from vortex_record.relationship_edges as edge
+          where edge.relationship_id = (relationship_value ->> 'relationshipId')::uuid
+            and edge.from_storage_contract_id = (source_type ->> 'storageContractId')::uuid
+            and edge.to_storage_contract_id = (prepared_record ->> 'storageContractId')::uuid
+            and edge.to_record_id = (prepared_record ->> 'recordId')::uuid
+            and edge.from_organisation_id = context_organization_id
+            and edge.to_organisation_id = context_organization_id
+            and edge.from_application_root_id is not distinct from case
+              when source_type ->> 'storageScope' = 'application_contained'
+                then context_application_id else null end
+            and edge.to_application_root_id is not distinct from case
+              when prepared_record #>> '{recordType,storageScope}' = 'application_contained'
+                then context_application_id else null end
+          union
+          select (pg_catalog.jsonb_populate_record(null::vortex_record.relationship_edges,
+            pg_catalog.jsonb_build_object(
+              'relationship_id', relationship_value -> 'relationshipId',
+              'from_organisation_id', context_organization_id, 'to_organisation_id', context_organization_id,
+              'from_storage_contract_id', source_type -> 'storageContractId', 'from_record_id', proposed.value -> 'recordId',
+              'to_storage_contract_id', prepared_record -> 'storageContractId', 'to_record_id', prepared_record -> 'recordId',
+              'from_application_root_id', case when source_type ->> 'storageScope' = 'application_contained'
+                then context_application_id else null end,
+              'to_application_root_id', case when prepared_record #>> '{recordType,storageScope}' = 'application_contained'
+                then context_application_id else null end
+            )
+          )).* from pg_catalog.jsonb_array_elements(p_proposed_records) as proposed(value)
+          where proposed.value -> 'storageContractId' = source_type -> 'storageContractId'
+            and proposed.value ->> 'lifecycleState' = 'active'
+            and proposed.value -> 'existingValues' -> (relationship_value ->> 'fromFieldId') -> 'recordId'
+              = prepared_record -> 'recordId'
+            and proposed.value -> 'existingValues' -> (relationship_value ->> 'fromFieldId') -> 'recordTypeId'
+              = prepared_record -> 'recordTypeId'
+        ) as candidate
+        order by candidate.from_storage_contract_id, candidate.from_record_id
       loop
         source_snapshot := vortex_record.relationship_total_record_snapshot_internal(
           catalogue, (relationship_value ->> 'fromRecordTypeId')::uuid,
@@ -210,6 +239,10 @@ begin
         if source_snapshot is null then
           return pg_catalog.jsonb_build_object('outcome', 'restart');
         end if;
+        if source_snapshot -> 'existingValues' -> (relationship_value ->> 'fromFieldId') -> 'recordId'
+            is distinct from prepared_record -> 'recordId'
+          or source_snapshot -> 'existingValues' -> (relationship_value ->> 'fromFieldId') -> 'recordTypeId'
+            is distinct from prepared_record -> 'recordTypeId' then continue; end if;
         source_key := null;
         select item.value ->> 'recordKey' into source_key
         from pg_catalog.jsonb_array_elements(after_closure -> 'records') as item(value)
@@ -236,17 +269,75 @@ begin
     prepared_records := prepared_records || pg_catalog.jsonb_build_array(prepared_record);
   end loop;
 
+  -- Every record removed or recovered by the command has its own lifecycle
+  -- rules. Keep those stored-value snapshots separate from generated-field
+  -- parents, whose applicable operation remains update.
+  for lifecycle_effect in
+    select effect.*
+    from vortex_record.record_lifecycle_command_effects as effect
+    where effect.organization_id = context_organization_id
+      and effect.application_root_id = context_application_id
+      and effect.actor_organization_account_id = (context_value ->> 'organizationAccountId')::uuid
+      and effect.command_id = p_command_id
+      and effect.effect_kind = case when p_operation = 'delete' then 'soft_deleted' else 'restored' end
+    order by effect.storage_contract_id, effect.record_id
+  loop
+    select item.value into strict lifecycle_type
+    from pg_catalog.jsonb_array_elements(catalogue -> 'recordTypes') as item(value)
+    where (item.value ->> 'recordTypeId')::uuid = lifecycle_effect.record_type_id;
+    lifecycle_loaded := vortex_record.load_record_access_facts_internal(
+      lifecycle_effect.record_type_id, p_operation, lifecycle_effect.record_id,
+      null, null
+    );
+    if lifecycle_loaded ->> 'outcome' is distinct from 'loaded' then
+      raise exception using errcode = '55000', message = 'Lifecycle rule snapshot is unavailable';
+    end if;
+    select storage.module_root_id into strict rule_module_root_id
+    from vortex_record.storage_catalogue as storage
+    where storage.storage_contract_id = lifecycle_effect.storage_contract_id
+      and storage.record_type_id = lifecycle_effect.record_type_id
+      and storage.state = 'active';
+    select item.value into lifecycle_proposed
+    from pg_catalog.jsonb_array_elements(p_proposed_records) as item(value)
+    where (item.value ->> 'recordTypeId')::uuid = lifecycle_effect.record_type_id
+      and (item.value ->> 'recordId')::uuid = lifecycle_effect.record_id;
+    lifecycle_records := lifecycle_records || pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'recordKey', case when lifecycle_effect.record_type_id = p_record_type_id
+            and lifecycle_effect.record_id = p_record_id then 'root'
+          else lifecycle_effect.record_type_id::text || ':' || lifecycle_effect.record_id::text end,
+        'recordType', lifecycle_type - 'moduleReleaseRevision',
+        'recordId', lifecycle_effect.record_id,
+        'concurrencyNumber', lifecycle_loaded -> 'concurrencyNumber',
+        'existingValues', case when p_root_snapshot is not null
+            and lifecycle_effect.record_type_id = p_record_type_id
+            and lifecycle_effect.record_id = p_record_id
+          then p_root_snapshot -> 'existingValues'
+          when p_operation = 'restore' and lifecycle_proposed is not null
+            then lifecycle_proposed -> 'existingValues'
+          else lifecycle_loaded -> 'fieldValues' end,
+        'canRead', lifecycle_effect.record_type_id = p_record_type_id and lifecycle_effect.record_id = p_record_id,
+        'relationshipSources', '[]'::jsonb,
+        'beforeSaveFlows', vortex_record.before_save_flows_for_record_type_internal(
+          rule_module_root_id, (lifecycle_type ->> 'moduleReleaseRevision')::bigint,
+          lifecycle_effect.record_type_id
+        )
+      )
+    );
+  end loop;
+
   return pg_catalog.jsonb_build_object(
     'outcome', 'prepared',
     'correlationId', context_value -> 'correlationId',
     'readableFieldIds', '[]'::jsonb,
-    'records', prepared_records
+    'records', prepared_records,
+    'lifecycleRecords', lifecycle_records
   );
 end
 $function$;
-alter function vortex_record.prepare_record_lifecycle_totals_internal(text,uuid,uuid,uuid,jsonb) owner to vortex_record_adapter;
+alter function vortex_record.prepare_record_lifecycle_totals_internal(text,uuid,uuid,uuid,jsonb,jsonb) owner to vortex_record_adapter;
 
-revoke all on function vortex_record.prepare_record_lifecycle_totals_internal(text, uuid, uuid, uuid, jsonb)
+revoke all on function vortex_record.prepare_record_lifecycle_totals_internal(text, uuid, uuid, uuid, jsonb, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
-comment on function vortex_record.prepare_record_lifecycle_totals_internal(text, uuid, uuid, uuid, jsonb) is null;
+comment on function vortex_record.prepare_record_lifecycle_totals_internal(text, uuid, uuid, uuid, jsonb, jsonb) is null;

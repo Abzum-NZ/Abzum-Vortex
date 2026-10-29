@@ -18,6 +18,13 @@ declare
   nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000'::uuid;
   root_snapshot jsonb;
   deletion_result jsonb;
+  deletion_plan jsonb;
+  storage_changes jsonb;
+  storage_set jsonb;
+  generated_plan jsonb;
+  parent_plan jsonb;
+  written_revisions jsonb;
+  storage_change jsonb;
   current_revision bigint;
   context_value jsonb;
   receipt vortex_record.command_receipts%rowtype;
@@ -96,8 +103,8 @@ begin
         end if;
         return pg_catalog.jsonb_build_object(
           'outcome', 'deleted',
-          'recordId', receipt_claim -> 'recordId',
-          'concurrencyNumber', receipt_claim -> 'concurrencyNumber',
+          'recordId', receipt_claim -> 'result' -> 'recordId',
+          'concurrencyNumber', receipt_claim -> 'result' -> 'concurrencyNumber',
           'correlationId', context_value -> 'correlationId',
           'replayed', true
         );
@@ -115,9 +122,14 @@ begin
         'vortex_record.lifecycle_command_id', p_command_id::text, true
       );
       begin
-        perform vortex_record.soft_delete_record_recursive_internal(
+        deletion_plan := vortex_record.prepare_record_delete_closure_internal(
           p_record_type_id, p_record_id, p_expected_concurrency_number, array[]::text[]
         );
+        storage_set := vortex_record.prepare_record_storage_set_internal(deletion_plan -> 'storageChanges');
+        perform vortex_record.append_record_lifecycle_effect_internal((
+          select pg_catalog.jsonb_agg(distinct item.value order by item.value)
+          from pg_catalog.jsonb_array_elements(deletion_plan -> 'effects') as item(value)
+        ));
         deletion_result := pg_catalog.jsonb_build_object('outcome', 'completed');
       exception
         when serialization_failure or deadlock_detected then
@@ -160,7 +172,7 @@ begin
       end if;
 
       return vortex_record.prepare_record_lifecycle_totals_internal(
-        'delete', p_record_type_id, p_record_id, p_command_id, root_snapshot
+        'delete', p_record_type_id, p_record_id, p_command_id, root_snapshot, storage_set -> 'proposedRecords'
       );
     end if;
     context_value := vortex_access.validated_human_request_context();
@@ -193,16 +205,54 @@ begin
 
     -- Closure identity and revisions are re-derived under the held locks rather
     -- than taken from the caller.
+    deletion_plan := vortex_record.prepare_record_delete_closure_internal(
+      p_record_type_id, p_record_id, p_expected_concurrency_number, array[]::text[]
+    );
+    storage_set := vortex_record.prepare_record_storage_set_internal(deletion_plan -> 'storageChanges');
     preparation := vortex_record.prepare_record_lifecycle_totals_internal(
-      'delete', p_record_type_id, p_record_id, p_command_id, null
+      'delete', p_record_type_id, p_record_id, p_command_id, null, storage_set -> 'proposedRecords'
     );
     if preparation ->> 'outcome' is distinct from 'prepared' then
       raise exception using errcode = '40001',
         message = 'Protected record delete closure changed';
     end if;
-    perform vortex_record.apply_record_lifecycle_generated_values_internal(
-      preparation, false, p_mutations
+    generated_plan := vortex_record.prepare_record_lifecycle_generated_values_internal(
+      preparation, false, p_mutations, storage_set -> 'proposedRecords'
     );
+    storage_set := vortex_record.prepare_record_storage_set_internal(
+      (storage_set -> 'storageChanges') || (generated_plan -> 'storageChanges')
+    );
+    storage_changes := storage_set -> 'storageChanges';
+    perform vortex_record.apply_record_storage_changes_internal(storage_changes);
+    perform vortex_record.apply_relationship_edges_internal((
+      select coalesce(pg_catalog.jsonb_agg(distinct item.value order by item.value), '[]'::jsonb)
+      from pg_catalog.jsonb_array_elements(deletion_plan -> 'edgeChanges') as item(value)
+    ));
+        for storage_change in
+          select distinct pg_catalog.jsonb_build_object(
+            'storageContractId', item.value -> 'storageContractId',
+            'applicationRootId', case when storage.storage_scope = 'application_contained'
+              then context_value -> 'applicationRootId' else null end
+          )
+          from pg_catalog.jsonb_array_elements(storage_changes) as item(value)
+          join vortex_record.storage_catalogue as storage
+            on storage.storage_contract_id = (item.value ->> 'storageContractId')::uuid
+          where storage.storage_scope <> 'application_contained'
+            or exists (
+              select 1 from pg_catalog.jsonb_array_elements(deletion_plan -> 'effects') as effect(value)
+              where effect.value ->> 'effectKind' = 'optional_cleared'
+                and effect.value -> 'storageContractId' = item.value -> 'storageContractId'
+            )
+        loop
+          perform vortex_record.bump_record_data_version_internal(
+            (context_value ->> 'organizationId')::uuid, (storage_change ->> 'storageContractId')::uuid,
+            (storage_change ->> 'applicationRootId')::uuid
+          );
+        end loop;
+    for parent_plan in select item.value from pg_catalog.jsonb_array_elements(generated_plan -> 'parentPlans') as item(value)
+    loop
+      perform vortex_record.complete_relationship_total_parent_internal(parent_plan);
+    end loop;
 
     for effect_row in
       select effect.*
@@ -253,7 +303,8 @@ begin
     perform vortex_record.append_record_activity_internal(p_activity_id, 'delete_record', subject_ids, array[]::uuid[], 'completed');
 
     perform vortex_record.complete_command_receipt_internal(
-      'record_delete', p_command_id, p_record_id, p_expected_concurrency_number + 1,
+      'record_delete', p_command_id,
+      pg_catalog.jsonb_build_object('recordId', p_record_id, 'concurrencyNumber', p_expected_concurrency_number + 1),
       'Protected record delete receipt is stale'
     );
 
@@ -265,6 +316,22 @@ begin
       'replayed', false
     );
   elsif p_operation = 'restore' then
+    if p_mutations is null then
+      if p_command_id is null or p_command_id = nil_uuid
+        or p_record_type_id is null or p_record_type_id = nil_uuid
+        or p_record_id is null or p_record_id = nil_uuid
+        or p_activity_id is null or p_activity_id = nil_uuid
+        or p_occurrence_id is null or p_occurrence_id = nil_uuid
+        or p_expected_concurrency_number is null
+        or p_expected_concurrency_number not between 1 and 9007199254740990 then
+        return pg_catalog.jsonb_build_object(
+          'outcome', 'refused', 'reasonCode', 'command_invalid'
+        );
+      end if;
+      return vortex_record.prepare_record_restore_internal(
+        p_command_id, p_record_type_id, p_record_id, p_expected_concurrency_number
+      );
+    end if;
     context_value := vortex_access.validated_human_request_context();
     receipt := vortex_record.lock_command_receipt_internal('record_restore', p_command_id);
     if receipt.command_id is null
@@ -280,7 +347,7 @@ begin
     -- The journaled effects prove the preflight that ran was this restore.
     if exists (
       select 1 from vortex_record.record_lifecycle_command_effects as effect
-      where effect.command_id = receipt.command_id and effect.effect_kind <> 'restored'
+      where effect.command_id = receipt.command_id and effect.effect_kind not in ('restored', 'links_restored')
     ) or not exists (
       select 1 from vortex_record.record_lifecycle_command_effects as effect
       where effect.command_id = receipt.command_id
@@ -292,37 +359,119 @@ begin
         message = 'Protected record restore is not prepared';
     end if;
 
+    deletion_plan := vortex_record.prepare_record_restore_closure_internal(
+      p_record_type_id, p_record_id, p_expected_concurrency_number
+    );
+    if deletion_plan ->> 'outcome' is distinct from 'prepared' then
+      raise exception using errcode = '40001', message = 'Protected record restore closure changed';
+    end if;
+    storage_set := vortex_record.prepare_record_storage_set_internal(deletion_plan -> 'storageChanges');
     preparation := vortex_record.prepare_record_lifecycle_totals_internal(
-      'restore', p_record_type_id, p_record_id, p_command_id, null
+      'restore', p_record_type_id, p_record_id, p_command_id, null, storage_set -> 'proposedRecords'
     );
     if preparation ->> 'outcome' is distinct from 'prepared'
       or (
         select (item.value ->> 'concurrencyNumber')::bigint
         from pg_catalog.jsonb_array_elements(preparation -> 'records') as item(value)
         where item.value ->> 'recordKey' = 'root'
-      ) is distinct from p_expected_concurrency_number + 1 then
+      ) is distinct from p_expected_concurrency_number then
       raise exception using errcode = '40001',
         message = 'Protected record restore closure changed';
     end if;
-    revisions := vortex_record.apply_record_lifecycle_generated_values_internal(
-      preparation, true, p_mutations
+    generated_plan := vortex_record.prepare_record_lifecycle_generated_values_internal(
+      preparation, true, p_mutations, storage_set -> 'proposedRecords'
     );
+    storage_set := vortex_record.prepare_record_storage_set_internal(
+      (storage_set -> 'storageChanges') || (generated_plan -> 'storageChanges')
+    );
+    written_revisions := vortex_record.apply_record_storage_changes_internal(storage_set -> 'storageChanges');
+    perform vortex_record.validate_record_restore_set_internal(deletion_plan -> 'subjects');
+    select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'recordKey', prepared.value -> 'recordKey',
+      'concurrencyNumber', coalesce(written.value -> 'concurrencyNumber', prepared.value -> 'concurrencyNumber')
+    )) into revisions
+    from pg_catalog.jsonb_array_elements(preparation -> 'records') as prepared(value)
+    left join pg_catalog.jsonb_array_elements(written_revisions) as written(value)
+      on written.value -> 'recordId' = prepared.value -> 'recordId'
+      and written.value -> 'storageContractId' = prepared.value -> 'storageContractId';
+    for parent_plan in
+      select item.value from pg_catalog.jsonb_array_elements(generated_plan -> 'parentPlans') as item(value)
+      where not exists (
+        select 1 from pg_catalog.jsonb_array_elements(deletion_plan -> 'subjects') as restored(value)
+        where restored.value -> 'recordId' = item.value -> 'recordId'
+          and restored.value -> 'recordTypeId' = item.value -> 'recordTypeId'
+      )
+    loop
+      perform vortex_record.complete_relationship_total_parent_internal(parent_plan);
+    end loop;
     select (item.value ->> 'concurrencyNumber')::bigint into strict restored_revision
     from pg_catalog.jsonb_array_elements(revisions) as item(value)
     where item.value ->> 'recordKey' = 'root';
 
-    perform vortex_record.append_record_activity_internal(p_activity_id, 'restore_record', array[p_record_id]::uuid[], array[]::uuid[], 'completed');
+    select pg_catalog.array_agg(distinct effect.record_id order by effect.record_id)
+      into subject_ids
+    from vortex_record.record_lifecycle_command_effects as effect
+    where effect.organization_id = (context_value ->> 'organizationId')::uuid
+      and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
+      and effect.actor_organization_account_id = (context_value ->> 'organizationAccountId')::uuid
+      and effect.command_id = p_command_id;
+    perform vortex_record.append_record_activity_internal(
+      p_activity_id, 'restore_record', subject_ids, array[]::uuid[], 'completed'
+    );
 
     perform vortex_record.complete_command_receipt_internal(
-      'record_restore', p_command_id, p_record_id, restored_revision,
+      'record_restore', p_command_id,
+      pg_catalog.jsonb_build_object('recordId', p_record_id, 'concurrencyNumber', restored_revision,
+        'unrestoredLinkCount', deletion_plan -> 'unrestoredLinkCount'),
       'Protected record restore receipt is stale'
     );
+
+    for effect_row in
+      select effect.*
+      from vortex_record.record_lifecycle_command_effects as effect
+      where effect.organization_id = (context_value ->> 'organizationId')::uuid
+        and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
+        and effect.actor_organization_account_id = (context_value ->> 'organizationAccountId')::uuid
+        and effect.command_id = p_command_id
+      order by effect.effect_sequence
+    loop
+      select (revision.value ->> 'concurrencyNumber')::bigint into strict current_revision
+      from pg_catalog.jsonb_array_elements(preparation -> 'records') as prepared(value)
+      join pg_catalog.jsonb_array_elements(revisions) as revision(value)
+        on revision.value ->> 'recordKey' = prepared.value ->> 'recordKey'
+      where (prepared.value ->> 'recordTypeId')::uuid = effect_row.record_type_id
+        and (prepared.value ->> 'recordId')::uuid = effect_row.record_id;
+      if exists (
+        select 1 from vortex_record.storage_catalogue as storage
+        where storage.storage_contract_id = effect_row.storage_contract_id
+          and storage.storage_scope = 'application_contained'
+      ) then
+        begin
+          notice_sequence := pg_catalog.nextval(
+            'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
+          );
+          perform vortex_platform.publish_change_notice(
+            effect_row.organization_id, effect_row.application_root_id,
+            effect_row.record_type_id, effect_row.record_id, current_revision,
+            'changed', notice_sequence, notice_sequence,
+            (context_value ->> 'correlationId')::uuid
+          );
+        exception when others then
+          raise warning 'Record restore notice failed: [%] %', sqlstate, sqlerrm;
+        end;
+      else
+        perform vortex_record.bump_record_data_version_internal(
+          effect_row.organization_id, effect_row.storage_contract_id, null
+        );
+      end if;
+    end loop;
 
     return pg_catalog.jsonb_build_object(
       'outcome', 'restored',
       'recordId', p_record_id,
       'concurrencyNumber', restored_revision,
       'correlationId', context_value -> 'correlationId',
+      'unrestoredLinkCount', deletion_plan -> 'unrestoredLinkCount',
       'replayed', false
     );
   elsif p_operation = 'transfer_ownership' then
@@ -383,7 +532,7 @@ begin
       -- A replay reprojects from current access and intentionally never returns
       -- owner metadata (including the prior target).
       loaded := (vortex_record.read_record(
-        p_record_type_id, (receipt_claim ->> 'recordId')::uuid
+        p_record_type_id, (receipt_claim -> 'result' ->> 'recordId')::uuid
       )) -> 'record';
       if loaded ->> 'outcome' <> 'allowed' then
         return pg_catalog.jsonb_build_object(
@@ -517,7 +666,8 @@ begin
       raise exception using errcode = '55000', message = 'Record ownership transfer Event append failed';
     end if;
     perform vortex_record.complete_command_receipt_internal(
-      'record_save', p_command_id, p_record_id, updated_concurrency_number,
+      'record_save', p_command_id,
+      pg_catalog.jsonb_build_object('recordId', p_record_id, 'concurrencyNumber', updated_concurrency_number),
       'Record ownership transfer receipt is stale'
     );
     if record_fact #>> '{recordScope,storageScope}' = 'application_contained' then

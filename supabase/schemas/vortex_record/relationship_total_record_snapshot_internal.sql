@@ -18,6 +18,7 @@ declare
   value_expression text;
   load_sql text;
   result_value jsonb;
+  proposed_record jsonb;
 begin
   if p_record_type_id is null or p_record_id is null or p_lock is null
     or pg_catalog.jsonb_typeof(p_catalogue -> 'recordTypes') <> 'array' then
@@ -28,6 +29,21 @@ begin
   from pg_catalog.jsonb_array_elements(p_catalogue -> 'recordTypes') item(value)
   where pg_catalog.lower(item.value ->> 'recordTypeId') = pg_catalog.lower(p_record_type_id::text);
   if record_type is null then return null; end if;
+
+  -- The record writer may supply its already-locked proposed closure while
+  -- preparing generated fields. This lets a delete or restore calculate its
+  -- final totals before its one physical write, using the same snapshot path.
+  select item.value into proposed_record
+  from pg_catalog.jsonb_array_elements(coalesce(p_catalogue -> 'proposedRecords', '[]'::jsonb)) as item(value)
+  where item.value ->> 'recordTypeId' = p_record_type_id::text
+    and item.value ->> 'recordId' = p_record_id::text;
+  if proposed_record is not null then
+    if proposed_record ->> 'lifecycleState' <> 'active' then return null; end if;
+    return (proposed_record - 'lifecycleState') || pg_catalog.jsonb_build_object(
+      'recordType', record_type - 'moduleReleaseRevision',
+      'definitionRevision', record_type -> 'moduleReleaseRevision'
+    );
+  end if;
 
   select stored.* into catalogue_row
   from vortex_record.storage_catalogue stored

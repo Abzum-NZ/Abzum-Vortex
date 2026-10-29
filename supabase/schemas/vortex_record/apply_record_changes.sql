@@ -789,7 +789,8 @@ begin
     end if;
     if creation_count = 0 then
       perform vortex_record.complete_command_receipt_internal(
-        'named_action', effective_command_id, p_record_id, p_expected_concurrency_number,
+        'named_action', effective_command_id,
+        pg_catalog.jsonb_build_object('recordId', p_record_id, 'concurrencyNumber', p_expected_concurrency_number),
         'Named action receipt is stale'
       );
     else
@@ -828,7 +829,7 @@ begin
     if action_mode then
       projection := vortex_record.project_named_action_record_internal(
         action_owner_kind, action_owner_id, action_release_revision,
-        action_id_value, p_record_type_id, (receipt_claim ->> 'recordId')::uuid
+        action_id_value, p_record_type_id, (receipt_claim -> 'result' ->> 'recordId')::uuid
       );
       if projection ->> 'outcome' <> 'completed' then
         return pg_catalog.jsonb_build_object(
@@ -837,7 +838,7 @@ begin
       end if;
     else
       projection := (vortex_record.read_record(
-        p_record_type_id, (receipt_claim ->> 'recordId')::uuid
+        p_record_type_id, (receipt_claim -> 'result' ->> 'recordId')::uuid
       )) -> 'record';
       if projection ->> 'outcome' <> 'allowed' then
         return pg_catalog.jsonb_build_object(
@@ -1193,7 +1194,7 @@ begin
           action_owner_kind, action_owner_id, action_release_revision, action_id_value
         );
       else
-        mutation := vortex_record.change_record(
+        mutation := vortex_record.prepare_record_change_internal(
           p_record_type_id, p_record_id, p_expected_concurrency_number,
           value_final_values, value_submitted_field_ids
         );
@@ -1203,7 +1204,7 @@ begin
       and preview_installation is null
       and meta ->> 'storageScope' = 'application_contained'
       and pg_catalog.jsonb_array_length(relationship_changes) > 0 then
-      mutation := vortex_record.change_record(
+      mutation := vortex_record.prepare_record_change_internal(
         p_record_type_id, p_record_id, p_expected_concurrency_number,
         value_final_values, value_submitted_field_ids
       );
@@ -1270,6 +1271,11 @@ begin
     end if;
 
     if mutation ->> 'outcome' in ('completed', 'allowed') then
+      if mutation ? 'storageChange' then
+        perform vortex_record.apply_record_storage_changes_internal(
+          pg_catalog.jsonb_build_array(mutation -> 'storageChange')
+        );
+      end if;
       for relationship_change in
         select item.value
         from pg_catalog.jsonb_array_elements(relationship_changes) as item(value)
@@ -1345,7 +1351,8 @@ begin
     named_action_receipt_subject_write := true;
   else
     perform vortex_record.complete_command_receipt_internal(
-      receipt_kind, effective_command_id, saved_record_id, saved_concurrency_number,
+      receipt_kind, effective_command_id,
+      pg_catalog.jsonb_build_object('recordId', saved_record_id, 'concurrencyNumber', saved_concurrency_number),
       'Record save receipt is stale'
     );
   end if;

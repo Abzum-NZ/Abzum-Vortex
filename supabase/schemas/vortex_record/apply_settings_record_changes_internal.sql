@@ -339,8 +339,8 @@ begin
   end if;
 
   perform vortex_record.complete_command_receipt_internal(
-    'record_save', p_command_id, p_record_id,
-    (access_result ->> 'concurrencyNumber')::bigint,
+    'record_save', p_command_id,
+    pg_catalog.jsonb_build_object('recordId', p_record_id, 'concurrencyNumber', (access_result ->> 'concurrencyNumber')::bigint),
     'Organization settings record save receipt is stale'
   );
   projection := (vortex_record.read_record(p_record_type_id, p_record_id)) -> 'record';

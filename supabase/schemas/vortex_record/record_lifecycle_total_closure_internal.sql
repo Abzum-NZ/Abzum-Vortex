@@ -25,12 +25,7 @@ declare
   record_keys text[] := array[]::text[];
   signatures jsonb := '[]'::jsonb;
 begin
-  if p_operation = 'restore' then
-    return vortex_record.discover_relationship_total_closure_internal(
-      p_catalogue, 'update', p_record_type_id, p_record_id, '{}'::jsonb
-    );
-  end if;
-  if p_operation is distinct from 'delete' or p_command_id is null
+  if p_operation is null or p_operation not in ('delete', 'restore') or p_command_id is null
     or pg_catalog.jsonb_typeof(p_catalogue -> 'recordTypes') is distinct from 'array'
     or pg_catalog.jsonb_typeof(p_catalogue -> 'relationships') is distinct from 'array' then
     return null;
@@ -41,6 +36,22 @@ begin
   context_actor_id := (context_value ->> 'organizationAccountId')::uuid;
 
   for seed in
+    select distinct effect.record_type_id, effect.storage_contract_id, effect.record_id
+    from vortex_record.record_lifecycle_command_effects as effect
+    where ((p_operation = 'restore' and effect.effect_kind in ('restored', 'links_restored'))
+        or (p_operation = 'delete' and effect.effect_kind = 'optional_cleared'))
+      and effect.organization_id = context_organization_id
+      and effect.application_root_id = context_application_id
+      and effect.actor_organization_account_id = context_actor_id
+      and effect.command_id = p_command_id
+      and not (p_operation = 'delete' and exists (
+        select 1 from vortex_record.record_lifecycle_command_effects as deleted
+        where deleted.organization_id = effect.organization_id
+          and deleted.command_id = effect.command_id
+          and deleted.storage_contract_id = effect.storage_contract_id
+          and deleted.record_id = effect.record_id and deleted.effect_kind = 'soft_deleted'
+      ))
+    union
     select distinct
       (target_type.value ->> 'recordTypeId')::uuid as record_type_id,
       edge.to_storage_contract_id as storage_contract_id,
@@ -65,7 +76,8 @@ begin
           relationship.value, (item.value ->> 'recordTypeId')::uuid
         )
     ) as target_type
-    where effect.organization_id = context_organization_id
+    where p_operation = 'delete'
+      and effect.organization_id = context_organization_id
       and effect.application_root_id = context_application_id
       and effect.actor_organization_account_id = context_actor_id
       and effect.command_id = p_command_id
@@ -93,8 +105,10 @@ begin
       )
     order by 2, 3
   loop
-    seed_key := pg_catalog.lower(seed.record_type_id::text) || ':'
-      || pg_catalog.lower(seed.record_id::text);
+    seed_key := case when p_operation = 'restore'
+        and seed.record_type_id = p_record_type_id and seed.record_id = p_record_id
+      then 'root' else pg_catalog.lower(seed.record_type_id::text) || ':'
+        || pg_catalog.lower(seed.record_id::text) end;
     -- A parent already reached is complete: discovery follows every
     -- transitive total parent of each member it adds.
     if seed_key = any (record_keys) then
@@ -110,8 +124,11 @@ begin
       select item.value
       from pg_catalog.jsonb_array_elements(closure_value -> 'records') as item(value)
     loop
-      record_key := case when closure_record ->> 'recordKey' = 'root'
-        then seed_key else closure_record ->> 'recordKey' end;
+      record_key := case when p_operation = 'restore'
+          and (closure_record ->> 'recordTypeId')::uuid = p_record_type_id
+          and (closure_record ->> 'recordId')::uuid = p_record_id then 'root'
+        when closure_record ->> 'recordKey' = 'root'
+          then seed_key else closure_record ->> 'recordKey' end;
       if record_key = any (record_keys) then
         continue;
       end if;

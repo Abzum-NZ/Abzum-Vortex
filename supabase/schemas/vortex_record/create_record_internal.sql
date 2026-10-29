@@ -23,9 +23,8 @@ declare
   column_value jsonb;
   input_value jsonb;
   final_values jsonb := coalesce(p_final_values, '{}'::jsonb);
-  column_names text[] := array[]::text[];
-  column_values text[] := array[]::text[];
-  insert_sql text;
+  physical_values jsonb := '{}'::jsonb;
+  edge_changes jsonb := '[]'::jsonb;
   loaded jsonb;
   facts jsonb;
   decision jsonb;
@@ -150,58 +149,27 @@ begin
         continue;
       end if;
 
-      column_names := pg_catalog.array_append(
-        column_names, pg_catalog.format('%I', column_value ->> 'token')
-      );
-      column_values := pg_catalog.array_append(column_values,
-        case when pg_catalog.jsonb_typeof(input_value) = 'null' then 'null'
-        else case column_value ->> 'databaseValueType'
-          when 'decimal' then pg_catalog.format('%L::numeric', input_value #>> '{}')
-          when 'timestamp_with_time_zone' then
-            pg_catalog.format('%L::timestamptz', input_value #>> '{}')
-          when 'date' then pg_catalog.format('%L::date', input_value #>> '{}')
-          when 'integer' then pg_catalog.format('%L::bigint', input_value #>> '{}')
-          when 'boolean' then pg_catalog.format('%L::boolean', input_value #>> '{}')
-          when 'json' then pg_catalog.format('%L::jsonb', input_value::text)
-          else pg_catalog.format('%L::text', input_value #>> '{}')
-        end end
+      physical_values := physical_values || pg_catalog.jsonb_build_object(
+        column_value ->> 'token', input_value
       );
     end loop;
 
-    insert_sql := pg_catalog.format(
-      'insert into record_data.%I (
-         organisation_id, module_root_id, record_type_id, storage_contract_id,
-         record_id, application_root_id, definition_revision,
-         owner_organisation_account_id, owner_group_id, lifecycle_state,
-         concurrency_number, created_at, created_by, updated_at, updated_by%s
-       ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, ''active'', 1,
-         pg_catalog.statement_timestamp(), $10, pg_catalog.statement_timestamp(), $10%s)',
-      meta ->> 'table',
-      case when pg_catalog.cardinality(column_names) = 0 then ''
-        else ', ' || pg_catalog.array_to_string(column_names, ', ') end,
-      case when pg_catalog.cardinality(column_values) = 0 then ''
-        else ', ' || pg_catalog.array_to_string(column_values, ', ') end
-    );
-    if exact_create_notice then
-      execute insert_sql || ' returning record_id, concurrency_number'
-        into strict saved_record_id, saved_concurrency_number
-        using
-          (context_value ->> 'organizationId')::uuid,
-          (meta ->> 'moduleRootId')::uuid, p_record_type_id,
-          (meta ->> 'storageContractId')::uuid, record_id_value, app_scope,
-          (meta ->> 'moduleReleaseRevision')::bigint,
-          owner_account_id, owner_group_id,
-          (context_value ->> 'organizationAccountId')::uuid;
-      record_id_value := saved_record_id;
-    else
-      execute insert_sql using
-        (context_value ->> 'organizationId')::uuid,
-        (meta ->> 'moduleRootId')::uuid, p_record_type_id,
-        (meta ->> 'storageContractId')::uuid, record_id_value, app_scope,
-        (meta ->> 'moduleReleaseRevision')::bigint,
-        owner_account_id, owner_group_id,
-        (context_value ->> 'organizationAccountId')::uuid;
-    end if;
+    perform vortex_record.apply_record_storage_changes_internal(pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'storageContractId', meta -> 'storageContractId', 'recordId', record_id_value,
+        'expectedConcurrencyNumber', null,
+        'values', physical_values || pg_catalog.jsonb_build_object(
+          'module_root_id', meta -> 'moduleRootId', 'record_type_id', p_record_type_id,
+          'storage_contract_id', meta -> 'storageContractId', 'application_root_id', app_scope,
+          'definition_revision', meta -> 'moduleReleaseRevision',
+          'owner_organisation_account_id', owner_account_id, 'owner_group_id', owner_group_id,
+          'lifecycle_state', 'active', 'created_at', pg_catalog.statement_timestamp(),
+          'created_by', context_value -> 'organizationAccountId'
+        )
+      )
+    ));
+    saved_record_id := record_id_value;
+    saved_concurrency_number := 1;
 
     -- The canonical link-target share-lock prelude is written once in
     -- lock_record_change_targets_internal. Every created link's target row is
@@ -230,10 +198,12 @@ begin
     loop
       field_id_value := (relationship_value ->> 'fromFieldId')::uuid;
       if final_values ? pg_catalog.lower(field_id_value::text) then
-        perform vortex_record.write_relationship_value_internal(
-          p_record_type_id, record_id_value,
-          (relationship_value ->> 'relationshipId')::uuid,
-          final_values -> pg_catalog.lower(field_id_value::text), false
+        edge_changes := edge_changes || pg_catalog.jsonb_build_array(
+          vortex_record.prepare_relationship_value_internal(
+            p_record_type_id, record_id_value,
+            (relationship_value ->> 'relationshipId')::uuid,
+            final_values -> pg_catalog.lower(field_id_value::text), false
+          )
         );
       elsif ownership_mode = 'inherited'
         and (record_type_value ->> 'ownershipRelationshipId')::uuid =
@@ -242,6 +212,8 @@ begin
         raise exception using errcode = 'P4020', message = refusal_reason;
       end if;
     end loop;
+
+    perform vortex_record.apply_relationship_edges_internal(edge_changes);
 
     loaded := vortex_record.load_record_access_facts_internal(
       p_record_type_id, 'create', record_id_value, null, null::jsonb
