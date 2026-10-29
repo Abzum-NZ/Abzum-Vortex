@@ -26,6 +26,8 @@ declare
   restored_values jsonb;
   physical_values jsonb;
   missing_links integer;
+  current_lifecycle text;
+  current_revision bigint;
 begin
   context_value := vortex_access.validated_human_request_context();
   if not context_value ? 'applicationRootId' then
@@ -41,7 +43,10 @@ begin
     and entry.record_type_id = p_record_type_id
     and entry.record_id = p_record_id
     and entry.effect_kind = 'soft_deleted'
-    and entry.post_concurrency_number = p_expected_concurrency_number;
+    and entry.post_concurrency_number = p_expected_concurrency_number
+    and entry.delete_roots @> pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'recordTypeId', p_record_type_id, 'recordId', p_record_id
+    ));
   if delete_command_id is null then
     return pg_catalog.jsonb_build_object(
       'outcome', 'refused', 'reasonCode', 'record_unavailable',
@@ -56,7 +61,10 @@ begin
   from vortex_record.record_lifecycle_command_effects as entry
   where entry.organization_id = (context_value ->> 'organizationId')::uuid
     and entry.application_root_id = (context_value ->> 'applicationRootId')::uuid
-    and entry.command_id = delete_command_id;
+    and entry.command_id = delete_command_id
+    and entry.delete_roots @> pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'recordTypeId', p_record_type_id, 'recordId', p_record_id
+    ));
 
   -- Lock the complete affected set before changing any row. A cleared-link
   -- source can occur more than once; its last journaled revision is authoritative.
@@ -66,7 +74,8 @@ begin
       'recordTypeId', item.value -> 'record_type_id',
       'recordId', item.value -> 'record_id',
       'expectedConcurrencyNumber', pg_catalog.max((item.value ->> 'post_concurrency_number')::bigint),
-      'deleted', pg_catalog.bool_or(item.value ->> 'effect_kind' = 'soft_deleted')
+      'deleted', pg_catalog.bool_or(item.value ->> 'effect_kind' = 'soft_deleted'),
+      'shared', pg_catalog.bool_or(pg_catalog.jsonb_array_length(item.value -> 'delete_roots') > 1)
     )
     from pg_catalog.jsonb_array_elements(effects) as item(value)
     where item.value ->> 'effect_kind' = 'soft_deleted'
@@ -79,6 +88,21 @@ begin
       (subject ->> 'recordTypeId')::uuid,
       case when (subject ->> 'deleted')::boolean then 'restore' else 'update' end
     );
+    -- A shared closure row restored through another root stays active; it is
+    -- not rewritten and its later edits are preserved. The requested root must
+    -- itself still be deleted at the displayed revision.
+    execute pg_catalog.format(
+      'select stored.lifecycle_state, stored.concurrency_number from record_data.%I as stored
+       where stored.organisation_id = $1 and stored.record_id = $2 for update',
+      meta ->> 'table'
+    ) into current_lifecycle, current_revision
+    using (context_value ->> 'organizationId')::uuid, (subject ->> 'recordId')::uuid;
+    if (subject ->> 'deleted')::boolean and (subject ->> 'shared')::boolean
+      and current_lifecycle = 'active'
+      and ((subject ->> 'recordTypeId')::uuid, (subject ->> 'recordId')::uuid)
+        is distinct from (p_record_type_id, p_record_id) then
+      continue;
+    end if;
     loaded := vortex_record.load_record_access_facts_internal(
       (subject ->> 'recordTypeId')::uuid,
       case when (subject ->> 'deleted')::boolean then 'restore' else 'update' end,

@@ -199,6 +199,31 @@ alter table vortex_record.record_lifecycle_command_effects
       and vortex_platform.is_non_nil_uuid(previous_value ->> 'recordId')
     )
   );
+alter table vortex_record.record_lifecycle_command_effects add column delete_roots jsonb;
+-- Existing commands have one root, recorded in their completed receipt. Rebuild
+-- their journal into the same root format used by new sets.
+update vortex_record.record_lifecycle_command_effects as effect
+set delete_roots = (
+  select pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+    'recordTypeId', root.record_type_id, 'recordId', root.record_id
+  ))
+  from vortex_record.command_receipts as receipt
+  join lateral (
+    select candidate.record_type_id, candidate.record_id
+    from vortex_record.record_lifecycle_command_effects as candidate
+    where candidate.command_id = receipt.command_id
+      and candidate.record_id = (receipt.result ->> 'recordId')::uuid
+    order by candidate.effect_sequence desc limit 1
+  ) as root on true
+  where receipt.command_id = effect.command_id
+);
+alter table vortex_record.record_lifecycle_command_effects
+  alter column delete_roots set not null,
+  add constraint record_lifecycle_command_effects_roots_valid
+    check (pg_catalog.jsonb_typeof(delete_roots) = 'array' and delete_roots <> '[]'::jsonb);
+comment on column vortex_record.record_lifecycle_command_effects.delete_roots is
+  'Every delete root whose closure reached this effect; restoring one root selects only its effects.';
+
 comment on table vortex_record.record_lifecycle_command_effects is
   'Private lifecycle command journal: affected record identities, revisions and the targets of optional links cleared by deletion.';
 comment on column vortex_record.record_lifecycle_command_effects.previous_value is
@@ -223,7 +248,7 @@ declare
   context_value jsonb;
   receipt vortex_record.command_receipts%rowtype;
   next_sequence integer;
-  restoring boolean;
+  receipt_kind text;
 begin
   bound_command_id := nullif(
     pg_catalog.current_setting('vortex_record.lifecycle_command_id', true), ''
@@ -233,12 +258,22 @@ begin
     raise exception using errcode = '22023', message = 'Record lifecycle effects are invalid';
   end if;
   if pg_catalog.jsonb_array_length(p_effects) = 0 then return; end if;
-  restoring := (p_effects -> 0 ->> 'effectKind') in ('restored', 'links_restored');
   if exists (
     select 1 from pg_catalog.jsonb_array_elements(p_effects) as item(value)
-    where not (item.value ?& array['effectKind', 'storageContractId', 'recordTypeId', 'recordId', 'preConcurrencyNumber', 'relationshipId', 'previousValue'])
+    where not (item.value ?& array['effectKind', 'storageContractId', 'recordTypeId', 'recordId', 'preConcurrencyNumber', 'relationshipId', 'previousValue', 'deleteRoots'])
       or item.value ->> 'effectKind' not in ('soft_deleted', 'optional_cleared', 'restored', 'links_restored')
-      or ((item.value ->> 'effectKind') in ('restored', 'links_restored')) is distinct from restoring
+      or pg_catalog.jsonb_typeof(item.value -> 'deleteRoots') is distinct from 'array'
+      or item.value -> 'deleteRoots' = '[]'::jsonb
+      or exists (
+        select 1 from pg_catalog.jsonb_array_elements(case
+          when pg_catalog.jsonb_typeof(item.value -> 'deleteRoots') = 'array'
+            then item.value -> 'deleteRoots' else '[]'::jsonb end) as root(value)
+        where pg_catalog.jsonb_typeof(root.value) is distinct from 'object'
+          or not (root.value ?& array['recordTypeId', 'recordId'])
+          or root.value - array['recordTypeId', 'recordId']::text[] <> '{}'::jsonb
+          or not vortex_platform.is_non_nil_uuid(root.value ->> 'recordTypeId')
+          or not vortex_platform.is_non_nil_uuid(root.value ->> 'recordId')
+      )
       or (item.value ->> 'effectKind' = 'optional_cleared' and (
         pg_catalog.jsonb_typeof(item.value -> 'previousValue') is distinct from 'object'
         or not ((item.value -> 'previousValue') ?& array['recordTypeId', 'recordId'])
@@ -251,9 +286,17 @@ begin
     raise exception using errcode = '22023', message = 'Record lifecycle effects are invalid';
   end if;
   context_value := vortex_access.validated_human_request_context();
-  receipt := vortex_record.lock_command_receipt_internal(
-    case when restoring then 'record_restore' else 'record_delete' end, bound_command_id
-  );
+  select stored.command_kind into receipt_kind
+  from vortex_record.command_receipts as stored where stored.command_id = bound_command_id;
+  if receipt_kind not in ('record_delete', 'record_restore', 'record_changes')
+    or exists (
+      select 1 from pg_catalog.jsonb_array_elements(p_effects) as item(value)
+      where (receipt_kind = 'record_delete' and item.value ->> 'effectKind' not in ('soft_deleted', 'optional_cleared'))
+        or (receipt_kind = 'record_restore' and item.value ->> 'effectKind' not in ('restored', 'links_restored'))
+    ) then
+    raise exception using errcode = '42501', message = 'Record lifecycle command kind is invalid';
+  end if;
+  receipt := vortex_record.lock_command_receipt_internal(receipt_kind, bound_command_id);
   if receipt.command_id is null or receipt.result is not null then
     raise exception using errcode = '42501', message = 'Record lifecycle effect journal is unavailable';
   end if;
@@ -267,7 +310,7 @@ begin
     organization_id, application_root_id, actor_organization_account_id,
     command_id, effect_sequence, effect_kind, storage_contract_id,
     record_type_id, record_id, relationship_id,
-    pre_concurrency_number, post_concurrency_number, previous_value
+    pre_concurrency_number, post_concurrency_number, previous_value, delete_roots
   )
   select (context_value ->> 'organizationId')::uuid, (context_value ->> 'applicationRootId')::uuid,
     (context_value ->> 'organizationAccountId')::uuid, receipt.command_id,
@@ -276,7 +319,7 @@ begin
     (item.value ->> 'recordId')::uuid, (item.value ->> 'relationshipId')::uuid,
     (item.value ->> 'preConcurrencyNumber')::bigint,
     (item.value ->> 'preConcurrencyNumber')::bigint + 1,
-    nullif(item.value -> 'previousValue', 'null'::jsonb)
+    nullif(item.value -> 'previousValue', 'null'::jsonb), item.value -> 'deleteRoots'
   from pg_catalog.jsonb_array_elements(p_effects) with ordinality as item(value, ordinality);
 end
 $function$;
@@ -5158,6 +5201,14 @@ begin
     'recordTypeId', p_record_type_id, 'recordId', p_record_id,
     'preConcurrencyNumber', p_expected_concurrency_number, 'relationshipId', null, 'previousValue', null
   ));
+  -- Each outer root replaces the recursive root tags with its own identity.
+  -- The set preparation unions these tags when closures share an effect.
+  select coalesce(pg_catalog.jsonb_agg(item.value || pg_catalog.jsonb_build_object(
+    'deleteRoots', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'recordTypeId', p_record_type_id, 'recordId', p_record_id
+    ))
+  ) order by item.ordinality), '[]'::jsonb) into effects
+  from pg_catalog.jsonb_array_elements(effects) with ordinality as item(value, ordinality);
   return pg_catalog.jsonb_build_object(
     'storageChanges', storage_changes, 'edgeChanges', edge_changes, 'effects', effects
   );
@@ -5661,6 +5712,8 @@ declare
   restored_values jsonb;
   physical_values jsonb;
   missing_links integer;
+  current_lifecycle text;
+  current_revision bigint;
 begin
   context_value := vortex_access.validated_human_request_context();
   if not context_value ? 'applicationRootId' then
@@ -5676,7 +5729,10 @@ begin
     and entry.record_type_id = p_record_type_id
     and entry.record_id = p_record_id
     and entry.effect_kind = 'soft_deleted'
-    and entry.post_concurrency_number = p_expected_concurrency_number;
+    and entry.post_concurrency_number = p_expected_concurrency_number
+    and entry.delete_roots @> pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'recordTypeId', p_record_type_id, 'recordId', p_record_id
+    ));
   if delete_command_id is null then
     return pg_catalog.jsonb_build_object(
       'outcome', 'refused', 'reasonCode', 'record_unavailable',
@@ -5691,7 +5747,10 @@ begin
   from vortex_record.record_lifecycle_command_effects as entry
   where entry.organization_id = (context_value ->> 'organizationId')::uuid
     and entry.application_root_id = (context_value ->> 'applicationRootId')::uuid
-    and entry.command_id = delete_command_id;
+    and entry.command_id = delete_command_id
+    and entry.delete_roots @> pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'recordTypeId', p_record_type_id, 'recordId', p_record_id
+    ));
 
   -- Lock the complete affected set before changing any row. A cleared-link
   -- source can occur more than once; its last journaled revision is authoritative.
@@ -5701,7 +5760,8 @@ begin
       'recordTypeId', item.value -> 'record_type_id',
       'recordId', item.value -> 'record_id',
       'expectedConcurrencyNumber', pg_catalog.max((item.value ->> 'post_concurrency_number')::bigint),
-      'deleted', pg_catalog.bool_or(item.value ->> 'effect_kind' = 'soft_deleted')
+      'deleted', pg_catalog.bool_or(item.value ->> 'effect_kind' = 'soft_deleted'),
+      'shared', pg_catalog.bool_or(pg_catalog.jsonb_array_length(item.value -> 'delete_roots') > 1)
     )
     from pg_catalog.jsonb_array_elements(effects) as item(value)
     where item.value ->> 'effect_kind' = 'soft_deleted'
@@ -5714,6 +5774,21 @@ begin
       (subject ->> 'recordTypeId')::uuid,
       case when (subject ->> 'deleted')::boolean then 'restore' else 'update' end
     );
+    -- A shared closure row restored through another root stays active; it is
+    -- not rewritten and its later edits are preserved. The requested root must
+    -- itself still be deleted at the displayed revision.
+    execute pg_catalog.format(
+      'select stored.lifecycle_state, stored.concurrency_number from record_data.%I as stored
+       where stored.organisation_id = $1 and stored.record_id = $2 for update',
+      meta ->> 'table'
+    ) into current_lifecycle, current_revision
+    using (context_value ->> 'organizationId')::uuid, (subject ->> 'recordId')::uuid;
+    if (subject ->> 'deleted')::boolean and (subject ->> 'shared')::boolean
+      and current_lifecycle = 'active'
+      and ((subject ->> 'recordTypeId')::uuid, (subject ->> 'recordId')::uuid)
+        is distinct from (p_record_type_id, p_record_id) then
+      continue;
+    end if;
     loaded := vortex_record.load_record_access_facts_internal(
       (subject ->> 'recordTypeId')::uuid,
       case when (subject ->> 'deleted')::boolean then 'restore' else 'update' end,
@@ -5883,7 +5958,10 @@ begin
       'storageContractId', item.value -> 'storageContractId',
       'recordTypeId', item.value -> 'recordTypeId', 'recordId', item.value -> 'recordId',
       'preConcurrencyNumber', item.value -> 'expectedConcurrencyNumber',
-      'relationshipId', null, 'previousValue', null
+      'relationshipId', null, 'previousValue', null,
+      'deleteRoots', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordTypeId', p_record_type_id, 'recordId', p_record_id
+      ))
     )) from pg_catalog.jsonb_array_elements(plan_value -> 'subjects') as item(value)
   ));
   perform pg_catalog.set_config('vortex_record.lifecycle_command_id', '', true);

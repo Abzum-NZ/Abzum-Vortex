@@ -51,7 +51,10 @@ begin
       'storageContractId', item.value -> 'storageContractId',
       'recordTypeId', item.value -> 'recordTypeId', 'recordId', item.value -> 'recordId',
       'preConcurrencyNumber', item.value -> 'expectedConcurrencyNumber',
-      'relationshipId', null, 'previousValue', null
+      'relationshipId', null, 'previousValue', null,
+      'deleteRoots', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordTypeId', p_record_type_id, 'recordId', p_record_id
+      ))
     )) from pg_catalog.jsonb_array_elements(plan_value -> 'subjects') as item(value)
   ));
   perform pg_catalog.set_config('vortex_record.lifecycle_command_id', '', true);
