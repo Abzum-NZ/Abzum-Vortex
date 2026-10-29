@@ -16,7 +16,18 @@ export function fieldFocusLost(
   fieldKey: string,
   value: TypedFieldValue,
 ): void {
-  if (event.relatedTarget !== null && event.currentTarget.contains(event.relatedTarget)) return;
+  const next = event.relatedTarget;
+  if (next !== null) {
+    if (event.currentTarget.contains(next)) return;
+    // Select and calendar popups can be portalled outside the field's DOM subtree. Their trigger
+    // names the popup with aria-controls, and moving into it does not leave the field.
+    for (const trigger of event.currentTarget.querySelectorAll("[aria-controls]")) {
+      for (const id of (trigger.getAttribute("aria-controls") ?? "").split(/\s+/)) {
+        if (id !== "" && event.currentTarget.ownerDocument.getElementById(id)?.contains(next))
+          return;
+      }
+    }
+  }
   void handler?.({ event: "field_focus_lost", fieldKey, value });
 }
 
