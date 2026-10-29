@@ -11,6 +11,7 @@ export const flowRefusalFeedbackCodeSchema = z.enum([
   ]).options,
   "role_acceptance_required",
   "recent_authentication_required",
+  "multi_factor_required",
   "role_settings_change_required",
   "application_storage_incompatible",
   "application_republish_required",
@@ -30,6 +31,7 @@ export const flowRefusalFeedbackSentences: Readonly<Record<FlowRefusalFeedbackCo
   invalid_command: "The supplied inputs are invalid.",
   duplicate_conflict: "A conflicting item already exists.",
   stale_revision: "This item changed. Refresh and try again.",
+  multi_factor_required: "This needs two-step verification. Verify, or set it up, then try again.",
   recent_authentication_required:
     "To protect your organisation, this change needs a sign-in within the last 15 minutes. Sign in again, then retry the change.",
   role_acceptance_required: "This role revision needs accepting before it can be assigned.",
@@ -61,6 +63,7 @@ export const flowRefusalFeedbackSentences: Readonly<Record<FlowRefusalFeedbackCo
 const platformGuidanceCodes: ReadonlySet<string> = new Set<FlowRefusalFeedbackCode>([
   "application_republish_required",
   "recent_authentication_required",
+  "multi_factor_required",
   "application_storage_incompatible",
   "application_not_installed",
   "application_not_newer",

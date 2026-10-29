@@ -12,6 +12,7 @@ export {
   requestPasswordRecovery,
   requestRegistration,
   localDevelopmentSignInAvailable,
+  newPasswordPolicy,
   signInWithLocalDevelopmentAccount,
   signInWithPassword,
   type IdentityJourneyConfiguration,

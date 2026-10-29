@@ -64,10 +64,10 @@ begin
     end if;
     if vortex_access.recent_authentication_deadline_internal(
       context_value, evaluated_at,
-      '{"kind":"primary","maximumAgeSeconds":900}'::jsonb
+      '{"kind":"multi_factor","maximumAgeSeconds":3600}'::jsonb
     ) is null then
-      raise exception using errcode = 'V3142',
-        message = 'A recent sign-in is required for capability ceiling changes';
+      raise exception using errcode = 'V3152',
+        message = 'Multi-factor authentication is required for capability ceiling changes';
     end if;
     actor_kind_value := 'identity';
     actor_id_value := actor_identity_id;

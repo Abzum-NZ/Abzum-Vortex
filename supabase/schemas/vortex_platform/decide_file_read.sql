@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION vortex_platform.decide_file_read(p_file_id uuid) RETURNS jsonb
-    LANGUAGE plpgsql
+    LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
 declare
@@ -25,7 +25,8 @@ begin
     stored_record_type_id, stored_record_id, stored_field_id,
     stored_lifecycle_state, stored_scanner_result
   from vortex_platform.file_records as stored
-  where stored.file_id = p_file_id;
+  where stored.file_id = p_file_id
+    and stored.organization_id = (select vortex_platform.organization_id());
   if not found
     or stored_record_id is null
     or stored_lifecycle_state <> 'active'

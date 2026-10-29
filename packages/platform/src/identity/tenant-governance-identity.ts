@@ -119,6 +119,8 @@ const mutationCode = (error: unknown) => {
       return "duplicate_conflict" as const;
     case "V3102":
       return "stale_revision" as const;
+    case "V3152":
+      return "multi_factor_required" as const;
     case "V3103":
       return "last_manager" as const;
     case "V3101":

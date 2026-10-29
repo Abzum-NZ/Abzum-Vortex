@@ -11,10 +11,18 @@ begin
       'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', vortex_access.required_platform_permission('platform.organization.invitations.manage'),
-      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'multi_factor', 'maximumAgeSeconds', 3600),
       'authority', pg_catalog.jsonb_build_object('kind', 'permission')
     )
   ) as evaluated;
+  if decision.outcome = 'refused' and decision.reason_code = 'multi_factor_unsatisfied' then
+    raise exception using errcode = 'V3152',
+      message = 'Organization invitation administration requires multi-factor authentication';
+  end if;
+  if decision.outcome = 'refused' and decision.reason_code = 'authentication_unsatisfied' then
+    raise exception using errcode = 'V3150',
+      message = 'Organization invitation administration requires recent authentication';
+  end if;
   if decision.outcome is distinct from 'eligible'
     or decision.operation_key is distinct from 'platform.organization.invitations.manage'
     or decision.target_kind is distinct from 'organization'

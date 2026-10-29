@@ -763,6 +763,8 @@ export const acceptApplicationRoleChanges = async (
           "installation_role_acceptance_authentication",
           "authentication_required",
         );
+      if (result.kind === "unavailable" && result.code === "multi_factor_required")
+        installationProblem("installation_role_acceptance_multi_factor", "multi_factor_required");
       installationProblem(
         "installation_role_set_not_accepted",
         result.kind === "unavailable" ? "refused" : "temporarily_unavailable",

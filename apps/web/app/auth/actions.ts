@@ -20,7 +20,13 @@ import {
   serializeSignInContinuation,
   type SignInContinuation,
 } from "./_lib/sign-in-continuation";
-import { bootstrapIdentitySession, endIdentitySession } from "./_lib/session-server";
+import {
+  bootstrapIdentitySession,
+  endIdentitySession,
+  enrollMfaFactor,
+  readMfaFactor,
+  verifyMfaFactor,
+} from "./_lib/session-server";
 import { mapWebError } from "../_lib/web-error-mapper";
 
 const formValue = (formData: FormData, name: string, trim = true): string => {
@@ -33,6 +39,7 @@ const failureStatus = (code: string): string => {
   if (code === "vortex.identity.privacy_notice_required") return "privacy_notice_required";
   if (code === "vortex.identity.privacy_notice_changed") return "privacy_notice_changed";
   if (code === "vortex.identity.registration_closed") return "registration_closed";
+  if (code === "vortex.identity.invalid_password") return "invalid_password";
   if (code === "vortex.identity.invalid_credentials") return "invalid_credentials";
   if (code === "vortex.identity.invalid_or_expired_link") return "invalid_link";
   if (code === "vortex.identity.authority_unavailable") return "unavailable";
@@ -92,6 +99,15 @@ export async function signIn(formData: FormData): Promise<never> {
   );
 
   const session = result.ok ? await bootstrapIdentitySession(result) : undefined;
+  if (result.ok && session?.kind === "active") {
+    const factor = await readMfaFactor();
+    if (factor.kind !== "setup") {
+      const query = new URLSearchParams({ mfa: "1" });
+      if (continuation !== undefined)
+        query.set("continuation", serializeSignInContinuation(continuation));
+      redirect(`/auth/sign-in?${query.toString()}`);
+    }
+  }
   redirect(
     result.ok && session?.kind === "active"
       ? continuation === undefined
@@ -99,6 +115,33 @@ export async function signIn(formData: FormData): Promise<never> {
         : signInContinuationAddressPath(continuation)
       : signInStatusPath(result.ok ? "unavailable" : failureStatus(result.code), continuation),
   );
+}
+
+export type MfaFormState =
+  | { kind: "setup"; error?: string }
+  | { kind: "enrolled"; factorId: string; secret: string; error?: string }
+  | { kind: "challenge"; factorId: string; error?: string };
+
+export async function completeMfa(
+  previous: MfaFormState,
+  formData: FormData,
+): Promise<MfaFormState> {
+  if (formValue(formData, "intent") === "enroll") {
+    const enrolled = await enrollMfaFactor();
+    return enrolled.kind === "enrolled"
+      ? enrolled
+      : { kind: "setup", error: "Two-step verification could not be set up. Try again." };
+  }
+  const factorId = formValue(formData, "factor_id");
+  const code = formValue(formData, "code");
+  if (
+    !/^[0-9a-f-]{36}$/iu.test(factorId) ||
+    !/^\d{6}$/u.test(code) ||
+    !(await verifyMfaFactor(factorId, code))
+  )
+    return { ...previous, error: "The code could not be verified. Check it and try again." };
+  const continuation = parseSingleSignInContinuation(formData.getAll("continuation"));
+  redirect(continuation === undefined ? "/signed-in" : signInContinuationAddressPath(continuation));
 }
 
 export async function signOut(): Promise<never> {
@@ -165,5 +208,11 @@ export async function updatePassword(formData: FormData): Promise<never> {
     formValue(formData, "password", false),
   );
 
-  redirect(result.ok ? "/auth/success?state=password-updated" : "/auth/error?reason=invalid-link");
+  redirect(
+    result.ok
+      ? "/auth/success?state=password-updated"
+      : result.code === "vortex.identity.invalid_password"
+        ? "/auth/update-password?status=invalid_password"
+        : "/auth/error?reason=invalid-link",
+  );
 }

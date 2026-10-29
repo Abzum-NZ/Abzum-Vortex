@@ -112,14 +112,18 @@ export const toCoordinatorError = (
   // A stale sign-in keeps its meaning, so the person is told to sign in again.
   if (error instanceof InstallationProblem && error.problem.kind === "authentication_required")
     return fail("APPLICATION_INSTALLATION_RECENT_AUTHENTICATION_REQUIRED", error);
+  if (error instanceof InstallationProblem && error.problem.kind === "multi_factor_required")
+    return fail("APPLICATION_INSTALLATION_MULTI_FACTOR_REQUIRED", error);
   // A refusal stays a refusal, never a generic failure.
   if (error instanceof InstallationProblem && error.problem.kind === "refused")
     return fail("APPLICATION_INSTALLATION_REFUSED", error);
   if (error instanceof BuilderAuthorityError)
     return fail(
-      error.code === "BUILDER_RECENT_AUTHENTICATION_REQUIRED"
-        ? "APPLICATION_INSTALLATION_RECENT_AUTHENTICATION_REQUIRED"
-        : "APPLICATION_INSTALLATION_PERMISSION_REFUSED",
+      error.code === "BUILDER_MULTI_FACTOR_REQUIRED"
+        ? "APPLICATION_INSTALLATION_MULTI_FACTOR_REQUIRED"
+        : error.code === "BUILDER_RECENT_AUTHENTICATION_REQUIRED"
+          ? "APPLICATION_INSTALLATION_RECENT_AUTHENTICATION_REQUIRED"
+          : "APPLICATION_INSTALLATION_PERMISSION_REFUSED",
       error,
     );
   if (error instanceof DefinitionError)

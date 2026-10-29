@@ -226,7 +226,7 @@ export const createAccessAdministrationRoleOperations = ({
         requests.runChange(session, candidate, async (transaction, scope) => {
           const row = requireOne(
             await transaction.query<RoleChangeRow>`
-            select outcome, organization_id, role_summary, access_version
+            select outcome, organization_id, role_summary, access_version, refusal_reason
             from vortex_access.revise_organization_role_metadata_for_administration(
               ${command.data.roleId}::uuid,
               ${command.data.expectedRoleRevision}::bigint,
@@ -237,7 +237,7 @@ export const createAccessAdministrationRoleOperations = ({
           `,
           );
           if (isRecordedRefusal(row, row.role_summary, scope.organizationId, scope.accessVersion))
-            return recordedRefusal;
+            return recordedRefusal(row);
           const parsed = changeOrganizationAdministrationRoleResultSchema.safeParse({
             role: row.role_summary,
             accessVersion: databaseRevision(row.access_version),
@@ -296,7 +296,7 @@ export const createAccessAdministrationRoleOperations = ({
           });
           const row = requireOne(
             await transaction.query<RoleChangeRow>`
-            select outcome, organization_id, role_summary, access_version
+            select outcome, organization_id, role_summary, access_version, refusal_reason
             from vortex_access.retire_organization_role_for_administration(
               ${command.data.roleId}::uuid,
               ${command.data.expectedRoleRevision}::bigint,
@@ -306,7 +306,7 @@ export const createAccessAdministrationRoleOperations = ({
           `,
           );
           if (isRecordedRefusal(row, row.role_summary, scope.organizationId, scope.accessVersion))
-            return recordedRefusal;
+            return recordedRefusal(row);
           const parsed = changeOrganizationAdministrationRoleResultSchema.safeParse({
             role: row.role_summary,
             accessVersion: databaseRevision(row.access_version),

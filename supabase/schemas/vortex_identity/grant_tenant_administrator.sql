@@ -48,6 +48,13 @@ begin
   perform vortex_identity.require_current_tenant_capability(
     actor_identity_id, p_tenant_id, 'platform.tenant.administrators.manage', evaluated_at
   );
+  if vortex_access.recent_authentication_deadline_internal(
+    vortex_platform.current_context(), evaluated_at,
+    '{"kind":"multi_factor","maximumAgeSeconds":3600}'::jsonb
+  ) is null then
+    raise exception using errcode = 'V3152',
+      message = 'Tenant governance requires multi-factor authentication';
+  end if;
   if p_subject_identity_id = actor_identity_id then
     raise exception using errcode = '42501', message = 'Tenant authority cannot be granted to yourself';
   end if;

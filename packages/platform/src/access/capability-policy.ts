@@ -438,6 +438,7 @@ export const capabilityPolicyRefusalCodes = [
   "CAPABILITY_POLICY_STALE",
   "CAPABILITY_POLICY_AUTHORITY_UNAVAILABLE",
   "CAPABILITY_POLICY_RECENT_AUTHENTICATION_REQUIRED",
+  "CAPABILITY_POLICY_MULTI_FACTOR_REQUIRED",
   "CAPABILITY_ALLOCATION_ABOVE_CEILING",
   "CAPABILITY_POLICY_SCOPE_UNAVAILABLE",
   "CAPABILITY_POLICY_OPERATOR_NOT_CONFIGURED",
@@ -650,6 +651,8 @@ const personRefusal = (
       return { outcome: "refused", operation, code: "CAPABILITY_POLICY_STALE" };
     case "V3141":
       return { outcome: "refused", operation, code: "CAPABILITY_POLICY_AUTHORITY_UNAVAILABLE" };
+    case "V3152":
+      return { outcome: "refused", operation, code: "CAPABILITY_POLICY_MULTI_FACTOR_REQUIRED" };
     case "V3142":
       return {
         outcome: "refused",

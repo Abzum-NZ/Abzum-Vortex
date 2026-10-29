@@ -65,6 +65,9 @@ export const finishedNotice = (
 /** Signing in again for a recent sign-in; the dispatcher adds where to come back to. */
 export const reauthenticationPath = "/auth/session-ended?status=reauthenticate";
 
+/** Verifying with, or setting up, an authenticator for the two-step verification a change needs. */
+export const multiFactorPath = "/auth/sign-in?mfa=1";
+
 export const refusalNotices: Readonly<
   Record<Extract<FormFlowFeedback, { kind: "refusal" }>["code"], Notice>
 > = Object.fromEntries(
@@ -72,6 +75,8 @@ export const refusalNotices: Readonly<
     code,
     code === "recent_authentication_required"
       ? { tone: "problem", text, link: { label: "Sign in again", href: reauthenticationPath } }
-      : { tone: "problem", text },
+      : code === "multi_factor_required"
+        ? { tone: "problem", text, link: { label: "Verify", href: multiFactorPath } }
+        : { tone: "problem", text },
   ]),
 ) as Readonly<Record<Extract<FormFlowFeedback, { kind: "refusal" }>["code"], Notice>>;

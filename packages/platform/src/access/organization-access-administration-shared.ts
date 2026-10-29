@@ -24,6 +24,7 @@ export type GroupChangeRow = DatabaseRow & {
   organization_id: unknown;
   group_summary: unknown;
   access_version: unknown;
+  refusal_reason: unknown;
 };
 
 export type MembershipChangeRow = DatabaseRow & {
@@ -31,6 +32,7 @@ export type MembershipChangeRow = DatabaseRow & {
   organization_id: unknown;
   membership_summary: unknown;
   access_version: unknown;
+  refusal_reason: unknown;
 };
 
 export type RoleDetailRow = DatabaseRow & {
@@ -45,6 +47,7 @@ export type RoleChangeRow = DatabaseRow & {
   organization_id: unknown;
   role_summary: unknown;
   access_version: unknown;
+  refusal_reason: unknown;
 };
 
 export type RoleAssignmentChangeRow = DatabaseRow & {
@@ -52,6 +55,7 @@ export type RoleAssignmentChangeRow = DatabaseRow & {
   organization_id: unknown;
   assignment_summary: unknown;
   access_version: unknown;
+  refusal_reason: unknown;
 };
 
 export type RoleChangePreparationRow = DatabaseRow & {
@@ -63,6 +67,7 @@ export type DelegationAuthorityChangeRow = DatabaseRow & {
   organization_id: unknown;
   delegation_summary: unknown;
   access_version: unknown;
+  refusal_reason: unknown;
 };
 
 export type StewardshipAppointmentRow = DatabaseRow & {
@@ -70,6 +75,7 @@ export type StewardshipAppointmentRow = DatabaseRow & {
   organization_id: unknown;
   appointment_summary: unknown;
   access_version: unknown;
+  refusal_reason: unknown;
 };
 
 export type RoleActivationChangeRow = DatabaseRow & {
@@ -77,6 +83,7 @@ export type RoleActivationChangeRow = DatabaseRow & {
   organization_id: unknown;
   activation_summary: unknown;
   access_version: unknown;
+  refusal_reason: unknown;
 };
 
 export const normalizeGroup = (value: unknown): unknown => {
@@ -188,24 +195,45 @@ export const requireOne = <Row>(rows: readonly Row[]): Row => {
   return rows[0];
 };
 
-export const recordedRefusal = Symbol("recordedAccessAdministrationRefusal");
-type RecordedRefusal = typeof recordedRefusal;
+const recordedRefusalMarker = Symbol("recordedAccessAdministrationRefusal");
+type RecordedRefusal = Readonly<{
+  marker: typeof recordedRefusalMarker;
+  reason: "recent_authentication_required" | "multi_factor_required" | null;
+}>;
+export const recordedRefusal = (row: Readonly<{ refusal_reason: unknown }>): RecordedRefusal => {
+  const reason = row.refusal_reason;
+  if (
+    reason !== null &&
+    reason !== "recent_authentication_required" &&
+    reason !== "multi_factor_required"
+  )
+    throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+  return { marker: recordedRefusalMarker, reason };
+};
 
 export const isRecordedRefusal = (
   row: Readonly<{
     outcome: unknown;
     organization_id: unknown;
     access_version: unknown;
+    refusal_reason: unknown;
   }>,
   summary: unknown,
   organizationId: string,
   accessVersion: number,
 ): boolean => {
-  if (row.outcome !== "refused") return false;
+  if (row.outcome !== "refused") {
+    if (row.refusal_reason !== null)
+      throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+    return false;
+  }
   if (
     typeof row.organization_id !== "string" ||
     !sameId(row.organization_id, organizationId) ||
     summary !== null ||
+    (row.refusal_reason !== null &&
+      row.refusal_reason !== "recent_authentication_required" &&
+      row.refusal_reason !== "multi_factor_required") ||
     databaseRevision(row.access_version) !== accessVersion
   )
     throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
@@ -231,10 +259,18 @@ export const mapRecordedRefusal = async <Result>(
 ): Promise<HumanOrganizationRequestResult<Result>> => {
   const result = await request;
   if (result.kind !== "available") return result;
-  if (result.value === recordedRefusal)
+  if (
+    typeof result.value === "object" &&
+    result.value !== null &&
+    "marker" in result.value &&
+    result.value.marker === recordedRefusalMarker
+  ) {
+    const reason = (result.value as RecordedRefusal).reason;
     return refuseAdministration(operation, "ACCESS_ADMIN_REFUSED_BY_DATABASE", {
       kind: "unavailable",
+      ...(reason === null ? {} : { code: reason }),
     } as const);
+  }
   return { kind: "available", value: result.value as Result };
 };
 
