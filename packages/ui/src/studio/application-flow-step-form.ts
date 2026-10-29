@@ -1,13 +1,10 @@
 import {
   builderKeySchema,
   flowFormulaSchema,
-  flowLiteralSchema,
-  flowRoundingModeSchema,
   sourcePageShell,
   type ApplicationSourceDocument,
   type FlowFormula,
   type FlowLiteral,
-  type FlowRoundingMode,
   type FlowTaskPropertyType,
   type FlowValue,
   type ImmutablePlatformBlockCatalogue,
@@ -42,113 +39,24 @@ import {
  * step draft, which `applyStudioFlowStepDraft` turns back into the stored task.
  */
 
-// ─── Calculations: one operator over two numbers ─────────────────────────────────────────────
-
-export type StudioFlowCalculationOperand =
-  | Readonly<{
-      kind: "literal";
-      literal:
-        | Readonly<{ type: "whole_number"; value: number }>
-        | Readonly<{ type: "decimal_number"; value: string }>;
-    }>
-  | Readonly<{ kind: "input" | "variable"; name: string }>;
+/** The editor keeps an invalid expression in the step draft until it is corrected. */
 export type StudioFlowCalculation = Readonly<{
-  operator: "add" | "subtract" | "multiply" | "divide";
-  left: StudioFlowCalculationOperand;
-  right: StudioFlowCalculationOperand;
-  scale: number;
-  rounding: FlowRoundingMode;
-}>;
-export type StudioFlowCalculationReference = Readonly<{
-  kind: "input" | "variable";
-  name: string;
-  type: "whole_number" | "decimal_number";
+  formula: FlowFormula | undefined;
+  error?: string;
 }>;
 
-const calculationReferences = (flow: SourceFlow): StudioFlowCalculationReference[] => {
-  const references: StudioFlowCalculationReference[] = [];
-  for (const [name, declaration] of Object.entries(flow.inputs ?? {}))
-    if (declaration.type === "whole_number" || declaration.type === "decimal_number")
-      references.push({ kind: "input", name, type: declaration.type });
-  for (const [name, declaration] of Object.entries(flow.variables ?? {}))
-    if (
-      (declaration.type === "whole_number" || declaration.type === "decimal_number") &&
-      Object.hasOwn(declaration, "default")
-    )
-      references.push({ kind: "variable", name, type: declaration.type });
-  return references;
-};
-
-const formulaOperand = (formula: FlowFormula): StudioFlowCalculationOperand | undefined => {
-  if (formula.op === "literal") {
-    if (formula.type === "whole_number" && typeof formula.value === "number")
-      return { kind: "literal", literal: { type: "whole_number", value: formula.value } };
-    if (formula.type === "decimal_number" && typeof formula.value === "string")
-      return { kind: "literal", literal: { type: "decimal_number", value: formula.value } };
-    return undefined;
-  }
-  if (
-    formula.op === "reference" &&
-    (formula.reference.source === "input" || formula.reference.source === "variable") &&
-    "name" in formula.reference
-  )
-    return { kind: formula.reference.source, name: formula.reference.name };
-  return undefined;
-};
-
-/** A formula the calculation control shows: one operator over two numbers or numeric references. */
-const formulaCalculation = (value: FlowValue): StudioFlowCalculation | undefined => {
-  if (value.kind !== "formula") return undefined;
-  const formula = value.formula;
-  if (
-    (formula.op !== "add" &&
-      formula.op !== "subtract" &&
-      formula.op !== "multiply" &&
-      formula.op !== "divide") ||
-    formula.args.length !== 2
-  )
-    return undefined;
-  const left = formulaOperand(formula.args[0]!);
-  const right = formulaOperand(formula.args[1]!);
-  return left === undefined || right === undefined
-    ? undefined
-    : { operator: formula.op, left, right, scale: formula.scale, rounding: formula.rounding };
-};
+const formulaCalculation = (value: FlowValue): StudioFlowCalculation | undefined =>
+  value.kind === "formula" ? { formula: value.formula } : undefined;
 
 const calculationFormula = (
-  flow: SourceFlow,
   calculation: StudioFlowCalculation,
   label: string,
 ): Readonly<{ ok: true; value: FlowValue }> | Readonly<{ ok: false; reason: string }> => {
-  if (!Number.isInteger(calculation.scale) || calculation.scale < 0 || calculation.scale > 18)
-    return { ok: false, reason: `${label}: keep between 0 and 18 decimal places.` };
-  if (!flowRoundingModeSchema.safeParse(calculation.rounding).success)
-    return { ok: false, reason: `${label}: choose how to round.` };
-  const references = calculationReferences(flow);
-  const operand = (side: StudioFlowCalculationOperand): FlowFormula | undefined => {
-    if (side.kind === "literal")
-      return flowLiteralSchema.safeParse(side.literal).success
-        ? { op: "literal", type: side.literal.type, value: side.literal.value }
-        : undefined;
-    return references.some((entry) => entry.kind === side.kind && entry.name === side.name)
-      ? { op: "reference", reference: { source: side.kind, name: side.name } }
-      : undefined;
-  };
-  const left = operand(calculation.left);
-  const right = operand(calculation.right);
-  if (left === undefined || right === undefined)
-    return {
-      ok: false,
-      reason: `${label}: each side must be a number or one of the flow's numeric inputs or variables.`,
-    };
-  const formula: FlowFormula = {
-    op: calculation.operator,
-    args: [left, right],
-    scale: calculation.scale,
-    rounding: calculation.rounding,
-  };
-  return flowFormulaSchema.safeParse(formula).success
-    ? { ok: true, value: { kind: "formula", formula } }
+  if (calculation.formula === undefined && calculation.error !== undefined)
+    return { ok: false, reason: `${label}: ${calculation.error}` };
+  const parsed = flowFormulaSchema.safeParse(calculation.formula);
+  return parsed.success
+    ? { ok: true, value: { kind: "formula", formula: parsed.data } }
     : { ok: false, reason: `${label}: this calculation is not valid.` };
 };
 
@@ -421,7 +329,6 @@ export type StudioFlowStepForm =
       draft: StudioFlowStepDraft;
       /** For a control step: what it can point at (other flows, forms). */
       controlEntries?: readonly StudioFlowNamedEntry[];
-      calculationReferences: readonly StudioFlowCalculationReference[];
     }>
   | Readonly<{ kind: "unavailable"; reason: string }>;
 
@@ -723,7 +630,6 @@ export const projectStudioFlowStepForm = (
 ): StudioFlowStepForm => {
   const where = describeStudioFlowLocation(flow, path);
   const description = task.description ?? "";
-  const references = calculationReferences(flow);
   if (!("properties" in task)) {
     const control = controlDraft(task);
     if (control === undefined || control === null)
@@ -749,7 +655,6 @@ export const projectStudioFlowStepForm = (
       fields: [],
       draft: { description, properties: {}, control },
       ...(controlEntries === undefined ? {} : { controlEntries }),
-      calculationReferences: references,
     };
   }
   const definition = studioFlowDefinitionOf(task.type, task.version);
@@ -818,7 +723,6 @@ export const projectStudioFlowStepForm = (
     kind: "available",
     fields,
     draft: { description, properties, control: null },
-    calculationReferences: references,
   };
 };
 
@@ -862,7 +766,7 @@ const propertyValue = (
     case "whole":
       return { ok: true, value: studioFlowValueOf(draft.source) };
     case "calculation":
-      return calculationFormula(flow, draft.calculation, label);
+      return calculationFormula(draft.calculation, label);
     case "text": {
       const text = draft.value.trim();
       if (text.length === 0)

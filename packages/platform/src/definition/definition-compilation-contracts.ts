@@ -129,7 +129,7 @@ export const resolvedDefinitionSchema = z.discriminatedUnion("kind", [
 
 export const definitionResolutionSnapshotSchema = z
   .object({
-    contractVersion: z.literal("4.0.0"),
+    contractVersion: z.literal("4.1.0"),
     fingerprint: fingerprintSchema,
     definitions: z.array(resolvedDefinitionSchema).min(1),
     identities: z.array(sourceIdentityAssignmentSchema),
@@ -342,7 +342,7 @@ export const applicationToolSchema = z
  */
 export const applicationToolBundleSchema = z
   .object({
-    contractVersion: z.literal("4.0.0"),
+    contractVersion: z.literal("4.1.0"),
     applicationKey: namespacedKeySchema,
     tools: z.array(applicationToolSchema).max(10_000),
   })

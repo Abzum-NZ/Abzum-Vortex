@@ -496,6 +496,7 @@
     "icon": "type",
     "paletteGroup": "input",
     "rendererKey": "platform.renderer.text_input",
+    "value_type": { "kind": "fixed", "type": "text" },
     "properties": [
       {
         "kind": "text",
@@ -625,6 +626,12 @@
     "icon": "hash",
     "paletteGroup": "input",
     "rendererKey": "platform.renderer.number_input",
+    "value_type": {
+      "kind": "boolean_setting",
+      "setting": "integer",
+      "when_true": "whole_number",
+      "when_false": "decimal_number"
+    },
     "properties": [
       {
         "kind": "text",
@@ -740,6 +747,7 @@
     "icon": "check-square",
     "paletteGroup": "input",
     "rendererKey": "platform.renderer.boolean_input",
+    "value_type": { "kind": "fixed", "type": "yes_no" },
     "properties": [
       {
         "kind": "text",
@@ -824,6 +832,7 @@
     "icon": "calendar",
     "paletteGroup": "input",
     "rendererKey": "platform.renderer.date_input",
+    "value_type": { "kind": "fixed", "type": "date" },
     "properties": [
       {
         "kind": "text",
@@ -907,6 +916,7 @@
     "icon": "list",
     "paletteGroup": "input",
     "rendererKey": "platform.renderer.choice_input",
+    "value_type": { "kind": "fixed", "type": "choice" },
     "properties": [
       {
         "kind": "text",
@@ -1681,6 +1691,7 @@
     "icon": "link",
     "paletteGroup": "input",
     "rendererKey": "platform.renderer.link_input",
+    "value_type": { "kind": "fixed", "type": "record_reference" },
     "properties": [
       {
         "kind": "text",
@@ -1817,6 +1828,7 @@
     "icon": "file-text",
     "paletteGroup": "input",
     "rendererKey": "platform.renderer.rich_text_input",
+    "value_type": { "kind": "fixed", "type": "json" },
     "properties": [
       {
         "kind": "text",
@@ -4254,6 +4266,7 @@
     "icon": "table",
     "paletteGroup": "input",
     "rendererKey": "platform.renderer.table_input",
+    "value_type": { "kind": "fixed", "type": "json" },
     "properties": [
       {
         "kind": "text",
@@ -4471,6 +4484,7 @@
     "icon": "paperclip",
     "paletteGroup": "input",
     "rendererKey": "platform.renderer.attachment_input",
+    "value_type": { "kind": "fixed", "type": "json" },
     "properties": [
       {
         "kind": "text",
@@ -4587,6 +4601,7 @@
     "icon": "key-round",
     "paletteGroup": "input",
     "rendererKey": "platform.renderer.connection_secret_input",
+    "value_type": { "kind": "fixed", "type": "text" },
     "properties": [
       {
         "kind": "text",

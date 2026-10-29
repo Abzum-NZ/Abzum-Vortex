@@ -277,7 +277,7 @@ export const createApplicationResolutionSnapshot = (
   const identities = [...input.identities].sort((left, right) =>
     compareCanonicalStrings(identityOrder(left), identityOrder(right)),
   );
-  const evidence = { contractVersion: "4.0.0" as const, definitions, identities };
+  const evidence = { contractVersion: "4.1.0" as const, definitions, identities };
   return definitionResolutionSnapshotSchema.parse({
     ...evidence,
     fingerprint: fingerprintCanonicalValue(evidence),

@@ -15,11 +15,8 @@ import {
   recordLinkValueSchema,
   recordRichTextDocumentSchema,
 } from "./module-field-values";
-import {
-  flowRuntimeValueOf,
-  type ActionFlowOutcome,
-  type ActionFlowSeed,
-} from "../rules/action-flow-run";
+import type { ActionFlowOutcome, ActionFlowSeed } from "../rules/action-flow-run";
+import { flowRuntimeValueOf } from "../rules/flow-runtime-value";
 import type { FlowProtectedTaskCall } from "../rules/flow-interpreter";
 import { isRecord } from "../catalogue/runtime-primitives";
 
@@ -52,7 +49,7 @@ export type PreparedNamedAction = Readonly<{
    * The sole current Module validation contract the subject Record's owning Module release was
    * published under. It is checked, never branched on.
    */
-  validationContractVersion: "4.0.0";
+  validationContractVersion: "4.1.0";
   action: NamedActionDefinition;
   recordType: RecordTypeDefinition;
   recordId: string;
@@ -264,6 +261,9 @@ export const actionFlowSeed = (
         hasOwn(prepared.existingValues, field.fieldId)
           ? prepared.existingValues[field.fieldId]
           : null,
+        field.type === "calculation" || field.type === "total"
+          ? field.settings.resultType
+          : undefined,
       ),
     ]),
   ),
