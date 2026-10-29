@@ -14,7 +14,11 @@ import type {
   FlowReference,
   FlowRoundingMode,
 } from "../workflows/flow-values";
-import { flowFormulaChildren, flowFormulaSchema } from "../workflows/flow-values";
+import {
+  flowFormulaChildren,
+  flowFormulaHasUnroundedDivide,
+  flowFormulaSchema,
+} from "../workflows/flow-values";
 import { flowInstantMicros } from "./flow-instant";
 import { conditionValueType, operatorAcceptsOperands } from "./condition-types";
 
@@ -1292,10 +1296,7 @@ export const checkFlowFormula = (
     case "join":
       formula.parts.forEach((part, index) => {
         const type = child(part, "parts", index);
-        const unroundedDivide = (node: FlowFormula): boolean =>
-          node.op !== "round" &&
-          (node.op === "divide" || flowFormulaChildren(node).some(unroundedDivide));
-        if (type !== undefined && numericTypes.has(type) && unroundedDivide(part))
+        if (type !== undefined && numericTypes.has(type) && flowFormulaHasUnroundedDivide(part))
           add(
             [...path, "parts", index],
             "vortex.definition.source_type_compatibility",

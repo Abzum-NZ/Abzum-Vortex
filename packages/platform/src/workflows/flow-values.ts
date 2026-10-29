@@ -395,7 +395,11 @@ export const flowFormulaUsesNow = (formula: FlowFormula): boolean =>
 /** A divide at a numeric escape must be protected by an explicit rounding operation. */
 export const flowFormulaHasUnroundedDivide = (formula: FlowFormula): boolean =>
   formula.op !== "round" &&
-  (formula.op === "divide" || flowFormulaChildren(formula).some(flowFormulaHasUnroundedDivide));
+  (formula.op === "divide" ||
+    (formula.op === "if"
+      ? [formula.then, formula.else]
+      : flowFormulaChildren(formula)
+    ).some(flowFormulaHasUnroundedDivide));
 
 /**
  * A formula bounded in depth and size. Whether `now` may appear depends on where the formula
