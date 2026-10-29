@@ -31,6 +31,7 @@ import {
   type ReactNode,
 } from "react";
 import type { FlowRuntimeState } from "./flow-runtime/flow-runtime";
+import { FlowRuntimeStateContext } from "./flow-runtime/flow-runtime-state-context";
 import type { ComponentConfig, Config, Field, PuckContext, SlotComponent } from "@puckeditor/core";
 import {
   plainSettingValue,
@@ -507,42 +508,44 @@ function PlacementBlock(props: {
     >
       {ownCss === undefined ? null : <style>{ownCss}</style>}
       {visible ? (
-        <Implementation
-          {...parsedInputs}
-          placementId={placementId}
-          settings={settings}
-          slots={slots}
-          breakpoint={activeBreakpoint}
-          responsiveLayout={responsive}
-          metadata={release}
-          fieldInputControlReleases={fieldInputControlReleases}
-          themeTokens={themeTokens}
-          {...availability}
-          {...(metadataIn.projectedNavigation === undefined
-            ? {}
-            : { projectedNavigation: metadataIn.projectedNavigation })}
-          {...(metadataIn.resolvePageHref === undefined
-            ? {}
-            : { resolvePageHref: metadataIn.resolvePageHref })}
-          {...(metadataIn.onNavigatePage === undefined
-            ? {}
-            : { onNavigatePage: metadataIn.onNavigatePage })}
-          {...(metadataIn.onPrefetchPage === undefined
-            ? {}
-            : { onPrefetchPage: metadataIn.onPrefetchPage })}
-          {...(metadataIn.currentPageId === undefined
-            ? {}
-            : { currentPageId: metadataIn.currentPageId })}
-          {...(metadataIn.componentBundleOrigin === undefined
-            ? {}
-            : { componentBundleOrigin: metadataIn.componentBundleOrigin })}
-          {...(metadataIn.applicationSearch === undefined
-            ? {}
-            : { applicationSearch: metadataIn.applicationSearch })}
-          {...(metadataIn.applicationSearchPageSubject === undefined
-            ? {}
-            : { applicationSearchPageSubject: metadataIn.applicationSearchPageSubject })}
-        />
+        <FlowRuntimeStateContext.Provider value={metadataIn.runtimeState}>
+          <Implementation
+            {...parsedInputs}
+            placementId={placementId}
+            settings={settings}
+            slots={slots}
+            breakpoint={activeBreakpoint}
+            responsiveLayout={responsive}
+            metadata={release}
+            fieldInputControlReleases={fieldInputControlReleases}
+            themeTokens={themeTokens}
+            {...availability}
+            {...(metadataIn.projectedNavigation === undefined
+              ? {}
+              : { projectedNavigation: metadataIn.projectedNavigation })}
+            {...(metadataIn.resolvePageHref === undefined
+              ? {}
+              : { resolvePageHref: metadataIn.resolvePageHref })}
+            {...(metadataIn.onNavigatePage === undefined
+              ? {}
+              : { onNavigatePage: metadataIn.onNavigatePage })}
+            {...(metadataIn.onPrefetchPage === undefined
+              ? {}
+              : { onPrefetchPage: metadataIn.onPrefetchPage })}
+            {...(metadataIn.currentPageId === undefined
+              ? {}
+              : { currentPageId: metadataIn.currentPageId })}
+            {...(metadataIn.componentBundleOrigin === undefined
+              ? {}
+              : { componentBundleOrigin: metadataIn.componentBundleOrigin })}
+            {...(metadataIn.applicationSearch === undefined
+              ? {}
+              : { applicationSearch: metadataIn.applicationSearch })}
+            {...(metadataIn.applicationSearchPageSubject === undefined
+              ? {}
+              : { applicationSearchPageSubject: metadataIn.applicationSearchPageSubject })}
+          />
+        </FlowRuntimeStateContext.Provider>
       ) : null}
     </div>
   );

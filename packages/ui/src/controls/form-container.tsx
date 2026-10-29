@@ -20,6 +20,7 @@ import {
 } from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import { FlowSurfaceContext } from "../flow-runtime/flow-surface-context";
+import { FlowRuntimeStateContext } from "../flow-runtime/flow-runtime-state-context";
 import { resolveControlContext, type ControlRenderProps } from "./control-context";
 import {
   applicableDraftFeedback,
@@ -188,6 +189,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
 
   const titleId = useId();
   const inFlowSurface = useContext(FlowSurfaceContext);
+  const flowRuntimeState = useContext(FlowRuntimeStateContext);
   const feedbackId = useId();
   const formId = props.placementId;
   const formRef = useRef<HTMLFormElement>(null);
@@ -307,6 +309,10 @@ export function FormContainer(props: FormContainerProps): ReactElement {
 
   const events = context.events;
   const eventsRef = useRef(events);
+  useEffect(
+    () => flowRuntimeState?.registerForm(formId, registry.valueOf),
+    [flowRuntimeState, formId, registry],
+  );
   useEffect(() => {
     eventsRef.current = events;
   }, [events]);

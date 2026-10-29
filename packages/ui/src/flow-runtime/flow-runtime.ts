@@ -3,6 +3,7 @@ import type { FlowIntentHost } from "./intents";
 import type { ServerDrivenResult } from "./server-driven-run";
 import type { FlowInvokeClient, FlowSubjectContext } from "./server-flow-client";
 import { startFlowEventCycle, type FlowEventCycle } from "./flow-cycle";
+import type { TypedFieldValue } from "../controls/projected-data";
 
 export type FlowRuntimeOptions = Readonly<{
   client: FlowInvokeClient;
@@ -27,6 +28,7 @@ export function createFlowRuntimeState() {
   const running = new Map<string, number>();
   const cycles = new Map<string, Readonly<{ cycle: FlowEventCycle }>>();
   const listeners = new Map<string, Set<() => void>>();
+  const forms = new Map<string, (fieldKey: string) => TypedFieldValue | undefined>();
   const notify = (controlId: string) => listeners.get(controlId)?.forEach((listener) => listener());
   const changeRunning = (controlId: string, amount: number) => {
     const before = running.get(controlId) ?? 0;
@@ -38,6 +40,16 @@ export function createFlowRuntimeState() {
   const abandoned: ServerDrivenResult = { kind: "abandoned", unanswered: true };
   return {
     isRunning: (controlId: string) => (running.get(controlId) ?? 0) > 0,
+    registerForm: (formId: string, read: (fieldKey: string) => TypedFieldValue | undefined) => {
+      const key = formId.toLowerCase();
+      if (forms.has(key)) throw new Error(`Form '${formId}' is registered more than once`);
+      forms.set(key, read);
+      return () => {
+        if (forms.get(key) === read) forms.delete(key);
+      };
+    },
+    readFormValue: (formId: string, fieldKey: string) =>
+      forms.get(formId.toLowerCase())?.(fieldKey),
     cycleFor: (gestureId: string) => cycles.get(gestureId)?.cycle,
     trackCycle: (gestureId: string, cycle: FlowEventCycle) => {
       const held = { cycle };
