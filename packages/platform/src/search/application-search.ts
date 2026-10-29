@@ -166,6 +166,23 @@ export const searchConfiguredApplication = async (
   const matches: ApplicationSearchMatch[] = [];
   const states: Record<string, SearchScanState> = {};
   let boundary: SearchPosition | undefined;
+  const eligibleTypes = parsed.data.recordTypes.filter(
+    (entry) =>
+      entry.recordType.state === "resolved" &&
+      input.allowedRecordTypeIds.has(String(entry.recordType.recordTypeId).toLowerCase()),
+  );
+  let remainingTypes = eligibleTypes.length;
+  let visits = 0;
+  let heldReads = 0;
+  let reservedHeld = eligibleTypes.reduce((total, entry) => {
+    if (entry.recordType.state !== "resolved") return total;
+    return (
+      total +
+      (input.cursor?.types[String(entry.recordType.recordTypeId).toLowerCase()]?.held.length ?? 0)
+    );
+  }, 0);
+  if (reservedHeld > 200)
+    return { kind: "refused", reason: "The search continuation is invalid. Run the search again." };
   const before = (left: SearchPosition, right: SearchPosition): boolean =>
     left.score > right.score || (left.score === right.score && left.id.localeCompare(right.id) < 0);
   for (const entry of parsed.data.recordTypes) {
@@ -185,14 +202,16 @@ export const searchConfiguredApplication = async (
       return { kind: "refused", reason: "A filter field or value is not valid for this search." };
     if (!input.allowedRecordTypeIds.has(recordTypeId)) continue;
     let state = input.cursor?.types[recordTypeId];
+    reservedHeld -= state?.held.length ?? 0;
+    const visitBudget = Math.floor((200 - visits) / remainingTypes);
+    remainingTypes -= 1;
+    let typeVisits = 0;
     let after = input.cursor?.after ?? undefined;
-    let visits = 0;
-    let heldReads = 0;
     let displayed = 0;
     let frontier: SearchPosition | undefined;
-    while (displayed < input.limit + 1 && visits < 200) {
+    while (displayed < input.limit + 1 && typeVisits < visitBudget) {
       if (state?.done && state.held.length === 0) break;
-      if (heldReads + (state?.held.length ?? 0) > 200) break;
+      if (heldReads + (state?.held.length ?? 0) + reservedHeld > 200) break;
       heldReads += state?.held.length ?? 0;
       const page = await input.readPage({
         recordTypeId,
@@ -203,9 +222,10 @@ export const searchConfiguredApplication = async (
         ...(after === undefined ? {} : { after }),
         ...(state === undefined ? {} : { state }),
         limit: Math.min(input.limit + 1 - displayed, 200),
-        maxVisits: 200 - visits,
+        maxVisits: visitBudget - typeVisits,
       });
       visits += page.visits;
+      typeVisits += page.visits;
       state = page.state;
       frontier = page.frontier;
       for (const row of page.rows) {
@@ -256,6 +276,21 @@ export const searchConfiguredApplication = async (
       .sort((left, right) => right.score - left.score || left.id.localeCompare(right.id))
       .slice(0, 200);
     states[match.recordTypeId] = { ...state, held };
+  }
+  // A group can return at most 200 rows, so lower held ranks cannot enter it.
+  const held = Object.entries(states)
+    .flatMap(([recordTypeId, state]) => state.held.map((position) => ({ recordTypeId, position })))
+    .sort(
+      (left, right) =>
+        right.position.score - left.position.score ||
+        left.position.id.localeCompare(right.position.id),
+    )
+    .slice(0, 200);
+  for (const [recordTypeId, state] of Object.entries(states)) {
+    states[recordTypeId] = {
+      ...state,
+      held: held.filter((item) => item.recordTypeId === recordTypeId).map((item) => item.position),
+    };
   }
   const last = selected[selected.length - 1];
   const cursor = Object.values(states).some((state) => !state.done || state.held.length > 0)
