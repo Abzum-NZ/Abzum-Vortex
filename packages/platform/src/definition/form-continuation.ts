@@ -100,8 +100,7 @@ export const createFormContinuationService = (
       draft?: Extract<FormContinuationOutcome, { kind: "finished" }>["draft"];
     }>,
   ): FormContinuationOutcome => {
-    if (response.kind === "refused")
-      return refuse("not_resumable");
+    if (response.kind === "refused") return refuse("not_resumable");
 
     if (response.kind === "suspended") {
       const formId = response.awaiting === "form" ? formIdOf(response) : undefined;
