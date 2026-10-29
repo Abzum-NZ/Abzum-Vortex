@@ -1,10 +1,9 @@
-import {
-  safeFlowResultDescriptors,
-  type BrowserFlowPlan,
-  type FlowBindingInput,
-  type ComponentFlowBinding,
-  type FlowBindingConcurrency,
-  type FlowFormula,
+import type {
+  BrowserFlowPlan,
+  FlowBindingInput,
+  ComponentFlowBinding,
+  FlowBindingConcurrency,
+  FlowFormula,
 } from "@vortex/platform/schema";
 import type { FlowIntentHost } from "./intents";
 import type { ServerDrivenResult } from "./server-driven-run";
@@ -199,63 +198,15 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
           cycle ?? startFlowEventCycle(binding.flowId, settings.controlId),
         );
         try {
-          const browser = options.browserBinding?.(binding.bindingId);
-          if (browser !== undefined && options.timeZone !== undefined) {
-            const { startBrowserFlow } = await import("./browser-flow-runner");
-            const result = await startBrowserFlow({
-              plan: browser.plan,
-              bindings: browser.inputs,
-              caller: callerInputs ?? {},
-              runId: clickId,
-              timeZone: options.timeZone,
-              host: options.host,
-              readFormValue: options.state.readFormValue,
-              condition: settings.condition,
-              signal: runSignal,
-            });
-            if (result.kind === "abandoned") return { kind: "abandoned", unanswered: true };
-            if (result.kind === "skipped") return { kind: "skipped" };
-            if (result.kind === "completed")
-              return {
-                kind: "finished",
-                runId: clickId,
-                descriptor: safeFlowResultDescriptors.completed,
-                outputs: result.outputs,
-              };
-            if (result.kind === "failed")
-              return {
-                kind: "finished",
-                runId: clickId,
-                descriptor: safeFlowResultDescriptors[result.failure.outcome],
-                outputs: {},
-                failure: {
-                  code: result.failure.code,
-                  ...(result.failure.taskId === undefined ? {} : { taskId: result.failure.taskId }),
-                  ...(result.failure.diagnostic === undefined
-                    ? {}
-                    : { diagnostic: result.failure.diagnostic }),
-                },
-              };
-          }
-          const [first, { driveServerFlow }] = await Promise.all([
-            options.client.startBinding(
-              { bindingId: binding.bindingId, flowId: binding.flowId },
-              callerInputs ?? {},
-              clickId,
-              runSignal,
-              subject,
-            ),
-            import("./server-driven-run"),
-          ]);
-          return await driveServerFlow(
-            options.client,
-            binding.flowId,
-            first,
-            options.host,
+          const { runFlowBinding } = await import("./flow-runtime-driver");
+          return await runFlowBinding(
+            options,
+            binding,
+            callerInputs,
+            clickId,
             runSignal,
-            options.committed === undefined
-              ? undefined
-              : () => options.committed?.(binding.bindingId),
+            subject,
+            settings,
           );
         } finally {
           releaseCycle();
@@ -265,7 +216,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
   };
   return Object.freeze({
     prefetch: async () => {
-      await import("./browser-flow-runner");
+      await Promise.all([import("./flow-runtime-driver"), import("./browser-flow-runner")]);
     },
     dispatchReference,
     dispatch: (binding, callerInputs = {}, clickId, subject, cycle) =>
