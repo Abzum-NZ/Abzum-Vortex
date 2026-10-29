@@ -39,8 +39,8 @@ Every secret is supplied by the environment. Nothing in this directory holds one
 | `KESTRA_BASIC_AUTH_USERNAME` | The account the API and interface demand |
 | `KESTRA_BASIC_AUTH_PASSWORD` | Its password |
 | `KESTRA_PUBLIC_URL` | The public Kestra address used in generated links |
-| `VORTEX_EVENT_DISPATCH_WAKEUP_URL_BASE64` | Base64 encoding of the protected Vercel dispatch route address for scheduled event recovery |
-| `VORTEX_EVENT_DISPATCH_WAKEUP_CREDENTIAL_BASE64` | Base64 encoding of the dispatcher route bearer credential, whose SHA-256 digest is configured in Vercel |
+| `VORTEX_EVENT_DISPATCH_RECOVERY_URL_BASE64` | Base64 encoding of the protected Vercel dispatch route address for scheduled event recovery |
+| `VORTEX_EVENT_DISPATCH_RECOVERY_CREDENTIAL_BASE64` | Base64 encoding of the dispatcher route bearer credential, whose SHA-256 digest is configured in Vercel |
 | `VORTEX_RUNTIME_BUNDLE_CLEANUP_URL_BASE64` | Base64 encoding of the protected Vercel runtime-bundle cleanup route address |
 | `VORTEX_RUNTIME_BUNDLE_CLEANUP_CREDENTIAL_BASE64` | Base64 encoding of the cleanup route bearer credential; its SHA-256 digest is configured on the Vercel route |
 
