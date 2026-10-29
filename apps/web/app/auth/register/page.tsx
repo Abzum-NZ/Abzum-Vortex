@@ -54,6 +54,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
           </Field>
           <Field>
             <Label htmlFor="password">Password</Label>
+            <FieldDescription>{newPasswordPolicy.description}</FieldDescription>
             <Input
               id="password"
               name="password"
@@ -61,9 +62,9 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
               autoComplete="new-password"
               minLength={newPasswordPolicy.minimumLength}
               pattern={newPasswordPolicy.pattern}
+              title={newPasswordPolicy.description}
               required
             />
-            <FieldDescription>{newPasswordPolicy.description}</FieldDescription>
           </Field>
           <Field orientation="horizontal">
             <Checkbox id="privacy-notice" name="privacy_notice_acknowledged" required />

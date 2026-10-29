@@ -52,6 +52,7 @@ export default async function UpdatePasswordPage({
         </Field>
         <Field>
           <Label htmlFor="password">New password</Label>
+          <FieldDescription>{newPasswordPolicy.description}</FieldDescription>
           <Input
             id="password"
             name="password"
@@ -59,9 +60,9 @@ export default async function UpdatePasswordPage({
             autoComplete="new-password"
             minLength={newPasswordPolicy.minimumLength}
             pattern={newPasswordPolicy.pattern}
+            title={newPasswordPolicy.description}
             required
           />
-          <FieldDescription>{newPasswordPolicy.description}</FieldDescription>
         </Field>
         <SubmitButton pendingLabel="Updating password…">Update password</SubmitButton>
       </form>
