@@ -23,6 +23,7 @@ export type PlacementFlowBinding = Readonly<{
   eventId: string;
   event: string;
   flowId: string;
+  segment: Readonly<{ segmentId: string; fingerprint: string }> | Readonly<{ segmentId: null }>;
   /** The names of the caller inputs the bound flow declares; the surface may fill only these. */
   callerInputs: readonly string[];
   /** The whole values input feeds a record-save task in this bound flow. */

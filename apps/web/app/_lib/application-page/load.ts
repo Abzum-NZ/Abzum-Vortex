@@ -15,6 +15,7 @@ import {
   isTablePlacement,
   fieldControl,
   formFieldOf,
+  flowPlansOf,
 } from "@vortex/platform/server";
 import { runtimeContextSelection, runtimePreviewOf } from "@vortex/platform/server";
 import {
@@ -677,6 +678,7 @@ const loadApplicationPageJoined = async (
   };
   const flowBindingInput = {
     application,
+    plans: flowPlansOf(context.releaseSet),
     recordTypeByPlacement,
     bindings,
     pageDefinition,

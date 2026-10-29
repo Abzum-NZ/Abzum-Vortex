@@ -1,4 +1,8 @@
-import { buildLinkTilesQueryBinding, type InstalledRuntimeContext } from "@vortex/platform/server";
+import {
+  buildLinkTilesQueryBinding,
+  type FlowPlanSet,
+  type InstalledRuntimeContext,
+} from "@vortex/platform/server";
 import {
   ATTACHMENT_LIST_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
@@ -281,6 +285,7 @@ export const projectFlowBindingTargets = (input: {
 export const projectPlacementBindings = (
   input: Readonly<{
     application: InstalledRuntimeContext["releaseSet"]["application"];
+    plans: FlowPlanSet;
     recordTypeByPlacement: Map<string, string>;
     bindings: Record<string, PlacementFlowBinding[]>;
     pageDefinition: PageDefinition;
@@ -291,6 +296,7 @@ export const projectPlacementBindings = (
 ): void => {
   const {
     application,
+    plans,
     recordTypeByPlacement,
     bindings,
     pageDefinition,
@@ -348,12 +354,19 @@ export const projectPlacementBindings = (
           return flowTaskChildLists(task).some((child) => savesValues(child.tasks));
         });
       const flow = application.content.flows.find((entry) => sameId(entry.id, binding.flow.flowId));
+      const plan = plans.plans.get(String(binding.flow.flowId));
+      if (plan === undefined) throw new Error("FLOW_BINDING_PLAN_UNAVAILABLE");
+      const entrySegment = plan.segments.find((segment) => segment.kind === "server");
       return {
         savesFormValues: flow !== undefined && savesValues(flow.tasks),
         bindingId: binding.bindingId,
         eventId: binding.eventId,
         event: binding.event,
         flowId: binding.flow.flowId,
+        segment:
+          entrySegment === undefined
+            ? { segmentId: null }
+            : { segmentId: entrySegment.id, fingerprint: entrySegment.fingerprint },
         callerInputs: Object.values(binding.flow.inputs).flatMap((input) =>
           typeof input === "object" && input !== null && input.kind === "caller"
             ? [input.name]
