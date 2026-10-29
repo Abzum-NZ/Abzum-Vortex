@@ -11,9 +11,10 @@ create or replace function vortex_record.search_document_page(
   p_after_score integer default null,
   p_after_record_id uuid default null,
   p_limit integer default 40,
-  p_state jsonb default null
+  p_state jsonb default null,
+  p_max_visits integer default 200
 )
-returns table (record_id uuid, score integer, record jsonb, capabilities jsonb, state jsonb, frontier_score integer, frontier_id uuid)
+returns table (record_id uuid, score integer, record jsonb, capabilities jsonb, state jsonb, frontier_score integer, frontier_id uuid, visits integer)
 language plpgsql
 volatile
 security definer
@@ -54,6 +55,7 @@ begin
     or pg_catalog.jsonb_array_length(p_filters) > 32
     or (p_after_score is null) <> (p_after_record_id is null)
     or p_limit is null or p_limit not between 1 and 200
+    or p_max_visits is null or p_max_visits not between 1 and 200
     or pg_catalog.jsonb_typeof(held_ids) is distinct from 'array'
     or pg_catalog.jsonb_array_length(held_ids) > 200
     or (scan_score is null) <> (scan_id is null) then
@@ -126,7 +128,7 @@ begin
       if (pg_catalog.jsonb_array_length(results) >= p_limit
         and (candidate.upper_score < worst_score
           or (candidate.upper_score = worst_score and candidate.record_id > worst_id)))
-        or new_visits >= 200 then
+        or new_visits >= p_max_visits then
         next_score := candidate.upper_score;
         next_id := candidate.record_id;
         exit;
@@ -141,6 +143,8 @@ begin
       or (current_read -> 'record' ->> 'concurrencyNumber')::bigint is distinct from candidate.source_record_version
       or not (current_read -> 'record' -> 'values' ? p_title_field_id::text)
       or current_read -> 'record' -> 'values' -> p_title_field_id::text in ('null'::jsonb, '""'::jsonb)
+      or (pg_catalog.jsonb_typeof(current_read -> 'record' -> 'values' -> p_title_field_id::text) = 'string'
+        and pg_catalog.btrim(current_read -> 'record' -> 'values' ->> p_title_field_id::text, E' \t\n\r\f' || pg_catalog.chr(11)) = '')
       or exists (
         select 1 from pg_catalog.jsonb_array_elements(p_filters) f(value)
         where not (current_read -> 'record' -> 'values' ? (f.value ->> 'fieldId'))
@@ -202,20 +206,20 @@ begin
     'scan', case when scan_score is null then null else pg_catalog.jsonb_build_object('score', scan_score, 'id', scan_id) end,
     'held', held_rows, 'done', scan_exhausted); 
   if pg_catalog.jsonb_array_length(output_rows) = 0 then
-    return query select null::uuid, null::integer, null::jsonb, null::jsonb, state_value, next_score, next_id;
+    return query select null::uuid, null::integer, null::jsonb, null::jsonb, state_value, next_score, next_id, new_visits;
   else
     return query select (row.value ->> 'id')::uuid, (row.value ->> 'score')::integer,
-      row.value -> 'record', row.value -> 'capabilities', state_value, next_score, next_id
+      row.value -> 'record', row.value -> 'capabilities', state_value, next_score, next_id, new_visits
     from pg_catalog.jsonb_array_elements(output_rows) with ordinality row(value, ordinality)
     order by row.ordinality;
   end if;
 end
 $function$;
 
-alter function vortex_record.search_document_page(uuid,uuid,uuid,jsonb,uuid,jsonb,jsonb,integer,uuid,integer,jsonb) owner to vortex_owner;
-revoke all on function vortex_record.search_document_page(uuid,uuid,uuid,jsonb,uuid,jsonb,jsonb,integer,uuid,integer,jsonb)
+alter function vortex_record.search_document_page(uuid,uuid,uuid,jsonb,uuid,jsonb,jsonb,integer,uuid,integer,jsonb,integer) owner to vortex_owner;
+revoke all on function vortex_record.search_document_page(uuid,uuid,uuid,jsonb,uuid,jsonb,jsonb,integer,uuid,integer,jsonb,integer)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
-grant execute on function vortex_record.search_document_page(uuid,uuid,uuid,jsonb,uuid,jsonb,jsonb,integer,uuid,integer,jsonb)
+grant execute on function vortex_record.search_document_page(uuid,uuid,uuid,jsonb,uuid,jsonb,jsonb,integer,uuid,integer,jsonb,integer)
   to vortex_request;
 
 drop function vortex_record.read_search_document_page(uuid,uuid,uuid,uuid,jsonb,integer);

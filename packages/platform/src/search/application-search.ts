@@ -133,6 +133,7 @@ export const searchConfiguredApplication = async (
         after?: SearchPosition;
         state?: SearchScanState;
         limit: number;
+        maxVisits: number;
       }>,
     ): Promise<
       Readonly<{
@@ -142,6 +143,7 @@ export const searchConfiguredApplication = async (
           record: ApplicationSearchRecord;
         }>[];
         state: SearchScanState;
+        visits: number;
         frontier?: SearchPosition;
       }>
     >;
@@ -182,44 +184,59 @@ export const searchConfiguredApplication = async (
     if (filters === undefined)
       return { kind: "refused", reason: "A filter field or value is not valid for this search." };
     if (!input.allowedRecordTypeIds.has(recordTypeId)) continue;
-    const prior = input.cursor?.types[recordTypeId];
-    if (prior?.done && prior.held.length === 0) {
-      states[recordTypeId] = prior;
-      continue;
-    }
-    const page = await input.readPage({
-      recordTypeId,
-      fields: entry.fields,
-      titleFieldId: String(entry.titleFieldId),
-      terms,
-      filters,
-      ...(input.cursor?.after == null ? {} : { after: input.cursor.after }),
-      ...(prior === undefined ? {} : { state: prior }),
-      limit: Math.min(input.limit + 1, 200),
-    });
-    states[recordTypeId] = page.state;
-    if (page.frontier !== undefined && (boundary === undefined || before(page.frontier, boundary)))
-      boundary = page.frontier;
-    for (const row of page.rows) {
-      const values = new Map(
-        Object.entries(row.record.values).map(([id, value]) => [id.toLowerCase(), value]),
-      );
-      const title = displayValue(values.get(String(entry.titleFieldId).toLowerCase()));
-      if (title === undefined) continue;
-      const subtitle =
-        entry.subtitleFieldId === undefined
-          ? undefined
-          : displayValue(values.get(String(entry.subtitleFieldId).toLowerCase()));
-      matches.push({
-        recordId: row.recordId,
+    let state = input.cursor?.types[recordTypeId];
+    let after = input.cursor?.after ?? undefined;
+    let visits = 0;
+    let heldReads = 0;
+    let displayed = 0;
+    let frontier: SearchPosition | undefined;
+    while (displayed < input.limit + 1 && visits < 200) {
+      if (state?.done && state.held.length === 0) break;
+      if (heldReads + (state?.held.length ?? 0) > 200) break;
+      heldReads += state?.held.length ?? 0;
+      const page = await input.readPage({
         recordTypeId,
-        targetPageId: String(entry.targetPageId),
-        concurrencyNumber: row.record.concurrencyNumber,
-        title,
-        ...(subtitle === undefined ? {} : { subtitle }),
-        rank: row.rank,
+        fields: entry.fields,
+        titleFieldId: String(entry.titleFieldId),
+        terms,
+        filters,
+        ...(after === undefined ? {} : { after }),
+        ...(state === undefined ? {} : { state }),
+        limit: Math.min(input.limit + 1 - displayed, 200),
+        maxVisits: 200 - visits,
       });
+      visits += page.visits;
+      state = page.state;
+      frontier = page.frontier;
+      for (const row of page.rows) {
+        const values = new Map(
+          Object.entries(row.record.values).map(([id, value]) => [id.toLowerCase(), value]),
+        );
+        const title = displayValue(values.get(String(entry.titleFieldId).toLowerCase()));
+        if (title === undefined) continue;
+        const subtitle =
+          entry.subtitleFieldId === undefined
+            ? undefined
+            : displayValue(values.get(String(entry.subtitleFieldId).toLowerCase()));
+        matches.push({
+          recordId: row.recordId,
+          recordTypeId,
+          targetPageId: String(entry.targetPageId),
+          concurrencyNumber: row.record.concurrencyNumber,
+          title,
+          ...(subtitle === undefined ? {} : { subtitle }),
+          rank: row.rank,
+        });
+        displayed += 1;
+      }
+      const last = page.rows[page.rows.length - 1];
+      if (last !== undefined) after = { score: last.rank, id: last.recordId };
+      if (page.visits === 0 && page.rows.length === 0) break;
     }
+    if (state === undefined) throw new Error("SEARCH_SCAN_STATE_MISSING");
+    states[recordTypeId] = state;
+    if (frontier !== undefined && (boundary === undefined || before(frontier, boundary)))
+      boundary = frontier;
   }
   matches.sort(
     (left, right) => right.rank - left.rank || left.recordId.localeCompare(right.recordId),

@@ -106,7 +106,7 @@ export const searchInstalledApplication = async (
                 and binding.value ->> 'state' = 'active')
         )
         select active_installation.value as installation, verified_installation.value is not null as verified,
-          page.record_id, page.score, page.record, page.capabilities, page.state, page.frontier_score, page.frontier_id
+          page.record_id, page.score, page.record, page.capabilities, page.state, page.frontier_score, page.frontier_id, page.visits
         from active_installation
         left join verified_installation on true
         left join lateral vortex_record.search_document_page(
@@ -114,7 +114,7 @@ export const searchInstalledApplication = async (
           ${JSON.stringify(request.fields)}::text::jsonb, ${request.titleFieldId}::uuid,
           ${JSON.stringify(request.terms)}::text::jsonb, ${JSON.stringify(request.filters)}::text::jsonb,
           ${request.after?.score ?? null}::integer, ${request.after?.id ?? null}::uuid, ${request.limit}::integer,
-          ${JSON.stringify(request.state ?? null)}::text::jsonb
+          ${JSON.stringify(request.state ?? null)}::text::jsonb, ${request.maxVisits}::integer
         ) page on verified_installation.value is not null
       `;
       const first = rows[0];
@@ -143,7 +143,12 @@ export const searchInstalledApplication = async (
         if (!sameId(record.recordId, recordId)) throw new Error("SEARCH_RECORD_ID_MISMATCH");
         return [{ recordId, rank: z.number().int().nonnegative().parse(row.score), record }];
       });
-      return { rows: page, state, ...(frontier === undefined ? {} : { frontier }) };
+      return {
+        rows: page,
+        state,
+        visits: z.number().int().min(0).max(200).parse(first.visits),
+        ...(frontier === undefined ? {} : { frontier }),
+      };
     },
   });
 };
