@@ -1,4 +1,4 @@
-﻿import { z } from "zod";
+import { z } from "zod";
 import { revisionSchema, roleIdSchema } from "../catalogue/identifiers";
 
 /** The exact role revision the inviter intended to grant. */

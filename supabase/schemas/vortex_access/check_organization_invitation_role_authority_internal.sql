@@ -1,4 +1,4 @@
-﻿create or replace function vortex_access.check_organization_invitation_role_authority_internal(
+create or replace function vortex_access.check_organization_invitation_role_authority_internal(
   p_organization_id uuid, p_inviter_id uuid, p_role_id uuid, p_checked_at timestamptz
 )
 returns boolean
