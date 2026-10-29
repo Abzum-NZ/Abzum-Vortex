@@ -24,10 +24,7 @@ type FlowContinuationBinding = Readonly<{
   releaseKey: string;
 }>;
 
-export type FlowEffectPrincipal =
-  | Readonly<{ kind: "person"; id: string }>
-  | Readonly<{ kind: "specified_account"; id: string }>
-  | Readonly<{ kind: "system"; id: string }>;
+export type FlowEffectPrincipal = Readonly<{ kind: "person"; id: string }>;
 
 type FlowEffectKey = Readonly<{
   runId: string;

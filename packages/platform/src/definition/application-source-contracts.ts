@@ -3,7 +3,7 @@ import { previewApplicationKeyNamespace } from "./preview-application-key";
 import { applicationExperienceStateSchema } from "../catalogue/catalogues";
 import { inspectApplicationPageReplacements } from "../pages/application-page-replacement";
 import { applicationSourceContractVersion } from "./application-contract-versions";
-import { maximumApplicationRoles } from "./application-contracts";
+import { maximumApplicationRoles, pageValueDeclarationsSchema } from "./application-contracts";
 import {
   builderKeySchema,
   namespacedKeySchema,
@@ -221,6 +221,7 @@ const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
 );
 const sourcePageCommon = {
   id: sourceProvenanceTarget(sourceAliasSchema, ["pageId"]),
+  values: sourceProvenanceUnchanged(pageValueDeclarationsSchema.optional(), true),
   key: sourceProvenanceUnchanged(builderKeySchema),
   name: sourceProvenanceUnchanged(labelSchema),
   replaces_page: sourceProvenanceTarget(sourceAliasSchema.optional(), ["replacementOfPageId"]),

@@ -15,6 +15,7 @@ import {
 } from "../workflows/flow-source-contracts";
 import { flowTaskRegistry, type FlowTaskTypeKey } from "../workflows/flow-task-registry";
 import type { FlowValue } from "../workflows/flow-values";
+import { compileFlowPlans, FlowPlanError } from "../workflows/flow-plan";
 import type { DefinitionProvenanceEntry } from "./definition-provenance";
 import { canonicalJson, compareCanonicalStrings } from "./canonical-json-definition";
 import {
@@ -221,19 +222,6 @@ const resolveTriggers = (ctx: Context, source: SourceFlow): unknown[] =>
         ...trigger,
         inputs,
         recordTypeId: resolveAt(ctx, recordType, [...path, "recordTypeId"]),
-        operations: trigger.operations.map((operation, operationIndex) =>
-          operation.kind === "transition"
-            ? {
-                ...operation,
-                actionId: resolveAt(ctx, ctx.resolver.action(operation.actionId), [
-                  ...path,
-                  "operations",
-                  operationIndex,
-                  "actionId",
-                ]),
-              }
-            : operation,
-        ),
       };
     }
     if (trigger.type === "Event")
@@ -245,7 +233,7 @@ const resolveTriggers = (ctx: Context, source: SourceFlow): unknown[] =>
           "recordTypeId",
         ]),
       };
-    return { ...trigger, inputs };
+    throw refusal(ctx, "vortex.definition.unsupported_workflow_trigger", "unsupported_choice");
   });
 
 /**
@@ -346,32 +334,6 @@ const resolveProperty = (
       // Generic values retain their complete shape, including bounded paths on task-output refs.
       return value;
   }
-};
-
-const resolveFileAttachmentField = (
-  ctx: Context,
-  value: FlowValue,
-  properties: Readonly<Record<string, FlowValue>>,
-  recordTypeProperty: string,
-  path: Path,
-): FlowValue => {
-  const { record, member: alias } = splitMemberReference(ctx, aliasOf(ctx, value));
-  const field = ctx.resolver.field(record, alias);
-  const fieldId = resolveAt(ctx, field, [...path, "literal", "value"]);
-  const recordType = ctx.resolver.recordType(aliasOf(ctx, properties[recordTypeProperty]!));
-  const matches = ctx.resolver.fieldMetadata(fieldId);
-  if (matches.length === 0)
-    throw refusal(ctx, "vortex.definition.workflow_node_references", "broken_reference");
-  if (matches.length !== 1)
-    throw refusal(ctx, "vortex.definition.ambiguous_identity", "unresolved_reference");
-  const metadata = matches[0]!;
-  if (
-    metadata.identifier !== field.identifier ||
-    metadata.type !== "attachment" ||
-    metadata.recordTypeId !== recordType.identifier
-  )
-    throw refusal(ctx, "vortex.definition.workflow_node_references", "invalid_value");
-  return identityLiteral(fieldId);
 };
 
 const resolveTaskList = (ctx: Context, tasks: readonly SourceFlowTask[], path: Path): unknown[] =>
@@ -504,15 +466,6 @@ const resolveTask = (ctx: Context, task: SourceFlowTask, path: Path): unknown =>
       const node = task as Extract<SourceFlowTask, { tasks: SourceFlowTask[] }>;
       return { ...node, tasks: resolveTaskList(ctx, node.tasks, [...path, "tasks"]) };
     }
-    case "parallel": {
-      const node = task as Extract<SourceFlowTask, { type: "parallel" }>;
-      return {
-        ...node,
-        branches: node.branches.map((branch, index) =>
-          resolveTaskList(ctx, branch, [...path, "branches", index]),
-        ),
-      };
-    }
     case "run_flow": {
       const node = task as Extract<SourceFlowTask, { type: "run_flow" }>;
       return {
@@ -520,15 +473,7 @@ const resolveTask = (ctx: Context, task: SourceFlowTask, path: Path): unknown =>
         flowId: resolveAt(ctx, ctx.resolver.flow(node.flowId), [...path, "flowId"]),
       };
     }
-    case "wait_for_person": {
-      const node = task as Extract<SourceFlowTask, { type: "wait_for_person" }>;
-      return {
-        ...node,
-        formId: resolveAt(ctx, ctx.resolver.form(node.formId), [...path, "formId"]),
-      };
-    }
     case "stop":
-    case "wait_until":
       return task;
     default: {
       const node = task as Extract<SourceFlowTask, { properties: unknown }>;
@@ -545,29 +490,14 @@ const resolveTask = (ctx: Context, task: SourceFlowTask, path: Path): unknown =>
           : undefined;
         if (declared === undefined)
           throw refusal(ctx, "vortex.definition.workflow_node_values", "unknown_property");
-        const fileRecordTypeProperty =
-          node.type === "file.attach" && name === "target_attachment_field"
-            ? "target_record_type"
-            : node.type === "file.move" && name === "source_attachment_field"
-              ? "source_record_type"
-              : node.type === "file.move" && name === "target_attachment_field"
-                ? "target_record_type"
-                : undefined;
-        properties[name] =
-          fileRecordTypeProperty === undefined
-            ? resolveProperty(
-                ctx,
-                declared.type,
-                value,
-                node.properties,
-                definition.transactionScope === "saved_record",
-                [...path, "properties", name],
-              )
-            : resolveFileAttachmentField(ctx, value, node.properties, fileRecordTypeProperty, [
-                ...path,
-                "properties",
-                name,
-              ]);
+        properties[name] = resolveProperty(
+          ctx,
+          declared.type,
+          value,
+          node.properties,
+          definition.transactionScope === "saved_record",
+          [...path, "properties", name],
+        );
       }
       return { ...node, properties };
     }
@@ -729,17 +659,7 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
       ...source,
       id: flowIdentity.identifier,
       namespace: resolver.definitionKey,
-      runAs:
-        source.runAs.kind === "specified_account" || source.runAs.kind === "system"
-          ? {
-              ...source.runAs,
-              executionBindingId: resolveAt(
-                ctx,
-                resolver.executionBinding(source.runAs.executionBindingId),
-                ["runAs", "executionBindingId"],
-              ),
-            }
-          : source.runAs,
+      runAs: source.runAs,
       ...(source.invocationPermissionId !== undefined
         ? {
             invocationPermissionId: resolveAt(
@@ -767,13 +687,13 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
     });
   });
 
+  // BeforeSave flows first, in source order (each record type's rule list orders its own); every
+  // other flow in permanent identity order.
   compiled.sort((left, right) => {
-    const leftTrigger = left.flow.triggers.find((trigger) => trigger.type === "BeforeSave");
-    const rightTrigger = right.flow.triggers.find((trigger) => trigger.type === "BeforeSave");
-    if (leftTrigger?.type === "BeforeSave" && rightTrigger?.type === "BeforeSave")
-      return leftTrigger.priority - rightTrigger.priority || left.sourceIndex - right.sourceIndex;
-    if (leftTrigger !== undefined || rightTrigger !== undefined)
-      return leftTrigger === undefined ? 1 : -1;
+    const leftRule = left.flow.triggers.some((trigger) => trigger.type === "BeforeSave");
+    const rightRule = right.flow.triggers.some((trigger) => trigger.type === "BeforeSave");
+    if (leftRule && rightRule) return left.sourceIndex - right.sourceIndex;
+    if (leftRule || rightRule) return leftRule ? -1 : 1;
     return compareCanonicalStrings(left.flow.id, right.flow.id);
   });
   const compiledFlowsById = new Map<string, FlowDefinition>(
@@ -803,6 +723,21 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
       called.ruleCode,
       called.family,
       caller === undefined ? undefined : resolver.locate?.(input.flows[caller.sourceIndex]!.key),
+    );
+  }
+  // Publication compiles the plan the runtime builds, and refuses a flow it cannot plan, naming
+  // the step. The plan itself is never stored.
+  try {
+    compileFlowPlans(compiled.map(({ flow }) => flow));
+  } catch (error) {
+    if (!(error instanceof FlowPlanError)) throw error;
+    const planned = compiled.find(({ flow }) => flow.id === error.flowId);
+    throw new DefinitionCompilationError(
+      "vortex.definition.unsupported_workflow_node",
+      "unsupported_choice",
+      planned === undefined ? undefined : resolver.locate?.(input.flows[planned.sourceIndex]!.key),
+      undefined,
+      error.reason,
     );
   }
   const provenance = compiled.flatMap(({ flow, sourceIndex, resolved }, canonicalIndex) =>

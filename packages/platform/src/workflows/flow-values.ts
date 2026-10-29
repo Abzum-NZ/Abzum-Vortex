@@ -65,6 +65,12 @@ export const flowReferenceObjectSchema = z.discriminatedUnion("source", [
     .strict(),
   z.object({ source: z.literal("execution_actor") }).strict(),
   z.object({ source: z.literal("execution_now") }).strict(),
+  /** A value the page declares; it lives only in the page and never crosses to the server. */
+  z.object({ source: z.literal("page"), name: builderKeySchema }).strict(),
+  /** A field of a named form on the page: the form's placement and the field's key. */
+  z
+    .object({ source: z.literal("form"), form: z.string().min(1).max(240), field: builderKeySchema })
+    .strict(),
 ]);
 export type FlowReference = z.infer<typeof flowReferenceObjectSchema>;
 
@@ -80,6 +86,8 @@ const referencePatterns = {
   ),
   executionActor: /^\{\{\s*execution\.actor\s*\}\}$/,
   executionNow: /^\{\{\s*execution\.now\s*\}\}$/,
+  page: new RegExp(`^\\{\\{\\s*page\\.${referenceName}\\s*\\}\\}$`),
+  form: new RegExp(`^\\{\\{\\s*forms\\.${referenceName}\\.${referenceName}\\s*\\}\\}$`),
 } as const;
 
 /**
@@ -110,6 +118,10 @@ export const parseFlowReference = (text: string): FlowReference | undefined => {
     };
   } else if (referencePatterns.executionActor.test(text)) reference = { source: "execution_actor" };
   else if (referencePatterns.executionNow.test(text)) reference = { source: "execution_now" };
+  else if ((match = referencePatterns.page.exec(text)))
+    reference = { source: "page", name: match[1]! };
+  else if ((match = referencePatterns.form.exec(text)))
+    reference = { source: "form", form: match[1]!, field: match[2]! };
   return reference !== undefined && flowReferenceObjectSchema.safeParse(reference).success
     ? reference
     : undefined;
@@ -121,7 +133,7 @@ const referenceTextSchema = z.string().transform((text, context) => {
     context.addIssue({
       code: "custom",
       message:
-        "Use a closed reference such as {{ inputs.x }}, {{ vars.x }}, {{ trigger.record.f }}, {{ trigger.previous.f }}, {{ outputs.task.key }}, {{ outputs.form.values.label }}, {{ execution.actor }} or {{ execution.now }}; Module calculations may use {{ module.fields.<permanent fieldId> }}; text is never evaluated",
+        "Use a closed reference such as {{ inputs.x }}, {{ vars.x }}, {{ trigger.record.f }}, {{ trigger.previous.f }}, {{ outputs.task.key }}, {{ outputs.form.values.label }}, {{ execution.actor }}, {{ execution.now }}, {{ page.x }} or {{ forms.form.field }}; Module calculations may use {{ module.fields.<permanent fieldId> }}; text is never evaluated",
     });
     return z.NEVER;
   }

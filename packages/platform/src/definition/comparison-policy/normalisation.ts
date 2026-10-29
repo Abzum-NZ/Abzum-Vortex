@@ -83,7 +83,7 @@ export const normaliseModuleContent = <T extends ModuleContent>(content: T): T =
       })),
       "eventId",
     ),
-    // Equal-priority BeforeSave flows execute in this order.
+    // Flow order is part of the release; each record type's rule list orders its BeforeSave flows.
     flows: value.flows,
     sharingConditions: sorted(
       (value.sharingConditions as RecordValue[]).map((condition) => {

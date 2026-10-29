@@ -8,6 +8,7 @@ import {
   type ApplicationSourceDocument,
   type PlatformBlockReleaseIdentity,
   type SourceItemVortex,
+  defaultFlowBindingSettings,
 } from "@vortex/platform/schema";
 import { operationsModules } from "./module";
 import { operationsRunbooks, runbookPageKey, runbookPageText } from "./runbooks";
@@ -494,7 +495,7 @@ const theme = {
  */
 export const operationsApplication: ApplicationSourceDocument =
   applicationSourceDocumentSchema.parse({
-    source_contract_version: "3.0.0",
+    source_contract_version: "4.0.0",
     root_alias: "app_operations",
     key: "vortex.app.operations",
     kind: "application",
@@ -668,7 +669,6 @@ export const operationsApplication: ApplicationSourceDocument =
         {
           // Clicking an incident row opens its own detail page with the record identity the row
           // carries, so the page subject is read through the normal record read path.
-          contractVersion: "1.0.0",
           id: openIncidentRowClick.flow,
           key: openIncidentRowClick.flow,
           description: openIncidentRowClick.description,
@@ -746,6 +746,7 @@ export const operationsApplication: ApplicationSourceDocument =
           event: "form_submit",
           flow: "operations_create_incident",
           inputs: { values: { kind: "caller", name: "values" } },
+          settings: defaultFlowBindingSettings("form_submit"),
         },
         {
           id: "form_binding_operations_incident_attach",
@@ -757,6 +758,7 @@ export const operationsApplication: ApplicationSourceDocument =
             deduplication_key: { kind: "caller", name: "deduplication_key" },
             evidence: { kind: "caller", name: "evidence" },
           },
+          settings: defaultFlowBindingSettings("form_submit"),
         },
         // Clicking an incident row starts the one flow that opens that incident's detail page,
         // with the record identity the row carries as its only input.
@@ -767,6 +769,7 @@ export const operationsApplication: ApplicationSourceDocument =
           event: "row_clicked" as const,
           flow: openIncidentRowClick.flow,
           inputs: { record_id: { kind: "caller" as const, name: "record_id" } },
+          settings: defaultFlowBindingSettings("row_clicked"),
         },
         // Each operator button starts its own one-task flow with no inputs: the incident is the
         // detail page's subject, and the named action's own permission, field policy and
@@ -778,6 +781,7 @@ export const operationsApplication: ApplicationSourceDocument =
           event: "action" as const,
           flow: operation.flow,
           inputs: {},
+          settings: defaultFlowBindingSettings("action"),
         })),
       ],
     },

@@ -3,11 +3,10 @@ import {
   PLATFORM_SERVICE_OPERATIONS,
   type PlatformServiceOperationKey,
 } from "../../catalogue/platform-service-operation-catalogue";
-import {
-  flowContractVersion,
-  type FlowDefinition,
-  type FlowInputDeclaration,
-  type FlowTask,
+import type {
+  FlowDefinition,
+  FlowInputDeclaration,
+  FlowTask,
 } from "../../workflows/flow-contracts";
 import type { FlowFormula, FlowReference, FlowValue } from "../../workflows/flow-values";
 import { asObject, fail, type JsonObject } from "./shared";
@@ -252,7 +251,6 @@ export function compileActionFlow(
 
   const label = String(action.label);
   return {
-    contractVersion: flowContractVersion,
     id: canonicalAction.actionId as unknown as FlowDefinition["id"],
     key: flowKey,
     ...(/\{\{|\{%/.test(label) ? {} : { description: label }),

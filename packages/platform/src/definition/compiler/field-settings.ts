@@ -108,6 +108,33 @@ export function fieldSettings(
 ): unknown {
   const settings = asObject(field.settings);
   const localField = (alias: string) => resolution.field(qualifiedRecordType, alias);
+  // Where a choice or link field's options come from. A query or an options flow runs with the
+  // options runtime, so publication refuses it by name until then.
+  const optionsSource = (source: JsonObject, target?: string): JsonObject => {
+    if (source.kind === "flow" || source.query !== undefined)
+      throw new DefinitionCompilationError(
+        "vortex.definition.unsupported_workflow_node",
+        "unsupported_choice",
+        undefined,
+        undefined,
+        `Field ${String(field.key)}: options from ${source.kind === "flow" ? "an options flow" : "a query"} cannot run yet`,
+      );
+    if (source.kind === "fixed")
+      return source.parent_field === undefined
+        ? { kind: "fixed" }
+        : {
+            kind: "fixed",
+            parentFieldId: localField(String(source.parent_field)),
+            optionParents: asObject(source.option_parents),
+          };
+    return source.parent_field === undefined
+      ? { kind: "query" }
+      : {
+          kind: "query",
+          parentFieldId: localField(String(source.parent_field)),
+          filterFieldId: resolution.field(String(target), String(source.filter_field)),
+        };
+  };
   switch (field.type) {
     case "text":
       return {
@@ -166,15 +193,11 @@ export function fieldSettings(
                 ),
               }
             : {}),
-          ...(option.parent_values === undefined ? {} : { parentValues: option.parent_values }),
         })),
-        ...(settings.depends_on === undefined
+        // A table column's choices are its own list; only a field declares an options source.
+        ...(settings.options_source === undefined
           ? {}
-          : {
-              dependsOn: {
-                parentFieldId: localField(String(asObject(settings.depends_on).parent_field)),
-              },
-            }),
+          : { optionsSource: optionsSource(asObject(settings.options_source)) }),
       };
     case "several_choices":
       return {
@@ -191,6 +214,7 @@ export function fieldSettings(
             : {}),
         })),
         ...(settings.maximum_selections ? { maximumSelections: settings.maximum_selections } : {}),
+        optionsSource: optionsSource(asObject(settings.options_source)),
       };
     case "reference_number":
       return {
@@ -234,17 +258,7 @@ export function fieldSettings(
           ...(settings.application_root_required === undefined
             ? {}
             : { applicationRootIdRequired: settings.application_root_required }),
-          ...(settings.depends_on === undefined
-            ? {}
-            : {
-                dependsOn: {
-                  parentFieldId: localField(String(asObject(settings.depends_on).parent_field)),
-                  filterFieldId: resolution.field(
-                    String(settings.target),
-                    String(asObject(settings.depends_on).filter_field),
-                  ),
-                },
-              }),
+          optionsSource: optionsSource(asObject(settings.options_source), String(settings.target)),
         };
       } catch (error) {
         if (
@@ -263,6 +277,7 @@ export function fieldSettings(
       return {
         targets: (settings.targets as string[]).map((target) => resolution.recordType(target)),
         onParentDelete: settings.on_parent_delete,
+        optionsSource: optionsSource(asObject(settings.options_source)),
       };
     case "calculation": {
       const authored = flowFormulaSchema.parse(settings.expression);

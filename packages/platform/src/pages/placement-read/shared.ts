@@ -22,6 +22,17 @@ import type { LinkFieldType } from "../cell-projection";
 import type { BoardPlacementFailureCause } from "../board-query";
 import type { RecordsTableFilterTarget } from "../records-table-query";
 
+import { optionParentValues, optionsSourceNarrowing } from "../../definition/field-options-source";
+/** The parent field a choice or link field's options follow, as the page reads it. */
+const narrowedBy = (
+  optionsSource: Parameters<typeof optionsSourceNarrowing>[0],
+): Readonly<{ dependsOnField?: string }> => {
+  const narrowing = optionsSourceNarrowing(optionsSource);
+  return narrowing === undefined
+    ? {}
+    : { dependsOnField: String(narrowing.parentFieldId).toLowerCase() };
+};
+
 export type PlacementModule = InstalledRuntimeContext["releaseSet"]["modules"][number];
 export type PlacementQuery = PlacementModule["content"]["queries"][number];
 export type PlacementField = PlacementModule["content"]["recordTypes"][number]["fields"][number];
@@ -491,20 +502,18 @@ export const fieldEditorsOf = (
                 {
                   kind: "choice",
                   required,
-                  options: field.settings.options.map((option) => ({
-                    value: option.value,
-                    label: option.label,
-                    ...(option.parentValues === undefined
-                      ? {}
-                      : { parentValues: option.parentValues }),
-                  })),
-                  ...(field.settings.dependsOn === undefined
-                    ? {}
-                    : {
-                        dependsOnField: String(
-                          field.settings.dependsOn.parentFieldId,
-                        ).toLowerCase(),
-                      }),
+                  options: field.settings.options.map((option) => {
+                    const parentValues = optionParentValues(
+                      field.settings.optionsSource,
+                      option.value,
+                    );
+                    return {
+                      value: option.value,
+                      label: option.label,
+                      ...(parentValues === undefined ? {} : { parentValues }),
+                    };
+                  }),
+                  ...narrowedBy(field.settings.optionsSource),
                 },
               ],
             ];
@@ -542,13 +551,7 @@ export const fieldEditorsOf = (
                       required,
                       recordTypeId: String(recordTypeId),
                       targetLabel: target.singularLabel,
-                      ...(field.settings.dependsOn === undefined
-                        ? {}
-                        : {
-                            dependsOnField: String(
-                              field.settings.dependsOn.parentFieldId,
-                            ).toLowerCase(),
-                          }),
+                      ...narrowedBy(field.settings.optionsSource),
                     },
                   ],
                 ];

@@ -70,6 +70,10 @@ export const studioFlowReferenceToken = (reference: FlowReference): string => {
     case "execution_actor":
     case "execution_now":
       return reference.source;
+    case "page":
+      return `page:${reference.name}`;
+    case "form":
+      return `form:${reference.form}:${reference.field}`;
   }
 };
 
@@ -504,16 +508,9 @@ export const studioFlowTaskPath = (
                 ),
                 [task.default, [...here, "default"]],
               ]
-            : "branches" in task
-              ? task.branches.map(
-                  (branch, branchIndex): [readonly SourceFlowTask[], StudioFlowPath] => [
-                    branch,
-                    [...here, "branches", branchIndex],
-                  ],
-                )
-              : "tasks" in task
-                ? [[task.tasks, [...here, "tasks"]]]
-                : [];
+            : "tasks" in task
+              ? [[task.tasks, [...here, "tasks"]]]
+              : [];
       for (const [list, listPath] of lists) {
         const found = walk(list, listPath);
         if (found !== undefined) return found;

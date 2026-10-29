@@ -16,12 +16,10 @@ import type {
   ViewerSafeRecordPinSelector,
 } from "../records/record-links";
 import type { SaveRecordCommand } from "../records/records";
-import {
-  flowIdSchema,
-  type ExecutionAuthorityContext,
-  type FlowDefinition,
-  type FlowReadFieldsScalarType,
-  type FlowTriggerOrigin,
+import type {
+  FlowDefinition,
+  FlowReadFieldsScalarType,
+  FlowTriggerOrigin,
 } from "../workflows/flow-contracts";
 import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
 import type { FlowWarningNotice } from "../workflows/form-continuation-contracts";
@@ -38,6 +36,7 @@ import type {
   FlowRuntimeValues,
 } from "../rules/flow-interpreter";
 import type { ProtectedOperationExecutor } from "./protected-operation-executor";
+import { flowIdSchema } from "../catalogue/identifiers";
 
 /**
  * The exact set of compiled flows one run is bound to. `releaseKey` identifies that exact release
@@ -46,7 +45,8 @@ import type { ProtectedOperationExecutor } from "./protected-operation-executor"
  */
 export type FlowRelease = Readonly<{
   releaseKey: string;
-  flows: ReadonlyMap<string, unknown>;
+  /** The release's planned flows (`flowPlansOf`), validated once per release. */
+  flows: ReadonlyMap<string, FlowDefinition>;
   /** The release's record types by lower-case record type id, for the values of a Save record task. */
   recordTypes?: ReadonlyMap<string, FlowRecordType>;
   /** The release's named actions by action key, for a Call protected operation task naming one. */
@@ -321,17 +321,11 @@ export type FlowOrchestratorResponse =
     }>
   | Readonly<{ kind: "refused" }>;
 
-type RunAuthority =
-  | Readonly<{
-      kind: "person";
-      session: IdentitySession;
-      selection: OrganizationSelectionCandidate;
-    }>
-  | Readonly<{
-      kind: "execution_authority";
-      context: ExecutionAuthorityContext;
-      organizationId: string;
-    }>;
+type RunAuthority = Readonly<{
+  kind: "person";
+  session: IdentitySession;
+  selection: OrganizationSelectionCandidate;
+}>;
 
 export type PreparedPersonRun = Readonly<{
   session: IdentitySession;

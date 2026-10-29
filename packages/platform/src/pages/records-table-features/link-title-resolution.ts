@@ -5,6 +5,7 @@ import type { JsonValue } from "../../catalogue/common";
 import { fieldIdSchema, moduleRootIdSchema, queryIdSchema } from "../../catalogue/identifiers";
 import { isRecord, sameId } from "../../catalogue/runtime-primitives";
 import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
+import { optionsSourceNarrowing } from "../../definition/field-options-source";
 import type { ProtectedQueryCommand } from "../../queries/protected-query-contracts";
 import type { createProtectedQueryService } from "../../queries/protected-query-service";
 import { titleText } from "../../queries/record-choices";
@@ -129,7 +130,11 @@ export const resolveLinkTitles = async (
   // A dependent link resolves after the field it depends on, so a parent pasted in the same batch
   // is known first.
   const depthOf = (field: string, seen = 0): number => {
-    const parent = linkField(field)?.settings.dependsOn?.parentFieldId;
+    const settings = linkField(field)?.settings;
+    const parent =
+      settings === undefined
+        ? undefined
+        : optionsSourceNarrowing(settings.optionsSource)?.parentFieldId;
     return parent === undefined || seen > 8 ? 0 : 1 + depthOf(String(parent), seen + 1);
   };
   const fields = [...new Set(cells.map((cell) => cell.field.toLowerCase()))].sort(
@@ -171,7 +176,7 @@ export const resolveLinkTitles = async (
     }
     const { definition, targetModule, targetType } = target;
     const titleFieldId = String(targetType.titleFieldId);
-    const dependency = definition.settings.dependsOn;
+    const dependency = optionsSourceNarrowing(definition.settings.optionsSource);
     const filterFieldId = dependency === undefined ? undefined : String(dependency.filterFieldId);
     const targetLabel = targetType.singularLabel;
     const titleField = targetType.fields.find((candidate) =>

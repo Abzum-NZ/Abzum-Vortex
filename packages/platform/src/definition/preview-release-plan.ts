@@ -56,12 +56,6 @@ const dependencyReference = (dependency: ExactDefinitionDependency): string => {
       return `${dependency.applicationRootId}:${dependency.queryId}`;
     case "module_query":
       return `${dependency.moduleRootId}:${dependency.queryId}`;
-    case "application_form":
-      return `${dependency.applicationRootId}:${dependency.formId}`;
-    case "application_workflow":
-      return `${dependency.applicationRootId}:${dependency.workflowId}`;
-    case "application_action":
-      return `${dependency.applicationRootId}:${dependency.actionId}`;
   }
 };
 

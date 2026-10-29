@@ -7,6 +7,7 @@ import {
   type ExactDefinitionDependency,
   type PrepareDefinitionPublicationCommand,
 } from "./definition-store-contracts";
+import { definitionContractChangedReason } from "./version-impact";
 import type { VersionImpact, VersionImpactReason } from "./version-impact";
 import { applicationValidationContractVersion } from "./application-contract-versions";
 import type { ModuleSourceDocument } from "./module-source-contracts";
@@ -119,7 +120,8 @@ export const latestReleaseVersion = (
 ): string | null =>
   "currentReleaseVersion" in candidate
     ? candidate.currentReleaseVersion
-    : (candidate.releaseHistory.latestRelease?.publication.releaseVersion ?? null);
+    : (candidate.releaseHistory.latestRelease?.publication.releaseVersion ??
+      candidate.releaseHistory.supersededReleaseVersion);
 
 /**
  * Whether staging gives a stored inline Module root a new draft revision: its source changed, or
@@ -265,7 +267,7 @@ const releaseInlineModules = async (
     const output = compiled.output;
     const impact = compareDefinitionVersionImpactWithEvidence({
       kind: "module",
-      validationContractVersion: "3.0.0",
+      validationContractVersion: "4.0.0",
       releaseHistory: module.releaseHistory,
       candidate: output.canonical,
     });
@@ -298,7 +300,7 @@ const releaseInlineModules = async (
       reasons,
       dependencyManifest: manifestFor(dependencies, output, resolution),
       resolutionSnapshot: resolution,
-      validationContractVersion: "3.0.0",
+      validationContractVersion: "4.0.0",
       releaseNote,
     };
     if (released) await transaction.appendModuleRelease(append);
@@ -353,7 +355,11 @@ const publicationReasons = (
   application: CompiledApplication,
 ): VersionImpactReason[] => {
   const latest = candidate.releaseHistory.latestRelease;
-  if (latest === null) return [];
+  // A release after one of an earlier definition contract is a major change of the whole definition.
+  if (latest === null)
+    return candidate.releaseHistory.supersededReleaseVersion === null
+      ? []
+      : [definitionContractChangedReason("application")];
   const own = compareDefinitionVersionImpactWithEvidence({
     kind: "application",
     validationContractVersion: applicationValidationContractVersion,
@@ -417,7 +423,7 @@ export const planApplicationPublication = async (
   releaseNote: string,
   pinned?: readonly ExactDefinitionDependency[],
 ): Promise<ApplicationPublicationState> => {
-  const latestVersion = candidate.releaseHistory.latestRelease?.publication.releaseVersion;
+  const latestVersion = latestReleaseVersion(candidate) ?? undefined;
   const provisional =
     latestVersion === undefined ? "1.0.0" : assignNextDefinitionVersion(latestVersion, "major");
   const pass = async (version: string, pins?: typeof pinned) => {

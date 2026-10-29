@@ -8,7 +8,7 @@ import {
   collectActionFlowTasks,
   contributedActionControlIds,
   fieldInputSourceField,
-  flowLibraryOf,
+  flowPlansOf,
   plainReleaseDefaults,
   type ActionFlowRunner,
   type InstalledRuntimeContext,
@@ -365,13 +365,7 @@ export const contributedActionPreviews = (
 ) => {
   const actions = contributedActionsOf(context, pageDefinition);
   if (actions.length === 0) return undefined;
-  const flows = new Map<string, unknown>();
-  for (const flow of [
-    ...context.releaseSet.application.content.flows,
-    ...context.releaseSet.modules.flatMap((module) => module.content.flows),
-  ])
-    flows.set(String(flow.id), flow);
-  const library = flowLibraryOf(flows);
+  const library = flowPlansOf(context.releaseSet).library;
   return Object.freeze({
     references: actions.map((action) =>
       installedNamedActionReferenceSchema.parse({

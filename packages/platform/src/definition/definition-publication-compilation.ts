@@ -149,7 +149,7 @@ export const compileModuleCandidate = (
   resolution: DefinitionResolution,
   permissions: PlatformPermissionSource,
 ): CompiledModuleCandidate => {
-  if (candidate.draft.source.kind !== "module" || resolution.contractVersion !== "3.0.0")
+  if (candidate.draft.source.kind !== "module" || resolution.contractVersion !== "4.0.0")
     return refuse("DEFINITION_COMPILATION_REFUSED");
   // Dependency resolution authenticated these outputs and checked that they parse, but passes them
   // as stored: schema defaults (such as a Module's empty `queries`) are not filled in here.
@@ -223,7 +223,7 @@ export const compileApplicationCandidate = (
 }> => {
   if (
     candidate.draft.source.kind !== "application" ||
-    resolution.contractVersion !== "3.0.0" ||
+    resolution.contractVersion !== "4.0.0" ||
     dependencies.composition === undefined
   )
     return refuse("DEFINITION_COMPILATION_REFUSED");
@@ -345,9 +345,11 @@ export const validateCandidate = (
     String(candidate.releaseHistory.rootId) !== String(candidate.draft.rootId)
   )
     refuse("DEFINITION_HISTORY_INVALID");
-  const latest = candidate.releaseHistory.latestRelease;
-  // validatedDraft already authenticated this source's fingerprint.
-  if (candidate.draft.publishedRevision !== latest?.publication.revision)
+  // validatedDraft already authenticated this source's fingerprint. The anchor is the latest
+  // release, or the release of an earlier definition contract that precedes this one.
+  if (
+    (candidate.draft.publishedRevision ?? null) !== candidate.releaseHistory.anchorReleaseRevision
+  )
     refuse("DEFINITION_HISTORY_INVALID");
   return candidate;
 };

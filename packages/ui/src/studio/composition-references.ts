@@ -160,17 +160,8 @@ export const studioPlacementRemovalReference = (
           case "sequential":
             children.push(list(task.tasks));
             break;
-          case "parallel":
-            for (const branch of list(task.branches)) children.push(list(branch));
-            break;
-          case "wait_for_person": {
-            const blocked = target(task.formId, true, "flow_form");
-            if (blocked !== undefined) return at(blocked);
-            break;
-          }
           case "run_flow":
           case "stop":
-          case "wait_until":
             break;
           default:
             return at("unresolved_target");

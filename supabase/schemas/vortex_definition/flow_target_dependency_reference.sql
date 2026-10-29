@@ -12,12 +12,6 @@ CREATE OR REPLACE FUNCTION vortex_definition.flow_target_dependency_reference(p_
       (p_dependency ->> 'applicationRootId') || ':' || (p_dependency ->> 'queryId')
     when 'module_query' then
       (p_dependency ->> 'moduleRootId') || ':' || (p_dependency ->> 'queryId')
-    when 'application_form' then
-      (p_dependency ->> 'applicationRootId') || ':' || (p_dependency ->> 'formId')
-    when 'application_workflow' then
-      (p_dependency ->> 'applicationRootId') || ':' || (p_dependency ->> 'workflowId')
-    when 'application_action' then
-      (p_dependency ->> 'applicationRootId') || ':' || (p_dependency ->> 'actionId')
     when 'protected_operation' then
       (p_dependency #>> '{operation,owner,kind}') || ':'
         || case p_dependency #>> '{operation,owner,kind}'

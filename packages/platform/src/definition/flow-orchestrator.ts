@@ -5,9 +5,9 @@ import { z } from "zod";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
 import { isRecord } from "../catalogue/runtime-primitives";
 import type { ExecuteNamedActionCommand } from "../records/named-actions";
-import { flowMaximumServerSeconds, type FlowDefinition } from "../workflows/flow-contracts";
+import type { FlowDefinition } from "../workflows/flow-contracts";
 import { flowWarningNoticeSchema } from "../workflows/form-continuation-contracts";
-import { collectActionFlowTasks, flowLibraryOf } from "../rules/action-flow-run";
+import { collectActionFlowTasks } from "../rules/action-flow-run";
 import {
   resumeFlowRun,
   startFlowRun,
@@ -40,6 +40,7 @@ import {
   type Run,
 } from "./flow-orchestrator-types";
 import { createFlowTaskRunner } from "./flow-task-runner";
+import { flowMaximumServerSeconds } from "../workflows/flow-limits";
 
 /** Orchestrates flows with verified authority, revision-bound writes and single-use continuations. */
 
@@ -55,8 +56,11 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
   const newRunId = dependencies.newRunId ?? (() => randomUUID());
   const newToken = dependencies.newToken ?? (() => randomBytes(32).toString("base64url"));
 
-  /** The library of validated flows of one release; an invalid flow is unavailable, never trusted. */
-  const libraryOf = (release: FlowRelease): FlowLibrary => flowLibraryOf(release.flows);
+  /** The library of one release: its planned flows; a flow that is not planned is unavailable. */
+  const libraryOf =
+    (release: FlowRelease): FlowLibrary =>
+    (flowId) =>
+      release.flows.get(flowId);
 
   const elapsedMilliseconds = (run: Run): number =>
     Math.max(0, Math.round(run.carriedMilliseconds + (clock() - run.segmentStart)));

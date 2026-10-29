@@ -24,6 +24,6 @@ const connectionType = systemDirectory.record_types
 if (connectionType === undefined) throw new Error("Connection type field is missing");
 Object.assign(connectionType, {
   type: "choice",
-  settings: { options: connectionTypeDisplayOptions },
+  settings: { options: connectionTypeDisplayOptions, options_source: { kind: "fixed" } },
 });
 export const systemDirectoryModule: unknown = systemDirectory;

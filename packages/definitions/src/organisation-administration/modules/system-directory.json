@@ -92,7 +92,10 @@
                 "value": "closed",
                 "label": "Closed"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -127,7 +130,8 @@
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     },
     {
       "id": "rt_system_directory_organization_invitation",
@@ -221,7 +225,10 @@
                 "value": "expired",
                 "label": "Expired"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -256,7 +263,8 @@
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     },
     {
       "id": "rt_system_directory_group",
@@ -358,12 +366,16 @@
                 "value": "retired",
                 "label": "Retired"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     },
     {
       "id": "rt_system_directory_group_membership",
@@ -515,7 +527,10 @@
                 "value": "revoked",
                 "label": "Revoked"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -547,12 +562,16 @@
                 "value": "revoked",
                 "label": "Revoked"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     },
     {
       "id": "rt_system_directory_role",
@@ -683,7 +702,10 @@
                 "value": "retired",
                 "label": "Retired"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -707,7 +729,10 @@
                 "value": "custom",
                 "label": "Custom"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -731,7 +756,10 @@
                 "value": "privileged",
                 "label": "Privileged"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -755,7 +783,10 @@
                 "value": "activation_required",
                 "label": "Activation required"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -773,7 +804,8 @@
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     },
     {
       "id": "rt_system_directory_role_assignment",
@@ -914,7 +946,10 @@
                 "value": "group",
                 "label": "Group"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -968,7 +1003,10 @@
                 "value": "eligible",
                 "label": "Eligible"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -1022,7 +1060,10 @@
                 "value": "revoked",
                 "label": "Revoked"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -1054,12 +1095,16 @@
                 "value": "revoked",
                 "label": "Revoked"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     },
     {
       "id": "rt_system_directory_role_activation",
@@ -1213,7 +1258,10 @@
                 "value": "group",
                 "label": "Group"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -1267,7 +1315,10 @@
                 "value": "revoked",
                 "label": "Revoked"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -1295,12 +1346,16 @@
                 "value": "revoked",
                 "label": "Revoked"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     },
     {
       "id": "rt_system_directory_delegation",
@@ -1377,7 +1432,10 @@
                 "value": "group",
                 "label": "Group"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -1431,7 +1489,10 @@
                 "value": "bounded",
                 "label": "Bounded"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -1485,7 +1546,10 @@
                 "value": "revoked",
                 "label": "Revoked"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -1517,12 +1581,16 @@
                 "value": "revoked",
                 "label": "Revoked"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     },
     {
       "id": "rt_system_directory_organization",
@@ -1662,7 +1730,10 @@
                 "value": "removal_pending",
                 "label": "Removal pending"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -1697,7 +1768,8 @@
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     },
     {
       "id": "rt_system_directory_tenant_administrator",
@@ -1826,7 +1898,10 @@
                 "value": "platform.tenant.organizations.reparent",
                 "label": "Move organisations"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         },
         {
@@ -1888,12 +1963,16 @@
                 "value": "revoked",
                 "label": "Revoked"
               }
-            ]
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
           }
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     },
     {
       "id": "rt_system_directory_connection_instance",
@@ -2048,7 +2127,8 @@
         }
       ],
       "pipelines": [],
-      "relationships": []
+      "relationships": [],
+      "before_save_rules": []
     }
   ],
   "permissions": [

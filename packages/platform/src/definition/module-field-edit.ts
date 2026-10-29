@@ -248,8 +248,17 @@ const linkProblem = (
   return undefined;
 };
 
-/** A link field names the filter of its target; a choice field names only its parent. */
-type LinkDependencyDeclaration = Readonly<{ parent_field: string; filter_field?: string }>;
+/**
+ * A field's authored options source, as far as the dependency judgement reads it: a link field
+ * narrowed by a parent names the filter of its target; a narrowed choice field names its parent
+ * and each option's parent options.
+ */
+type OptionsSourceDeclaration = Readonly<{
+  kind: string;
+  parent_field?: string;
+  filter_field?: string;
+  option_parents?: Readonly<Record<string, readonly string[]>>;
+}>;
 
 /** A source record type's fields as the one link-dependency judgement reads them, by field key. */
 const linkDependencyViews = (
@@ -259,9 +268,10 @@ const linkDependencyViews = (
   record.fields.map((field) => {
     const settings = field.settings as {
       target?: unknown;
-      depends_on?: LinkDependencyDeclaration;
-      options?: readonly { value: string; parent_values?: readonly string[] }[];
+      options_source?: OptionsSourceDeclaration;
+      options?: readonly { value: string }[];
     };
+    const source = settings.options_source;
     return {
       id: field.key,
       label: field.label,
@@ -272,20 +282,21 @@ const linkDependencyViews = (
         : {}),
       ...(field.type === "choice" && settings.options !== undefined
         ? {
-            options: settings.options.map((option) => ({
-              value: option.value,
-              ...(option.parent_values === undefined ? {} : { parentValues: option.parent_values }),
-            })),
+            options: settings.options.map((option) => {
+              const parentValues = source?.option_parents?.[option.value];
+              return {
+                value: option.value,
+                ...(parentValues === undefined ? {} : { parentValues }),
+              };
+            }),
           }
         : {}),
-      ...(settings.depends_on === undefined
+      ...(source?.parent_field === undefined
         ? {}
         : {
             dependsOn: {
-              parent: settings.depends_on.parent_field,
-              ...(settings.depends_on.filter_field === undefined
-                ? {}
-                : { filter: settings.depends_on.filter_field }),
+              parent: source.parent_field,
+              ...(source.filter_field === undefined ? {} : { filter: source.filter_field }),
             },
           }),
     };
@@ -578,16 +589,15 @@ export const deleteInlineModuleField = (
     .find(({ module: other, type, item }) => {
       const settings = item.settings as {
         target?: unknown;
-        depends_on?: LinkDependencyDeclaration;
+        options_source?: OptionsSourceDeclaration;
       };
-      if (settings.depends_on === undefined) return false;
+      const source = settings.options_source;
+      if (source?.parent_field === undefined) return false;
       return (
-        (other.key === moduleKey &&
-          type.key === recordKey &&
-          settings.depends_on.parent_field === fieldKey) ||
+        (other.key === moduleKey && type.key === recordKey && source.parent_field === fieldKey) ||
         (typeof settings.target === "string" &&
           qualifiedLinkTarget(other.key, settings.target) === recordType &&
-          settings.depends_on.filter_field === fieldKey)
+          source.filter_field === fieldKey)
       );
     })?.item;
   if (dependent !== undefined)

@@ -1,5 +1,5 @@
 {
-  "source_contract_version": "3.0.0",
+  "source_contract_version": "4.0.0",
   "root_alias": "app_landing_zone",
   "key": "vortex.app.landing_zone",
   "kind": "application",
@@ -1454,7 +1454,6 @@
     ],
     "flows": [
       {
-        "contractVersion": "1.0.0",
         "id": "landing_zone_bookmark_create",
         "key": "landing_zone_bookmark_create",
         "description": "Creates a bookmark tile from the submitted values and opens the Bookmarks page.",
@@ -1850,7 +1849,6 @@
         }
       },
       {
-        "contractVersion": "1.0.0",
         "id": "landing_zone_open_favourite_status",
         "key": "landing_zone_open_favourite_status",
         "description": "Opens the protected Favourite status form for one returned tile record.",
@@ -1894,7 +1892,6 @@
         "outputs": {}
       },
       {
-        "contractVersion": "1.0.0",
         "id": "landing_zone_save_favourite_status",
         "key": "landing_zone_save_favourite_status",
         "description": "Saves only the submitted favourite status for the protected tile subject, then returns to saved tile management.",
@@ -2008,7 +2005,6 @@
         }
       },
       {
-        "contractVersion": "1.0.0",
         "id": "landing_zone_open_remove_tile",
         "key": "landing_zone_open_remove_tile",
         "description": "Opens the protected removal form for one returned private tile record.",
@@ -2052,7 +2048,6 @@
         "outputs": {}
       },
       {
-        "contractVersion": "1.0.0",
         "id": "landing_zone_remove_tile",
         "key": "landing_zone_remove_tile",
         "description": "Confirms removal of the protected private tile subject and returns to saved tile management after the named action succeeds.",
@@ -2191,6 +2186,13 @@
             "kind": "caller",
             "name": "description"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "form",
+          "timeoutMs": 10000
         }
       },
       {
@@ -2204,6 +2206,13 @@
             "kind": "caller",
             "name": "record_id"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -2221,6 +2230,13 @@
             "kind": "caller",
             "name": "is_favourite"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "form",
+          "timeoutMs": 10000
         }
       },
       {
@@ -2234,6 +2250,13 @@
             "kind": "caller",
             "name": "record_id"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -2247,6 +2270,13 @@
             "kind": "caller",
             "name": "record_id"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -2260,6 +2290,13 @@
             "kind": "caller",
             "name": "record_id"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -2273,6 +2310,13 @@
             "kind": "caller",
             "name": "record_id"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
         }
       },
       {
@@ -2286,6 +2330,13 @@
             "kind": "caller",
             "name": "record"
           }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "form",
+          "timeoutMs": 10000
         }
       }
     ]

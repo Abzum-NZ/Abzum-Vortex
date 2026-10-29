@@ -202,6 +202,9 @@ function compileModule(
       customActionIds: (recordType.custom_actions as string[]).map((alias) =>
         resolution.id(definitionKey, "action", alias, "content"),
       ),
+      beforeSaveFlowIds: (recordType.before_save_rules as string[]).map((alias) =>
+        resolution.id(definitionKey, "flow", alias, "content"),
+      ),
       pipelines: (recordType.pipelines as JsonObject[]).map((pipeline) => ({
         pipelineId: resolution.id(
           definitionKey,
@@ -694,7 +697,7 @@ export function compileParsedModuleRequest(
     const ownDefinition = resolution.definition(definitionKey, "module");
     const output = moduleCompilationOutputSchema.safeParse({
       kind: "module",
-      validationContractVersion: "3.0.0",
+      validationContractVersion: "4.0.0",
       canonical,
       artifact: {
         kind: "module",

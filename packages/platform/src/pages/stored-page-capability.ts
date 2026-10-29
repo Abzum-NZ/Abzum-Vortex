@@ -27,14 +27,15 @@ import type { CompiledLayout } from "../definition/application-composition/page-
 import { compiledItemTree } from "../definition/application-composition/compiled-item-tree";
 import { conditionNodeSchema, type ConditionNode } from "../definition/module-foundation-contracts";
 import { installedNamedActionReferenceSchema } from "../records/named-actions";
-import { platformOperationKey } from "../workflows/default-flow-sources";
+import { platformOperationKey } from "../catalogue/platform-service-operation-catalogue";
 import {
   flowTaskChildLists,
   type FlowDefinition,
   type FlowTask,
 } from "../workflows/flow-contracts";
 import { flowTaskRegistry } from "../workflows/flow-task-registry";
-import { collectActionFlowTasks, flowLibraryOf } from "../rules/action-flow-run";
+import { collectActionFlowTasks } from "../rules/action-flow-run";
+import { flowPlansOf } from "../workflows/flow-plan";
 import { evaluateTypedCondition } from "../rules/typed-condition";
 import { TypedConditionEvaluationError } from "../rules/typed-condition-error";
 import {
@@ -383,7 +384,7 @@ const placementOperationBindings = (
             if (recordType !== undefined && !recordTypeIds.has(recordType.toLowerCase()))
               outcome.resolved = false;
             if (
-              task.type === "flow.run_background" &&
+              task.type === "backend.run" &&
               !flows.has(String(literal(task, "flow")).toLowerCase())
             )
               outcome.resolved = false;
@@ -460,21 +461,7 @@ export const createStoredPageCapabilityService = (
   const requests = createHumanOrganizationRequestService(requestDependencies);
   const boundActions = placementNamedActions(context);
   // Application and Module flows, one per identity: an ambiguous release is refused, not run.
-  let flowLibraryValue: ReturnType<typeof flowLibraryOf> | undefined;
-  const flowLibrary = () => {
-    if (flowLibraryValue === undefined) {
-      const flows = new Map<string, unknown>();
-      for (const flow of [
-        ...applicationRelease.content.flows,
-        ...context.releaseSet.modules.flatMap((module) => module.content.flows),
-      ]) {
-        if (flows.has(String(flow.id))) throw new Error("FLOW_IDENTITY_AMBIGUOUS");
-        flows.set(String(flow.id), flow);
-      }
-      flowLibraryValue = flowLibraryOf(flows);
-    }
-    return flowLibraryValue;
-  };
+  const flowLibrary = () => flowPlansOf(context.releaseSet).library;
 
   // Undefined means the selected page is not in the release: a lasting answer, not a fault.
   const load = async (pageId: string): Promise<FixedAuthenticatedPageCapability | undefined> => {

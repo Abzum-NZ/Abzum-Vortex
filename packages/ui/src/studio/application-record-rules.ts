@@ -9,7 +9,8 @@ import { studioFlowLabel } from "./semantic-selection";
 /**
  * The before-save rules of a record type, as the Data tab lists them. A rule is a BeforeSave flow
  * of the module that owns the record type, edited on the Flows tab with the same step editors as
- * every flow; there is no other kind of rule. The list says when each runs and what it does.
+ * every flow; there is no other kind of rule. The record type's ordered rule list
+ * (`before_save_rules`) is the order they run in; the list says when each runs and what it does.
  */
 
 type SourceTask = SourceFlow["tasks"][number];
@@ -17,7 +18,7 @@ type SourceTask = SourceFlow["tasks"][number];
 export type StudioRecordRule = Readonly<{
   flowAlias: string;
   name: string;
-  /** When it runs, in words: before the record is created, changed, or both. */
+  /** When it runs, in words: before the record is created, changed, deleted or restored. */
   when: string;
   /** What its steps do, one line per refusal, warning or required field, in step order. */
   effects: readonly string[];
@@ -33,7 +34,14 @@ const beforeSaveTrigger = (flow: SourceFlow, recordKey: string) =>
     (trigger) => trigger.type === "BeforeSave" && trigger.recordTypeId === recordKey,
   );
 
-/** The rules of one record type of an owned module, in the order the module holds them. */
+const operationWords = {
+  create: "created",
+  update: "changed",
+  delete: "deleted",
+  restore: "restored",
+} as const;
+
+/** The rules of one record type of an owned module, in the order they run. */
 export const studioRecordRules = (
   source: Readonly<ApplicationSourceDocument>,
   moduleKey: string,
@@ -46,11 +54,11 @@ export const studioRecordRules = (
     const key = reference?.slice(reference.lastIndexOf(".") + 1);
     return record.fields.find((field) => field.key === key)?.label ?? key ?? "a field";
   };
-  return module.flows.flatMap((flow) => {
-    const trigger = beforeSaveTrigger(flow, recordKey);
-    if (trigger === undefined || trigger.type !== "BeforeSave") return [];
-    const create = trigger.operations.some((operation) => operation.kind === "create");
-    const update = trigger.operations.some((operation) => operation.kind === "update");
+  return record.before_save_rules.flatMap((flowAlias) => {
+    const flow = module.flows.find((entry) => entry.id === flowAlias);
+    const trigger = flow === undefined ? undefined : beforeSaveTrigger(flow, recordKey);
+    if (flow === undefined || trigger === undefined || trigger.type !== "BeforeSave") return [];
+    const words = trigger.operations.map((operation) => operationWords[operation.kind]);
     const effects: string[] = [];
     const visit = (tasks: readonly SourceTask[]) => {
       for (const task of tasks) {
@@ -71,14 +79,7 @@ export const studioRecordRules = (
       {
         flowAlias: flow.id,
         name: studioFlowLabel(flow),
-        when:
-          create && update
-            ? "Before a record is created or changed"
-            : create
-              ? "Before a record is created"
-              : update
-                ? "Before a record is changed"
-                : "Before a named action moves a record on",
+        when: `Before a record is ${words.length === 1 ? words[0] : `${words.slice(0, -1).join(", ")} or ${words.at(-1)}`}`,
         effects,
       },
     ];
@@ -118,5 +119,56 @@ export const deleteStudioRecordRule = (
       reason: `${studioFlowLabel(caller)} runs this rule, so it cannot be deleted. Remove that step first.`,
     };
   module.flows = module.flows.filter((entry) => entry !== flow);
+  syncStudioRecordRuleLists(module);
   return { kind: "deleted", source: candidate };
+};
+
+type SourceModule = ApplicationSourceDocument["body"]["modules"][number];
+
+/**
+ * Keeps each record type's ordered rule list equal to the module's BeforeSave flows that name it:
+ * a flow that no longer covers the record type leaves its list, and a newly covering flow runs
+ * last. Every Studio edit that adds, removes or retargets a rule calls it on the edited module.
+ */
+export const syncStudioRecordRuleLists = (module: SourceModule): void => {
+  for (const record of module.record_types) {
+    const covering = module.flows
+      .filter((flow) => beforeSaveTrigger(flow, record.key) !== undefined)
+      .map((flow) => flow.id);
+    record.before_save_rules = [
+      ...record.before_save_rules.filter((alias) => covering.includes(alias)),
+      ...covering.filter((alias) => !record.before_save_rules.includes(alias)),
+    ];
+  }
+};
+
+export type StudioRecordRuleMove =
+  | Readonly<{ kind: "moved"; source: ApplicationSourceDocument }>
+  | Readonly<{ kind: "refused"; reason: string }>;
+
+/** Moves one rule a place earlier or later in its record type's run order. */
+export const moveStudioRecordRule = (
+  source: Readonly<ApplicationSourceDocument>,
+  moduleKey: string,
+  recordKey: string,
+  flowAlias: string,
+  direction: "earlier" | "later",
+): StudioRecordRuleMove => {
+  const candidate: ApplicationSourceDocument = structuredClone(source);
+  const record = candidate.body.modules
+    .find((entry) => entry.key === moduleKey)
+    ?.record_types.find((entry) => entry.key === recordKey);
+  const index = record?.before_save_rules.indexOf(flowAlias) ?? -1;
+  const target = direction === "earlier" ? index - 1 : index + 1;
+  if (record === undefined || index < 0)
+    return { kind: "refused", reason: "This rule is no longer in the draft." };
+  if (target < 0 || target >= record.before_save_rules.length)
+    return {
+      kind: "refused",
+      reason: `This rule already runs ${direction === "earlier" ? "first" : "last"}.`,
+    };
+  const order = [...record.before_save_rules];
+  [order[index], order[target]] = [order[target]!, order[index]!];
+  record.before_save_rules = order;
+  return { kind: "moved", source: candidate };
 };

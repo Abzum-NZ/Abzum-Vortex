@@ -446,8 +446,7 @@ begin
       end if;
     elsif supplied_kind in (
       'application_flow', 'application_flow_node', 'application_query',
-      'module_query', 'application_form', 'application_workflow', 'application_action',
-      'protected_operation'
+      'module_query', 'protected_operation'
     ) then
       -- Flow targets are contained by, or pinned for, one exact Application
       -- release. Each entry has exactly its contract shape, and its owner is
@@ -476,12 +475,6 @@ begin
             array['applicationRootId', 'queryId', 'resolutionFingerprint']::text[]
           when 'module_query' then
             array['moduleRootId', 'queryId', 'declaredRequirement', 'resolutionFingerprint']::text[]
-          when 'application_form' then
-            array['applicationRootId', 'formId', 'resolutionFingerprint']::text[]
-          when 'application_workflow' then
-            array['applicationRootId', 'workflowId', 'resolutionFingerprint']::text[]
-          when 'application_action' then
-            array['applicationRootId', 'actionId', 'resolutionFingerprint']::text[]
           when 'protected_operation' then array['operation', 'resolutionFingerprint']::text[]
         end
       );
@@ -1072,8 +1065,7 @@ begin
     supplied_entry := null;
     if supplied_kind in (
       'application_flow', 'application_flow_node', 'application_query',
-      'module_query', 'application_form', 'application_workflow', 'application_action',
-      'protected_operation'
+      'module_query', 'protected_operation'
     ) then
       supplied_entry := supplied_dependency;
       supplied_reference := vortex_definition.flow_target_dependency_reference(supplied_dependency);

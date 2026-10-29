@@ -61,7 +61,7 @@ export type ResolvedDependencies = Readonly<{
 const stable = (version: string): boolean =>
   stableDefinitionReleaseVersionSchema.safeParse(version).success;
 
-const moduleOutputContractVersion = (output: ModuleOutput): "3.0.0" =>
+const moduleOutputContractVersion = (output: ModuleOutput): "4.0.0" =>
   output.validationContractVersion;
 
 const accepts = (requirements: readonly VersionRequirement[], version: string): boolean =>
@@ -179,21 +179,15 @@ const subjectOf = (dependency: ExactDefinitionDependency): string =>
             ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.queryId}`
             : dependency.kind === "module_query"
               ? `${dependency.kind}:${dependency.moduleRootId}:${dependency.queryId}`
-              : dependency.kind === "application_form"
-                ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.formId}`
-                : dependency.kind === "application_workflow"
-                  ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.workflowId}`
-                  : dependency.kind === "application_action"
-                    ? `${dependency.kind}:${dependency.applicationRootId}:${dependency.actionId}`
-                    : dependency.kind === "protected_operation"
-                      ? `${dependency.kind}:${dependency.operation.owner.kind}:${
-                          dependency.operation.owner.kind === "application"
-                            ? dependency.operation.owner.applicationRootId
-                            : dependency.operation.owner.kind === "module"
-                              ? dependency.operation.owner.moduleRootId
-                              : dependency.operation.owner.serviceId
-                        }:${dependency.operation.operationId}`
-                      : `${dependency.kind}:${dependency.key}`;
+              : dependency.kind === "protected_operation"
+                ? `${dependency.kind}:${dependency.operation.owner.kind}:${
+                    dependency.operation.owner.kind === "application"
+                      ? dependency.operation.owner.applicationRootId
+                      : dependency.operation.owner.kind === "module"
+                        ? dependency.operation.owner.moduleRootId
+                        : dependency.operation.owner.serviceId
+                  }:${dependency.operation.operationId}`
+                : `${dependency.kind}:${dependency.key}`;
 
 const sortedManifest = (
   dependencies: readonly ExactDefinitionDependency[],
@@ -1044,7 +1038,7 @@ export const buildResolution = (
     ),
   );
   if (candidate.draft.source.kind === "module") {
-    const evidence = { contractVersion: "3.0.0" as const, definitions, identities: allIdentities };
+    const evidence = { contractVersion: "4.0.0" as const, definitions, identities: allIdentities };
     return definitionResolutionSnapshotSchema.parse({
       ...evidence,
       fingerprint: fingerprintCanonicalValue(evidence),

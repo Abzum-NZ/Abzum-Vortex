@@ -23,8 +23,8 @@ declare
 begin
   if p_source is null
     or p_source <> all (array[
-      'web', 'mcp', 'programmatic_interface', 'connection', 'federation',
-      'durable_workflow', 'system'
+      'web', 'webmcp', 'mcp', 'programmatic_interface', 'connection', 'federation',
+      'system'
     ]) then
     raise exception using errcode = '22023', message = 'Activity source channel is invalid';
   end if;

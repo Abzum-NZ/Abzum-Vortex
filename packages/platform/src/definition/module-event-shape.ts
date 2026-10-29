@@ -19,8 +19,7 @@ const tasksAnnounce = (tasks: readonly SourceFlowTask[], key: string): boolean =
     if ("else" in task && tasksAnnounce(task.else ?? [], key)) return true;
     if ("tasks" in task && tasksAnnounce(task.tasks, key)) return true;
     if ("cases" in task && task.cases.some((entry) => tasksAnnounce(entry.tasks, key))) return true;
-    if ("default" in task && tasksAnnounce(task.default ?? [], key)) return true;
-    return "branches" in task && task.branches.some((branch) => tasksAnnounce(branch, key));
+    return "default" in task && tasksAnnounce(task.default ?? [], key);
   });
 
 /** Edits a declared module event without changing its identity or announcement references. */

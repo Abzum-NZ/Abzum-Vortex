@@ -50,8 +50,8 @@ begin
       and p_outcome <> all (array['completed', 'refused', 'failed']))
     or (p_source is not null
       and p_source <> all (array[
-        'web', 'mcp', 'programmatic_interface', 'connection', 'federation',
-        'durable_workflow', 'system'
+        'web', 'webmcp', 'mcp', 'programmatic_interface', 'connection', 'federation',
+        'system'
       ])) then
     raise exception using errcode = '22023',
       message = 'Activity history aggregate selector is invalid';

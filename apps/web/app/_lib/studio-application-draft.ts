@@ -43,6 +43,7 @@ import {
   queryTotalLabel,
   definitionValidationEntry,
   translateDefinitionRuleFailures,
+  optionsSourceNarrowing,
 } from "@vortex/platform/schema";
 import {
   BuilderAuthorityError,
@@ -816,9 +817,9 @@ export const loadStudioApplicationDraft = async (
                             ? { parentLink: true }
                             : {}),
                           ...((field.type === "link" || field.type === "choice") &&
-                          field.settings.dependsOn !== undefined
+                          optionsSourceNarrowing(field.settings.optionsSource) !== undefined
                             ? {
-                                dependsOn: `${release!.key}:${recordType.key}.${recordType.fields.find((candidate) => sameId(String(candidate.fieldId), String(field.settings.dependsOn!.parentFieldId)))?.key ?? ""}`,
+                                dependsOn: `${release!.key}:${recordType.key}.${recordType.fields.find((candidate) => sameId(String(candidate.fieldId), String(optionsSourceNarrowing(field.settings.optionsSource)!.parentFieldId)))?.key ?? ""}`,
                               }
                             : {}),
                         };

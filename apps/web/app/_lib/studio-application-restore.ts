@@ -48,6 +48,7 @@ const failureKind = (error: unknown): FailureKind => {
   const kind = classifyDatabaseError(error);
   if (error instanceof DefinitionError) {
     if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING") return "conflict";
+    if (error.code === "RELEASE_CONTRACT_SUPERSEDED") return "superseded";
     if (
       [
         "DEFINITION_CONTEXT_REFUSED",
@@ -133,7 +134,8 @@ const failedCommand = (
   invocationStarted: boolean,
 ): StudioApplicationRestoreCommandResult => ({
   kind,
-  stateMayHaveChanged: invocationStarted ? "unknown" : false,
+  // A version of an earlier contract is refused when its release is read, before any write.
+  stateMayHaveChanged: invocationStarted && kind !== "superseded" ? "unknown" : false,
 });
 
 /** Runs one explicitly confirmed HUMAN restore and reports success only after the request commits. */

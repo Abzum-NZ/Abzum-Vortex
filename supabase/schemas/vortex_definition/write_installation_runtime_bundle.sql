@@ -44,7 +44,7 @@ begin
     or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid
     or p_application_release_revision is null
     or p_application_release_revision not between 1 and 9007199254740991
-    or p_bundle_format_version is distinct from 2
+    or p_bundle_format_version is distinct from 3
     or p_pin_fingerprint is null or p_pin_fingerprint !~ '^sha256:[a-f0-9]{64}$'
     or p_parts is null or pg_catalog.jsonb_typeof(p_parts) is distinct from 'array' then
     raise exception using errcode = '22023',
@@ -162,7 +162,7 @@ begin
       message = 'Installation runtime bundle source changed';
   end if;
   source_manifest := pg_catalog.jsonb_build_object(
-    'bundleFormatVersion', 2,
+    'bundleFormatVersion', 3,
     'application', pg_catalog.jsonb_build_object(
       'rootId', prepared_source #> '{application,rootId}',
       'definitionKey', prepared_source #> '{application,key}',
