@@ -1938,5 +1938,217 @@
         "key": "platform.organization.assignments.manage"
       }
     }
+  },
+  "create_connection_instance": {
+    "key": "create_connection_instance",
+    "name": "Create connection",
+    "release": {
+      "serviceId": "6f7dbb31-f414-41b6-998a-79ba56aa7230",
+      "operationId": "cf598f50-fb64-4368-9039-6e99525b0d86",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "6f7dbb31-f414-41b6-998a-79ba56aa7230"
+        },
+        "operationId": "cf598f50-fb64-4368-9039-6e99525b0d86"
+      },
+      "inputs": {
+        "connection_type_id": {
+          "type": "text",
+          "required": true
+        },
+        "connection_type_version": {
+          "type": "text",
+          "required": true
+        },
+        "destination_key": {
+          "type": "text",
+          "required": true
+        },
+        "secret_reference_id": {
+          "type": "text",
+          "required": true
+        }
+      },
+      "outputs": {
+        "connection_instance_id": {
+          "type": "text",
+          "required": true
+        },
+        "revision": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "effect": "change",
+      "expectedRevision": "not_required",
+      "confirmation": "required",
+      "duplicateProtection": "required",
+      "safeResults": ["committed", "refused", "validation", "failed"],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "ec2908a1-f3cd-4c4a-8bf7-91bffbf4cb3d",
+        "key": "platform.organization.connections.manage"
+      }
+    }
+  },
+  "edit_connection_instance": {
+    "key": "edit_connection_instance",
+    "name": "Edit connection",
+    "release": {
+      "serviceId": "6f7dbb31-f414-41b6-998a-79ba56aa7230",
+      "operationId": "e2261031-6f43-4958-92f7-f50de70576e8",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "6f7dbb31-f414-41b6-998a-79ba56aa7230"
+        },
+        "operationId": "e2261031-6f43-4958-92f7-f50de70576e8"
+      },
+      "inputs": {
+        "connection_instance_id": {
+          "type": "text",
+          "required": true
+        },
+        "expected_revision": {
+          "type": "whole_number",
+          "required": true
+        },
+        "destination_key": {
+          "type": "text",
+          "required": true
+        },
+        "secret_reference_id": {
+          "type": "text",
+          "required": false
+        }
+      },
+      "outputs": {
+        "connection_instance_id": {
+          "type": "text",
+          "required": true
+        },
+        "revision": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "effect": "change",
+      "expectedRevision": "required",
+      "confirmation": "required",
+      "duplicateProtection": "required",
+      "safeResults": ["committed", "refused", "conflict", "validation", "failed"],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "ec2908a1-f3cd-4c4a-8bf7-91bffbf4cb3d",
+        "key": "platform.organization.connections.manage"
+      }
+    }
+  },
+  "revoke_connection_instance": {
+    "key": "revoke_connection_instance",
+    "name": "Revoke connection",
+    "release": {
+      "serviceId": "6f7dbb31-f414-41b6-998a-79ba56aa7230",
+      "operationId": "da3d0a7e-8de0-4a5e-94dd-ceeb561f03c9",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "6f7dbb31-f414-41b6-998a-79ba56aa7230"
+        },
+        "operationId": "da3d0a7e-8de0-4a5e-94dd-ceeb561f03c9"
+      },
+      "inputs": {
+        "connection_instance_id": {
+          "type": "text",
+          "required": true
+        },
+        "expected_revision": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "outputs": {
+        "connection_instance_id": {
+          "type": "text",
+          "required": true
+        },
+        "revision": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "effect": "change",
+      "expectedRevision": "required",
+      "confirmation": "required",
+      "duplicateProtection": "required",
+      "safeResults": ["committed", "refused", "conflict", "validation", "failed"],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "ec2908a1-f3cd-4c4a-8bf7-91bffbf4cb3d",
+        "key": "platform.organization.connections.manage"
+      }
+    }
+  },
+  "health_check_connection_instance": {
+    "key": "health_check_connection_instance",
+    "name": "Check connection health",
+    "release": {
+      "serviceId": "6f7dbb31-f414-41b6-998a-79ba56aa7230",
+      "operationId": "82a48c6a-ff84-4c12-b7b1-243a6d03f5de",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "6f7dbb31-f414-41b6-998a-79ba56aa7230"
+        },
+        "operationId": "82a48c6a-ff84-4c12-b7b1-243a6d03f5de"
+      },
+      "inputs": {
+        "connection_instance_id": {
+          "type": "text",
+          "required": true
+        },
+        "expected_revision": {
+          "type": "whole_number",
+          "required": true
+        }
+      },
+      "outputs": {
+        "revision": {
+          "type": "whole_number",
+          "required": true
+        },
+        "health_outcome": {
+          "type": "text",
+          "required": true
+        }
+      },
+      "effect": "change",
+      "expectedRevision": "required",
+      "confirmation": "required",
+      "duplicateProtection": "required",
+      "safeResults": ["committed", "refused", "conflict", "validation", "failed"],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "ec2908a1-f3cd-4c4a-8bf7-91bffbf4cb3d",
+        "key": "platform.organization.connections.manage"
+      }
+    }
   }
 }

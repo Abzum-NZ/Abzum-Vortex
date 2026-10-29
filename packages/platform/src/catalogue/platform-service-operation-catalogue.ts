@@ -62,6 +62,10 @@ const entry = (definition: {
  * upgrade an application; they re-prove installation authority in their own transactions.
  */
 export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
+  create_connection_instance: entry(sources.create_connection_instance),
+  edit_connection_instance: entry(sources.edit_connection_instance),
+  revoke_connection_instance: entry(sources.revoke_connection_instance),
+  health_check_connection_instance: entry(sources.health_check_connection_instance),
   create_group: entry(sources.create_group),
   create_tenant_organization: entry(sources.create_tenant_organization),
   rename_group: entry(sources.rename_group),
