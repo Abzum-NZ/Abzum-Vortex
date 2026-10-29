@@ -23,6 +23,50 @@ import {
   type RecordsTableRequestRefusal,
 } from ".";
 import { installedPlacementProps } from "./placement";
+import type { SelectedOrganizationScope } from "../../access/identity-access";
+import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
+import { readQueryBindings } from "../../definition/application-composition/query-bindings";
+import { protectedQueryCommandSchema } from "../../queries/protected-query-contracts";
+import { readQueryMembership } from "../../queries/protected-query-table";
+import { resolveQueryBindings, type QueryBindingContext } from "../query-binding-resolver";
+import {
+  findModuleQuery,
+  placementSettingsOf,
+  type PlacementReadEntry,
+} from "../placement-read/shared";
+
+/** Proves supplied rows against the projected table's installed query under this request's scope. */
+export const recordsTableMembershipRefusal = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  context: InstalledRuntimeContext,
+  placement: PlacementReadEntry,
+  bindings: QueryBindingContext,
+  recordIds: readonly string[],
+): Promise<string | undefined> => {
+  const queryId =
+    typeof placement.vortex.queryId === "string" ? placement.vortex.queryId : undefined;
+  const bound = queryId === undefined ? undefined : findModuleQuery(context, queryId);
+  if (bound === undefined) return "query_not_installed";
+  const declared = readQueryBindings(placementSettingsOf(placement));
+  if (declared.kind !== "read") return "query_bindings_malformed";
+  const resolved = await resolveQueryBindings(declared.bindings, bound.query.inputs, bindings, {});
+  if (resolved.kind !== "resolved") return `query_inputs_${resolved.kind}`;
+  const command = protectedQueryCommandSchema.safeParse({
+    moduleRootId: bound.module.rootId,
+    queryId: bound.query.queryId,
+    inputValues: resolved.inputValues,
+    requestedFieldIds: bound.query.selectedFieldIds.slice(0, 1),
+    pageSize: recordIds.length,
+    exactRecordIds: recordIds,
+  });
+  if (!command.success) return "query_membership_command_invalid";
+  const result = await readQueryMembership(transaction, scope, command.data);
+  if (result.outcome !== "completed") return `query_membership_${result.reasonCode}`;
+  return recordIds.every((id) => result.recordIds.some((member) => sameId(id, member)))
+    ? undefined
+    : "record_not_in_query";
+};
 
 /**
  * Why one inline-edited cell may not be written now, or undefined when it may: the field must be
