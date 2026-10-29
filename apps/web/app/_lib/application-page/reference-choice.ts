@@ -9,10 +9,15 @@ import {
   type IdentitySession,
   type OrganizationSelectionCandidate,
   sameId,
+  walkPageComposition,
 } from "@vortex/platform/schema";
 import { loadInstalledContext, requestDependencies } from "./installed-context";
 import { platformPermissionSource } from "../platform-permission-source";
-import { withContributedPlacements } from "./contributed-placements";
+import { withContributedFormPlacements, withContributedPlacements } from "./contributed-placements";
+import {
+  projectedReferenceChoiceForm,
+  type ProjectedReferenceChoiceForm,
+} from "../reference-choices";
 
 export type ReferenceChoicePageResult =
   | Readonly<{ kind: "completed"; values: ReferenceChoiceInputValues }>
@@ -27,6 +32,51 @@ export type ReferenceChoiceAddress = Readonly<{
   /** The installed context this same request's own HUMAN address read authorized. */
   installedContext?: InstalledRuntimeContext;
 }>;
+
+/** Projects only the admitted row's form, inside the transaction that proved its membership. */
+export const projectRowReferenceChoiceForm = async (
+  transaction: Parameters<
+    ReturnType<typeof createStoredPageCapabilityService>["projectFormInTransaction"]
+  >[0],
+  scope: Parameters<
+    ReturnType<typeof createStoredPageCapabilityService>["projectFormInTransaction"]
+  >[1],
+  context: InstalledRuntimeContext,
+  projectedPage: Readonly<Record<string, unknown>>,
+  pageId: string,
+  formId: string,
+  subject: Readonly<{ moduleRootId: string; recordTypeId: string; recordId: string }>,
+): Promise<ProjectedReferenceChoiceForm | undefined> => {
+  const service = createStoredPageCapabilityService({
+    ...requestDependencies(),
+    context,
+    permissions: platformPermissionSource,
+    selection: { pageId },
+  });
+  const form = await service.projectFormInTransaction(
+    transaction,
+    scope,
+    projectedPage,
+    formId,
+    subject,
+  );
+  if (form === undefined) return undefined;
+  const page = structuredClone(projectedPage) as Record<string, unknown>;
+  let replaced = false;
+  walkPageComposition(page.composition, (placement) => {
+    if (sameId(placement.placementId, formId)) {
+      Object.assign(placement.item, structuredClone(form));
+      replaced = true;
+    }
+    return undefined;
+  });
+  if (!replaced) return undefined;
+  return projectedReferenceChoiceForm(
+    withContributedFormPlacements(page, context, subject, formId),
+    context.releaseSet.modules,
+    formId,
+  );
+};
 
 /** Reprojects the current addressed page under the actor and the exact installed release. */
 export const projectReferenceChoicePage = async (
