@@ -356,7 +356,6 @@ export {
   createFlowRuntime,
   createFlowRuntimeState,
   createFormBlockRuntime,
-  driveServerFlow,
   isFlowIntent,
   parseServerFlowResponse,
   performPresentationIntent,

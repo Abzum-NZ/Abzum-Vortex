@@ -1,6 +1,6 @@
 import type { ComponentFlowBinding, FlowBindingConcurrency } from "@vortex/platform/schema";
 import type { FlowIntentHost } from "./intents";
-import { driveServerFlow, type ServerDrivenResult } from "./server-driven-run";
+import type { ServerDrivenResult } from "./server-driven-run";
 import type { FlowInvokeClient, FlowSubjectContext } from "./server-flow-client";
 
 export type FlowRuntimeOptions = Readonly<{
@@ -150,13 +150,16 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
       settings.concurrency,
       signal,
       async (runSignal) => {
-        const first = await options.client.startBinding(
-          { bindingId: binding.bindingId, flowId: binding.flowId },
-          callerInputs ?? {},
-          clickId,
-          runSignal,
-          subject,
-        );
+        const [first, { driveServerFlow }] = await Promise.all([
+          options.client.startBinding(
+            { bindingId: binding.bindingId, flowId: binding.flowId },
+            callerInputs ?? {},
+            clickId,
+            runSignal,
+            subject,
+          ),
+          import("./server-driven-run"),
+        ]);
         return driveServerFlow(
           options.client,
           binding.flowId,

@@ -28,7 +28,7 @@ export {
   type FlowIntentKind,
   type FlowMessageIntent,
 } from "./intents";
-export { driveServerFlow, type ServerDrivenResult } from "./server-driven-run";
+export type { ServerDrivenResult } from "./server-driven-run";
 export {
   createFlowInvokeClient,
   parseServerFlowResponse,
