@@ -307,7 +307,15 @@ export const evaluateRecordCalculations = (
         (id) => values.get(id) !== undefined && values.get(id) !== null,
       )
     ) {
-      evaluationIssue = formulaFailure(formula, scope) ?? "invalid_result";
+      const roundedProbe =
+        field.settings.resultType === "whole_number"
+          ? evaluateFlowFormula(formula, scope, { resultScale: 18, resultRounding: "half_even" })
+          : undefined;
+      evaluationIssue =
+        formulaFailure(formula, scope) ??
+        (roundedProbe !== undefined && roundedProbe.type !== "money"
+          ? "non_integral_whole_number"
+          : "invalid_result");
     }
 
     if (evaluationIssue !== undefined) {
