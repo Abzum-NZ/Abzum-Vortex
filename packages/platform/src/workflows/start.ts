@@ -248,7 +248,7 @@ export const startFlow = async <Value>(
       request.iteration,
     );
     let runId = suppliedRunId.success ? suppliedRunId.data : undefined;
-    let evidenceState: "started" | "succeeded" | "refused" | "failed" | "closed" | undefined;
+    let evidenceState: "started" | "pending" | "succeeded" | "refused" | "failed" | "closed" | undefined;
     if (hasCompletion) {
       if (runId === undefined) {
         const opened = await transaction.query`select vortex_access.flow_run_evidence(${'start'}::text, ${null}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${null}::uuid) as result`;
@@ -257,21 +257,23 @@ export const startFlow = async <Value>(
       const locked = await transaction.query`select vortex_access.flow_run_evidence(${'lock'}::text, ${runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${null}::uuid) as result`;
       const evidence = z.discriminatedUnion("state", [
         z.object({ state: z.literal("unavailable") }).strict(),
-        z.object({ state: z.enum(["started", "succeeded", "refused", "failed", "closed"]), completionCommandId: z.uuid().nullable() }).strict(),
+        z.object({ state: z.enum(["started", "pending", "succeeded", "refused", "failed", "closed"]), pendingCommandId: z.uuid().nullable(), completionCommandId: z.uuid().nullable() }).strict(),
       ]).parse(locked[0]?.result);
       if (evidence.state === "unavailable") return { kind: "refused" };
       evidenceState = evidence.state;
       if (segment.tasks.length === 0) {
-        if (evidence.state === "refused" || evidence.state === "failed" ||
+        if (evidence.state === "pending" || evidence.state === "refused" || evidence.state === "failed" ||
           (evidence.state === "closed" && evidence.completionCommandId !== commandId))
           return { kind: "refused" };
-      } else if (evidence.state === "closed") return { kind: "refused" };
+      } else if (evidence.state === "closed" ||
+        (evidence.state === "pending" && (!segment.multiTransaction || evidence.pendingCommandId !== commandId)))
+        return { kind: "refused" };
     }
     if (runId === undefined) return { kind: "refused" };
     const recordOutcome = async (outcome: SegmentExecution<Value>["outcome"]): Promise<void> => {
       if (!hasCompletion || evidenceState === "closed") return;
       const action = segment.tasks.length === 0 && outcome === "succeeded" ? "close" : outcome;
-      const updated = await transaction.query`select vortex_access.flow_run_evidence(${action}::text, ${runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${action === "close" ? commandId : null}::uuid) as result`;
+      const updated = await transaction.query`select vortex_access.flow_run_evidence(${action}::text, ${runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${action === "close" || evidenceState === "pending" ? commandId : null}::uuid) as result`;
       const expectedState = action === "close" ? "closed" : action;
       z.object({ state: z.literal(expectedState) }).strict().parse(updated[0]?.result);
     };

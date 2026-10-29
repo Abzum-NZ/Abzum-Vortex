@@ -12,12 +12,12 @@ declare
   v_run_id uuid;
   held record;
 begin
-  if p_action is null or p_action not in ('start', 'lock', 'succeeded', 'refused', 'failed', 'close')
+  if p_action is null or p_action not in ('start', 'lock', 'pending', 'succeeded', 'refused', 'failed', 'close')
     or not vortex_platform.is_non_nil_uuid(p_flow_id::text)
     or not vortex_platform.is_non_nil_uuid(p_binding_id::text)
     or not vortex_platform.is_non_nil_uuid(v_application_root_id::text)
     or (p_action <> 'start' and not vortex_platform.is_non_nil_uuid(p_run_id::text))
-    or (p_action = 'close' and not vortex_platform.is_non_nil_uuid(p_command_id::text)) then
+    or (p_action in ('pending', 'close') and not vortex_platform.is_non_nil_uuid(p_command_id::text)) then
     raise exception using errcode = '22023', message = 'Flow run evidence is invalid';
   end if;
   if p_action = 'start' then
@@ -37,7 +37,7 @@ begin
     );
     return pg_catalog.jsonb_build_object('runId', v_run_id, 'state', 'started');
   end if;
-  select evidence.state, evidence.completion_command_id into held
+  select evidence.state, evidence.pending_command_id, evidence.completion_command_id into held
   from vortex_access.flow_run_evidence as evidence
   where evidence.run_id = p_run_id
     and evidence.organization_id = v_organization_id
@@ -50,7 +50,8 @@ begin
   if not found then return pg_catalog.jsonb_build_object('state', 'unavailable'); end if;
   if p_action = 'lock' then
     return pg_catalog.jsonb_build_object(
-      'state', held.state, 'completionCommandId', held.completion_command_id
+      'state', held.state, 'pendingCommandId', held.pending_command_id,
+      'completionCommandId', held.completion_command_id
     );
   end if;
   if held.state = 'closed' then
@@ -58,11 +59,15 @@ begin
       when p_action = 'close' and held.completion_command_id = p_command_id then 'closed'
       else 'unavailable' end);
   end if;
+  if held.state = 'pending' and held.pending_command_id is distinct from p_command_id then
+    return pg_catalog.jsonb_build_object('state', 'unavailable');
+  end if;
   if p_action = 'close' and held.state not in ('started', 'succeeded') then
     return pg_catalog.jsonb_build_object('state', 'unavailable');
   end if;
   update vortex_access.flow_run_evidence as evidence
   set state = case when p_action = 'close' then 'closed' else p_action end,
+      pending_command_id = case when p_action = 'pending' then p_command_id else null end,
       completion_command_id = case when p_action = 'close' then p_command_id else null end,
       expires_at = pg_catalog.statement_timestamp() + interval '15 minutes'
   where evidence.run_id = p_run_id;
