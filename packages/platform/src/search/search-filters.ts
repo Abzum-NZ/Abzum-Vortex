@@ -5,7 +5,7 @@ import type { ModuleField } from "../definition/module-contracts";
 import type { ConditionNode } from "../definition/module-foundation-contracts";
 import { normalizeExactDecimal } from "../records/exact-decimal";
 import { moduleFieldValueSchemas } from "../records/module-field-values";
-import { evaluateTypedCondition } from "../rules/typed-condition";
+import { conditionFieldType } from "../rules/condition-types";
 
 type SearchFilter = Readonly<{ key: string; value: string }>;
 
@@ -42,7 +42,7 @@ export const splitSearchFilters = (
   return { literal: tokens.join(" "), filters };
 };
 
-type PreparedFilter = Readonly<{ field: ModuleField; condition: ConditionNode }>;
+type PreparedFilter = Readonly<{ fieldId: string; type: string; condition: ConditionNode }>;
 
 /** Build the same typed conditions used by ordinary queries, over configured search fields. */
 export const prepareSearchFilters = (
@@ -100,8 +100,11 @@ export const prepareSearchFilters = (
       default:
         return undefined;
     }
+    const type = conditionFieldType(field);
+    if (type === undefined) return undefined;
     prepared.push({
-      field,
+      fieldId: field.fieldId,
+      type,
       condition: {
         kind: "comparison",
         operator,
@@ -112,21 +115,3 @@ export const prepareSearchFilters = (
   }
   return prepared;
 };
-
-/** A missing field is withheld, so it cannot satisfy a filter. */
-export const matchesSearchFilters = (
-  filters: readonly PreparedFilter[],
-  values: Readonly<Record<string, JsonValue>>,
-): boolean =>
-  filters.every(({ field, condition }) => {
-    const key = Object.keys(values).find((id) => id.toLowerCase() === field.fieldId.toLowerCase());
-    if (key === undefined) return false;
-    return evaluateTypedCondition({
-      condition,
-      sourceRecordFields: [field],
-      declaredFieldIds: [field.fieldId],
-      fieldValues: { [field.fieldId]: values[key] },
-      parameterDeclarations: [],
-      parameterValues: {},
-    });
-  });

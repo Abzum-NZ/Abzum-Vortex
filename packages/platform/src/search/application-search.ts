@@ -3,7 +3,6 @@ import "server-only";
 import type { SelectedOrganizationScope } from "../access/identity-access";
 import type { JsonValue } from "../catalogue/common";
 import type { ModuleField } from "../definition/module-contracts";
-import { sameId } from "../catalogue/runtime-primitives";
 import {
   applicationSearchSchema,
   type ApplicationSearch,
@@ -12,13 +11,8 @@ import {
   moduleFieldValueSchemas,
   type RecordRichTextDocument,
 } from "../records/module-field-values";
-import { matchLiteralSearch } from "./literal-search";
-import { matchesSearchFilters, prepareSearchFilters, splitSearchFilters } from "./search-filters";
-import { searchPriorityWeights, type SearchDocument } from "./document-store";
-import type {
-  PermittedSearchCurrentRead,
-  PermittedSearchCurrentReadRequest,
-} from "./permitted-search";
+import { literalSearchTerms } from "./literal-search";
+import { prepareSearchFilters, splitSearchFilters } from "./search-filters";
 
 export type ApplicationSearchRecord = Readonly<{
   concurrencyNumber: number;
@@ -36,7 +30,11 @@ export type ApplicationSearchMatch = Readonly<{
 export type ApplicationSearchResult =
   | Readonly<{ kind: "disabled" }>
   | Readonly<{ kind: "refused"; reason?: string }>
-  | Readonly<{ kind: "available"; matches: readonly ApplicationSearchMatch[] }>;
+  | Readonly<{
+      kind: "available";
+      matches: readonly ApplicationSearchMatch[];
+      boundary?: Readonly<{ score: number; id: string }>;
+    }>;
 
 const boundedDisplayText = (value: string): string | undefined => {
   const text = value
@@ -105,23 +103,28 @@ const displayValue = (value: JsonValue | undefined): string | undefined => {
   return boundedDisplayText(text.join(" "));
 };
 
-/**
- * The composition root supplies an installed release and one current human transaction.
- * Configuration is not a browser command. Matching, ranking and presentation all follow the
- * fixed Record read; a stale index revision contributes neither a match nor a page slot.
- */
+/** The database page performs matching and current record permission before ranking. */
 export const searchConfiguredApplication = async (
   input: Readonly<{
     scope: SelectedOrganizationScope;
     configuration: ApplicationSearch | undefined;
     expression: string;
     fieldsByRecordType: ReadonlyMap<string, readonly ModuleField[]>;
-    /** Index documents of one record type in bounded batches; the batch size is the permitted-search candidate bound. */
-    candidateBatches(recordTypeId: string): AsyncIterable<readonly SearchDocument[]>;
-    /** Keyed by lower-case record identity; a record that cannot be read now is absent. */
-    readCurrentRecords(
-      request: PermittedSearchCurrentReadRequest,
-    ): Promise<ReadonlyMap<string, ApplicationSearchRecord>>;
+    allowedRecordTypeIds: ReadonlySet<string>;
+    after?: Readonly<{ score: number; id: string }>;
+    readPage(
+      request: Readonly<{
+        recordTypeId: string;
+        fields: ApplicationSearch["recordTypes"][number]["fields"];
+        titleFieldId: string;
+        terms: NonNullable<ReturnType<typeof literalSearchTerms>>;
+        filters: NonNullable<ReturnType<typeof prepareSearchFilters>>;
+        after?: Readonly<{ score: number; id: string }>;
+        limit: number;
+      }>,
+    ): Promise<
+      readonly Readonly<{ recordId: string; rank: number; record: ApplicationSearchRecord }>[]
+    >;
   }>,
 ): Promise<ApplicationSearchResult> => {
   if (input.configuration === undefined || !input.configuration.enabled)
@@ -133,10 +136,13 @@ export const searchConfiguredApplication = async (
     );
     return { kind: "refused" };
   }
-  const matches: ApplicationSearchMatch[] = [];
   const expression = splitSearchFilters(input.expression);
   if (expression === undefined || (expression.literal === "" && expression.filters.length === 0))
     return { kind: "refused", reason: "Check the search expression." };
+  const terms = literalSearchTerms(expression.literal);
+  if (terms === undefined) return { kind: "refused", reason: "Check the search expression." };
+  const matches: ApplicationSearchMatch[] = [];
+  let boundary: Readonly<{ score: number; id: string }> | undefined;
   for (const entry of parsed.data.recordTypes) {
     if (entry.recordType.state !== "resolved") {
       console.error("[search] refused SEARCH_RECORD_TYPE_NOT_RESOLVED");
@@ -152,52 +158,25 @@ export const searchConfiguredApplication = async (
     );
     if (filters === undefined)
       return { kind: "refused", reason: "A filter field or value is not valid for this search." };
-    for await (const batch of input.candidateBatches(recordTypeId)) {
-      const current = new Map<string, ApplicationSearchRecord>();
-      const indexed = new Map(
-        batch.map((candidate) => [candidate.recordId.toLowerCase(), candidate]),
-      );
-      const result = await matchLiteralSearch(
-        {
-          expression: expression.literal,
-          ...(expression.literal === "" ? { matchAll: true } : {}),
-          search: {
-            access: input.scope,
-            request: {
-              applicationRootId: input.scope.applicationRootId,
-              recordTypeId,
-              requestedFieldIds: entry.fields.map((field) => String(field.fieldId)),
-            },
-            candidates: batch,
-          },
-        },
-        {
-          readCurrentRecords: async (request) => {
-            const records = await input.readCurrentRecords(request);
-            const reads = new Map<string, PermittedSearchCurrentRead>();
-            for (const [recordId, record] of records) {
-              if (record.concurrencyNumber !== indexed.get(recordId)?.sourceRecordVersion) continue;
-              current.set(recordId, record);
-              reads.set(recordId, {
-                outcome: "allowed",
-                concurrencyNumber: record.concurrencyNumber,
-                readableFieldIds: Object.keys(record.values),
-              });
-            }
-            return reads;
-          },
-        },
-      );
-      if (result.outcome === "refused") {
-        console.error("[search] refused SEARCH_PERMITTED_QUERY_REFUSED");
-        return { kind: "refused" };
-      }
-      for (const match of result.matches) {
-        const record = current.get(match.candidate.recordId.toLowerCase());
-        if (record === undefined) continue;
-        if (!matchesSearchFilters(filters, record.values)) continue;
+    if (!input.allowedRecordTypeIds.has(recordTypeId.toLowerCase())) continue;
+    let after = input.after;
+    let read = 0;
+    let displayed = 0;
+    while (displayed < 41 && read < 200) {
+      const limit = Math.min(41 - displayed, 200 - read);
+      const page = await input.readPage({
+        recordTypeId,
+        fields: entry.fields,
+        titleFieldId: String(entry.titleFieldId),
+        terms,
+        filters,
+        ...(after === undefined ? {} : { after }),
+        limit,
+      });
+      read += page.length;
+      for (const row of page) {
         const values = new Map(
-          Object.entries(record.values).map(([fieldId, value]) => [fieldId.toLowerCase(), value]),
+          Object.entries(row.record.values).map(([id, value]) => [id.toLowerCase(), value]),
         );
         const title = displayValue(values.get(String(entry.titleFieldId).toLowerCase()));
         if (title === undefined) continue;
@@ -205,37 +184,32 @@ export const searchConfiguredApplication = async (
           entry.subtitleFieldId === undefined
             ? undefined
             : displayValue(values.get(String(entry.subtitleFieldId).toLowerCase()));
-        const rank = match.matchedFields.reduce((total, matched) => {
-          const selected = entry.fields.find((field) =>
-            sameId(String(field.fieldId), matched.fieldId),
-          );
-          return (
-            total +
-            (selected === undefined
-              ? 0
-              : searchPriorityWeights[selected.priority] * matched.termIndices.length)
-          );
-        }, 0);
         matches.push({
-          recordId: match.candidate.recordId,
+          recordId: row.recordId,
           recordTypeId,
           targetPageId: String(entry.targetPageId),
-          concurrencyNumber: record.concurrencyNumber,
+          concurrencyNumber: row.record.concurrencyNumber,
           title,
           ...(subtitle === undefined ? {} : { subtitle }),
-          rank,
+          rank: row.rank,
         });
+        displayed += 1;
       }
-      // Only the best 200 permitted results can be paged through. Keep memory bounded
-      // while still evaluating every candidate for the globally ranked result set.
-      matches.sort(
-        (left, right) => right.rank - left.rank || left.recordId.localeCompare(right.recordId),
-      );
-      matches.length = Math.min(matches.length, 200);
+      const last = page[page.length - 1];
+      if (page.length < limit || last === undefined) break;
+      after = { score: last.rank, id: last.recordId };
+      if (
+        read === 200 &&
+        displayed < 41 &&
+        (boundary === undefined ||
+          after.score > boundary.score ||
+          (after.score === boundary.score && after.id.localeCompare(boundary.id) < 0))
+      )
+        boundary = after;
     }
   }
   matches.sort(
     (left, right) => right.rank - left.rank || left.recordId.localeCompare(right.recordId),
   );
-  return { kind: "available", matches };
+  return { kind: "available", matches, ...(boundary === undefined ? {} : { boundary }) };
 };

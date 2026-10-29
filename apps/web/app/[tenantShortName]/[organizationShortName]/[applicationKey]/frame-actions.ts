@@ -246,7 +246,7 @@ export async function searchLauncherAction(
       groupKey === key ? cursor : undefined,
     );
     if (result.kind === "refused") refusal = result.reason;
-    if (result.kind === "available" && result.results.length > 0)
+    if (result.kind === "available" && (result.results.length > 0 || result.cursor !== undefined))
       groups.push({
         key,
         title: app.name,

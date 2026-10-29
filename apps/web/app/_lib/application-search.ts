@@ -36,7 +36,7 @@ const cursorSchema = z
     query: z.string(),
     score: z.number(),
     id: z.uuid(),
-    count: z.number().int().min(1).max(160),
+    count: z.number().int().min(0).max(199),
   })
   .strict();
 /** Only the expression comes from the browser; address, release and fields are server-bound. */
@@ -118,8 +118,37 @@ export const loadApplicationSearch = async (
         )
           return { kind: "refused" as const };
         if (expression === undefined) return { kind: "ready" as const };
+        const allowedRecordTypeIds = new Set<string>();
+        const permittedPages = new Map<string, boolean>();
+        for (const entry of configuration.recordTypes) {
+          if (entry.recordType.state !== "resolved") continue;
+          const page = application.content.pages.find((candidate) =>
+            sameId(candidate.pageId, entry.targetPageId),
+          );
+          if (page === undefined) continue;
+          let permitted = permittedPages.get(page.key);
+          if (permitted === undefined) {
+            const link = await createApplicationPageLinkReader(address).read(session, {
+              kind: "page",
+              applicationKey: address.applicationKey,
+              pageKey: page.key,
+            });
+            permitted =
+              link.availability === "available" &&
+              sameId(link.organizationId, context.organizationId) &&
+              sameId(link.applicationRootId, context.applicationRootId) &&
+              link.applicationReleaseRevision === application.releaseRevision &&
+              link.contentFingerprint === application.contentFingerprint &&
+              link.resolutionFingerprint === application.resolutionFingerprint;
+            permittedPages.set(page.key, permitted);
+          }
+          if (permitted)
+            allowedRecordTypeIds.add(String(entry.recordType.recordTypeId).toLowerCase());
+        }
         const result = await searchInstalledApplication({
           transaction,
+          allowedRecordTypeIds,
+          ...(after === undefined ? {} : { after: { score: after.score, id: after.id } }),
           scope,
           configuration,
           expression,
@@ -138,6 +167,7 @@ export const loadApplicationSearch = async (
         return {
           kind: "searched" as const,
           matches: result.matches,
+          ...(result.boundary === undefined ? {} : { boundary: result.boundary }),
           pages: application.content.pages,
           revision: application.releaseRevision,
           organizationId: context.organizationId,
@@ -155,39 +185,18 @@ export const loadApplicationSearch = async (
       return { kind: "refused", expression: expression ?? "", reason: searched.value.reason };
     if (searched.value.kind !== "searched") return unavailable;
     const result = searched.value;
-    const links = new Map<
-      string,
-      Awaited<ReturnType<ReturnType<typeof createApplicationPageLinkReader>["read"]>>
-    >();
     const results: { href: string; title: string; subtitle?: string; score: number; id: string }[] =
       [];
     for (const match of result.matches) {
       if (
-        after !== undefined &&
-        (match.rank > after.score ||
-          (match.rank === after.score && match.recordId.localeCompare(after.id) <= 0))
+        result.boundary !== undefined &&
+        (match.rank < result.boundary.score ||
+          (match.rank === result.boundary.score &&
+            match.recordId.localeCompare(result.boundary.id) > 0))
       )
-        continue;
-      const page = result.pages.find((page) => sameId(page.pageId, match.targetPageId));
-      if (page === undefined) continue;
-      let link = links.get(page.key);
-      if (link === undefined) {
-        link = await createApplicationPageLinkReader(address).read(session, {
-          kind: "page",
-          applicationKey: address.applicationKey,
-          pageKey: page.key,
-        });
-        links.set(page.key, link);
-      }
-      if (
-        link.availability !== "available" ||
-        !sameId(link.organizationId, result.organizationId) ||
-        !sameId(link.applicationRootId, result.applicationRootId) ||
-        link.applicationReleaseRevision !== result.revision ||
-        link.contentFingerprint !== result.contentFingerprint ||
-        link.resolutionFingerprint !== result.resolutionFingerprint
-      )
-        continue;
+        break;
+      const page = result.pages.find((candidate) => sameId(candidate.pageId, match.targetPageId));
+      if (page === undefined) throw new Error("SEARCH_PAGE_MISSING");
       results.push({
         href: `${applicationPageAddressPath(address.tenantShortName, address.organizationShortName, address.applicationKey, page.key)}?record_id=${encodeURIComponent(match.recordId)}`,
         title: match.title,
@@ -197,14 +206,16 @@ export const loadApplicationSearch = async (
       });
       if (results.length === 41) break;
     }
-    const page = results.slice(0, 40);
+    const page = results.slice(0, Math.min(40, 200 - (after?.count ?? 0)));
     const count = (after?.count ?? 0) + page.length;
     const last = page[page.length - 1];
+    const nextPosition =
+      results.length > page.length && last !== undefined ? last : result.boundary;
     const next =
-      results.length > 40 && count < 200 && last !== undefined
-        ? Buffer.from(JSON.stringify({ query, score: last.score, id: last.id, count })).toString(
-            "base64url",
-          )
+      count < 200 && nextPosition !== undefined
+        ? Buffer.from(
+            JSON.stringify({ query, score: nextPosition.score, id: nextPosition.id, count }),
+          ).toString("base64url")
         : undefined;
     return {
       kind: "available",
