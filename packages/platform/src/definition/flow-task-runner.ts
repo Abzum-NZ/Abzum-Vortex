@@ -977,16 +977,8 @@ export const createFlowTaskRunner = (
     const planned = planTask(run, state, call);
     if (!("plan" in planned)) return undefined;
     if (run.authority.kind !== "person") return undefined;
-    const target = taskTarget(planned.plan);
-    if (
-      target !== undefined &&
-      (await dependencies.subjects?.read(
-        run.authority.session,
-        run.authority.selection,
-        target,
-      )) !== "read"
-    )
-      return undefined;
+    // The completed receipt is scoped to the verified actor and binding. Its subject may have
+    // been deleted by this very command; replay exposes only its stored safe outcome.
     if (warnings.length === 0) return replay;
     const rendered = await replayWarnings(run, planned.plan, {
       ...replay.outputs,

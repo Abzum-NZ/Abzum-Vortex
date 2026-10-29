@@ -21,6 +21,10 @@ export type AdmissionHost = Readonly<{
   requests: HumanOrganizationRequestDependencies;
   invocation: FlowBindingInvocation;
   installationOf: (context: InstalledRuntimeContext) => InstalledFlowBindings;
+  pageAccess: (
+    context: InstalledRuntimeContext,
+    bound: BoundHumanOrganizationRequest,
+  ) => Promise<boolean>;
   pageGate: (
     context: InstalledRuntimeContext,
     binding: ComponentFlowBinding,
@@ -46,11 +50,13 @@ const prepareAdmission = (
   const capturedBinding = installation.bindings.find((entry) =>
     sameId(entry.bindingId, run.bindingId),
   );
-  if (capturedBinding === undefined) return undefined;
+  if (capturedBinding === undefined || !sameId(capturedBinding.flow.flowId, run.flowId))
+    return undefined;
   const selection = run.authority.selection;
   if (selection.applicationRootId === undefined) return undefined;
   let currentInstallation: InstalledFlowBindings | undefined;
   let currentRelease: FlowRelease | undefined;
+  let currentContext: InstalledRuntimeContext | undefined;
   return {
     authorizeBinding: async (bound: BoundHumanOrganizationRequest) => {
       if (bound.scope.applicationRootId === undefined) return false;
@@ -65,6 +71,7 @@ const prepareAdmission = (
             : { previewInstallationId: bound.scope.previewInstallationId }),
         },
       }).load();
+      currentContext = current;
       currentInstallation = host.installationOf(current);
       const matches = currentInstallation.bindings.filter((entry) =>
         sameId(entry.bindingId, run.bindingId),
@@ -86,8 +93,12 @@ const prepareAdmission = (
           ? {}
           : { selectedRecordReadProjections: currentInstallation.selectedRecordReadProjections }),
       };
-      return host.pageGate(current, capturedBinding, bound, currentInstallation, state);
+      return host.pageAccess(current, bound);
     },
+    authorizeGesture: async (bound: BoundHumanOrganizationRequest) =>
+      currentContext !== undefined &&
+      currentInstallation !== undefined &&
+      host.pageGate(currentContext, capturedBinding, bound, currentInstallation, state),
     currentPlan: async () => {
       const currentPlan = currentInstallation?.plans.get(run.flowId);
       return currentPlan === undefined || currentInstallation === undefined
@@ -132,6 +143,7 @@ export const admitFlowContinuation = async (
     {
       requests: host.requests,
       authorizeBinding: admission.authorizeBinding,
+      authorizeGesture: admission.authorizeGesture,
       currentPlan: admission.currentPlan,
       authorizeInvocation: admission.authorizeInvocation,
       execute: async () => {
@@ -171,6 +183,7 @@ export const admitFlowPageStart = async (
     {
       requests: host.requests,
       authorizeBinding: admission.authorizeBinding,
+      authorizeGesture: admission.authorizeGesture,
       currentPlan: admission.currentPlan,
       authorizeInvocation: admission.authorizeInvocation,
       execute: async () => ({ value: null, outcome: "succeeded", effects: {}, warnings: {} }),
@@ -221,6 +234,7 @@ export const admitFlowSegment = async (
     {
       requests: host.requests,
       authorizeBinding: admission.authorizeBinding,
+      authorizeGesture: admission.authorizeGesture,
       currentPlan: admission.currentPlan,
       authorizeInvocation: admission.authorizeInvocation,
       execute: async (bound, _part, replay) => {

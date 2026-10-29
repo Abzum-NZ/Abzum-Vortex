@@ -450,6 +450,21 @@ export async function invokeInstalledFlow(
       requests: requestDependencies,
       invocation,
       installationOf: installedFlowBindings,
+      pageAccess: async (context, bound) => {
+        const page = context.releaseSet.application.content.pages.find(
+          (candidate) => candidate.key === body.pageKey,
+        );
+        if (page === undefined) return false;
+        const capability = createStoredPageCapabilityService({
+          ...requestDependencies,
+          context,
+          permissions: dependencies.releaseCatalogue.permissions,
+          selection: { pageId: String(page.pageId) },
+        });
+        return (
+          (await capability.projectInTransaction(bound.transaction, bound.scope)) !== undefined
+        );
+      },
       pageGate: async (context, binding, bound, currentInstallation, state) => {
         if (!(await gateBindingToAddressedPage(context, binding.controlId, bound))) return false;
         const page = admittedProjection?.page;

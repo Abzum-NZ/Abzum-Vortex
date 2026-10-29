@@ -133,6 +133,8 @@ export type FlowContinuationExecution<Value> =
 type StartFlowDependencies<Value> = Readonly<{
   requests: HumanOrganizationRequestDependencies;
   authorizeBinding: (context: SegmentContext) => Promise<boolean>;
+  /** Full gesture projection is required for first execution, but not for a completed replay. */
+  authorizeGesture: (context: SegmentContext) => Promise<boolean>;
   authorizeInvocation: (context: SegmentContext) => Promise<boolean>;
   /** Resolve the installed plan under the same scope that authorizes this admission. */
   currentPlan: (
@@ -317,6 +319,8 @@ export const startFlow = async <Value>(
         .parse(z.object({ result: z.unknown() }).parse(rows[0]).result);
     };
     if (request.expected === null) {
+      if (request.channel === "page" && !(await dependencies.authorizeGesture(context)))
+        return { kind: "refused" };
       if (request.continuation !== undefined) {
         if (
           request.continuationPlan === undefined ||
@@ -489,6 +493,12 @@ export const startFlow = async <Value>(
       else if (found.status === "pending" && segment.multiTransaction) workflowPending = true;
       else if (found.status !== "none") return { kind: "refused" };
     }
+    if (
+      request.channel === "page" &&
+      replay === undefined &&
+      !(await dependencies.authorizeGesture(context))
+    )
+      return { kind: "refused" };
     if (replay === undefined && !workflowPending) {
       const retryAfterSeconds = await rateLimit(segment.changes ? "change" : "read");
       if (retryAfterSeconds !== undefined) return { kind: "rate_limited", retryAfterSeconds };
