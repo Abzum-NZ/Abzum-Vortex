@@ -211,6 +211,20 @@ const referencesIn = (value: unknown, found: FlowReference[] = []): FlowReferenc
   return found;
 };
 
+type FlowBindingInputs = Readonly<Record<string, FlowBindingInput>>;
+
+/** Any binding that resolves an input on the server makes it server-only in the shared plan. */
+const serverResolvedInputs = (bindings: readonly FlowBindingInputs[]): ReadonlySet<string> => {
+  const names = new Set<string>();
+  for (const inputs of bindings)
+    for (const [name, input] of Object.entries(inputs)) {
+      if (input.kind === "caller" || input.kind === "literal") continue;
+      if (referencesIn(input).some((item) => item.source !== "page" && item.source !== "form"))
+        names.add(name);
+    }
+  return names;
+};
+
 const outputTypes = (steps: readonly FlowTask[]): Record<string, string> =>
   Object.fromEntries(
     steps.flatMap((step) =>
@@ -395,7 +409,10 @@ const cut = (flow: FlowDefinition, section: FlowPlanSection, tasks: readonly Flo
 };
 
 /** Compiles one validated flow into its plan. Throws `FlowPlanError` naming the step it refuses. */
-export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
+export const compileFlowPlan = (
+  flow: FlowDefinition,
+  bindings: readonly FlowBindingInputs[] = [],
+): FlowPlan => {
   const drafts = [
     ...cut(flow, "tasks", flow.tasks),
     ...cut(flow, "errors", flow.errors),
@@ -444,6 +461,7 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
   const pageInputs = new Set(
     pageReferences.flatMap((reference) => (reference.source === "input" ? [reference.name] : [])),
   );
+  const serverInputs = serverResolvedInputs(bindings);
   const pageVariables = new Set(
     pageReferences.flatMap((reference) =>
       reference.source === "variable" ? [reference.name] : [],
@@ -459,7 +477,7 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
       flowId: flow.id,
       inputs: Object.fromEntries(
         Object.entries(flow.inputs)
-          .filter(([name]) => pageInputs.has(name))
+          .filter(([name]) => pageInputs.has(name) && !serverInputs.has(name))
           .map(([name, { type, required, default: defaultValue, recordTypeIds }]) => [
             name,
             {
@@ -500,12 +518,15 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
 };
 
 /** Compiles every flow of one release. One flow per identity; an ambiguous release is refused. */
-export const compileFlowPlans = (flows: readonly FlowDefinition[]): FlowPlanSet => {
+export const compileFlowPlans = (
+  flows: readonly FlowDefinition[],
+  bindings: ReadonlyMap<string, readonly FlowBindingInputs[]> = new Map(),
+): FlowPlanSet => {
   const plans = new Map<string, FlowPlan>();
   for (const flow of flows) {
     const id = String(flow.id);
     if (plans.has(id)) throw new FlowPlanError(id, undefined, "two flows share one identity");
-    plans.set(id, compileFlowPlan(flow));
+    plans.set(id, compileFlowPlan(flow, bindings.get(id)));
   }
   return planSet(plans);
 };
@@ -524,6 +545,7 @@ export const flowBindingPlanIssue = (
     return "Latest wins cannot be used on a flow that changes data; use Queue";
   if (binding.event === "options_requested" && (plan.pageSteps || plan.changes))
     return "An options flow only reads: it can hold no page steps and no changes";
+  const serverInputs = serverResolvedInputs(binding.inputs);
   const serverOnly = (reference: FlowReference): boolean => {
     switch (reference.source) {
       case "execution_actor":
@@ -533,16 +555,7 @@ export const flowBindingPlanIssue = (
       case "module_field":
         return true;
       case "input":
-        // The plan is shared by every binding. One server-resolved source makes that input
-        // server-only for all bindings, including one that could supply it from the page.
-        return binding.inputs.some((inputs) => {
-          const input = inputs[reference.name];
-          if (input === undefined || input.kind === "caller" || input.kind === "literal")
-            return false;
-          return referencesIn(input).some(
-            (item) => item.source !== "page" && item.source !== "form",
-          );
-        });
+        return serverInputs.has(reference.name);
       default:
         return false;
     }
@@ -563,7 +576,14 @@ export const flowBindingPlanIssue = (
 /** The release set shape a plan set is built from: the cached, already-validated release content. */
 type PlannedContent = Readonly<{ flows: readonly FlowDefinition[] }>;
 type PlannedReleaseSet = Readonly<{
-  application: Readonly<{ content: PlannedContent }>;
+  application: Readonly<{
+    content: PlannedContent &
+      Readonly<{
+        flowBindings?: readonly Readonly<{
+          flow: Readonly<{ flowId: string; inputs: FlowBindingInputs }>;
+        }>[];
+      }>;
+  }>;
   modules: readonly Readonly<{ content: PlannedContent }>[];
 }>;
 
@@ -594,6 +614,13 @@ export const flowPlansOf = (releaseSet: PlannedReleaseSet): FlowPlanSet => {
     return known.set;
   const plans = new Map<string, FlowPlan>();
   const ambiguous = new Set<string>();
+  const bindings = new Map<string, FlowBindingInputs[]>();
+  for (const binding of releaseSet.application.content.flowBindings ?? []) {
+    const id = String(binding.flow.flowId);
+    const held = bindings.get(id) ?? [];
+    held.push(binding.flow.inputs);
+    bindings.set(id, held);
+  }
   for (const flow of [
     ...releaseSet.application.content.flows,
     ...modules.flatMap((content) => content.flows),
@@ -605,7 +632,7 @@ export const flowPlansOf = (releaseSet: PlannedReleaseSet): FlowPlanSet => {
       continue;
     }
     try {
-      plans.set(id, compileFlowPlan(flow));
+      plans.set(id, compileFlowPlan(flow, bindings.get(id)));
     } catch (error) {
       if (!(error instanceof FlowPlanError)) throw error;
       console.error(`[flows] flow ${id} cannot be planned: ${error.reason}`);
