@@ -21,7 +21,7 @@ catalog:
   tsx: 4.23.15
   ws: 8.21.3
   sonner: 2.0.8
-  knip: 5.63.0
+  knip: 6.43.0
   re2js: 2.9.1
   "@xyflow/react": 12.12.0
   "@tanstack/react-table": 8.21.3
@@ -41,7 +41,6 @@ overrides:
   motion-dom: 13.4.5
   motion-utils: 13.3.0
   happy-dom: 21.0.4
-  zod: 4.6.7
 
 # Reject writes queued after socket closure until the driver ships the fix.
 # https://github.com/porsager/postgres/pull/1209

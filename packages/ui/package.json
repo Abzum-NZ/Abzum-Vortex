@@ -45,7 +45,7 @@
     "react": "catalog:",
     "react-day-picker": "catalog:",
     "react-dom": "19.3.0",
-    "shadcn": "4.21.0",
+    "shadcn": "4.23.0",
     "sonner": "catalog:",
     "tailwind-merge": "3.7.0",
     "tailwindcss": "catalog:",
