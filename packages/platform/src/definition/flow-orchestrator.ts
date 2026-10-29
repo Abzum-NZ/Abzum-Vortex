@@ -41,6 +41,7 @@ import {
 } from "./flow-orchestrator-types";
 import { createFlowTaskRunner } from "./flow-task-runner";
 import { flowMaximumServerSeconds } from "../workflows/flow-limits";
+import { flowEntrySegmentsMatch } from "../workflows/flow-plan";
 
 /** Orchestrates flows with verified authority, revision-bound writes and single-use continuations. */
 
@@ -342,7 +343,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
      */
     async start(
       request: FlowStartRequest,
-      expectation?: Pick<FlowRunExpectation, "releaseKey">,
+      expectation?: Pick<FlowRunExpectation, "releaseKey" | "entrySegments">,
     ): Promise<FlowOrchestratorResponse> {
       try {
         const parsed = startRequestSchema.safeParse(request);
@@ -352,6 +353,11 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         if (prepared === undefined) return refused;
         if (expectation !== undefined && expectation.releaseKey !== prepared.release.releaseKey)
           return refused;
+        if (expectation?.entrySegments !== undefined) {
+          const plan = prepared.release.plans.get(binding.flowId);
+          if (plan === undefined) return refused;
+          if (!flowEntrySegmentsMatch(plan, expectation.entrySegments)) return { kind: "reload" };
+        }
         const actor = await dependencies.resolveActor?.(session, selection);
         const flow = prepared.library(prepared.flowId);
         const triggerRecord = await readRunRecord(

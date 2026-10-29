@@ -22,7 +22,6 @@ import {
   flowBindingInvocationSchema,
   type FlowBindingInvocation,
 } from "../workflows/flow-invocation-contracts";
-import { flowEntrySegmentsMatch } from "../workflows/flow-plan";
 import {
   flowRefusalFeedbackSchema,
   unlocatedCorrectionsRefusal,
@@ -903,11 +902,6 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           );
         const binding = matchingBindings[0]!;
 
-        const plan = installation.plans.get(String(binding.flow.flowId));
-        if (plan === undefined) return refuse("FLOW_INVOKE_PLAN_NOT_FOUND");
-        if (!flowEntrySegmentsMatch(plan, request.entrySegments))
-          return { kind: "reload", installationRevision: installation.installationRevision };
-
         let callerInputs: Readonly<Record<string, unknown>> = request.callerInputs;
         if (binding.event === "form_submit") {
           const adapted = await dependencies.adaptFormSubmit?.(
@@ -938,14 +932,17 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           installation.installationRevision,
           request.clickId,
         );
-        const response = await dependencies.orchestratorFor(release, runId, installation).start({
-          session: session.data,
-          selection: selection.data,
-          bindingId: binding.bindingId,
-          gestureId: request.clickId,
-          binding: { flowId: binding.flow.flowId, inputs },
-          ...(request.subject === undefined ? {} : { subject: request.subject }),
-        });
+        const response = await dependencies.orchestratorFor(release, runId, installation).start(
+          {
+            session: session.data,
+            selection: selection.data,
+            bindingId: binding.bindingId,
+            gestureId: request.clickId,
+            binding: { flowId: binding.flow.flowId, inputs },
+            ...(request.subject === undefined ? {} : { subject: request.subject }),
+          },
+          { releaseKey: installation.releaseKey, entrySegments: request.entrySegments },
+        );
         return toResult(response, {
           applicationRootId: installation.applicationRootId,
           installationRevision: installation.installationRevision,

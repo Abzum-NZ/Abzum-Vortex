@@ -271,6 +271,8 @@ export type FlowResumeRequest = z.input<typeof resumeRequestSchema>;
 export type FlowRunExpectation = Readonly<{
   /** The exact release of the flow set; must equal the release trusted installation state resolves. */
   releaseKey: string;
+  /** The complete set of possible first server segments shown by the binding. */
+  entrySegments?: readonly Readonly<{ segmentId: string; fingerprint: string }>[];
   /** The paused node the caller answers; the stored run must be paused at exactly this node. */
   pausedAt?: Readonly<{ nodeId: string; awaiting: "form" | "confirm" }>;
   /** The receipt the caller holds; the stored run must be that run with that many committed effects. */
