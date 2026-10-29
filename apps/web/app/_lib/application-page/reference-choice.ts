@@ -3,7 +3,9 @@ import {
   type PermittedApplicationsRead,
   type PermittedApplication,
   type InstalledRuntimeContext,
+  createReferenceChoiceService,
   createStoredPageCapabilityService,
+  requireProjectedPlacement,
 } from "@vortex/platform/server";
 import {
   type IdentitySession,
@@ -12,10 +14,12 @@ import {
   walkPageComposition,
 } from "@vortex/platform/schema";
 import { loadInstalledContext, requestDependencies } from "./installed-context";
+import { getQueryContinuationKey } from "../query-continuation-key";
 import { platformPermissionSource } from "../platform-permission-source";
 import { withContributedFormPlacements, withContributedPlacements } from "./contributed-placements";
 import {
   projectedReferenceChoiceForm,
+  referenceChoiceFieldForPlacement,
   type ProjectedReferenceChoiceForm,
 } from "../reference-choices";
 
@@ -32,6 +36,38 @@ export type ReferenceChoiceAddress = Readonly<{
   /** The installed context this same request's own HUMAN address read authorized. */
   installedContext?: InstalledRuntimeContext;
 }>;
+
+/** Proves one dynamic choice key against its installed source under the gate's transaction. */
+export const validateProjectedReferenceChoice = async (
+  bound: Parameters<
+    ReturnType<typeof createReferenceChoiceService>["resolveExactInTransaction"]
+  >[0],
+  context: InstalledRuntimeContext,
+  projectedPage: Readonly<Record<string, unknown>>,
+  placementId: string,
+  key: string,
+): Promise<boolean> => {
+  const match = /^r_([0-9a-f]{32})$/.exec(key);
+  const gate = requireProjectedPlacement(projectedPage, placementId);
+  if (match === null || gate.kind !== "on_page") return false;
+  const descriptor = referenceChoiceFieldForPlacement(gate.placement, context.releaseSet.modules);
+  if (descriptor === undefined) return false;
+  const hex = match[1]!;
+  const recordId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  const service = createReferenceChoiceService({
+    ...requestDependencies(),
+    continuationKey: getQueryContinuationKey(),
+  });
+  const resolved = await service.resolveExactInTransaction(bound, {
+    ...descriptor.command,
+    exactRecordId: recordId,
+  });
+  return (
+    resolved.kind === "available" &&
+    resolved.value.outcome === "completed" &&
+    resolved.value.choices.some((choice) => choice.key === key)
+  );
+};
 
 /** Projects only the admitted row's form, inside the transaction that proved its membership. */
 export const projectRowReferenceChoiceForm = async (

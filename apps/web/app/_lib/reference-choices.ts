@@ -124,7 +124,7 @@ const queryCommand = (
 };
 
 /** Resolves one trusted placement's source against the exact installed Module releases. */
-const referenceChoiceFieldForPlacement = (
+export const referenceChoiceFieldForPlacement = (
   placement: PlacedParts,
   modules: readonly ModuleDefinitionConsumerReadResult[],
 ): ReferenceChoiceFormField | undefined => {
