@@ -14,7 +14,7 @@ import type {
   FlowReference,
   FlowRoundingMode,
 } from "../workflows/flow-values";
-import { flowFormulaChildren } from "../workflows/flow-values";
+import { flowFormulaChildren, flowFormulaSchema } from "../workflows/flow-values";
 import { flowInstantMicros } from "./flow-instant";
 
 /**
@@ -473,6 +473,390 @@ const joined = (candidate: FlowRuntimeValue): string | undefined => {
   return undefined;
 };
 
+type FormulaExecutionFrame = Readonly<{
+  scope: FlowFormulaScope;
+  exactValues: WeakMap<FlowRuntimeValue, ExactRational>;
+  exactText: (value: ExactRational) => string | undefined;
+  compareValues: (left: FlowRuntimeValue, right: FlowRuntimeValue) => ReturnType<typeof compare>;
+}>;
+type FormulaProgram = (frame: FormulaExecutionFrame) => FlowRuntimeValue | undefined;
+const compiledFormulas = new WeakMap<FlowFormula, FormulaProgram>();
+
+/** Compile each typed operator once to a closure; no formula text is executed. */
+export const compileFlowFormula = (node: FlowFormula): FormulaProgram => {
+  const known = compiledFormulas.get(node);
+  if (known !== undefined) return known;
+  for (const child of flowFormulaChildren(node)) compileFlowFormula(child);
+  let program: FormulaProgram;
+  switch (node.op) {
+    case "literal":
+      program = () => {
+        return value(node.type, node.value);
+      };
+      break;
+    case "reference":
+      program = (frame) => {
+        const scope = frame.scope;
+        return scope.reference(node.reference as FlowReference);
+      };
+      break;
+    case "now":
+      program = (frame) => {
+        const scope = frame.scope;
+        return value("date_time", scope.now);
+      };
+      break;
+    case "record_id":
+      program = (frame) => {
+        const evaluate = (child: FlowFormula) => compiledFormulas.get(child)!(frame);
+        {
+          const operand = evaluate(node.arg);
+          if (
+            operand?.type !== "json" ||
+            operand.value === null ||
+            typeof operand.value !== "object" ||
+            Array.isArray(operand.value) ||
+            Reflect.ownKeys(operand.value).length !== 2 ||
+            !Object.hasOwn(operand.value, "recordTypeId") ||
+            !Object.hasOwn(operand.value, "recordId")
+          )
+            return undefined;
+          const record = recordLinkValueSchema.safeParse(operand.value);
+          return record.success ? value("text", record.data.recordId) : undefined;
+        }
+      };
+      break;
+    case "add":
+    case "multiply":
+    case "subtract":
+    case "divide":
+      program = (frame) => {
+        const exactValues = frame.exactValues;
+        const evaluate = (child: FlowFormula) => compiledFormulas.get(child)!(frame);
+        {
+          const operands = node.args.map(evaluate);
+          return operands.some((operand) => operand === undefined)
+            ? undefined
+            : arithmetic(
+                node.op,
+                operands as FlowRuntimeValue[],
+                node.op !== "divide" &&
+                  operands.every((operand) => operand?.type === "whole_number")
+                  ? 0
+                  : 18,
+                "half_even",
+                exactValues,
+                true,
+              );
+        }
+      };
+      break;
+    case "round":
+      program = (frame) => {
+        const exactValues = frame.exactValues;
+        const evaluate = (child: FlowFormula) => compiledFormulas.get(child)!(frame);
+        {
+          const operand = evaluate(node.arg);
+          if (operand === undefined) return undefined;
+          const rounded = arithmetic(
+            "add",
+            [operand],
+            node.scale,
+            node.rounding,
+            exactValues,
+            false,
+          );
+          if (rounded === undefined) return undefined;
+          if (operand.type === "whole_number") {
+            const whole = Number(rounded.value);
+            return Number.isSafeInteger(whole) ? value("whole_number", whole) : undefined;
+          }
+          return value(operand.type, rounded.value);
+        }
+      };
+      break;
+    case "coalesce":
+      program = (frame) => {
+        const evaluate = (child: FlowFormula) => compiledFormulas.get(child)!(frame);
+        {
+          let last: FlowRuntimeValue | undefined;
+          for (const arg of node.args) {
+            last = evaluate(arg);
+            if (last === undefined) return undefined;
+            if (last.value !== null) return last;
+          }
+          return last;
+        }
+      };
+      break;
+    case "min":
+    case "max":
+      program = (frame) => {
+        const compareValues = frame.compareValues;
+        const evaluate = (child: FlowFormula) => compiledFormulas.get(child)!(frame);
+        {
+          let chosen = evaluate(node.args[0]!);
+          if (chosen === undefined) return undefined;
+          for (const arg of node.args.slice(1)) {
+            const next = evaluate(arg);
+            if (next === undefined) return undefined;
+            const order = compareValues(chosen, next);
+            if (typeof order !== "number") return undefined;
+            if ((node.op === "min" && order > 0) || (node.op === "max" && order < 0)) chosen = next;
+          }
+          return chosen;
+        }
+      };
+      break;
+    case "percent":
+      program = (frame) => {
+        const exactValues = frame.exactValues;
+        const evaluate = (child: FlowFormula) => compiledFormulas.get(child)!(frame);
+        {
+          const part = evaluate(node.args[0]);
+          const whole = evaluate(node.args[1]);
+          if (part === undefined || whole === undefined) return undefined;
+          if ((part.type === "money") !== (whole.type === "money")) return undefined;
+          if (part.type === "money" && currencyOf(part) !== currencyOf(whole)) return undefined;
+          const asDecimal = (operand: FlowRuntimeValue): FlowRuntimeValue | undefined => {
+            const decimal = decimalOf(operand);
+            if (decimal === undefined) return undefined;
+            const result = value("decimal_number", formatExactDecimal(decimal));
+            const exact = exactValues.get(operand);
+            if (exact !== undefined) exactValues.set(result, exact);
+            return result;
+          };
+          const numerator = asDecimal(part);
+          const denominator = asDecimal(whole);
+          if (numerator === undefined || denominator === undefined) return undefined;
+          const ratio = arithmetic(
+            "divide",
+            [numerator, denominator],
+            node.scale,
+            node.rounding,
+            exactValues,
+            true,
+          );
+          return ratio === undefined
+            ? undefined
+            : arithmetic(
+                "multiply",
+                [ratio, value("whole_number", 100)],
+                node.scale,
+                node.rounding,
+                exactValues,
+                false,
+              );
+        }
+      };
+      break;
+    case "eq":
+    case "neq":
+    case "lt":
+    case "lte":
+    case "gt":
+    case "gte":
+      program = (frame) => {
+        const compareValues = frame.compareValues;
+        const evaluate = (child: FlowFormula) => compiledFormulas.get(child)!(frame);
+        {
+          const left = evaluate(node.left);
+          const right = evaluate(node.right);
+          if (left === undefined || right === undefined) return undefined;
+          const order = compareValues(left, right);
+          if (order === undefined) return undefined;
+          if (node.op === "eq" || node.op === "neq") {
+            const equal = order === 0 || order === "equal_only_same";
+            return yesNo(node.op === "eq" ? equal : !equal);
+          }
+          if (order === "equal_only_same" || order === "equal_only_different") return undefined;
+          return yesNo(
+            node.op === "lt"
+              ? order < 0
+              : node.op === "lte"
+                ? order <= 0
+                : node.op === "gt"
+                  ? order > 0
+                  : order >= 0,
+          );
+        }
+      };
+      break;
+    case "contains":
+    case "starts_with":
+    case "ends_with":
+      program = (frame) => {
+        const evaluate = (child: FlowFormula) => compiledFormulas.get(child)!(frame);
+        {
+          const left = evaluate(node.left);
+          const right = evaluate(node.right);
+          if (left === undefined || right === undefined) return undefined;
+          if (typeof left.value === "string" && typeof right.value === "string") {
+            if (!isTextType(left.type) || !isTextType(right.type)) return undefined;
+            return yesNo(
+              node.op === "contains"
+                ? left.value.includes(right.value)
+                : node.op === "starts_with"
+                  ? left.value.startsWith(right.value)
+                  : left.value.endsWith(right.value),
+            );
+          }
+          if (node.op === "contains" && Array.isArray(left.value))
+            return yesNo(left.value.some((item) => flowJsonValuesEqual(item, right.value)));
+          return undefined;
+        }
+      };
+      break;
+    case "is_empty":
+    case "is_not_empty":
+      program = (frame) => {
+        const evaluate = (child: FlowFormula) => compiledFormulas.get(child)!(frame);
+        {
+          const operand = evaluate(node.arg);
+          if (operand === undefined) return undefined;
+          return yesNo(node.op === "is_empty" ? isEmpty(operand) : !isEmpty(operand));
+        }
+      };
+      break;
+    case "in":
+      program = (frame) => {
+        const compareValues = frame.compareValues;
+        const evaluate = (child: FlowFormula) => compiledFormulas.get(child)!(frame);
+        {
+          const target = evaluate(node.value);
+          if (target === undefined) return undefined;
+          let found = false;
+          for (const option of node.options) {
+            const candidate = evaluate(option);
+            if (candidate === undefined) return undefined;
+            const order = compareValues(target, candidate);
+            if (order === undefined) return undefined;
+            if (order === 0 || order === "equal_only_same") found = true;
+          }
+          return yesNo(found);
+        }
+      };
+      break;
+    case "and":
+    case "or":
+      program = (frame) => {
+        const evaluate = (child: FlowFormula) => compiledFormulas.get(child)!(frame);
+        {
+          const operands = node.args.map(evaluate);
+          if (operands.some((operand) => operand?.type !== "yes_no")) return undefined;
+          const truths = (operands as FlowRuntimeValue[]).map((operand) => operand.value === true);
+          return yesNo(node.op === "and" ? truths.every(Boolean) : truths.some(Boolean));
+        }
+      };
+      break;
+    case "not":
+      program = (frame) => {
+        const evaluate = (child: FlowFormula) => compiledFormulas.get(child)!(frame);
+        {
+          const operand = evaluate(node.arg);
+          return operand?.type === "yes_no" ? yesNo(operand.value !== true) : undefined;
+        }
+      };
+      break;
+    case "if":
+      program = (frame) => {
+        const evaluate = (child: FlowFormula) => compiledFormulas.get(child)!(frame);
+        {
+          const condition = evaluate(node.condition);
+          if (condition?.type !== "yes_no") return undefined;
+          return evaluate(condition.value === true ? node.then : node.else);
+        }
+      };
+      break;
+    case "join":
+      program = (frame) => {
+        const exactValues = frame.exactValues;
+        const exactText = frame.exactText;
+        const evaluate = (child: FlowFormula) => compiledFormulas.get(child)!(frame);
+        {
+          const parts = node.parts.map(evaluate);
+          const texts = parts.map((part) => {
+            if (part === undefined) return undefined;
+            const exact = exactValues.get(part);
+            return exact === undefined ? joined(part) : exactText(exact);
+          });
+          if (texts.some((text) => text === undefined)) return undefined;
+          const result = (texts as string[]).join(node.separator ?? "");
+          return result.length > maximumTextCharacters ? undefined : value("text", result);
+        }
+      };
+      break;
+    case "deadline_passed":
+      program = (frame) => {
+        const scope = frame.scope;
+        const evaluate = (child: FlowFormula) => compiledFormulas.get(child)!(frame);
+        {
+          if (node.status !== undefined) {
+            const status = evaluate(node.status);
+            if (status === undefined || !isTextType(status.type)) return undefined;
+            if (
+              node.terminalStatusValues.some((candidate) =>
+                flowJsonValuesEqual(candidate, status.value),
+              )
+            )
+              return yesNo(false);
+          }
+          const due = evaluate(node.due);
+          if (due === undefined || due.value === null) return undefined;
+          if (due.type === "date") {
+            if (typeof due.value !== "string" || scope.organizationLocalDate === undefined)
+              return undefined;
+            return yesNo(due.value < scope.organizationLocalDate);
+          }
+          if (due.type !== "date_time") return undefined;
+          const order = compare(due, value("date_time", scope.now));
+          return typeof order === "number" ? yesNo(order <= 0) : undefined;
+        }
+      };
+      break;
+    case "date_add":
+      program = (frame) => {
+        const evaluate = (child: FlowFormula) => compiledFormulas.get(child)!(frame);
+        {
+          const date = evaluate(node.date);
+          const amount = evaluate(node.amount);
+          return date === undefined || amount === undefined
+            ? undefined
+            : dateAdd(date, amount, node.unit);
+        }
+      };
+      break;
+    case "date_diff":
+      program = (frame) => {
+        const evaluate = (child: FlowFormula) => compiledFormulas.get(child)!(frame);
+        {
+          const from = evaluate(node.from);
+          const to = evaluate(node.to);
+          return from === undefined || to === undefined ? undefined : dateDiff(from, to, node.unit);
+        }
+      };
+      break;
+  }
+  compiledFormulas.set(node, program);
+  return program;
+};
+
+/** Prepare the typed formulas of a release, without treating literal data as formula syntax. */
+export const prepareFlowFormulas = (input: unknown): void => {
+  if (Array.isArray(input)) {
+    input.forEach(prepareFlowFormulas);
+    return;
+  }
+  if (input === null || typeof input !== "object") return;
+  const record = input as Record<string, unknown>;
+  if (record.kind === "literal") return;
+  if (typeof record.op === "string" && flowFormulaSchema.safeParse(record).success) {
+    compileFlowFormula(record as FlowFormula);
+    return;
+  }
+  Object.values(record).forEach(prepareFlowFormulas);
+};
+
 /** Evaluates a formula in a scope, or returns `undefined` when any operand is not of the right type. */
 export const evaluateFlowFormula = (
   formula: FlowFormula,
@@ -516,244 +900,8 @@ export const evaluateFlowFormula = (
     const difference = first.numerator * second.denominator - second.numerator * first.denominator;
     return difference < 0n ? -1 : difference > 0n ? 1 : 0;
   };
-  const evaluate = (node: FlowFormula): FlowRuntimeValue | undefined => {
-    switch (node.op) {
-      case "literal":
-        return value(node.type, node.value);
-      case "reference":
-        return scope.reference(node.reference as FlowReference);
-      case "now":
-        return value("date_time", scope.now);
-      case "record_id": {
-        const operand = evaluate(node.arg);
-        if (
-          operand?.type !== "json" ||
-          operand.value === null ||
-          typeof operand.value !== "object" ||
-          Array.isArray(operand.value) ||
-          Reflect.ownKeys(operand.value).length !== 2 ||
-          !Object.hasOwn(operand.value, "recordTypeId") ||
-          !Object.hasOwn(operand.value, "recordId")
-        )
-          return undefined;
-        const record = recordLinkValueSchema.safeParse(operand.value);
-        return record.success ? value("text", record.data.recordId) : undefined;
-      }
-      case "add":
-      case "multiply":
-      case "subtract":
-      case "divide": {
-        const operands = node.args.map(evaluate);
-        return operands.some((operand) => operand === undefined)
-          ? undefined
-          : arithmetic(
-              node.op,
-              operands as FlowRuntimeValue[],
-              node.op !== "divide" && operands.every((operand) => operand?.type === "whole_number")
-                ? 0
-                : 18,
-              "half_even",
-              exactValues,
-              true,
-            );
-      }
-      case "round": {
-        const operand = evaluate(node.arg);
-        if (operand === undefined) return undefined;
-        const rounded = arithmetic("add", [operand], node.scale, node.rounding, exactValues, false);
-        if (rounded === undefined) return undefined;
-        if (operand.type === "whole_number") {
-          const whole = Number(rounded.value);
-          return Number.isSafeInteger(whole) ? value("whole_number", whole) : undefined;
-        }
-        return value(operand.type, rounded.value);
-      }
-      case "coalesce": {
-        let last: FlowRuntimeValue | undefined;
-        for (const arg of node.args) {
-          last = evaluate(arg);
-          if (last === undefined) return undefined;
-          if (last.value !== null) return last;
-        }
-        return last;
-      }
-      case "min":
-      case "max": {
-        let chosen = evaluate(node.args[0]!);
-        if (chosen === undefined) return undefined;
-        for (const arg of node.args.slice(1)) {
-          const next = evaluate(arg);
-          if (next === undefined) return undefined;
-          const order = compareValues(chosen, next);
-          if (typeof order !== "number") return undefined;
-          if ((node.op === "min" && order > 0) || (node.op === "max" && order < 0)) chosen = next;
-        }
-        return chosen;
-      }
-      case "percent": {
-        const part = evaluate(node.args[0]);
-        const whole = evaluate(node.args[1]);
-        if (part === undefined || whole === undefined) return undefined;
-        if ((part.type === "money") !== (whole.type === "money")) return undefined;
-        if (part.type === "money" && currencyOf(part) !== currencyOf(whole)) return undefined;
-        const asDecimal = (operand: FlowRuntimeValue): FlowRuntimeValue | undefined => {
-          const decimal = decimalOf(operand);
-          if (decimal === undefined) return undefined;
-          const result = value("decimal_number", formatExactDecimal(decimal));
-          const exact = exactValues.get(operand);
-          if (exact !== undefined) exactValues.set(result, exact);
-          return result;
-        };
-        const numerator = asDecimal(part);
-        const denominator = asDecimal(whole);
-        if (numerator === undefined || denominator === undefined) return undefined;
-        const ratio = arithmetic(
-          "divide",
-          [numerator, denominator],
-          node.scale,
-          node.rounding,
-          exactValues,
-          true,
-        );
-        return ratio === undefined
-          ? undefined
-          : arithmetic(
-              "multiply",
-              [ratio, value("whole_number", 100)],
-              node.scale,
-              node.rounding,
-              exactValues,
-              false,
-            );
-      }
-      case "eq":
-      case "neq":
-      case "lt":
-      case "lte":
-      case "gt":
-      case "gte": {
-        const left = evaluate(node.left);
-        const right = evaluate(node.right);
-        if (left === undefined || right === undefined) return undefined;
-        const order = compareValues(left, right);
-        if (order === undefined) return undefined;
-        if (node.op === "eq" || node.op === "neq") {
-          const equal = order === 0 || order === "equal_only_same";
-          return yesNo(node.op === "eq" ? equal : !equal);
-        }
-        if (order === "equal_only_same" || order === "equal_only_different") return undefined;
-        return yesNo(
-          node.op === "lt"
-            ? order < 0
-            : node.op === "lte"
-              ? order <= 0
-              : node.op === "gt"
-                ? order > 0
-                : order >= 0,
-        );
-      }
-      case "contains":
-      case "starts_with":
-      case "ends_with": {
-        const left = evaluate(node.left);
-        const right = evaluate(node.right);
-        if (left === undefined || right === undefined) return undefined;
-        if (typeof left.value === "string" && typeof right.value === "string") {
-          if (!isTextType(left.type) || !isTextType(right.type)) return undefined;
-          return yesNo(
-            node.op === "contains"
-              ? left.value.includes(right.value)
-              : node.op === "starts_with"
-                ? left.value.startsWith(right.value)
-                : left.value.endsWith(right.value),
-          );
-        }
-        if (node.op === "contains" && Array.isArray(left.value))
-          return yesNo(left.value.some((item) => flowJsonValuesEqual(item, right.value)));
-        return undefined;
-      }
-      case "is_empty":
-      case "is_not_empty": {
-        const operand = evaluate(node.arg);
-        if (operand === undefined) return undefined;
-        return yesNo(node.op === "is_empty" ? isEmpty(operand) : !isEmpty(operand));
-      }
-      case "in": {
-        const target = evaluate(node.value);
-        if (target === undefined) return undefined;
-        let found = false;
-        for (const option of node.options) {
-          const candidate = evaluate(option);
-          if (candidate === undefined) return undefined;
-          const order = compareValues(target, candidate);
-          if (order === undefined) return undefined;
-          if (order === 0 || order === "equal_only_same") found = true;
-        }
-        return yesNo(found);
-      }
-      case "and":
-      case "or": {
-        const operands = node.args.map(evaluate);
-        if (operands.some((operand) => operand?.type !== "yes_no")) return undefined;
-        const truths = (operands as FlowRuntimeValue[]).map((operand) => operand.value === true);
-        return yesNo(node.op === "and" ? truths.every(Boolean) : truths.some(Boolean));
-      }
-      case "not": {
-        const operand = evaluate(node.arg);
-        return operand?.type === "yes_no" ? yesNo(operand.value !== true) : undefined;
-      }
-      case "if": {
-        const condition = evaluate(node.condition);
-        if (condition?.type !== "yes_no") return undefined;
-        return evaluate(condition.value === true ? node.then : node.else);
-      }
-      case "join": {
-        const parts = node.parts.map(evaluate);
-        const texts = parts.map((part) => {
-          if (part === undefined) return undefined;
-          const exact = exactValues.get(part);
-          return exact === undefined ? joined(part) : exactText(exact);
-        });
-        if (texts.some((text) => text === undefined)) return undefined;
-        const result = (texts as string[]).join(node.separator ?? "");
-        return result.length > maximumTextCharacters ? undefined : value("text", result);
-      }
-      case "deadline_passed": {
-        if (node.status !== undefined) {
-          const status = evaluate(node.status);
-          if (status === undefined || !isTextType(status.type)) return undefined;
-          if (
-            node.terminalStatusValues.some((candidate) =>
-              flowJsonValuesEqual(candidate, status.value),
-            )
-          )
-            return yesNo(false);
-        }
-        const due = evaluate(node.due);
-        if (due === undefined || due.value === null) return undefined;
-        if (due.type === "date") {
-          if (typeof due.value !== "string" || scope.organizationLocalDate === undefined)
-            return undefined;
-          return yesNo(due.value < scope.organizationLocalDate);
-        }
-        if (due.type !== "date_time") return undefined;
-        const order = compare(due, value("date_time", scope.now));
-        return typeof order === "number" ? yesNo(order <= 0) : undefined;
-      }
-      case "date_add": {
-        const date = evaluate(node.date);
-        const amount = evaluate(node.amount);
-        return date === undefined || amount === undefined
-          ? undefined
-          : dateAdd(date, amount, node.unit);
-      }
-      case "date_diff": {
-        const from = evaluate(node.from);
-        const to = evaluate(node.to);
-        return from === undefined || to === undefined ? undefined : dateDiff(from, to, node.unit);
-      }
-    }
-  };
+  const evaluate = (node: FlowFormula): FlowRuntimeValue | undefined =>
+    compileFlowFormula(node)({ scope, exactValues, exactText, compareValues });
   const evaluated = evaluate(formula);
   if (evaluated === undefined) return undefined;
   if (
