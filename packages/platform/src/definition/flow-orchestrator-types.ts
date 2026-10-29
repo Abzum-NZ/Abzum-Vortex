@@ -6,7 +6,11 @@ import {
   type OrganizationSelectionCandidate,
 } from "../access/identity-access";
 import type { JsonValue } from "../catalogue/common";
-import { recordIdSchema, revisionSchema } from "../catalogue/identifiers";
+import {
+  containedComponentIdSchema,
+  recordIdSchema,
+  revisionSchema,
+} from "../catalogue/identifiers";
 import type {
   ExecuteNamedActionResult,
   InstalledNamedActionReference,
@@ -232,6 +236,8 @@ export const startRequestSchema = z
   .object({
     session: identitySessionSchema,
     selection: organizationSelectionCandidateSchema,
+    bindingId: containedComponentIdSchema,
+    gestureId: z.uuid(),
     binding: z
       .object({
         flowId: flowIdSchema,
@@ -343,6 +349,8 @@ export type Run = {
   origin: FlowTriggerOrigin;
   originId: string;
   flowId: string;
+  bindingId: string;
+  gestureId: string;
   release: FlowRelease;
   library: FlowLibrary;
   /** Server milliseconds already spent by earlier segments of this run. */

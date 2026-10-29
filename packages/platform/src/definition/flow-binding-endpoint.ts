@@ -927,6 +927,8 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
         const response = await dependencies.orchestratorFor(release, runId, installation).start({
           session: session.data,
           selection: selection.data,
+          bindingId: binding.bindingId,
+          gestureId: request.clickId,
           binding: { flowId: binding.flow.flowId, inputs },
           ...(request.subject === undefined ? {} : { subject: request.subject }),
         });

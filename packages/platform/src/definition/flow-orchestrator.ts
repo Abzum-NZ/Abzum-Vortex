@@ -194,7 +194,12 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           identityId: session.identityId,
           flowId: run.flowId,
           releaseKey: run.release.releaseKey,
-          state: { state, warnings: run.warnings },
+          state: {
+            state,
+            warnings: run.warnings,
+            bindingId: run.bindingId,
+            gestureId: run.gestureId,
+          },
           elapsedMilliseconds: Math.min(elapsedMilliseconds(run), 3_600_000),
           lifetimeSeconds: flowContinuationLifetimeSeconds,
         });
@@ -340,7 +345,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       try {
         const parsed = startRequestSchema.safeParse(request);
         if (!parsed.success || !withinPayload(parsed.data.binding.inputs)) return refused;
-        const { session, selection, binding, subject } = parsed.data;
+        const { session, selection, binding, subject, bindingId, gestureId } = parsed.data;
         const prepared = await prepare(session, selection, binding.flowId);
         if (prepared === undefined) return refused;
         if (expectation !== undefined && expectation.releaseKey !== prepared.release.releaseKey)
@@ -359,6 +364,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           origin: "person",
           originId: session.identityId,
           flowId: prepared.flowId,
+          bindingId,
+          gestureId,
           release: prepared.release,
           library: prepared.library,
           carriedMilliseconds: 0,
@@ -415,7 +422,12 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         });
         if (stored === undefined) return refused;
         const snapshot = z
-          .object({ state: z.unknown(), warnings: z.array(flowWarningNoticeSchema) })
+          .object({
+            state: z.unknown(),
+            warnings: z.array(flowWarningNoticeSchema),
+            bindingId: z.uuid(),
+            gestureId: z.uuid(),
+          })
           .strict()
           .parse(stored.state);
         const state = snapshot.state as FlowRunState;
@@ -454,6 +466,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           origin: "person",
           originId: session.identityId,
           flowId: prepared.flowId,
+          bindingId: snapshot.bindingId,
+          gestureId: snapshot.gestureId,
           release: prepared.release,
           library: prepared.library,
           carriedMilliseconds: stored.elapsedMilliseconds,
