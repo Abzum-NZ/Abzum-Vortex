@@ -225,7 +225,12 @@ export type FlowRunResult =
   | Readonly<{ status: "failed"; failure: FlowFailure }>;
 
 export type FlowRunStep =
-  | Readonly<{ kind: "protected_task"; state: FlowRunState; call: FlowProtectedTaskCall }>
+  | Readonly<{
+      kind: "protected_task";
+      state: FlowRunState;
+      call: FlowProtectedTaskCall;
+      replay?: FlowRunResume;
+    }>
   | Readonly<{ kind: "boundary"; state: FlowRunState; result?: FlowRunResult; nextTaskId?: string }>
   | Readonly<{
       kind: "interface";
@@ -1112,14 +1117,7 @@ const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep =>
               task.id,
               "the earlier result cannot be shown again; reload",
             );
-          return resumeFlowRun(
-            executed.step.state,
-            replay,
-            machine.library,
-            observer,
-            machine.segment,
-            machine.replay,
-          );
+          return { ...executed.step, replay };
         }
         if (executed.step.kind === "interface") {
           const intent = executed.step.intents.find((intent) => intent.taskId === task.id);

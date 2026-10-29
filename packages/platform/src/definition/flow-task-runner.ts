@@ -549,6 +549,13 @@ export const createFlowTaskRunner = (
     }
   };
 
+  const taskTarget = (plan: TaskPlan) =>
+    plan.kind === "action"
+      ? { recordTypeId: plan.command.recordTypeId, recordId: plan.command.recordId }
+      : plan.kind === "save" && plan.command.operation === "update"
+        ? { recordTypeId: plan.command.recordTypeId, recordId: plan.command.recordId }
+        : undefined;
+
   /** Runs a planned task's effect, holding the claim. Every failure is a safe outcome. */
   const runPlan = async (
     run: Run,
@@ -566,12 +573,7 @@ export const createFlowTaskRunner = (
     // The page subject is retained as run evidence. A fresh read under this initiator's request
     // scope verifies the exact record type and identity before either protected change is attempted.
     // The record service still checks change or action permission inside its own transaction.
-    const target =
-      plan.kind === "action"
-        ? { recordTypeId: plan.command.recordTypeId, recordId: plan.command.recordId }
-        : plan.kind === "save" && plan.command.operation === "update"
-          ? { recordTypeId: plan.command.recordTypeId, recordId: plan.command.recordId }
-          : undefined;
+    const target = taskTarget(plan);
     if (target !== undefined) {
       const subject = await dependencies.subjects!.read(session, selection, target);
       if (subject !== "read")
@@ -969,19 +971,49 @@ export const createFlowTaskRunner = (
     const outputs = Object.fromEntries(
       Object.entries(ran.stored).filter(([name]) => name !== "diagnostic" && name !== "warnings"),
     );
+    const diagnostic = flowRefusalFeedbackSchema.safeParse(ran.stored.diagnostic);
     return {
       result: ran.result,
       replay: {
         kind: "task_result",
         outcome: ran.result.outcome,
         outputs,
-        ...(ran.result.diagnostic === undefined
-          ? {}
-          : { diagnostic: { code: ran.result.diagnostic.code } }),
+        ...(diagnostic.success ? { diagnostic: diagnostic.data } : {}),
       },
       warnings: ran.warnings ?? [],
     };
   };
 
-  return Object.freeze({ run: runProtectedTask, runSegmentTask });
+  /** Rebuilds warning text from current readable data before returning a stored effect outcome. */
+  const replaySegmentTask = async (
+    run: Run,
+    state: FlowRunState,
+    call: FlowProtectedTaskCall,
+    replay: Extract<FlowRunResume, { kind: "task_result" }>,
+    warnings: readonly z.infer<typeof storedFlowWarningSchema>[],
+  ): Promise<FlowRunResume | undefined> => {
+    const planned = planTask(run, state, call);
+    if (!("plan" in planned)) return undefined;
+    if (run.authority.kind !== "person") return undefined;
+    const target = taskTarget(planned.plan);
+    if (
+      target !== undefined &&
+      (await dependencies.subjects?.read(
+        run.authority.session,
+        run.authority.selection,
+        target,
+      )) !== "read"
+    )
+      return undefined;
+    if (warnings.length === 0) return replay;
+    const rendered = await replayWarnings(run, planned.plan, {
+      ...replay.outputs,
+      warnings,
+    });
+    if (rendered === undefined) return undefined;
+    appendWarnings(run, call, rendered);
+    return replay;
+  };
+
+  return Object.freeze({ run: runProtectedTask, runSegmentTask, replaySegmentTask });
 };
