@@ -62,6 +62,8 @@ import {
 import { flowPlansOf } from "../workflows/flow-plan";
 import { openFlowAdmissionRun } from "../workflows/start";
 import { admitFlowSegment } from "./flow-admission";
+import { admitPageGesture } from "./flow-admission-page";
+import { admitRowForm } from "./flow-row-form-admission";
 import { sealFlowCarriedValues } from "../workflows/flow-carried-values";
 import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
@@ -122,7 +124,7 @@ export type FlowControlOptionRequest = Readonly<{
   controls: Readonly<Record<string, string>>;
 }>;
 
-type InvocationDependencies = Readonly<{
+export type InvocationDependencies = Readonly<{
   authorityId: IdentityAuthorityId;
   /** The application catalogue's install and upgrade journeys, run under the initiator's authority. */
   applicationStore: ApplicationStoreService;
@@ -131,6 +133,14 @@ type InvocationDependencies = Readonly<{
   releaseCatalogue: Parameters<typeof createDatabaseApplicationBoundReleaseSetService>[0];
   continuationKey: QueryContinuationKey;
   validateControlOption: (input: FlowControlOptionRequest) => Promise<boolean>;
+  projectRowForm: (
+    bound: BoundHumanOrganizationRequest,
+    context: InstalledRuntimeContext,
+    page: Readonly<Record<string, unknown>>,
+    pageId: string,
+    formId: string,
+    subject: Readonly<{ moduleRootId: string; recordTypeId: string; recordId: string }>,
+  ) => Promise<ProjectedForm | undefined>;
   guidedFormControls: (
     page: unknown,
     shells?: unknown,
@@ -431,7 +441,44 @@ export async function invokeInstalledFlow(
             requests: requestDependencies,
             invocation,
             installationOf: installedFlowBindings,
-            pageGate: gateBindingToAddressedPage,
+            pageGate: async (context, binding, bound, currentInstallation, state) => {
+              if (!(await gateBindingToAddressedPage(context, binding.controlId, bound)))
+                return false;
+              const page = admittedProjection?.page;
+              if (page === undefined) return false;
+              const guided = guidedControls.get(binding.controlId.toLowerCase());
+              if (
+                guided !== undefined &&
+                (guided === null || !guided.summary || binding.event !== "form_submit")
+              )
+                return false;
+              return admitPageGesture(
+                {
+                  validateOption: dependencies.validateControlOption,
+                  projectRowForm: (rowBound, rowContext, rowPage, tableId, formId, recordId) =>
+                    admitRowForm(
+                      dependencies,
+                      requestDependencies,
+                      rowBound,
+                      rowContext,
+                      rowPage,
+                      body,
+                      binding,
+                      state,
+                      tableId,
+                      formId,
+                      recordId,
+                    ),
+                },
+                bound,
+                context,
+                currentInstallation,
+                page,
+                body,
+                binding,
+                state,
+              );
+            },
             portsFor: dependenciesFor,
           },
           installation,

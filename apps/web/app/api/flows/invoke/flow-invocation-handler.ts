@@ -36,7 +36,10 @@ import {
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { privateJsonResponse as privateResponse } from "../../../_lib/private-response";
 import { mapWebError } from "../../../_lib/web-error-mapper";
-import { validateProjectedControlOption } from "../../../_lib/application-page/reference-choice";
+import {
+  projectRowReferenceChoiceForm,
+  validateProjectedControlOption,
+} from "../../../_lib/application-page/reference-choice";
 import { validateProjectedLinkControl } from "../../../_lib/application-page/link-input";
 
 const maximumRequestBodyLength = 131_072;
@@ -124,6 +127,16 @@ export const createFlowInvocationHandler =
         telemetry: appTelemetry,
         releaseCatalogue: installedReleaseCatalogue,
         continuationKey: getQueryContinuationKey(),
+        projectRowForm: (bound, context, page, pageId, formId, subject) =>
+          projectRowReferenceChoiceForm(
+            bound.transaction,
+            bound.scope,
+            context,
+            page,
+            pageId,
+            formId,
+            subject,
+          ),
         validateControlOption: (input) => {
           if (input.bound.scope.previewInstallationId !== undefined) {
             console.error("[flows] preview control demand not prepared");

@@ -14,6 +14,8 @@ import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bu
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
 import type { InstalledFlowBindings } from "./flow-binding-endpoint";
 import type { FlowOrchestratorDependencies, FlowRelease } from "./flow-orchestrator-types";
+import type { ComponentFlowBinding } from "./application-flow-bindings";
+import type { FlowRunState } from "../rules/flow-interpreter";
 
 type AdmissionHost = Readonly<{
   requests: HumanOrganizationRequestDependencies;
@@ -21,8 +23,10 @@ type AdmissionHost = Readonly<{
   installationOf: (context: InstalledRuntimeContext) => InstalledFlowBindings;
   pageGate: (
     context: InstalledRuntimeContext,
-    controlId: string,
+    binding: ComponentFlowBinding,
     bound: BoundHumanOrganizationRequest,
+    installation: InstalledFlowBindings,
+    state: FlowRunState,
   ) => Promise<boolean>;
   portsFor: (
     release: FlowRelease,
@@ -96,7 +100,7 @@ export const admitFlowSegment = async (
             ? {}
             : { selectedRecordReadProjections: currentInstallation.selectedRecordReadProjections }),
         };
-        return host.pageGate(current, capturedBinding.controlId, bound);
+        return host.pageGate(current, capturedBinding, bound, currentInstallation, state);
       },
       currentPlan: async () => {
         const currentPlan = currentInstallation?.plans.get(run.flowId);
