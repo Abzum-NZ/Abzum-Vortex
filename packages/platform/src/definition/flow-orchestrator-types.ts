@@ -5,15 +5,8 @@ import {
   type IdentitySession,
   type OrganizationSelectionCandidate,
 } from "../access/identity-access";
-import { correlationIdSchema, type JsonValue } from "../catalogue/common";
-import {
-  applicationRootIdSchema,
-  moduleRootIdSchema,
-  organizationIdSchema,
-  recordIdSchema,
-  revisionSchema,
-  timestampSchema,
-} from "../catalogue/identifiers";
+import type { JsonValue } from "../catalogue/common";
+import { recordIdSchema, revisionSchema } from "../catalogue/identifiers";
 import type {
   ExecuteNamedActionResult,
   InstalledNamedActionReference,
@@ -31,10 +24,8 @@ import {
   type FlowTriggerOrigin,
 } from "../workflows/flow-contracts";
 import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
-import { flowLiteralSchema } from "../workflows/flow-values";
 import type { FlowWarningNotice } from "../workflows/form-continuation-contracts";
 import { formContinuationAnswerSchema } from "../workflows/form-continuation-answer";
-import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 import type { RecordSaveServiceResult } from "../records/save-record";
 import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
 import type { ActionFlowRunner } from "../rules/action-flow-run";
@@ -79,103 +70,6 @@ export type FlowSelectedRecordReadProjection = Readonly<{
   recordTypeId: string;
   fields: readonly FlowSelectedRecordReadField[];
 }>;
-
-/** Exact installation and compiled-flow release identity retained on a committed start intent. */
-export const flowReleaseIdentitySchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    applicationRootId: applicationRootIdSchema,
-    applicationReleaseRevision: revisionSchema,
-    applicationReleaseVersion: stableDefinitionReleaseVersionSchema,
-    flowOwnerKind: z.enum(["application", "module"]),
-    flowOwnerRootId: z.union([applicationRootIdSchema, moduleRootIdSchema]),
-    flowReleaseRevision: revisionSchema,
-    flowReleaseVersion: stableDefinitionReleaseVersionSchema,
-    flowReleaseFingerprint: z.string().regex(/^sha256:[a-f0-9]{64}$/),
-  })
-  .strict();
-type FlowReleaseIdentity = z.infer<typeof flowReleaseIdentitySchema>;
-
-/** Trusted read shape of one committed Event start; callers supply only its intent identifier. */
-export const committedFlowStartIntentSchema = z
-  .object({
-    intentId: z.uuid(),
-    organizationId: organizationIdSchema,
-    applicationRootId: applicationRootIdSchema,
-    applicationReleaseRevision: revisionSchema,
-    applicationReleaseVersion: stableDefinitionReleaseVersionSchema,
-    flowRelease: z.discriminatedUnion("ownerKind", [
-      z
-        .object({
-          ownerKind: z.literal("application"),
-          rootId: applicationRootIdSchema,
-          revision: revisionSchema,
-          version: stableDefinitionReleaseVersionSchema,
-          fingerprint: z.string().regex(/^sha256:[a-f0-9]{64}$/),
-        })
-        .strict(),
-      z
-        .object({
-          ownerKind: z.literal("module"),
-          rootId: moduleRootIdSchema,
-          revision: revisionSchema,
-          version: stableDefinitionReleaseVersionSchema,
-          fingerprint: z.string().regex(/^sha256:[a-f0-9]{64}$/),
-        })
-        .strict(),
-    ]),
-    flowId: flowIdSchema,
-    origin: z.literal("event"),
-    originId: z.uuid(),
-    trigger: z.object({ type: z.literal("Event"), id: z.string().min(1).max(1300) }).strict(),
-    inputs: z.record(z.string().min(1).max(200), flowLiteralSchema),
-    triggerValues: z.record(z.string().min(1).max(200), flowLiteralSchema),
-    correlationId: correlationIdSchema,
-    acceptedAt: timestampSchema,
-  })
-  .strict()
-  .superRefine((intent, context) => {
-    if (
-      intent.flowRelease.ownerKind === "application" &&
-      (intent.flowRelease.rootId !== intent.applicationRootId ||
-        intent.flowRelease.revision !== intent.applicationReleaseRevision ||
-        intent.flowRelease.version !== intent.applicationReleaseVersion)
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["flowRelease"],
-        message: "Application flow release differs from the installation",
-      });
-  });
-type CommittedFlowStartIntent = z.infer<typeof committedFlowStartIntentSchema>;
-
-export const releaseIdentityForIntent = (
-  intent: CommittedFlowStartIntent,
-): FlowReleaseIdentity => ({
-  organizationId: intent.organizationId,
-  applicationRootId: intent.applicationRootId,
-  applicationReleaseRevision: intent.applicationReleaseRevision,
-  applicationReleaseVersion: intent.applicationReleaseVersion,
-  flowOwnerKind: intent.flowRelease.ownerKind,
-  flowOwnerRootId: intent.flowRelease.rootId,
-  flowReleaseRevision: intent.flowRelease.revision,
-  flowReleaseVersion: intent.flowRelease.version,
-  flowReleaseFingerprint: intent.flowRelease.fingerprint,
-});
-
-export const flowReleaseIdentityMatches = (
-  expected: FlowReleaseIdentity,
-  actual: FlowReleaseIdentity,
-): boolean =>
-  expected.organizationId.toLowerCase() === actual.organizationId.toLowerCase() &&
-  expected.applicationRootId.toLowerCase() === actual.applicationRootId.toLowerCase() &&
-  expected.applicationReleaseRevision === actual.applicationReleaseRevision &&
-  expected.applicationReleaseVersion === actual.applicationReleaseVersion &&
-  expected.flowOwnerKind === actual.flowOwnerKind &&
-  expected.flowOwnerRootId.toLowerCase() === actual.flowOwnerRootId.toLowerCase() &&
-  expected.flowReleaseRevision === actual.flowReleaseRevision &&
-  expected.flowReleaseVersion === actual.flowReleaseVersion &&
-  expected.flowReleaseFingerprint === actual.flowReleaseFingerprint;
 
 /** One record type of a release: each field's identity by its key and by its own identity. */
 export type FlowRecordType = Readonly<{
@@ -302,12 +196,6 @@ export type FlowOrchestratorDependencies = Readonly<{
    * installation state. `undefined` refuses the start without saying why.
    */
   resolveRelease: (organizationId: string, flowId: string) => Promise<FlowRelease | undefined>;
-  /** Reads a committed Event intent by ID; the caller cannot supply its tenant, release or actor. */
-  readCommittedStartIntent?: (intentId: string) => Promise<unknown>;
-  /** Resolves the exact immutable release named by the committed intent, never the current pointer. */
-  resolveCommittedStartRelease?: (
-    intent: CommittedFlowStartIntent,
-  ) => Promise<(FlowRelease & Readonly<{ identity: FlowReleaseIdentity }>) | undefined>;
   /**
    * Checks a flow's invocation permission for the initiator. Required whenever the started flow, or
    * any flow it can reach through Run flow, declares one; such a flow is unavailable to the run when

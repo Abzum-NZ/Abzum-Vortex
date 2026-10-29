@@ -12,7 +12,7 @@ set search_path = ''
 as $function$
 declare
   expected_sections constant text[] := array[
-    'pages', 'navigation', 'flows', 'trigger_index', 'theme', 'component_registry',
+    'pages', 'navigation', 'flows', 'theme', 'component_registry',
     'access_plan', 'tool_bundle'
   ];
   checked_context jsonb;
