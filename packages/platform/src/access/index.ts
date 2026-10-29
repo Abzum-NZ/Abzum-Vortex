@@ -190,28 +190,6 @@ export {
   type ReserveCapabilityCommand,
 } from "./capability-reservation";
 export {
-  flowExecutionBindingAdministratorAuthoritySchema,
-  flowExecutionBindingErrorCodes,
-  FlowExecutionBindingError,
-  flowExecutionBindingReadResultSchema,
-  readFlowExecutionBinding,
-  readFlowExecutionBindingCommandSchema,
-  type FlowExecutionBindingAdministratorAuthority,
-  type FlowExecutionBindingErrorCode,
-  type FlowExecutionBindingReadResult,
-  type ReadFlowExecutionBindingCommand,
-} from "./flow-execution-bindings";
-export {
-  flowRunAsPrincipalErrorCodes,
-  FlowRunAsPrincipalError,
-  flowRunAsPrincipalReadResultSchema,
-  readFlowRunAsPrincipalForRun,
-  readFlowRunAsPrincipalForRunCommandSchema,
-  type FlowRunAsPrincipalErrorCode,
-  type FlowRunAsPrincipalReadResult,
-  type ReadFlowRunAsPrincipalForRunCommand,
-} from "./flow-run-as-principals";
-export {
   meteringEventErrorCodes,
   meteringEventRecordResultSchema,
   recordMeteringEvent,
@@ -220,50 +198,6 @@ export {
   type MeteringEventRecordResult,
   type RecordMeteringEventCommand,
 } from "./metering-events";
-export {
-  flowEffectiveActorDelegationUseSchema,
-  flowEffectiveActorErrorCodes,
-  FlowEffectiveActorError,
-  flowEffectiveActorIdentitySchema,
-  flowEffectiveActorNodeRequestSchema,
-  flowEffectiveActorPurposeSchema,
-  flowEffectiveActorRefusalReasonSchema,
-  flowEffectiveActorRequestSchema,
-  flowEffectiveActorResolutionSchema,
-  flowEffectiveActorRunActorSchema,
-  flowEffectiveActorStateSchema,
-  openFlowEffectiveActorTransaction,
-  readFlowEffectiveActorCurrentAuthority,
-  resolveFlowEffectiveActor,
-  type FlowEffectiveActorAuthorityReader,
-  type FlowEffectiveActorCurrentAuthority,
-  type FlowEffectiveActorDelegationUse,
-  type FlowEffectiveActorDependencies,
-  type FlowEffectiveActorEffectiveResolution,
-  type FlowEffectiveActorErrorCode,
-  type FlowEffectiveActorIdentity,
-  type FlowEffectiveActorNodeRequest,
-  type FlowEffectiveActorPurpose,
-  type FlowEffectiveActorRefusalReason,
-  type FlowEffectiveActorRequest,
-  type FlowEffectiveActorResolution,
-  type FlowEffectiveActorRunActor,
-  type FlowEffectiveActorScopeResolver,
-  type FlowEffectiveActorState,
-  type FlowEffectiveActorTransactionAccess,
-  type FlowEffectiveActorTransactionDependencies,
-  type FlowEffectiveActorTransactionRunner,
-} from "./flow-effective-actor";
-
-export {
-  createDurableActorRequestService,
-  verifiedDurableActorContextSchema,
-  type DurableActorRequestDependencies,
-  type DurableActorRequestResult,
-  type DurableActorRequestScope,
-  type VerifiedDurableActorRequestContext,
-} from "./durable-actor-request";
-
 export {
   evaluateOrganizationRecordPermissionAvailability,
   type OrganizationRecordPermissionAvailability,

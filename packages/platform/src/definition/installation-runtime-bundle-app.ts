@@ -423,18 +423,6 @@ const buildInstallationRuntimeBundleWriteCommand = (
     pages: pageSource,
     navigation,
     flows: { flows, flowBindings },
-    trigger_index: flows
-      .flatMap((flow) =>
-        flow.triggers.map((trigger) => ({
-          flowId: flow.id,
-          trigger,
-        })),
-      )
-      .sort(
-        (left, right) =>
-          compareCanonical(left.flowId, right.flowId) ||
-          compareCanonical(left.trigger.id, right.trigger.id),
-      ),
     theme,
     component_registry: platformBlockDependencies,
     access_plan: {

@@ -13,7 +13,7 @@ set search_path = ''
 as $function$
 declare
   expected_sections constant text[] := array[
-    'pages', 'navigation', 'flows', 'trigger_index', 'theme', 'component_registry',
+    'pages', 'navigation', 'flows', 'theme', 'component_registry',
     'access_plan', 'tool_bundle'
   ];
   permission_decision record;
@@ -38,7 +38,6 @@ declare
   section_text text;
   application_content jsonb;
   expected_modules jsonb;
-  expected_trigger_index jsonb;
   expected_access_plan jsonb;
 begin
   if p_application_root_id is null
@@ -235,12 +234,6 @@ begin
     ) order by (module.value ->> 'rootId') collate "C"), '[]'::jsonb)
   into expected_modules
   from pg_catalog.jsonb_array_elements(prepared_source -> 'modules') as module(value);
-  select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
-      'flowId', flow.value -> 'id', 'trigger', trigger.value
-    ) order by (flow.value ->> 'id') collate "C", (trigger.value ->> 'id') collate "C"), '[]'::jsonb)
-  into expected_trigger_index
-  from pg_catalog.jsonb_array_elements(application_content -> 'flows') as flow(value)
-  cross join lateral pg_catalog.jsonb_array_elements(flow.value -> 'triggers') as trigger(value);
   select pg_catalog.jsonb_build_object(
     'preparedRecordAccessPlan', prepared_source -> 'preparedRecordAccessPlan',
     'declaredPermissions', pg_catalog.jsonb_build_object(
@@ -259,7 +252,6 @@ begin
       'flows', application_content -> 'flows',
       'flowBindings', application_content -> 'flowBindings'
     )
-    or section_payloads -> 'trigger_index' is distinct from expected_trigger_index
     or section_payloads -> 'theme' is distinct from application_content -> 'theme'
     or section_payloads -> 'component_registry' is distinct from application_content -> 'platformBlockDependencies'
     or section_payloads -> 'tool_bundle' is distinct from prepared_source #> '{application,compilationOutput,toolBundle}'
