@@ -81,6 +81,11 @@ export type FlowSegmentStub = Readonly<{
   labels: readonly string[];
 }>;
 
+/** An output can refer to a value explicitly returned by a server segment, never an authored task. */
+export type BrowserFlowOutputValue =
+  | FlowDefinition["outputs"][string]["value"]
+  | Readonly<{ kind: "reference"; reference: Readonly<{ source: "final_output"; name: string }> }>;
+
 /** The plan the page receives: page steps and segment stubs only. */
 export type BrowserFlowPlan = Readonly<{
   flowId: string;
@@ -93,7 +98,12 @@ export type BrowserFlowPlan = Readonly<{
   variables: Readonly<
     Record<string, Pick<FlowDefinition["variables"][string], "type" | "default">>
   >;
-  outputs: Readonly<Record<string, Pick<FlowDefinition["outputs"][string], "type" | "value">>>;
+  outputs: Readonly<
+    Record<
+      string,
+      Readonly<{ type: FlowDefinition["outputs"][string]["type"]; value: BrowserFlowOutputValue }>
+    >
+  >;
   segments: readonly (FlowPageSegment | FlowSegmentStub)[];
 }>;
 
