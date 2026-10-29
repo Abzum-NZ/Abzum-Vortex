@@ -5,12 +5,9 @@ import { containedComponentIdSchema, recordIdSchema, revisionSchema } from "../c
 import { flowIdSchema } from "../catalogue/identifiers";
 import { jsonValueSchema } from "../catalogue/common";
 
-const installationRevisionSchema = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
-
 const runStartInvocationSchema = z
   .object({
     kind: z.literal("run_start"),
-    installationRevision: installationRevisionSchema,
     bindingId: containedComponentIdSchema,
     flowId: flowIdSchema,
     clickId: z.uuid(),
@@ -21,7 +18,6 @@ const runStartInvocationSchema = z
 const bindingInvocationSchema = z
   .object({
     kind: z.literal("binding"),
-    installationRevision: installationRevisionSchema,
     bindingId: containedComponentIdSchema,
     flowId: flowIdSchema,
     /** A row form's source table; the gate revalidates it and the subject against that table. */
@@ -55,7 +51,6 @@ const bindingInvocationSchema = z
 const continuationInvocationSchema = z
   .object({
     kind: z.literal("continuation"),
-    installationRevision: installationRevisionSchema,
     flowId: flowIdSchema,
     /** The row form's source table, supplied by the page and revalidated by the gate. */
     sourceTablePlacementId: containedComponentIdSchema.optional(),

@@ -808,8 +808,6 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
               ? "FLOW_INVOKE_INSTALLATION_NOT_FOUND"
               : "FLOW_INVOKE_INSTALLATION_ORGANIZATION_MISMATCH",
           );
-        if (request.installationRevision !== installation.installationRevision)
-          return { kind: "reload", installationRevision: installation.installationRevision };
         if (request.kind === "run_start") {
           const matches = installation.bindings.filter((entry) =>
             sameId(entry.bindingId, request.bindingId),

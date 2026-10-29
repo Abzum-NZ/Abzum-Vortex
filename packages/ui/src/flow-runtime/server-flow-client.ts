@@ -23,11 +23,6 @@ export type FlowApplicationAddress = Readonly<{
   pageRecordId?: string;
 }>;
 
-/** What the surface was rendered from, so the server can refuse a stale or foreign request. */
-export type FlowInstallationContext = Readonly<{
-  installationRevision: number;
-}>;
-
 /**
  * The exact evidence the server issued with a paused run, returned with the continuation so the
  * server can compare it with trusted state. The page never invents it: it stores what the previous
@@ -108,7 +103,6 @@ export type FlowSubjectContext = Readonly<{ recordId: string; revision: number }
 
 export type FlowInvokeClientOptions = Readonly<{
   address: FlowApplicationAddress;
-  installation: FlowInstallationContext;
   /** Current address and declared control values, sampled when each request is sent. */
   pageInputs?: () => Readonly<{
     parameters: Readonly<Record<string, string | readonly string[]>>;
@@ -307,15 +301,11 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
       return unavailable;
     }
   };
-  const context = {
-    installationRevision: options.installation.installationRevision,
-  };
   return Object.freeze({
     openRun: (binding, clickId, signal, sourceTablePlacementId) =>
       send(
         {
           kind: "run_start",
-          ...context,
           bindingId: binding.bindingId,
           flowId: binding.flowId,
           clickId,
@@ -336,7 +326,6 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
       send(
         {
           kind: "binding",
-          ...context,
           bindingId: binding.bindingId,
           flowId: binding.flowId,
           entrySegments: [...binding.entrySegments],
@@ -365,7 +354,6 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
       send(
         {
           kind: "continuation",
-          ...context,
           flowId,
           continuation,
           answer,

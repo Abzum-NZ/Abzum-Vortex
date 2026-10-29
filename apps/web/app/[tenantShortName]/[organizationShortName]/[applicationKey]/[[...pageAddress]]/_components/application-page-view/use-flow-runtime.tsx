@@ -121,9 +121,6 @@ export function useFlowRuntime({
         pageKey: application.pageKey,
         ...(subject === undefined ? {} : { pageRecordId: subject.recordId }),
       },
-      installation: {
-        installationRevision: application.installationRevision,
-      },
       pageInputs: () => {
         const search = new URLSearchParams(window.location.search);
         const parameters: Record<string, string | string[]> = {};

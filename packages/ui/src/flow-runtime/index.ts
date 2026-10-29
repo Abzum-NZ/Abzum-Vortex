@@ -32,7 +32,6 @@ export {
   createFlowInvokeClient,
   parseServerFlowResponse,
   type FlowApplicationAddress,
-  type FlowInstallationContext,
   type FlowSubjectContext,
   type FlowInvokeClient,
   type FlowInvokeClientOptions,

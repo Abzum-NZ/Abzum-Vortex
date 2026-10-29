@@ -1441,7 +1441,6 @@ export async function invokeInstalledFlow(
         guided.flowId === undefined ||
         String(model.pageId).toLowerCase() !== guided.pageId.toLowerCase() ||
         draft.computedStepId !== summary.id ||
-        model.invocation.installationRevision !== body.invocation.installationRevision ||
         draft.draftId.toLowerCase() !== reference.draftId.toLowerCase() ||
         draft.revision !== reference.revision ||
         draft.flowId.toLowerCase() !== guided.flowId.toLowerCase() ||
