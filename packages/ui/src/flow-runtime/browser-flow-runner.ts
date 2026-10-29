@@ -2,6 +2,7 @@ import {
   browserFlowMemberTypeResolver,
   pageFlowFinalOutputs,
   resolvePageFlowInputs,
+  pageFlowFormValue,
   type FlowBindingInput,
   type BrowserFlowPlan,
   type FlowFailure,
@@ -135,19 +136,32 @@ export async function startBrowserFlow(
     runId: string;
     timeZone: string;
     host: FlowIntentHost;
+    readFormValue: (formId: string, fieldKey: string) => unknown;
     signal?: AbortSignal;
   }>,
 ): Promise<BrowserFlowResult> {
   try {
+    const resolveForm: FlowFormReferenceResolver = (reference) => {
+      const type = input.plan.forms[reference.form]?.[reference.field];
+      return type === undefined
+        ? undefined
+        : pageFlowFormValue(type, input.readFormValue(reference.form, reference.field));
+    };
     const clock = pageFlowClock(input.timeZone);
     const inputs = resolvePageFlowInputs(input.plan.inputs, input.bindings, input.caller, {
       ...clock,
-      reference: () => undefined,
+      reference: (reference) =>
+        reference.source === "form"
+          ? resolveForm(reference)
+          : reference.source === "execution_now"
+            ? { type: "date_time", value: clock.now }
+            : undefined,
     });
     return await runBrowserFlow({
       plan: input.plan,
       start: { runId: input.runId, flowId: input.plan.flowId, inputs, ...clock },
       host: input.host,
+      resolveForm,
       ...(input.signal === undefined ? {} : { signal: input.signal }),
     });
   } catch (error) {

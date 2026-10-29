@@ -204,6 +204,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
               runId: clickId,
               timeZone: options.timeZone,
               host: options.host,
+              readFormValue: options.state.readFormValue,
               signal: runSignal,
             });
             if (result.kind === "abandoned") return { kind: "abandoned", unanswered: true };

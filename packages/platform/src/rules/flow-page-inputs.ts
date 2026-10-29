@@ -1,7 +1,8 @@
 import type { JsonValue } from "../catalogue/json-value";
 import { isRecordLinkValue } from "../records/module-field-value-predicates";
 import type { FlowBindingInput } from "../workflows/flow-contracts";
-import type { FlowFormulaScope } from "./flow-formula";
+import type { FlowFormulaScope, FlowRuntimeValue } from "./flow-formula";
+import { flowRuntimeValueOf } from "./flow-runtime-value";
 import type { FlowProgram } from "./flow-interpreter-core";
 import { resolveFlowValue } from "./flow-value-runtime";
 import { flowValueMatchesType } from "./flow-value-shapes";
@@ -43,4 +44,16 @@ export const resolvePageFlowInputs = (
     entries.push([name, value as JsonValue]);
   }
   return Object.fromEntries(entries);
+};
+
+/** Interpret a form value only under the compiler's declared field type. */
+export const pageFlowFormValue = (type: string, value: unknown): FlowRuntimeValue | undefined => {
+  if (value === undefined) return undefined;
+  if (value === null || flowValueMatchesType(value, type))
+    return { type, value: value as JsonValue };
+  const converted = flowRuntimeValueOf(type, value);
+  return converted.type === type &&
+    (converted.value === null || flowValueMatchesType(converted.value, type))
+    ? converted
+    : undefined;
 };

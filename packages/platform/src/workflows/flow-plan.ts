@@ -89,6 +89,8 @@ export type BrowserFlowOutputValue =
 /** The plan the page receives: page steps and segment stubs only. */
 export type BrowserFlowPlan = Readonly<{
   flowId: string;
+  /** Declared types of form fields consumed by page expressions or segment seeds. */
+  forms: FlowFormTypes;
   inputs: Readonly<
     Record<
       string,
@@ -529,6 +531,40 @@ export const compileFlowPlan = (
         pageInputs.add(name);
     }
   }
+  const formReferences = referencesIn([
+    ...segments.flatMap((segment) => [
+      segment.guard,
+      ...(segment.kind === "page" ? [segment.tasks] : []),
+      ...(segment.kind === "server" ? [segment.inputs] : []),
+    ]),
+    ...Object.values(flow.outputs).map((output) => output.value),
+    ...bindings.flatMap((inputs) =>
+      Object.entries(inputs)
+        .filter(([name]) => pageInputs.has(name))
+        .map(([, value]) => value),
+    ),
+  ]);
+  const pageForms: Record<string, Record<string, string>> = {};
+  for (const reference of formReferences) {
+    if (reference.source !== "form") continue;
+    const type = formTypes[reference.form]?.[reference.field];
+    if (type === undefined)
+      throw new FlowPlanError(
+        flow.id,
+        undefined,
+        `unknown form field ${reference.form}.${reference.field}`,
+      );
+    (pageForms[reference.form] ??= {})[reference.field] = type;
+  }
+  // Segment input maps have already been reduced to keys, rather than reference expressions.
+  for (const segment of segments) {
+    if (segment.kind !== "server") continue;
+    for (const [name, type] of Object.entries(segment.inputs)) {
+      const [source, form, field] = name.split(".");
+      if (source === "forms" && form !== undefined && field !== undefined)
+        (pageForms[form] ??= {})[field] = type;
+    }
+  }
   const pageVariables = new Set(
     pageReferences.flatMap((reference) =>
       reference.source === "variable" ? [reference.name] : [],
@@ -547,6 +583,7 @@ export const compileFlowPlan = (
     pageSteps: segments.some((segment) => segment.kind === "page"),
     browser: {
       flowId: flow.id,
+      forms: pageForms,
       inputs: Object.fromEntries(
         Object.entries(flow.inputs)
           .filter(([name]) => pageInputs.has(name) && !serverInputs.has(name))
@@ -717,7 +754,9 @@ export const flowPlansOf = (releaseSet: PlannedReleaseSet): FlowPlanSet => {
       continue;
     }
     try {
-      const usesForm = referencesIn(flow).some((reference) => reference.source === "form");
+      const usesForm = referencesIn([flow, bindings.get(id)]).some(
+        (reference) => reference.source === "form",
+      );
       if (usesForm) formTypes ??= installedFlowFormTypes(releaseSet);
       plans.set(id, compileFlowPlan(flow, bindings.get(id), usesForm ? formTypes : undefined));
     } catch (error) {
