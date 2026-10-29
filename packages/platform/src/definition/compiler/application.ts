@@ -578,7 +578,24 @@ function compileApplicationFlowBindings(
   const definitionKey = String(source.key);
   const flowsById = new Map(flows.map((flow) => [String(flow.id), flow]));
   const plans = compileFlowPlans(flows).plans;
-  return compiledSourceFlowBindings(body).map((binding) => {
+  const sourceBindings = compiledSourceFlowBindings(body);
+  const inputsByFlow = new Map<
+    string,
+    Record<string, ReturnType<typeof flowBindingInputSchema.parse>>[]
+  >();
+  for (const binding of sourceBindings) {
+    const flowId = resolution.id(definitionKey, "flow", String(binding.flow), "content");
+    const inputs = Object.fromEntries(
+      Object.entries(asObject(binding.inputs ?? {})).map(([name, value]) => [
+        name,
+        flowBindingInputSchema.parse(value),
+      ]),
+    );
+    const held = inputsByFlow.get(flowId) ?? [];
+    held.push(inputs);
+    inputsByFlow.set(flowId, held);
+  }
+  return sourceBindings.map((binding) => {
     const flowId = resolution.id(definitionKey, "flow", String(binding.flow), "content");
     const flow = flowsById.get(flowId);
     const location = resolution.location("flow_binding", String(binding.id));
@@ -600,9 +617,7 @@ function compileApplicationFlowBindings(
     // flow only reads.
     const planIssue = flowBindingPlanIssue(plans.get(flowId)!, {
       event: String(binding.event),
-      inputs: Object.fromEntries(
-        Object.entries(inputs).map(([name, value]) => [name, flowBindingInputSchema.parse(value)]),
-      ),
+      inputs: inputsByFlow.get(flowId) ?? [],
       settings: settings.data,
     });
     if (planIssue !== undefined)

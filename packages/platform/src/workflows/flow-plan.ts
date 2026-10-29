@@ -515,7 +515,7 @@ export const flowBindingPlanIssue = (
   plan: FlowPlan,
   binding: Readonly<{
     event: string;
-    inputs: Readonly<Record<string, FlowBindingInput>>;
+    inputs: readonly Readonly<Record<string, FlowBindingInput>>[];
     settings?: Readonly<{ concurrency?: string }> | undefined;
   }>,
 ): string | undefined => {
@@ -532,12 +532,17 @@ export const flowBindingPlanIssue = (
       case "trigger_previous":
       case "module_field":
         return true;
-      case "input": {
-        const input = binding.inputs[reference.name];
-        if (input === undefined || input.kind === "caller" || input.kind === "literal")
-          return false;
-        return referencesIn(input).some((item) => item.source !== "page" && item.source !== "form");
-      }
+      case "input":
+        // The plan is shared by every binding. One server-resolved source makes that input
+        // server-only for all bindings, including one that could supply it from the page.
+        return binding.inputs.some((inputs) => {
+          const input = inputs[reference.name];
+          if (input === undefined || input.kind === "caller" || input.kind === "literal")
+            return false;
+          return referencesIn(input).some(
+            (item) => item.source !== "page" && item.source !== "form",
+          );
+        });
       default:
         return false;
     }
