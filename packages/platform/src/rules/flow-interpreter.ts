@@ -27,6 +27,7 @@ import {
   type FlowFormulaScope,
   type FlowRuntimeValue,
 } from "./flow-formula";
+import { resolveFlowValue } from "./flow-value-runtime";
 import {
   flowMaximumForEachItemsOther,
   flowMaximumProtectedOperations,
@@ -437,25 +438,10 @@ const evaluateValue = (
   flow: FlowDefinition,
   taskId: string,
 ): FlowRuntimeValue => {
-  const scope = scopeOf(state, activation, flow);
-  let result: FlowRuntimeValue | undefined;
-  if (value.kind === "literal") result = typed(value.literal.type, value.literal.value);
-  else if (value.kind === "reference") result = scope.reference(value.reference as FlowReference);
-  else if (value.kind === "formula") result = evaluateFlowFormula(value.formula, scope);
-  // Constructed values resolve under exactly the same rules as a top-level value, so a
-  // nested reference reads the same input, variable or task output it would read on its own.
-  else if (value.kind === "map") {
-    const entries: Record<string, JsonValue> = {};
-    for (const [name, entry] of Object.entries(value.entries))
-      entries[name] = evaluateValue(entry, state, activation, flow, taskId).value;
-    result = typed("json", entries);
-  } else if (value.kind === "array") {
-    const items = value.items.map(
-      (item) => evaluateValue(item, state, activation, flow, taskId).value,
-    );
-    result = typed("json", items);
-  }
-  return result ?? failed("value_unresolved", "failed", taskId);
+  return (
+    resolveFlowValue(value, scopeOf(state, activation, flow)) ??
+    failed("value_unresolved", "failed", taskId)
+  );
 };
 
 const evaluateProperties = (
