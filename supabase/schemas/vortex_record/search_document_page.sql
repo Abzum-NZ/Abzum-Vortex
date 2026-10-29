@@ -80,8 +80,7 @@ begin
         cross join lateral (
           select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
             'fieldId', matched_field.field_id,
-            'weight', case field.value ->> 'priority'
-              when 'first' then 3 when 'normal' then 2 when 'last' then 1 else 0 end)) as hits
+            'weight', (field.value ->> 'weight')::integer)) as hits
           from (
             select distinct entry.value ->> 'fieldId' as field_id
             from pg_catalog.jsonb_array_elements(d.entries) entry(value)

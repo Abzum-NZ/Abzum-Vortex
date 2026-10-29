@@ -12,6 +12,7 @@ import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-tran
 import { protectedQueryRowCapabilitiesSchema } from "../queries/protected-query-contracts";
 import type { QueryContinuationKey } from "../queries/continuation-token";
 import { openToken, sealToken } from "../queries/sealed-token";
+import { searchPriorityWeights } from "./document-store";
 import {
   searchConfiguredApplication,
   type ApplicationSearchResult,
@@ -111,7 +112,7 @@ export const searchInstalledApplication = async (
         left join verified_installation on true
         left join lateral vortex_record.search_document_page(
           ${scope.organizationId}::uuid, ${applicationRootId}::uuid, ${request.recordTypeId}::uuid,
-          ${JSON.stringify(request.fields)}::text::jsonb, ${request.titleFieldId}::uuid,
+          ${JSON.stringify(request.fields.map((field) => ({ fieldId: field.fieldId, weight: searchPriorityWeights[field.priority] })))}::text::jsonb, ${request.titleFieldId}::uuid,
           ${JSON.stringify(request.terms)}::text::jsonb, ${JSON.stringify(request.filters)}::text::jsonb,
           ${request.after?.score ?? null}::integer, ${request.after?.id ?? null}::uuid, ${request.limit}::integer,
           ${JSON.stringify(request.state ?? null)}::text::jsonb, ${request.maxVisits}::integer
