@@ -7,7 +7,7 @@ jobs:
   guard:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
@@ -15,10 +15,10 @@ jobs:
       # pull_request checkout does not fetch. Full history lets the guard verify that a migration
       # branch contains this fetched main commit.
       - run: git fetch --no-tags --depth=1 origin main:refs/remotes/origin/main
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 12.6.0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
