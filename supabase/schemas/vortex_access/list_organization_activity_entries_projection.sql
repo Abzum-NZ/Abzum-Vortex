@@ -86,11 +86,11 @@ begin
   into decision_outcome, decision_organization_id, decision_account_id
   from vortex_access.evaluate_organization_permission_eligibility(
     pg_catalog.jsonb_build_object(
-      'operationKey', 'platform.organization.permissions.read',
+      'operationKey', 'platform.organization.activity.read',
       'action', pg_catalog.jsonb_build_object('actionKind', 'read'),
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', vortex_access.required_platform_permission(
-        'platform.organization.permissions.read'
+        'platform.organization.activity.read'
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
       'authority', pg_catalog.jsonb_build_object('kind', 'permission')
