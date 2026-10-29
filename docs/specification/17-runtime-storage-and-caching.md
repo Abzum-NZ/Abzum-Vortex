@@ -27,7 +27,7 @@ flowchart LR
     PERSON[Browser or approved client] --> IDP[Vortex Identity Authority]
     IDP --> VERCEL[Vercel web and server]
     VERCEL --> SUPA[Supabase data, accounts, files, live updates and queue]
-    SUPA -->|event wake-up| VERCEL
+    VERCEL -->|after-commit dispatch| SUPA
     KESTRA[Kestra operational jobs] -->|recovery and cleanup| VERCEL
     DOPPLER[Doppler secrets] --> VERCEL
     DOPPLER --> KESTRA
@@ -42,7 +42,6 @@ Vortex uses Supabase as an integrated platform, but each capability has one narr
 | [Auth](https://supabase.com/docs/guides/auth), [OAuth 2.1 server](https://supabase.com/docs/guides/auth/oauth-server) and [asymmetric signing keys](https://supabase.com/docs/guides/auth/signing-keys) | Environment-wide identity authority, locally verifiable short-lived identity tokens, and authorization-code-with-PKCE tokens for governed MCP clients | Organisation roles, groups, application access and MCP capability grants remain live Vortex data, not OAuth scope or token claims. Supabase authorizes identity/client; the Vercel MCP route enforces Vortex access.                      |
 | PostgreSQL, [row-level security](https://supabase.com/docs/guides/database/postgres/row-level-security) and [Supavisor](https://supabase.com/docs/guides/database/connecting-to-postgres)               | Authoritative data, transactions, constraints, organisation separation and pooled server connections                                                  | Internal service schemas are not exposed through the Data API. Request roles do not own tables or bypass row rules. Vercel uses transaction mode; migrations and database verification use a separate owner credential over session mode. |
 | [Queues](https://supabase.com/docs/guides/queues)                                                                                                                                                       | Logged, durable event delivery after a committed save                                                                                                 | Queue client functions are server-only and the `pgmq_public` interface is not exposed to browsers.                                                                                                                                        |
-| [Database Webhooks](https://supabase.com/docs/guides/database/webhooks)                                                                                                                                 | Asynchronous low-latency wake-up after durable work exists                                                                                            | A webhook is a hint, not delivery proof; the queue and scheduled Kestra recovery remain authoritative.                                                                                                                                    |
 | [Realtime Broadcast](https://supabase.com/docs/guides/realtime/authorization)                                                                                                                           | Private, content-free invalidation for open components                                                                                                | Clients reload through the authorised query path; business values are never broadcast.                                                                                                                                                    |
 | [Storage](https://supabase.com/docs/guides/storage)                                                                                                                                                     | Private objects, resumable uploads and authenticated private download streams                                                                         | Business files are never public; Storage row policies and File-service checks both apply.                                                                                                                                                 |
 | [CLI, database tests and linting](https://supabase.com/docs/guides/local-development/cli/testing-and-linting)                                                                                           | Reproducible local database, migration checks, pgTAP tests and database lint                                                                          | The shared Testing project remains the authoritative platform and separation test. Kestra alone migrates Testing and Production.                                                                                                          |
@@ -60,8 +59,6 @@ flowchart LR
     WEB --> DB[PostgreSQL plus row rules]
     WEB --> STORE[Private Storage]
     DB --> Q[Logged Supabase Queue]
-    DB -->|wake-up hint| HOOK[Database Webhook]
-    HOOK --> WEB
     Q --> WEB
     DB -->|content-free| LIVE[Private Realtime Broadcast]
     LIVE --> BROWSER[Open component]
@@ -519,9 +516,9 @@ Matching schemas make contract validation and query translation easier, but they
 
 ## Event dispatch without a permanent web worker
 
-The [record save](06-records-and-lifecycle.md#save-sequence) writes an event outbox entry and a message to a logged durable [Supabase Queue](https://supabase.com/docs/guides/queues) in the same database transaction. Queue access is server-only and is not added to an exposed Data API schema. An asynchronous [database webhook](https://supabase.com/docs/guides/database/webhooks) wakes a protected Vercel dispatcher route. The dispatcher claims a bounded batch, honours per-record sequence, and starts [Kestra executions](https://kestra.io/docs/workflow-components/execution) for matched flows.
+The [record save](06-records-and-lifecycle.md#save-sequence) writes an event outbox entry and a message to a logged durable [Supabase Queue](https://supabase.com/docs/guides/queues) in the same database transaction. Queue access is server-only and is not added to an exposed Data API schema. After each committed request the Vercel server schedules the bounded dispatcher in process, after the response. The dispatcher claims a bounded batch, honours per-record sequence, and starts [Kestra executions](https://kestra.io/docs/workflow-components/execution) for matched flows.
 
-A scheduled [Kestra](https://kestra.io/docs/workflow-components/triggers) recovery flow calls the platform dispatcher endpoint; it does not read the database. This recovers messages after a failed webhook or web deployment, while the database webhook provides the normal wake-up path.
+A scheduled [Kestra](https://kestra.io/docs/workflow-components/triggers) recovery flow calls the platform dispatcher endpoint; it does not read the database. This recovers messages after a failed or interrupted in-process dispatch or web deployment, while the after-commit dispatch provides the normal delivery path.
 
 ## Cache model
 

@@ -824,12 +824,29 @@ export const withRuntimeTransaction = async <Result>(
     : createRuntimeTransactionRunner(owned)(operation);
 };
 
+// Instrumentation and request bundles share the listener through the process global.
+const committedTransactionListenerKey = Symbol.for("vortex.committedTransactionListener");
+type CommittedTransactionGlobal = typeof globalThis & {
+  [committedTransactionListenerKey]?: () => void;
+};
+
+export const registerCommittedTransactionListener = (listener: () => void): void => {
+  (globalThis as CommittedTransactionGlobal)[committedTransactionListenerKey] = listener;
+};
+
 export const withResolvedRequestTransaction = async <Scope, Result>(
   resolve: RequestContextResolver<Scope>,
   operation: ResolvedRequestOperation<Scope, Result>,
 ): Promise<Result> => {
   const owned = currentOwnedDriver();
-  return owned === undefined
+  const result = await (owned === undefined
     ? defaultResolvedRequestRunner(resolve, operation)
-    : createResolvedRequestTransactionRunner(owned)(resolve, operation);
+    : createResolvedRequestTransactionRunner(owned)(resolve, operation));
+  try {
+    (globalThis as CommittedTransactionGlobal)[committedTransactionListenerKey]?.();
+  } catch (error) {
+    // The transaction has committed; scheduling failure must not report a failed write.
+    console.error("[events] could not schedule committed transaction dispatch", error);
+  }
+  return result;
 };

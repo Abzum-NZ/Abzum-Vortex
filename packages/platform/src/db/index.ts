@@ -14,6 +14,7 @@ export {
 export {
   withRuntimeTransaction,
   withResolvedRequestTransaction,
+  registerCommittedTransactionListener,
   withPooledRequestLifetime,
   runtimeDatabasePoolSize,
   type PooledRequestLifetime,

@@ -11,18 +11,9 @@ export async function register(): Promise<void> {
   const { registerCleanNetworkStartup } = await import("./app/_lib/clean-network-startup");
   registerCleanNetworkStartup();
 
-  // Each deployment explicitly selects its single event-delivery trigger.
-  const deliveryMode = process.env.VORTEX_EVENT_DELIVERY_MODE;
-  if (deliveryMode !== "in_process" && deliveryMode !== "external")
-    throw new Error(
-      "Configure VORTEX_EVENT_DELIVERY_MODE: a local server adds VORTEX_EVENT_DELIVERY_MODE=in_process to apps/web/.env.development.local; a hosted deployment sets external",
-    );
-  if (deliveryMode === "external" && !process.env.VORTEX_EVENT_DISPATCHER_CREDENTIAL_SHA256)
-    throw new Error("External event delivery requires a dispatcher credential digest");
   const { prepareApplicationRuntime } = await import("./app/_lib/prepare-application-runtime");
   await prepareApplicationRuntime();
-  if (deliveryMode === "in_process") {
-    const { startLocalEventDispatch } = await import("./app/_lib/local-event-dispatch");
-    startLocalEventDispatch();
-  }
+  const { registerCommittedTransactionListener } = await import("@vortex/platform/server");
+  const { scheduleCommittedEventDispatch } = await import("./app/_lib/event-dispatch-after");
+  registerCommittedTransactionListener(scheduleCommittedEventDispatch);
 }
