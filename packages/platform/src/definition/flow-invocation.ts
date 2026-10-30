@@ -49,6 +49,7 @@ import { readPermittedApplicationsAtAddress } from "./application-address";
 import { createFlowCurrentRecordReader } from "./flow-current-record";
 import { createFlowQueryReader } from "./flow-query-reader";
 import { createFlowRecordChangePort, flowRecordTypeRelationships } from "./flow-record-changes";
+import { createOptionMembershipCheck } from "./option-membership-check";
 import { createFlowOrchestrator } from "./flow-orchestrator";
 import type {
   FlowNamedAction,
@@ -517,7 +518,20 @@ export async function invokeInstalledFlow(
       executor: executorFor(boundRequest, receipt),
       ...(boundRequest === undefined
         ? {}
-        : { recordChanges: createFlowRecordChangePort(boundRequest) }),
+        : {
+            recordChanges: createFlowRecordChangePort(
+              boundRequest,
+              createOptionMembershipCheck({
+                dependencies: {
+                  ...scopedDependencies,
+                  continuationKey: dependencies.continuationKey,
+                },
+                installation,
+                session: boundRequest.session,
+                selection: boundRequest.selection,
+              }),
+            ),
+          }),
       records:
         boundRequest === undefined
           ? records

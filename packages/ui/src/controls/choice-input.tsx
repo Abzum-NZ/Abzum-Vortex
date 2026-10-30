@@ -242,6 +242,9 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   };
   // Opening reads the first page at once; typing reads again once the person pauses.
   useEffect(() => {
+    // Closing leaves what was read as the previous items; opening reads again, and the page answers
+    // from its cache while the inputs are the same.
+    if (!comboboxOpen) lastRequestedSearch.current = undefined;
     if (!remoteOptions || !comboboxOpen || optionsRequested.current === undefined) return;
     const search = searchTerm.trim();
     if (search === lastRequestedSearch.current) return;

@@ -63,9 +63,6 @@ export const bindingOfEvent = (
 const eventIdOf = (event: DisplaySemanticEvent): string | undefined =>
   "eventId" in event ? event.eventId : undefined;
 
-export const choiceScopeKey = (placementId: string, formId?: string): string =>
-  formId === undefined ? placementId : `${formId}\u0000${placementId}`;
-
 /**
  * Finds the binding an event identity names. Every event that carries an `eventId` (a row click, a
  * row action, an inline or row edit) matches by that identity alone. Only `card_moved` and

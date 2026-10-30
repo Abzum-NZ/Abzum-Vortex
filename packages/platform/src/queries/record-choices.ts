@@ -55,6 +55,18 @@ const recordChoiceCommandSchema = z
       })
       .strict()
       .optional(),
+    /**
+     * A link field's declared query: its permitted rows are the choices, read with these input
+     * values in place of the target's own listing. One target only.
+     */
+    sourceQuery: z
+      .object({
+        moduleRootId: moduleRootIdSchema,
+        queryId: queryIdSchema,
+        inputValues: z.record(z.string(), z.custom<JsonValue>()),
+      })
+      .strict()
+      .optional(),
     /** Narrows the records to those whose title or another searchable field holds this text. */
     search: z.string().trim().min(1).max(100).optional(),
     pageSize: z.number().int().min(1).max(recordChoicePageSizes.maximum),
@@ -241,7 +253,7 @@ export const createRecordChoiceReader = (queries: RecordChoiceQueryRunner) =>
         return { kind: "available", value: { outcome: "refused", reasonCode: "request_invalid" } };
       const command = parsed.data;
       const several = command.targets.length > 1;
-      if (command.narrowedBy !== undefined && several)
+      if ((command.narrowedBy !== undefined || command.sourceQuery !== undefined) && several)
         return { kind: "available", value: { outcome: "refused", reasonCode: "request_invalid" } };
       let positions: Positions | undefined;
       if (command.continuationToken !== undefined) {
@@ -270,10 +282,10 @@ export const createRecordChoiceReader = (queries: RecordChoiceQueryRunner) =>
       const next: Positions = [];
       for (const { target, token } of read) {
         const result = await queries.run(session, selection, {
-          moduleRootId: target.moduleRootId,
+          moduleRootId: command.sourceQuery?.moduleRootId ?? target.moduleRootId,
           // A record type is listed by its own identity: the listing query the engine resolves for it.
-          queryId: queryIdSchema.parse(target.recordTypeId),
-          inputValues: {},
+          queryId: command.sourceQuery?.queryId ?? queryIdSchema.parse(target.recordTypeId),
+          inputValues: command.sourceQuery?.inputValues ?? {},
           requestedFieldIds: [target.titleFieldId],
           requestedSystemFieldKeys: [],
           sort: [],

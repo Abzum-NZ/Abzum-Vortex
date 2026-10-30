@@ -290,7 +290,7 @@ export function useFlowRuntime({
             }
             controls.submit(answer.data.values);
           };
-        else if (model.linkInputPlacementIds.includes(placementId))
+        else if (model.optionPlacementIds.includes(placementId))
           events.options_requested = (event: ControlSemanticEvent) => {
             if (event.event !== "options_requested") return;
             return import("./field-options").then(({ requestFieldOptions }) =>

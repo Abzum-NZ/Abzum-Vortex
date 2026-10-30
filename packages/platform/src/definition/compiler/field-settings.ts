@@ -108,17 +108,20 @@ export function fieldSettings(
 ): unknown {
   const settings = asObject(field.settings);
   const localField = (alias: string) => resolution.field(qualifiedRecordType, alias);
-  // Where a choice or link field's options come from. A query or an options flow runs with the
-  // options runtime, so publication refuses it by name until then.
+  // Where a choice or link field's options come from: a fixed list, a declared query or an options
+  // flow, each over the fields of the same record type it reads.
+  const moduleKey = qualifiedRecordType.slice(0, qualifiedRecordType.lastIndexOf(":"));
+  const sourceInputs = (inputs: unknown): JsonObject =>
+    Object.fromEntries(
+      Object.entries(asObject(inputs)).map(([name, alias]) => [name, localField(String(alias))]),
+    );
   const optionsSource = (source: JsonObject, target?: string): JsonObject => {
-    if (source.kind === "flow" || source.query !== undefined)
-      throw new DefinitionCompilationError(
-        "vortex.definition.unsupported_workflow_node",
-        "unsupported_choice",
-        undefined,
-        undefined,
-        `Field ${String(field.key)}: options from ${source.kind === "flow" ? "an options flow" : "a query"} cannot run yet`,
-      );
+    if (source.kind === "flow")
+      return {
+        kind: "flow",
+        flowId: resolution.id(moduleKey, "flow", String(source.flow), "content"),
+        inputs: sourceInputs(source.inputs),
+      };
     if (source.kind === "fixed")
       return source.parent_field === undefined
         ? { kind: "fixed" }
@@ -127,6 +130,20 @@ export function fieldSettings(
             parentFieldId: localField(String(source.parent_field)),
             optionParents: asObject(source.option_parents),
           };
+    if (source.query !== undefined) {
+      const queryReference = String(source.query);
+      const split = queryReference.lastIndexOf(":");
+      return {
+        kind: "query",
+        queryId: resolution.id(
+          queryReference.slice(0, split),
+          "query",
+          queryReference.slice(split + 1),
+          "content",
+        ),
+        inputs: sourceInputs(source.inputs),
+      };
+    }
     return source.parent_field === undefined
       ? { kind: "query" }
       : {

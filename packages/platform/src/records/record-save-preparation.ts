@@ -23,6 +23,7 @@ import { decideChoiceOptionPermission } from "./choice-option-permission";
 import type { calculateAndFinalize } from "./field-candidate";
 import { storedRecordCandidateValues, type RecordFieldValuePendingCheck } from "./field-values";
 import { firstFieldDependencyRefusal } from "./link-dependencies";
+import { firstOptionSourceRefusal, type OptionMembershipCheck } from "./option-membership";
 import {
   saveRecordResultSchema,
   type RecordSaveFieldCorrection,
@@ -567,6 +568,8 @@ export const finalizeCalculatedValues = async (
       recordTypeId: string,
       recordId: string,
     ) => Promise<Readonly<Record<string, unknown>> | undefined>;
+    /** Whether a value is among the options its declared source offers the saver now. */
+    optionMember?: OptionMembershipCheck;
   }>,
 ): Promise<SaveRecordResult | Readonly<{ finalValues: Record<string, unknown> }>> => {
   if (!values.success) {
@@ -744,6 +747,42 @@ export const finalizeCalculatedValues = async (
             code: "field_refused" as const,
             fieldId: dependency.childFieldId,
             message: `Choose ${labelOf(dependency.childFieldId)} again: it does not belong to the chosen ${labelOf(dependency.parentFieldId)}.`,
+          },
+        ],
+      });
+    }
+  }
+  if (prepared.recordType.systemProjection === undefined) {
+    const sourced = await firstOptionSourceRefusal(
+      prepared.recordType,
+      Object.keys(command.submittedValues),
+      finalValues,
+      prepared.existingValues,
+      checks?.optionMember,
+    );
+    if (sourced !== undefined) {
+      // The cause stays in the log; the person is told which field to choose again.
+      console.error(
+        `[record] save refused OPTION_SOURCE_${sourced.reason.toUpperCase()}: field=${sourced.fieldId}`,
+      );
+      if (!prepared.readableFieldIds.has(sourced.fieldId.toLowerCase()))
+        return safeRefusal(prepared.correlationId, "operation_refused");
+      const label =
+        prepared.recordType.fields.find(
+          (candidate) => String(candidate.fieldId).toLowerCase() === sourced.fieldId.toLowerCase(),
+        )?.label ?? "the field";
+      return saveRecordResultSchema.parse({
+        contractVersion: "2.0.0",
+        outcome: "correction_required",
+        correlationId: prepared.correlationId,
+        corrections: [
+          {
+            code: "field_refused" as const,
+            fieldId: sourced.fieldId,
+            message:
+              sourced.reason === "unchecked"
+                ? `${label} cannot be saved from here: its options cannot be checked.`
+                : `Choose ${label} again: it is no longer one of the options offered.`,
           },
         ],
       });

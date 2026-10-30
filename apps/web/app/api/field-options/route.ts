@@ -1,6 +1,7 @@
 import type { NextRequest, NextResponse } from "next/server";
 import {
   containedComponentIdSchema,
+  jsonValueSchema,
   logRefusal,
   recordIdSchema,
   revisionSchema,
@@ -38,6 +39,8 @@ const requestSchema = z
     subjectRecordId: recordIdSchema.optional(),
     /** For a dependent link field: the record chosen in the field it depends on, in the draft (a form field or an edited cell). */
     parentRecordId: recordIdSchema.optional(),
+    /** For a field whose options a flow works out: the form's draft values, by field key. */
+    draft: z.record(z.string().min(1).max(200), jsonValueSchema).optional(),
     search: z.string().trim().max(100).optional(),
     pageSize: z.number().int().min(1).max(200).optional(),
     continuationToken: z.string().min(1).max(65_536).optional(),
@@ -113,6 +116,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       releaseKey: body.releaseKey,
       ...(body.subjectRecordId === undefined ? {} : { subjectRecordId: body.subjectRecordId }),
       ...(body.parentRecordId === undefined ? {} : { parentRecordId: body.parentRecordId }),
+      ...(body.draft === undefined ? {} : { draft: body.draft }),
       ...(body.search === undefined ? {} : { search: body.search }),
       ...(body.pageSize === undefined ? {} : { pageSize: body.pageSize }),
       ...(body.continuationToken === undefined
@@ -124,7 +128,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         return privateResponse(
           {
             kind: "completed",
-            choices: result.choices,
+            ...(result.choices === undefined ? {} : { choices: result.choices }),
+            ...(result.options === undefined ? {} : { options: result.options }),
             ...(result.nextContinuationToken === undefined
               ? {}
               : { nextContinuationToken: result.nextContinuationToken }),

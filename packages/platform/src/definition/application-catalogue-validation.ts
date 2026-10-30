@@ -633,6 +633,21 @@ export function validateApplicationSourceCatalogue(
       const reading = readSourceItem(item, release);
       reportSettingFailures(reading.settingFailures, location);
       validateDataContract(placement, alias, reading.settings, location, release);
+      // An option filter is a decision of the platform's catalogue and applies to the one record
+      // type it is made for: the roles of the system directory, offered by a link input.
+      if (reading.settings.option_filter !== undefined) {
+        const recordTypes = item.props.record_types;
+        if (
+          release.key !== "platform.form.link_input" ||
+          !Array.isArray(recordTypes) ||
+          recordTypes.length !== 1 ||
+          recordTypes[0] !== "vortex.system_directory:role"
+        )
+          report("vortex.definition.application_block_settings", "invalid_value", [
+            ...location,
+            ...keySegment("setting", "option_filter"),
+          ]);
+      }
       validateQueryBindingStructure(reading.settings, location);
       validateAccessibleName(reading.settings, release, location);
       validateResponsive(placement, release, location);

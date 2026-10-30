@@ -26,6 +26,7 @@ import {
   type GridLayoutCommitResult,
   type GridViewCommand,
   type GridViewCommandResult,
+  type JsonValue,
 } from "@vortex/platform/schema";
 import type {
   ApplicationPageModel,
@@ -294,7 +295,7 @@ export function useRuntimeInputs({
       ...Object.keys(controls),
       ...Object.keys(model.bindings),
       ...guidedActiveFormIds,
-      ...model.linkInputPlacementIds,
+      ...model.optionPlacementIds,
       ...Object.keys(model.pageParameters.controls),
       ...Object.keys(model.pageParameters.drawers),
     ]);
@@ -577,16 +578,40 @@ export function useRuntimeInputs({
         )
           events.row_expanded = rowDetailHandlers(placementId);
       }
-      // A link field's picker asks for its records; the page reads them under the person's access.
-      if (model.linkInputPlacementIds.includes(placementId))
+      // A field's picker asks for its options; the page reads them under the person's access.
+      if (model.optionPlacementIds.includes(placementId))
         events.options_requested = (event: ControlSemanticEvent) => {
           if (event.event !== "options_requested") return;
+          const owner = formOwners[placementId];
+          const store = controlDraftsRef?.current;
+          // A field whose options a flow works out sends the form's draft: the flow reads it.
+          const draft =
+            owner === undefined ||
+            store === undefined ||
+            !model.optionsFlowPlacementIds.includes(placementId)
+              ? undefined
+              : {
+                  ...store.baselines[owner],
+                  ...Object.fromEntries(
+                    Object.values(store.drafts)
+                      .filter((entry) => entry.owner === owner)
+                      .map((entry) => [entry.fieldKey, entry.value]),
+                  ),
+                };
           return import("./field-options")
             .then(({ requestFieldOptions }) =>
-              requestFieldOptions(model, placementId, event, () => router.refresh()),
+              requestFieldOptions(
+                model,
+                placementId,
+                {
+                  ...event,
+                  ...(draft === undefined ? {} : { draft: draft as Record<string, JsonValue> }),
+                },
+                () => router.refresh(),
+              ),
             )
             .then((page) => {
-              if (titles.current.scope === navigationKey)
+              if ("choices" in page && titles.current.scope === navigationKey)
                 rememberPublishedChoices(titles.current.values, placementId, page);
               return page;
             });

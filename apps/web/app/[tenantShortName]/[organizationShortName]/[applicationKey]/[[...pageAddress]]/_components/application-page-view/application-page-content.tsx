@@ -15,7 +15,6 @@ import {
   PagePuckRenderer,
   type FlowIntentHost,
   type ServerDrivenResult,
-  type ControlSemanticEvent,
   type DisplaySemanticEvent,
   type RenderedPage,
   type PlatformThemeTokens,
