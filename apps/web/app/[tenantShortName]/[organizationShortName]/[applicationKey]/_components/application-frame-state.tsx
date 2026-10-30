@@ -24,6 +24,10 @@ export type ControlDrafts = {
   scope: string;
   model?: object;
   pending?: Promise<void>;
+  restoreBaselines?: (registry: {
+    valuesOf: (formId: string) => Readonly<Record<string, unknown>> | undefined;
+    markSaved: (formId: string, values: Readonly<Record<string, unknown>>) => void;
+  }) => void;
   drafts: Record<string, ControlDraft>;
   baselines: Record<string, Readonly<Record<string, unknown>>>;
   baselineFields: Record<string, Record<string, { kind: string; fieldKey: string }>>;

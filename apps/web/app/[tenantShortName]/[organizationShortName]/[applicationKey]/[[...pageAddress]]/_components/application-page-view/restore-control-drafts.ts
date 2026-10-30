@@ -62,3 +62,18 @@ export function restoreDrafts(
     );
   }
 }
+
+/** Rebase each restored form after its controls have registered. */
+export function restoreBaselines(
+  store: ControlDrafts,
+): NonNullable<ControlDrafts["restoreBaselines"]> {
+  return (registry) => {
+    for (const [id, draft] of Object.entries(store.drafts)) {
+      const owner = draft.owner;
+      const baseline = owner === undefined ? undefined : store.baselines[owner];
+      const current = owner === undefined ? undefined : registry.valuesOf(owner);
+      if (baseline !== undefined && current !== undefined && store.restored[id] !== undefined)
+        registry.markSaved(owner!, { ...current, ...baseline });
+    }
+  };
+}

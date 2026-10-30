@@ -516,24 +516,23 @@ export function ApplicationPageViewContent({
     if (Object.keys(drafts.drafts).length === 0) {
       drafts.restored = {};
       delete drafts.pending;
+      delete drafts.restoreBaselines;
     } else {
-      const promise = import("./restore-control-drafts").then(({ restoreDrafts }) => {
-        if (controlDraftsRef?.current !== drafts || drafts.pending !== promise) return;
-        restoreDrafts(drafts, controls, tableData, formOwners);
-        delete drafts.pending;
-      });
+      const promise = import("./restore-control-drafts").then(
+        ({ restoreDrafts, restoreBaselines }) => {
+          if (controlDraftsRef?.current !== drafts || drafts.pending !== promise) return;
+          restoreDrafts(drafts, controls, tableData, formOwners);
+          drafts.restoreBaselines = restoreBaselines(drafts);
+          delete drafts.pending;
+        },
+      );
       drafts.pending = promise;
     }
   }
   if (drafts?.pending !== undefined) use(drafts.pending);
   useEffect(() => {
-    const drafts = controlDraftsRef?.current;
-    if (drafts === undefined) return;
-    for (const [id, draft] of Object.entries(drafts.drafts)) {
-      const baseline = draft.owner === undefined ? undefined : drafts.baselines[draft.owner];
-      if (baseline !== undefined && drafts.restored[id] !== undefined)
-        unsavedWorkRegistry?.restoreBaseline(draft.owner!, baseline);
-    }
+    if (unsavedWorkRegistry !== undefined)
+      controlDraftsRef?.current.restoreBaselines?.(unsavedWorkRegistry);
   }, [navigationKey, model, controlDraftsRef, unsavedWorkRegistry]);
 
   const fieldFlowEvents = useFieldFlowEvents(navigationKey, runtimeState, runBinding, setNotice);
