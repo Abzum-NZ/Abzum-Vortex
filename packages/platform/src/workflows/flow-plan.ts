@@ -271,21 +271,6 @@ const unitLocation = (
   return locations.values().next().value ?? "neutral";
 };
 
-/** Whether the compiler places every part of an interactive flow in the page. */
-export const flowIsPageOnly = (flow: FlowDefinition): boolean => {
-  if (flow.execution !== "interactive") return false;
-  try {
-    return [...flow.tasks, ...flow.errors, ...flow.finally].every((task) => {
-      const location = unitLocation(flow, task, undefined);
-      return location === "page" || location === "neutral";
-    });
-  } catch (error) {
-    // Validation reports the unsupported or unknown task at its own location.
-    if (error instanceof FlowPlanError) return false;
-    throw error;
-  }
-};
-
 const allSteps = (tasks: readonly FlowTask[]): FlowTask[] =>
   tasks.flatMap((task) => [
     task,

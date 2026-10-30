@@ -1,7 +1,6 @@
 import { valueTypesCompatible, workflowValueTypeSchema } from "../catalogue/catalogues";
 import { isIsoCurrencyCode } from "../catalogue/currencies";
 import { checkFlowFormula } from "../rules/flow-formula-check";
-import { flowIsPageOnly } from "../workflows/flow-plan";
 import { formatterCatalogue, unitCatalogue } from "../pages/value-format";
 import { recordTypeIdSchema } from "../catalogue/identifiers";
 import type {
@@ -251,7 +250,6 @@ export function validateFlow(
   ) => issues.push({ path, ruleCode, family, message });
 
   const timeAllowed = flow.execution === "interactive" || flow.execution === "background";
-  const pageOnly = flowIsPageOnly(flow as FlowDefinition);
 
   // ── Run locations, task types, versions and properties: the registry's own placement check. ──
   for (const placement of validateFlowTaskPlacement(flow)) {
@@ -444,7 +442,7 @@ export function validateFlow(
         return "organization_account_reference";
       case "execution_now":
         return "date_time";
-      // Page values await the page store; form fields run in page-only flows.
+      // Page values await the page store; form fields are resolved by the page and segment seed.
       case "page":
       case "form": {
         const environments = options.referenceEnvironments ?? [];
@@ -471,15 +469,12 @@ export function validateFlow(
             "broken_reference",
             "Page and form references require a bound page",
           );
-        if (reference.source === "page" || !pageOnly)
+        if (reference.source === "page")
           unreadableReferences.push({
             path,
             ruleCode: "vortex.definition.unsupported_workflow_node",
             family: "unsupported_choice",
-            message:
-              reference.source === "page"
-                ? `The page value ${reference.name} cannot be read yet`
-                : `The form field ${reference.form}.${reference.field} cannot be read yet`,
+            message: `The page value ${reference.name} cannot be read yet`,
           });
         return types.length > 0 && types.every((type) => type === types[0]) ? types[0] : undefined;
       }
