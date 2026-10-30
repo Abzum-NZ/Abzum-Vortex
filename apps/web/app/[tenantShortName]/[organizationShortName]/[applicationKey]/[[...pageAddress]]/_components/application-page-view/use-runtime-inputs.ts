@@ -13,7 +13,7 @@ import {
   type DisplaySemanticEvent,
   type ServerDrivenResult,
   type FlowIntentHost,
-  type FormFlowFeedback,
+  type FlowRuntimeState,
 } from "@vortex/ui";
 import {
   isRecord,
@@ -66,7 +66,7 @@ import type { useFieldFlowEvents } from "./use-field-flow-events";
 export function useRuntimeInputs({
   currentData,
   model,
-  formFeedback,
+  runtimeState,
   guidedActiveFormIds,
   guidedActivePlacementIds,
   guidedFormCompleted,
@@ -97,7 +97,6 @@ export function useRuntimeInputs({
   submitGuidedSummary,
   advanceGuidedStep,
   currentEditFormBaselines,
-  setFormFeedback,
   choiceEvidenceFor,
   submittedFormsRef,
   formCancelledRef,
@@ -124,7 +123,7 @@ export function useRuntimeInputs({
 }: Readonly<{
   currentData: ApplicationPageModel["data"];
   model: ApplicationPageModel;
-  formFeedback: Readonly<Record<string, FormFlowFeedback>>;
+  runtimeState: FlowRuntimeState;
   guidedActiveFormIds: string[];
   guidedActivePlacementIds: ReadonlySet<string> | undefined;
   guidedFormCompleted: boolean;
@@ -204,7 +203,6 @@ export function useRuntimeInputs({
     requested?: string,
   ) => Promise<void>;
   currentEditFormBaselines: ApplicationPageModel["editFormBaselines"];
-  setFormFeedback: Dispatch<SetStateAction<Readonly<Record<string, FormFlowFeedback>>>>;
   choiceEvidenceFor: (
     formId: string,
     values: Readonly<Record<string, unknown>>,
@@ -313,7 +311,6 @@ export function useRuntimeInputs({
       ...Object.keys(currentData),
       ...Object.keys(controls),
       ...Object.keys(model.bindings),
-      ...Object.keys(formFeedback),
       ...guidedActiveFormIds,
       ...model.linkInputPlacementIds,
       ...Object.keys(model.pageParameters.controls),
@@ -346,8 +343,6 @@ export function useRuntimeInputs({
       const tableData = tablePayloadFor(data);
       const declaredEvents = placementEventNames[placementId];
       const supportsEvent = (eventName: string): boolean => declaredEvents?.has(eventName) === true;
-      const flowFeedback =
-        formOwners[placementId] === placementId ? formFeedback[placementId] : undefined;
       // Runtime data alone does not identify a display: forms can have projected owner-group data.
       // Give each placement only the display callbacks its own registered release declares.
       if (data !== undefined && model.guidedForm === undefined) {
@@ -748,10 +743,13 @@ export function useRuntimeInputs({
             Object.keys(recordValues).length === 0
           ) {
             setNotice(undefined);
-            setFormFeedback((current) => ({
-              ...current,
-              [placementId]: { kind: "message", tone: "success", text: "No changes to save." },
-            }));
+            runtimeState.messages.show({
+              id: crypto.randomUUID(),
+              target: "inline",
+              component: placementId,
+              severity: "success",
+              text: "No changes to save.",
+            });
             return;
           }
           const choiceEvidence = choiceEvidenceFor(placementId, event.values);
@@ -800,11 +798,7 @@ export function useRuntimeInputs({
             delete store.baselines[placementId];
             delete store.baselineFields[placementId];
           }
-          setFormFeedback((current) => {
-            const next = { ...current };
-            delete next[placementId];
-            return next;
-          });
+          runtimeState.messages.clear("inline", placementId);
           if (resetBinding !== undefined)
             void applyDispatch(
               formBlock.reset(asComponentBinding(placementId, resetBinding), event.gestureId),
@@ -814,10 +808,9 @@ export function useRuntimeInputs({
             );
         };
       if (data === undefined) {
-        if (Object.keys(events).length > 0 || flowFeedback !== undefined)
+        if (Object.keys(events).length > 0)
           inputs[placementId] = {
             ...(Object.keys(events).length === 0 ? {} : { events }),
-            ...(flowFeedback === undefined ? {} : { flowFeedback }),
           };
         continue;
       }
@@ -882,7 +875,6 @@ export function useRuntimeInputs({
                 });
               },
             }),
-        ...(flowFeedback === undefined ? {} : { flowFeedback }),
       };
     }
     return inputs;
@@ -894,7 +886,7 @@ export function useRuntimeInputs({
     fieldFlowEvents,
     formBlock,
     formCancelledRef,
-    formFeedback,
+    runtimeState,
     formOwners,
     recordDetailOwners,
     launcherPlacements,

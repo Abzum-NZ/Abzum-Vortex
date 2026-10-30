@@ -17,14 +17,15 @@ export function InlineMessage({ placementId }: Readonly<{ placementId: string }>
     () => undefined,
   );
   const urgent = message?.severity === "warning" || message?.severity === "error";
+  const shown = message !== undefined && (message.refusal?.corrections?.length ?? 0) === 0;
   return (
     <div
       id={inlineMessageId(placementId)}
-      hidden={message === undefined}
+      hidden={!shown}
       role={urgent ? "alert" : "status"}
       aria-live={urgent ? "assertive" : "polite"}
     >
-      {message === undefined ? null : (
+      {!shown ? null : (
         <>
           {message.title === undefined ? null : <strong>{message.title}: </strong>}
           {message.text}

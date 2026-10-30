@@ -1,4 +1,5 @@
 import type { NoticeSeverity } from "../components/notice";
+import type { FormFlowFeedback } from "@vortex/platform/schema";
 
 export type PageMessageTarget = "toast" | "banner" | "dialog" | "inline" | "slot";
 export type PageMessage = Readonly<{
@@ -12,6 +13,7 @@ export type PageMessage = Readonly<{
     | Readonly<{ kind: "flow"; label: string; run: () => void }>
     | Readonly<{ kind: "link"; label: string; href: string }>;
   dismissAfterMs?: number;
+  refusal?: Extract<FormFlowFeedback, { kind: "refusal" }>;
 }>;
 
 /** Messages are slots of the page's runtime state, keyed by their presentation target. */
@@ -32,6 +34,10 @@ export function createPageMessages(notify: (key: string) => void) {
     read: (target: PageMessageTarget, component?: string) => values.get(keyOf(target, component)),
     key: keyOf,
     clear,
+    clearAll: () => {
+      for (const message of [...values.values()])
+        clear(message.target, message.component, message.id);
+    },
     show: (message: PageMessage) => {
       const key = keyOf(message.target, message.component);
       const timer = timers.get(key);

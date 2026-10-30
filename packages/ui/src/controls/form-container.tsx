@@ -8,16 +8,13 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type FormEvent,
   type KeyboardEvent,
   type ReactElement,
   type RefObject,
 } from "react";
-import {
-  flowRefusalFeedbackSentences,
-  type FlowFieldCorrection,
-  type FormFlowFeedback,
-} from "@vortex/platform/schema";
+import type { FlowFieldCorrection, FormFlowFeedback } from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import { FlowSurfaceContext } from "../flow-runtime/flow-surface-context";
 import { FlowRuntimeStateContext } from "../flow-runtime/flow-runtime-state-context";
@@ -61,7 +58,6 @@ import {
 export type FormContainerProps = ControlRenderProps<FormPayload> &
   Readonly<{
     draftFeedback?: FormDraftFeedbackSupply;
-    flowFeedback?: FormFlowFeedback;
     reactions?: FormReactions;
   }>;
 
@@ -73,30 +69,6 @@ const fieldCorrectionText: Readonly<Record<FlowFieldCorrection["code"], string>>
   invalid_value: "This value is not valid.",
   field_refused: "This value was not accepted.",
 };
-
-const refusalFeedbackText = (feedback: Extract<FormFlowFeedback, { kind: "refusal" }>): string => {
-  if (feedback.ruleMessages !== undefined) return feedback.ruleMessages.join(" ");
-  if (feedback.code === "invalid_command" && feedback.fieldLabel !== undefined)
-    return `Check the ${feedback.fieldLabel} field and try again.`;
-  return flowRefusalFeedbackSentences[feedback.code];
-};
-
-const refusalRecoveryText = {
-  partial: "Only part of this was saved. Refresh and review what changed.",
-  uncertain: "The result is not certain yet. Refresh before trying again.",
-} as const;
-
-const formFlowFeedbackPresentation = (
-  feedback: FormFlowFeedback,
-): Readonly<{ tone: "success" | "problem"; text: string }> =>
-  feedback.kind === "message"
-    ? { tone: feedback.tone, text: feedback.text }
-    : {
-        tone: "problem",
-        text: `${refusalFeedbackText(feedback)}${
-          feedback.recovery === undefined ? "" : ` ${refusalRecoveryText[feedback.recovery]}`
-        }`,
-      };
 
 /** Input types for which Enter is the form's default submission, as in native implicit submission. */
 const NON_SUBMITTING_INPUT_TYPES = new Set([
@@ -195,6 +167,16 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   const flowRuntimeState = useContext(FlowRuntimeStateContext);
   const feedbackId = useId();
   const formId = props.placementId;
+  const message = useSyncExternalStore(
+    (listener) =>
+      flowRuntimeState?.subscribe(
+        `message:${flowRuntimeState.messages.key("inline", formId)}`,
+        listener,
+      ) ?? (() => undefined),
+    () => flowRuntimeState?.messages.read("inline", formId),
+    () => undefined,
+  );
+  const refusalMessage = message?.refusal;
   const formRef = useRef<HTMLFormElement>(null);
   const [generation, setGeneration] = useState(0);
   const [ownerGroupChoice, setOwnerGroupChoice] = useState<string | undefined>();
@@ -238,12 +220,12 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   // The feedback is read through a ref: a callback that changed with each result would make every
   // field's mount effect report a change when the result arrives, marking its located corrections
   // as already edited past before the person has seen them.
-  const flowFeedbackRef = useRef(props.flowFeedback);
-  flowFeedbackRef.current = props.flowFeedback;
+  const refusalRef = useRef(refusalMessage);
+  refusalRef.current = refusalMessage;
   const reportFieldChanged = useCallback(() => {
     for (const listener of [...listeners.current]) listener();
-    const settled = flowFeedbackRef.current;
-    if (settled?.kind === "refusal" && settled.corrections !== undefined)
+    const settled = refusalRef.current;
+    if (settled?.corrections !== undefined)
       setEditedPastCorrections(JSON.stringify(settled.corrections));
     if (supplied) setFeedbackTick((current) => current + 1);
     if (validationAttemptedRef.current) setValidationErrors(registry.validationErrors());
@@ -269,7 +251,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     (fieldKey: string) => {
       if (Object.hasOwn(validationErrors, fieldKey)) return validationErrors[fieldKey];
       // A refusal from the server locates its corrections by the same field keys.
-      const refused = props.flowFeedback;
+      const refused = refusalMessage;
       const correction =
         refused?.kind === "refusal" && JSON.stringify(refused.corrections) !== editedPastCorrections
           ? refused.corrections?.find((candidate) => candidate.field === fieldKey)
@@ -284,7 +266,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
         fieldCorrectionText[correction.code]
       );
     },
-    [validationErrors, props.flowFeedback, editedPastCorrections, registry],
+    [validationErrors, refusalMessage, editedPastCorrections, registry],
   );
 
   const scope: FormScope = useMemo(
@@ -354,10 +336,10 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     focusField(formRef.current, Object.keys(validationErrors)[0]);
   }, [validationErrors]);
   useEffect(() => {
-    const refused = props.flowFeedback;
+    const refused = refusalMessage;
     if (refused?.kind !== "refusal" || refused.corrections === undefined) return;
     focusField(formRef.current, refused.corrections[0]?.field);
-  }, [props.flowFeedback]);
+  }, [refusalMessage]);
 
   const onSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
@@ -423,8 +405,6 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     context.unavailable || props.data?.status === "disabled" || ownerGroups?.length === 0;
   // Why the form cannot be used now, such as a required field this person cannot fill in.
   const refusal = context.unavailable ? undefined : context.disabledReason;
-  const flowFeedback =
-    props.flowFeedback === undefined ? undefined : formFlowFeedbackPresentation(props.flowFeedback);
   const content = (
     <>
       {refusal === undefined ? null : (
@@ -511,16 +491,6 @@ export function FormContainer(props: FormContainerProps): ReactElement {
         </FormScopeContext.Provider>
         <FormDraftFeedbackRegion id={feedbackId} summary={summary} />
         <InlineMessage placementId={props.placementId} />
-        {flowFeedback === undefined ? null : (
-          <Alert
-            variant={flowFeedback.tone === "problem" ? "destructive" : "default"}
-            role={flowFeedback.tone === "problem" ? "alert" : "status"}
-            aria-live="polite"
-            data-vortex-form-feedback={flowFeedback.tone}
-          >
-            <AlertDescription>{flowFeedback.text}</AlertDescription>
-          </Alert>
-        )}
       </form>
     </>
   );

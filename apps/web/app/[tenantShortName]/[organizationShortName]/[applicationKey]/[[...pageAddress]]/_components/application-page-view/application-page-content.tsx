@@ -19,7 +19,6 @@ import {
   type ControlSemanticEvent,
   type ChoiceInputPayload,
   type DisplaySemanticEvent,
-  type FormFlowFeedback,
   type RenderedPage,
   type PlatformThemeTokens,
   type ApplicationWebMcpRuntime,
@@ -179,7 +178,6 @@ export function ApplicationPageViewContent({
     },
     [runtimeState],
   );
-  const [formFeedback, setFormFeedback] = useState<Readonly<Record<string, FormFlowFeedback>>>({});
   const [webMcpShellState, setWebMcpShellState] = useState<ApplicationWebMcpRuntime>();
   const reportWebMcpShellState = useCallback(
     (runtime: ApplicationWebMcpRuntime | undefined) => setWebMcpShellState(runtime),
@@ -317,7 +315,7 @@ export function ApplicationPageViewContent({
   useEffect(() => {
     setGuidedBusy(false);
     setNotice(undefined);
-    setFormFeedback({});
+    runtimeState.messages.clearAll();
   }, [navigationKey]);
 
   const { choicePayloadFor, choiceEvidenceFor, requestChoicePage } = useReferenceChoices({
@@ -396,7 +394,7 @@ export function ApplicationPageViewContent({
     placementRequestsRef,
     navigationKey,
     setNotice,
-    setFormFeedback,
+    runtimeState,
     router,
     model,
     platformComponentRegistry,
@@ -571,7 +569,7 @@ export function ApplicationPageViewContent({
   const { runtimeInputs } = useRuntimeInputs({
     currentData: tableData,
     model,
-    formFeedback,
+    runtimeState,
     guidedActiveFormIds,
     guidedActivePlacementIds,
     guidedFormCompleted,
@@ -602,7 +600,6 @@ export function ApplicationPageViewContent({
     submitGuidedSummary,
     advanceGuidedStep,
     currentEditFormBaselines,
-    setFormFeedback,
     choiceEvidenceFor,
     submittedFormsRef,
     formCancelledRef,

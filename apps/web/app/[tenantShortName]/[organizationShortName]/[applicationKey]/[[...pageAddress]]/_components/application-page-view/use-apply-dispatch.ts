@@ -1,10 +1,10 @@
 import { useCallback, type Dispatch, type SetStateAction, type RefObject } from "react";
-import { toast } from "@vortex/ui/components/sonner";
 import type { useRouter } from "next/navigation";
 import type {
   createPlatformComponentRegistryForReleases,
   ServerDrivenResult,
   FormFlowFeedback,
+  FlowRuntimeState,
 } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import { applicationPageAddressPath } from "../../../../../../_lib/address-paths";
@@ -24,7 +24,7 @@ export function useApplyDispatch({
   placementRequestsRef,
   navigationKey,
   setNotice,
-  setFormFeedback,
+  runtimeState,
   router,
   model,
   platformComponentRegistry,
@@ -39,7 +39,7 @@ export function useApplyDispatch({
   }>;
   navigationKey: string;
   setNotice: Dispatch<SetStateAction<Notice | undefined>>;
-  setFormFeedback: Dispatch<SetStateAction<Readonly<Record<string, FormFlowFeedback>>>>;
+  runtimeState: FlowRuntimeState;
   router: ReturnType<typeof useRouter>;
   model: ApplicationPageModel;
   platformComponentRegistry: ReturnType<typeof createPlatformComponentRegistryForReleases>;
@@ -70,13 +70,7 @@ export function useApplyDispatch({
       let outcome: DispatchOutcome = { notice: undefined, confirmed: false, changed: false };
       const isCurrentNavigation = (): boolean => placementRequestsRef.current.key === navigationKey;
       setNotice(undefined);
-      if (formPlacementId !== undefined)
-        setFormFeedback((current) => {
-          if (!Object.hasOwn(current, formPlacementId)) return current;
-          const next = { ...current };
-          delete next[formPlacementId];
-          return next;
-        });
+      if (formPlacementId !== undefined) runtimeState.messages.clear("inline", formPlacementId);
       const showResult = (
         resultNotice: Notice,
         refusalFeedback?: Extract<FormFlowFeedback, { kind: "refusal" }>,
@@ -101,29 +95,26 @@ export function useApplyDispatch({
             formPlacementId,
             platformComponentRegistry,
           ) !== undefined;
-        if (formOnPage && resultNotice.link === undefined) setNotice(undefined);
-        else
+        if (
+          formOnPage &&
+          resultNotice.link === undefined &&
+          refusalFeedback?.corrections !== undefined
+        ) {
+          runtimeState.messages.show({
+            id: crypto.randomUUID(),
+            target: "inline",
+            component: formPlacementId,
+            severity: "error",
+            text: resultNotice.text,
+            refusal: refusalFeedback,
+          });
+        } else
           setNotice((current) => {
             // A client intent can refuse after the server has completed (for example, a page the
             // viewer cannot open). A successful run must not erase that more specific refusal.
             if (current?.tone === "problem" && resultNotice.tone !== "problem") return current;
-            return formPlacementId === undefined || resultNotice.tone === "problem"
-              ? resultNotice
-              : undefined;
+            return resultNotice;
           });
-        // A confirmed change is announced once, in the notifications region, which stays while
-        // the page moves on (a saved form usually opens what it saved).
-        if (resultNotice.tone !== "problem" && formOnPage) return;
-        if (formPlacementId !== undefined) {
-          setFormFeedback((current) => ({
-            ...current,
-            [formPlacementId]: refusalFeedback ?? {
-              kind: "message",
-              tone: resultNotice.tone === "problem" ? "problem" : "success",
-              text: resultNotice.text,
-            },
-          }));
-        }
       };
       try {
         const server = await dispatch;
@@ -167,6 +158,19 @@ export function useApplyDispatch({
             ]),
           ];
           const ruleMessages = authoredMessages.length > 0 ? authoredMessages : undefined;
+          const corrections =
+            diagnostic?.corrections ??
+            (fieldLabel !== undefined &&
+            diagnostic?.submittedField !== undefined &&
+            diagnostic.ruleRefusal !== undefined
+              ? [
+                  {
+                    field: diagnostic.submittedField,
+                    code: "field_refused" as const,
+                    message: diagnostic.ruleRefusal.message,
+                  },
+                ]
+              : undefined);
           const refusalFeedback: Extract<FormFlowFeedback, { kind: "refusal" }> | undefined =
             diagnostic === undefined
               ? undefined
@@ -174,9 +178,7 @@ export function useApplyDispatch({
                   kind: "refusal" as const,
                   code: diagnostic.code,
                   ...(fieldLabel === undefined ? {} : { fieldLabel }),
-                  ...(diagnostic.corrections === undefined
-                    ? {}
-                    : { corrections: diagnostic.corrections }),
+                  ...(corrections === undefined ? {} : { corrections }),
                   ...(ruleMessages === undefined ? {} : { ruleMessages }),
                   ...(recovery === undefined ? {} : { recovery }),
                 };
@@ -253,15 +255,6 @@ export function useApplyDispatch({
             server.descriptor.commit === "confirmed" &&
             ["completed", "committed"].includes(server.descriptor.outcome) &&
             server.failure === undefined;
-          // A saved form usually opens what it saved: its confirmation is a toast that outlives
-          // this page (other gestures confirm through the page notice's own toast).
-          if (
-            confirmed &&
-            formPlacementId !== undefined &&
-            resultNotice.tone !== "problem" &&
-            resultNotice.link === undefined
-          )
-            toast.success(resultNotice.text);
           outcome = {
             ...outcome,
             confirmed,
@@ -324,6 +317,7 @@ export function useApplyDispatch({
       navigationKey,
       refreshPlacements,
       refreshTargetsForBinding,
+      runtimeState,
       router,
     ],
   );
