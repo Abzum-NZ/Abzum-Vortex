@@ -25,7 +25,8 @@ type FlowContinuationBinding = Readonly<{
   releaseKey: string;
 }>;
 
-export type FlowEffectPrincipal = Readonly<{ kind: "person"; id: string }>;
+/** A person, or the organisation account a back-end run acts as (recorded as the system principal). */
+export type FlowEffectPrincipal = Readonly<{ kind: "person" | "system"; id: string }>;
 
 type FlowEffectKey = Readonly<{
   runId: string;

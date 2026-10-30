@@ -1,12 +1,8 @@
 import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
-import {
-  createEventDispatcherWakeup,
-  createDerivedFieldBackfillConsumer,
-  createSearchEventConsumer,
-  createSearchIndexDependencies,
-} from "@vortex/platform/server";
+import { createEventDispatcherWakeup } from "@vortex/platform/server";
+import { eventConsumers } from "./event-consumers";
 
 /**
  * Runs the bounded dispatcher with a process-local credential and the dispatcher system grant.
@@ -23,10 +19,7 @@ const maximumDrainDispatches = 500;
 export const createInProcessEventDispatcher = (): InProcessEventDispatcher => {
   const credential = randomBytes(32).toString("hex");
   const wakeup = createEventDispatcherWakeup({
-    consumers: [
-      createDerivedFieldBackfillConsumer(),
-      createSearchEventConsumer(createSearchIndexDependencies()),
-    ],
+    consumers: eventConsumers(),
     environment: {
       VORTEX_EVENT_DISPATCHER_CREDENTIAL_SHA256: createHash("sha256")
         .update(credential, "utf8")

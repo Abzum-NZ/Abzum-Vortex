@@ -27,16 +27,12 @@ import { bindingsWithMessageActions } from "./message-action-bindings";
 import type { ModuleDefinitionConsumerReadResult } from "./definition-consumer-read";
 import type { RecordReferenceChoiceCommand } from "../queries/reference-choice-contracts";
 import type { PermittedApplication, PermittedApplicationsRead } from "./application-launcher-read";
-import { createOrganizationAccessAdministrationService } from "../access/organization-access-administration-access";
 import { runOrganizationAccessOperation } from "../access/organization-access-decision-access";
 import {
   createHumanOrganizationRequestService,
   type BoundHumanOrganizationRequest,
 } from "../access/human-organization-request";
-import { createRequestBoundTenantGovernanceService } from "../identity/tenant-governance-request-bound";
 import { createReferenceChoiceService } from "../queries/reference-choice-service";
-import { changeConnectionInstance } from "../connections/connection-administration";
-import { checkConnectionHealth } from "../connections/connection-health";
 import { createViewerSafeRecordLinkReadService } from "../queries/viewer-safe-record-link-read";
 import { adaptPrivateFormSubmit } from "../pages/form-request";
 import { createPageSubjectReader } from "../pages/page-subject-read";
@@ -50,20 +46,15 @@ import type { createDatabaseApplicationBoundReleaseSetService } from "./applicat
 import { readPermittedApplicationsAtAddress } from "./application-address";
 import { createFlowCurrentRecordReader } from "./flow-current-record";
 import { createFlowQueryReader } from "./flow-query-reader";
-import { createFlowRecordChangePort, flowRecordTypeRelationships } from "./flow-record-changes";
+import { createFlowRecordChangePort } from "./flow-record-changes";
+import type { BackendAdapter } from "../workflows/backend-adapters";
+import { installedFlowRelease } from "./flow-installed-release";
+import { createFlowProtectedExecutor } from "./flow-protected-executor";
 import { createFlowOrchestrator } from "./flow-orchestrator";
-import type {
-  FlowNamedAction,
-  FlowOrchestratorDependencies,
-  FlowRecordType,
-  FlowRelease,
-} from "./flow-orchestrator-types";
+import type { FlowOrchestratorDependencies, FlowRelease } from "./flow-orchestrator-types";
 import { createFormContinuationService } from "./form-continuation";
-import {
-  installedModuleClosure,
-  installedSelectedRecordReadContext,
-} from "./flow-selected-record-context";
-import { flowEntrySegmentsMatch, flowPlansOf } from "../workflows/flow-plan";
+import { installedModuleClosure } from "./flow-selected-record-context";
+import { flowEntrySegmentsMatch } from "../workflows/flow-plan";
 import { flowNeedsRunStart } from "../workflows/flow-run-start";
 import { openFlowAdmissionRun, type FlowReceiptClaim } from "../workflows/start";
 import {
@@ -77,8 +68,6 @@ import { admitRowForm } from "./flow-row-form-admission";
 import { openFlowCarriedValues, sealFlowCarriedValues } from "../workflows/flow-carried-values";
 import { createInstalledContextLoader } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
-import { installedNamedActionDescriptors, installedNamedActions } from "./installed-named-actions";
-import { createProtectedOperationExecutor } from "./protected-operation-executor";
 import type { ApplicationStoreService } from "./installation-application-store";
 import { createViewerSafeRecordLinkService, type FlowPinTarget } from "./viewer-safe-record-link";
 import type { QueryContinuationKey } from "../queries/continuation-token";
@@ -140,6 +129,8 @@ export type InvocationDependencies = Readonly<{
   authorityId: IdentityAuthorityId;
   /** The application catalogue's install and upgrade journeys, run under the initiator's authority. */
   applicationStore: ApplicationStoreService;
+  /** The back-end adapter a Run on back end step hands its child flow to. */
+  backend: BackendAdapter;
   channel: ProtectedOperationChannel;
   telemetry: NonNullable<Parameters<typeof createRecordSaveService>[0]["telemetry"]>;
   releaseCatalogue: Parameters<typeof createDatabaseApplicationBoundReleaseSetService>[0];
@@ -338,38 +329,12 @@ export async function invokeInstalledFlow(
         : undefined;
     },
   });
-  const executorFor = (
-    boundRequest?: BoundHumanOrganizationRequest,
-    receipt?: FlowReceiptClaim,
-  ) => {
-    const scopedDependencies = {
-      ...requestDependencies,
-      ...(boundRequest === undefined ? {} : { boundRequest }),
-    };
-    const scopedRequests = createHumanOrganizationRequestService(scopedDependencies);
-    return createProtectedOperationExecutor({
-      accessAdministration: createOrganizationAccessAdministrationService(scopedDependencies),
-      connectionAdministration: (session, selection, change) =>
-        scopedRequests.runChange(session, selection, (transaction) =>
-          changeConnectionInstance(transaction, change),
-        ),
-      connectionHealth: (session, selection, command) =>
-        scopedRequests.runChange(session, selection, (transaction, scope) =>
-          checkConnectionHealth(transaction, scope, command),
-        ),
-      applicationStore: dependencies.applicationStore,
-      ...(receipt === undefined ? {} : { receipt }),
-      tenantGovernance: {
-        run: (session, selection, operation) =>
-          scopedRequests.runAccessChange(session, selection, (transaction, scope) =>
-            operation({
-              tenantId: scope.tenantId,
-              operations: createRequestBoundTenantGovernanceService(transaction, scope),
-            }),
-          ),
-      },
-    });
-  };
+  const executorFor = (boundRequest?: BoundHumanOrganizationRequest, receipt?: FlowReceiptClaim) =>
+    createFlowProtectedExecutor(
+      { ...requestDependencies, ...(boundRequest === undefined ? {} : { boundRequest }) },
+      dependencies.applicationStore,
+      receipt,
+    );
   // Save record tasks and named actions run through the record service's own
   // protected paths, under the initiator's verified request and in their own transactions.
   const records = createRecordSaveService(requestDependencies);
@@ -519,6 +484,7 @@ export async function invokeInstalledFlow(
         admitFlowContinuation(admissionHost, installation, run, state, execute, openReplay),
       admitPageStart: (run, state) => admitFlowPageStart(admissionHost, installation, run, state),
       executor: executorFor(boundRequest, receipt),
+      backend: dependencies.backend,
       ...(boundRequest === undefined
         ? {}
         : { recordChanges: createFlowRecordChangePort(boundRequest) }),
@@ -827,8 +793,7 @@ export async function invokeInstalledFlow(
 
   /** The flow bindings, flows and record types of one trusted installed context. */
   const installedFlowBindings = (installation: InstalledRuntimeContext): InstalledFlowBindings => {
-    const releaseSet = installation.releaseSet;
-    const application = releaseSet.application;
+    const application = installation.releaseSet.application;
     guidedControls.clear();
     for (const page of application.content.pages) {
       if (page.type !== "guided_form") continue;
@@ -854,68 +819,7 @@ export async function invokeInstalledFlow(
         );
       }
     }
-    // The release's plans, built once per installed release: one flow per identity (a Module flow
-    // never shadows an Application flow; an ambiguous release is refused rather than run).
-    const { flows, plans } = flowPlansOf(releaseSet);
-    const selectedReadContext = installedSelectedRecordReadContext(application, releaseSet.modules);
-    if (selectedReadContext === undefined)
-      throw new Error("SELECTED_RECORD_READ_BINDING_UNAVAILABLE");
-    const installedActions = installedNamedActionDescriptors(
-      application,
-      releaseSet.modules,
-      installation.recordContributions,
-    );
-    // Each record type's fields by key and by identity, for the values of a Save record task,
-    // and the named action that declares it sets each choice option.
-    const recordTypes = new Map<string, FlowRecordType>();
-    for (const recordType of releaseSet.modules.flatMap((module) => module.content.recordTypes)) {
-      const fieldIds = new Map<string, string>();
-      const optionActions = new Map<string, ReadonlyMap<string, FlowNamedAction>>();
-      for (const field of recordType.fields) {
-        fieldIds.set(String(field.key).toLowerCase(), String(field.fieldId));
-        fieldIds.set(String(field.fieldId).toLowerCase(), String(field.fieldId));
-      }
-      for (const { named, setsChoice } of installedActions) {
-        if (
-          setsChoice === undefined ||
-          named.subjectRecordTypeId.toLowerCase() !== String(recordType.recordTypeId).toLowerCase()
-        )
-          continue;
-        const linked = new Map(optionActions.get(setsChoice.fieldId.toLowerCase()));
-        linked.set(setsChoice.option, named);
-        optionActions.set(setsChoice.fieldId.toLowerCase(), linked);
-      }
-      recordTypes.set(String(recordType.recordTypeId).toLowerCase(), {
-        fieldIds,
-        optionActions,
-        relationships: flowRecordTypeRelationships(recordType),
-      });
-    }
-    const namedActions = installedNamedActions(
-      application,
-      releaseSet.modules,
-      installation.recordContributions,
-    );
-    const installed: InstalledFlowBindings = {
-      organizationId: installation.organizationId,
-      applicationRootId: address.application.applicationRootId,
-      installationRevision: installation.applicationReleaseRevision,
-      releaseKey: [
-        application.releaseVersion,
-        application.contentFingerprint,
-        application.resolutionFingerprint,
-      ].join(":"),
-      bindings: application.content.flowBindings,
-      flows,
-      plans,
-      recordTypes,
-      namedActions,
-      selectedRecordReadProjections: selectedReadContext.projections,
-      selectedRecordReadInputs: selectedReadContext.inputs,
-      selectedRecordReadModules: selectedReadContext.modules,
-      applicationContent: application.content,
-      modules: releaseSet.modules,
-    };
+    const installed = installedFlowRelease(installation);
     return installed;
   };
 

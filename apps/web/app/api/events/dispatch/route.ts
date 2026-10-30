@@ -4,21 +4,16 @@ import { logRefusal } from "@vortex/platform/schema";
 import {
   authenticateEventDispatcher,
   createEventDispatcherWakeup,
-  createDerivedFieldBackfillConsumer,
-  createSearchEventConsumer,
-  createSearchIndexDependencies,
   eventDispatcherWakeupLimits,
 } from "@vortex/platform/server";
+import { backendAdapter } from "../../../_lib/backend-adapter";
+import { eventConsumers } from "../../../_lib/event-consumers";
 import { readBoundedRequestText } from "../../_lib/bounded-request-body";
 import { privateJsonResponse as privateResponse } from "../../../_lib/private-response";
 
 // The scheduled recovery tick uses the protected bounded dispatcher.
-const wakeup = createEventDispatcherWakeup({
-  consumers: [
-    createDerivedFieldBackfillConsumer(),
-    createSearchEventConsumer(createSearchIndexDependencies()),
-  ],
-});
+const wakeup = createEventDispatcherWakeup({ consumers: eventConsumers() });
+const backRunsPerTick = 20;
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -78,6 +73,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Any unexpected dispatcher failure fails closed without internal detail in the response.
     logRefusal("events-dispatch", "wake-up", "dispatcher_failed", error);
     return privateResponse({ outcome: "unavailable" }, 503);
+  }
+
+  // The same tick runs back-end runs a reply left pending (a Run on back end in start mode).
+  try {
+    await backendAdapter().sweep(backRunsPerTick);
+  } catch (error) {
+    logRefusal("events-dispatch", "wake-up", "backend_sweep_failed", error);
   }
 
   if (response.outcome === "refused") {

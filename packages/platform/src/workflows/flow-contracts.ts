@@ -222,6 +222,8 @@ export const flowTriggerSchema = z.discriminatedUnion("type", [
         z.object({ kind: z.literal("declared"), eventKey: namespacedKeySchema }).strict(),
       ]),
       duplicateProtection: z.literal("committed_occurrence"),
+      /** Order only: this subscriber runs after the named subscribers of the same event finish. */
+      runAfter: z.array(flowIdSchema).max(10).optional(),
     })
     .strict(),
 ]);
@@ -541,13 +543,19 @@ const collectRunFlowTargets = (flow: FlowDefinition | FlowSource): FlowId[] => {
 
 export type FlowCallIssue = {
   flowId: FlowId;
-  code: "cycle" | "depth_exceeded" | "transaction_calls_non_transaction";
+  code:
+    | "cycle"
+    | "depth_exceeded"
+    | "transaction_calls_non_transaction"
+    | "background_calls_non_background"
+    | "run_after_target"
+    | "run_after_cycle";
   message: string;
 };
 
 /**
  * Checks Run flow across a set of flows that can see each other: no cycles, a chain of at most
- * three nested calls, and a transaction flow calling only transaction flows. Targets outside the
+ * three nested calls, a transaction flow calling only transaction flows, and a back-end flow calling only back-end flows. Targets outside the
  * supplied set are the dependency validator's concern, not this function's.
  */
 export const validateFlowCallGraph = (
@@ -564,8 +572,62 @@ export const validateFlowCallGraph = (
           code: "transaction_calls_non_transaction",
           message: "A transaction flow may run only another transaction flow",
         });
+      // A back-end flow has no page, so a flow it runs cannot hold a page step.
+      if (flow.execution === "background" && target && target.execution !== "background")
+        issues.push({
+          flowId: flow.id,
+          code: "background_calls_non_background",
+          message: "A back-end flow may run only another back-end flow, which has no page steps",
+        });
     }
   }
+  // A subscriber orders itself only after other subscribers of the same record type and event.
+  const eventKey = (trigger: Extract<FlowTrigger, { type: "Event" }>) =>
+    JSON.stringify([trigger.recordTypeId, trigger.event]);
+  const orderedAfter = new Map<FlowId, FlowId[]>();
+  for (const flow of flows) {
+    for (const trigger of flow.triggers) {
+      if (trigger.type !== "Event" || trigger.runAfter === undefined) continue;
+      for (const targetId of trigger.runAfter) {
+        const target = byId.get(targetId);
+        const sameEvent =
+          target?.execution === "background" &&
+          target.triggers.some(
+            (candidate) => candidate.type === "Event" && eventKey(candidate) === eventKey(trigger),
+          );
+        if (!sameEvent)
+          issues.push({
+            flowId: flow.id,
+            code: "run_after_target",
+            message:
+              "Run after names only another back-end subscriber of the same record type and event",
+          });
+        else orderedAfter.set(flow.id, [...(orderedAfter.get(flow.id) ?? []), targetId]);
+      }
+    }
+  }
+  const settled = new Set<FlowId>();
+  const ordering = new Set<FlowId>();
+  const reportedOrdering = new Set<FlowId>();
+  const orderFrom = (flowId: FlowId): void => {
+    if (settled.has(flowId)) return;
+    ordering.add(flowId);
+    for (const targetId of orderedAfter.get(flowId) ?? []) {
+      if (ordering.has(targetId)) {
+        if (!reportedOrdering.has(targetId)) {
+          reportedOrdering.add(targetId);
+          issues.push({
+            flowId: targetId,
+            code: "run_after_cycle",
+            message: "Subscribers cannot run after each other in a cycle",
+          });
+        }
+      } else orderFrom(targetId);
+    }
+    ordering.delete(flowId);
+    settled.add(flowId);
+  };
+  for (const flow of flows) orderFrom(flow.id);
   // One depth-first walk with memoised chain lengths, so shared callees are measured once.
   const reportedCycles = new Set<FlowId>();
   const visiting = new Set<FlowId>();
