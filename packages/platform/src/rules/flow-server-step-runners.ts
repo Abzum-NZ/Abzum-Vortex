@@ -2,10 +2,10 @@ import type { ServerStepType } from "../workflows/flow-task-registry";
 
 /**
  * Which server runner executes each step that runs on the server today (`ServerStepType`): this
- * interpreter, the protected task runner (`definition/flow-task-runner.ts`), or a named action's
- * transaction flow (`rules/action-flow-run.ts`, which collects record steps into one change).
+ * interpreter or the protected task runner (`definition/flow-task-runner.ts`; a transaction flow's
+ * record steps are collected into one change by `rules/transaction-flow-run.ts`).
  */
-type ServerStepRunner = "interpreter" | "protected_task" | "action_flow";
+type ServerStepRunner = "interpreter" | "protected_task";
 const serverStepRunners = {
   if: "interpreter",
   switch: "interpreter",
@@ -31,7 +31,7 @@ const serverStepRunners = {
   "record.restore": "protected_task",
   "record.link": "protected_task",
   "record.changes": "protected_task",
-  "event.announce": "action_flow",
+  "event.announce": "protected_task",
 } as const satisfies Record<ServerStepType, ServerStepRunner>;
 
 /** Whether the server runs this step with the given runner. */
