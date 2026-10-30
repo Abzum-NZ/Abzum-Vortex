@@ -79,6 +79,7 @@ const standardKinds = [
   "created",
   "changed",
   "deleted",
+  "restored",
   "linked",
   "unlinked",
   "reassigned",

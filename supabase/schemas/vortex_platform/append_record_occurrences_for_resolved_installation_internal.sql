@@ -291,7 +291,7 @@ begin
         or (descriptor ->> 'recordTypeId')::uuid is distinct from catalogue_row.record_type_id
         or descriptor ->> 'eventKind' is null
         or descriptor ->> 'eventKind' not in (
-          'created', 'changed', 'deleted', 'linked', 'unlinked', 'reassigned',
+          'created', 'changed', 'deleted', 'restored', 'linked', 'unlinked', 'reassigned',
           'state_changed'
         ) then
         raise exception using errcode = '22023', message = 'Installed Event descriptor is invalid';

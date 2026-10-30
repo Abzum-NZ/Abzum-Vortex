@@ -60,6 +60,7 @@ const standardEventOccurrencePayloadSchema = z.discriminatedUnion("kind", [
   emptyStandardOccurrencePayload("created"),
   z.object({ kind: z.literal("changed"), changedFieldIds: canonicalFieldIdsSchema }).strict(),
   emptyStandardOccurrencePayload("deleted"),
+  emptyStandardOccurrencePayload("restored"),
   emptyStandardOccurrencePayload("linked"),
   emptyStandardOccurrencePayload("unlinked"),
   emptyStandardOccurrencePayload("reassigned"),

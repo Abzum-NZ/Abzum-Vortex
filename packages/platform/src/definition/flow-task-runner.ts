@@ -66,6 +66,9 @@ import { planBackendTask, runBackendTask, type BackendTaskPlan } from "./flow-ba
 import { planRecordLink } from "./flow-relationship-changes";
 import { planRelationshipCopies } from "./flow-relationship-copies";
 
+/** A query step reads at most one keyset page: the flow's page size, 1 to 200, when it names one. */
+const queryPageSizeSchema = z.number().int().min(1).max(200).optional();
+
 /**
  * Runs the protected tasks of one flow run: plans each task, claims its effect in the ledger and
  * runs the record, operation or named-action path it names. `runNamedAction` is the orchestrator's
@@ -999,9 +1002,16 @@ export const createFlowTaskRunner = (
       const parameters = z
         .record(builderKeySchema, jsonValueSchema)
         .safeParse(call.properties.parameters?.value ?? {});
+      const pageSize = queryPageSizeSchema.safeParse(call.properties.page_size?.value);
+      const continuation = z
+        .string()
+        .max(65_536)
+        .safeParse(call.properties.continuation?.value ?? "");
       if (
         !queryId.success ||
         !parameters.success ||
+        !pageSize.success ||
+        !continuation.success ||
         carriesSensitive(parameters.data, run.sensitive)
       )
         return { outcome: "validation" };
@@ -1009,11 +1019,22 @@ export const createFlowTaskRunner = (
         const result = await dependencies.queryRecords.read(
           run.authority.session,
           run.authority.selection,
-          { queryId: queryId.data, parameters: parameters.data },
+          {
+            queryId: queryId.data,
+            parameters: parameters.data,
+            pageSize: pageSize.data,
+            continuation: continuation.data,
+          },
         );
         if (result.kind !== "available") return { outcome: requestOutcome(result.kind) };
         if (result.value.outcome !== "read") return { outcome: "refused" };
-        return { outcome: "completed", outputs: { records: [...result.value.recordIds] } };
+        return {
+          outcome: "completed",
+          outputs: {
+            records: [...result.value.recordIds],
+            continuation: result.value.continuation,
+          },
+        };
       } catch (error) {
         reportUnexpectedFailure("record query task", error);
         return { outcome: "failed" };

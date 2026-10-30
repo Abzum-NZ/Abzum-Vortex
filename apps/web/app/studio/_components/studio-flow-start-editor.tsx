@@ -55,6 +55,7 @@ const eventLabels: Readonly<Record<string, string>> = {
   created: "is created",
   changed: "is changed",
   deleted: "is deleted",
+  restored: "is restored",
   linked: "is linked",
   unlinked: "is unlinked",
   reassigned: "is reassigned",

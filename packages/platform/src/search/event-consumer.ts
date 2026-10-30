@@ -277,6 +277,7 @@ const indexableEventKinds: ReadonlySet<string> = new Set([
   "created",
   "changed",
   "deleted",
+  "restored",
   "state_changed",
   "reassigned",
 ]);
