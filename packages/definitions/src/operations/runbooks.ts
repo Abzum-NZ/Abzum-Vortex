@@ -1,5 +1,5 @@
 /**
- * Concrete Operations runbooks for the six spec 19 critical incident codes.
+ * Concrete Operations runbooks for the six spec 19 critical incident codes and recovery.
  *
  * Each entry is keyed by the exact `runbookReference` an alert producer supplies in its
  * `AlertRecord`, so an incident's `runbook_reference` resolves to one page. The six codes are
@@ -36,6 +36,7 @@ const runbookReferences = Object.freeze({
   privacyRemovalFailure: "vortex.operations.runbooks.privacy_removal_failure",
   eventSequenceFailure: "vortex.operations.runbooks.event_sequence_failure",
   backupFailure: "vortex.operations.runbooks.backup_failure",
+  databaseRecovery: "vortex.operations.runbooks.database_recovery",
   productionAccessTestFailure: "vortex.operations.runbooks.production_access_test_failure",
 } as const);
 
@@ -121,8 +122,28 @@ export const operationsRunbooks: readonly OperationsRunbook[] = Object.freeze([
       "Confirm the independent encrypted copy, checksum and completion against the inventory; a job reporting success is not proof.",
       "Re-run the hourly backup and verify the new object, its checksum and its requested expiry appear in the inventory.",
       "Treat the provider-managed copy as unavailable and prove recovery from the independent copy.",
+      "Follow the Database recovery runbook for PITR, Storage and Kestra recovery.",
       "Escalate to the owning role when no verified recovery point exists; acknowledge first when work has started.",
       "Record cause and follow-up work, and resolve only after a verified backup and inventory entry exist.",
+    ],
+  },
+  {
+    code: runbookCodes.backupFailure,
+    runbookReference: runbookReferences.databaseRecovery,
+    owningRole: "database_operator",
+    title: "Database recovery",
+    summary:
+      "Recover a database, its Storage objects and the Kestra server's own database into an approved target. A database restore alone is not a complete recovery.",
+    steps: [
+      "The database operator owns the recovery; an independent authorised approver approves its target and point. Only operators with the required provider, backup and recovery-key access restore. Customer-content access remains separately governed; nobody approves their own action.",
+      "Declare the incident or drill, start the timer, fence old writers and keep the target closed to ordinary users and external side effects. A drill uses an isolated scratch project or lane, never production or stage.",
+      "Production must enable continuous Supabase point-in-time recovery with a seven-day window before opening. In Database > Backups, check the configured window and earliest and latest available recovery points; the provider currently offers 7, 14 or 28 days. A latest point may lag the clock when no transactions occurred. PITR replaces daily backups while enabled.",
+      "Choose an approved point inside the available window. For a drill, use Restore to a New Project and confirm the destination is isolated; restoring the existing project makes it inaccessible and overwrites its database. For provider loss, verify the independent encrypted R2 logical backup against its inventory and checksum, then decrypt and restore it to an isolated compatible project using the separately held key.",
+      "Restore matching Storage bucket configuration and object bytes from independent backups. Supabase database backups include Storage metadata but not object bytes. Reconcile the recovered inventory and checksums with the database; keep affected scopes closed when objects are missing or mismatched.",
+      "Stop Kestra before restoring its own database and internal storage from verified independent backups, following the Kestra recovery procedure. Restore its configuration and credentials securely; restart in the isolated environment with external triggers and side effects fenced, and verify its health and required operational state.",
+      "After fencing writers, establish the surviving removal and revocation journal's confirmed high-water mark, verify sequence completeness and integrity, reconcile unresolved intents, and replay later removals and revocations before opening affected data or access. Missing evidence or unresolved scope keeps that scope closed; if the scope cannot be identified, keep the cluster closed.",
+      "Verify database integrity, application definitions, representative record and file counts, organisation isolation, access decisions and operational dependencies. Record the recovery point, observed data loss, recovery time, checks and follow-up work without customer content or secrets. Measure against the one-hour data-loss and eight-hour minimum-service objectives; do not claim either without evidence.",
+      "An independent authorised approver decides whether the recovered service can open for its declared use. Destroy the isolated drill environment after recording evidence, or hand the approved recovery target to operations for controlled cutover.",
     ],
   },
   {
