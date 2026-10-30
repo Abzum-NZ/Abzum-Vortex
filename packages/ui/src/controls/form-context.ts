@@ -8,7 +8,7 @@ import type { FlowEventCycle } from "../flow-runtime/flow-cycle";
 import { usePlacementReactions } from "../flow-runtime/placement-reactions";
 
 /** One validated input change, published before its field-change event is dispatched. */
-export type FormFieldSet = Readonly<{
+type FormFieldSet = Readonly<{
   value: TypedFieldValue;
   apply: () => void;
   emit: () => void;
