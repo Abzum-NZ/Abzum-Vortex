@@ -6,7 +6,7 @@ import type { ProtectedQueryServiceDependencies } from "../queries/protected-que
 import type { InstalledFlowBindings } from "./flow-binding-endpoint";
 import type { FlowOrchestratorDependencies } from "./flow-orchestrator-types";
 
-/** A declared query's first bounded page, read under the segment's current authority. */
+/** One bounded page of a declared query, read under the segment's current authority. */
 export const createFlowQueryReader = (
   dependencies: ProtectedQueryServiceDependencies,
   installation: InstalledFlowBindings,
@@ -32,17 +32,21 @@ export const createFlowQueryReader = (
         queryId: declared.query.queryId,
         inputValues: target.parameters,
         requestedFieldIds: declared.query.selectedFieldIds,
-        // The query declares the page it may be opened with (at most 200, the paging maximum).
-        pageSize: declared.query.pageSize,
+        pageSize: target.pageSize,
+        continuationToken: target.continuation === "" ? undefined : target.continuation,
       });
       if (result.kind !== "available") return result;
       if (result.value.outcome !== "completed")
         return { kind: "available", value: { outcome: "unavailable" } };
-      // Field values and the reader's continuation stay inside the protected read. The authored
-      // task currently returns only record references, never a projection or an unbounded set.
+      // Field values stay inside the protected read. The task returns one bounded page of record
+      // references and the reader's opaque continuation for the next page.
       return {
         kind: "available",
-        value: { outcome: "read", recordIds: result.value.rows.map((row) => row.recordId) },
+        value: {
+          outcome: "read",
+          recordIds: result.value.rows.map((row) => row.recordId),
+          continuation: result.value.nextContinuationToken ?? "",
+        },
       };
     },
   };

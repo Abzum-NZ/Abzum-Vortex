@@ -244,10 +244,16 @@ export type FlowOrchestratorDependencies = Readonly<{
     read(
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
-      target: Readonly<{ queryId: string; parameters: Readonly<Record<string, JsonValue>> }>,
+      target: Readonly<{
+        queryId: string;
+        parameters: Readonly<Record<string, JsonValue>>;
+        pageSize: number;
+        /** Empty for the first page. */
+        continuation: string;
+      }>,
     ): Promise<
       HumanOrganizationRequestResult<
-        | Readonly<{ outcome: "read"; recordIds: readonly string[] }>
+        | Readonly<{ outcome: "read"; recordIds: readonly string[]; continuation: string }>
         | Readonly<{ outcome: "unavailable" }>
       >
     >;

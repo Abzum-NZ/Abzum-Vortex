@@ -235,6 +235,7 @@ export const standardInstalledEventKindSchema = z.enum([
   "created",
   "changed",
   "deleted",
+  "restored",
   "linked",
   "unlinked",
   "reassigned",
