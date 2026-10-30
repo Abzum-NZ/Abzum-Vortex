@@ -50,10 +50,9 @@ import {
 
 /**
  * The pages of one record type, written as ordinary explicit source in one draft edit: a list (a
- * records table on the record type's list query, a New button, rows that open the detail page), a
- * detail (the record's fields, an Edit button, a table of each record type that links to it), a
- * create or edit form (a form of field inputs, its submit bound to a Save flow of one
- * `record.save` step and an Open step), and a guided create form (the same, in steps).
+ * records table, New and Delete actions, rows that open the detail page), a detail (the fields,
+ * Edit and Delete buttons, a table of each linked record type), a create or edit form (field
+ * inputs whose submit runs the default Save flow) and a guided create form (the same, in steps).
  *
  * Nothing is generated at runtime: every block, query, flow, event and binding is written into the
  * draft by the one add-page, block, flow-create and binding paths, and can then be edited like any
@@ -317,13 +316,13 @@ const flowCreate = (
 };
 
 /** The parts of a flow the one flow-create command takes, from a default flow builder's source. */
-const flowParts = (flow: SourceFlow, name: string) => ({
+const flowParts = ({ description, inputs, tasks, outputs, errors }: SourceFlow, name: string) => ({
   name,
-  description: flow.description ?? "",
-  inputs: flow.inputs,
-  tasks: flow.tasks,
-  outputs: flow.outputs,
-  ...(flow.errors.length === 0 ? {} : { errors: flow.errors }),
+  description: description ?? "",
+  inputs,
+  tasks,
+  outputs,
+  ...(errors.length === 0 ? {} : { errors }),
 });
 
 /** Binds a control event to a flow made from a default flow builder's source; the binding carries each flow input by name. */
@@ -333,7 +332,10 @@ const bindDefault = (
   event: "action" | "row_clicked" | "row_action" | "form_submit",
   flow: SourceFlow,
   name: string,
-  extra: Readonly<{ rowActionLabel?: string }> = {},
+  extra: Readonly<{
+    rowActionLabel?: string;
+    rowActionCapability?: "update" | "delete" | "restore";
+  }> = {},
 ) =>
   flowCreate(
     plan,
@@ -515,7 +517,10 @@ const bindDelete = (
   controlAlias: string,
   event: "action" | "row_action",
   after: DefaultFlowAfter,
-  extra: Readonly<{ rowActionLabel?: string }> = {},
+  extra: Readonly<{
+    rowActionLabel?: string;
+    rowActionCapability?: "update" | "delete" | "restore";
+  }> = {},
 ) => {
   const restoreFlow = restoreFlowKey(plan, resolved);
   return bindDefault(
@@ -607,16 +612,13 @@ const opensAny = (source: Source, page: Page, targets: readonly string[]): boole
 /** Whether a control of the page already starts a flow that deletes the record type's records. */
 const deletesFrom = (source: Source, page: Page, qualified: string): boolean => {
   const controls = new Set(sourcePageItems(page.composition).map((item) => item.props.id));
-  return source.body.flow_bindings.some(
-    (binding) =>
-      controls.has(binding.control) &&
-      source.body.flows.some(
-        (flow) =>
-          flow.key === binding.flow &&
-          JSON.stringify(flow.tasks).includes(`"record.delete"`) &&
-          JSON.stringify(flow.tasks).includes(`"${qualified}"`),
-      ),
+  const started = new Set(
+    source.body.flow_bindings.filter((b) => controls.has(b.control)).map((b) => b.flow),
   );
+  return source.body.flows.some((flow) => {
+    const tasks = JSON.stringify(flow.tasks);
+    return started.has(flow.key) && tasks.includes('"record.delete"') && tasks.includes(qualified);
+  });
 };
 
 /**
@@ -748,6 +750,7 @@ const addList = (
       { kind: "refresh" },
       {
         rowActionLabel: "Delete",
+        rowActionCapability: "delete",
       },
     );
     plan.details.push(

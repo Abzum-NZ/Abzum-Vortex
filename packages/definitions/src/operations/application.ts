@@ -286,6 +286,7 @@ const pages = [
               label: "Delete",
               icon: "workflow",
               placement: "menu",
+              capability: "delete",
             },
           ],
           columns: incidentColumns.map(([field, label], index) => ({

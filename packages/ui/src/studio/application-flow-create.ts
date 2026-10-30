@@ -156,6 +156,8 @@ export type StudioFlowCreateCommand =
       errors?: SourceFlow["errors"];
       bindingInputs: SourceBinding["inputs"];
       rowActionLabel?: string;
+      /** The record action the row action needs of the viewer; the server disables it for a row that lacks it. */
+      rowActionCapability?: "update" | "delete" | "restore";
     }>
   /** A flow no control starts, such as the one a message's Undo runs. */
   | Readonly<{
@@ -322,6 +324,7 @@ const bindControl = (
   inputs: SourceBinding["inputs"],
   borrowed: StudioBorrowedChoices | null,
   rowActionLabel?: string,
+  rowActionCapability?: "update" | "delete" | "restore",
 ): Readonly<{ id: string; eventId: string }> => {
   const body = source.body;
   const page = body.pages.find((candidate) =>
@@ -455,7 +458,13 @@ const bindControl = (
     item.props.features = { ...features, [recordsTableRowActionsFeature.key]: { enabled: true } };
     item.props.row_actions = [
       ...(Array.isArray(item.props.row_actions) ? item.props.row_actions : []),
-      { event_id: eventId, label, icon: "workflow", placement: "menu" },
+      {
+        event_id: eventId,
+        label,
+        icon: "workflow",
+        placement: "menu",
+        ...(rowActionCapability === undefined ? {} : { capability: rowActionCapability }),
+      },
     ];
   }
   return { id, eventId };
@@ -861,6 +870,7 @@ export const applyStudioFlowCreate = (
               command.bindingInputs,
               borrowed,
               command.rowActionLabel,
+              command.rowActionCapability,
             );
     }
     body.flows.push(flow);
