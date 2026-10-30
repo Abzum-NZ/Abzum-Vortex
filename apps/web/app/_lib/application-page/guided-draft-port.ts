@@ -31,15 +31,12 @@ export const createGuidedDraftPort = (
   boundRequest: BoundHumanOrganizationRequest | undefined,
 ): FlowGuidedDraftPort => {
   const dependencies = guidedFormDependencies(boundRequest);
-  const loadOwn = async (
-    session: IdentitySession,
-    draftId: string,
-    revision: number,
-  ) => {
+  const loadOwn = async (session: IdentitySession, draftId: string, revision: number) => {
     const loaded = await loadGuidedConfirmation(session, address, guided, subject, boundRequest);
     const current = loaded?.guidedForm;
     if (loaded === undefined || current === undefined) return { outcome: "unavailable" as const };
-    if (current.draftId.toLowerCase() !== draftId.toLowerCase()) return { outcome: "refused" as const };
+    if (current.draftId.toLowerCase() !== draftId.toLowerCase())
+      return { outcome: "refused" as const };
     if (current.revision !== revision) return { outcome: "conflict" as const };
     return { outcome: "loaded" as const, loaded, current };
   };
@@ -48,7 +45,9 @@ export const createGuidedDraftPort = (
       const own = await loadOwn(session, input.draftId, input.revision);
       if (own.outcome !== "loaded") return own;
       const { loaded, current } = own;
-      const computedIndex = loaded.steps.findIndex((step) => step.stepId === current.computedStepId);
+      const computedIndex = loaded.steps.findIndex(
+        (step) => step.stepId === current.computedStepId,
+      );
       const stepIndex = loaded.steps.findIndex((step) => step.stepId === input.step);
       const step = loaded.steps[stepIndex];
       if (step === undefined || step.summary || stepIndex > computedIndex)

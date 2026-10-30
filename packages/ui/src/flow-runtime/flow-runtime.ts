@@ -6,9 +6,7 @@ import type {
   FlowFormula,
   PageDefinition,
 } from "@vortex/platform/schema";
-import {
-  isRecord,
-} from "@vortex/platform/schema";
+import { isRecord } from "@vortex/platform/schema";
 import type { FlowIntentHost } from "./intents";
 import type { ServerDrivenResult } from "./server-driven-run";
 import type { FlowInvokeClient, FlowSubjectContext } from "./server-flow-client";

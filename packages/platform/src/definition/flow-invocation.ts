@@ -1099,7 +1099,11 @@ export async function invokeInstalledFlow(
     );
     const guided =
       binding === undefined ? undefined : guidedControls.get(binding.controlId.toLowerCase());
-    if (guided !== undefined && binding !== undefined && refusesGuidedBinding(guided, binding.event)) {
+    if (
+      guided !== undefined &&
+      binding !== undefined &&
+      refusesGuidedBinding(guided, binding.event)
+    ) {
       logFlowRefusal("BINDING_GUIDED_CONTROL_NOT_CONFIRMED");
       return { kind: "refused", committedNow: false };
     }

@@ -25,10 +25,7 @@ import { createGuidedDraftPort } from "../../../_lib/application-page/guided-dra
 import { installedReleaseCatalogue } from "../../../_lib/definition-catalogue";
 import { applicationStoreService } from "../../../_lib/application-store-service";
 import { backendAdapter } from "../../../_lib/backend-adapter";
-import {
-  getGuidedFormControlIds,
-  getGuidedFormFlowId,
-} from "@vortex/platform/server";
+import { getGuidedFormControlIds, getGuidedFormFlowId } from "@vortex/platform/server";
 import { getQueryContinuationKey } from "../../../_lib/query-continuation-key";
 import { resolveFormOptionValues } from "../../../_lib/application-page/form-option-values";
 import { appTelemetry } from "../../../_lib/server-composition";
