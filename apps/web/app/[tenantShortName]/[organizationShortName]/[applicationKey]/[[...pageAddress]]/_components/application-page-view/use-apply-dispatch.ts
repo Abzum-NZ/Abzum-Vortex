@@ -131,12 +131,15 @@ export function useApplyDispatch({
         }
         if (server.kind === "finished") {
           // A later run of the same binding that went through settles the earlier unknown outcome.
+          const sourceControlId = Object.values(model.bindings)
+            .flat()
+            .find((held) => held.bindingId === sourceBindingId)?.controlId;
           if (
-            sourceBindingId !== undefined &&
+            sourceControlId !== undefined &&
             server.failure === undefined &&
             ["completed", "committed"].includes(server.descriptor.outcome)
           )
-            runtimeState.messages.clear("inline", `retry:${sourceBindingId}`);
+            runtimeState.messages.clear("inline", `retry:${sourceControlId}`);
           let resultNotice = finishedNotice(
             server.descriptor.outcome,
             server.failure?.code,
@@ -304,7 +307,7 @@ export function useApplyDispatch({
             showResult(outcomeNotices.uncertain ?? unavailableNotice);
             return outcome;
           }
-          const component = `retry:${sourceBindingId ?? server.controlId}`;
+          const component = `retry:${server.controlId}`;
           const retry = server.retry;
           runtimeState.messages.show({
             id: crypto.randomUUID(),
