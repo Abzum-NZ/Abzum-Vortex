@@ -52,7 +52,7 @@ export type FlowTestRunRequest = Readonly<{
 }>;
 
 /** How a test run ended: the flow's own outcome, or why it stopped early. */
-export type FlowTestRunEnd =
+type FlowTestRunEnd =
   | Readonly<{
       kind: "finished";
       outcome: string;
@@ -357,6 +357,57 @@ export const runFlowTest = async (
       ? { subject: { recordId, revision: subjectRead.revision } }
       : {}),
   });
+  // After the flow, each occurrence reaches the subscribers its record type and event name, as
+  // they would after a commit: in order, each in the back end's own run, in this same request.
+  const scope = {
+    identityId: bound.session.identityId,
+    session: bound.session,
+    selection: bound.selection,
+    installation,
+    release,
+  };
+  const backend = inlineFor(bound);
+  for (let next = 0; next < occurrences.length && next < maximumOccurrences; next += 1) {
+    const occurrence = occurrences[next]!;
+    const subscribers = orderSubscribers(
+      [...release.flows.values()].filter((candidate) =>
+        subscribes(candidate, {
+          kind: "standard",
+          eventKind: occurrence.eventKind,
+          recordTypeId: occurrence.recordTypeId,
+        }),
+      ),
+    );
+    for (const subscriber of subscribers) {
+      const startedAt = performance.now();
+      const outcome = await trace.insideBackEnd(() =>
+        runBackendFlow(
+          {
+            requests: requestDependencies,
+            applicationStore: dependencies.applicationStore,
+            backend: () => backend,
+          },
+          { ...requestDependencies, boundRequest: bound },
+          scope,
+          {
+            runId: randomUUID(),
+            flowId: subscriber.id,
+            actorId: bound.scope.organizationAccountId,
+            origin: "event",
+            inputs: { recordId: occurrence.recordId, occurrenceId: occurrence.occurrenceId },
+          },
+          trace,
+        ),
+      );
+      trace.subscriber(
+        subscriber.id,
+        subscriber.key,
+        outcome.state,
+        outcome.failureCode,
+        startedAt,
+      );
+    }
+  }
   const totalMs = Math.round((performance.now() - started) * 100) / 100;
   const steps = trace.steps();
   const paused = steps.at(-1)?.outcome === "paused";

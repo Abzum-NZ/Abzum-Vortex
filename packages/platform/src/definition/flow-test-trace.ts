@@ -15,7 +15,7 @@ export type FlowTraceNotRun =
   "multi_transaction" | "access_change" | "scope_lock" | "external_effect" | "needs_a_person";
 
 /** What a refused or failed step reports; the host words it exactly as a user would read it. */
-export type FlowTraceRefusal = Readonly<{
+type FlowTraceRefusal = Readonly<{
   outcome: string;
   failureCode?: string;
   diagnostic?: FlowRefusalFeedback;
@@ -38,7 +38,7 @@ export type FlowTraceStep = Readonly<{
   refusal?: FlowTraceRefusal;
 }>;
 
-export const maskedValue = "••••••";
+const maskedValue = "••••••";
 
 const mask = (value: JsonValue, sensitive: readonly string[]): JsonValue => {
   if (typeof value === "string")
