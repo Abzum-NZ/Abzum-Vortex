@@ -57,7 +57,7 @@ const StandardPageAdoption = dynamic(
 );
 const StudioBackendRuns = dynamic(
   () => import("./studio-backend-runs").then((module) => module.StudioBackendRuns),
-  { loading: () => <p role="status">Loading the back-end runs�</p> },
+  { loading: () => <p role="status">Loading the back-end runs…</p> },
 );
 const StudioHistoryTab = dynamic(
   () => import("./studio-history-tab").then((module) => module.StudioHistoryTab),
