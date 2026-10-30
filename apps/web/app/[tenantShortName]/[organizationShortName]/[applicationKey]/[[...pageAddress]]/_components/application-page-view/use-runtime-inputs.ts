@@ -55,6 +55,7 @@ import { useBulkSelection } from "./use-bulk-selection";
 import { useBatchUndo } from "./use-batch-undo";
 import { useRangeSummary } from "./use-range-summary";
 import { useRecordsExport } from "./use-records-export";
+import { requestRecordChoices } from "./record-choices";
 import type { useFieldFlowEvents } from "./use-field-flow-events";
 
 export function useRuntimeInputs({
@@ -576,23 +577,21 @@ export function useRuntimeInputs({
         )
           events.table_records_requested = (event: DisplaySemanticEvent) => {
             if (event.event !== "table_records_requested") return;
-            return import("./record-choices").then(({ requestRecordChoices }) =>
-              requestRecordChoices(
-                model,
-                placementId,
-                {
-                  fieldId: event.field,
-                  purpose: event.purpose,
-                  ...(event.parentRecordId === undefined
-                    ? {}
-                    : { parentRecordId: event.parentRecordId }),
-                  ...(event.search === undefined ? {} : { search: event.search }),
-                  ...(event.continuationToken === undefined
-                    ? {}
-                    : { continuationToken: event.continuationToken }),
-                },
-                () => router.refresh(),
-              ),
+            return requestRecordChoices(
+              model,
+              placementId,
+              {
+                fieldId: event.field,
+                purpose: event.purpose,
+                ...(event.parentRecordId === undefined
+                  ? {}
+                  : { parentRecordId: event.parentRecordId }),
+                ...(event.search === undefined ? {} : { search: event.search }),
+                ...(event.continuationToken === undefined
+                  ? {}
+                  : { continuationToken: event.continuationToken }),
+              },
+              () => router.refresh(),
             );
           };
         if (supportsEvent("search_changed"))
@@ -655,15 +654,13 @@ export function useRuntimeInputs({
       if (model.linkInputPlacementIds.includes(placementId))
         events.records_requested = (event: ControlSemanticEvent) => {
           if (event.event !== "records_requested") return;
-          return import("./record-choices")
-            .then(({ requestRecordChoices }) =>
-              requestRecordChoices(model, placementId, event, () => router.refresh()),
-            )
-            .then((page) => {
+          return requestRecordChoices(model, placementId, event, () => router.refresh()).then(
+            (page) => {
               if (titles.current.scope === navigationKey)
                 rememberPublishedChoices(titles.current.values, placementId, page);
               return page;
-            });
+            },
+          );
         };
       const publishedParameter = model.pageParameters.controls[placementId];
       const fieldFlows = fieldFlowEvents(placementId, bindings);
