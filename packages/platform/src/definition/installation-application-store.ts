@@ -26,7 +26,11 @@ import {
   type FirstInstallFlowEnvironment,
 } from "./installation-first-install-app";
 import { createFirstInstallCoordinator } from "./installation-first-install-coordinator";
-import { activateFirstInstall, readMemberRoleAssignable } from "./installation-first-install-roles";
+import {
+  activateFirstInstall,
+  readMemberRoleAssignable,
+  resumeFirstInstallRoles,
+} from "./installation-first-install-roles";
 import { releaseMemberRole, type ApplicationRoleChange } from "./installation-role-templates";
 import { readApplicationRemoval, removeApplication } from "./installation-removal";
 import {
@@ -408,24 +412,26 @@ const install = async (
       candidate = await readCurrentFirstInstallCandidate(environment, session, selector, reviewed);
     }
     const acceptRole = yes(inputs.accept_member_role);
+    const choice = acceptRole
+      ? {
+          kind: "accept" as const,
+          sourceRoleId: releaseMemberRole(candidate.snapshot.roles).sourceRoleId,
+        }
+      : { kind: "decline" as const };
+    let memberRoleGranted = acceptRole;
     if (candidate.snapshot.registrationState === "provisioned_inactive") {
-      await activateFirstInstall(
-        environment,
-        candidate,
-        acceptRole
-          ? {
-              kind: "accept",
-              sourceRoleId: releaseMemberRole(candidate.snapshot.roles).sourceRoleId,
-            }
-          : { kind: "decline" },
-      );
-    } else if (candidate.snapshot.registrationState !== "active_exact") return "conflict";
+      await activateFirstInstall(environment, candidate, choice);
+    } else if (candidate.snapshot.registrationState === "active_exact") {
+      memberRoleGranted = await resumeFirstInstallRoles(environment, candidate, choice);
+      candidate = await readCurrentFirstInstallCandidate(environment, session, selector, reviewed);
+      if (candidate.snapshot.registrationState !== "active_exact") return "conflict";
+    } else return "conflict";
     return {
       kind: "available",
       value: {
         application_name: candidate.releaseSet.application.content.name,
         release_version: candidate.snapshot.selected.releaseVersion,
-        member_role_granted: acceptRole,
+        member_role_granted: memberRoleGranted,
       },
     };
   } catch (error) {

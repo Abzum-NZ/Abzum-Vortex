@@ -219,6 +219,26 @@ const applyFirstInstallRoles = async (
     installationProblem("first_install_member_role_assignment_mismatch", "failed");
 };
 
+/** Reapply the reviewed roles on an active target and verify the installer's member assignment. */
+export const resumeFirstInstallRoles = async (
+  environment: FirstInstallFlowEnvironment,
+  candidate: FirstInstallCandidate,
+  choice: FirstInstallMemberRoleChoice,
+): Promise<boolean> => {
+  await applyFirstInstallRoles(environment, candidate, choice);
+  if (choice.kind === "decline") return false;
+  const current = await readInstallationRoles(
+    environment,
+    candidate.session,
+    candidate.selector,
+    environment.containsCustomComponents(candidate.releaseSet),
+  );
+  const member = current.roles.find((role) => sameId(role.sourceRoleId, choice.sourceRoleId));
+  if (member?.lifecycle !== "active" || member.installerAssignment === null)
+    installationProblem("first_install_member_assignment_changed", "conflict");
+  return true;
+};
+
 /**
  * The one first-install activation. It first makes every role of the release an organisation
  * role and applies the installer's choice for the default member role (above); then it activates
