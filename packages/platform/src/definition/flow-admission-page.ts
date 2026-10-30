@@ -54,6 +54,8 @@ export const admitPageGesture = async (
   const sourceTableId = request.invocation.sourceTablePlacementId;
   let tableId: string | undefined;
   let recordId: string | undefined;
+  /** The chosen records of a bulk action, each proven to be a row of the table. */
+  let bulkRecordIds: string[] | undefined;
   const inputs: Record<string, unknown> = Object.create(null);
   if (request.invocation.kind === "binding") {
     Object.assign(inputs, request.invocation.callerInputs ?? {});
@@ -92,7 +94,6 @@ export const admitPageGesture = async (
   } else if (
     binding.event === "row_action" ||
     binding.event === "row_clicked" ||
-    binding.event === "bulk_action" ||
     binding.event === recordsTableInlineEditEvent ||
     binding.event === recordsTableRowEditEvent
   ) {
@@ -114,6 +115,15 @@ export const admitPageGesture = async (
       recordId = parsed.data;
     }
   }
+  if (binding.event === "bulk_action") {
+    const gate = requireProjectedPlacement(page, binding.controlId);
+    if (gate.kind !== "on_page") return false;
+    tableId = String(binding.controlId);
+    const chosen = Array.isArray(inputs.subjects) ? inputs.subjects : [];
+    bulkRecordIds = chosen.flatMap((entry) =>
+      isRecord(entry) && typeof entry.record === "string" ? [entry.record] : [],
+    );
+  }
   const refusal = await recordsTableBindingRefusal(
     installation,
     binding,
@@ -125,7 +135,9 @@ export const admitPageGesture = async (
     console.error(`[flows] table binding refused: ${refusal.reason}`);
     return false;
   }
-  if (tableId === undefined || recordId === undefined) return true;
+  const recordIds = bulkRecordIds ?? (recordId === undefined ? undefined : [recordId]);
+  // A bulk run over every matching record names no row: its own sealed selection stands for them.
+  if (tableId === undefined || recordIds === undefined || recordIds.length === 0) return true;
   const pageType = pageSubjectType(pageDefinition);
   const pageRecord = recordIdSchema.safeParse(request.pageRecordId);
   const subject =
@@ -150,7 +162,7 @@ export const admitPageGesture = async (
       subjectId: request.pageRecordId,
       parameters: request.pageInputs.parameters,
       controls: request.pageInputs.controls,
-      recordIds: [recordId],
+      recordIds,
     },
     (placementId, raw, parsed) =>
       host.validateOption({
@@ -171,6 +183,7 @@ export const admitPageGesture = async (
   }
   return (
     !rowForm ||
-    host.projectRowForm(bound, context, page, tableId, String(binding.controlId), recordId)
+    (recordId !== undefined &&
+      host.projectRowForm(bound, context, page, tableId, String(binding.controlId), recordId))
   );
 };
