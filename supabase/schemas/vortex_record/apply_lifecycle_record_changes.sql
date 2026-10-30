@@ -34,7 +34,7 @@ begin
     );
   end if;
 
-  result_value := vortex_record.apply_record_changes(
+  result_value := vortex_record.apply_record_mutations_internal(
     p_command_id, p_operation, p_record_type_id, p_record_id,
     p_expected_concurrency_number, '{}'::jsonb, null,
     p_mutations, p_activity_id, p_occurrence_id

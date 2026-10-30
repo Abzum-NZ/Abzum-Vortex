@@ -23,56 +23,7 @@ declare
   normalized_edges jsonb;
 begin
   if p_command_id is null or not vortex_platform.is_non_nil_uuid(p_command_id::text)
-    or pg_catalog.jsonb_typeof(p_subjects) is distinct from 'array'
-    or pg_catalog.jsonb_array_length(p_subjects) not between 1 and 200 then
-    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
-  end if;
-  if exists (
-    select 1 from pg_catalog.jsonb_array_elements(p_subjects) as item(value)
-    where pg_catalog.jsonb_typeof(item.value) is distinct from 'object'
-      or not (item.value ?& array[
-        'operation', 'recordTypeId', 'recordId', 'expectedConcurrencyNumber',
-        'submittedValues', 'finalValues', 'selectedGroupId', 'activityId', 'occurrenceId'
-      ])
-      or item.value - array[
-        'operation', 'recordTypeId', 'recordId', 'expectedConcurrencyNumber',
-        'submittedValues', 'finalValues', 'selectedGroupId', 'activityId', 'occurrenceId'
-      ]::text[] <> '{}'::jsonb
-      or pg_catalog.jsonb_typeof(item.value -> 'operation') is distinct from 'string'
-      or item.value ->> 'operation' not in ('create', 'update', 'delete', 'restore')
-      or not vortex_platform.is_non_nil_uuid(item.value ->> 'recordTypeId')
-      or not vortex_platform.is_non_nil_uuid(item.value ->> 'activityId')
-      or not vortex_platform.is_non_nil_uuid(item.value ->> 'occurrenceId')
-      or pg_catalog.jsonb_typeof(item.value -> 'submittedValues') is distinct from 'object'
-      or pg_catalog.jsonb_typeof(item.value -> 'finalValues') is distinct from 'object'
-      or (item.value ->> 'operation' = 'create' and (
-        item.value -> 'recordId' <> 'null'::jsonb
-        or item.value -> 'expectedConcurrencyNumber' <> 'null'::jsonb
-        or (item.value -> 'selectedGroupId' <> 'null'::jsonb
-          and not vortex_platform.is_non_nil_uuid(item.value ->> 'selectedGroupId'))
-      ))
-      or (item.value ->> 'operation' <> 'create' and (
-        not vortex_platform.is_non_nil_uuid(item.value ->> 'recordId')
-        or pg_catalog.jsonb_typeof(item.value -> 'expectedConcurrencyNumber') is distinct from 'number'
-        or not pg_catalog.pg_input_is_valid(item.value ->> 'expectedConcurrencyNumber', 'bigint')
-        or item.value -> 'selectedGroupId' <> 'null'::jsonb
-      ))
-      or (item.value ->> 'operation' in ('delete', 'restore') and (
-        item.value -> 'submittedValues' <> '{}'::jsonb or item.value -> 'finalValues' <> '{}'::jsonb
-      ))
-  ) or exists (
-    select 1 from pg_catalog.jsonb_array_elements(p_subjects) as item(value)
-    where item.value ->> 'operation' <> 'create'
-    group by item.value -> 'recordTypeId', item.value -> 'recordId'
-    having pg_catalog.count(*) > 1
-  ) then
-    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
-  end if;
-  if exists (
-    select 1 from pg_catalog.jsonb_array_elements(p_subjects) as item(value)
-    where item.value ->> 'operation' <> 'create'
-      and (item.value ->> 'expectedConcurrencyNumber')::bigint not between 1 and 9007199254740990
-  ) then
+    or not vortex_record.record_change_set_is_valid_internal(p_subjects) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
   end if;
   perform vortex_access.validated_human_request_context();
@@ -100,6 +51,14 @@ begin
       );
     end if;
     if subject ->> 'operation' = 'create' then
+      prepared := vortex_record.classify_record_change_values_internal(
+        (subject ->> 'recordTypeId')::uuid, subject -> 'finalValues', meta, subject -> 'submittedValues',
+        (meta #>> '{context,organizationId}')::uuid, (meta #>> '{context,applicationRootId}')::uuid,
+        'record_changes', p_command_id
+      );
+      if prepared ->> 'outcome' is distinct from 'classified' then
+        return prepared || pg_catalog.jsonb_build_object('index', ordinal);
+      end if;
       select coalesce(pg_catalog.array_agg(key::uuid order by key::uuid), array[]::uuid[])
       into submitted_fields from pg_catalog.jsonb_object_keys(subject -> 'submittedValues') as key;
       prepared := vortex_record.prepare_record_create_internal(

@@ -54,7 +54,7 @@ begin
     'values', p_final_values
   ));
 
-  return vortex_record.apply_record_changes(
+  return vortex_record.apply_record_mutations_internal(
     p_command_id, p_operation, p_record_type_id, p_record_id,
     p_expected_concurrency_number, p_submitted_values, p_selected_group_id,
     mutations, p_activity_id, p_occurrence_id

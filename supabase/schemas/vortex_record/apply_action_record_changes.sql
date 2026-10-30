@@ -79,7 +79,7 @@ begin
       with ordinality as item(value, ordinality)
     order by (item.value ->> 'recordId')::uuid
   loop
-    subject_result := vortex_record.apply_record_changes(
+    subject_result := vortex_record.apply_record_mutations_internal(
       (subject ->> 'commandId')::uuid, 'update', p_record_type_id,
       (subject ->> 'recordId')::uuid,
       (subject ->> 'expectedConcurrencyNumber')::bigint,
