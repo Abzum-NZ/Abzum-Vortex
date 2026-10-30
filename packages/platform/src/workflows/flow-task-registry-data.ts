@@ -51,7 +51,6 @@ const page = { page: true, server: false, backend: false } as const;
 const server = { page: false, server: true, backend: false } as const;
 const serverAndBackend = { page: false, server: true, backend: true } as const;
 const everywhere = { page: true, server: true, backend: true } as const;
-const nowhere = { page: false, server: false, backend: false } as const;
 
 /** Where each step runs today; each later batch flips a flag when it lands the implementation. */
 export const flowTaskRuns = Object.freeze({
