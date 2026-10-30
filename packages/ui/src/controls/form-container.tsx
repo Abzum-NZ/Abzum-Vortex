@@ -32,7 +32,6 @@ import {
   equalFormValue,
   FormScopeContext,
   useFormScope,
-  type FormReactions,
   type FormScope,
 } from "./form-context";
 import { useUnsavedWorkRegistry } from "./unsaved-work";
@@ -58,7 +57,6 @@ import {
 export type FormContainerProps = ControlRenderProps<FormPayload> &
   Readonly<{
     draftFeedback?: FormDraftFeedbackSupply;
-    reactions?: FormReactions;
   }>;
 
 /** A safe, final result returned by the form's bound flow. */
