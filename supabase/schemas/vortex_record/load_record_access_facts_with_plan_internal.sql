@@ -368,7 +368,7 @@ begin
       current_contract := load_contracts[pg_catalog.array_length(load_contracts, 1)];
       select coalesce(pg_catalog.array_agg(distinct queued.record_id), array[]::uuid[])
       into batch_record_ids
-      from pg_catalog.unnest(load_contracts, load_records)
+      from rows from (pg_catalog.unnest(load_contracts), pg_catalog.unnest(load_records))
         as queued(contract_id, record_id)
       where queued.contract_id = current_contract
         and not records_by_id ? pg_catalog.lower(queued.record_id::text);
@@ -376,7 +376,7 @@ begin
       select coalesce(pg_catalog.array_agg(queued.contract_id order by queued.ordinality), array[]::uuid[]),
         coalesce(pg_catalog.array_agg(queued.record_id order by queued.ordinality), array[]::uuid[])
       into load_contracts, load_records
-      from pg_catalog.unnest(load_contracts, load_records) with ordinality
+      from rows from (pg_catalog.unnest(load_contracts), pg_catalog.unnest(load_records)) with ordinality
         as queued(contract_id, record_id, ordinality)
       where queued.contract_id <> current_contract;
 
