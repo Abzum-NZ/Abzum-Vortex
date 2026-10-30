@@ -155,6 +155,9 @@ const decodePositions = (token: string): Positions | undefined => {
   }
 };
 
+/** The most pages one request reads while an admission keeps leaving them empty. */
+const admittedPageReadBound = 10;
+
 /**
  * Reads one page of the records a link field may point at. Each target record type is read by
  * its own listing query (the record type's identity): the Query engine admits only records the
@@ -242,7 +245,38 @@ export const createRecordChoiceReader = (queries: RecordChoiceQueryRunner) =>
           }),
       }).read(session, selection, { ...parsed.data, targets, pageSize: 1 }, admit);
     },
+    /**
+     * One page of choices. When a further decision (the admission) leaves a page empty while more
+     * records follow, the next pages are read, within a bound, until there are choices to offer or
+     * the records end, so the picker never says there is nothing while more exist.
+     */
     async read(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      candidate: RecordChoiceCommand,
+      admit?: RecordChoiceAdmission,
+    ): Promise<HumanOrganizationRequestResult<RecordChoiceRead>> {
+      const reader = createRecordChoiceReader(queries);
+      let page = await reader.readPage(session, selection, candidate, admit);
+      for (
+        let reads = 1;
+        admit !== undefined &&
+        reads < admittedPageReadBound &&
+        page.kind === "available" &&
+        page.value.outcome === "completed" &&
+        page.value.choices.length === 0 &&
+        page.value.nextContinuationToken !== undefined;
+        reads += 1
+      )
+        page = await reader.readPage(
+          session,
+          selection,
+          { ...candidate, continuationToken: page.value.nextContinuationToken },
+          admit,
+        );
+      return page;
+    },
+    async readPage(
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
       candidate: RecordChoiceCommand,

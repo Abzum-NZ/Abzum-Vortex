@@ -740,7 +740,7 @@ type OptionsFlowField = Readonly<{
 }>;
 
 /** The options flow a placement bound to a record field declares, when it declares one. */
-export const placementOptionsFlow = (
+const placementOptionsFlow = (
   context: InstalledRuntimeContext,
   placement: Readonly<{ settings: Readonly<Record<string, unknown>> }>,
 ): OptionsFlowField | undefined => {

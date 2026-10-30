@@ -409,6 +409,28 @@ export function applicationPageRules(scope: ApplicationScope): void {
           problem.sentence,
         ),
       );
+    // A flow or query options source is read only for a placement bound to its field. A placement
+    // that names its field by name would offer the declared list without the source, so
+    // publication refuses it.
+    if (pageRecord !== undefined)
+      for (const [placementId, placement] of placementEntries) {
+        const settings = object(placement.settings);
+        const name = object(settings.name ?? {});
+        if (name.kind !== "text" || settings.field !== undefined) continue;
+        const field = array(pageRecord.fields).find((candidate) => candidate.key === name.value);
+        const source = object(object(field?.settings ?? {}).optionsSource ?? {});
+        if (source.kind === "flow" || (source.kind === "query" && source.queryId !== undefined))
+          failures.push(
+            failure(
+              output,
+              "vortex.definition.application_block_settings",
+              "unsupported_choice",
+              { kind: "page", key: String(page.key) },
+              undefined,
+              `Placement ${placementId} on page ${String(page.key)} names field ${String(name.value)}, whose options come from a ${String(source.kind)}: place it as the field input of that field`,
+            ),
+          );
+      }
     // A dependent field input offers choices only for what its form's draft holds in the field it
     // depends on, so that field must be placed in the same form (a guided form is one form). One
     // form holds one input per field: the form keeps one draft value per field.
