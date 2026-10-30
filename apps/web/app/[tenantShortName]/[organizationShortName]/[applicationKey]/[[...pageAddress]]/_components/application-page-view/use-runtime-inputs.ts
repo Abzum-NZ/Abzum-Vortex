@@ -792,6 +792,12 @@ export function useRuntimeInputs({
             readyBinding.bindingId,
           );
         };
+      const tabBinding = bindings.find((binding) => binding.event === "tab_changed");
+      if (tabBinding !== undefined && supportsEvent("tab_changed"))
+        events.tab_changed = (event: ControlSemanticEvent) => {
+          if (event.event !== "tab_changed") return;
+          void runBinding(placementId, tabBinding, { tab_key: event.tabKey });
+        };
       const resetBinding = bindings.find((binding) => binding.event === "form_reset");
       if (supportsEvent("form_reset"))
         events.form_reset = (event: ControlSemanticEvent) => {

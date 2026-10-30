@@ -3,7 +3,6 @@
 import { useState } from "react";
 import {
   checkFlowFormula,
-  flowFormulaChildren,
   flowFormulaSchema,
   flowRoundingModeSchema,
   normalizeExactDecimal,
@@ -350,34 +349,23 @@ export function StudioFormulaEditor({
       },
       issue: (_path, _rule, _family, message) => issues.push(message),
     });
-    const unavailable = (node: FlowFormula): boolean =>
-      (node.op === "reference" &&
-        (node.reference.source === "page" || node.reference.source === "form")) ||
-      flowFormulaChildren(node).some(unavailable);
-    return {
-      error: issues[0],
-      type,
-      warning: unavailable(formula) ? "Page and form values cannot be read yet." : undefined,
-    };
+    return { error: issues[0], type };
   };
   const [text, setText] = useState(() => printFormula(value, references));
   const [problem, setProblem] = useState<string | undefined>(() => inspect(value).error);
   const [resultType, setResultType] = useState<string | undefined>(() => inspect(value).type);
-  const [warning, setWarning] = useState<string | undefined>(() => inspect(value).warning);
   const edit = (next: string) => {
     setText(next);
     try {
       const formula = parseFormula(next, references);
-      const { error, type, warning: nextWarning } = inspect(formula);
+      const { error, type } = inspect(formula);
       setProblem(error);
       setResultType(type);
-      setWarning(nextWarning);
       onChange(formula, error);
     } catch (error) {
       const message = error instanceof Error ? error.message : "This formula is invalid.";
       setProblem(message);
       setResultType(undefined);
-      setWarning(undefined);
       onChange(undefined, message);
     }
   };
@@ -425,7 +413,6 @@ export function StudioFormulaEditor({
         role={problem === undefined ? undefined : "alert"}
       >
         {problem ?? (resultType === undefined ? "Enter a formula." : `Result: ${resultType}`)}
-        {warning === undefined ? "" : ` ${warning}`}
       </p>
     </div>
   );

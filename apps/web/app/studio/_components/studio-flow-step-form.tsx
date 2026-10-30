@@ -358,10 +358,8 @@ const pickerOptions = (
       return choices.connections.map((entry) => ({ value: entry.key, label: entry.label }));
     case "flow":
       return flows.map((flow) => ({ value: flow.id, label: studioFlowLabel(flow) }));
-    case "field":
-      return field.options;
     default:
-      return undefined;
+      return field.options;
   }
 };
 

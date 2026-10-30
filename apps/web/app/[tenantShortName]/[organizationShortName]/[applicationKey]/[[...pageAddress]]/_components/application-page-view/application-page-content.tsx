@@ -46,6 +46,7 @@ import type {
   PageSelection,
 } from "./types";
 import { ownersByPlacement } from "./form-surface";
+import { usePageEvents } from "./use-page-events";
 import { placementEventNamesByPage, applicationLauncherPlacementIds } from "./placement-helpers";
 import { useUnsavedWorkPrompt } from "./use-unsaved-work-prompt";
 import { useNavigationScope } from "./use-navigation-scope";
@@ -451,6 +452,8 @@ export function ApplicationPageViewContent({
     commitTablePage,
     tableQueryPending,
   });
+
+  usePageEvents(model, navigationKey, runBinding);
 
   const { commitLayout, runViewCommand } = useGridLayout({
     model,

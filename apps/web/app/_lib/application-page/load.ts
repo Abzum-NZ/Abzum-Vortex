@@ -686,6 +686,14 @@ const loadApplicationPageJoined = async (
     selectedReadTypesByFlow,
   };
   for (const entry of placements) projectPlacementBindings(flowBindingInput, entry);
+  // The page itself is the control of its own events (load, record_loaded).
+  projectPlacementBindings(flowBindingInput, {
+    placementId: String(pageDefinition.pageId),
+    item: {},
+    props: {},
+    vortex: {},
+    settings: {},
+  });
   let flowTimeZone: string | undefined;
   if (
     Object.values(bindings).some((items) => items.some((binding) => binding.browser !== undefined))

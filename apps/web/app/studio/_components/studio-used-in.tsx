@@ -2,6 +2,7 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import {
   applicationUses,
+  describeApplicationUsers,
   type ApplicationSourceDocument,
   type ApplicationUsePlace,
   type ApplicationUseTarget,
@@ -154,7 +155,10 @@ export function StudioReferencesAlert({
     <Alert variant="destructive" role="alert">
       <AlertTitle>{title ?? `${name} cannot be ${action ?? "changed"}`}</AlertTitle>
       <AlertDescription className="space-y-2">
-        <p>{issue ?? `It is used in ${placesWord(references.length)}. Remove those uses first.`}</p>
+        <p>
+          {issue ??
+            `${name} is used by ${describeApplicationUsers(references)}. Remove those uses first.`}
+        </p>
         <Button
           type="button"
           size="xs"

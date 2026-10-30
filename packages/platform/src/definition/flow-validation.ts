@@ -91,6 +91,8 @@ export type FlowReferenceEnvironment = Readonly<{
   page: string;
   /** Source control aliases present on this page for the bound flow. */
   controls?: readonly string[];
+  /** The page's own alias when a flow is bound to the page itself (load, record_loaded). */
+  pageControl?: string;
   values: Readonly<Record<string, string>>;
   forms: Readonly<Record<string, Readonly<Record<string, string>>>>;
   formRestrictions?: Readonly<
