@@ -843,6 +843,16 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
                   fields,
                 ]),
               ),
+              ...(binding.formRestrictions === undefined
+                ? {}
+                : {
+                    formRestrictions: Object.fromEntries(
+                      Object.entries(binding.formRestrictions).map(([alias, fields]) => [
+                        resolver.form(alias).identifier,
+                        fields,
+                      ]),
+                    ),
+                  }),
             },
           ])
         : [bindings];

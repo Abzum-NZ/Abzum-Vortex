@@ -170,7 +170,6 @@ export function useFormField(
       read: () => valueRef.current,
       publish: (next) => {
         valueRef.current = next;
-        previousRef.current = next;
         reportFieldChanged?.();
       },
       validate: () => validateRef.current?.(),
@@ -178,7 +177,6 @@ export function useFormField(
         const change = setterRef.current?.(next, cycle);
         if (change === undefined) return false;
         valueRef.current = change.value;
-        previousRef.current = change.value;
         change.apply();
         reportFieldChanged?.();
         change.emit();

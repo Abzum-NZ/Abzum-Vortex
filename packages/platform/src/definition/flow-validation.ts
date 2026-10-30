@@ -91,6 +91,20 @@ export type FlowReferenceEnvironment = Readonly<{
   controls?: readonly string[];
   values: Readonly<Record<string, string>>;
   forms: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  formRestrictions?: Readonly<
+    Record<
+      string,
+      Readonly<
+        Record<
+          string,
+          Readonly<{
+            readOnly: boolean;
+            protectedKind?: "attachment" | "secret";
+          }>
+        >
+      >
+    >
+  >;
 }>;
 
 export type FlowValidationOptions = Readonly<{
@@ -778,6 +792,39 @@ export function validateFlow(
       const formName = targetName(form);
       const fieldName = targetName(field);
       const environments = options.referenceEnvironments ?? [];
+      if (formName !== undefined && fieldName !== undefined) {
+        for (const environment of environments) {
+          const restriction = environment.formRestrictions?.[formName]?.[fieldName];
+          if (restriction?.readOnly)
+            add(
+              path,
+              "vortex.definition.workflow_node_values",
+              "invalid_value",
+              `Set value step ${task.id}: field ${fieldName} is read-only on page ${environment.page}`,
+            );
+          if (restriction?.protectedKind === "secret")
+            add(
+              path,
+              "vortex.definition.workflow_node_values",
+              "invalid_value",
+              `Set value step ${task.id}: secret field ${fieldName} cannot be set`,
+            );
+          if (restriction?.protectedKind === "attachment") {
+            const empty =
+              (value.kind === "literal" &&
+                (value.literal.value === null ||
+                  (Array.isArray(value.literal.value) && value.literal.value.length === 0))) ||
+              (value.kind === "array" && value.items.length === 0);
+            if (!empty)
+              add(
+                path,
+                "vortex.definition.workflow_node_values",
+                "invalid_value",
+                `Set value step ${task.id}: attachment field ${fieldName} accepts only an empty value`,
+              );
+          }
+        }
+      }
       const types = environments.map((environment) => {
         const type =
           pageName !== undefined

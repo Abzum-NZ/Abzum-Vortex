@@ -137,7 +137,11 @@ export function LinkInput(props: LinkInputProps): ReactElement {
       return {
         value: reference,
         apply: () => setPicked({ reference, title: item.title, typeLabel: item.typeLabel }),
-        emit: () => context.events?.field_changed?.(flowSetFieldChange(cycle, fieldKey, reference)),
+        emit: () =>
+          context.events?.field_changed?.({
+            ...flowSetFieldChange(cycle, fieldKey, reference),
+            draftDisplay: { title: item.title },
+          }),
       };
     },
   );
