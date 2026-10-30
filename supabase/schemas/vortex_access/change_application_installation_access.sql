@@ -11,7 +11,6 @@ security definer
 set search_path = ''
 as $function$
 declare
-  context_value jsonb;
   authority record;
   current_registration vortex_access.permission_registrations%rowtype;
   registration_found boolean;
@@ -38,7 +37,7 @@ begin
   -- registration read below cannot change before the coordinator rechecks it.
   select locked.* into strict authority
   from vortex_access.lock_application_installation_authority() as locked;
-  context_value := vortex_access.validated_human_request_context();
+  perform vortex_access.validated_human_request_context();
 
   select registration.* into current_registration
   from vortex_access.permission_registrations as registration
@@ -143,22 +142,6 @@ begin
       raise exception using errcode = '40001',
         message = 'Application installation access Activity is stale';
     end if;
-  end if;
-
-  -- Continue only at the Access version this protected change itself produced. The
-  -- organisation version lock remains held until commit; all later permission and
-  -- installation checks use current authority. Identity, session, authentication,
-  -- correlation and scope stay pinned, and rollback restores this context too.
-  update vortex_platform.request_contexts as established
-  set context = pg_catalog.jsonb_set(
-    context_value, '{accessVersion}', pg_catalog.to_jsonb(changed.access_version)
-  )
-  where established.backend_pid = pg_catalog.pg_backend_pid()
-    and established.transaction_id = pg_catalog.pg_current_xact_id()
-    and established.context = context_value;
-  if not found then
-    raise exception using errcode = '55000',
-      message = 'Application installation access context is unavailable';
   end if;
 
   return pg_catalog.jsonb_build_object(
