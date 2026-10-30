@@ -1,5 +1,6 @@
 import { flowRuntimeValueOf } from "../../rules/flow-runtime-value";
 import { sourceFlowCollectionSchema } from "../../workflows/flow-source-contracts";
+import { reachablePageFlows } from "../../workflows/flow-reachability";
 import {
   sourceItemTree,
   sourcePageItems,
@@ -192,7 +193,11 @@ function compileOwnedFlowSources(
             const application = body as unknown as ApplicationSourceDocument["body"];
             const controls = new Set(
               application.flow_bindings
-                .filter((binding) => binding.flow === flow.id || binding.flow === flow.key)
+                .filter((binding) =>
+                  reachablePageFlows([binding.flow], parsed.data).some(
+                    (reachable) => reachable.id === flow.id,
+                  ),
+                )
                 .map((binding) => binding.control),
             );
             return application.pages.flatMap((page) => {
@@ -204,6 +209,10 @@ function compileOwnedFlowSources(
               ];
               if (!items.some((item) => controls.has(item.props.id))) return [];
               const forms: Record<string, Readonly<Record<string, string>>> = {};
+              const formRestrictions: Record<
+                string,
+                Record<string, { readOnly: boolean; protectedKind?: "attachment" | "secret" }>
+              > = {};
               for (const form of items) {
                 if (
                   form.props.vortex.block.block_id !== FORM_CONTAINER_BLOCK_RELEASE.blockId ||
@@ -212,6 +221,10 @@ function compileOwnedFlowSources(
                 )
                   continue;
                 const fields: Record<string, string> = {};
+                const restrictions: Record<
+                  string,
+                  { readOnly: boolean; protectedKind?: "attachment" | "secret" }
+                > = {};
                 for (const control of sourceItemTree([form])) {
                   const release = CONTROL_BLOCK_RELEASES.find(
                     (candidate) => candidate.rendererKey === control.type,
@@ -230,6 +243,14 @@ function compileOwnedFlowSources(
                       ? control.props.name
                       : field;
                   if (name === undefined) continue;
+                  restrictions[name] = {
+                    readOnly: control.props.read_only === true,
+                    ...(release.key === "platform.form.attachment_input"
+                      ? { protectedKind: "attachment" as const }
+                      : release.key === "platform.form.connection_secret_input"
+                        ? { protectedKind: "secret" as const }
+                        : {}),
+                  };
                   const declared = release.value_type;
                   const type =
                     record !== undefined && field !== undefined
@@ -244,6 +265,7 @@ function compileOwnedFlowSources(
                   if (type !== undefined) fields[name] = type;
                 }
                 forms[form.props.id] = fields;
+                formRestrictions[form.props.id] = restrictions;
               }
               return [
                 {
@@ -255,6 +277,7 @@ function compileOwnedFlowSources(
                     Object.entries(page.values ?? {}).map(([key, value]) => [key, value.type]),
                   ),
                   forms,
+                  formRestrictions,
                 },
               ];
             });

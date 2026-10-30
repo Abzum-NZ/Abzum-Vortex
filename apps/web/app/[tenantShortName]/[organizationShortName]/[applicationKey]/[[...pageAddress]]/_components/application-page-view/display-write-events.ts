@@ -59,9 +59,9 @@ export async function cardMoved(
     placementId,
     bindings,
     runBinding,
-    setNotice,
+    showPageMessage,
     formCancelledRef,
-  }: Context & Pick<Inputs, "setNotice" | "formCancelledRef">,
+  }: Context & Pick<Inputs, "showPageMessage" | "formCancelledRef">,
   event: DisplaySemanticEvent,
 ): Promise<boolean> {
   if (event.event !== "card_moved") return false;
@@ -70,7 +70,7 @@ export async function cardMoved(
     console.error(
       `[page] card move has no binding or revision: ${binding === undefined ? "BOARD_CARD_MOVE_BINDING_MISSING" : "BOARD_CARD_MOVE_REVISION_MISSING"}`,
     );
-    setNotice(unavailableNotice);
+    showPageMessage(unavailableNotice);
     return false;
   }
   let accepted = false;
@@ -94,14 +94,14 @@ export async function cardMoved(
 
 /** Run a card add through its bound flow. */
 export async function cardAdded(
-  { placementId, bindings, runBinding, setNotice }: Context & Pick<Inputs, "setNotice">,
+  { placementId, bindings, runBinding, showPageMessage }: Context & Pick<Inputs, "showPageMessage">,
   event: DisplaySemanticEvent,
 ): Promise<boolean> {
   if (event.event !== "card_added") return false;
   const binding = bindingFor(bindings, event);
   if (binding === undefined) {
     console.error("[page] card add has no binding: BOARD_CARD_ADD_BINDING_MISSING");
-    setNotice(unavailableNotice);
+    showPageMessage(unavailableNotice);
     return false;
   }
   const outcome = await runBinding(placementId, binding, suppliedValues(event));

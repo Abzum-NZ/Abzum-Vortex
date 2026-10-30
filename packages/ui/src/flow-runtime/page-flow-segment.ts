@@ -10,6 +10,7 @@ import {
   type FlowRunStart,
   type FlowRunState,
   type FlowRunStep,
+  type FlowRuntimeValues,
 } from "@vortex/platform/schema";
 import {
   isSurfaceCancellation,
@@ -41,6 +42,7 @@ export async function drivePageFlowSegment(
     resolveMember: FlowOutputMemberTypeResolver;
     resolveForm?: FlowFormReferenceResolver;
     host: FlowIntentHost;
+    readPageValues: () => FlowRuntimeValues;
     signal?: AbortSignal;
   }>,
 ): Promise<PageFlowSegmentResult> {
@@ -83,7 +85,14 @@ export async function drivePageFlowSegment(
       const answer = await performPageFlowIntent(waiting, host, signal);
       if (signal?.aborted) return { kind: "abandoned" };
       if (answer === undefined) throw new Error("FLOW_PAGE_ANSWER_INVALID");
-      step = resumeFlowRun(step.state, answer, library, resolveMember, undefined, resolveForm);
+      step = resumeFlowRun(
+        { ...step.state, pageValues: input.readPageValues() },
+        answer,
+        library,
+        resolveMember,
+        undefined,
+        resolveForm,
+      );
     }
     throw new Error("FLOW_PAGE_SUSPENSION_LIMIT");
   } catch (error) {

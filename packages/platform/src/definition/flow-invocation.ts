@@ -23,6 +23,7 @@ import type {
 import type { ApplicationContent } from "./application-contracts";
 import type { ProtectedOperationChannel } from "./application-flow-bindings";
 import { canonicalJson } from "./canonical-json";
+import { bindingsWithMessageActions } from "./message-action-bindings";
 import type { ModuleDefinitionConsumerReadResult } from "./definition-consumer-read";
 import type { RecordReferenceChoiceCommand } from "../queries/reference-choice-contracts";
 import type { PermittedApplication, PermittedApplicationsRead } from "./application-launcher-read";
@@ -1170,7 +1171,9 @@ export async function invokeInstalledFlow(
         return { kind: "refused", committedNow: false };
       }
     }
-    const binding = bindingInstallation.bindings.find(
+    const binding = bindingsWithMessageActions(bindingInstallation.bindings, [
+      ...bindingInstallation.flows.values(),
+    ]).find(
       (candidate) => candidate.bindingId.toLowerCase() === invocation.bindingId.toLowerCase(),
     );
     const guided =

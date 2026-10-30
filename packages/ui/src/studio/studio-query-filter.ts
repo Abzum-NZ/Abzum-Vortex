@@ -119,9 +119,9 @@ export const writeStudioQueryFilter = (
       const field = fieldKeyOf(value.fieldId);
       return field === undefined ? undefined : { source: "field", field };
     }
-    return value.source === "value"
-      ? { source: "value", value: value.value }
-      : { source: "parameter", parameter: value.key };
+    if (value.source === "value") return { source: "value", value: value.value };
+    if (value.source === "parameter") return { source: "parameter", parameter: value.key };
+    return undefined;
   };
   const write = (node: ConditionNode): Plain | undefined => {
     if (node.kind === "comparison") return writeComparison(node);

@@ -12,6 +12,7 @@ import {
 } from "./control-context";
 import { useFormScope } from "./form-context";
 import { usePendingGesture } from "./pending-gesture";
+import { usePlacementReactions } from "../flow-runtime/placement-reactions";
 
 export type ButtonProps = ControlRenderProps<ButtonPayload>;
 
@@ -47,6 +48,7 @@ export function Button(props: ButtonProps): ReactElement {
     "primary",
   );
   const form = useFormScope();
+  const reactions = usePlacementReactions();
   const noteId = useId();
   // An action handler may return the promise of the flow it started; the button stays busy until it
   // settles, so one gesture cannot start the same flow twice.
@@ -63,6 +65,7 @@ export function Button(props: ButtonProps): ReactElement {
     context.pending || gesture.pending || (mode === "submit" && form?.pending === true);
   const disabled =
     context.inactive ||
+    reactions.readOnly === true ||
     pending ||
     settings.boolean("disabled") ||
     (mode !== "action" && form?.inactive === true);

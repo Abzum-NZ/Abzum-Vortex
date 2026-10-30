@@ -1,6 +1,7 @@
 import {
   buildLinkTilesQueryBinding,
   flowEntrySegments,
+  messageActionBindings,
   readOrganizationRuntimeSettings,
   type HumanOrganizationRequestDependencies,
   type InstalledRuntimeContext,
@@ -327,14 +328,25 @@ export const projectPlacementBindings = (
     pageSubjectRecordTypeId,
     selectedReadTypesByFlow,
   } = input;
-  const held = application.content.flowBindings.filter((binding) =>
+  const authored = application.content.flowBindings.filter((binding) =>
     sameId(binding.controlId, placementId),
   );
+  const held = authored.flatMap((binding) => [
+    { binding, messageAction: undefined },
+    ...messageActionBindings(binding, [...plans.flows.values()]).map((derived) => ({
+      binding: derived.binding,
+      messageAction: {
+        authoredBindingId: derived.authoredBindingId,
+        sourceFlowId: derived.sourceFlowId,
+        taskId: derived.taskId,
+      },
+    })),
+  ]);
   if (held.length > 0) {
     const placementRecordTypeId =
       recordTypeByPlacement.get(placementId.toLowerCase()) ??
       (formId === undefined ? undefined : recordTypeByPlacement.get(formId.toLowerCase()));
-    bindings[placementId] = held.map((binding) => {
+    bindings[placementId] = held.map(({ binding, messageAction }) => {
       // An action selects the page subject, so a foreign placement cannot lend it a record type.
       const selectedRecordTypeId =
         binding.event === "action"
@@ -391,6 +403,7 @@ export const projectPlacementBindings = (
               ),
             );
       return {
+        ...(messageAction === undefined ? {} : { messageAction }),
         browser: { plan, inputs: pageInputs },
         savesFormValues: flow !== undefined && savesValues(flow.tasks),
         bindingId: binding.bindingId,

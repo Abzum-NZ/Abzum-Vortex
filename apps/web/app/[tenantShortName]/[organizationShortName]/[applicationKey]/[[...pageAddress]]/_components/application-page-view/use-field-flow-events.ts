@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   continueFlowEventCycle,
   type ControlSemanticEvent,
@@ -7,7 +7,7 @@ import {
 import type { PlacementFlowBinding } from "../../../../../../_lib/application-page";
 import { bindingOfEvent } from "./event-values";
 import type { usePlacementActions } from "./use-placement-actions";
-import type { Notice } from "./types";
+import type { PageMessageDraft } from "./types";
 
 type RunBinding = ReturnType<typeof usePlacementActions>["runBinding"];
 type Pending = { timer: ReturnType<typeof setTimeout>; fire: () => void };
@@ -17,7 +17,7 @@ export function useFieldFlowEvents(
   navigationKey: string,
   state: FlowRuntimeState,
   runBinding: RunBinding,
-  setNotice: Dispatch<SetStateAction<Notice | undefined>>,
+  showPageMessage: (message: PageMessageDraft | undefined) => void,
 ) {
   const pending = useRef(new Map<string, Pending>());
   const latest = useRef(
@@ -61,8 +61,9 @@ export function useFieldFlowEvents(
           pending.current.delete(changed.bindingId);
           if (changed.settings.concurrency === "latest_wins") state.cancel(changed.bindingId);
           if (event.origin === "flow" && (nextCycle === undefined || "reason" in nextCycle)) {
-            setNotice({
-              tone: "problem",
+            showPageMessage({
+              target: "banner",
+              severity: "error",
               text:
                 nextCycle === undefined
                   ? "The field action stopped because its flow cycle was missing."
@@ -114,6 +115,6 @@ export function useFieldFlowEvents(
         },
       };
     },
-    [runBinding, setNotice, state],
+    [runBinding, showPageMessage, state],
   );
 }

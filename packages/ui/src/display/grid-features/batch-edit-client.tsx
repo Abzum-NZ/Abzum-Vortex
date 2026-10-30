@@ -1,6 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState, type ReactElement } from "react";
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactElement,
+} from "react";
+import { FlowRuntimeStateContext } from "../../flow-runtime/flow-runtime-state-context";
+import { createFlowRuntimeState } from "../../flow-runtime/flow-runtime";
 import {
   recordsTableBatchEditMaximumFields,
   recordsTableBatchEditMaximumRows,
@@ -161,13 +172,6 @@ export const batchRowsOf = (
   return [...rows.values()] as unknown as BatchRows;
 };
 
-type Notice = Readonly<{
-  tone: "info" | "success" | "critical";
-  title: string;
-  lines: readonly string[];
-  problems: readonly BatchProblem[];
-}>;
-
 /** How a record is named in a sentence: its first column's text when it has one, else its row. */
 const recordName = (context: GridFeatureContext, line: number): string => {
   const shown = line < 0 ? undefined : context.lines[line];
@@ -202,31 +206,59 @@ export function useBatchEdit(
 }> {
   const handler = context.events?.batch_edit_requested;
   const refresh = context.events?.refresh;
-  const [notice, setNotice] = useState<Notice | undefined>(undefined);
+  const sharedState = useContext(FlowRuntimeStateContext);
+  const standaloneState = useRef<ReturnType<typeof createFlowRuntimeState> | undefined>(undefined);
+  if (sharedState === undefined) standaloneState.current ??= createFlowRuntimeState();
+  const state = sharedState ?? standaloneState.current!;
+  const messageTarget = `grid-batch:${useId()}`;
+  const notice = useSyncExternalStore(
+    (listener) =>
+      state.subscribe(`message:${state.messages.key("inline", messageTarget)}`, listener),
+    () => state.messages.read("inline", messageTarget),
+    () => undefined,
+  );
+  const clearMessage = useCallback(
+    () => state.messages.clear("inline", messageTarget),
+    [state, messageTarget],
+  );
+  useEffect(() => () => clearMessage(), [clearMessage]);
   const [busy, setBusy] = useState(false);
   const working = useRef(false);
   const latest = useRef(context);
   latest.current = context;
   const headingId = useId();
 
-  const refuse = useCallback((title: string, problems: readonly BatchProblem[]): void => {
-    setNotice({
-      tone: "critical",
-      title,
-      lines: problems.map(
-        (problem) =>
-          `${recordName(latest.current, problem.line)}${
-            problem.field === undefined
-              ? ""
-              : `, ${latest.current.columns.find((column) => same(column.key, problem.field!))?.label ?? problem.field}`
-          }: ${problem.message}`,
-      ),
-      problems,
-    });
-  }, []);
+  const refuse = useCallback(
+    (title: string, problems: readonly BatchProblem[]): void => {
+      state.messages.show({
+        id: crypto.randomUUID(),
+        target: "inline",
+        component: messageTarget,
+        severity: "error",
+        text: title,
+        details: problems.map(
+          (problem) =>
+            `${recordName(latest.current, problem.line)}${
+              problem.field === undefined
+                ? ""
+                : `, ${latest.current.columns.find((column) => same(column.key, problem.field!))?.label ?? problem.field}`
+            }: ${problem.message}`,
+        ),
+        locations: problems.map((problem) => ({ row: problem.line, field: problem.field })),
+      });
+    },
+    [state, messageTarget],
+  );
   const tell = useCallback(
-    (title: string): void => setNotice({ tone: "success", title, lines: [], problems: [] }),
-    [],
+    (title: string): void =>
+      state.messages.show({
+        id: crypto.randomUUID(),
+        target: "inline",
+        component: messageTarget,
+        severity: "success",
+        text: title,
+      }),
+    [state, messageTarget],
   );
 
   const run = useCallback(
@@ -237,7 +269,7 @@ export function useBatchEdit(
       if (handler === undefined || working.current) return undefined;
       working.current = true;
       setBusy(true);
-      setNotice(undefined);
+      clearMessage();
       try {
         const answer = (await handler({
           event: "batch_edit_requested",
@@ -246,12 +278,11 @@ export function useBatchEdit(
         })) as DisplayBatchEditAnswer | undefined;
         const parsed = recordsTableBatchEditResultSchema.safeParse(answer?.result);
         if (!parsed.success || answer === undefined) {
-          setNotice({
-            tone: "critical",
-            title: "Nothing was changed. That is not available right now.",
-            lines: [],
-            problems: [],
-          });
+          console.error(
+            "[grid] invalid batch edit response",
+            parsed.success ? "missing answer" : parsed.error,
+          );
+          refuse("Nothing was changed. That is not available right now.", []);
           return undefined;
         }
         const result = parsed.data;
@@ -275,44 +306,34 @@ export function useBatchEdit(
           );
           return answer;
         }
-        setNotice({
-          tone: "critical",
-          title: "Nothing was changed. That is not available right now.",
-          lines: [],
-          problems: [],
-        });
+        refuse("Nothing was changed. That is not available right now.", []);
         return answer;
       } catch (error) {
         console.error("[grid] a batch edit could not be sent", error);
-        setNotice({
-          tone: "critical",
-          title: "Nothing was changed. That is not available right now.",
-          lines: [],
-          problems: [],
-        });
+        refuse("Nothing was changed. That is not available right now.", []);
         return undefined;
       } finally {
         working.current = false;
         setBusy(false);
       }
     },
-    [handler, refresh, refuse],
+    [handler, refresh, refuse, clearMessage],
   );
 
   // The refused cells wear aria-invalid and a ring until the notice goes; the ring is never the
   // only sign, the sentence in the notice names each cell.
-  const marked = notice?.problems;
+  const marked = notice?.locations;
   useEffect(() => {
     const root = surface.rootRef.current;
     if (root === null || marked === undefined || marked.length === 0) return;
     const keys = latest.current.columns.map((column) => column.key);
     const cells: HTMLElement[] = [];
     for (const problem of marked) {
-      if (problem.line < 0) continue;
+      if (problem.row < 0) continue;
       const selector =
         problem.field === undefined
-          ? `[data-grid-cell][data-row="${problem.line}"]`
-          : `[data-grid-cell][data-row="${problem.line}"][data-col="${CSS.escape(
+          ? `[data-grid-cell][data-row="${problem.row}"]`
+          : `[data-grid-cell][data-row="${problem.row}"][data-col="${CSS.escape(
               keys.find((key) => same(key, problem.field!)) ?? problem.field,
             )}"]`;
       for (const cell of root.querySelectorAll<HTMLElement>(selector))
@@ -332,29 +353,32 @@ export function useBatchEdit(
 
   // A new page or query forgets the notice: its cells are not the ones that were refused.
   useEffect(() => {
-    setNotice((held) => (held?.tone === "critical" ? undefined : held));
-  }, [context.rows]);
+    if (state.messages.read("inline", messageTarget)?.severity === "error") clearMessage();
+  }, [context.rows, state, messageTarget, clearMessage]);
 
   const element =
     notice === undefined ? null : (
       <Alert
-        variant={notice.tone === "critical" ? "critical" : "success"}
-        role={notice.tone === "critical" ? "alert" : "status"}
+        variant={notice.severity === "error" ? "destructive" : "success"}
+        role={notice.severity === "error" ? "alert" : "status"}
+        aria-live={notice.severity === "error" ? "assertive" : "polite"}
         aria-labelledby={headingId}
         className="max-w-prose"
       >
-        <AlertTitle id={headingId}>{notice.title}</AlertTitle>
-        {notice.lines.length === 0 ? null : (
+        <AlertTitle id={headingId}>{notice.text}</AlertTitle>
+        {notice.details === undefined || notice.details.length === 0 ? null : (
           <AlertDescription>
             <ul className="list-disc pl-4">
-              {notice.lines.slice(0, 20).map((line) => (
+              {notice.details.slice(0, 20).map((line) => (
                 <li key={line}>{line}</li>
               ))}
-              {notice.lines.length > 20 ? <li>and {notice.lines.length - 20} more cells</li> : null}
+              {notice.details.length > 20 ? (
+                <li>and {notice.details.length - 20} more cells</li>
+              ) : null}
             </ul>
           </AlertDescription>
         )}
-        <Button type="button" variant="outline" size="xs" onClick={() => setNotice(undefined)}>
+        <Button type="button" variant="outline" size="xs" onClick={clearMessage}>
           Dismiss
         </Button>
       </Alert>

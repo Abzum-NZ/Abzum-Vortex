@@ -1,4 +1,5 @@
-import type { ControlSemanticEvent, FormBlockRuntime } from "@vortex/ui";
+import type { ControlSemanticEvent, FormBlockRuntime, PageMessageDraft } from "@vortex/ui";
+export type { PageMessageDraft } from "@vortex/ui";
 import type {
   FlowFieldCorrection,
   ReferenceChoiceSelectionEvidenceMap,
@@ -59,12 +60,6 @@ export type EventHandlers = Record<string, (event: never) => void> & {
   form_reset?: (event: FormResetEvent) => void | Promise<void>;
 };
 
-export type Notice = Readonly<{
-  tone: "info" | "problem";
-  text: string;
-  link?: Readonly<{ label: string; href: string }>;
-}>;
-
 /**
  * How a gesture's own control tells the person its outcome. A transient control (a grid row
  * action's toast) is gone in seconds, so a problem also stays on the page; an in-place control (a
@@ -78,7 +73,7 @@ export type ControlReport = "transient" | "in_place";
  * its own control (a grid cell) is reported only here and not in the page notice.
  */
 export type DispatchOutcome = Readonly<{
-  notice: Notice | undefined;
+  notice: PageMessageDraft | undefined;
   confirmed: boolean;
   changed: boolean;
   corrections?: readonly FlowFieldCorrection[];

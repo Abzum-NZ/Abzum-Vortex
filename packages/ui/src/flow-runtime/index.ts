@@ -1,4 +1,5 @@
 export { useFlowIntentHost, type FlowIntentHostOptions } from "./flow-intent-host";
+export type { PageMessage, PageMessageDraft } from "./messages";
 export {
   continueFlowEventCycle,
   flowSetFieldChange,
