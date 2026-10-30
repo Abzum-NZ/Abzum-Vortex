@@ -266,7 +266,7 @@ function compileModule(
             flowId: resolution.id(definitionKey, "flow", String(action.flow), "content"),
             writePolicy: actionWritePolicy(
               (body.flows as JsonObject[]).find((flow) => flow.id === action.flow),
-              record,
+              action.record_type,
               qualifiedForRecord,
               resolution,
             ),

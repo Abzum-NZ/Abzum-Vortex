@@ -362,6 +362,23 @@ export function provenanceFor(
       representedCanonicalPaths.add(canonicalKey);
       continue;
     }
+    // An action's write policy is derived from its flow, so it traces to the action's flow reference.
+    if (
+      sourceObject.kind === "module" &&
+      canonicalPath[0] === "content" &&
+      canonicalPath[1] === "actions" &&
+      typeof canonicalPath[2] === "number" &&
+      canonicalPath[3] === "writePolicy"
+    ) {
+      entries.push({
+        canonicalPath,
+        origin: "source",
+        sourcePath: ["body", "actions", canonicalPath[2], "flow"],
+        ruleCode: TRANSFORM_RULE,
+      });
+      representedCanonicalPaths.add(canonicalKey);
+      continue;
+    }
     fail("vortex.definition.invalid_compilation_output", "invalid_value");
   }
   return entries;

@@ -873,39 +873,15 @@
       "triggers": [],
       "tasks": [
         {
-          "id": "set_attached_signal_key",
+          "id": "set_fields",
           "type": "record.set_fields",
           "version": "1.0.0",
           "properties": {
             "values": {
               "kind": "map",
               "entries": {
-                "attached_signal_key": "{{ inputs.deduplication_key }}"
-              }
-            }
-          }
-        },
-        {
-          "id": "set_attached_signal_evidence",
-          "type": "record.set_fields",
-          "version": "1.0.0",
-          "properties": {
-            "values": {
-              "kind": "map",
-              "entries": {
-                "attached_signal_evidence": "{{ inputs.evidence }}"
-              }
-            }
-          }
-        },
-        {
-          "id": "set_attached_at",
-          "type": "record.set_fields",
-          "version": "1.0.0",
-          "properties": {
-            "values": {
-              "kind": "map",
-              "entries": {
+                "attached_signal_key": "{{ inputs.deduplication_key }}",
+                "attached_signal_evidence": "{{ inputs.evidence }}",
                 "attached_at": "{{ execution.now }}"
               }
             }
@@ -951,7 +927,7 @@
       "triggers": [],
       "tasks": [
         {
-          "id": "set_state_acknowledged",
+          "id": "set_fields",
           "type": "record.set_fields",
           "version": "1.0.0",
           "properties": {
@@ -1009,7 +985,7 @@
       "triggers": [],
       "tasks": [
         {
-          "id": "set_severity_critical",
+          "id": "set_fields",
           "type": "record.set_fields",
           "version": "1.0.0",
           "properties": {
@@ -1067,7 +1043,7 @@
       "triggers": [],
       "tasks": [
         {
-          "id": "set_state_resolved",
+          "id": "set_fields",
           "type": "record.set_fields",
           "version": "1.0.0",
           "properties": {
