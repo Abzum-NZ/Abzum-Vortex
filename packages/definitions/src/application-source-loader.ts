@@ -3,6 +3,7 @@ import {
   applicationSourceDocumentSchema,
   type ApplicationSourceDocument,
   type SourceApplicationThemeSelection,
+  type SourceFlow,
 } from "@vortex/platform/schema";
 
 type JsonObject = Record<string, unknown>;
@@ -24,12 +25,13 @@ const collectBlockReleases = (value: unknown, result = new Set<string>()): Set<s
 /**
  * Loads an authored Application with the Modules it owns, its exact registered block dependencies
  * and its explicit theme selection. Each Module is authored in its own file beside the Application
- * and becomes part of the one Application source here.
+ * and becomes part of the one Application source here, with the default flows its builders made.
  */
 export const loadApplicationSource = (
   authoredSource: unknown,
   selection: SourceApplicationThemeSelection,
   modules: readonly unknown[],
+  defaultFlows: readonly SourceFlow[],
 ): ApplicationSourceDocument => {
   const sourceObject = authoredSource as JsonObject;
   const body = sourceObject.body as JsonObject;
@@ -57,6 +59,8 @@ export const loadApplicationSource = (
     ...sourceObject,
     body: {
       ...body,
+      // The default flows come from the one builder per kind; the authored flows are the rest.
+      flows: [...(body.flows as readonly unknown[]), ...defaultFlows],
       modules,
       platform_block_dependencies: dependencies,
       theme,

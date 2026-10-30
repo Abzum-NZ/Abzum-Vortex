@@ -434,10 +434,12 @@ export async function invokeInstalledFlow(
           }),
       installationOf: installedFlowBindings,
       pageAccess: async (context, bound) => {
+        // An authored binding or one derived from it for a message's action (Undo).
+        const installed = installedFlowBindings(context);
         const binding =
           invocation.kind === "binding"
-            ? context.releaseSet.application.content.flowBindings.find((candidate) =>
-                sameId(candidate.bindingId, invocation.bindingId),
+            ? bindingsWithMessageActions(installed.bindings, [...installed.flows.values()]).find(
+                (candidate) => sameId(candidate.bindingId, invocation.bindingId),
               )
             : undefined;
         if (invocation.kind === "binding" && binding === undefined) return false;

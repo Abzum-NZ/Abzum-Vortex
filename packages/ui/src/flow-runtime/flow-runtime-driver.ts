@@ -38,6 +38,7 @@ export async function runFlowBinding(
             signal,
           ),
         setPageValues: options.state.pageValues.write,
+        validateForm: options.state.validateForm,
         setFormValue: (form, field, value) => {
           const cycle = options.state.cycleFor(clickId);
           return cycle !== undefined && options.state.writeFormValue(form, field, value, cycle);

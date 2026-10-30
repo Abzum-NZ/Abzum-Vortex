@@ -88,8 +88,14 @@ export function createFlowRuntimeState(
     Readonly<{
       read: (fieldKey: string) => TypedFieldValue | undefined;
       write: (fieldKey: string, value: unknown, cycle: FlowEventCycle) => boolean;
+      validate: () => boolean;
     }>
   >();
+  /** A form is registered under its placement and, in a dialog, the dialog's own scope, so two copies never collide. */
+  const formKey = (formId: string, scope: string) => `${scope}|${formId.toLowerCase()}`;
+  /** The form of a scope, else the page's own form of that placement. */
+  const formIn = (formId: string, scope: string) =>
+    forms.get(formKey(formId, scope)) ?? forms.get(formKey(formId, ""));
   const notify = (controlId: string) => listeners.get(controlId)?.forEach((listener) => listener());
   const pageValues = createPageValueSlots(declarations, (key) => notify(`page:${key}`));
   const messages = createPageMessages((key) => notify(`message:${key}`));
@@ -141,25 +147,33 @@ export function createFlowRuntimeState(
       formId: string,
       read: (fieldKey: string) => TypedFieldValue | undefined,
       write: (fieldKey: string, value: unknown, cycle: FlowEventCycle) => boolean,
+      validate: () => boolean,
+      scope = "",
     ) => {
-      const key = formId.toLowerCase();
+      const key = formKey(formId, scope);
       if (forms.has(key)) throw new Error(`Form '${formId}' is registered more than once`);
-      const form = { read, write };
+      const form = { read, write, validate };
       forms.set(key, form);
       for (const fieldKey of Object.keys(formTypes[formId] ?? {}))
-        notify(`form:${key}:${fieldKey}`);
+        notify(`form:${formId.toLowerCase()}:${fieldKey}`);
       return () => {
         if (forms.get(key) === form) {
           forms.delete(key);
           for (const fieldKey of Object.keys(formTypes[formId] ?? {}))
-            notify(`form:${key}:${fieldKey}`);
+            notify(`form:${formId.toLowerCase()}:${fieldKey}`);
         }
       };
     },
-    readFormValue: (formId: string, fieldKey: string) =>
-      forms.get(formId.toLowerCase())?.read(fieldKey),
-    writeFormValue: (formId: string, fieldKey: string, value: unknown, cycle: FlowEventCycle) =>
-      forms.get(formId.toLowerCase())?.write(fieldKey, value, cycle) ?? false,
+    readFormValue: (formId: string, fieldKey: string, scope = "") =>
+      formIn(formId, scope)?.read(fieldKey),
+    writeFormValue: (
+      formId: string,
+      fieldKey: string,
+      value: unknown,
+      cycle: FlowEventCycle,
+      scope = "",
+    ) => formIn(formId, scope)?.write(fieldKey, value, cycle) ?? false,
+    validateForm: (formId: string, scope = "") => formIn(formId, scope)?.validate() ?? false,
     cycleFor: (gestureId: string) => cycles.get(gestureId)?.cycle,
     trackCycle: (gestureId: string, cycle: FlowEventCycle) => {
       const held = { cycle };
@@ -334,6 +348,24 @@ export function createFlowRuntimeState(
 }
 
 export type FlowRuntimeState = ReturnType<typeof createFlowRuntimeState>;
+
+/**
+ * The runtime state as a dialog's form sees it: its form registers, reads, writes and validates in
+ * the dialog's own scope (the form's placement and the dialog's run), and everything else is the
+ * page's. The same form shown inline and in a dialog never collide.
+ */
+export const scopeFlowRuntimeForms = (
+  state: FlowRuntimeState,
+  scope: string,
+): FlowRuntimeState => ({
+  ...state,
+  registerForm: (formId, read, write, validate) =>
+    state.registerForm(formId, read, write, validate, scope),
+  readFormValue: (formId, fieldKey) => state.readFormValue(formId, fieldKey, scope),
+  writeFormValue: (formId, fieldKey, value, cycle) =>
+    state.writeFormValue(formId, fieldKey, value, cycle, scope),
+  validateForm: (formId) => state.validateForm(formId, scope),
+});
 
 /** The safe identity of a binding used by a surface that does not receive its input map. */
 export type PlacementFlowBinding = Readonly<{

@@ -9,6 +9,7 @@ import {
   type FieldInputControlReleaseMap,
   type createPlatformComponentRegistryForReleases,
   PagePuckRenderer,
+  scopeFlowRuntimeForms,
   UnsavedWorkProvider,
   useFlowIntentHost,
   type ControlSemanticEvent,
@@ -202,6 +203,7 @@ export function useFlowRuntime({
             parameters.set(name, String(value));
         const query = parameters.toString();
         const address = `${resolvePageHref(target.pageId)}${query === "" ? "" : `?${query}`}`;
+        runtimeState.messages.carryToasts();
         // Inside the frame the change runs in its page transition (dimmed page, progress line).
         if (startPageChange === undefined) router.push(address);
         else startPageChange(() => router.push(address));
@@ -209,7 +211,29 @@ export function useFlowRuntime({
       resolveInternalAddress: (target) =>
         target.kind === "page" ? resolvePageHref(target.pageId) : basePath,
     }),
-    [basePath, model.pages, resolvePageHref, router, showPageMessage, startPageChange, unsavedWork],
+    [
+      basePath,
+      model.pages,
+      resolvePageHref,
+      router,
+      runtimeState,
+      showPageMessage,
+      startPageChange,
+      unsavedWork,
+    ],
+  );
+  // A dialog's form registers in its own scope: the form's placement and the dialog's run.
+  const dialogStatesRef = useRef(new Map<string, FlowRuntimeState>());
+  const dialogState = useCallback(
+    (form: FlowFormIntent): FlowRuntimeState => {
+      const scope = `dialog:${form.formId}:${form.taskId}`;
+      const held = dialogStatesRef.current.get(scope);
+      if (held !== undefined) return held;
+      const created = scopeFlowRuntimeForms(runtimeState, scope);
+      dialogStatesRef.current.set(scope, created);
+      return created;
+    },
+    [runtimeState],
   );
   const renderForm = useCallback(
     (
@@ -320,6 +344,7 @@ export function useFlowRuntime({
                   resolvePageHref={resolvePageHref}
                   currentPageId={model.pageId}
                   runtimeInputs={scopedInputs}
+                  runtimeState={dialogState(form)}
                 />
               </UnsavedWorkProvider>
               <DialogFooter>
@@ -338,7 +363,7 @@ export function useFlowRuntime({
         ),
       };
     },
-    [currentData, model, navigation, resolvePageHref, router],
+    [currentData, dialogState, model, navigation, resolvePageHref, router],
   );
   const messageActionRef = useRef<(message: FlowMessageIntent) => void>(() => undefined);
   const {
@@ -430,6 +455,13 @@ export function useFlowRuntime({
       subject,
     ],
   );
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   messageActionRef.current = (message) => {
     const all = Object.values(model.bindings).flat();
     const source = all.find((binding) => binding.bindingId === message.originBindingId);
@@ -448,16 +480,19 @@ export function useFlowRuntime({
       showPageMessage(unavailableNotice);
       return;
     }
-    applyMessageActionRef.current(
-      flowRuntime.dispatch(
-        action,
-        message.actionInputs,
-        crypto.randomUUID(),
-        message.subject,
-        message.sourceTablePlacementId,
-      ),
-      action.bindingId,
+    const dispatched = flowRuntime.dispatch(
+      action,
+      message.actionInputs,
+      crypto.randomUUID(),
+      message.subject,
+      message.sourceTablePlacementId,
     );
+    applyMessageActionRef.current(dispatched, action.bindingId);
+    // An action carried to the next page (Undo after a delete that opened the list) finishes after
+    // this page has gone: the page now showing re-reads what the action changed.
+    void dispatched.then(() => {
+      if (!mountedRef.current) router.refresh();
+    });
   };
   const webMcpRuntime = useMemo(
     () =>

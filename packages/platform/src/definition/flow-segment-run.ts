@@ -20,6 +20,28 @@ import type {
   Run,
 } from "./flow-orchestrator-types";
 
+type TaskResult = Extract<FlowRunResume, { kind: "task_result" }>;
+
+/** A committed save carries the authored messages of its warnings as its `warning` output, so a flow shows them as a step. */
+const withSaveWarning = (
+  taskType: string,
+  result: TaskResult,
+  warnings: readonly Readonly<{ taskId: string; message: string }>[],
+  taskId: string,
+): TaskResult =>
+  taskType === "record.save" && result.outcome === "committed"
+    ? {
+        ...result,
+        outputs: {
+          ...result.outputs,
+          warning: warnings
+            .filter((entry) => entry.taskId === taskId)
+            .map((entry) => entry.message)
+            .join(" "),
+        },
+      }
+    : result;
+
 /** Runs only the admitted segment. The host constructs a fresh frame and bound ports per attempt. */
 export const runFlowSegment = async (
   dependencies: FlowOrchestratorDependencies,
@@ -85,13 +107,18 @@ export const runFlowSegment = async (
               receipt.warnings[key] ?? [],
             );
       if (replay?.kind !== "task_result") throw new Error("FLOW_SEGMENT_REPLAY_UNAVAILABLE");
-      result = replay;
+      result =
+        step.kind === "protected_task"
+          ? withSaveWarning(step.call.taskType, replay, run.warnings, step.call.taskId)
+          : replay;
     } else {
       const executed =
         step.kind === "protected_set"
           ? await runner.runSegmentSet(run, step.state, step)
           : await runner.runSegmentTask(run, step.state, step.call);
       result = { kind: "task_result", ...executed.result };
+      if (step.kind === "protected_task")
+        result = withSaveWarning(step.call.taskType, result, run.warnings, step.call.taskId);
       if (executed.replay !== undefined) {
         if (receipt !== undefined) throw new Error("FLOW_SEGMENT_REPLAY_RAN_EFFECT");
         effects[key] = { outcome: executed.result.outcome, replay: executed.replay };

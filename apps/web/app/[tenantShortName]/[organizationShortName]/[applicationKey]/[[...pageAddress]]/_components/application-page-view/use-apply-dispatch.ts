@@ -247,13 +247,12 @@ export function useApplyDispatch({
             }
           }
           if (!isCurrentNavigation()) return outcome;
-          // Reads, navigation and initialization have no write to confirm. Authored messages
-          // are already presented by the flow host; keep failures and gesture-specific feedback.
+          // A run that finished well says so through its own flow steps (the "Saved" and "Deleted"
+          // messages): the page reports only what went wrong, or needs the person to look at.
           const silentCompletion =
-            resultNotice === outcomeNotices.completed &&
-            server.failure === undefined &&
-            server.descriptor.commit !== "confirmed" &&
-            server.descriptor.commit !== "partial";
+            (resultNotice === outcomeNotices.completed ||
+              resultNotice === outcomeNotices.committed) &&
+            server.failure === undefined;
           if (!silentCompletion) showResult(resultNotice, refusalFeedback);
           const changedUnderPerson =
             server.descriptor.outcome === "conflict" || diagnostic?.code === "stale_revision";

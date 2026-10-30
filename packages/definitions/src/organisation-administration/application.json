@@ -2482,6 +2482,34 @@
                 }
               }
             }
+          },
+          {
+            "id": "done",
+            "type": "interface.show_message",
+            "version": "1.0.0",
+            "properties": {
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Notice recorded."
+                }
+              },
+              "target": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "toast"
+                }
+              },
+              "severity": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "success"
+                }
+              }
+            }
           }
         ],
         "outputs": {},
@@ -2565,174 +2593,37 @@
                 }
               }
             }
+          },
+          {
+            "id": "done",
+            "type": "interface.show_message",
+            "version": "1.0.0",
+            "properties": {
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Request recorded."
+                }
+              },
+              "target": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "toast"
+                }
+              },
+              "severity": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "success"
+                }
+              }
+            }
           }
         ],
         "outputs": {},
-        "errors": [],
-        "finally": []
-      },
-      {
-        "id": "flow_suspend_organization_account",
-        "key": "suspend_organization_account",
-        "labels": {
-          "name": "Suspend organisation account"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "organization_account_id": {
-            "type": "record_reference",
-            "required": true,
-            "recordTypeIds": ["vortex.system_directory:person"]
-          },
-          "expected_revision": {
-            "type": "whole_number",
-            "required": true
-          }
-        },
-        "variables": {},
-        "triggers": [],
-        "tasks": [
-          {
-            "id": "call",
-            "type": "operation.call",
-            "version": "1.0.0",
-            "properties": {
-              "operation": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "platform.suspend_organization_account"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {
-          "result": {
-            "type": "json",
-            "value": {
-              "kind": "reference",
-              "reference": {
-                "source": "task_output",
-                "task": "call",
-                "key": "result"
-              }
-            }
-          }
-        },
-        "errors": [],
-        "finally": []
-      },
-      {
-        "id": "flow_reactivate_organization_account",
-        "key": "reactivate_organization_account",
-        "labels": {
-          "name": "Reactivate organisation account"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "organization_account_id": {
-            "type": "record_reference",
-            "required": true,
-            "recordTypeIds": ["vortex.system_directory:person"]
-          },
-          "expected_revision": {
-            "type": "whole_number",
-            "required": true
-          }
-        },
-        "variables": {},
-        "triggers": [],
-        "tasks": [
-          {
-            "id": "call",
-            "type": "operation.call",
-            "version": "1.0.0",
-            "properties": {
-              "operation": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "platform.reactivate_organization_account"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {
-          "result": {
-            "type": "json",
-            "value": {
-              "kind": "reference",
-              "reference": {
-                "source": "task_output",
-                "task": "call",
-                "key": "result"
-              }
-            }
-          }
-        },
-        "errors": [],
-        "finally": []
-      },
-      {
-        "id": "flow_close_organization_account",
-        "key": "close_organization_account",
-        "labels": {
-          "name": "Close organisation account"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "organization_account_id": {
-            "type": "record_reference",
-            "required": true,
-            "recordTypeIds": ["vortex.system_directory:person"]
-          },
-          "expected_revision": {
-            "type": "whole_number",
-            "required": true
-          }
-        },
-        "variables": {},
-        "triggers": [],
-        "tasks": [
-          {
-            "id": "call",
-            "type": "operation.call",
-            "version": "1.0.0",
-            "properties": {
-              "operation": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "platform.close_organization_account"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {
-          "result": {
-            "type": "json",
-            "value": {
-              "kind": "reference",
-              "reference": {
-                "source": "task_output",
-                "task": "call",
-                "key": "result"
-              }
-            }
-          }
-        },
         "errors": [],
         "finally": []
       },
@@ -2964,236 +2855,6 @@
         "finally": []
       },
       {
-        "id": "flow_revoke_organization_invitation",
-        "key": "revoke_organization_invitation",
-        "labels": {
-          "name": "Revoke organisation invitation"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "invitation_id": {
-            "type": "record_reference",
-            "required": true,
-            "recordTypeIds": ["vortex.system_directory:organization_invitation"]
-          },
-          "expected_revision": {
-            "type": "whole_number",
-            "required": true
-          }
-        },
-        "variables": {},
-        "triggers": [],
-        "tasks": [
-          {
-            "id": "call",
-            "type": "operation.call",
-            "version": "1.0.0",
-            "properties": {
-              "operation": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "platform.revoke_organization_invitation"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {
-          "result": {
-            "type": "json",
-            "value": {
-              "kind": "reference",
-              "reference": {
-                "source": "task_output",
-                "task": "call",
-                "key": "result"
-              }
-            }
-          }
-        },
-        "errors": [],
-        "finally": []
-      },
-      {
-        "id": "flow_open_organization_settings",
-        "key": "open_organization_settings",
-        "labels": {
-          "name": "Open organisation settings"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "record_id": {
-            "type": "record_reference",
-            "required": true,
-            "recordTypeIds": ["vortex.organisation_administration:organization_settings"]
-          }
-        },
-        "variables": {},
-        "triggers": [],
-        "tasks": [
-          {
-            "id": "navigate",
-            "type": "interface.navigate",
-            "version": "1.0.0",
-            "properties": {
-              "page": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "edit_organisation_runtime_settings"
-                }
-              },
-              "parameters": {
-                "kind": "map",
-                "entries": {
-                  "record_id": "{{ inputs.record_id }}"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {},
-        "errors": [],
-        "finally": []
-      },
-      {
-        "id": "flow_save_organization_settings_record",
-        "key": "save_organization_settings_record",
-        "labels": {
-          "name": "Save organisation settings"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "record": {
-            "type": "record_reference",
-            "required": true,
-            "recordTypeIds": ["vortex.organisation_administration:organization_settings"]
-          },
-          "values": {
-            "type": "json",
-            "required": true
-          }
-        },
-        "variables": {},
-        "triggers": [],
-        "tasks": [
-          {
-            "id": "save",
-            "type": "record.save",
-            "version": "1.0.0",
-            "properties": {
-              "record_type": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "vortex.organisation_administration:organization_settings"
-                }
-              },
-              "record": {
-                "kind": "reference",
-                "reference": {
-                  "source": "input",
-                  "name": "record"
-                }
-              },
-              "values": {
-                "kind": "reference",
-                "reference": {
-                  "source": "input",
-                  "name": "values"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {
-          "record": {
-            "type": "record_reference",
-            "recordTypeIds": ["vortex.organisation_administration:organization_settings"],
-            "value": {
-              "kind": "reference",
-              "reference": {
-                "source": "task_output",
-                "task": "save",
-                "key": "record"
-              }
-            }
-          }
-        },
-        "errors": [],
-        "finally": []
-      },
-      {
-        "id": "navigate_new_notice",
-        "key": "navigate_new_notice",
-        "description": "Opens the organisation notice form.",
-        "labels": {
-          "name": "New notice"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {},
-        "tasks": [
-          {
-            "id": "open_page",
-            "type": "interface.navigate",
-            "version": "1.0.0",
-            "properties": {
-              "page": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "record_organisation_notice"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {}
-      },
-      {
-        "id": "navigate_new_privacy_request",
-        "key": "navigate_new_privacy_request",
-        "description": "Opens the privacy request form.",
-        "labels": {
-          "name": "New privacy request"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {},
-        "tasks": [
-          {
-            "id": "open_page",
-            "type": "interface.navigate",
-            "version": "1.0.0",
-            "properties": {
-              "page": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "record_privacy_request_case"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {}
-      },
-      {
         "id": "flow_create_connection",
         "key": "create_connection",
         "labels": {
@@ -3415,6 +3076,34 @@
                 "literal": {
                   "type": "text",
                   "value": "platform.revoke_connection_instance"
+                }
+              }
+            }
+          },
+          {
+            "id": "done",
+            "type": "interface.show_message",
+            "version": "1.0.0",
+            "properties": {
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Connection revoked."
+                }
+              },
+              "target": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "toast"
+                }
+              },
+              "severity": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "success"
                 }
               }
             }
@@ -3749,51 +3438,6 @@
             }
           }
         },
-        "errors": [],
-        "finally": []
-      },
-      {
-        "id": "flow_open_connection_detail",
-        "key": "open_connection_detail",
-        "labels": {
-          "name": "Open connection"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "record_id": {
-            "type": "record_reference",
-            "required": true,
-            "recordTypeIds": ["vortex.system_directory:connection_instance"]
-          }
-        },
-        "variables": {},
-        "triggers": [],
-        "tasks": [
-          {
-            "id": "navigate",
-            "type": "interface.navigate",
-            "version": "1.0.0",
-            "properties": {
-              "page": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "connection_detail"
-                }
-              },
-              "parameters": {
-                "kind": "map",
-                "entries": {
-                  "record_id": "{{ inputs.record_id }}"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {},
         "errors": [],
         "finally": []
       }

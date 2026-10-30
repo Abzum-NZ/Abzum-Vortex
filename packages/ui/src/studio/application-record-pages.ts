@@ -1,6 +1,10 @@
 import {
   changeableByPeople,
+  defaultDeleteFlowSource,
+  defaultOpenFlowSource,
+  defaultRestoreFlowSource,
   defaultSaveFlowSource,
+  type DefaultFlowAfter,
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
   sourcePageItems,
   sourcePageZones,
@@ -9,6 +13,20 @@ import {
   type SourceItem,
   type ImmutablePlatformBlockCatalogue,
 } from "@vortex/platform/schema";
+import {
+  columnLimit,
+  kindWords,
+  listing,
+  lowerFirst,
+  takenIds,
+  columnTypes,
+  fieldsPerStep,
+  inputTypes,
+  pageSize,
+  studioRecordPageChoices,
+  studioRecordPageKinds,
+  type StudioRecordPageCommand,
+} from "./application-record-page-kinds";
 import { applyStudioFlowCreate, type StudioFlowCreateCommand } from "./application-flow-create";
 import { ensureStudioRecordQuery } from "./default-record-query";
 import { STUDIO_ROW_ACTION_EVENT_SETTING, studioRowActionEventId } from "./contextual-palette";
@@ -32,10 +50,9 @@ import {
 
 /**
  * The pages of one record type, written as ordinary explicit source in one draft edit: a list (a
- * records table on the record type's list query, a New button, rows that open the detail page), a
- * detail (the record's fields, an Edit button, a table of each record type that links to it), a
- * create or edit form (a form of field inputs, its submit bound to a Save flow of one
- * `record.save` step and an Open step), and a guided create form (the same, in steps).
+ * records table, New and Delete actions, rows that open the detail page), a detail (the fields,
+ * Edit and Delete buttons, a table of each linked record type), a create or edit form (field
+ * inputs whose submit runs the default Save flow) and a guided create form (the same, in steps).
  *
  * Nothing is generated at runtime: every block, query, flow, event and binding is written into the
  * draft by the one add-page, block, flow-create and binding paths, and can then be edited like any
@@ -43,129 +60,10 @@ import {
  * Adding a companion separately connects it to the record type's existing pages.
  */
 
-export type StudioRecordPageKind = "list" | "detail" | "form_create" | "form_edit" | "guided";
-
-export type StudioRecordPageCommand = Readonly<{
-  kind: "add_record_page";
-  /** The record type, qualified by its owned module: `module.key:record_key`. */
-  recordType: string;
-  type: StudioRecordPageKind;
-  shellAlias: string | null;
-  addToMenu: boolean;
-  /**
-   * A list page's own name; the record type's plural name when left out. A record type can have
-   * several lists, each its own page with its own name.
-   */
-  name?: string | undefined;
-}>;
-
-export const studioRecordPageKinds: readonly Readonly<{
-  kind: StudioRecordPageKind;
-  label: string;
-  hint: string;
-}>[] = [
-  {
-    kind: "list",
-    label: "List",
-    hint: "A table of every record, with a New button; a row opens the record.",
-  },
-  {
-    kind: "detail",
-    label: "Detail",
-    hint: "One record's fields, an Edit button and the records that link to it.",
-  },
-  {
-    kind: "form_create",
-    label: "Create form",
-    hint: "A form that saves a new record, then opens it.",
-  },
-  {
-    kind: "form_edit",
-    label: "Edit form",
-    hint: "A form that saves changes to a record, then opens it.",
-  },
-  {
-    kind: "guided",
-    label: "Guided create form",
-    hint: "The create form, a few fields per step, then a check and save step.",
-  },
-];
-
 type Module = Source["body"]["modules"][number];
 type RecordType = Module["record_types"][number];
 type Field = RecordType["fields"][number];
 type Query = Module["queries"][number];
-
-/** The record types a page can be made for: those of the modules this application owns. */
-export const studioRecordPageChoices = (
-  source: Source,
-): readonly Readonly<{
-  recordType: string;
-  label: string;
-  kinds: readonly StudioRecordPageKind[];
-}>[] =>
-  source.body.modules.flatMap((module) =>
-    module.record_types.map((record) => ({
-      recordType: `${module.key}:${record.key}`,
-      label: `${record.plural_name} (${module.name})`,
-      kinds: studioRecordPageKinds
-        .filter(
-          (entry) =>
-            record.standard_actions.includes("read") &&
-            (entry.kind === "form_create" || entry.kind === "guided"
-              ? record.standard_actions.includes("create")
-              : entry.kind === "form_edit"
-                ? record.standard_actions.includes("update")
-                : true),
-        )
-        .map((entry) => entry.kind),
-    })),
-  );
-
-/** Field types an automatic field input draws; any other type has no input to put in a form. */
-const inputTypes: ReadonlySet<string> = new Set([
-  "text",
-  "email_address",
-  "phone_number",
-  "web_address",
-  "long_text",
-  "formatted_text",
-  "whole_number",
-  "decimal_number",
-  "money",
-  "yes_no",
-  "date",
-  "date_time",
-  "choice",
-  "several_choices",
-  "link",
-  "link_to_one_of_several",
-  "table",
-  "attachment",
-]);
-/** Field types a table column shows compactly. */
-const columnTypes: ReadonlySet<string> = new Set([
-  "reference_number",
-  "text",
-  "email_address",
-  "web_address",
-  "phone_number",
-  "choice",
-  "whole_number",
-  "decimal_number",
-  "money",
-  "date",
-  "date_time",
-  "yes_no",
-]);
-const columnLimit = 5;
-const fieldsPerStep = 3;
-const pageSize = 40;
-
-const lowerFirst = (name: string): string =>
-  /^[A-Z][a-z]/.test(name) ? `${name[0]!.toLowerCase()}${name.slice(1)}` : name;
-const listing = (labels: readonly string[]): string =>
-  labels.length <= 1 ? labels.join("") : `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)!}`;
 
 /** The record type, its owned module and its title field, or a located refusal. */
 const resolveRecordType = (source: Source, reference: string) => {
@@ -182,7 +80,7 @@ const resolveRecordType = (source: Source, reference: string) => {
       `The record type ${quoted(record.name)} has no title field, so its pages cannot name a record. Choose its title field in Data first.`,
     );
   /** The record type's standard permission for one action, or a located refusal. */
-  const standard = (action: "read" | "create" | "update") => {
+  const standard = (action: "read" | "create" | "update" | "soft_delete") => {
     if (!record.standard_actions.includes(action))
       return refuse(
         `${record.name} does not allow ${action}. Enable it under Standard actions in Data first.`,
@@ -216,7 +114,11 @@ const resolveRecordType = (source: Source, reference: string) => {
    * holds the record type's standard permission for that action at that moment. A page opens with
    * an application permission; the record permission still governs the records it shows.
    */
-  const permission = (target: Source, action: "read" | "create" | "update", details?: string[]) => {
+  const permission = (
+    target: Source,
+    action: "read" | "create" | "update" | "soft_delete",
+    details?: string[],
+  ) => {
     const recordPermission = standard(action).key;
     const body = target.body;
     const key = `${target.key}.${module.key.replaceAll(".", "_")}.${record.key}.${action}`;
@@ -237,7 +139,13 @@ const resolveRecordType = (source: Source, reference: string) => {
         "The application already declares 100 permissions, so no page permission can be added.",
       );
     const verb =
-      action === "read" ? "Open" : action === "create" ? "Open creation of" : "Open editing of";
+      action === "read"
+        ? "Open"
+        : action === "create"
+          ? "Open creation of"
+          : action === "update"
+            ? "Open editing of"
+            : "Delete";
     body.permissions.push({
       id: uniqueKey(
         `${record.key}_${action}`,
@@ -247,7 +155,10 @@ const resolveRecordType = (source: Source, reference: string) => {
       ),
       key,
       label: `${verb} ${record.plural_name.toLowerCase()}`.slice(0, 60),
-      description: `Allows opening the ${action === "read" ? "" : `${action === "create" ? "creation" : "editing"} `}pages of ${record.plural_name.toLowerCase()} in ${module.name}.`,
+      description:
+        action === "soft_delete"
+          ? `Allows deleting ${record.plural_name.toLowerCase()} in ${module.name} from their pages.`
+          : `Allows opening the ${action === "read" ? "" : `${action === "create" ? "creation" : "editing"} `}pages of ${record.plural_name.toLowerCase()} in ${module.name}.`,
       action_kind: "named",
       named_action: uniqueKey(
         `${record.key}_${action}`,
@@ -279,23 +190,6 @@ const resolveRecordType = (source: Source, reference: string) => {
   };
 };
 type Resolved = ReturnType<typeof resolveRecordType>;
-
-/** Every `id` in the source: a new block, query, step or flow alias is unique among them all. */
-const takenIds = (source: Source): Set<string> => {
-  const names = new Set<string>();
-  const visit = (value: unknown): void => {
-    if (Array.isArray(value)) {
-      value.forEach(visit);
-      return;
-    }
-    if (value === null || typeof value !== "object") return;
-    const record = value as Record<string, unknown>;
-    if (typeof record.id === "string") names.add(record.id);
-    Object.values(record).forEach(visit);
-  };
-  visit(source);
-  return names;
-};
 
 /** Which existing page of the record type each companion kind is, judged by its type and its Save flow. */
 export const companions = (source: Source, qualified: string) => {
@@ -414,33 +308,49 @@ const flowCreate = (
   plan: Plan,
   command: StudioFlowCreateCommand,
   what: string,
-): Readonly<{ id: string; eventId: string }> => {
+): Readonly<{ id: string; eventId: string; flowKey: string }> => {
   const result = applyStudioFlowCreate(judged(plan.source), command, null);
   if (result.kind === "refused") return refuse(`${what} could not be made: ${result.reason}`);
   plan.source = result.source;
-  return result.binding!;
+  return { ...result.binding!, flowKey: result.selection.flowAlias };
 };
 
-const textLiteral = (value: string) => ({
-  kind: "literal" as const,
-  literal: { type: "text" as const, value },
+/** The parts of a flow the one flow-create command takes, from a default flow builder's source. */
+const flowParts = ({ description, inputs, tasks, outputs, errors }: SourceFlow, name: string) => ({
+  name,
+  description: description ?? "",
+  inputs,
+  tasks,
+  outputs,
+  ...(errors.length === 0 ? {} : { errors }),
 });
-const navigateTask = (id: string, page: string, recordId?: string): SourceFlow["tasks"][number] =>
-  ({
-    id,
-    type: "interface.navigate",
-    version: "1.0.0",
-    properties: {
-      page: textLiteral(page),
-      ...(recordId === undefined
-        ? {}
-        : { parameters: { kind: "map", entries: { record_id: recordId } } }),
+
+/** Binds a control event to a flow made from a default flow builder's source; the binding carries each flow input by name. */
+const bindDefault = (
+  plan: Plan,
+  controlAlias: string,
+  event: "action" | "row_clicked" | "row_action" | "form_submit",
+  flow: SourceFlow,
+  name: string,
+  extra: Readonly<{
+    rowActionLabel?: string;
+    rowActionCapability?: "update" | "delete" | "restore";
+  }> = {},
+) =>
+  flowCreate(
+    plan,
+    {
+      kind: "control",
+      controlAlias,
+      event,
+      ...flowParts(flow, name),
+      bindingInputs: Object.fromEntries(
+        Object.keys(flow.inputs).map((input) => [input, { kind: "caller" as const, name: input }]),
+      ),
+      ...extra,
     },
-  }) as unknown as SourceFlow["tasks"][number];
-const recordInput = (resolved: Resolved) =>
-  ({
-    record_id: { type: "record_reference", required: true, recordTypeIds: [resolved.qualified] },
-  }) as unknown as SourceFlow["inputs"];
+    `The flow ${quoted(name)}`,
+  );
 
 /** A flow bound to a row click or an action that opens one page, with the clicked or current record when given. */
 const openFlow = (
@@ -450,28 +360,19 @@ const openFlow = (
   name: string,
   target: Page,
   resolved: Resolved | undefined,
-): Readonly<{ id: string; eventId: string }> =>
-  flowCreate(
+) =>
+  bindDefault(
     plan,
-    {
-      kind: "control",
-      controlAlias,
-      event,
-      name,
+    controlAlias,
+    event,
+    defaultOpenFlowSource({
+      id: "open",
+      key: "open",
       description: `Opens the page ${quoted(target.name)}${resolved === undefined ? "" : ` with the ${lowerFirst(resolved.record.name)}`}.`,
-      inputs: resolved === undefined ? {} : recordInput(resolved),
-      outputs: {},
-      tasks: [
-        navigateTask(
-          "open_page",
-          target.key,
-          resolved === undefined ? undefined : "{{ inputs.record_id }}",
-        ),
-      ],
-      bindingInputs:
-        resolved === undefined ? {} : { record_id: { kind: "caller", name: "record_id" } },
-    },
-    `The flow ${quoted(name)}`,
+      page: target.key,
+      ...(resolved === undefined ? {} : { recordType: resolved.qualified }),
+    }),
+    name,
   );
 
 /** Finds a placed block by alias in the current draft, with the list that holds it. */
@@ -519,21 +420,20 @@ const openRows = (plan: Plan, tableAlias: string, resolved: Resolved, detail: Pa
   );
 };
 
-/** A button that opens a page, placed beside `besideAlias` (before it) or at `items`' start, and its flow. */
-const openButton = (
+/** A button placed beside `besideAlias` (before it) or at `items`' start, seen only with `permission`. */
+const placeButton = (
   context: StudioStructureContext,
   plan: Plan,
   label: string,
   permission: string,
-  target: Page,
-  resolved: Resolved | undefined,
   place: Readonly<{ beside: string }> | Readonly<{ items: SourceItem[] }>,
+  variant: "primary" | "danger" = "primary",
 ): string => {
   const alias = freshAlias(plan, `button_${uniqueKey(label, "", new Set(), 40)}`);
   const button = blockItem(
     release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.BUTTON_BLOCK_RELEASE, "button"),
     alias,
-    { label, action_kind: "action", variant: "primary" },
+    { label, action_kind: "action", variant },
     {},
     { view_permission: permission },
   );
@@ -558,8 +458,87 @@ const openButton = (
       (header.props.actions as SourceItem[]).push(button);
     }
   }
+  return alias;
+};
+
+/** A button that opens a page, placed beside `besideAlias` (before it) or at `items`' start, and its flow. */
+const openButton = (
+  context: StudioStructureContext,
+  plan: Plan,
+  label: string,
+  permission: string,
+  target: Page,
+  resolved: Resolved | undefined,
+  place: Readonly<{ beside: string }> | Readonly<{ items: SourceItem[] }>,
+): string => {
+  const alias = placeButton(context, plan, label, permission, place);
   openFlow(plan, alias, "action", label, target, resolved);
   return alias;
+};
+
+/** The flow that brings a deleted record of the type back: made once, started by the Undo of a Deleted message. */
+const restoreFlowKey = (plan: Plan, resolved: Resolved): string => {
+  const existing = plan.source.body.flows.find((flow) =>
+    flow.tasks.some(
+      (task) =>
+        task.type === "record.restore" &&
+        "properties" in task &&
+        JSON.stringify(task.properties).includes(`"${resolved.qualified}"`),
+    ),
+  );
+  if (existing !== undefined) return existing.key;
+  const name = `Restore ${lowerFirst(resolved.record.name)}`;
+  const flow = defaultRestoreFlowSource({
+    id: "restore",
+    key: "restore",
+    recordType: resolved.qualified,
+    recordName: lowerFirst(resolved.record.name),
+    after: { kind: "refresh" },
+  });
+  const result = applyStudioFlowCreate(
+    judged(plan.source),
+    {
+      kind: "flow",
+      ...flowParts(flow, name),
+      description: `Brings a deleted ${lowerFirst(resolved.record.name)} back.`,
+    },
+    null,
+  );
+  if (result.kind === "refused")
+    return refuse(`The flow ${quoted(name)} could not be made: ${result.reason}`);
+  plan.source = result.source;
+  return result.selection.flowAlias;
+};
+
+/** The Delete flow of the type that ends on `after`, bound to `controlAlias`. */
+const bindDelete = (
+  plan: Plan,
+  resolved: Resolved,
+  controlAlias: string,
+  event: "action" | "row_action",
+  after: DefaultFlowAfter,
+  extra: Readonly<{
+    rowActionLabel?: string;
+    rowActionCapability?: "update" | "delete" | "restore";
+  }> = {},
+) => {
+  const restoreFlow = restoreFlowKey(plan, resolved);
+  return bindDefault(
+    plan,
+    controlAlias,
+    event,
+    defaultDeleteFlowSource({
+      id: "delete",
+      key: "delete",
+      description: `Deletes one ${lowerFirst(resolved.record.name)} after asking, and offers Undo.`,
+      recordType: resolved.qualified,
+      recordName: lowerFirst(resolved.record.name),
+      restoreFlow,
+      after,
+    }),
+    `Delete ${lowerFirst(resolved.record.name)}`,
+    extra,
+  );
 };
 
 /** Every records table on a page that reads a query of the record type, including related records. */
@@ -627,6 +606,60 @@ const opensAny = (source: Source, page: Page, targets: readonly string[]): boole
               ),
           ),
       ),
+  );
+};
+
+/** Whether a control of the page already starts a flow that deletes the record type's records. */
+const deletesFrom = (source: Source, page: Page, qualified: string): boolean => {
+  const controls = new Set(sourcePageItems(page.composition).map((item) => item.props.id));
+  const started = new Set(
+    source.body.flow_bindings.filter((b) => controls.has(b.control)).map((b) => b.flow),
+  );
+  return source.body.flows.some((flow) => {
+    const tasks = JSON.stringify(flow.tasks);
+    return started.has(flow.key) && tasks.includes('"record.delete"') && tasks.includes(qualified);
+  });
+};
+
+/**
+ * A Delete button on the record type's detail page, once the type allows delete and has a list to
+ * go back to. Whichever of the two pages is made second adds it.
+ */
+const ensureDetailDelete = (context: StudioStructureContext, plan: Plan, resolved: Resolved) => {
+  const found = companions(plan.source, resolved.qualified);
+  const list = found.list[0];
+  if (
+    !resolved.record.standard_actions.includes("soft_delete") ||
+    found.detail === undefined ||
+    list === undefined ||
+    deletesFrom(plan.source, found.detail, resolved.qualified)
+  )
+    return;
+  const shown = sourcePageItems(found.detail.composition).find(
+    (item) => String(item.type) === "platform.renderer.record_detail",
+  );
+  const data = found.detail.composition as unknown as Parameters<typeof sourcePageZones>[0];
+  const alias = placeButton(
+    context,
+    plan,
+    "Delete",
+    resolved.permission(plan.source, "soft_delete", plan.details),
+    shown === undefined
+      ? {
+          items:
+            sourcePageZones(data).find(([, items]) => items.length > 0)?.[1] ??
+            sourcePageZones(data).at(-1)![1],
+        }
+      : { beside: shown.props.id },
+    "danger",
+  );
+  bindDelete(plan, resolved, alias, "action", {
+    kind: "navigate",
+    page: list.key,
+    withRecord: false,
+  });
+  plan.details.push(
+    `A ${quoted("Delete")} button on ${quoted(found.detail.name)} asks to confirm, deletes the ${lowerFirst(resolved.record.name)} and opens ${quoted(list.name)}, with an Undo.`,
   );
 };
 
@@ -708,6 +741,23 @@ const addList = (
     plan.details.push(
       `No New button yet: ${record.plural_name.toLowerCase()} have no create form. Adding one puts the button here.`,
     );
+  if (record.standard_actions.includes("soft_delete")) {
+    bindDelete(
+      plan,
+      resolved,
+      tableAlias,
+      "row_action",
+      { kind: "refresh" },
+      {
+        rowActionLabel: "Delete",
+        rowActionCapability: "delete",
+      },
+    );
+    plan.details.push(
+      `Each row has a ${quoted("Delete")} action: it asks to confirm, deletes the ${lowerFirst(record.name)} and offers Undo.`,
+    );
+  }
+  ensureDetailDelete(context, plan, resolved);
   return placedPage.page;
 };
 
@@ -967,6 +1017,7 @@ const addDetail = (
     plan.details.push(
       `No Edit button yet: ${record.plural_name.toLowerCase()} have no edit form. Adding one puts the button here.`,
     );
+  ensureDetailDelete(context, plan, resolved);
   linkTablesToDetail(
     context,
     plan,
@@ -1031,35 +1082,29 @@ const formFields = (
   return { fields, left };
 };
 
-/** The Save flow of a form: the one default `record.save` step, then opening the saved record's detail or the list. */
-const saveFlowParts = (plan: Plan, resolved: Resolved, mode: "create" | "update") => {
-  const base = defaultSaveFlowSource({
+/** The Save flow of a form: the default Save, then opening the saved record's detail or the list. */
+const saveFlow = (plan: Plan, resolved: Resolved, mode: "create" | "update", form: string) => {
+  const found = companions(plan.source, resolved.qualified);
+  const next = found.detail ?? found.list[0];
+  const after: DefaultFlowAfter =
+    next === undefined
+      ? { kind: "none" }
+      : { kind: "navigate", page: next.key, withRecord: next === found.detail };
+  plan.details.push(
+    next === undefined
+      ? `After saving, the form stays open: ${resolved.record.plural_name.toLowerCase()} have no detail or list page yet.`
+      : `After saving, it opens ${quoted(next.name)}${next === found.detail ? ` with the saved ${lowerFirst(resolved.record.name)}` : ""}.`,
+  );
+  return defaultSaveFlowSource({
     id: "save",
     key: "save",
     recordType: resolved.qualified,
     mode,
     ownershipMode: resolved.record.ownership_mode as
       "none" | "organization_account" | "group" | "inherited",
+    form,
+    after,
   });
-  const found = companions(plan.source, resolved.qualified);
-  const after = found.detail ?? found.list[0];
-  const recordId = mode === "create" ? "{{ outputs.save.record }}" : "{{ inputs.record }}";
-  const tasks =
-    after === undefined
-      ? base.tasks
-      : [
-          ...base.tasks,
-          navigateTask("open_page", after.key, after === found.detail ? recordId : undefined),
-        ];
-  plan.details.push(
-    after === undefined
-      ? `After saving, the form stays open: ${resolved.record.plural_name.toLowerCase()} have no detail or list page yet.`
-      : `After saving, it opens ${quoted(after.name)}${after === found.detail ? ` with the saved ${lowerFirst(resolved.record.name)}` : ""}.`,
-  );
-  const bindingInputs = Object.fromEntries(
-    Object.keys(base.inputs).map((name) => [name, { kind: "caller" as const, name }]),
-  );
-  return { inputs: base.inputs, outputs: base.outputs, tasks, bindingInputs };
 };
 
 /** A readable-width frame holding one form of field inputs and its submit button. */
@@ -1139,27 +1184,22 @@ const addForm = (
     mode === "create"
       ? `Save new ${lowerFirst(record.name)}`
       : `Save ${lowerFirst(record.name)} changes`;
-  const parts = saveFlowParts(plan, resolved, mode);
-  flowCreate(
+  const save = saveFlow(plan, resolved, mode, formAlias);
+  bindDefault(
     plan,
+    formAlias,
+    "form_submit",
     {
-      kind: "control",
-      controlAlias: formAlias,
-      event: "form_submit",
-      name: flowName,
+      ...save,
       description:
         mode === "create"
           ? `Saves a new ${lowerFirst(record.name)} from ${quoted(name)}.`
           : `Saves the changes to one ${lowerFirst(record.name)} from ${quoted(name)}.`,
-      inputs: parts.inputs,
-      tasks: parts.tasks,
-      outputs: parts.outputs,
-      bindingInputs: parts.bindingInputs,
     },
-    `The flow ${quoted(flowName)}`,
+    flowName,
   );
   plan.details.push(
-    `Submitting the form runs the flow ${quoted(flowName)}: one Save record step${parts.tasks.length > 1 ? " and one Open page step" : ""}.`,
+    `Submitting the form runs the flow ${quoted(flowName)}: it checks the form, saves the ${lowerFirst(record.name)}, says "Saved" and opens the next page.`,
   );
   linkFormBack(context, plan, resolved, placedPage.page, mode);
   return placedPage.page;
@@ -1335,22 +1375,20 @@ const addGuided = (
     );
   plan.details.push("The last step, Check and save, shows the answers with a Save button.");
   const flowName = `Save new ${lowerFirst(record.name)}`;
-  const parts = saveFlowParts(plan, resolved, "create");
   const summary = forms.at(-1)!.formAlias;
-  flowCreate(
+  const save = saveFlow(plan, resolved, "create", summary);
+  const bindingInputs = Object.fromEntries(
+    Object.keys(save.inputs).map((input) => [input, { kind: "caller" as const, name: input }]),
+  );
+  bindDefault(
     plan,
+    summary,
+    "form_submit",
     {
-      kind: "control",
-      controlAlias: summary,
-      event: "form_submit",
-      name: flowName,
+      ...save,
       description: `Saves a new ${lowerFirst(record.name)} from ${quoted(name)}.`,
-      inputs: parts.inputs,
-      tasks: parts.tasks,
-      outputs: parts.outputs,
-      bindingInputs: parts.bindingInputs,
     },
-    `The flow ${quoted(flowName)}`,
+    flowName,
   );
   const flowKey = plan.source.body.flow_bindings.find(
     (binding) => binding.control === summary,
@@ -1363,7 +1401,7 @@ const addGuided = (
         controlAlias: form.formAlias,
         event: "form_submit",
         flowKey,
-        bindingInputs: parts.bindingInputs,
+        bindingInputs,
       },
       `The binding of ${quoted(name)}`,
     );
@@ -1372,14 +1410,6 @@ const addGuided = (
   );
   linkFormBack(context, plan, resolved, placedPage.page, "create");
   return placedPage.page;
-};
-
-const kindWords: Readonly<Record<StudioRecordPageKind, string>> = {
-  list: "list",
-  detail: "detail page",
-  form_create: "create form",
-  form_edit: "edit form",
-  guided: "guided create form",
 };
 
 /** Adds the page of one kind for a record type, with everything it needs, as one draft edit. */

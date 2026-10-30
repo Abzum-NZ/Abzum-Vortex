@@ -59,6 +59,20 @@ export type FormContainerProps = ControlRenderProps<FormPayload> &
     draftFeedback?: FormDraftFeedbackSupply;
   }>;
 
+const subscribeNever = (): (() => void) => () => undefined;
+
+/**
+ * False in the server render and until React has hydrated the page, true afterwards. Before then
+ * nothing can run the form's flow, and a click would submit the HTML form natively, putting the
+ * typed values in the address.
+ */
+const useHydrated = (): boolean =>
+  useSyncExternalStore(
+    subscribeNever,
+    () => true,
+    () => false,
+  );
+
 /** A safe, final result returned by the form's bound flow. */
 export type { FormFlowFeedback };
 
@@ -196,11 +210,13 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   const [editedPastCorrections, setEditedPastCorrections] = useState<string | undefined>();
   // The submission's flow: the form is pending from the submit gesture until that flow settles.
   const submission = usePendingGesture();
-  const pending = context.pending || submission.pending;
+  const hydrated = useHydrated();
+  const pending = context.pending || submission.pending || !hydrated;
   useEffect(() => {
     if (pending) setEditedPastCorrections(undefined);
   }, [pending]);
   const validationAttemptedRef = useRef(false);
+  const focusFirstInvalidRef = useRef(false);
   const supply = props.draftFeedback;
   const supplied = supply !== undefined;
   const resetBaseline = useCallback(() => {
@@ -297,9 +313,18 @@ export function FormContainer(props: FormContainerProps): ReactElement {
 
   const events = context.events;
   const eventsRef = useRef(events);
+  // The validate step shows every field's problem at once and moves to the first, as a submit does.
+  const validateNow = useCallback((): boolean => {
+    validationAttemptedRef.current = true;
+    const problems = registry.validationErrors();
+    setValidationErrors(problems);
+    if (Object.keys(problems).length === 0) return true;
+    focusFirstInvalidRef.current = true;
+    return false;
+  }, [registry]);
   useEffect(
-    () => flowRuntimeState?.registerForm(formId, registry.valueOf, registry.write),
-    [flowRuntimeState, formId, registry],
+    () => flowRuntimeState?.registerForm(formId, registry.valueOf, registry.write, validateNow),
+    [flowRuntimeState, formId, registry, validateNow],
   );
   useEffect(() => {
     eventsRef.current = events;
@@ -331,7 +356,6 @@ export function FormContainer(props: FormContainerProps): ReactElement {
 
   // A refused submission moves focus to the first field it names, so a keyboard or screen-reader
   // user lands on what to fix instead of staying on the button.
-  const focusFirstInvalidRef = useRef(false);
   useEffect(() => {
     if (!focusFirstInvalidRef.current) return;
     focusFirstInvalidRef.current = false;
@@ -403,8 +427,12 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       : ownerGroups?.some((group) => group.groupId === ownerGroupChoice)
         ? ownerGroupChoice
         : undefined;
+  // Until hydration every control is disabled, so the form cannot submit natively.
   const fieldsDisabled =
-    context.unavailable || props.data?.status === "disabled" || ownerGroups?.length === 0;
+    !hydrated ||
+    context.unavailable ||
+    props.data?.status === "disabled" ||
+    ownerGroups?.length === 0;
   // Why the form cannot be used now, such as a required field this person cannot fill in.
   const refusal = context.unavailable ? undefined : context.disabledReason;
   const content = (

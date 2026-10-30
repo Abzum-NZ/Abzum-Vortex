@@ -51,7 +51,6 @@ const page = { page: true, server: false, backend: false } as const;
 const server = { page: false, server: true, backend: false } as const;
 const serverAndBackend = { page: false, server: true, backend: true } as const;
 const everywhere = { page: true, server: true, backend: true } as const;
-const nowhere = { page: false, server: false, backend: false } as const;
 
 /** Where each step runs today; each later batch flips a flag when it lands the implementation. */
 export const flowTaskRuns = Object.freeze({
@@ -84,7 +83,7 @@ export const flowTaskRuns = Object.freeze({
   "interface.show_message": page,
   "interface.clear_message": page,
   "interface.set_value": page,
-  "interface.validate_form": nowhere,
+  "interface.validate_form": page,
   "interface.show_form": page,
   "interface.confirm": page,
   "interface.navigate": page,
@@ -203,7 +202,8 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       // The inputs of the named action that owns the chosen option; absent means none.
       action_inputs: optional("input_map"),
     },
-    outputs: [output("record", "record_reference")],
+    // The authored messages of the save's BeforeSave warnings, joined; empty when there are none.
+    outputs: [output("record", "record_reference"), output("warning", "text")],
   },
   "record.create": {
     title: "Create record",
@@ -483,7 +483,6 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     runLocations: ["browser"],
     effect: "interface",
     properties: { form: required("form_id") },
-    outputs: [output("valid", "yes_no")],
   },
   "interface.show_form": {
     title: "Show form",
