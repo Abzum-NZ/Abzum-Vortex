@@ -6,6 +6,7 @@ import {
 } from "@vortex/platform/schema";
 import {
   applicationSourceDocumentSchema,
+  pageDispatchedEvents,
   pageSemanticEventKinds,
   recordLoadedPageTypes,
   authoredRecordsTableEventAvailable,
@@ -246,7 +247,9 @@ export const projectStudioFlowCreateChoices = (
       page?.type === "detail" && "record_type" in page && typeof page.record_type === "string"
         ? page.record_type
         : null;
-    for (const event of release?.supportedEvents ?? []) {
+    for (const event of (release?.supportedEvents ?? []).filter((entry) =>
+      pageDispatchedEvents.has(entry),
+    )) {
       const placed = placements.get(alias);
       if (
         (bound.has(`${alias} ${event}`) && !(event === "row_action" && hasRowActionMenu(placed))) ||

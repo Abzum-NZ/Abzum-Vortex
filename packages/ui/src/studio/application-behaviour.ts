@@ -1,5 +1,6 @@
 import {
   applicationSourceDocumentSchema,
+  pageDispatchedEvents,
   pageSemanticEventKinds,
   recordLoadedPageTypes,
   sourceItemTree,
@@ -90,7 +91,9 @@ export const projectStudioBehaviour = (
         String(candidate.blockId) === block?.block_id &&
         String(candidate.releaseVersion) === block?.release_version,
     );
-    return (release?.supportedEvents ?? []).filter((event) => event !== "row_action");
+    return (release?.supportedEvents ?? []).filter(
+      (event) => event !== "row_action" && pageDispatchedEvents.has(event),
+    );
   };
   const control = studioBehaviourControl(target);
   return events().map((event): StudioBehaviourEvent => {

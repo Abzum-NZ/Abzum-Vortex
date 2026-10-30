@@ -8,7 +8,7 @@ import {
 } from "../application-composition/source-composition";
 import type { ApplicationSourceDocument } from "../definition-source";
 import { duplicateFlowBindings } from "../application-contracts";
-import { recordLoadedPageTypes } from "../component-semantic-events";
+import { pageDispatchedEvents, recordLoadedPageTypes } from "../component-semantic-events";
 import {
   type PreparedValidationContext,
   editSaveSources,
@@ -107,23 +107,6 @@ const sourceBlockKey = (item: SourceItem): string | undefined => {
 const sourceButtonActionKind = (item: SourceItem): unknown =>
   sourceBlockSetting(item, "action_kind", "string") ?? "action";
 
-/** The page currently dispatches these events to their bound flows. */
-const pageFlowEvents = new Set([
-  "action",
-  "row_clicked",
-  "row_action",
-  "inline_edit",
-  "row_edit",
-  "card_moved",
-  "card_added",
-  "field_changed",
-  "field_focus_lost",
-  "form_ready",
-  "form_reset",
-  "form_submit",
-  "tab_changed",
-]);
-
 /** Refuse a binding that the current page wiring cannot dispatch. */
 export function applicationFlowBindingPageEventRule(
   source: ApplicationSourceDocument,
@@ -142,7 +125,8 @@ export function applicationFlowBindingPageEventRule(
     const guided = placement?.pageType === "guided_form";
     const guidedEvent =
       event === "field_changed" || event === "field_focus_lost" || event === "form_submit";
-    if (page === undefined && pageFlowEvents.has(event) && (!guided || guidedEvent)) return [];
+    if (page === undefined && pageDispatchedEvents.has(event) && (!guided || guidedEvent))
+      return [];
     const controlKey = builderKeySchema.safeParse(control);
     const bindingKey = builderKeySchema.safeParse(binding.id);
     return [

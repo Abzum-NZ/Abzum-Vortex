@@ -47,6 +47,27 @@ export const pageSemanticEventKinds = [
   "record_loaded",
 ] as const satisfies readonly ComponentSemanticEventKind[];
 
+/**
+ * The events the page runtime dispatches to their bound flows. A block may declare more events
+ * than this; a binding of one the page does not dispatch is refused, and Studio offers only these.
+ */
+export const pageDispatchedEvents: ReadonlySet<string> = new Set([
+  "action",
+  "row_clicked",
+  "row_action",
+  "inline_edit",
+  "row_edit",
+  "card_moved",
+  "card_added",
+  "field_changed",
+  "field_focus_lost",
+  "form_ready",
+  "form_reset",
+  "form_submit",
+  "tab_changed",
+  ...pageSemanticEventKinds,
+]);
+
 /** The page types that show one record and so raise `record_loaded`. */
 export const recordLoadedPageTypes: ReadonlySet<string> = new Set(["detail", "form"]);
 
