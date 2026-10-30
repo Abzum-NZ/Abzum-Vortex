@@ -16,9 +16,13 @@ begin
   if loaded ->> 'outcome' <> 'loaded' then
     return pg_catalog.jsonb_build_object('outcome', 'refused');
   end if;
-  decision := vortex_access.evaluate_organization_record_access_internal(
-    loaded -> 'declaration', p_record_id, loaded -> 'facts'
-  );
+  decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+    pg_catalog.jsonb_build_object(
+      'declaration', loaded -> 'declaration',
+      'recordId', p_record_id,
+      'facts', loaded -> 'facts'
+    )
+  )) -> 0);
   if decision ->> 'outcome' <> 'allowed' then
     return pg_catalog.jsonb_build_object('outcome', 'refused');
   end if;
