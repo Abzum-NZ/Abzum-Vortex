@@ -52,7 +52,13 @@ import type {
 import { FirstRecordTypeEmptyState } from "../../_components/first-record-type-empty-state";
 import { readStudioCanvasRecords, readStudioDataRecords } from "../_lib/studio-preview-reader";
 import { readWhenPreviewReady } from "../_lib/studio-preview-gate";
-import { applyStudioItemLabels, type StudioPlacementDescriber } from "@vortex/ui/studio";
+import {
+  applyStudioItemLabels,
+  applyStudioPageValue,
+  type StudioPageValueCommand,
+  type StudioPageValueResult,
+  type StudioPlacementDescriber,
+} from "@vortex/ui/studio";
 import { studioDraftNavigation } from "../_lib/studio-draft-navigation";
 import { studioUseTargetOf } from "../_lib/studio-places";
 import { pageUsingLayout } from "../_lib/studio-view-request";
@@ -72,7 +78,8 @@ import { StudioUsedIn } from "./studio-used-in";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
 import { StudioBlockOutlinePanel } from "./studio-outline-panels";
 import type { StudioRailKey } from "./studio-rail-tabs";
-import type { StudioDraft } from "./use-studio-draft";
+import type { StudioDraft, StudioDraftStep } from "./use-studio-draft";
+import { StudioPageValuesPanel } from "./studio-page-values-panel";
 import type { useStudioDraftTheme } from "./use-studio-draft-theme";
 
 // The Puck editor is the heaviest Studio dependency; load it only when a page is selected.
@@ -684,6 +691,19 @@ export function useStudioCanvasTab({
     ],
   );
 
+  // The page's declared values, added, changed and removed as one undoable edit each.
+  const commandPageValue = (command: StudioPageValueCommand): StudioPageValueResult => {
+    const outcome = draft.run((current): StudioDraftStep<StudioPageValueResult> => {
+      const result = applyStudioPageValue(current, command);
+      return result.kind === "applied"
+        ? { kind: "edit", source: result.source, result }
+        : { kind: "keep", result };
+    });
+    return outcome.kind === "blocked"
+      ? { kind: "refused", reason: outcome.message }
+      : outcome.result;
+  };
+
   const commandVisibility: Parameters<
     typeof ApplicationVisibilityConditionEditor
   >[0]["onCommand"] = (expected, expectedSelection, metadata, condition) => {
@@ -936,6 +956,15 @@ export function useStudioCanvasTab({
           saved={draft.saved}
           disabled={draft.locked}
           onCommand={commandVisibility}
+        />
+      )}
+      {selected?.kind === "page" && inspector.status === "resolved" && (
+        <StudioPageValuesPanel
+          source={source}
+          pageAlias={selected.pageAlias}
+          disabled={draft.locked}
+          organisationCurrency={undefined}
+          onEdit={commandPageValue}
         />
       )}
       {inspector.status === "resolved" && placementWorkflows}

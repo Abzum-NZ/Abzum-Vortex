@@ -77,6 +77,10 @@ export type ApplicationUseTarget =
   | Readonly<{ kind: "action"; moduleKey: string; actionKey: string }>
   | Readonly<{ kind: "permission"; permissionKey: string }>
   | Readonly<{ kind: "page"; pageAlias: string }>
+  /** A value a page declares: its flows, displays and conditions read or set it. */
+  | Readonly<{ kind: "page_value"; pageAlias: string; name: string }>
+  /** A component a message is sent to (a Notice slot, or a form or section a message sits under). */
+  | Readonly<{ kind: "message_target"; placementAlias: string }>
   | Readonly<{ kind: "navigation"; navigationItemAlias: string }>
   /** One option of a choice field, such as a pipeline stage. */
   | Readonly<{
@@ -388,6 +392,10 @@ export const applicationUseTargetKey = (target: ApplicationUseTarget): string =>
       return `permission:${target.permissionKey}`;
     case "page":
       return `page:${target.pageAlias}`;
+    case "page_value":
+      return `page_value:${target.pageAlias}:${target.name}`;
+    case "message_target":
+      return `message_target:${target.placementAlias}`;
     case "navigation":
       return `navigation:${target.navigationItemAlias}`;
     case "choice_option":
@@ -1074,6 +1082,118 @@ const flowUses = (
   return namedUses(index, [flow.key, flow.id], own);
 };
 
+const rendererNames: Readonly<Record<string, string>> = {
+  "platform.renderer.text": "Text",
+  "platform.renderer.summary_values": "Summary value",
+  "platform.renderer.notice": "Notice",
+  "platform.renderer.table": "Table",
+  "platform.renderer.form_container": "Form",
+  "platform.renderer.container": "Section",
+};
+
+/** A block named as a person knows it: its kind and its title or label ("Summary value 'Credit'"). */
+const blockName = (source: Source, path: Path): string | undefined => {
+  if ((path[1] !== "pages" && path[1] !== "shells") || typeof path[2] !== "number")
+    return undefined;
+  const owner = (source.body[path[1]] as readonly unknown[])[path[2]];
+  const alias = blockAlong(owner, path.slice(3));
+  const found = alias === undefined ? undefined : placementPath(source, alias);
+  if (found === undefined) return undefined;
+  const item = at(source, found.slice(0, -2));
+  if (!isObject(item)) return undefined;
+  const kind = rendererNames[String(item.type)] ?? "Block";
+  // A summary's value is named by its own label; other blocks by their title or label.
+  const sources = path.indexOf("value_sources");
+  const entry = sources < 0 ? undefined : at(source, path.slice(0, sources + 2));
+  const props = isObject(item.props) ? item.props : {};
+  const title =
+    isObject(entry) && typeof entry.label === "string"
+      ? entry.label
+      : [props.title, props.label, props.name].find((text) => typeof text === "string");
+  return typeof title === "string" && title !== "" ? `${kind} '${title}'` : kind;
+};
+
+/** A flow named as a person knows it ("flow 'Update credit use'"). */
+const flowName = (source: Source, path: Path): string | undefined => {
+  if (path[1] !== "flows" || typeof path[2] !== "number") return undefined;
+  const flow = source.body.flows[path[2]];
+  return flow === undefined
+    ? undefined
+    : `flow '${Object.values(flow.labels)[0] ?? flow.key.replaceAll("_", " ")}'`;
+};
+
+/** The aliases of the page's own blocks and the page itself: what a flow binding's control can be. */
+const pageControls = (source: Source, pageIndex: number): Set<string> => {
+  const page = source.body.pages[pageIndex]!;
+  const controls = new Set<string>([page.id]);
+  walkSourceStrings(page.composition, [], (text, path, key) => {
+    if (key === "id" && path[path.length - 2] === "props") controls.add(text);
+  });
+  return controls;
+};
+
+/** The flows bound on the page, by id and key. */
+const flowsBoundOn = (source: Source, controls: ReadonlySet<string>): Set<string> =>
+  new Set(
+    source.body.flow_bindings
+      .filter((binding) => controls.has(binding.control))
+      .map((binding) => binding.flow),
+  );
+
+/**
+ * A page value is used where the page's flows read or set it, where a display shows it and where a
+ * condition of the page or of a binding on it reads it. Each use is named by its flow or block.
+ */
+const pageValueUses = (source: Source, index: UseIndex, pageAlias: string, name: string): Use[] => {
+  const pageIndex = source.body.pages.findIndex((page) => page.id === pageAlias);
+  if (pageIndex < 0) return [];
+  const own: Path = ["body", "pages", pageIndex];
+  const controls = pageControls(source, pageIndex);
+  const bound = flowsBoundOn(source, controls);
+  const uses: Use[] = [];
+  for (const { path, key } of occurrences(index, name)) {
+    if (path[1] === "pages" && path[2] === pageIndex && path[3] === "values") continue;
+    const parent = at(source, path.slice(0, -1));
+    const reads = key === "name" && isObject(parent) && parent.source === "page";
+    const sets =
+      key === "value" &&
+      path.slice(-4, -1).join(".") === "properties.value.literal" &&
+      (at(source, path.slice(0, -4)) as Json | undefined)?.type === "interface.set_value";
+    const shows = key === "page_value" && starts(path, own);
+    if (!reads && !sets && !shows) continue;
+    if (starts(path, own)) {
+      const label = blockName(source, path);
+      uses.push(label === undefined ? { path } : { path, label });
+    } else if (path[1] === "flows" && typeof path[2] === "number") {
+      const flow = source.body.flows[path[2]];
+      if (flow !== undefined && (bound.has(flow.id) || bound.has(flow.key)))
+        uses.push({ path, label: flowName(source, path)! });
+    } else if (path[1] === "flow_bindings" && typeof path[2] === "number") {
+      const binding = source.body.flow_bindings[path[2]];
+      if (binding !== undefined && controls.has(binding.control))
+        uses.push({ path, label: "a start condition" });
+    }
+  }
+  return uses;
+};
+
+/**
+ * A component a message is sent to is used where a Show message or Clear message step names it
+ * (as its component), outside the component itself.
+ */
+const messageTargetUses = (source: Source, index: UseIndex, placementAlias: string): Use[] =>
+  occurrences(index, placementAlias)
+    .filter(({ path, key }) => {
+      if (key !== "value" || path[1] !== "flows") return false;
+      const step = at(source, path.slice(0, -4));
+      return (
+        path.slice(-4, -1).join(".") === "properties.component.literal" &&
+        isObject(step) &&
+        (step.type === "interface.show_message" || step.type === "interface.clear_message")
+      );
+    })
+    .map(({ path }) => ({ path, label: flowName(source, path)! }));
+
 /** A menu entry is used where its alias appears outside the entry itself. */
 const navigationUses = (index: UseIndex, alias: string): Use[] =>
   namedUses(index, [alias], undefined);
@@ -1108,6 +1228,10 @@ const usesOf = (source: Source, index: UseIndex, target: ApplicationUseTarget): 
       return permissionUses(index, target.permissionKey);
     case "page":
       return pageUses(source, index, target.pageAlias);
+    case "page_value":
+      return pageValueUses(source, index, target.pageAlias, target.name);
+    case "message_target":
+      return messageTargetUses(source, index, target.placementAlias);
     case "navigation":
       return navigationUses(index, target.navigationItemAlias);
     case "choice_option":
@@ -1133,6 +1257,21 @@ const placesOf = (source: Source, uses: readonly Use[]): readonly ApplicationUse
     if (!found.has(identity)) found.set(identity, Object.freeze(named));
   }
   return Object.freeze([...found.values()]);
+};
+
+/**
+ * The users of a part named in a sentence: "the flow 'Update credit use' and the Summary value
+ * 'Credit'". A place a person cannot be given a name for is described as its place is.
+ */
+export const describeApplicationUsers = (places: readonly ApplicationUsePlace[]): string => {
+  const names = [
+    ...new Set(
+      places.map((place) => (place.label.includes("'") ? `the ${place.label}` : place.label)),
+    ),
+  ];
+  return names.length <= 1
+    ? (names[0] ?? "")
+    : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 };
 
 /**
