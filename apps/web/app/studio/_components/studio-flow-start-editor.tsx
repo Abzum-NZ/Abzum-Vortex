@@ -14,6 +14,7 @@ import {
   StudioHelp,
   StudioInspectorGroup,
   studioWords,
+  studioBindingSentence,
   type StudioFlowBindingInputDraft,
   type StudioFlowInputDraft,
   type StudioFlowStartDraft,
@@ -433,7 +434,7 @@ export function StudioFlowStartEditor({
         {shown.bindings.map((binding) => (
           <fieldset key={binding.id} className="space-y-2">
             <legend className="text-sm font-medium">
-              When {controlLabel(binding.control)} is used
+              {studioBindingSentence(controlLabel(binding.control), binding.event)}
             </legend>
             {shown.inputs.length === 0 && (
               <StudioHelp hint="The flow declares no inputs, so the control passes nothing." />

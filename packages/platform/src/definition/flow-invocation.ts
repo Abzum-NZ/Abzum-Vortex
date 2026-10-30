@@ -661,7 +661,8 @@ export async function invokeInstalledFlow(
         installationRevision: context.applicationReleaseRevision,
         page: projected,
       };
-    if (controlId === undefined) return true;
+    // A binding of the page itself (load, record_loaded) is on the page the person is addressing.
+    if (controlId === undefined || sameId(controlId, String(page.pageId))) return true;
     const gate = requireProjectedPlacement(projected, controlId);
     if (gate.kind === "refused") {
       logFlowRefusal(`BINDING_CONTROL_NOT_ON_PAGE ${gate.reason}`);

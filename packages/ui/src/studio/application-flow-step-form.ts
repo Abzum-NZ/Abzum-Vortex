@@ -89,7 +89,45 @@ export type StudioFlowDraftChoices = Readonly<{
   }>[];
   queries: readonly Readonly<{ key: string; label: string }>[];
   connections: readonly Readonly<{ key: string; label: string }>[];
+  /**
+   * The components a message can appear under or in, on the pages the flow is bound on: a form or
+   * section shows it inline, a Notice slot receives it by name.
+   */
+  messagePlacements: readonly Readonly<{ alias: string; label: string; kind: "inline" | "slot" }>[];
+  /** The page values every page the flow is bound on declares, for a step that sets one. */
+  pageValues: readonly Readonly<{ name: string; label: string; type: string }>[];
 }>;
+
+/**
+ * A placement as the builder named it: its title, label or name setting, else the outline's own
+ * label for it.
+ */
+const placementTitle = (
+  node: Readonly<{ label: string; settings: Readonly<Record<string, unknown>> }>,
+): string => {
+  for (const key of ["title", "label", "name"]) {
+    const value = node.settings[key];
+    if (typeof value === "string" && value.trim() !== "") return value.trim();
+  }
+  return node.label;
+};
+
+/** How serious a message is, by the name a Show message step stores. */
+const messageSeverityOptions: readonly Readonly<{ value: string; label: string }>[] = [
+  { value: "info", label: "Information" },
+  { value: "success", label: "Success" },
+  { value: "warning", label: "Warning" },
+  { value: "error", label: "Error" },
+];
+
+/** Where a message can show, by the name a Show message step stores. */
+const messageTargetOptions: readonly Readonly<{ value: string; label: string }>[] = [
+  { value: "dialog", label: "In a dialog" },
+  { value: "toast", label: "As a toast" },
+  { value: "banner", label: "In the page banner" },
+  { value: "inline", label: "Under a field, form or section" },
+  { value: "slot", label: "In a Notice slot" },
+];
 
 const actionInputType = (type: string): string => type;
 
@@ -106,6 +144,7 @@ export const projectStudioFlowDraftChoices = (
   const forms: { alias: string; label: string; fields: StudioFlowNamedEntry[] }[] = [];
   const open: { alias: string; fields: StudioFlowNamedEntry[] }[] = [];
   const owners = new Map<string, StudioSemanticPlacementOwner>();
+  const messagePlacements: { alias: string; label: string; kind: "inline" | "slot" }[] = [];
   const pagesFor = (owner: StudioSemanticPlacementOwner): string[] =>
     owner.kind === "page"
       ? [owner.pageAlias]
@@ -125,6 +164,23 @@ export const projectStudioFlowDraftChoices = (
       return;
     }
     owners.set(node.selection.placementAlias, node.owner);
+    const blockKey = release?.key;
+    if (blockKey === "platform.display.notice")
+      messagePlacements.push({
+        alias: node.selection.placementAlias,
+        label: placementTitle(node),
+        kind: "slot",
+      });
+    else if (
+      blockKey === "platform.layout.container" ||
+      (blockKey?.startsWith("platform.form.") === true &&
+        blockKey !== "platform.form.validation_message")
+    )
+      messagePlacements.push({
+        alias: node.selection.placementAlias,
+        label: placementTitle(node),
+        kind: "inline",
+      });
     const name = node.settings.name;
     const fieldProperty = release?.properties.find(
       (property) => property.kind === "field_reference" && property.derivesFieldInput === true,
@@ -161,7 +217,7 @@ export const projectStudioFlowDraftChoices = (
     if (isForm) {
       const entry = {
         alias: node.selection.placementAlias,
-        label: node.label,
+        label: placementTitle(node),
         fields: [] as StudioFlowNamedEntry[],
       };
       forms.push(entry);
@@ -178,6 +234,8 @@ export const projectStudioFlowDraftChoices = (
   const invokingPages = [
     ...new Set(
       controls.flatMap((control) => {
+        // The page itself is the control of its own events.
+        if (source.body.pages.some((page) => page.id === control)) return [control];
         const owner = owners.get(control);
         return owner === undefined ? [] : pagesFor(owner);
       }),
@@ -192,7 +250,21 @@ export const projectStudioFlowDraftChoices = (
           const pages = pagesFor(owner);
           return invokingPages.every((page) => pages.includes(page));
         });
+  const onInvokingPages = (alias: string): boolean => {
+    const owner = owners.get(alias);
+    if (draft.flow === undefined) return true;
+    if (owner === undefined || invokingPages.length === 0) return false;
+    const pages = pagesFor(owner);
+    return invokingPages.every((page) => pages.includes(page));
+  };
+  const boundPages = source.body.pages.filter((page) => invokingPages.includes(page.id));
   return {
+    messagePlacements: messagePlacements.filter((entry) => onInvokingPages(entry.alias)),
+    pageValues: Object.entries(boundPages[0]?.values ?? {})
+      .filter(([name, declaration]) =>
+        boundPages.every((page) => page.values?.[name]?.type === declaration.type),
+      )
+      .map(([name, declaration]) => ({ name, label: declaration.label, type: declaration.type })),
     recordTypes: source.body.modules.flatMap((module) =>
       module.record_types.map((record) => ({
         key: `${module.key}:${record.key}`,
@@ -373,6 +445,7 @@ const controlFor = (type: FlowTaskPropertyType): StudioFlowPropertyControl | und
       return "message";
     case "builder_key":
     case "namespaced_key":
+    case "placement_id":
       return "key";
     case "record_type_id":
       return "record_type";
@@ -686,12 +759,25 @@ export const projectStudioFlowStepForm = (
         control === "input_map" ? expectedEntries(task, key, choices, source) : undefined;
       const recordFieldList =
         control === "field_values" ? recordFields(source, recordType, moduleKey) : undefined;
+      const messageStep =
+        task.type === "interface.show_message" || task.type === "interface.clear_message";
       const options =
         task.type === "event.announce" && key === "event"
           ? studioFlowEventChoices(source, flow, moduleKey, task.properties.record)
-          : control === "field"
-            ? studioFlowFieldOptions(source, flow, moduleKey, task.properties)
-            : undefined;
+          : messageStep && key === "target"
+            ? messageTargetOptions
+            : task.type === "interface.show_message" && key === "severity"
+              ? messageSeverityOptions
+              : messageStep && key === "component"
+                ? choices.messagePlacements.map((entry) => ({
+                    value: entry.alias,
+                    label: `${entry.label} (${entry.kind === "slot" ? "Notice slot" : "inline"})`,
+                  }))
+                : task.type === "interface.set_value" && key === "value"
+                  ? choices.pageValues.map((entry) => ({ value: entry.name, label: entry.label }))
+                  : control === "field"
+                    ? studioFlowFieldOptions(source, flow, moduleKey, task.properties)
+                    : undefined;
       const valueType =
         control === "value" && declaration.type === "record_change_list"
           ? "json"

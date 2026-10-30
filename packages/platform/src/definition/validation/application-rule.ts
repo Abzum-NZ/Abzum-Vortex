@@ -344,7 +344,10 @@ export function applicationRule(context: PreparedValidationContext): DefinitionR
       if (
         flow === undefined ||
         flow.execution !== "interactive" ||
-        !applicationPlacementIds.has(String(binding.controlId)) ||
+        !(
+          applicationPlacementIds.has(String(binding.controlId)) ||
+          pages.has(String(binding.controlId))
+        ) ||
         !eventIds.has(String(binding.eventId))
       )
         failures.push(
