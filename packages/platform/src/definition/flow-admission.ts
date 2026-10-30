@@ -26,6 +26,10 @@ import type { FlowRunState } from "../rules/flow-interpreter";
 export type AdmissionHost = Readonly<{
   requests: HumanOrganizationRequestDependencies;
   invocation: FlowBindingInvocation;
+  boundContext?: Readonly<{
+    request: BoundHumanOrganizationRequest;
+    context: InstalledRuntimeContext;
+  }>;
   installationOf: (context: InstalledRuntimeContext) => InstalledFlowBindings;
   pageAccess: (
     context: InstalledRuntimeContext,
@@ -78,7 +82,16 @@ const prepareAdmission = (
   return {
     authorizeBinding: async (bound: BoundHumanOrganizationRequest) => {
       if (bound.scope.applicationRootId === undefined) return false;
-      const current = await createInstalledContextLoader(bound.transaction, bound.scope).load();
+      const captured = host.boundContext;
+      const current =
+        captured !== undefined &&
+        sameId(captured.request.scope.organizationId, bound.scope.organizationId) &&
+        captured.request.scope.applicationRootId !== undefined &&
+        bound.scope.applicationRootId !== undefined &&
+        sameId(captured.request.scope.applicationRootId, bound.scope.applicationRootId) &&
+        captured.request.scope.accessVersion === bound.scope.accessVersion
+          ? captured.context
+          : await createInstalledContextLoader(bound.transaction, bound.scope).load();
       currentContext = current;
       currentInstallation = host.installationOf(current);
       const matches = currentInstallation.bindings.filter((entry) =>

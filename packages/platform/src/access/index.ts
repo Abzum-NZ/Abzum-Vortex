@@ -43,6 +43,7 @@ export {
 } from "./live-context";
 export {
   createHumanOrganizationRequestService,
+  type BoundHumanOrganizationRequest,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "./human-organization-request";

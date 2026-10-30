@@ -87,7 +87,10 @@ type ProjectedFormField = Readonly<{
   fieldKey: string;
   command: RecordReferenceChoiceCommand;
 }>;
-type ProjectedForm = Readonly<{ fields: ReadonlyMap<string, ProjectedFormField> }>;
+type ProjectedForm = Readonly<{
+  fields: ReadonlyMap<string, ProjectedFormField>;
+  projectedPage?: Readonly<Record<string, unknown>>;
+}>;
 type GuidedControl = Readonly<{
   pageKey: string;
   pageId: string;
@@ -129,6 +132,7 @@ export type FlowControlOptionRequest = Readonly<{
 }>;
 
 export type InvocationDependencies = Readonly<{
+  boundRequest?: BoundHumanOrganizationRequest;
   authorityId: IdentityAuthorityId;
   /** The application catalogue's install and upgrade journeys, run under the initiator's authority. */
   applicationStore: ApplicationStoreService;
@@ -190,6 +194,7 @@ export type InvocationDependencies = Readonly<{
       modules: readonly ModuleDefinitionConsumerReadResult[];
       formId: string;
       projectedFields: ReadonlyMap<string, ProjectedFormField>;
+      sequential?: boolean;
       values: unknown;
       evidence?: unknown;
     }>,
@@ -284,6 +289,7 @@ export async function invokeInstalledFlow(
     identityAuthorityId: authorityId,
     telemetry,
     channel: dependencies.channel,
+    ...(dependencies.boundRequest === undefined ? {} : { boundRequest: dependencies.boundRequest }),
   };
   const requests = createHumanOrganizationRequestService({
     ...requestDependencies,
@@ -439,6 +445,11 @@ export async function invokeInstalledFlow(
     const admissionHost: AdmissionHost = {
       requests: requestDependencies,
       invocation,
+      ...(dependencies.boundRequest === undefined || address.installedContext === undefined
+        ? {}
+        : {
+            boundContext: { request: dependencies.boundRequest, context: address.installedContext },
+          }),
       installationOf: installedFlowBindings,
       pageAccess: async (context, bound) => {
         const binding =
@@ -1004,6 +1015,7 @@ export async function invokeInstalledFlow(
       modules: installed.modules,
       formId: trustedFormId,
       projectedFields: projectedForm.fields,
+      ...(dependencies.boundRequest === undefined ? {} : { sequential: true }),
       values: answer.values,
       ...(answer.choiceEvidence === undefined ? {} : { evidence: answer.choiceEvidence }),
     });
@@ -1229,6 +1241,17 @@ export async function invokeInstalledFlow(
           ...(subject === undefined ? {} : { subjectRecordId: subject.recordId }),
         });
         if (projectedForm === undefined) return undefined;
+        if (
+          dependencies.boundRequest !== undefined &&
+          projectedForm.projectedPage !== undefined &&
+          subject?.recordId === body.pageRecordId &&
+          admittedProjection === undefined
+        )
+          admittedProjection = {
+            accessVersion: dependencies.boundRequest.scope.accessVersion,
+            installationRevision: installation.installationRevision,
+            page: projectedForm.projectedPage,
+          };
         const resolvedValues = await dependencies.resolveFormValues({
           service: referenceChoices,
           session: identity.session,
@@ -1237,6 +1260,7 @@ export async function invokeInstalledFlow(
           modules: installation.modules,
           formId: binding.controlId,
           projectedFields: projectedForm.fields,
+          ...(dependencies.boundRequest === undefined ? {} : { sequential: true }),
           values,
           ...(callerInputs.choiceEvidence === undefined
             ? {}
