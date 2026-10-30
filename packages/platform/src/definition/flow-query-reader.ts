@@ -32,7 +32,8 @@ export const createFlowQueryReader = (
         queryId: declared.query.queryId,
         inputValues: target.parameters,
         requestedFieldIds: declared.query.selectedFieldIds,
-        pageSize: 200,
+        // The query declares the page it may be opened with (at most 200, the paging maximum).
+        pageSize: declared.query.pageSize,
       });
       if (result.kind !== "available") return result;
       if (result.value.outcome !== "completed")
