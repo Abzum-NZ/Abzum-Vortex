@@ -569,6 +569,11 @@ const startFlowInternal = async <Value>(
         if (claimSchema.parse(rows[0]?.result).status !== "claimed")
           throw new Error("FLOW_SEGMENT_CLAIM_INVALID");
       }
+      if (hasCompletion && replay === undefined && evidenceState !== "pending") {
+        const rows =
+          await transaction.query`select vortex_access.flow_run_evidence(${"pending"}::text, ${runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${commandId}::uuid) as result`;
+        z.object({ state: z.literal("pending") }).strict().parse(rows[0]?.result);
+      }
       return {
         kind: "workflow_pending",
         commandId,
@@ -652,6 +657,12 @@ const startFlowInternal = async <Value>(
       const executed = await dependencies.executeWorkflow!(pending.replay);
       if (executed.outcome === "succeeded" && pending.replay === undefined) {
         const completion = await requests.run(request.session, request.selection, async (transaction) => {
+          if (hasCompletion) {
+            const locked =
+              await transaction.query`select vortex_access.flow_run_evidence(${"lock"}::text, ${pending.runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${null}::uuid) as result`;
+            const state = z.object({ state: z.string() }).parse(locked[0]?.result);
+            if (state.state === "unavailable") return "refused" as const;
+          }
           await transaction.query`select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(${`${request.selection.organizationId}:flow_segment:${pending.commandId}`}, 818))`;
           const rows = await transaction.query`select vortex_record.flow_segment_receipt(${pending.commandId}::uuid, true) as result`;
           const claim = claimSchema.parse(rows[0]?.result);
@@ -659,6 +670,11 @@ const startFlowInternal = async <Value>(
           if (claim.status !== "pending") return "refused" as const;
           const receipt = await recordSegmentEffects(transaction, pending.runId, executed);
           await transaction.query`select vortex_record.complete_flow_segment_receipt(${pending.commandId}::uuid, ${JSON.stringify(receipt)}::text::jsonb)`;
+          if (hasCompletion) {
+            const updated =
+              await transaction.query`select vortex_access.flow_run_evidence(${"succeeded"}::text, ${pending.runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${pending.commandId}::uuid) as result`;
+            z.object({ state: z.literal("succeeded") }).strict().parse(updated[0]?.result);
+          }
           return "recorded" as const;
         });
         if (completion.kind !== "available" || completion.value === "refused")
@@ -669,6 +685,26 @@ const startFlowInternal = async <Value>(
           runId: pending.runId,
           committedNow: completion.value === "recorded" && Object.keys(executed.effects).length > 0,
         };
+      }
+      if (executed.outcome !== "succeeded" && pending.replay === undefined && hasCompletion) {
+        const outcome = executed.outcome;
+        const recorded = await requests.run(request.session, request.selection, async (transaction) => {
+          const locked =
+            await transaction.query`select vortex_access.flow_run_evidence(${"lock"}::text, ${pending.runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${null}::uuid) as result`;
+          const state = z.object({ state: z.string() }).parse(locked[0]?.result);
+          if (state.state === "unavailable") return false;
+          await transaction.query`select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(${`${request.selection.organizationId}:flow_segment:${pending.commandId}`}, 818))`;
+          const receipts =
+            await transaction.query`select vortex_record.flow_segment_receipt(${pending.commandId}::uuid, true) as result`;
+          const claim = claimSchema.parse(receipts[0]?.result);
+          if (claim.status === "completed") return true;
+          if (claim.status !== "pending") return false;
+          const rows =
+            await transaction.query`select vortex_access.flow_run_evidence(${outcome}::text, ${pending.runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${pending.commandId}::uuid) as result`;
+          z.object({ state: z.literal(outcome) }).strict().parse(rows[0]?.result);
+          return true;
+        });
+        if (recorded.kind !== "available" || !recorded.value) return { kind: "refused" };
       }
       return { kind: "completed", value: executed.value, runId: pending.runId };
     } catch (error) {
