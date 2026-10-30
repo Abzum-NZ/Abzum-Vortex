@@ -221,6 +221,7 @@ export function useFlowRuntime({
             parameters.set(name, String(value));
         const query = parameters.toString();
         const address = `${resolvePageHref(target.pageId)}${query === "" ? "" : `?${query}`}`;
+        runtimeState.messages.carryToasts();
         // Inside the frame the change runs in its page transition (dimmed page, progress line).
         if (startPageChange === undefined) router.push(address);
         else startPageChange(() => router.push(address));
@@ -228,7 +229,16 @@ export function useFlowRuntime({
       resolveInternalAddress: (target) =>
         target.kind === "page" ? resolvePageHref(target.pageId) : basePath,
     }),
-    [basePath, model.pages, resolvePageHref, router, showPageMessage, startPageChange, unsavedWork],
+    [
+      basePath,
+      model.pages,
+      resolvePageHref,
+      router,
+      runtimeState,
+      showPageMessage,
+      startPageChange,
+      unsavedWork,
+    ],
   );
   // A dialog's form registers in its own scope: the form's placement and the dialog's run.
   const dialogStatesRef = useRef(new Map<string, FlowRuntimeState>());

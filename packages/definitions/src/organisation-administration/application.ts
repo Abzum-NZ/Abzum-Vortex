@@ -1,6 +1,7 @@
 import {
   DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
   defaultOpenFlowSource,
+  defaultOperationFlowSource,
   defaultSaveFlowSource,
   type ApplicationSourceDocument,
 } from "@vortex/platform/schema";
@@ -80,6 +81,78 @@ export const organisationAdministrationApplication: ApplicationSourceDocument =
           recordType: "vortex.system_directory:connection_instance",
         }),
         labels: { name: "Open connection" },
+      },
+      {
+        ...defaultOperationFlowSource({
+          id: "flow_suspend_organization_account",
+          key: "suspend_organization_account",
+          operation: "platform.suspend_organization_account",
+          inputs: {
+            organization_account_id: {
+              type: "record_reference",
+              required: true,
+              recordTypeIds: ["vortex.system_directory:person"],
+            },
+            expected_revision: { type: "whole_number", required: true },
+          },
+          returnsResult: true,
+          done: "Account suspended.",
+        }),
+        labels: { name: "Suspend organisation account" },
+      },
+      {
+        ...defaultOperationFlowSource({
+          id: "flow_reactivate_organization_account",
+          key: "reactivate_organization_account",
+          operation: "platform.reactivate_organization_account",
+          inputs: {
+            organization_account_id: {
+              type: "record_reference",
+              required: true,
+              recordTypeIds: ["vortex.system_directory:person"],
+            },
+            expected_revision: { type: "whole_number", required: true },
+          },
+          returnsResult: true,
+          done: "Account reactivated.",
+        }),
+        labels: { name: "Reactivate organisation account" },
+      },
+      {
+        ...defaultOperationFlowSource({
+          id: "flow_close_organization_account",
+          key: "close_organization_account",
+          operation: "platform.close_organization_account",
+          inputs: {
+            organization_account_id: {
+              type: "record_reference",
+              required: true,
+              recordTypeIds: ["vortex.system_directory:person"],
+            },
+            expected_revision: { type: "whole_number", required: true },
+          },
+          returnsResult: true,
+          done: "Account closed.",
+        }),
+        labels: { name: "Close organisation account" },
+      },
+      {
+        ...defaultOperationFlowSource({
+          id: "flow_revoke_organization_invitation",
+          key: "revoke_organization_invitation",
+          operation: "platform.revoke_organization_invitation",
+          inputs: {
+            invitation_id: {
+              type: "record_reference",
+              required: true,
+              recordTypeIds: ["vortex.system_directory:organization_invitation"],
+            },
+            expected_revision: { type: "whole_number", required: true },
+          },
+          returnsResult: true,
+          done: "Invitation revoked.",
+        }),
+        labels: { name: "Revoke organisation invitation" },
       },
     ],
   );

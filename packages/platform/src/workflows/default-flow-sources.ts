@@ -1,5 +1,4 @@
 import type { SourceFlow } from "./flow-source-contracts";
-import type { ProtectedOperationDescriptor } from "../definition/application-flow-bindings";
 
 /**
  * The generated default flows (architecture decision 2): the default Save of a form is one
@@ -450,7 +449,7 @@ export type DefaultOperationFlowInput = DefaultFlowIdentity &
     /** The operation's key: `platformOperationKey(...)` or a named action's namespaced key. */
     operation: string;
     /** The operation's typed inputs; the invoking form supplies each by name. */
-    inputs: ProtectedOperationDescriptor["inputs"];
+    inputs: SourceFlow["inputs"];
     /** The operation's typed results, returned to the caller as one value. */
     returnsResult?: boolean;
     /** Asks first; declining ends the flow. */
@@ -484,7 +483,13 @@ export const defaultOperationFlowSource = (input: DefaultOperationFlowInput): So
     inputs: Object.fromEntries(
       Object.entries(input.inputs).map(([name, declaration]) => [
         name,
-        { type: declaration.type, required: declaration.required },
+        {
+          type: declaration.type,
+          required: declaration.required,
+          ...(declaration.recordTypeIds === undefined
+            ? {}
+            : { recordTypeIds: declaration.recordTypeIds }),
+        },
       ]),
     ),
     tasks:

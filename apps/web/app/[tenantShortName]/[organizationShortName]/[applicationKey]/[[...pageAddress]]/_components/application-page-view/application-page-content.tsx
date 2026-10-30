@@ -136,7 +136,10 @@ export function ApplicationPageViewContent({
     };
   const runtimeState = runtimeStateRef.current.state;
   runtimeState.setFormTypes(model.formTypes);
-  useEffect(() => () => runtimeState.messages.dispose(), [runtimeState]);
+  useEffect(() => {
+    runtimeState.messages.adoptCarried();
+    return () => runtimeState.messages.dispose();
+  }, [runtimeState]);
   // The page address owns every table's query state; the served address only starts it.
   const { address, currentSearch } = usePageAddress({ model, served: searchParams.toString() });
   const [selection, setSelection] = useState<PageSelection>({});
