@@ -9,6 +9,7 @@ import {
   actionPermissionKeys,
   actionPermissionsMatch,
   actionDeleteEffectsSupported,
+  actionFlowOf,
 } from "./source-paths";
 import {
   applicationActionValueCompatible,
@@ -57,6 +58,8 @@ export function applicationRule(context: PreparedValidationContext): DefinitionR
       applicationFieldReferencesValid,
     } = scope;
 
+    const flows = array(content.flows) as unknown as FlowDefinition[];
+    const flowsById = new Map(flows.map((flow) => [String(flow.id), flow]));
     for (const action of array(content.actions)) {
       const subject = records.get(String(action.subjectRecordTypeId));
       const subjectModuleBound = boundRecordTypeIds.has(String(action.subjectRecordTypeId));
@@ -94,78 +97,14 @@ export function applicationRule(context: PreparedValidationContext): DefinitionR
         applicationFieldReferencesValid(action.precondition, fields) &&
         (action.precondition === undefined ||
           typedConditionTypesValid(action.precondition, fieldMap, inputTypes));
-      for (const task of array(action.tasks)) {
-        const properties = object(task.properties);
-        if (String(task.type) === "record.set_fields") {
-          for (const [id, value] of Object.entries(object(properties.values)))
-            if (
-              !fields.has(id) ||
-              !applicationActionValueCompatible(
-                value,
-                fieldValuePairs.get(id),
-                fieldMap,
-                subjectModuleBound,
-                inputMap,
-                String(action.subjectRecordTypeId),
-              )
-            )
-              valid = false;
-        }
-        if (String(task.type) === "record.changes") {
-          for (const change of array(properties.changes))
-            if (
-              (change.relationshipIds as string[]).some((id) => !relationships.has(id)) ||
-              inputMap.get(String(change.targetInputKey))?.type !== "record_reference" ||
-              !array(inputMap.get(String(change.targetInputKey))?.recordTypes)
-                .map((reference) => String(reference.recordTypeId))
-                .includes(String(action.subjectRecordTypeId))
-            )
-              valid = false;
-        }
-        if (String(task.type) === "event.announce" && !events.has(String(properties.eventKey)))
-          valid = false;
-        if (String(task.type) === "record.create") {
-          const target = records.get(String(object(properties.recordType).recordTypeId));
-          const targetFields = new Map(
-            target ? array(target.fields).map((field) => [String(field.fieldId), field]) : [],
-          );
-          if (
-            !target ||
-            Object.entries(object(properties.values)).some(
-              ([id, value]) =>
-                !targetFields.has(id) ||
-                !applicationActionValueCompatible(
-                  value,
-                  fieldValuePairs.get(id),
-                  fieldMap,
-                  subjectModuleBound,
-                  inputMap,
-                  String(action.subjectRecordTypeId),
-                ),
-            )
-          )
-            valid = false;
-        }
-        walkValues(task, (entry) => {
-          const reference = actionValueReferenceEntry(entry);
-          if (
-            reference?.source === "input" &&
-            !inputs.has(String(reference.name)) &&
-            String(reference.name) !== "record"
-          )
-            valid = false;
-          if (
-            reference?.source === "trigger_record" &&
-            actionFieldByKey(fieldMap, String(reference.field)) === undefined
-          )
-            valid = false;
-        });
-      }
+      // A record action runs one flow of the Application; the flow validator checks inside it.
+      const flow = actionFlowOf(action, flowsById);
+      if (flow === undefined) valid = false;
       if (!valid)
         failures.push(
           failure(output, "vortex.definition.application_action_references", "broken_reference"),
         );
-      if (!actionDeleteEffectsSupported(action))
+      if (!actionDeleteEffectsSupported(actionFlowOf(action, flowsById)))
         failures.push(
           failure(output, "vortex.definition.application_action_references", "unsupported_choice"),
         );
@@ -402,8 +341,6 @@ export function applicationRule(context: PreparedValidationContext): DefinitionR
 
     // The flow compiler judged every flow with the one flow validator (`flow-validation.ts`) before
     // it produced this content, so only what binds to them is judged here.
-    const flows = array(content.flows) as unknown as FlowDefinition[];
-    const flowsById = new Map(flows.map((flow) => [String(flow.id), flow]));
     if (!readFieldsTypeMapsValid(flows, recordTypes))
       failures.push(
         failure(output, "vortex.definition.application_dependency_manifest", "broken_reference"),

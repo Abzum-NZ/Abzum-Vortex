@@ -41,13 +41,11 @@ import {
   type FormattedTextAllowedBlock,
 } from "../records/module-field-values";
 import {
-  actionTaskSchema,
   conditionNodeSchema,
   eventDefinitionSchema,
   moduleDependencySchema,
   relationshipDefinitionSchema,
 } from "./module-foundation-contracts";
-import { refineActionTaskIds } from "./definition-source-common";
 import {
   isWritableSystemProjection,
   moduleSourceContractVersion as moduleSourceContractVersion,
@@ -1254,8 +1252,8 @@ export const isSystemRecordProtectedOperation = (
 };
 
 /**
- * A canonical Module action. An action orders tasks or targets one registered protected operation,
- * never both. A protected-operation action declares no tasks and no identity or revision inputs,
+ * A canonical Module action. An action runs one Module flow or targets one registered protected operation,
+ * never both. A protected-operation action declares no flow and no identity or revision inputs,
  * because the subject record's identity and revision reach the operation automatically when it
  * runs. It needs both its own permission and the operation's registered permission: the operation
  * re-checks the actor's current authority in its owning service and never accepts an organisation
@@ -1272,7 +1270,8 @@ export const actionDefinitionSchema = z
     sharing: z.enum(["refused", "allowed"]),
     inputs: z.array(actionInputDefinitionSchema).max(50),
     precondition: conditionNodeSchema.optional(),
-    tasks: z.array(actionTaskSchema).max(10).superRefine(refineActionTaskIds),
+    /** The Module flow (transaction execution) that is this action's behaviour. */
+    flowId: flowIdSchema.optional(),
     protectedOperation: protectedOperationReferenceSchema.optional(),
     /** The choice field and option this action sets, so a plain save of that option runs it. */
     setsChoiceFieldId: fieldIdSchema.optional(),
@@ -1319,11 +1318,11 @@ export const actionDefinitionSchema = z
   })
   .superRefine((value, context) => {
     const operation = value.protectedOperation;
-    if ((operation !== undefined) === value.tasks.length > 0)
+    if ((operation !== undefined) === (value.flowId !== undefined))
       context.addIssue({
         code: "custom",
         path: ["protectedOperation"],
-        message: "An action targets either ordered tasks or one registered protected operation",
+        message: "An action runs either one Module flow or one registered protected operation",
       });
     if (operation !== undefined && !isSystemRecordProtectedOperation(operation))
       context.addIssue({

@@ -34,20 +34,66 @@ export const actionPermissionsMatch = (
 };
 
 /**
+ * The flow a canonical action runs: a `transaction` flow of its Module with no trigger, whose
+ * record input is the action's subject and whose other inputs are exactly the action's own inputs.
+ * `undefined` when the action has no flow (a protected-operation action) or the flow is not that.
+ */
+export const actionFlowOf = (
+  action: JsonObject,
+  flows: ReadonlyMap<string, unknown>,
+): JsonObject | undefined => {
+  const flow = flows.get(String(action.flowId)) as JsonObject | undefined;
+  if (flow === undefined || flow.execution !== "transaction" || array(flow.triggers).length > 0)
+    return undefined;
+  const flowInputs = object(flow.inputs);
+  const recordInput = flow.recordInput === undefined ? undefined : String(flow.recordInput);
+  const subject = recordInput === undefined ? undefined : object(flowInputs[recordInput]);
+  const subjectTypes = subject === undefined ? [] : array(subject.recordTypeIds).map(String);
+  if (
+    subject === undefined ||
+    subject.type !== "record_reference" ||
+    subjectTypes.length !== 1 ||
+    subjectTypes[0]!.toLowerCase() !== String(action.subjectRecordTypeId).toLowerCase()
+  )
+    return undefined;
+  const declared = array(action.inputs);
+  const others = Object.entries(flowInputs).filter(([key]) => key !== recordInput);
+  return others.length === declared.length &&
+    declared.every((input) => object(flowInputs[String(input.key)]).type === input.type)
+    ? flow
+    : undefined;
+};
+
+/** Every top-level task of an action's flow, in order. */
+const actionFlowTasks = (flow: JsonObject): JsonObject[] => array(flow.tasks);
+
+/**
  * A `record.delete` task deletes the subject at the revision the command
  * names, so a deleting action has exactly one delete and may otherwise only copy
  * relationships (which write the target, never the subject) and announce Events.
  * A subject write or a creation can move that revision. The Record runtime
  * refuses the same combination when it composes the action.
  */
-export const actionDeleteEffectsSupported = (action: JsonObject): boolean => {
-  const types = array(action.tasks).map((task) => String(task.type));
+export const actionDeleteEffectsSupported = (flow: JsonObject | undefined): boolean => {
+  const types = flow === undefined ? [] : actionFlowTasks(flow).map((task) => String(task.type));
   return (
     !types.includes("record.delete") ||
     (types.filter((type) => type === "record.delete").length === 1 &&
       types.every((type) => ["record.delete", "record.changes", "event.announce"].includes(type)))
   );
 };
+
+/** The `record.set_fields` entries of an action's flow: field key and the flow value it is set to. */
+export const actionFlowSetFields = (
+  flow: JsonObject,
+): readonly Readonly<{ field: string; value: JsonObject }>[] =>
+  actionFlowTasks(flow).flatMap((task) =>
+    String(task.type) === "record.set_fields"
+      ? Object.entries(object(object(object(task.properties).values).entries)).map(
+          ([field, value]) => ({ field, value: object(value) }),
+        )
+      : [],
+  );
 
 const sourceCollectionLocationKind = {
   record_types: "record_type",

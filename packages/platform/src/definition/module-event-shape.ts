@@ -76,15 +76,7 @@ export const saveInlineModuleEvent = (
     return { kind: "invalid", field: "label", issues: ["Use a shorter, distinct event label."] };
   const issues: string[] = [];
   if (existing !== undefined && existing.record_type !== record.key) {
-    const referenced =
-      source.body.modules.some((owner) =>
-        owner.actions.some((action) =>
-          action.tasks.some(
-            (task) => task.type === "event.announce" && task.properties.event === existing.key,
-          ),
-        ),
-      ) ||
-      [source.body, ...source.body.modules].some((owner) =>
+    const referenced = [source.body, ...source.body.modules].some((owner) =>
         owner.flows.some(
           (flow) =>
             flow.triggers.some(

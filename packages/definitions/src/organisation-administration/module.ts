@@ -1099,30 +1099,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
             validation: { maximum_length: 2_000 },
           },
         ],
-        tasks: [
-          {
-            id: "set_title",
-            type: "record.set_fields",
-            properties: { values: { title: "{{ inputs.title }}" } },
-          },
-          {
-            id: "set_body",
-            type: "record.set_fields",
-            properties: { values: { body: "{{ inputs.body }}" } },
-          },
-          {
-            id: "set_state",
-            type: "record.set_fields",
-            properties: {
-              values: { state: { kind: "literal", literal: { type: "json", value: "published" } } },
-            },
-          },
-          {
-            id: "set_published_at",
-            type: "record.set_fields",
-            properties: { values: { published_at: "{{ execution.now }}" } },
-          },
-        ],
+        flow: "flow_record_notice",
       },
       {
         id: "act_withdraw_notice",
@@ -1133,15 +1110,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
         shareable: false,
         precondition: { field: "state", operator: "equals", value: "published" },
         inputs: [],
-        tasks: [
-          {
-            id: "set_state_withdrawn",
-            type: "record.set_fields",
-            properties: {
-              values: { state: { kind: "literal", literal: { type: "json", value: "withdrawn" } } },
-            },
-          },
-        ],
+        flow: "flow_withdraw_notice",
       },
       {
         id: "act_record_privacy_request",
@@ -1168,30 +1137,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
             validation: { maximum_length: 2_000 },
           },
         ],
-        tasks: [
-          {
-            id: "set_subject",
-            type: "record.set_fields",
-            properties: { values: { subject: "{{ inputs.subject }}" } },
-          },
-          {
-            id: "set_details",
-            type: "record.set_fields",
-            properties: { values: { details: "{{ inputs.details }}" } },
-          },
-          {
-            id: "set_state",
-            type: "record.set_fields",
-            properties: {
-              values: { state: { kind: "literal", literal: { type: "json", value: "received" } } },
-            },
-          },
-          {
-            id: "set_received_at",
-            type: "record.set_fields",
-            properties: { values: { received_at: "{{ execution.now }}" } },
-          },
-        ],
+        flow: "flow_record_privacy_request",
       },
       {
         id: "act_complete_privacy_request",
@@ -1202,20 +1148,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
         shareable: false,
         precondition: { field: "state", operator: "equals", value: "received" },
         inputs: [],
-        tasks: [
-          {
-            id: "set_state",
-            type: "record.set_fields",
-            properties: {
-              values: { state: { kind: "literal", literal: { type: "json", value: "completed" } } },
-            },
-          },
-          {
-            id: "set_closed_at",
-            type: "record.set_fields",
-            properties: { values: { closed_at: "{{ execution.now }}" } },
-          },
-        ],
+        flow: "flow_complete_privacy_request",
       },
       {
         id: "act_refuse_privacy_request",
@@ -1226,24 +1159,248 @@ export const organisationAdministrationModule: SourceApplicationModule =
         shareable: false,
         precondition: { field: "state", operator: "equals", value: "received" },
         inputs: [],
+        flow: "flow_refuse_privacy_request",
+      },
+    ],
+    events: [],
+    flows: [
+      {
+        id: "flow_record_notice",
+        key: "record_notice",
+        labels: {},
+        execution: "transaction",
+        runAs: { kind: "saver" },
+        inputs: {
+          record: {
+            type: "record_reference",
+            required: true,
+            recordTypeIds: ["organisation_notice"],
+            description: "The record the action runs on.",
+          },
+          title: { type: "text", required: true },
+          body: { type: "text", required: true },
+        },
+        recordInput: "record",
+        variables: {},
+        triggers: [],
+        tasks: [
+          {
+            id: "set_title",
+            type: "record.set_fields",
+            version: "1.0.0",
+            properties: { values: { kind: "map", entries: { title: "{{ inputs.title }}" } } },
+          },
+          {
+            id: "set_body",
+            type: "record.set_fields",
+            version: "1.0.0",
+            properties: { values: { kind: "map", entries: { body: "{{ inputs.body }}" } } },
+          },
+          {
+            id: "set_state",
+            type: "record.set_fields",
+            version: "1.0.0",
+            properties: {
+              values: {
+                kind: "map",
+                entries: {
+                  state: { kind: "literal", literal: { type: "json", value: "published" } },
+                },
+              },
+            },
+          },
+          {
+            id: "set_published_at",
+            type: "record.set_fields",
+            version: "1.0.0",
+            properties: {
+              values: { kind: "map", entries: { published_at: "{{ execution.now }}" } },
+            },
+          },
+        ],
+        outputs: {},
+        errors: [],
+        finally: [],
+      },
+      {
+        id: "flow_withdraw_notice",
+        key: "withdraw_notice",
+        labels: {},
+        execution: "transaction",
+        runAs: { kind: "saver" },
+        inputs: {
+          record: {
+            type: "record_reference",
+            required: true,
+            recordTypeIds: ["organisation_notice"],
+            description: "The record the action runs on.",
+          },
+        },
+        recordInput: "record",
+        variables: {},
+        triggers: [],
+        tasks: [
+          {
+            id: "set_state_withdrawn",
+            type: "record.set_fields",
+            version: "1.0.0",
+            properties: {
+              values: {
+                kind: "map",
+                entries: {
+                  state: { kind: "literal", literal: { type: "json", value: "withdrawn" } },
+                },
+              },
+            },
+          },
+        ],
+        outputs: {},
+        errors: [],
+        finally: [],
+      },
+      {
+        id: "flow_record_privacy_request",
+        key: "record_privacy_request",
+        labels: {},
+        execution: "transaction",
+        runAs: { kind: "saver" },
+        inputs: {
+          record: {
+            type: "record_reference",
+            required: true,
+            recordTypeIds: ["privacy_request_case"],
+            description: "The record the action runs on.",
+          },
+          subject: { type: "text", required: true },
+          details: { type: "text", required: true },
+        },
+        recordInput: "record",
+        variables: {},
+        triggers: [],
+        tasks: [
+          {
+            id: "set_subject",
+            type: "record.set_fields",
+            version: "1.0.0",
+            properties: { values: { kind: "map", entries: { subject: "{{ inputs.subject }}" } } },
+          },
+          {
+            id: "set_details",
+            type: "record.set_fields",
+            version: "1.0.0",
+            properties: { values: { kind: "map", entries: { details: "{{ inputs.details }}" } } },
+          },
+          {
+            id: "set_state",
+            type: "record.set_fields",
+            version: "1.0.0",
+            properties: {
+              values: {
+                kind: "map",
+                entries: {
+                  state: { kind: "literal", literal: { type: "json", value: "received" } },
+                },
+              },
+            },
+          },
+          {
+            id: "set_received_at",
+            type: "record.set_fields",
+            version: "1.0.0",
+            properties: {
+              values: { kind: "map", entries: { received_at: "{{ execution.now }}" } },
+            },
+          },
+        ],
+        outputs: {},
+        errors: [],
+        finally: [],
+      },
+      {
+        id: "flow_complete_privacy_request",
+        key: "complete_privacy_request",
+        labels: {},
+        execution: "transaction",
+        runAs: { kind: "saver" },
+        inputs: {
+          record: {
+            type: "record_reference",
+            required: true,
+            recordTypeIds: ["privacy_request_case"],
+            description: "The record the action runs on.",
+          },
+        },
+        recordInput: "record",
+        variables: {},
+        triggers: [],
         tasks: [
           {
             id: "set_state",
             type: "record.set_fields",
+            version: "1.0.0",
             properties: {
-              values: { state: { kind: "literal", literal: { type: "json", value: "refused" } } },
+              values: {
+                kind: "map",
+                entries: {
+                  state: { kind: "literal", literal: { type: "json", value: "completed" } },
+                },
+              },
             },
           },
           {
             id: "set_closed_at",
             type: "record.set_fields",
-            properties: { values: { closed_at: "{{ execution.now }}" } },
+            version: "1.0.0",
+            properties: { values: { kind: "map", entries: { closed_at: "{{ execution.now }}" } } },
           },
         ],
+        outputs: {},
+        errors: [],
+        finally: [],
+      },
+      {
+        id: "flow_refuse_privacy_request",
+        key: "refuse_privacy_request",
+        labels: {},
+        execution: "transaction",
+        runAs: { kind: "saver" },
+        inputs: {
+          record: {
+            type: "record_reference",
+            required: true,
+            recordTypeIds: ["privacy_request_case"],
+            description: "The record the action runs on.",
+          },
+        },
+        recordInput: "record",
+        variables: {},
+        triggers: [],
+        tasks: [
+          {
+            id: "set_state",
+            type: "record.set_fields",
+            version: "1.0.0",
+            properties: {
+              values: {
+                kind: "map",
+                entries: {
+                  state: { kind: "literal", literal: { type: "json", value: "refused" } },
+                },
+              },
+            },
+          },
+          {
+            id: "set_closed_at",
+            type: "record.set_fields",
+            version: "1.0.0",
+            properties: { values: { kind: "map", entries: { closed_at: "{{ execution.now }}" } } },
+          },
+        ],
+        outputs: {},
+        errors: [],
+        finally: [],
       },
     ],
-    events: [],
-    flows: [],
     extension_points: [],
     sharing_conditions: [],
     queries: [

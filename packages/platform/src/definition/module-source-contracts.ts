@@ -10,8 +10,6 @@ import {
 import { descriptionSchema, jsonValueSchema, labelSchema } from "../catalogue/common";
 import {
   authoredSourceBase,
-  refineActionTaskIds,
-  sourceActionTaskSchema,
   sourceAliasSchema,
   sourceConditionSchema,
   sourceQualifiedRelationshipSchema,
@@ -24,7 +22,7 @@ import {
   sourceRecordLinkValueSchema,
 } from "../records/module-field-values";
 import { recordOwnershipModeSchema } from "../records/record-ownership-mode";
-import { sourceFlowCollectionSchema } from "../workflows/flow-source-contracts";
+import { flowAliasSchema, sourceFlowCollectionSchema } from "../workflows/flow-source-contracts";
 import {
   boundedProtectedReadModelSortKeys,
   protectedReadModelKeySchema,
@@ -666,9 +664,7 @@ const moduleSourceActionSchema = z
     shareable: sourceProvenanceTarget(z.boolean(), ["sharing"]),
     inputs: sourceProvenanceUnchanged(z.array(moduleSourceActionInputSchema).max(50)),
     precondition: sourceProvenanceUnchanged(sourceConditionSchema.optional()),
-    tasks: sourceProvenanceUnchanged(
-      z.array(sourceActionTaskSchema).max(10).superRefine(refineActionTaskIds),
-    ),
+    flow: sourceProvenanceTarget(flowAliasSchema.optional(), ["flowId"]),
     sets_choice_field: sourceProvenanceTarget(builderKeySchema.optional(), ["setsChoiceFieldId"]),
     sets_choice_option: sourceProvenanceUnchanged(z.string().min(1).max(120).optional()),
     protected_operation: sourceProvenanceTarget(
@@ -682,13 +678,13 @@ const moduleSourceActionSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    const hasTasks = value.tasks.length > 0;
+    const runsFlow = value.flow !== undefined;
     const hasOperation = value.protected_operation !== undefined;
-    if (hasTasks === hasOperation)
+    if (runsFlow === hasOperation)
       context.addIssue({
         code: "custom",
         path: ["protected_operation"],
-        message: "An action targets either ordered tasks or one registered protected operation",
+        message: "An action runs either one flow of its Module or one registered protected operation",
       });
     if ((value.sets_choice_field === undefined) !== (value.sets_choice_option === undefined))
       context.addIssue({
@@ -1046,7 +1042,7 @@ const refineModuleSourceBody = (value: ModuleSourceBodyFields, context: z.Refine
     else if (isProjection && !targetsOperation)
       context.addIssue({
         code: "custom",
-        path: ["actions", index, "tasks"],
+        path: ["actions", index, "flow"],
         message: "A system projection record type action targets a registered protected operation",
       });
   }
