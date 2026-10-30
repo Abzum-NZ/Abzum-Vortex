@@ -10,6 +10,7 @@ import {
   stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
 import { flowMaximumServerSeconds } from "./flow-limits";
+import { flowLiteralSchema } from "./flow-values";
 
 /*
  * The one registry of task types (architecture decision 1, "The task registry"). Every building
@@ -69,7 +70,12 @@ export const flowTaskPropertyTypeSchema = z.enum([
 export type FlowTaskPropertyType = z.infer<typeof flowTaskPropertyTypeSchema>;
 
 export const flowTaskPropertyDeclarationSchema = z
-  .object({ type: flowTaskPropertyTypeSchema, required: z.boolean() })
+  .object({
+    type: flowTaskPropertyTypeSchema,
+    required: z.boolean(),
+    /** The literal Studio inserts when the author adds this step. */
+    default: flowLiteralSchema.optional(),
+  })
   .strict();
 
 export const flowTaskOutputDeclarationSchema = z
@@ -583,7 +589,10 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     runLocations: allLocations,
     effect: "pure",
     properties: {
-      formatter: required("builder_key"),
+      formatter: {
+        ...required("builder_key"),
+        default: { type: "text", value: "number" },
+      },
       input: required("any_value"),
       places: optional("whole_number"),
       currency: optional("text"),

@@ -208,11 +208,18 @@ const seedValue = (
   type: FlowTaskPropertyType,
   flow: SourceFlow,
   source: Readonly<ApplicationSourceDocument>,
+  declaredDefault?: FlowLiteral,
 ): FlowValue | undefined => {
   const modules = source.body.modules;
   const recordInput = flowRecordInput(flow);
   const recordType = flowRecordType(flow);
   switch (type) {
+    case "any_value":
+      return text("");
+    case "builder_key":
+      return declaredDefault === undefined
+        ? undefined
+        : { kind: "literal", literal: declaredDefault };
     case "record_reference": {
       return recordInput === undefined
         ? undefined
@@ -320,7 +327,7 @@ const seededTask = (
             ? text("info")
             : definition.type === "data.calculate" && key === "result_type"
               ? text("decimal_number")
-              : seedValue(declaration.type, flow, source);
+              : seedValue(declaration.type, flow, source, declaration.default);
     if (seed === undefined) return undefined;
     properties[key] = seed;
   }
