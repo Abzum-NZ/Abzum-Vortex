@@ -35,7 +35,6 @@ begin
       new.action_kind,
       new.label,
       new.description,
-      new.meaning_fingerprint,
       new.source_module_key,
       new.steward_minimum,
       new.first_revision
@@ -45,7 +44,6 @@ begin
       old.action_kind,
       old.label,
       old.description,
-      old.meaning_fingerprint,
       old.source_module_key,
       old.steward_minimum,
       old.first_revision

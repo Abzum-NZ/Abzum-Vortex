@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_identity.protect_identity_disablement_command() RETURNS trigger
+CREATE OR REPLACE FUNCTION vortex_identity.protect_identity_disablement_command() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
@@ -10,7 +10,6 @@ begin
   if new.command_id is distinct from old.command_id
     or new.actor_identity_id is distinct from old.actor_identity_id
     or new.subject_identity_id is distinct from old.subject_identity_id
-    or new.command_fingerprint is distinct from old.command_fingerprint
     or new.correlation_id is distinct from old.correlation_id
     or new.requested_at is distinct from old.requested_at
     or old.outcome = 'disabled'

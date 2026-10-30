@@ -2,7 +2,6 @@ import { z } from "zod";
 import {
   applicationRootIdSchema,
   builderKeySchema,
-  containedComponentIdSchema,
   delegationAuthorityIdSchema,
   groupIdSchema,
   membershipIdSchema,
@@ -187,7 +186,6 @@ export const organizationAdministrationRoleAssignmentPolicySchema = z.discrimina
       maximumActivationDurationSeconds: revisionSchema,
       reasonRequired: z.boolean(),
       recentAuthentication: roleRecentAuthenticationRequirementSchema,
-      requiredCallerExecutionBindingId: containedComponentIdSchema.optional(),
     })
     .strict(),
 ]);

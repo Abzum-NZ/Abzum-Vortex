@@ -18,6 +18,7 @@ import {
   useFieldFeedback,
   useFieldIds,
   useSeededState,
+  fieldFocusLost,
 } from "./field-parts";
 import { equalFormValue, useFormField, useFormFieldError } from "./form-context";
 
@@ -27,7 +28,10 @@ const EMPTY_SELECTION: readonly string[] = Object.freeze([]);
 
 /** A multi-select control for the exact option values declared by a several_choices field. */
 export function SeveralChoicesInput(props: SeveralChoicesInputProps): ReactElement {
-  const context = resolveControlContext<SeveralChoicesInputPayload>(props, ["field_changed"]);
+  const context = resolveControlContext<SeveralChoicesInputPayload>(props, [
+    "field_changed",
+    "field_focus_lost",
+  ]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();
@@ -78,12 +82,23 @@ export function SeveralChoicesInput(props: SeveralChoicesInputProps): ReactEleme
     else if (!checked) nextSet.delete(key);
     const value = [...nextSet];
     setSelected(value);
-    context.events?.field_changed?.({ event: "field_changed", fieldKey, value });
+    context.events?.field_changed?.({
+      event: "field_changed",
+      origin: "user",
+      depth: 0,
+      immediate: true,
+      fieldKey,
+      value,
+    });
   };
 
   const described = describedBy(ids, help, fieldError, note, draftFeedback);
   return (
     <Field
+      onBlur={(event) => {
+        if (!disabled)
+          fieldFocusLost(event, context.events?.field_focus_lost, fieldKey, allowedSelected);
+      }}
       data-vortex-control="several-choices-input"
       hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}

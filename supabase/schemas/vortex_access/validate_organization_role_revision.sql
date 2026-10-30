@@ -123,8 +123,6 @@ begin
             and previous_permission.permission_id = current_permission.permission_id
             and previous_permission.continuity_revision =
               current_permission.continuity_revision
-            and previous_permission.meaning_fingerprint =
-              current_permission.meaning_fingerprint
         )
     ) into authority_broadened;
 
@@ -178,12 +176,11 @@ begin
     and permission.role_revision = target_role_revision
     and (
       permission.catalogue_fingerprint <> registration.permission_catalogue_fingerprint
-      or permission.meaning_fingerprint <> catalogue.meaning_fingerprint
     );
 
   if inconsistent_source_count <> 0 then
     raise exception using errcode = '23514',
-      message = 'Role permissions must retain exact catalogue and meaning evidence';
+      message = 'Role permissions must retain exact catalogue evidence';
   end if;
 
   select pg_catalog.count(*) into administrative_permission_count

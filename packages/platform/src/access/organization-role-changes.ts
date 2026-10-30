@@ -4,7 +4,6 @@ import {
   actorIdSchema,
   applicationRootIdSchema,
   builderKeySchema,
-  containedComponentIdSchema,
   fingerprintSchema,
   organizationIdSchema,
   revisionSchema,
@@ -78,7 +77,6 @@ export const organizationRoleNewActivationPolicySchema = z
       .max(Number.MAX_SAFE_INTEGER),
     reasonRequired: z.boolean(),
     recentAuthentication: roleRecentAuthenticationRequirementSchema,
-    requiredCallerExecutionBindingId: containedComponentIdSchema.optional(),
   })
   .strict();
 
@@ -127,6 +125,7 @@ export const organizationRoleTemplateSourceSchema = z
   .object({
     applicationRootId: applicationRootIdSchema,
     registrationRevision: revisionSchema,
+    releaseRevision: revisionSchema,
     catalogueFingerprint: fingerprintSchema,
   })
   .strict();

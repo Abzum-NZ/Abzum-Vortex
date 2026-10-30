@@ -93,7 +93,7 @@ const main = async (): Promise<void> => {
       );
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("The local Supabase")) throw error;
-    throw new Error("The local Supabase stack status could not be read.");
+    throw new Error("The local Supabase stack status could not be read.", { cause: error });
   }
 
   if (workdir.length === 0) {

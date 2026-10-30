@@ -130,7 +130,6 @@ begin
         and continuity.permission_id = permission.permission_id
         and continuity.state = 'available'
         and continuity.continuity_revision = permission.continuity_revision
-        and continuity.meaning_fingerprint = permission.meaning_fingerprint
       where permission.organization_id = p_organization_id
         and permission.role_id = role_record.role_id
         and permission.role_revision = role_record.role_revision
@@ -145,8 +144,6 @@ begin
             and (candidate.value ->> 'ownerId')::uuid = permission.owner_id
             and (candidate.value #>> '{permission,permissionId}')::uuid =
               permission.permission_id
-            and candidate.value ->> 'meaningFingerprint' =
-              permission.meaning_fingerprint
         );
       target_permission_count := pg_catalog.jsonb_array_length(
         target_template -> 'livePermissions'

@@ -1,6 +1,5 @@
 create or replace function vortex_identity.revoke_tenant_administrator(
   p_duplicate_key uuid,
-  p_command_fingerprint text,
   p_tenant_id uuid,
   p_assignment_id uuid,
   p_expected_revision bigint
@@ -26,7 +25,7 @@ begin
     or p_tenant_id is null or not vortex_platform.is_non_nil_uuid(p_tenant_id::text)
     or p_assignment_id is null or not vortex_platform.is_non_nil_uuid(p_assignment_id::text)
     or p_expected_revision is null or p_expected_revision not between 1 and 9007199254740991
-    or p_command_fingerprint is null or p_command_fingerprint !~ '^sha256:[0-9a-f]{64}$' then
+ then
     raise exception using errcode = '22023', message = 'Tenant assignment command is invalid';
   end if;
   actor_identity_id := vortex_identity.tenant_request_actor_id();
@@ -68,13 +67,10 @@ begin
     select r.* into stored
     from pg_catalog.jsonb_to_record(claimed) as r(
       "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
-      "subjectRevisions" bigint[], "fingerprint" text, "clusterId" uuid
+      "subjectRevisions" bigint[]
     );
-    if stored."fingerprint" <> p_command_fingerprint then
-      raise exception using errcode = 'V3001', message = 'Administration duplicate conflicts';
-    end if;
     return query select 'replayed'::text, 'revoke_tenant_administrator'::text,
-      p_assignment_id, stored."subjectRevisions"[1], stored."receiptId",
+      stored."subjectIds"[1], stored."subjectRevisions"[1], stored."receiptId",
       stored."acceptedAt";
     return;
   end if;
@@ -102,8 +98,7 @@ begin
     pg_catalog.jsonb_build_object(
       'receiptId', new_correlation_id, 'acceptedAt', evaluated_at,
       'subjectIds', pg_catalog.to_jsonb(array[p_assignment_id]),
-      'subjectRevisions', pg_catalog.to_jsonb(array[resulting_revision]),
-      'fingerprint', p_command_fingerprint, 'clusterId', null::uuid
+      'subjectRevisions', pg_catalog.to_jsonb(array[resulting_revision])
     )
   );
   return query select 'accepted'::text, 'revoke_tenant_administrator'::text,
@@ -111,14 +106,14 @@ begin
 end
 $function$;
 
-revoke execute on function vortex_identity.revoke_tenant_administrator(uuid, text, uuid, uuid, bigint)
+revoke execute on function vortex_identity.revoke_tenant_administrator(uuid, uuid, uuid, bigint)
   from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
-grant execute on function vortex_identity.revoke_tenant_administrator(uuid, text, uuid, uuid, bigint)
+grant execute on function vortex_identity.revoke_tenant_administrator(uuid, uuid, uuid, bigint)
   to vortex_runtime;
 
-comment on function vortex_identity.revoke_tenant_administrator(uuid, text, uuid, uuid, bigint) is
+comment on function vortex_identity.revoke_tenant_administrator(uuid, uuid, uuid, bigint) is
   'Protected same-tenant tenant-administrator revocation under the bound request context person''s current structural authority, with permanent-manager preservation, exact revision and accepted replay.';
 
-alter function vortex_identity.revoke_tenant_administrator(p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_assignment_id uuid, p_expected_revision bigint) owner to vortex_owner;
+alter function vortex_identity.revoke_tenant_administrator(p_duplicate_key uuid, p_tenant_id uuid, p_assignment_id uuid, p_expected_revision bigint) owner to vortex_owner;
 
-grant execute on function vortex_identity.revoke_tenant_administrator(p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_assignment_id uuid, p_expected_revision bigint) to postgres;
+grant execute on function vortex_identity.revoke_tenant_administrator(p_duplicate_key uuid, p_tenant_id uuid, p_assignment_id uuid, p_expected_revision bigint) to postgres;

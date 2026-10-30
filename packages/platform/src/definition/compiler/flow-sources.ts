@@ -248,6 +248,9 @@ function compileOwnedFlowSources(
               return [
                 {
                   page: page.name,
+                  controls: items
+                    .filter((item) => controls.has(item.props.id))
+                    .map((item) => item.props.id),
                   values: Object.fromEntries(
                     Object.entries(page.values ?? {}).map(([key, value]) => [key, value.type]),
                   ),
@@ -257,6 +260,7 @@ function compileOwnedFlowSources(
             });
           },
     flows: parsed.data,
+    rawFlows: asObject(source.body).flows as readonly unknown[],
     declaredDefinitionKeys,
     operationInputs: callableOperation,
     resolver: {

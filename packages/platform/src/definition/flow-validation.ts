@@ -87,6 +87,8 @@ export type FlowSetValidationIssue = FlowValidationIssue & Readonly<{ flowId: st
 
 export type FlowReferenceEnvironment = Readonly<{
   page: string;
+  /** Source control aliases present on this page for the bound flow. */
+  controls?: readonly string[];
   values: Readonly<Record<string, string>>;
   forms: Readonly<Record<string, Readonly<Record<string, string>>>>;
 }>;
@@ -440,7 +442,7 @@ export function validateFlow(
         return "organization_account_reference";
       case "execution_now":
         return "date_time";
-      // Not yet runnable: the page runner reads page values and form fields in page segments.
+      // Page values await the page store; form fields are resolved by the page and segment seed.
       case "page":
       case "form": {
         const environments = options.referenceEnvironments ?? [];
@@ -467,15 +469,13 @@ export function validateFlow(
             "broken_reference",
             "Page and form references require a bound page",
           );
-        unreadableReferences.push({
-          path,
-          ruleCode: "vortex.definition.unsupported_workflow_node",
-          family: "unsupported_choice",
-          message:
-            reference.source === "page"
-              ? `The page value ${reference.name} cannot be read yet`
-              : `The form field ${reference.form}.${reference.field} cannot be read yet`,
-        });
+        if (reference.source === "page")
+          unreadableReferences.push({
+            path,
+            ruleCode: "vortex.definition.unsupported_workflow_node",
+            family: "unsupported_choice",
+            message: `The page value ${reference.name} cannot be read yet`,
+          });
         return types.length > 0 && types.every((type) => type === types[0]) ? types[0] : undefined;
       }
       case "task_output": {

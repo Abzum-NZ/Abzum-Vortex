@@ -119,6 +119,7 @@ export const reactivateTenantCommandSchema = tenantLifecycleCommand("reactivate_
 
 export const configuredTenantAdministrationRefusalCodeSchema = z.enum([
   "invalid_command",
+  "reserved_tenant_short_name",
   "operator_not_configured",
   "duplicate_conflict",
   "scope_unavailable",

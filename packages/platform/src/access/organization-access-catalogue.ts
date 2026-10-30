@@ -1,11 +1,11 @@
 import { z } from "zod";
+import { canonicalJson } from "../definition/canonical-json";
 import { applicationRoleSchema } from "../definition/application-contracts";
 import { correlationIdSchema, descriptionSchema, labelSchema } from "../catalogue/common";
 import {
   actorIdSchema,
   applicationRootIdSchema,
   builderKeySchema,
-  containedComponentIdSchema,
   delegationAuthorityIdSchema,
   fingerprintSchema,
   groupIdSchema,
@@ -76,7 +76,6 @@ export const rolePermissionEntrySchema = z
     acceptedRegistrationRevision: revisionSchema,
     catalogueFingerprint: fingerprintSchema,
     continuityRevision: revisionSchema,
-    meaningFingerprint: fingerprintSchema,
   })
   .strict()
   .superRefine(addPermissionScopeIssue);
@@ -163,7 +162,6 @@ export const roleActivationPolicyRevisionSchema = z
     reasonRequired: z.boolean(),
     recentAuthentication: roleRecentAuthenticationRequirementSchema,
     /** The one published flow execution binding permitted to activate; absent means any eligible caller. */
-    requiredCallerExecutionBindingId: containedComponentIdSchema.optional(),
     changedByActorId: actorIdSchema,
     changedAt: timestampSchema,
     changeCorrelationId: correlationIdSchema,
@@ -662,6 +660,8 @@ const permissionCandidateEvidenceKey = (
     entry.permission.label,
     entry.permission.description,
     entry.permission.recordTypeId ?? null,
+    canonicalJson(entry.permission.recordScope ?? null),
+    canonicalJson(entry.permission.fieldPolicy ?? null),
     entry.permission.actionKind,
     entry.permission.namedAction ?? null,
     entry.permission.administrative,
@@ -673,7 +673,6 @@ const permissionCandidateEvidenceKey = (
     entry.sourceRelease.validationContractVersion,
     entry.sourceRelease.contentFingerprint,
     entry.sourceRelease.resolutionFingerprint,
-    entry.meaningFingerprint,
   ]);
 
 /**

@@ -16,6 +16,7 @@ import {
   useFieldFeedback,
   useFieldIds,
   useSeededState,
+  fieldFocusLost,
 } from "./field-parts";
 import { useRequiredFormField } from "./form-context";
 import type { RichTextInputPayload, TypedRichTextDocument } from "./projected-data";
@@ -61,7 +62,10 @@ const toDocument = (text: string): TypedRichTextDocument | null => {
  * executable content.
  */
 export function RichTextInput(props: RichTextInputProps): ReactElement {
-  const context = resolveControlContext<RichTextInputPayload>(props, ["field_changed"]);
+  const context = resolveControlContext<RichTextInputPayload>(props, [
+    "field_changed",
+    "field_focus_lost",
+  ]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();
@@ -99,6 +103,9 @@ export function RichTextInput(props: RichTextInputProps): ReactElement {
     setValue(next);
     context.events?.field_changed?.({
       event: "field_changed",
+      origin: "user",
+      depth: 0,
+      immediate: false,
       fieldKey,
       value: next === seededText ? seeded : toDocument(next),
     });
@@ -106,6 +113,15 @@ export function RichTextInput(props: RichTextInputProps): ReactElement {
 
   return (
     <Field
+      onBlur={(event) => {
+        if (!disabled && !readOnly)
+          fieldFocusLost(
+            event,
+            context.events?.field_focus_lost,
+            fieldKey,
+            value === seededText ? seeded : toDocument(value),
+          );
+      }}
       data-vortex-control="rich-text-input"
       hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}

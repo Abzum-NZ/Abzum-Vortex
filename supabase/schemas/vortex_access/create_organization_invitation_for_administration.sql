@@ -6,7 +6,7 @@ declare
   scope record;
   stored record; claimed jsonb;
   new_receipt_id uuid; new_accepted_at timestamptz;
-  created record; command_fingerprint text; target_invitation_id uuid;
+  created record; target_invitation_id uuid;
   subject_ids uuid[]; subject_revisions bigint[];
   operation_at timestamptz;
   role_item record; role_intents jsonb := '[]'::jsonb;
@@ -26,22 +26,17 @@ begin
   end if;
   select authorized.* into strict scope
   from vortex_access.organization_invitations_administration_change_scope() as authorized;
-  command_fingerprint := 'sha256:' || pg_catalog.encode(extensions.digest(
-    pg_catalog.convert_to(pg_catalog.concat_ws(E'\x1f', 'create_organization_invitation',
-      scope.organization_id::text, p_invited_email, p_expires_at::text,
-      (select pg_catalog.string_agg(id::text, ',' order by id) from pg_catalog.unnest(p_role_ids) as id)), 'UTF8'),
-      'sha256'), 'hex');
   claimed := vortex_record.claim_scoped_command_receipt_internal(
     'create_organization_invitation', p_duplicate_key, scope.organization_id,
     scope.tenant_id, scope.organization_account_id, 'Administration duplicate conflicts');
   if claimed is not null then
     select r.* into stored from pg_catalog.jsonb_to_record(claimed) as r(
       "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
-      "subjectRevisions" bigint[], "fingerprint" text, "clusterId" uuid);
-    if stored."fingerprint" <> command_fingerprint then
-      raise exception using errcode = 'V3001', message = 'Administration duplicate conflicts';
-    end if;
-    if pg_catalog.cardinality(stored."subjectIds") <> 2
+      "subjectRevisions" bigint[]);
+    if pg_catalog.cardinality(stored."subjectIds") is distinct from 2
+      or pg_catalog.cardinality(stored."subjectRevisions") is distinct from 2
+      or pg_catalog.array_position(stored."subjectIds", null) is not null
+      or stored."subjectIds"[1] = stored."subjectIds"[2]
       or not scope.organization_id = any(stored."subjectIds") then
       raise exception using errcode = '42501', message = 'Invitation creation receipt is unavailable';
     end if;
@@ -108,8 +103,7 @@ begin
     p_duplicate_key,
     pg_catalog.jsonb_build_object('receiptId', new_receipt_id,
       'acceptedAt', new_accepted_at, 'subjectIds', pg_catalog.to_jsonb(subject_ids),
-      'subjectRevisions', pg_catalog.to_jsonb(subject_revisions),
-      'fingerprint', command_fingerprint, 'clusterId', null));
+      'subjectRevisions', pg_catalog.to_jsonb(subject_revisions)));
   return query select 'accepted'::text, 'create_organization_invitation'::text,
     scope.organization_id, created.invitation_id, created.revision,
     new_receipt_id, new_accepted_at, scope.access_version;

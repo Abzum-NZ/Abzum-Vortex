@@ -1,14 +1,11 @@
 import { describeFailure, type JsonValue } from "@vortex/platform/schema";
 import {
-  performPresentationIntent,
-  confirmAnswer,
   isSurfaceCancellation,
-  readConfirmIntent,
-  readFormIntent,
   readMessageIntent,
   type FlowIntent,
   type FlowIntentHost,
 } from "./intents";
+import { performPageFlowIntent } from "./page-step-implementations";
 import type {
   FlowInvokeClient,
   FlowResumeEvidence,
@@ -16,6 +13,8 @@ import type {
 } from "./server-flow-client";
 
 export type ServerDrivenResult =
+  /** The binding condition did not hold, so its flow was not started. */
+  | Readonly<{ kind: "skipped" }>
   /** The server ended the run; `descriptor` is its safe result and outputs are as it released them. */
   | Readonly<{
       kind: "finished";
@@ -114,7 +113,7 @@ export async function driveServerFlow(
               readMessageIntent(intent)?.severity === "success"
             )
               continue;
-            await performPresentationIntent(intent, host, signal);
+            await performPageFlowIntent(intent, host, signal);
           }
           return {
             kind: "finished",
@@ -138,7 +137,7 @@ export async function driveServerFlow(
               return refuseInvalidServerFlowState("unexpected_pause_intent");
             else {
               if (signal?.aborted) return abandoned();
-              await performPresentationIntent(intent, host, signal);
+              await performPageFlowIntent(intent, host, signal);
             }
 
           const continuation = response.continuation;
@@ -148,42 +147,22 @@ export async function driveServerFlow(
             target: response.target,
             ...(response.receipt === undefined ? {} : { receipt: response.receipt }),
           };
-          if (response.awaiting === "form") {
-            const form = readFormIntent(waiting);
-            if (form === undefined) return refuseInvalidServerFlowState("form_intent");
-            awaitingSurface = true;
-            const answer = await host.showForm(form, signal);
-            awaitingSurface = false;
-            if (signal?.aborted) return abandoned();
-            answerSent = true;
-            response = await client.resume(
-              flowId,
-              continuation,
-              answer,
-              evidence,
-              signal,
-              sourceTablePlacementId,
-              response.carriedValues,
-            );
-          } else {
-            const confirmation = readConfirmIntent(waiting);
-            if (confirmation === undefined)
-              return refuseInvalidServerFlowState("confirmation_intent");
-            awaitingSurface = true;
-            const answer = await host.confirm(confirmation, signal);
-            awaitingSurface = false;
-            if (signal?.aborted) return abandoned();
-            answerSent = true;
-            response = await client.resume(
-              flowId,
-              continuation,
-              confirmAnswer(confirmation, answer),
-              evidence,
-              signal,
-              sourceTablePlacementId,
-              response.carriedValues,
-            );
-          }
+          awaitingSurface = true;
+          const answer = await performPageFlowIntent(waiting, host, signal);
+          awaitingSurface = false;
+          if (answer === undefined)
+            return refuseInvalidServerFlowState(`${response.awaiting}_intent`);
+          if (signal?.aborted) return abandoned();
+          answerSent = true;
+          response = await client.resume(
+            flowId,
+            continuation,
+            answer,
+            evidence,
+            signal,
+            sourceTablePlacementId,
+            response.carriedValues,
+          );
           break;
         }
       }

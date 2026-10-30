@@ -24,6 +24,7 @@ import {
   useFieldFeedback,
   useFieldIds,
   useSeededState,
+  fieldFocusLost,
 } from "./field-parts";
 import { useFormField, useFormFieldError } from "./form-context";
 
@@ -53,7 +54,10 @@ const settingDecimal = (setting: number) => {
  * publish a safe integer. Empty or invalid entry is `null`.
  */
 export function NumberInput(props: NumberInputProps): ReactElement {
-  const context = resolveControlContext<NumberInputPayload>(props, ["field_changed"]);
+  const context = resolveControlContext<NumberInputPayload>(props, [
+    "field_changed",
+    "field_focus_lost",
+  ]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();
@@ -131,11 +135,22 @@ export function NumberInput(props: NumberInputProps): ReactElement {
     if (disabled || readOnly) return;
     const next = event.target.value;
     setRaw(next);
-    context.events?.field_changed?.({ event: "field_changed", fieldKey, value: toTyped(next) });
+    context.events?.field_changed?.({
+      event: "field_changed",
+      origin: "user",
+      depth: 0,
+      immediate: false,
+      fieldKey,
+      value: toTyped(next),
+    });
   };
 
   return (
     <Field
+      onBlur={(event) => {
+        if (!disabled && !readOnly)
+          fieldFocusLost(event, context.events?.field_focus_lost, fieldKey, typed);
+      }}
       data-vortex-control="number-input"
       hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}

@@ -22,13 +22,14 @@ import {
   useFieldFeedback,
   useFieldIds,
   useSeededState,
+  fieldFocusLost,
 } from "./field-parts";
 import { useFormField, useFormFieldError } from "./form-context";
 import type { AttachmentInputPayload } from "./projected-data";
 
 /** A Puck field publishes completed references to its enclosing form. */
 export function AttachmentInput(props: ControlRenderProps<AttachmentInputPayload>): ReactElement {
-  const context = resolveControlContext(props, ["field_changed"]);
+  const context = resolveControlContext(props, ["field_changed", "field_focus_lost"]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();
@@ -65,8 +66,12 @@ export function AttachmentInput(props: ControlRenderProps<AttachmentInputPayload
     setSerialized(JSON.stringify(next));
     context.events?.field_changed?.({
       event: "field_changed",
+      origin: "user",
+      depth: 0,
+      immediate: false,
       fieldKey,
       value: next.map((file) => file.fileId),
+      draftDisplay: { files: next },
     });
   };
   const upload = async (selected: FileList | null) => {
@@ -151,6 +156,15 @@ export function AttachmentInput(props: ControlRenderProps<AttachmentInputPayload
   const chooseDisabled = disabled || readOnly || busy || (files.length >= maximum && maximum !== 1);
   return (
     <Field
+      onBlur={(event) => {
+        if (!disabled && !readOnly)
+          fieldFocusLost(
+            event,
+            context.events?.field_focus_lost,
+            fieldKey,
+            files.map((file) => file.fileId),
+          );
+      }}
       data-vortex-control="attachment-input"
       data-vortex-field-key={fieldKey}
       hidden={feedback?.hidden === true}

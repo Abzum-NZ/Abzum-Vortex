@@ -12,7 +12,8 @@ as $function$
 declare
   scope record;
   stored record; claimed jsonb;
-  target record; changed record; command_fingerprint text;
+  replay_target_id uuid;
+  target record; changed record;
   subject_ids uuid[]; subject_revisions bigint[];
 begin
   if p_duplicate_key is null or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
@@ -24,28 +25,26 @@ begin
   end if;
   select authorized.* into strict scope
   from vortex_access.organization_accounts_administration_change_scope() as authorized;
-  command_fingerprint := 'sha256:' || pg_catalog.encode(extensions.digest(
-    pg_catalog.convert_to(pg_catalog.concat_ws(E'\x1f', 'close_organization_account',
-      scope.organization_id::text, p_organization_account_id::text,
-      p_expected_revision::text), 'UTF8'), 'sha256'), 'hex');
   claimed := vortex_record.claim_scoped_command_receipt_internal(
     'close_organization_account', p_duplicate_key, scope.organization_id,
     scope.tenant_id, scope.organization_account_id, 'Administration duplicate conflicts');
   if claimed is not null then
     select r.* into stored from pg_catalog.jsonb_to_record(claimed) as r(
       "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
-      "subjectRevisions" bigint[], "fingerprint" text, "clusterId" uuid);
-    if stored."fingerprint" <> command_fingerprint then
-      raise exception using errcode = 'V3001', message = 'Administration duplicate conflicts';
-    end if;
-    if pg_catalog.cardinality(stored."subjectIds") <> 2
+      "subjectRevisions" bigint[]);
+    if pg_catalog.cardinality(stored."subjectIds") is distinct from 2
+      or pg_catalog.cardinality(stored."subjectRevisions") is distinct from 2
+      or pg_catalog.array_position(stored."subjectIds", null) is not null
+      or stored."subjectIds"[1] = stored."subjectIds"[2]
       or not scope.organization_id = any(stored."subjectIds")
-      or not p_organization_account_id = any(stored."subjectIds") then
+      then
       raise exception using errcode = '42501', message = 'Account closure receipt is unavailable';
     end if;
+    replay_target_id := case when stored."subjectIds"[1] = scope.organization_id
+      then stored."subjectIds"[2] else stored."subjectIds"[1] end;
     return query select 'replayed'::text, 'close_organization_account'::text,
-      scope.organization_id, p_organization_account_id,
-      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", p_organization_account_id)],
+      scope.organization_id, replay_target_id,
+      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", replay_target_id)],
       stored."receiptId", stored."acceptedAt",
       stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", scope.organization_id)];
     return;
@@ -87,8 +86,7 @@ begin
     p_duplicate_key,
     pg_catalog.jsonb_build_object('receiptId', changed.state_change_correlation_id,
       'acceptedAt', changed.changed_at, 'subjectIds', pg_catalog.to_jsonb(subject_ids),
-      'subjectRevisions', pg_catalog.to_jsonb(subject_revisions),
-      'fingerprint', command_fingerprint, 'clusterId', null));
+      'subjectRevisions', pg_catalog.to_jsonb(subject_revisions)));
   return query select 'accepted'::text, 'close_organization_account'::text,
     scope.organization_id, p_organization_account_id, changed.revision,
     changed.state_change_correlation_id, changed.changed_at, changed.access_version;

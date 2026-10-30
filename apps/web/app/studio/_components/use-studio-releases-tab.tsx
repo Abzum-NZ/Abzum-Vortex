@@ -446,7 +446,7 @@ export function useStudioReleasesTab({
       } catch (error) {
         console.error("[studio] the preview could not be started", describeFailure(error));
         previewTab?.close();
-        throw new Error(problem);
+        throw new Error(problem, { cause: error });
       } finally {
         if (latest.current.isActive()) setPreviewPending(false);
       }

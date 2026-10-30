@@ -346,7 +346,7 @@ A record may become visible to another application or organisation through an [a
 
 ### Grant activation
 
-A cross-organisation access grant becomes active only after the source Access service verifies authorised source and recipient consent over the same complete proposal fingerprint. No editable application record or ordinary workflow can activate it. Activation changes no record fields. In one cluster, both organisations' access versions change in the protected activation transaction. Across clusters, each cluster changes its local access version while exchanging signed consent and activation receipts through the retry-safe [grant reconciliation](17-runtime-storage-and-caching.md#grant-activation-and-reconciliation) contract.
+A cross-organisation access grant becomes active only after the source Access service verifies authorised source and recipient consent over the same grant and proposal revision. No editable application record or ordinary workflow can activate it. Activation changes no record fields. In one cluster, both organisations' access versions change in the protected activation transaction. Across clusters, each cluster changes its local access version while exchanging signed consent and activation receipts through the retry-safe [grant reconciliation](17-runtime-storage-and-caching.md#grant-activation-and-reconciliation) contract.
 
 ### Grant revocation and expiry
 

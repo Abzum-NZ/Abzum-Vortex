@@ -26,6 +26,7 @@ import {
   useFieldFeedback,
   useFieldIds,
   useSeededState,
+  fieldFocusLost,
 } from "./field-parts";
 import { useFormField, useFormFieldError } from "./form-context";
 import type { TableInputPayload, TypedTableValue } from "./projected-data";
@@ -53,7 +54,7 @@ type Row = TypedTableValue[number];
 
 /** One Puck control for the table field's declared columns; the record writer owns final policy. */
 export function TableInput(props: ControlRenderProps<TableInputPayload>): ReactElement {
-  const context = resolveControlContext(props, ["field_changed"]);
+  const context = resolveControlContext(props, ["field_changed", "field_focus_lost"]);
   const settings = readControlSettings(props, context.location);
   const fail = (message: string): never => {
     throw new DefinitionRenderError("INVALID_COMPOSITION", message, context.location);
@@ -173,6 +174,9 @@ export function TableInput(props: ControlRenderProps<TableInputPayload>): ReactE
     if (sourceModuleFieldValueSchemas.table.safeParse(next).success)
       context.events?.field_changed?.({
         event: "field_changed",
+        origin: "user",
+        depth: 0,
+        immediate: false,
         fieldKey,
         value: !required && next.length === 0 ? null : next,
       });
@@ -190,6 +194,15 @@ export function TableInput(props: ControlRenderProps<TableInputPayload>): ReactE
   };
   return (
     <Field
+      onBlur={(event) => {
+        if (!locked)
+          fieldFocusLost(
+            event,
+            context.events?.field_focus_lost,
+            fieldKey,
+            !required && typed.length === 0 ? null : typed,
+          );
+      }}
       data-vortex-control="table-input"
       data-vortex-placement-id={props.placementId}
       data-vortex-field-key={fieldKey}
