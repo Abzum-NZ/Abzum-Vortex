@@ -667,7 +667,9 @@ export const compileFlowFormula = (node: FlowFormula): FormulaProgram => {
             const equal = order === 0 || order === "equal_only_same";
             return yesNo(node.op === "eq" ? equal : !equal);
           }
-          if (order === "equal_only_same" || order === "equal_only_different") return undefined;
+          if (order === "equal_only_same" || order === "equal_only_different")
+            // An empty value is never less than or greater than anything.
+            return left.value === null || right.value === null ? yesNo(false) : undefined;
           return yesNo(
             node.op === "lt"
               ? order < 0
@@ -740,10 +742,15 @@ export const compileFlowFormula = (node: FlowFormula): FormulaProgram => {
       program = (frame) => {
         const evaluate = (child: FlowFormula) => compiledFormulas.get(child)!(frame);
         {
-          const operands = node.args.map(evaluate);
-          if (operands.some((operand) => operand?.type !== "yes_no")) return undefined;
-          const truths = (operands as FlowRuntimeValue[]).map((operand) => operand.value === true);
-          return yesNo(node.op === "and" ? truths.every(Boolean) : truths.some(Boolean));
+          // Stops at the first operand that decides the result, so "is not empty AND <comparison>"
+          // never evaluates the comparison on an empty value.
+          const decisive = node.op === "or";
+          for (const arg of node.args) {
+            const operand = evaluate(arg);
+            if (operand?.type !== "yes_no") return undefined;
+            if ((operand.value === true) === decisive) return yesNo(decisive);
+          }
+          return yesNo(!decisive);
         }
       };
       break;
