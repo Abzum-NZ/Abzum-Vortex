@@ -3,7 +3,7 @@ export { flowPathGuardMatches } from "./flow-path-guard";
 import { flowSegmentValues } from "./flow-segment-values";
 import type { FlowPlan, FlowServerSegment } from "../workflows/flow-plan";
 import type { parseFlowSegmentSeed } from "./flow-segment-seed";
-import { pageStepIntents } from "./flow-page-steps";
+import { pageStepIntents, pageValueAcceptsWrite, pageWritesIntent } from "./flow-page-steps";
 export { pageStepIntents } from "./flow-page-steps";
 import {
   at,
@@ -725,15 +725,7 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
     if (registered.type === "interface.set_value" && properties.value !== undefined) {
       const name = properties.value.value;
       const value = properties.to;
-      const declared = typeof name === "string" ? state.pageValues?.[name] : undefined;
-      if (
-        typeof name !== "string" ||
-        value === undefined ||
-        declared === undefined ||
-        value.type !== declared.type ||
-        (value.value !== null && !flowValueMatchesType(value.value, declared.type)) ||
-        (declared.type === "json" && value.value !== null && !Array.isArray(value.value))
-      )
+      if (typeof name !== "string" || !pageValueAcceptsWrite(state.pageValues?.[name], value))
         return failed("value_unresolved", "failed", taskId);
       machine.state.pageValues = { ...state.pageValues, [name]: value };
       machine.state.pageWrites = { ...state.pageWrites, [name]: value };
@@ -1035,16 +1027,7 @@ function takeIntents(machine: Machine): FlowInterfaceIntent[] {
   const intents = [...machine.state.pendingIntents];
   const writes = machine.state.pageWrites;
   if (writes !== undefined && Object.keys(writes).length > 0)
-    intents.push({
-      kind: "set_value",
-      taskId: "page_values",
-      properties: {
-        values: typed(
-          "json",
-          Object.fromEntries(Object.entries(writes).map(([key, value]) => [key, value.value])),
-        ),
-      },
-    });
+    intents.push(pageWritesIntent(writes));
   machine.state.pendingIntents = [];
   delete machine.state.pageWrites;
   return intents;
