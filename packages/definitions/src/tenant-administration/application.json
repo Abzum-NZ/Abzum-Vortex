@@ -1394,6 +1394,34 @@
                 }
               }
             }
+          },
+          {
+            "id": "done",
+            "type": "interface.show_message",
+            "version": "1.0.0",
+            "properties": {
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Organisation renamed."
+                }
+              },
+              "target": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "toast"
+                }
+              },
+              "severity": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "success"
+                }
+              }
+            }
           }
         ],
         "outputs": {
@@ -1601,6 +1629,34 @@
                       "path": ["number_format"]
                     }
                   }
+                }
+              }
+            }
+          },
+          {
+            "id": "done",
+            "type": "interface.show_message",
+            "version": "1.0.0",
+            "properties": {
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Organisation created."
+                }
+              },
+              "target": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "toast"
+                }
+              },
+              "severity": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "success"
                 }
               }
             }
