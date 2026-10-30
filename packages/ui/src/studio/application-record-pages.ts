@@ -9,7 +9,6 @@ import {
   sourcePageItems,
   sourcePageZones,
   standardPermissionKey,
-  type SourceFlow,
   type SourceItem,
   type ImmutablePlatformBlockCatalogue,
 } from "@vortex/platform/schema";
@@ -27,7 +26,14 @@ import {
   studioRecordPageKinds,
   type StudioRecordPageCommand,
 } from "./application-record-page-kinds";
-import { applyStudioFlowCreate, type StudioFlowCreateCommand } from "./application-flow-create";
+import { applyStudioFlowCreate } from "./application-flow-create";
+import {
+  bindDefault,
+  flowCreate,
+  flowParts,
+  freshAlias,
+  type Plan,
+} from "./application-record-plan";
 import { ensureStudioRecordQuery } from "./default-record-query";
 import { STUDIO_ROW_ACTION_EVENT_SETTING, studioRowActionEventId } from "./contextual-palette";
 import {
@@ -220,14 +226,6 @@ export const companions = (source: Source, qualified: string) => {
   };
 };
 
-/** A plan being written: the draft so far, the words describing it, and fresh aliases. */
-type Plan = { source: Source; details: string[]; taken: Set<string> };
-const freshAlias = (plan: Plan, base: string): string => {
-  const alias = uniqueKey(base, "", plan.taken, 160);
-  plan.taken.add(alias);
-  return alias;
-};
-
 const release = (
   context: StudioStructureContext,
   identity: Readonly<{ blockId: string }>,
@@ -302,55 +300,6 @@ const tableColumns = (
     visible: true,
   }));
 };
-
-/** Creates one flow bound to a control, or binds one more control to it, by the one flow-create path. */
-const flowCreate = (
-  plan: Plan,
-  command: StudioFlowCreateCommand,
-  what: string,
-): Readonly<{ id: string; eventId: string; flowKey: string }> => {
-  const result = applyStudioFlowCreate(judged(plan.source), command, null);
-  if (result.kind === "refused") return refuse(`${what} could not be made: ${result.reason}`);
-  plan.source = result.source;
-  return { ...result.binding!, flowKey: result.selection.flowAlias };
-};
-
-/** The parts of a flow the one flow-create command takes, from a default flow builder's source. */
-const flowParts = ({ description, inputs, tasks, outputs, errors }: SourceFlow, name: string) => ({
-  name,
-  description: description ?? "",
-  inputs,
-  tasks,
-  outputs,
-  ...(errors.length === 0 ? {} : { errors }),
-});
-
-/** Binds a control event to a flow made from a default flow builder's source; the binding carries each flow input by name. */
-const bindDefault = (
-  plan: Plan,
-  controlAlias: string,
-  event: "action" | "row_clicked" | "row_action" | "form_submit",
-  flow: SourceFlow,
-  name: string,
-  extra: Readonly<{
-    rowActionLabel?: string;
-    rowActionCapability?: "update" | "delete" | "restore";
-  }> = {},
-) =>
-  flowCreate(
-    plan,
-    {
-      kind: "control",
-      controlAlias,
-      event,
-      ...flowParts(flow, name),
-      bindingInputs: Object.fromEntries(
-        Object.keys(flow.inputs).map((input) => [input, { kind: "caller" as const, name: input }]),
-      ),
-      ...extra,
-    },
-    `The flow ${quoted(name)}`,
-  );
 
 /** A flow bound to a row click or an action that opens one page, with the clicked or current record when given. */
 const openFlow = (

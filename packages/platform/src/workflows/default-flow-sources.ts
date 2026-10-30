@@ -258,8 +258,7 @@ export type DefaultGuidedStepFlowInput = DefaultFlowIdentity &
 
 /**
  * The default step change of a guided form, every step visible: check the step's form, save its
- * answers to the person's draft, say so when the step still needs fixing, then open the step the
- * draft reaches. The page supplies the draft, the step and the step's answers by name.
+ * answers to the person's draft, then open the step the draft reaches. The page supplies the draft, the step and the step's answers by name.
  */
 export const defaultGuidedStepFlowSource = (input: DefaultGuidedStepFlowInput): SourceFlow =>
   interactiveSource(input, {
