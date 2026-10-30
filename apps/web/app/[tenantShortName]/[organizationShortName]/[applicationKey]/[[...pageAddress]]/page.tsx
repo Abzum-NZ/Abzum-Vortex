@@ -143,14 +143,9 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
     const expectedActiveReleaseRevision = Number(formData.get("expectedActiveReleaseRevision"));
     // Posted parameters only reconstruct the destination URL; loading it authorizes the subject.
     const postedParameters = formData.get("pageParameters");
-    if (
-      postedParameters !== null &&
-      (typeof postedParameters !== "string" || postedParameters.length > 8_192)
-    )
+    if (typeof postedParameters !== "string" || postedParameters.length > 8_192)
       throw new Error("APPLICATION_ADOPTION_PAGE_ADDRESS_INVALID");
-    const pageParameters = new URLSearchParams(
-      typeof postedParameters === "string" ? postedParameters : "",
-    );
+    const pageParameters = new URLSearchParams(postedParameters);
     pageParameters.delete("adoption");
 
     const rechecked = await resolveApplicationAddress(

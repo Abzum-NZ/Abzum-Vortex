@@ -621,11 +621,12 @@ export function ApplicationPageViewContent({
             const formData = new FormData();
             formData.set("applicationKey", application.applicationKey);
             formData.set("pageKey", application.pageKey);
+            formData.set("pageParameters", address.search());
             formData.set("targetReleaseRevision", String(offeredReleaseRevision));
             formData.set("expectedActiveReleaseRevision", String(installedReleaseRevision));
             await adoptReleaseAction(formData);
           },
-    [adoptReleaseAction, application.applicationKey, application.pageKey],
+    [adoptReleaseAction, address, application.applicationKey, application.pageKey],
   );
   useFramePageState("adoptRelease", adoptRelease);
 
