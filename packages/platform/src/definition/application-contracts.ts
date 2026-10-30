@@ -11,11 +11,12 @@ import {
   versionRequirementSchema,
 } from "./definitions";
 import type { ResolveRecordTypeReferences } from "./definitions";
-import { actionInputChoiceSchema, refineCompiledTextInputChoices } from "./module-contracts";
 import {
-  conditionNodeSchema,
-  eventDefinitionSchema,
-} from "./module-foundation-contracts";
+  actionInputChoiceSchema,
+  actionWritePolicySchema,
+  refineCompiledTextInputChoices,
+} from "./module-contracts";
+import { conditionNodeSchema, eventDefinitionSchema } from "./module-foundation-contracts";
 import { interfaceDefinitionSchema } from "../connections/integration-contracts";
 import {
   actionIdSchema,
@@ -222,6 +223,7 @@ export const applicationActionDefinitionSchema = z
     inputs: z.array(applicationActionInputDefinitionSchema).max(50),
     precondition: conditionNodeSchema.optional(),
     flowId: flowIdSchema,
+    writePolicy: actionWritePolicySchema,
   })
   .strict()
   .superRefine((value, context) => {
