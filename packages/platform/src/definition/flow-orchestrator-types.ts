@@ -53,6 +53,7 @@ import type {
   FlowRuntimeValues,
 } from "../rules/flow-interpreter";
 import type { ProtectedOperationExecutor } from "./protected-operation-executor";
+import type { FlowTraceCollector } from "./flow-test-trace";
 import { flowIdSchema } from "../catalogue/identifiers";
 
 /**
@@ -299,6 +300,8 @@ export type FlowOrchestratorDependencies = Readonly<{
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
   ) => Promise<string | undefined>;
+  /** Collects the steps of a builder's test run; absent on every normal run. */
+  trace?: FlowTraceCollector;
   now?: () => Date;
   /** A monotonic clock in milliseconds, for the server-time limit. */
   clock?: () => number;

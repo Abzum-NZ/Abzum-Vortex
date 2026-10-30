@@ -68,6 +68,10 @@ const StudioFlowsPanel = deferredStudioPart(
   () => import("./studio-flows-panel").then((module) => module.StudioFlowsPanel),
   "flows panel",
 );
+const StudioFlowTestRun = deferredStudioPart(
+  () => import("./studio-flow-test-run").then((module) => module.StudioFlowTestRun),
+  "flow test run",
+);
 const StudioFlowInspector = deferredStudioPart(
   () => import("./studio-flow-inspector").then((module) => module.StudioFlowInspector),
   "flow inspector",
@@ -511,6 +515,19 @@ export function useStudioFlowsTab({
             return true;
           }}
           label={`Workflow canvas of ${labels.get(selectionKey) ?? "the flow"}`}
+        />
+        <StudioFlowTestRun
+          key={selectionKey}
+          organizationId={draft.organizationId}
+          rootId={state.rootId}
+          draftRevision={draft.saved.draftRevision}
+          flow={outline.flow}
+          moduleKey={flowSelection.moduleKey}
+          blocked={
+            draft.status.kind === "saved"
+              ? undefined
+              : "Wait until the latest change is saved: a test runs the saved flow."
+          }
         />
       </div>
     );

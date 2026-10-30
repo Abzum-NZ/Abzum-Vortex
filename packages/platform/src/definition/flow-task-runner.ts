@@ -9,6 +9,7 @@ import {
   recordTypeIdSchema,
 } from "../catalogue/identifiers";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
+import { tracedTaskRunner } from "./flow-task-runner-trace";
 import { describeFailure, isRecord, sameId } from "../catalogue/runtime-primitives";
 import {
   executeNamedActionCommandSchema,
@@ -1442,11 +1443,12 @@ export const createFlowTaskRunner = (
     return replay;
   };
 
-  return Object.freeze({
+  const runner = Object.freeze({
     run: runProtectedTask,
     runSegmentTask,
     replaySegmentTask,
     runSegmentSet,
     replaySegmentSet,
   });
+  return dependencies.trace === undefined ? runner : tracedTaskRunner(dependencies.trace, runner);
 };
