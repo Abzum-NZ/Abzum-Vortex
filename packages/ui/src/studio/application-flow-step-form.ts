@@ -443,16 +443,22 @@ const recordFields = (
   }));
 };
 
-/** The record type a step's field values are written against: its own, or the record that started a save rule. */
+/**
+ * The record type a step's field values are written against: its own, or the record that started a
+ * save rule, or the record an action's flow runs on.
+ */
 const stepRecordType = (
   flow: SourceFlow,
   properties: Readonly<Record<string, FlowValue>>,
 ): string | undefined =>
   literalText(properties.record_type) ??
   (flow.execution === "transaction"
-    ? (flow.triggers ?? []).flatMap((trigger) =>
+    ? ((flow.triggers ?? []).flatMap((trigger) =>
         "recordTypeId" in trigger ? [trigger.recordTypeId] : [],
-      )[0]
+      )[0] ??
+      (flow.recordInput === undefined
+        ? undefined
+        : flow.inputs?.[flow.recordInput]?.recordTypeIds?.[0]))
     : undefined);
 
 /** The fields a field setting can name: of the step's record type, or of the record the flow runs for. */

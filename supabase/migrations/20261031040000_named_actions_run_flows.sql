@@ -174,6 +174,8 @@ grant execute on function vortex_record.installed_record_type_action_contributio
 comment on function vortex_record.installed_record_type_action_contributions_internal(uuid, uuid, bigint, uuid) is
   'Private exact installed action contributions of one owner record type in one organisation: the contributor Module''s declared actions, resolved against the extension point of the exact owner release the calling application binds, that take no inputs and only set fields the contributor itself contributed to that record type. Owner-only except for the fixed record adapter; it decides no access.';
 
+set role vortex_record_adapter;
+
 create or replace function vortex_record.named_action_creation_plan_internal(
   p_action_owner_kind text,
   p_action_owner_id uuid,
@@ -1541,4 +1543,5 @@ comment on function vortex_record.resolve_named_action_context_internal(
   text, uuid, bigint, uuid, uuid
 ) is
   'Private exact active installed action, permission-alternative and declared-Event resolver for protected named actions.';
+
 reset role;
