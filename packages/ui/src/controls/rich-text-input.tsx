@@ -1,8 +1,10 @@
 "use client";
 
-import type { ChangeEvent, ReactElement } from "react";
+import { useState, type ChangeEvent, type ReactElement } from "react";
+import { typedFieldValueSchema } from "@vortex/platform/schema";
 import { Field, FieldLabel } from "../components/field";
 import { Textarea } from "../components/textarea";
+import { flowSetFieldChange } from "../flow-runtime/flow-cycle";
 import {
   readControlSettings,
   resolveControlContext,
@@ -18,7 +20,7 @@ import {
   useSeededState,
   fieldFocusLost,
 } from "./field-parts";
-import { useRequiredFormField } from "./form-context";
+import { useFormFieldPublisher, useRequiredFormField } from "./form-context";
 import type { RichTextInputPayload, TypedRichTextDocument } from "./projected-data";
 
 export type RichTextInputProps = ControlRenderProps<RichTextInputPayload>;
@@ -67,8 +69,9 @@ export function RichTextInput(props: RichTextInputProps): ReactElement {
     "field_focus_lost",
   ]);
   const settings = readControlSettings(props, context.location);
-  const ids = useFieldIds();
+  const ids = useFieldIds(props.placementId);
   const fieldKey = settings.fieldKey();
+  const publish = useFormFieldPublisher(fieldKey);
   const label = context.accessibleName ?? props.metadata.name;
   const help = settings.text("help_text");
   const required = settings.boolean("required");
@@ -88,26 +91,59 @@ export function RichTextInput(props: RichTextInputProps): ReactElement {
         ? authoredDefault.value
         : null;
   const seededText = documentText(seeded);
+  const seedKey = JSON.stringify(seeded);
   const [value, setValue] = useSeededState(seededText);
+  const [written, setWritten] =
+    useState<Readonly<{ seedKey: string; text: string; document: TypedRichTextDocument | null }>>();
+  const typed =
+    written?.seedKey === seedKey && written.text === value
+      ? written.document
+      : value === seededText
+        ? seeded
+        : toDocument(value);
   const validationError = useRequiredFormField(
     fieldKey,
     props.placementId,
-    value === seededText ? seeded : toDocument(value),
+    typed,
     { label, missing: required && !disabled && !readOnly && value.trim() === "" },
+    (next, cycle) => {
+      if (disabled || readOnly || draftFeedback?.hidden === true) return undefined;
+      const parsed = typedFieldValueSchema.safeParse(next);
+      if (!parsed.success) return undefined;
+      const candidate = parsed.data;
+      if (
+        candidate !== null &&
+        (typeof candidate !== "object" || Array.isArray(candidate) || !("blocks" in candidate))
+      )
+        return undefined;
+      const document = candidate;
+      const text = documentText(document);
+      return {
+        value: document,
+        apply: () => {
+          setWritten({ seedKey, text, document });
+          setValue(text);
+        },
+        emit: () => context.events?.field_changed?.(flowSetFieldChange(cycle, fieldKey, document)),
+      };
+    },
   );
   const error = projectedError ?? validationError;
 
   const onChange = (event: ChangeEvent<HTMLTextAreaElement>): void => {
     if (disabled || readOnly) return;
     const next = event.target.value;
+    setWritten(undefined);
     setValue(next);
+    const document = next === seededText ? seeded : toDocument(next);
+    publish(document);
     context.events?.field_changed?.({
       event: "field_changed",
       origin: "user",
       depth: 0,
       immediate: false,
       fieldKey,
-      value: next === seededText ? seeded : toDocument(next),
+      value: document,
     });
   };
 
@@ -115,12 +151,7 @@ export function RichTextInput(props: RichTextInputProps): ReactElement {
     <Field
       onBlur={(event) => {
         if (!disabled && !readOnly)
-          fieldFocusLost(
-            event,
-            context.events?.field_focus_lost,
-            fieldKey,
-            value === seededText ? seeded : toDocument(value),
-          );
+          fieldFocusLost(event, context.events?.field_focus_lost, fieldKey, typed);
       }}
       data-vortex-control="rich-text-input"
       hidden={draftFeedback?.hidden === true}

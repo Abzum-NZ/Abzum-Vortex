@@ -7,7 +7,7 @@ import type {
   ApplicationPageModel,
   PlacementFlowBinding,
 } from "../../../../../../_lib/application-page";
-import type { Notice, GuidedFormActions } from "./types";
+import type { PageMessageDraft, GuidedFormActions } from "./types";
 import { asComponentBinding } from "./event-values";
 import { placementIdsInLayout } from "./placement-helpers";
 import { unavailableNotice } from "./notices";
@@ -20,7 +20,7 @@ export function useGuidedFormSteps({
   busy,
   guidedFormCompleted,
   setBusy,
-  setNotice,
+  showPageMessage,
   guidedFormActions,
   searchParams,
   router,
@@ -38,7 +38,7 @@ export function useGuidedFormSteps({
   busy: boolean;
   guidedFormCompleted: boolean;
   setBusy: Dispatch<SetStateAction<boolean>>;
-  setNotice: Dispatch<SetStateAction<Notice | undefined>>;
+  showPageMessage: (message: PageMessageDraft | undefined) => void;
   guidedFormActions: GuidedFormActions;
   searchParams: ReturnType<typeof useSearchParams>;
   router: ReturnType<typeof useRouter>;
@@ -50,7 +50,7 @@ export function useGuidedFormSteps({
   applyDispatch: (
     dispatch: Promise<ServerDrivenResult | undefined>,
     formPlacementId?: string,
-    afterAccepted?: () => Promise<Notice | undefined>,
+    afterAccepted?: () => Promise<PageMessageDraft | undefined>,
     sourceBindingId?: string,
   ) => Promise<unknown>;
 }>) {
@@ -104,7 +104,7 @@ export function useGuidedFormSteps({
       const guidedForm = model.guidedForm;
       if (guidedForm === undefined || busy || guidedFormCompleted) return;
       setBusy(true);
-      setNotice(undefined);
+      showPageMessage(undefined);
       try {
         const result = await guidedFormActions.advance({
           address: guidedAddress,
@@ -116,8 +116,9 @@ export function useGuidedFormSteps({
         });
         if (result.kind === "updated" || result.kind === "unchanged") {
           if (result.kind === "updated" && !result.valid && result.activeStepId === stepId)
-            setNotice({
-              tone: "problem",
+            showPageMessage({
+              target: "banner",
+              severity: "error",
               text: "Review the fields in this step before continuing.",
             });
           const queryStep =
@@ -131,16 +132,17 @@ export function useGuidedFormSteps({
           return;
         }
         if (result.kind === "conflict") {
-          setNotice({
-            tone: "problem",
+          showPageMessage({
+            target: "banner",
+            severity: "error",
             text: "This draft changed in another session. Review the latest step.",
           });
           router.refresh();
           return;
         }
-        setNotice(unavailableNotice);
+        showPageMessage(unavailableNotice);
       } catch {
-        setNotice(unavailableNotice);
+        showPageMessage(unavailableNotice);
       } finally {
         setBusy(false);
       }
@@ -224,7 +226,7 @@ export function useGuidedFormSteps({
         return;
       guidedSubmitInFlight.current = true;
       setBusy(true);
-      setNotice(undefined);
+      showPageMessage(undefined);
       try {
         const confirmed = await guidedFormActions.confirm({
           address: guidedAddress,
@@ -233,10 +235,11 @@ export function useGuidedFormSteps({
           stepId: guidedForm.activeStepId,
         });
         if (confirmed.kind !== "confirmed") {
-          setNotice(
+          showPageMessage(
             confirmed.kind === "conflict"
               ? {
-                  tone: "problem",
+                  target: "banner",
+                  severity: "error",
                   text: "This draft changed in another session. Review the latest step.",
                 }
               : unavailableNotice,
@@ -244,7 +247,7 @@ export function useGuidedFormSteps({
           if (confirmed.kind === "conflict") router.refresh();
           return;
         }
-        const afterAccepted = async (): Promise<Notice | undefined> => {
+        const afterAccepted = async (): Promise<PageMessageDraft | undefined> => {
           unsavedWorkRegistry?.markSaved(placementId, submittedValues);
           const abandoned = await guidedFormActions.abandon({
             address: guidedAddress,
@@ -254,7 +257,8 @@ export function useGuidedFormSteps({
           return abandoned.kind === "abandoned"
             ? undefined
             : {
-                tone: "problem",
+                target: "banner",
+                severity: "error",
                 text: "The submission finished, but the saved draft could not be cleared. Refresh before submitting again.",
               };
         };
@@ -267,7 +271,7 @@ export function useGuidedFormSteps({
         );
         await applyDispatch(dispatch, placementId, afterAccepted, binding.bindingId);
       } catch {
-        setNotice(unavailableNotice);
+        showPageMessage(unavailableNotice);
       } finally {
         guidedSubmitInFlight.current = false;
         setBusy(false);

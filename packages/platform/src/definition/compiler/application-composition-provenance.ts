@@ -223,10 +223,19 @@ function itemTargets(
       if (field === "view_permission") return plain([[...canonicalVortex, "viewPermissionKey"]]);
       if (field === "use_permission") return plain([[...canonicalVortex, "usePermissionKey"]]);
       if (field === "query") return plain([[...canonicalVortex, "queryId"]]);
-      if (field === "visibility_condition") {
+      const conditionFields = {
+        visibility_condition: "visibilityCondition",
+        required_condition: "requiredCondition",
+        read_only_condition: "readOnlyCondition",
+        enabled_condition: "enabledCondition",
+      } as const;
+      if (typeof field === "string" && field in conditionFields) {
         const targets = conditionSourceTargets(source as unknown as JsonObject, sourcePath, {
-          sourceRoot: [...itemPath, "props", "vortex", "visibility_condition"],
-          canonicalRoot: [...canonicalVortex, "visibilityCondition"],
+          sourceRoot: [...itemPath, "props", "vortex", field],
+          canonicalRoot: [
+            ...canonicalVortex,
+            conditionFields[field as keyof typeof conditionFields],
+          ],
         });
         return targets === undefined ? undefined : plain(targets);
       }

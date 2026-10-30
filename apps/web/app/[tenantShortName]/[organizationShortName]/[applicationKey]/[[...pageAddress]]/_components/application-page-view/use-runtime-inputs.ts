@@ -13,7 +13,7 @@ import {
   type DisplaySemanticEvent,
   type ServerDrivenResult,
   type FlowIntentHost,
-  type FormFlowFeedback,
+  type FlowRuntimeState,
 } from "@vortex/ui";
 import {
   isRecord,
@@ -41,7 +41,7 @@ import type {
   DispatchOutcome,
   PageSelection,
   TableContinuationTarget,
-  Notice,
+  PageMessageDraft,
   SubmittedForm,
   EventHandlers,
   ControlReport,
@@ -66,7 +66,7 @@ import type { useFieldFlowEvents } from "./use-field-flow-events";
 export function useRuntimeInputs({
   currentData,
   model,
-  formFeedback,
+  runtimeState,
   guidedActiveFormIds,
   guidedActivePlacementIds,
   guidedFormCompleted,
@@ -93,11 +93,10 @@ export function useRuntimeInputs({
   subject,
   requestedStepId,
   guidedSummaryStepId,
-  setNotice,
+  showPageMessage,
   submitGuidedSummary,
   advanceGuidedStep,
   currentEditFormBaselines,
-  setFormFeedback,
   choiceEvidenceFor,
   submittedFormsRef,
   formCancelledRef,
@@ -124,7 +123,7 @@ export function useRuntimeInputs({
 }: Readonly<{
   currentData: ApplicationPageModel["data"];
   model: ApplicationPageModel;
-  formFeedback: Readonly<Record<string, FormFlowFeedback>>;
+  runtimeState: FlowRuntimeState;
   guidedActiveFormIds: string[];
   guidedActivePlacementIds: ReadonlySet<string> | undefined;
   guidedFormCompleted: boolean;
@@ -141,7 +140,7 @@ export function useRuntimeInputs({
     supplied: Record<string, unknown>,
     selectedRecordId?: string,
     gestureSubject?: Readonly<{ recordId: string; revision: number }>,
-    afterAccepted?: () => Promise<Notice | undefined>,
+    afterAccepted?: () => Promise<PageMessageDraft | undefined>,
     clickId?: string,
     reportOnControl?: ControlReport,
     sourceTablePlacementId?: string,
@@ -190,7 +189,7 @@ export function useRuntimeInputs({
   subject: ApplicationPageModel["subject"];
   requestedStepId: RefObject<string | undefined>;
   guidedSummaryStepId: string | undefined;
-  setNotice: Dispatch<SetStateAction<Notice | undefined>>;
+  showPageMessage: (message: PageMessageDraft | undefined) => void;
   submitGuidedSummary: (
     placementId: string,
     binding: PlacementFlowBinding,
@@ -204,7 +203,6 @@ export function useRuntimeInputs({
     requested?: string,
   ) => Promise<void>;
   currentEditFormBaselines: ApplicationPageModel["editFormBaselines"];
-  setFormFeedback: Dispatch<SetStateAction<Readonly<Record<string, FormFlowFeedback>>>>;
   choiceEvidenceFor: (
     formId: string,
     values: Readonly<Record<string, unknown>>,
@@ -215,7 +213,7 @@ export function useRuntimeInputs({
   applyDispatch: (
     dispatch: Promise<ServerDrivenResult | undefined>,
     formPlacementId?: string,
-    afterAccepted?: () => Promise<Notice | undefined>,
+    afterAccepted?: () => Promise<PageMessageDraft | undefined>,
     sourceBindingId?: string,
   ) => Promise<unknown>;
   formBlock: ReturnType<typeof createFormBlockRuntime>;
@@ -313,7 +311,6 @@ export function useRuntimeInputs({
       ...Object.keys(currentData),
       ...Object.keys(controls),
       ...Object.keys(model.bindings),
-      ...Object.keys(formFeedback),
       ...guidedActiveFormIds,
       ...model.linkInputPlacementIds,
       ...Object.keys(model.pageParameters.controls),
@@ -338,14 +335,14 @@ export function useRuntimeInputs({
         Object.hasOwn(controlDraftsRef.current.restored, placementId)
       )
         data = controlDraftsRef.current.restored[placementId] as typeof data;
-      const bindings = model.bindings[placementId] ?? [];
+      const bindings = (model.bindings[placementId] ?? []).filter(
+        (binding) => binding.messageAction === undefined,
+      );
       const events: EventHandlers = {};
       const boardData = boardPayloadFor(data);
       const tableData = tablePayloadFor(data);
       const declaredEvents = placementEventNames[placementId];
       const supportsEvent = (eventName: string): boolean => declaredEvents?.has(eventName) === true;
-      const flowFeedback =
-        formOwners[placementId] === placementId ? formFeedback[placementId] : undefined;
       // Runtime data alone does not identify a display: forms can have projected owner-group data.
       // Give each placement only the display callbacks its own registered release declares.
       if (data !== undefined && model.guidedForm === undefined) {
@@ -412,7 +409,10 @@ export function useRuntimeInputs({
         )
           events.card_moved = (event: DisplaySemanticEvent) =>
             import("./display-write-events").then(({ cardMoved }) =>
-              cardMoved({ placementId, bindings, runBinding, setNotice, formCancelledRef }, event),
+              cardMoved(
+                { placementId, bindings, runBinding, showPageMessage, formCancelledRef },
+                event,
+              ),
             );
         if (
           boardData !== undefined &&
@@ -421,7 +421,7 @@ export function useRuntimeInputs({
         )
           events.card_added = (event: DisplaySemanticEvent) =>
             import("./display-write-events").then(({ cardAdded }) =>
-              cardAdded({ placementId, bindings, runBinding, setNotice }, event),
+              cardAdded({ placementId, bindings, runBinding, showPageMessage }, event),
             );
         if (boardData !== undefined && supportsEvent("page_changed"))
           events.page_changed = (event: DisplaySemanticEvent) =>
@@ -465,8 +465,9 @@ export function useRuntimeInputs({
               selected.length >= recordsSelectionMaximumIds &&
               !selected.some((item) => item.recordId === event.recordId)
             ) {
-              setNotice({
-                tone: "problem",
+              showPageMessage({
+                target: "banner",
+                severity: "error",
                 text: `Select at most ${recordsSelectionMaximumIds} records. Clear some selections before adding another.`,
               });
               return;
@@ -484,8 +485,9 @@ export function useRuntimeInputs({
               // so the cap is also decided here, where the rows already added are known.
               if (held.length >= recordsSelectionMaximumIds) {
                 queueMicrotask(() =>
-                  setNotice({
-                    tone: "problem",
+                  showPageMessage({
+                    target: "banner",
+                    severity: "error",
                     text: `Select at most ${recordsSelectionMaximumIds} records. Clear some selections before adding another.`,
                   }),
                 );
@@ -711,7 +713,7 @@ export function useRuntimeInputs({
             requestedStepId.current = undefined;
             if (model.guidedForm.activeStepId === guidedSummaryStepId) {
               if (submitBinding === undefined) {
-                setNotice(unavailableNotice);
+                showPageMessage(unavailableNotice);
                 return;
               }
               return submitGuidedSummary(
@@ -745,11 +747,14 @@ export function useRuntimeInputs({
             recordSubmission &&
             Object.keys(recordValues).length === 0
           ) {
-            setNotice(undefined);
-            setFormFeedback((current) => ({
-              ...current,
-              [placementId]: { kind: "message", tone: "success", text: "No changes to save." },
-            }));
+            showPageMessage(undefined);
+            runtimeState.messages.show({
+              id: crypto.randomUUID(),
+              target: "inline",
+              component: placementId,
+              severity: "success",
+              text: "No changes to save.",
+            });
             return;
           }
           const choiceEvidence = choiceEvidenceFor(placementId, event.values);
@@ -798,11 +803,7 @@ export function useRuntimeInputs({
             delete store.baselines[placementId];
             delete store.baselineFields[placementId];
           }
-          setFormFeedback((current) => {
-            const next = { ...current };
-            delete next[placementId];
-            return next;
-          });
+          runtimeState.messages.clear("inline", placementId);
           if (resetBinding !== undefined)
             void applyDispatch(
               formBlock.reset(asComponentBinding(placementId, resetBinding), event.gestureId),
@@ -812,10 +813,9 @@ export function useRuntimeInputs({
             );
         };
       if (data === undefined) {
-        if (Object.keys(events).length > 0 || flowFeedback !== undefined)
+        if (Object.keys(events).length > 0)
           inputs[placementId] = {
             ...(Object.keys(events).length === 0 ? {} : { events }),
-            ...(flowFeedback === undefined ? {} : { flowFeedback }),
           };
         continue;
       }
@@ -880,7 +880,6 @@ export function useRuntimeInputs({
                 });
               },
             }),
-        ...(flowFeedback === undefined ? {} : { flowFeedback }),
       };
     }
     return inputs;
@@ -892,7 +891,7 @@ export function useRuntimeInputs({
     fieldFlowEvents,
     formBlock,
     formCancelledRef,
-    formFeedback,
+    runtimeState,
     formOwners,
     recordDetailOwners,
     launcherPlacements,

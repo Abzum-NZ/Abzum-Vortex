@@ -385,6 +385,8 @@ export {
   type FlowInvokeClient,
   type FlowInvokeClientOptions,
   type FlowMessageIntent,
+  type PageMessage,
+  type PageMessageDraft,
   type FlowResumeEvidence,
   type FlowRuntime,
   type FlowRuntimeOptions,

@@ -93,6 +93,20 @@ export type FlowReferenceEnvironment = Readonly<{
   controls?: readonly string[];
   values: Readonly<Record<string, string>>;
   forms: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  formRestrictions?: Readonly<
+    Record<
+      string,
+      Readonly<
+        Record<
+          string,
+          Readonly<{
+            readOnly: boolean;
+            protectedKind?: "attachment" | "secret";
+          }>
+        >
+      >
+    >
+  >;
 }>;
 
 export type FlowValidationOptions = Readonly<{
@@ -461,7 +475,7 @@ export function validateFlow(
         return "organization_account_reference";
       case "execution_now":
         return "date_time";
-      // Page values await the page store; form fields are resolved by the page and segment seed.
+      // Page values and form fields resolve against every page on which this flow can run.
       case "page":
       case "form": {
         const environments = options.referenceEnvironments ?? [];
@@ -488,13 +502,6 @@ export function validateFlow(
             "broken_reference",
             "Page and form references require a bound page",
           );
-        if (reference.source === "page")
-          unreadableReferences.push({
-            path,
-            ruleCode: "vortex.definition.unsupported_workflow_node",
-            family: "unsupported_choice",
-            message: `The page value ${reference.name} cannot be read yet`,
-          });
         return types.length > 0 && types.every((type) => type === types[0]) ? types[0] : undefined;
       }
       case "task_output": {
@@ -785,6 +792,90 @@ export function validateFlow(
     where: Where,
     path: Path,
   ) => {
+    if (task.type === "interface.set_value" && name === "to") {
+      const pageValue = task.properties.value;
+      const form = task.properties.form;
+      const field = task.properties.field;
+      const targetName = (candidate: FlowValue | undefined) =>
+        candidate?.kind === "literal" && typeof candidate.literal.value === "string"
+          ? candidate.literal.value
+          : undefined;
+      const pageName = targetName(pageValue);
+      const formName = targetName(form);
+      const fieldName = targetName(field);
+      const environments = options.referenceEnvironments ?? [];
+      if (formName !== undefined && fieldName !== undefined) {
+        for (const environment of environments) {
+          const restriction = environment.formRestrictions?.[formName]?.[fieldName];
+          if (restriction?.readOnly)
+            add(
+              path,
+              "vortex.definition.workflow_node_values",
+              "invalid_value",
+              `Set value step ${task.id}: field ${fieldName} is read-only on page ${environment.page}`,
+            );
+          if (restriction?.protectedKind === "secret")
+            add(
+              path,
+              "vortex.definition.workflow_node_values",
+              "invalid_value",
+              `Set value step ${task.id}: secret field ${fieldName} cannot be set`,
+            );
+          if (restriction?.protectedKind === "attachment") {
+            const empty =
+              (value.kind === "literal" &&
+                (value.literal.value === null ||
+                  (Array.isArray(value.literal.value) && value.literal.value.length === 0))) ||
+              (value.kind === "array" && value.items.length === 0);
+            if (!empty)
+              add(
+                path,
+                "vortex.definition.workflow_node_values",
+                "invalid_value",
+                `Set value step ${task.id}: attachment field ${fieldName} accepts only an empty value`,
+              );
+          }
+        }
+      }
+      const types = environments.map((environment) => {
+        const type =
+          pageName !== undefined
+            ? environment.values[pageName]
+            : formName !== undefined && fieldName !== undefined
+              ? environment.forms[formName]?.[fieldName]
+              : undefined;
+        if (
+          type === undefined &&
+          (pageName !== undefined || (formName !== undefined && fieldName !== undefined))
+        )
+          add(
+            path,
+            "vortex.definition.workflow_node_references",
+            "broken_reference",
+            `Set value step ${task.id}: target is unavailable on page ${environment.page}`,
+          );
+        return type;
+      });
+      if (environments.length === 0)
+        add(
+          path,
+          "vortex.definition.workflow_node_references",
+          "broken_reference",
+          `Set value step ${task.id} requires a bound page`,
+        );
+      const type = types[0];
+      if (type !== undefined && types.every((candidate) => candidate === type))
+        checkValue(value, [type], where, path);
+      else valueType(value, where, path);
+      if (types.some((candidate) => candidate !== undefined && candidate !== type))
+        add(
+          path,
+          "vortex.definition.source_type_compatibility",
+          "invalid_value",
+          `Set value step ${task.id}: target types differ across pages`,
+        );
+      return;
+    }
     if (task.type === "data.calculate" && name === "result_type" && value.kind !== "literal")
       add(
         path,
@@ -1182,6 +1273,35 @@ export function validateFlow(
           const propertyPath = [...path, "properties", name];
           if (definition === undefined) valueType(value, where, propertyPath);
           else checkProperty(node, definition, name, value, where, propertyPath);
+        }
+        if (node.type === "interface.show_message") {
+          const action = node.properties.action_flow;
+          const inputs = node.properties.action_inputs;
+          if (action !== undefined && isTextLiteral(action)) {
+            const target = findFlow(
+              String((action as Extract<FlowValue, { kind: "literal" }>).literal.value),
+            );
+            if (inputs !== undefined && inputs.kind !== "map")
+              add(
+                [...path, "properties", "action_inputs"],
+                "vortex.definition.workflow_node_values",
+                "invalid_value",
+                "Message action inputs must be a map of named values",
+              );
+            else
+              checkInputMap(inputs?.kind === "map" ? inputs.entries : {}, target, where, [
+                ...path,
+                "properties",
+                "action_inputs",
+                "entries",
+              ]);
+          } else if (inputs !== undefined)
+            add(
+              [...path, "properties", "action_inputs"],
+              "vortex.definition.workflow_node_values",
+              "invalid_value",
+              "Message action inputs require an action flow",
+            );
         }
         if (node.type === "data.record_link") checkRecordLinkTask(node, path);
       }

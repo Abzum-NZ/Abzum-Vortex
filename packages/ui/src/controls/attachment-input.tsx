@@ -9,6 +9,7 @@ import {
 import { Field, FieldLabel } from "../components/field";
 import { Input } from "../components/input";
 import { Button } from "../components/button";
+import { flowSetFieldChange } from "../flow-runtime/flow-cycle";
 import {
   readControlSettings,
   resolveControlContext,
@@ -24,15 +25,16 @@ import {
   useSeededState,
   fieldFocusLost,
 } from "./field-parts";
-import { useFormField, useFormFieldError } from "./form-context";
+import { useFormField, useFormFieldError, useFormFieldPublisher } from "./form-context";
 import type { AttachmentInputPayload } from "./projected-data";
 
 /** A Puck field publishes completed references to its enclosing form. */
 export function AttachmentInput(props: ControlRenderProps<AttachmentInputPayload>): ReactElement {
   const context = resolveControlContext(props, ["field_changed", "field_focus_lost"]);
   const settings = readControlSettings(props, context.location);
-  const ids = useFieldIds();
+  const ids = useFieldIds(props.placementId);
   const fieldKey = settings.fieldKey();
+  const publish = useFormFieldPublisher(fieldKey);
   const label = context.accessibleName ?? props.metadata.name;
   const required = settings.boolean("required");
   const feedback = useFieldFeedback(fieldKey);
@@ -57,6 +59,32 @@ export function AttachmentInput(props: ControlRenderProps<AttachmentInputPayload
           (required && !disabled && !readOnly && files.length === 0
             ? `${label} is required.`
             : undefined)),
+    (value, cycle) => {
+      if (
+        disabled ||
+        readOnly ||
+        busyRef.current ||
+        feedback?.hidden === true ||
+        !Array.isArray(value)
+      )
+        return undefined;
+      if (
+        value.some((id) => typeof id !== "string" || !files.some((file) => file.fileId === id)) ||
+        new Set(value).size !== value.length
+      )
+        return undefined;
+      const kept = files.filter((file) => value.includes(file.fileId));
+      const references = kept.map((file) => file.fileId);
+      return {
+        value: references,
+        apply: () => setSerialized(JSON.stringify(kept)),
+        emit: () =>
+          context.events?.field_changed?.({
+            ...flowSetFieldChange(cycle, fieldKey, references),
+            draftDisplay: { files: kept },
+          }),
+      };
+    },
   );
   const formError = useFormFieldError(fieldKey);
   const help = settings.text("help_text");
@@ -64,6 +92,7 @@ export function AttachmentInput(props: ControlRenderProps<AttachmentInputPayload
   const note = inactiveNote(context);
   const change = (next: typeof files) => {
     setSerialized(JSON.stringify(next));
+    publish(next.map((file) => file.fileId));
     context.events?.field_changed?.({
       event: "field_changed",
       origin: "user",

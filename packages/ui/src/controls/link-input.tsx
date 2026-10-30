@@ -14,6 +14,7 @@ import {
 } from "../components/combobox";
 import { Field, FieldLabel } from "../components/field";
 import { InputGroup, InputGroupAddon } from "../components/input-group";
+import { flowSetFieldChange } from "../flow-runtime/flow-cycle";
 import {
   readControlSettings,
   resolveControlContext,
@@ -29,7 +30,7 @@ import {
   useSeededState,
   fieldFocusLost,
 } from "./field-parts";
-import { useFormFieldValue, useRequiredFormField } from "./form-context";
+import { useFormFieldPublisher, useFormFieldValue, useRequiredFormField } from "./form-context";
 import { labelInSentence, waitingForParent } from "./dependent-field";
 import {
   readRecordChoicePage,
@@ -68,8 +69,9 @@ export function LinkInput(props: LinkInputProps): ReactElement {
     "records_requested",
   ]);
   const settings = readControlSettings(props, context.location);
-  const ids = useFieldIds();
+  const ids = useFieldIds(props.placementId);
   const fieldKey = settings.fieldKey();
+  const publish = useFormFieldPublisher(fieldKey);
   const label = context.accessibleName ?? props.metadata.name;
   const help = settings.text("help_text");
   const placeholder = settings.text("placeholder") ?? "Search by name";
@@ -107,6 +109,41 @@ export function LinkInput(props: LinkInputProps): ReactElement {
     props.placementId,
     permitted?.reference ?? null,
     { label, missing: required && !disabled && !readOnly && permitted === null },
+    (value, cycle) => {
+      if (disabled || readOnly || waiting || draftFeedback?.hidden === true) return undefined;
+      if (value === null)
+        return {
+          value: null,
+          apply: () => setPicked(null),
+          emit: () => context.events?.field_changed?.(flowSetFieldChange(cycle, fieldKey, null)),
+        };
+      const candidate =
+        typeof value === "object" && value !== null && !Array.isArray(value)
+          ? (value as Record<string, unknown>)
+          : undefined;
+      const available = choices.filter((choice) =>
+        typeof value === "string"
+          ? choice.recordId === value
+          : choice.recordId === candidate?.recordId &&
+            choice.recordTypeId === candidate?.recordTypeId,
+      );
+      if (
+        available.length !== 1 ||
+        !allowedRecordTypeIds.includes(available[0]!.recordTypeId.toLowerCase())
+      )
+        return undefined;
+      const item = available[0]!;
+      const reference = Object.freeze({ recordTypeId: item.recordTypeId, recordId: item.recordId });
+      return {
+        value: reference,
+        apply: () => setPicked({ reference, title: item.title, typeLabel: item.typeLabel }),
+        emit: () =>
+          context.events?.field_changed?.({
+            ...flowSetFieldChange(cycle, fieldKey, reference),
+            draftDisplay: { title: item.title },
+          }),
+      };
+    },
   );
   const error = projectedError ?? validationError;
 
@@ -198,6 +235,7 @@ export function LinkInput(props: LinkInputProps): ReactElement {
     setNext(undefined);
     if (picked !== null) {
       setPicked(null);
+      publish(null);
       context.events?.field_changed?.({
         event: "field_changed",
         origin: "user",
@@ -220,6 +258,7 @@ export function LinkInput(props: LinkInputProps): ReactElement {
         ? null
         : { reference, title: item.title, typeLabel: item.typeLabel },
     );
+    publish(reference);
     context.events?.field_changed?.({
       event: "field_changed",
       origin: "user",

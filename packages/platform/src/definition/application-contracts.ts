@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { currencyCodeSchema } from "../records/module-field-values";
+import { isIsoCurrencyCode } from "../catalogue/currencies";
 import { inspectApplicationPageReplacements } from "../pages/application-page-replacement";
 import {
   applicationDefinitionEnvelopeSchema,
@@ -441,6 +443,9 @@ const experienceGatedPlacementKeys = [
   "viewPermissionKey",
   "usePermissionKey",
   "visibilityCondition",
+  "requiredCondition",
+  "readOnlyCondition",
+  "enabledCondition",
   "queryId",
 ] as const;
 
@@ -482,9 +487,18 @@ export const pageValueDeclarationSchema = z
     type: z.enum(["decimal_number", "money", "text", "yes_no", "json"]),
     label: labelSchema,
     initial: jsonValueSchema,
+    currency: currencyCodeSchema
+      .refine(isIsoCurrencyCode, "Use an ISO 4217 currency code")
+      .optional(),
   })
   .strict()
   .superRefine((declaration, context) => {
+    if (declaration.type !== "money" && declaration.currency !== undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["currency"],
+        message: "Only money page values declare a currency",
+      });
     if (
       declaration.initial !== null &&
       !typedValueMatchesType(declaration.initial, declaration.type, "flow")

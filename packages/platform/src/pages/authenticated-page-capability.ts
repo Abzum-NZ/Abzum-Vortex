@@ -1,4 +1,5 @@
 import "server-only";
+import { conditionReadsPageValues } from "../rules/typed-condition-core";
 
 import type { SelectedOrganizationScope } from "../access/identity-access";
 import type {
@@ -110,6 +111,9 @@ type RequiredPlacement = Readonly<{
   viewPermissionKey?: string;
   usePermissionKey?: string;
   visibilityCondition?: ConditionNode;
+  requiredCondition?: ConditionNode;
+  readOnlyCondition?: ConditionNode;
+  enabledCondition?: ConditionNode;
   ancestorPlacementIds: readonly string[];
 }>;
 
@@ -133,6 +137,15 @@ const collectSlot = (
       ...(candidate.visibilityCondition === undefined
         ? {}
         : { visibilityCondition: candidate.visibilityCondition }),
+      ...(candidate.requiredCondition === undefined
+        ? {}
+        : { requiredCondition: candidate.requiredCondition }),
+      ...(candidate.readOnlyCondition === undefined
+        ? {}
+        : { readOnlyCondition: candidate.readOnlyCondition }),
+      ...(candidate.enabledCondition === undefined
+        ? {}
+        : { enabledCondition: candidate.enabledCondition }),
     });
     for (const [, child] of compiledItemSlots(item))
       collectSlot(child, result, [...ancestorPlacementIds, placementId]);
@@ -224,7 +237,8 @@ const evaluatePlacement = async (
   const conditionAllowed =
     required.visibilityCondition === undefined
       ? binding.visibilityConditionAllowed
-      : deferRowCondition && conditionReadsField(required.visibilityCondition)
+      : conditionReadsPageValues(required.visibilityCondition) ||
+          (deferRowCondition && conditionReadsField(required.visibilityCondition))
         ? true
         : !view.allowed || ancestorHidden
           ? false
@@ -238,6 +252,25 @@ const evaluatePlacement = async (
     ancestorHidden || !view.allowed
       ? undefined
       : await evaluators.evaluateActionAvailability(transaction, scope, page, required.placementId);
+  const reactionEntries: [string, boolean][] = [];
+  for (const [name, condition] of [
+    ["required", required.requiredCondition],
+    ["readOnly", required.readOnlyCondition],
+    ["enabled", required.enabledCondition],
+  ] as const) {
+    if (
+      condition === undefined ||
+      conditionReadsPageValues(condition) ||
+      !view.allowed ||
+      ancestorHidden ||
+      (deferRowCondition && conditionReadsField(condition))
+    )
+      continue;
+    reactionEntries.push([
+      name,
+      await evaluators.evaluateVisibilityCondition(transaction, scope, page, condition),
+    ]);
+  }
   return {
     view,
     use,
@@ -254,6 +287,7 @@ const evaluatePlacement = async (
         : { operationRequired: binding.operationRequired }),
       operationBound: binding.operationBound,
       ...(conditionAllowed === undefined ? {} : { conditionAllowed }),
+      ...(reactionEntries.length === 0 ? {} : { reactions: Object.fromEntries(reactionEntries) }),
       ...(actionAvailable === undefined ? {} : { actionAvailable }),
     },
   };

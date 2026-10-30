@@ -10,6 +10,7 @@ import {
 import { Field, FieldLabel } from "../components/field";
 import { Input } from "../components/input";
 import { DefinitionRenderError } from "../definition-error";
+import { flowSetFieldChange } from "../flow-runtime/flow-cycle";
 import type { NumberInputPayload } from "./projected-data";
 import {
   readControlSettings,
@@ -26,7 +27,7 @@ import {
   useSeededState,
   fieldFocusLost,
 } from "./field-parts";
-import { useFormField, useFormFieldError } from "./form-context";
+import { useFormField, useFormFieldError, useFormFieldPublisher } from "./form-context";
 
 export type NumberInputProps = ControlRenderProps<NumberInputPayload>;
 
@@ -59,8 +60,9 @@ export function NumberInput(props: NumberInputProps): ReactElement {
     "field_focus_lost",
   ]);
   const settings = readControlSettings(props, context.location);
-  const ids = useFieldIds();
+  const ids = useFieldIds(props.placementId);
   const fieldKey = settings.fieldKey();
+  const publish = useFormFieldPublisher(fieldKey);
   const label = context.accessibleName ?? props.metadata.name;
   const help = settings.text("help_text");
   const placeholder = settings.text("placeholder");
@@ -127,7 +129,18 @@ export function NumberInput(props: NumberInputProps): ReactElement {
     }
     return undefined;
   };
-  useFormField(fieldKey, props.placementId, typed, validate);
+  useFormField(fieldKey, props.placementId, typed, validate, (value, cycle) => {
+    if (disabled || readOnly || draftFeedback?.hidden === true) return undefined;
+    if (value !== null && typeof value !== "string" && typeof value !== "number") return undefined;
+    const next = value === null ? "" : String(value);
+    const nextTyped = toTyped(next);
+    if (value !== null && (nextTyped === null || nextTyped !== value)) return undefined;
+    return {
+      value: nextTyped,
+      apply: () => setRaw(next),
+      emit: () => context.events?.field_changed?.(flowSetFieldChange(cycle, fieldKey, nextTyped)),
+    };
+  });
   const validationError = useFormFieldError(fieldKey);
   const error = projectedError ?? validationError ?? (raw.trim() === "" ? undefined : validate());
 
@@ -135,13 +148,15 @@ export function NumberInput(props: NumberInputProps): ReactElement {
     if (disabled || readOnly) return;
     const next = event.target.value;
     setRaw(next);
+    const value = toTyped(next);
+    publish(value);
     context.events?.field_changed?.({
       event: "field_changed",
       origin: "user",
       depth: 0,
       immediate: false,
       fieldKey,
-      value: toTyped(next),
+      value,
     });
   };
 

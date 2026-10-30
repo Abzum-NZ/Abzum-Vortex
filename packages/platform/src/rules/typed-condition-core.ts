@@ -1,4 +1,15 @@
 import type { JsonValue } from "../catalogue/common";
+import type { ConditionNode } from "../definition/module-foundation-contracts";
+
+/** Live page conditions depend on a page value or a form's current draft. */
+export const conditionReadsPageValues = (condition: ConditionNode): boolean => {
+  if (condition.kind === "comparison")
+    return [condition.left, condition.right].some(
+      (operand) => operand?.source === "page" || operand?.source === "form",
+    );
+  if (condition.kind === "not") return conditionReadsPageValues(condition.condition);
+  return condition.conditions.some(conditionReadsPageValues);
+};
 
 export type ResolvedTypedConditionOperand<TType extends string> = Readonly<{
   type?: TType;

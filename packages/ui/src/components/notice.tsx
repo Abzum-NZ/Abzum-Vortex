@@ -7,6 +7,13 @@ import { Button } from "./button";
 
 export type NoticeSeverity = "info" | "success" | "warning" | "error";
 
+export const noticeAlertVariant = {
+  info: "info",
+  success: "success",
+  warning: "warning",
+  error: "destructive",
+} as const satisfies Record<NoticeSeverity, string>;
+
 /** A text value or link is represented as data; notice content is never interpreted as markup. */
 export type NoticeContentPart =
   | Readonly<{ kind: "text"; value: string }>
@@ -20,6 +27,10 @@ export interface NoticeProps {
   content: NoticeContent;
   title?: string;
   dismissible?: boolean;
+  onDismiss?: () => void;
+  action?:
+    | Readonly<{ kind: "flow"; label: string; run: () => void }>
+    | Readonly<{ kind: "link"; label: string; href: string }>;
 }
 
 const NOTICE_BASE_ORIGIN = "https://vortex.invalid";
@@ -90,19 +101,21 @@ export function Notice({
   content,
   title,
   dismissible = false,
+  onDismiss,
+  action,
 }: NoticeProps): ReactElement | null {
   const [dismissed, setDismissed] = useState(false);
   if (dismissed) return null;
 
-  const error = severity === "error";
+  const urgent = severity === "error" || severity === "warning";
 
   return (
     <div data-slot="notice" data-vortex-severity={severity}>
       <Alert
-        role={error ? "alert" : "status"}
-        aria-live={error ? "assertive" : "polite"}
+        role={urgent ? "alert" : "status"}
+        aria-live={urgent ? "assertive" : "polite"}
         aria-atomic="true"
-        variant={error ? "critical" : severity}
+        variant={noticeAlertVariant[severity]}
       >
         <div className="min-w-0">
           <AlertTitle className="mb-1">
@@ -113,17 +126,31 @@ export function Notice({
             <p className="m-0">{renderNoticeContent(content)}</p>
           </AlertDescription>
         </div>
-        {dismissible ? (
+        {dismissible || action !== undefined ? (
           <AlertAction>
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              aria-label="Dismiss notice"
-              onClick={() => setDismissed(true)}
-            >
-              Dismiss
-            </Button>
+            {action === undefined ? null : action.kind === "link" ? (
+              <a className="underline" href={safeNoticeHref(action.href)}>
+                {action.label}
+              </a>
+            ) : (
+              <Button type="button" variant="ghost" size="xs" onClick={action.run}>
+                {action.label}
+              </Button>
+            )}
+            {dismissible ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                aria-label="Dismiss notice"
+                onClick={() => {
+                  if (onDismiss === undefined) setDismissed(true);
+                  else onDismiss();
+                }}
+              >
+                Dismiss
+              </Button>
+            ) : null}
           </AlertAction>
         ) : null}
       </Alert>

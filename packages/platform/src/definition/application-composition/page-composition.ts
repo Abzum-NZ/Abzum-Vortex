@@ -180,6 +180,9 @@ export type CompiledItemVortex = {
   viewPermissionKey?: string | undefined;
   usePermissionKey?: string | undefined;
   visibilityCondition?: z.infer<typeof conditionNodeSchema> | undefined;
+  requiredCondition?: z.infer<typeof conditionNodeSchema> | undefined;
+  readOnlyCondition?: z.infer<typeof conditionNodeSchema> | undefined;
+  enabledCondition?: z.infer<typeof conditionNodeSchema> | undefined;
   queryId?: string | undefined;
   responsive: z.infer<typeof responsivePlacementSchema>;
   slotOrders: Record<string, BreakpointOrder>;
@@ -284,6 +287,9 @@ const compiledItemVortexSchema = z
     viewPermissionKey: namespacedKeySchema.optional(),
     usePermissionKey: namespacedKeySchema.optional(),
     visibilityCondition: conditionNodeSchema.optional(),
+    requiredCondition: conditionNodeSchema.optional(),
+    readOnlyCondition: conditionNodeSchema.optional(),
+    enabledCondition: conditionNodeSchema.optional(),
     queryId: queryIdSchema.optional(),
     responsive: responsivePlacementSchema,
     slotOrders: z.record(builderKeySchema, breakpointOrderSchema),

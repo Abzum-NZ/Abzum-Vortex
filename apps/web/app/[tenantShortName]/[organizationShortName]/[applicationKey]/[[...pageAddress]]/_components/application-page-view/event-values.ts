@@ -54,7 +54,9 @@ export const bindingOfEvent = (
   bindings: readonly PlacementFlowBinding[],
   event: string,
 ): PlacementFlowBinding | undefined => {
-  const ofKind = bindings.filter((binding) => binding.event === event);
+  const ofKind = bindings.filter(
+    (binding) => binding.messageAction === undefined && binding.event === event,
+  );
   return ofKind.length === 1 ? ofKind[0] : undefined;
 };
 
@@ -74,7 +76,9 @@ export const bindingFor = (
   bindings: readonly PlacementFlowBinding[],
   event: DisplaySemanticEvent,
 ): PlacementFlowBinding | undefined => {
-  const ofKind = bindings.filter((binding) => binding.event === event.event);
+  const ofKind = bindings.filter(
+    (binding) => binding.messageAction === undefined && binding.event === event.event,
+  );
   const eventId = eventIdOf(event);
   if (eventId !== undefined) return ofKind.find((binding) => binding.eventId === eventId);
   return (event.event === "card_moved" || event.event === "card_added") && ofKind.length === 1

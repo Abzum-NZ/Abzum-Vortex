@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { Button } from "../components/button";
+import { Notice } from "../components/notice";
 import { Checkbox } from "../components/checkbox";
 import { useConfirm } from "../components/confirm-dialog";
 import {
@@ -33,6 +34,8 @@ import type {
 } from "./intents";
 import { surfaceCancellationError } from "./intents";
 import { FlowSurfaceContext } from "./flow-surface-context";
+import type { FlowRuntimeState } from "./flow-runtime";
+import type { PageMessageTarget } from "./messages";
 
 type Surface =
   | Readonly<{ id: number; kind: "message"; message: FlowMessageIntent; settle: () => void }>
@@ -65,6 +68,8 @@ export type FlowIntentHostOptions = Readonly<{
     }>,
   ) => Readonly<{ title: string; body: ReactNode }>;
   navigation: LinkNavigationEnvironment;
+  state: FlowRuntimeState;
+  onMessageAction: (message: FlowMessageIntent) => void;
   refresh?: FlowIntentHost["refresh"];
   setPanel?: FlowIntentHost["setPanel"];
   setFilter?: FlowIntentHost["setFilter"];
@@ -238,6 +243,29 @@ function createSurfaceQueue() {
 
 type SurfaceQueue = ReturnType<typeof createSurfaceQueue>;
 
+function MessageTarget({
+  state,
+  target,
+}: Readonly<{ state: FlowRuntimeState; target: PageMessageTarget }>): ReactElement | null {
+  const message = useSyncExternalStore(
+    (listener) => state.subscribe(`message:${state.messages.key(target)}`, listener),
+    () => state.messages.read(target),
+    () => undefined,
+  );
+  if (message === undefined) return null;
+  return (
+    <Notice
+      key={message.id}
+      severity={message.severity}
+      content={message.text}
+      dismissible
+      onDismiss={() => state.messages.clear(target, undefined, message.id)}
+      {...(message.title === undefined ? {} : { title: message.title })}
+      {...(message.action === undefined ? {} : { action: message.action })}
+    />
+  );
+}
+
 /** Only this subtree re-renders when a flow opens or closes a surface. */
 function FlowSurfaceHost({
   queue,
@@ -252,15 +280,36 @@ function FlowSurfaceHost({
     return (
       <FlowDialog
         key={current.id}
-        title={message.title}
+        title={message.title ?? "Message"}
         onDismiss={() => settle()}
         actions={
-          <Button type="button" onClick={() => settle()}>
-            OK
-          </Button>
+          <>
+            {message.actionLabel === undefined ? null : (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  settle();
+                  optionsRef.current.onMessageAction(message);
+                }}
+              >
+                {message.actionLabel}
+              </Button>
+            )}
+            <Button type="button" onClick={() => settle()}>
+              OK
+            </Button>
+          </>
         }
       >
-        <p role="status">{message.text}</p>
+        <p
+          role={message.severity === "warning" || message.severity === "error" ? "alert" : "status"}
+          aria-live={
+            message.severity === "warning" || message.severity === "error" ? "assertive" : "polite"
+          }
+        >
+          {message.text}
+        </p>
       </FlowDialog>
     );
   }
@@ -299,15 +348,49 @@ function FlowSurfaceHost({
 /** Presents flow intents without re-rendering the page when a surface changes. */
 export function useFlowIntentHost(
   options: FlowIntentHostOptions,
-): Readonly<{ host: FlowIntentHost; element: ReactElement }> {
+): Readonly<{ host: FlowIntentHost; element: ReactElement; banner: ReactElement }> {
   const optionsRef = useRef(options);
   optionsRef.current = options;
   const queue = useMemo(() => createSurfaceQueue(), []);
   useEffect(() => () => queue.abandon(), [queue]);
   const host = useMemo<FlowIntentHost>(
     () => ({
-      showMessage: (message, signal) =>
-        queue.enqueue<void>((id, settle) => ({ id, kind: "message", message, settle }), signal),
+      showMessage: (message, signal) => {
+        const state = optionsRef.current.state;
+        const id = crypto.randomUUID();
+        state.messages.show({
+          id,
+          target: message.target,
+          severity: message.severity,
+          text: message.text,
+          ...(message.component === undefined ? {} : { component: message.component }),
+          ...(message.title === undefined ? {} : { title: message.title }),
+          ...(message.dismissAfterMs === undefined
+            ? {}
+            : { dismissAfterMs: message.dismissAfterMs }),
+          ...(message.actionLabel === undefined
+            ? {}
+            : {
+                action: {
+                  kind: "flow" as const,
+                  label: message.actionLabel,
+                  run: () => optionsRef.current.onMessageAction(message),
+                },
+              }),
+        });
+        if (message.target !== "dialog") return;
+        return queue
+          .enqueue<void>(
+            (surfaceId, settle) => ({ id: surfaceId, kind: "message", message, settle }),
+            signal,
+          )
+          .finally(() => state.messages.clear("dialog", undefined, id));
+      },
+      clearMessage: (target, component) => {
+        optionsRef.current.state.messages.clear(target, component);
+        const current = queue.snapshot();
+        if (target === "dialog" && current?.kind === "message") current.settle();
+      },
       showForm: (form, signal) =>
         queue.enqueue<FlowFormAnswer>((id, settle) => ({ id, kind: "form", form, settle }), signal),
       confirm: (confirmation, signal) =>
@@ -323,6 +406,13 @@ export function useFlowIntentHost(
     }),
     [queue],
   );
-  const element = useMemo(() => <FlowSurfaceHost queue={queue} optionsRef={optionsRef} />, [queue]);
-  return { host, element };
+  const element = (
+    <>
+      <div className="fixed right-4 top-4 z-50">
+        <MessageTarget state={options.state} target="toast" />
+      </div>
+      <FlowSurfaceHost queue={queue} optionsRef={optionsRef} />
+    </>
+  );
+  return { host, element, banner: <MessageTarget state={options.state} target="banner" /> };
 }

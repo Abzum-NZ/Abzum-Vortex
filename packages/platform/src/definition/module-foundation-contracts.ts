@@ -53,6 +53,14 @@ const conditionOperandSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("field"), fieldId: fieldIdSchema }).strict(),
   z.object({ source: z.literal("value"), value: jsonValueSchema }).strict(),
   z.object({ source: z.literal("parameter"), key: builderKeySchema }).strict(),
+  z.object({ source: z.literal("page"), name: builderKeySchema }).strict(),
+  z
+    .object({
+      source: z.literal("form"),
+      form: z.string().min(1).max(240),
+      field: builderKeySchema,
+    })
+    .strict(),
 ]);
 const comparisonConditionSchema = z
   .object({
