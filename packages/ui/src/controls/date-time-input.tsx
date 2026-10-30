@@ -39,7 +39,7 @@ export function DateTimeInput(props: DateTimeInputProps): ReactElement {
   useEffect(() => {
     setBrowserTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone);
   }, []);
-  const ids = useFieldIds();
+  const ids = useFieldIds(props.placementId);
   const fieldKey = settings.fieldKey();
   const publish = useFormFieldPublisher(fieldKey);
   const label = context.accessibleName ?? props.metadata.name;

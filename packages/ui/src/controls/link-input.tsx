@@ -69,7 +69,7 @@ export function LinkInput(props: LinkInputProps): ReactElement {
     "records_requested",
   ]);
   const settings = readControlSettings(props, context.location);
-  const ids = useFieldIds();
+  const ids = useFieldIds(props.placementId);
   const fieldKey = settings.fieldKey();
   const publish = useFormFieldPublisher(fieldKey);
   const label = context.accessibleName ?? props.metadata.name;

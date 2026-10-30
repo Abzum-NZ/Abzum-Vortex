@@ -21,6 +21,7 @@ import {
 import { DefinitionRenderError } from "../definition-error";
 import { FlowSurfaceContext } from "../flow-runtime/flow-surface-context";
 import { FlowRuntimeStateContext } from "../flow-runtime/flow-runtime-state-context";
+import { InlineMessage, inlineMessageId } from "../flow-runtime/inline-message";
 import { resolveControlContext, type ControlRenderProps } from "./control-context";
 import {
   applicableDraftFeedback,
@@ -438,6 +439,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
         onReset={onReset}
         onKeyDown={onKeyDown}
         aria-busy={pending}
+        aria-describedby={inlineMessageId(props.placementId)}
         {...(inFlowSurface || title === undefined ? {} : { "aria-labelledby": titleId })}
         data-vortex-control="form-container"
         data-vortex-placement-id={props.placementId}
@@ -508,6 +510,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
           </fieldset>
         </FormScopeContext.Provider>
         <FormDraftFeedbackRegion id={feedbackId} summary={summary} />
+        <InlineMessage placementId={props.placementId} />
         {flowFeedback === undefined ? null : (
           <Alert
             variant={flowFeedback.tone === "problem" ? "destructive" : "default"}

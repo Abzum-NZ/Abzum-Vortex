@@ -24,7 +24,7 @@ import { useFormField, useFormFieldError, useFormFieldPublisher } from "./form-c
 export function ConnectionSecretInput(props: ControlRenderProps<never>): ReactElement {
   const context = resolveControlContext(props, ["field_changed", "field_focus_lost"]);
   const settings = readControlSettings(props, context.location);
-  const ids = useFieldIds();
+  const ids = useFieldIds(props.placementId);
   const fieldKey = settings.fieldKey();
   const publish = useFormFieldPublisher(fieldKey);
   const label = context.accessibleName ?? props.metadata.name;

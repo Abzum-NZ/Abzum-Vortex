@@ -1,8 +1,18 @@
 "use client";
 
-import { useId, useState, type FocusEvent, type ReactElement } from "react";
+import {
+  useContext,
+  useId,
+  useState,
+  useSyncExternalStore,
+  type FocusEvent,
+  type ReactElement,
+} from "react";
 import type { TypedFieldValue } from "@vortex/platform/schema";
 import { FieldDescription, FieldError } from "../components/field";
+import { Button } from "../components/button";
+import { FlowRuntimeStateContext } from "../flow-runtime/flow-runtime-state-context";
+import type { PageMessage } from "../flow-runtime/messages";
 import type { ControlContext } from "./control-context";
 import { FieldDraftFeedback, type FormFieldDraftFeedback } from "./draft-feedback";
 import type { ControlEventHandler } from "./projected-data";
@@ -39,10 +49,20 @@ type FieldIds = Readonly<{
   error: string;
   note: string;
   feedback: string;
+  inline: string;
+  message: PageMessage | undefined;
 }>;
 
-export function useFieldIds(): FieldIds {
+export function useFieldIds(placementId: string): FieldIds {
   const id = useId();
+  const runtime = useContext(FlowRuntimeStateContext);
+  const message = useSyncExternalStore(
+    (listener) =>
+      runtime?.subscribe(`message:${runtime.messages.key("inline", placementId)}`, listener) ??
+      (() => undefined),
+    () => runtime?.messages.read("inline", placementId),
+    () => undefined,
+  );
   return {
     control: `${id}-control`,
     label: `${id}-label`,
@@ -50,6 +70,8 @@ export function useFieldIds(): FieldIds {
     error: `${id}-error`,
     note: `${id}-note`,
     feedback: `${id}-feedback`,
+    inline: `${id}-inline`,
+    message,
   };
 }
 
@@ -89,6 +111,7 @@ export const describedBy = (
     error === undefined ? undefined : ids.error,
     note === undefined ? undefined : ids.note,
     draftFeedback === undefined ? undefined : ids.feedback,
+    ids.message === undefined ? undefined : ids.inline,
   ].filter((reference): reference is string => reference !== undefined);
   return {
     ...(references.length === 0 ? {} : { "aria-describedby": references.join(" ") }),
@@ -137,6 +160,30 @@ export function FieldMessages({
       {error === undefined ? null : <FieldError id={ids.error}>{error}</FieldError>}
       {note === undefined ? null : <FieldDescription id={ids.note}>{note}</FieldDescription>}
       <FieldDraftFeedback id={ids.feedback} feedback={draftFeedback} />
+      {ids.message === undefined ? null : (
+        <div
+          id={ids.inline}
+          role={
+            ids.message.severity === "warning" || ids.message.severity === "error"
+              ? "alert"
+              : "status"
+          }
+          aria-live={
+            ids.message.severity === "warning" || ids.message.severity === "error"
+              ? "assertive"
+              : "polite"
+          }
+          className="text-sm"
+        >
+          {ids.message.title === undefined ? null : <strong>{ids.message.title}: </strong>}
+          {ids.message.text}
+          {ids.message.action === undefined ? null : (
+            <Button type="button" variant="ghost" size="xs" onClick={ids.message.action.run}>
+              {ids.message.action.label}
+            </Button>
+          )}
+        </div>
+      )}
     </>
   );
 }

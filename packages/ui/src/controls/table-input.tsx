@@ -102,7 +102,7 @@ export function TableInput(props: ControlRenderProps<TableInputPayload>): ReactE
     new Set(columns.map((column) => column.key)).size !== columns.length
   )
     fail("A table input requires columns and row limits");
-  const ids = useFieldIds();
+  const ids = useFieldIds(props.placementId);
   const fieldKey = settings.fieldKey();
   const publish = useFormFieldPublisher(fieldKey);
   const label = context.accessibleName ?? props.metadata.name;
