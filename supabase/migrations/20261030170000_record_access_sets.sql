@@ -502,7 +502,7 @@ declare
   eligibility jsonb;
   validated_record_types jsonb[] := array[]::jsonb[];
   validated jsonb;
-  decisions jsonb := '[]'::jsonb;
+  decisions jsonb[] := array[]::jsonb[];
 begin
   -- Each target is one exact record under one action declaration and its
   -- facts; the result holds one complete decision per target in the same
@@ -557,18 +557,16 @@ begin
       when target_item.value -> 'facts' -> 'recordTypes' = any (validated_record_types)
         then target_item.value -> 'facts' -> 'recordTypes'
       else null end;
-    decisions := decisions || pg_catalog.jsonb_build_array(
-      vortex_access.evaluate_record_access_with_validated_types_internal(
-        target_item.value -> 'declaration', (target_item.value ->> 'recordId')::uuid,
-        target_item.value -> 'facts', eligibility, validated
-      )
+    decisions := decisions || vortex_access.evaluate_record_access_with_validated_types_internal(
+      target_item.value -> 'declaration', (target_item.value ->> 'recordId')::uuid,
+      target_item.value -> 'facts', eligibility, validated
     );
     if validated is null then
       validated_record_types := validated_record_types || (target_item.value -> 'facts' -> 'recordTypes');
     end if;
   end loop;
 
-  return decisions;
+  return pg_catalog.to_jsonb(decisions);
 end
 $function$;
 
@@ -995,11 +993,10 @@ declare
   current_contract uuid;
   current_meta jsonb;
   edge_item record;
-  facts_records jsonb;
-  facts_edges jsonb;
+  loaded_records jsonb;
   record_types_fact jsonb;
   relationships_fact jsonb;
-  results jsonb := '[]'::jsonb;
+  results jsonb;
 begin
   -- Step 1: the targets. One record type, record identity, optional expected
   -- revision, optional protected projection row and optional requested fields
@@ -1491,7 +1488,8 @@ begin
         continue;
       end if;
       load_sql := pg_catalog.format(
-        'select stored.record_id, pg_catalog.jsonb_build_object(
+        'select coalesce(pg_catalog.jsonb_object_agg(
+           pg_catalog.lower(stored.record_id::text), pg_catalog.jsonb_build_object(
            ''recordScope'', pg_catalog.jsonb_build_object(
              ''storageScope'', %L,
              ''organizationId'', stored.organisation_id,
@@ -1510,7 +1508,7 @@ begin
                ''ownerOrganizationAccountId'', stored.owner_organisation_account_id)
            when stored.owner_group_id is not null
              then pg_catalog.jsonb_build_object(''ownerGroupId'', stored.owner_group_id)
-           else ''{}''::jsonb end as fact
+           else ''{}''::jsonb end), ''{}''::jsonb)
          from record_data.%I as stored
          where stored.organisation_id = $1 and stored.record_id = any ($2)',
         current_meta ->> 'storageScope', (current_meta ->> 'moduleRootId')::uuid,
@@ -1518,16 +1516,13 @@ begin
         current_meta ->> 'storageScope', current_meta ->> 'valueExpression',
         current_meta ->> 'table'
       );
-      for loaded_row in execute load_sql using context_organization_id, array(
+      execute load_sql into loaded_records using context_organization_id, array(
         select distinct queued.record_id
         from rows from (pg_catalog.unnest(load_contracts), pg_catalog.unnest(load_records))
           as queued(contract_id, record_id)
         where queued.contract_id = current_contract
-      ) loop
-        closure_records := closure_records || pg_catalog.jsonb_build_object(
-          pg_catalog.lower(loaded_row.record_id::text), loaded_row.fact
-        );
-      end loop;
+      );
+      closure_records := closure_records || loaded_records;
     end loop;
     load_contracts := array[]::uuid[];
     load_records := array[]::uuid[];
@@ -1567,77 +1562,70 @@ begin
     from pg_catalog.jsonb_each(relationship_by_id) as declared(key, value)
   ), '[]'::jsonb);
 
-  for target_index in 1 .. target_count loop
-    if target_results[target_index] is null then
-      results := results || pg_catalog.jsonb_build_array(
-        pg_catalog.jsonb_build_object('outcome', 'missing')
-      );
-      continue;
-    end if;
-    if target_results[target_index] ->> 'outcome' = 'conflict' then
-      results := results || pg_catalog.jsonb_build_array(target_results[target_index]);
-      continue;
-    end if;
-    target_meta := type_meta -> pg_catalog.lower(target_type_ids[target_index]::text);
-    declaration := declarations -> pg_catalog.lower(target_type_ids[target_index]::text);
-    if declaration = 'null'::jsonb then
-      declaration := null;
-    end if;
-
-    select coalesce(pg_catalog.jsonb_agg(reached.fact order by reached.record_key collate "C"), '[]'::jsonb)
-    into facts_records
-    from (
-      select distinct record_key.value as record_key,
-        case when record_key.value = pg_catalog.lower(target_record_ids[target_index]::text)
-          then target_facts[target_index]
-          else closure_records -> record_key.value end as fact
-      from pg_catalog.unnest(pg_catalog.string_to_array(target_reached[target_index], ','))
-        as record_key(value)
-    ) as reached
-    where reached.fact is not null;
-
-    select coalesce(pg_catalog.jsonb_agg(distinct edge.value), '[]'::jsonb)
-    into facts_edges
-    from pg_catalog.jsonb_array_elements(target_edges[target_index]) as edge(value)
-    where exists (
-        select 1 from pg_catalog.jsonb_array_elements(facts_records) as present(value)
-        where present.value -> 'recordScope' ->> 'recordId' = edge.value ->> 'fromRecordId'
-      )
-      and exists (
-        select 1 from pg_catalog.jsonb_array_elements(facts_records) as present(value)
-        where present.value -> 'recordScope' ->> 'recordId' = edge.value ->> 'toRecordId'
-      );
-
-    results := results || pg_catalog.jsonb_build_array(
-      pg_catalog.jsonb_build_object(
+  select coalesce(pg_catalog.jsonb_agg(outcome.value order by outcome.target_index), '[]'::jsonb)
+  into results
+  from (
+    select indexed.target_index, case
+      when target_results[indexed.target_index] is null
+        then pg_catalog.jsonb_build_object('outcome', 'missing')
+      when target_results[indexed.target_index] ->> 'outcome' = 'conflict'
+        then target_results[indexed.target_index]
+      else pg_catalog.jsonb_build_object(
         'outcome', 'loaded',
         'context', context_value,
-        'declaration', declaration,
+        'declaration', typed.declaration,
         'facts', pg_catalog.jsonb_build_object(
-          'binding', declaration -> 'recordBinding',
+          'binding', typed.declaration -> 'recordBinding',
           'recordTypes', record_types_fact,
           'relationships', relationships_fact,
           'sharingConditions', condition_list,
-          'records', facts_records,
-          'edges', facts_edges
+          'records', reached.records,
+          'edges', present_edges.edges
         ),
         'accessPermissions', permission_by_id,
-        'recordTypeMeta', target_meta - 'isSystemProjection',
-        'isSystemProjection', (target_meta ->> 'isSystemProjection')::boolean,
-        'table', target_meta ->> 'table',
-        'columns', target_meta -> 'columns',
-        'concurrencyNumber', target_results[target_index] -> 'concurrencyNumber',
-        'definitionRevision', target_results[target_index] -> 'definitionRevision',
-        'moduleReleaseRevision', (target_meta ->> 'releaseRevision')::bigint,
-        'fieldValues', target_facts[target_index] -> 'fieldValues'
+        'recordTypeMeta', typed.meta - 'isSystemProjection',
+        'isSystemProjection', (typed.meta ->> 'isSystemProjection')::boolean,
+        'table', typed.meta ->> 'table',
+        'columns', typed.meta -> 'columns',
+        'concurrencyNumber', target_results[indexed.target_index] -> 'concurrencyNumber',
+        'definitionRevision', target_results[indexed.target_index] -> 'definitionRevision',
+        'moduleReleaseRevision', (typed.meta ->> 'releaseRevision')::bigint,
+        'fieldValues', target_facts[indexed.target_index] -> 'fieldValues'
       ) || case when p_installation ? 'previewInstallationId'
-          and not (target_meta ->> 'isSystemProjection')::boolean
+          and not (typed.meta ->> 'isSystemProjection')::boolean
         then pg_catalog.jsonb_build_object(
           'previewInstallationId', p_installation -> 'previewInstallationId'
         )
         else '{}'::jsonb end
-    );
-  end loop;
+    end as value
+    from pg_catalog.generate_subscripts(target_record_ids, 1) as indexed(target_index)
+    cross join lateral (
+      select type_meta -> pg_catalog.lower(target_type_ids[indexed.target_index]::text) as meta,
+        nullif(
+          declarations -> pg_catalog.lower(target_type_ids[indexed.target_index]::text), 'null'::jsonb
+        ) as declaration
+    ) as typed
+    cross join lateral (
+      select coalesce(pg_catalog.jsonb_agg(present.fact order by present.record_key collate "C"), '[]'::jsonb)
+          as records,
+        coalesce(pg_catalog.array_agg(present.record_key), array[]::text[]) as record_keys
+      from (
+        select distinct record_key.value as record_key,
+          case when record_key.value = pg_catalog.lower(target_record_ids[indexed.target_index]::text)
+            then target_facts[indexed.target_index]
+            else closure_records -> record_key.value end as fact
+        from pg_catalog.unnest(pg_catalog.string_to_array(target_reached[indexed.target_index], ','))
+          as record_key(value)
+      ) as present
+      where present.fact is not null
+    ) as reached
+    cross join lateral (
+      select coalesce(pg_catalog.jsonb_agg(distinct edge.value), '[]'::jsonb) as edges
+      from pg_catalog.jsonb_array_elements(target_edges[indexed.target_index]) as edge(value)
+      where pg_catalog.lower(edge.value ->> 'fromRecordId') = any (reached.record_keys)
+        and pg_catalog.lower(edge.value ->> 'toRecordId') = any (reached.record_keys)
+    ) as present_edges
+  ) as outcome;
 
   return results;
 exception

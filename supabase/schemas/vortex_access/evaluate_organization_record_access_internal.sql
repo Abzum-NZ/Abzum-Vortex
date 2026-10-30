@@ -15,7 +15,7 @@ declare
   eligibility jsonb;
   validated_record_types jsonb[] := array[]::jsonb[];
   validated jsonb;
-  decisions jsonb := '[]'::jsonb;
+  decisions jsonb[] := array[]::jsonb[];
 begin
   -- Each target is one exact record under one action declaration and its
   -- facts; the result holds one complete decision per target in the same
@@ -70,18 +70,16 @@ begin
       when target_item.value -> 'facts' -> 'recordTypes' = any (validated_record_types)
         then target_item.value -> 'facts' -> 'recordTypes'
       else null end;
-    decisions := decisions || pg_catalog.jsonb_build_array(
-      vortex_access.evaluate_record_access_with_validated_types_internal(
-        target_item.value -> 'declaration', (target_item.value ->> 'recordId')::uuid,
-        target_item.value -> 'facts', eligibility, validated
-      )
+    decisions := decisions || vortex_access.evaluate_record_access_with_validated_types_internal(
+      target_item.value -> 'declaration', (target_item.value ->> 'recordId')::uuid,
+      target_item.value -> 'facts', eligibility, validated
     );
     if validated is null then
       validated_record_types := validated_record_types || (target_item.value -> 'facts' -> 'recordTypes');
     end if;
   end loop;
 
-  return decisions;
+  return pg_catalog.to_jsonb(decisions);
 end
 $function$;
 
