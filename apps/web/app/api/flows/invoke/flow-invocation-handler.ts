@@ -107,6 +107,27 @@ export const createFlowInvocationHandler =
     const route = channel === "mcp" ? "/api/flows/invoke/mcp" : "/api/flows/invoke";
     try {
       if (!fromOwnSite(request)) return privateResponse({ kind: "refused" }, 403);
+      // Read before holding a database transaction: a slow upload must not pin a pooled connection.
+      const read = await readBoundedRequestText(request, maximumRequestBodyLength);
+      if (read.kind === "too_large") return privateResponse({ kind: "refused" }, 413);
+      if (read.kind === "unreadable") return refusedResponse();
+      let parsedBody: z.ZodSafeParseResult<z.infer<typeof requestSchema>>;
+      try {
+        parsedBody = requestSchema.safeParse(JSON.parse(read.text));
+      } catch (error) {
+        logRefusal(route, "request body", "body_not_json", error);
+        return refusedResponse();
+      }
+      if (!parsedBody.success) {
+        logRefusal(route, "request body", "body_schema_invalid", {
+          issues: parsedBody.error.issues.map((issue) => ({
+            code: issue.code,
+            path: issue.path,
+          })),
+        });
+        return refusedResponse();
+      }
+      const body = parsedBody.data;
       let scopedRequestCompleted = false;
       const outcome = await withRuntimeTransaction(
         async (transaction) => {
@@ -115,26 +136,6 @@ export const createFlowInvocationHandler =
             return privateResponse({ kind: "unavailable" }, 503);
           if (identity.kind !== "active") return privateResponse({ kind: "refused" }, 401);
 
-          const read = await readBoundedRequestText(request, maximumRequestBodyLength);
-          if (read.kind === "too_large") return privateResponse({ kind: "refused" }, 413);
-          if (read.kind === "unreadable") return refusedResponse();
-          let parsedBody: z.ZodSafeParseResult<z.infer<typeof requestSchema>>;
-          try {
-            parsedBody = requestSchema.safeParse(JSON.parse(read.text));
-          } catch (error) {
-            logRefusal(route, "request body", "body_not_json", error);
-            return refusedResponse();
-          }
-          if (!parsedBody.success) {
-            logRefusal(route, "request body", "body_schema_invalid", {
-              issues: parsedBody.error.issues.map((issue) => ({
-                code: issue.code,
-                path: issue.path,
-              })),
-            });
-            return refusedResponse();
-          }
-          const body = parsedBody.data;
           const execute = async (
             address: Extract<
               Awaited<ReturnType<typeof resolveApplicationAddress>>,
