@@ -47,13 +47,19 @@ begin
     or (p_named is not null and pg_catalog.jsonb_typeof(p_named) is distinct from 'object') then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
   end if;
-  calculation := vortex_record.prepare_record_changes(p_command_id, p_subjects, p_named);
-  if calculation ->> 'outcome' is distinct from 'prepared' then return calculation; end if;
   context_value := vortex_access.validated_human_request_context();
   preview_installation := vortex_record.read_current_preview_installation_internal();
   effective_command_id := vortex_record.preview_scoped_command_id_internal(p_command_id);
   if effective_command_id is null then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'preview_unavailable');
+  end if;
+  -- The locked preparation of this command earlier in this transaction: its rows stay locked,
+  -- so only revisions are checked again below, by the change-set preparation.
+  calculation := vortex_record.retain_record_change_preparation_internal(
+    effective_command_id, p_subjects, p_named, null
+  );
+  if calculation is null then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'record_calculation_changed');
   end if;
   -- The writer independently derives the exact affected parent identities,
   -- revisions and generated fields; the caller cannot omit or add a parent.
@@ -88,7 +94,7 @@ begin
   end if;
   receipt := vortex_record.claim_command_receipt_internal('record_changes', effective_command_id, false);
   if receipt ->> 'status' = 'completed' then
-    return vortex_record.prepare_record_changes(p_command_id, p_subjects, p_named);
+    return vortex_record.replay_record_changes_internal(effective_command_id, receipt -> 'result');
   elsif receipt ->> 'status' is distinct from 'claimed' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_identity_conflict');
   end if;
@@ -305,4 +311,4 @@ revoke all on function vortex_record.apply_record_changes(uuid,jsonb,jsonb,jsonb
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.apply_record_changes(uuid,jsonb,jsonb,jsonb) to vortex_request;
 comment on function vortex_record.apply_record_changes(uuid,jsonb,jsonb,jsonb) is
-  'Protected record-set persistence, the one public record writer (ordinary, or one named action over up to 200 subjects): revalidates the combined calculation graph and all current authority, claims one receipt, merges roots and generated parents once per storage table, appends effects and completes the whole result atomically.';
+  'Protected record-set persistence, the one public record writer (ordinary, or one named action over up to 200 subjects): takes the locked calculation its transaction prepared, re-checks revisions and all current authority, claims one receipt, merges roots and generated parents once per storage table, appends effects and completes the whole result atomically.';

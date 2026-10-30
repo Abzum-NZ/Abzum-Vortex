@@ -45,17 +45,21 @@ begin
   end if;
   -- An action that only announces writes no record and has nothing to calculate.
   if pg_catalog.jsonb_array_length(p_subjects) = 0 then
-    return pg_catalog.jsonb_build_object(
+    return vortex_record.retain_record_change_preparation_internal(effective_command_id, p_subjects, p_named,
+      pg_catalog.jsonb_build_object(
       'outcome', 'prepared', 'records', '[]'::jsonb, 'subjects', '[]'::jsonb,
       'lifecycleChanges', '[]'::jsonb, 'lifecycleProposals', '[]'::jsonb, 'recordCount', 0,
       'preview', vortex_record.read_current_preview_installation_internal() is not null,
       'correlationId', context_value -> 'correlationId', 'namedRoles', named_roles
-    );
+    ));
   end if;
-  preparation := vortex_record.prepare_record_calculation_set_internal(p_subjects, named_roles);
-  return preparation || pg_catalog.jsonb_build_object(
-    'correlationId', context_value -> 'correlationId', 'namedRoles', named_roles
-  );
+  preparation := vortex_record.prepare_record_calculation_set_internal(p_subjects, named_roles)
+    || pg_catalog.jsonb_build_object('correlationId', context_value -> 'correlationId', 'namedRoles', named_roles);
+  -- The writer takes this locked preparation later in the same transaction instead of preparing again.
+  if preparation ->> 'outcome' = 'prepared' then
+    perform vortex_record.retain_record_change_preparation_internal(effective_command_id, p_subjects, p_named, preparation);
+  end if;
+  return preparation;
 end
 $function$;
 alter function vortex_record.prepare_record_changes(uuid,jsonb,jsonb) owner to vortex_record_adapter;

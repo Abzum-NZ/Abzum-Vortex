@@ -228,6 +228,8 @@ export type FlowOrchestratorDependencies = Readonly<{
       targets: readonly FlowRecordTarget[],
       lock?: boolean,
     ): Promise<readonly FlowRecordTargetRead[]>;
+    /** Locks and reads only the current revisions of a set's targets; the writer decides authority. */
+    readRevisions(targets: readonly FlowRecordTarget[]): Promise<ReadonlyMap<string, number>>;
     apply(commandId: string, intents: readonly RecordChangeIntent[]): Promise<RecordChangesResult>;
     restoreRevision(recordTypeId: string, recordId: string): Promise<number | undefined>;
   }>;

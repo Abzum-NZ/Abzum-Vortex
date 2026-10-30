@@ -237,9 +237,6 @@ export type FlowRunResume =
       outcome: FlowTaskOutcome;
       outputs?: Readonly<Record<string, JsonValue>>;
       diagnostic?: FlowRefusalFeedback;
-      /** A set's outputs, one per call in order; a set refusal names its call's task. */
-      setOutputs?: readonly Readonly<Record<string, JsonValue>>[];
-      taskId?: string;
     }>
   | FormContinuationAnswer;
 
@@ -1295,20 +1292,36 @@ export const resumeFlowRun = (
   if (awaiting.kind === "protected_set") {
     if (resume.kind !== "task_result") return mismatch();
     if (resume.outcome === "committed" || resume.outcome === "completed") {
-      const produced = resume.setOutputs;
-      if (produced === undefined || produced.length !== awaiting.calls.length) return mismatch();
+      // A set's result carries each call's outputs under `set`, in call order.
+      const produced = resume.outputs?.set;
+      if (
+        !Array.isArray(produced) ||
+        produced.length !== awaiting.calls.length ||
+        !produced.every(
+          (entry) => entry !== null && typeof entry === "object" && !Array.isArray(entry),
+        )
+      )
+        return mismatch();
       if (resume.outcome === "committed") machine.state.committedEffects += 1;
       replaceTop(
         machine,
         awaiting.calls.reduce(
           (top, call, index) =>
-            storeTaskOutputs(top, call.taskId, declaredOutputs(call.taskType, produced[index])),
+            storeTaskOutputs(
+              top,
+              call.taskId,
+              declaredOutputs(
+                call.taskType,
+                produced[index] as Readonly<Record<string, JsonValue>>,
+              ),
+            ),
           activation,
         ),
       );
       return drive(machine, observer);
     }
-    const call = awaiting.calls.find((candidate) => candidate.taskId === resume.taskId);
+    // A refused set names the call whose change was refused under `task`.
+    const call = awaiting.calls.find((candidate) => candidate.taskId === resume.outputs?.task);
     if (call === undefined) return mismatch();
     machine.state.awaiting = { kind: "protected_task", ...call };
     return resumeFlowRun(

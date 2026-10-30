@@ -1800,13 +1800,19 @@ begin
     or (p_named is not null and pg_catalog.jsonb_typeof(p_named) is distinct from 'object') then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
   end if;
-  calculation := vortex_record.prepare_record_changes(p_command_id, p_subjects, p_named);
-  if calculation ->> 'outcome' is distinct from 'prepared' then return calculation; end if;
   context_value := vortex_access.validated_human_request_context();
   preview_installation := vortex_record.read_current_preview_installation_internal();
   effective_command_id := vortex_record.preview_scoped_command_id_internal(p_command_id);
   if effective_command_id is null then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'preview_unavailable');
+  end if;
+  -- The locked preparation of this command earlier in this transaction: its rows stay locked,
+  -- so only revisions are checked again below, by the change-set preparation.
+  calculation := vortex_record.retain_record_change_preparation_internal(
+    effective_command_id, p_subjects, p_named, null
+  );
+  if calculation is null then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'record_calculation_changed');
   end if;
   -- The writer independently derives the exact affected parent identities,
   -- revisions and generated fields; the caller cannot omit or add a parent.
@@ -1841,7 +1847,7 @@ begin
   end if;
   receipt := vortex_record.claim_command_receipt_internal('record_changes', effective_command_id, false);
   if receipt ->> 'status' = 'completed' then
-    return vortex_record.prepare_record_changes(p_command_id, p_subjects, p_named);
+    return vortex_record.replay_record_changes_internal(effective_command_id, receipt -> 'result');
   elsif receipt ->> 'status' is distinct from 'claimed' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_identity_conflict');
   end if;
@@ -2058,7 +2064,7 @@ revoke all on function vortex_record.apply_record_changes(uuid,jsonb,jsonb,jsonb
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.apply_record_changes(uuid,jsonb,jsonb,jsonb) to vortex_request;
 comment on function vortex_record.apply_record_changes(uuid,jsonb,jsonb,jsonb) is
-  'Protected record-set persistence, the one public record writer (ordinary, or one named action over up to 200 subjects): revalidates the combined calculation graph and all current authority, claims one receipt, merges roots and generated parents once per storage table, appends effects and completes the whole result atomically.';
+  'Protected record-set persistence, the one public record writer (ordinary, or one named action over up to 200 subjects): takes the locked calculation its transaction prepared, re-checks revisions and all current authority, claims one receipt, merges roots and generated parents once per storage table, appends effects and completes the whole result atomically.';
 
 create or replace function vortex_record.apply_record_storage_changes_internal(
   p_changes jsonb
@@ -6418,17 +6424,21 @@ begin
   end if;
   -- An action that only announces writes no record and has nothing to calculate.
   if pg_catalog.jsonb_array_length(p_subjects) = 0 then
-    return pg_catalog.jsonb_build_object(
+    return vortex_record.retain_record_change_preparation_internal(effective_command_id, p_subjects, p_named,
+      pg_catalog.jsonb_build_object(
       'outcome', 'prepared', 'records', '[]'::jsonb, 'subjects', '[]'::jsonb,
       'lifecycleChanges', '[]'::jsonb, 'lifecycleProposals', '[]'::jsonb, 'recordCount', 0,
       'preview', vortex_record.read_current_preview_installation_internal() is not null,
       'correlationId', context_value -> 'correlationId', 'namedRoles', named_roles
-    );
+    ));
   end if;
-  preparation := vortex_record.prepare_record_calculation_set_internal(p_subjects, named_roles);
-  return preparation || pg_catalog.jsonb_build_object(
-    'correlationId', context_value -> 'correlationId', 'namedRoles', named_roles
-  );
+  preparation := vortex_record.prepare_record_calculation_set_internal(p_subjects, named_roles)
+    || pg_catalog.jsonb_build_object('correlationId', context_value -> 'correlationId', 'namedRoles', named_roles);
+  -- The writer takes this locked preparation later in the same transaction instead of preparing again.
+  if preparation ->> 'outcome' = 'prepared' then
+    perform vortex_record.retain_record_change_preparation_internal(effective_command_id, p_subjects, p_named, preparation);
+  end if;
+  return preparation;
 end
 $function$;
 alter function vortex_record.prepare_record_changes(uuid,jsonb,jsonb) owner to vortex_record_adapter;
@@ -8158,5 +8168,125 @@ revoke all on function vortex_record.validate_named_action_reference_inputs_inte
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_record.validate_named_action_reference_inputs_internal(text,uuid,bigint,uuid,uuid,jsonb) is
   'Private: whether every record reference input of the exact installed action names a record the action may use under current authority.';
+
+create or replace function vortex_record.retain_record_change_preparation_internal(
+  p_command_id uuid,
+  p_subjects jsonb,
+  p_named jsonb,
+  p_preparation jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  retained jsonb;
+begin
+  -- The preparation lives only for this transaction, in a session table only the record adapter
+  -- owns; a table of the same name created by any other role is refused.
+  create temporary table if not exists record_change_preparations (
+    command_id uuid primary key,
+    intents jsonb not null,
+    named jsonb,
+    preparation jsonb not null
+  ) on commit delete rows;
+  if (select relation.relowner from pg_catalog.pg_class as relation
+      where relation.oid = 'pg_temp.record_change_preparations'::pg_catalog.regclass)
+    is distinct from 'vortex_record_adapter'::pg_catalog.regrole then
+    raise exception using errcode = '42501', message = 'Record change preparation store is unavailable';
+  end if;
+  if p_preparation is null then
+    -- Taking the preparation for the writer: the same command, intents (without the final values
+    -- the caller calculated) and named scope, prepared earlier in this transaction.
+    delete from pg_temp.record_change_preparations as stored
+    where stored.command_id = p_command_id
+      and stored.intents = (select coalesce(pg_catalog.jsonb_agg(item.value - 'finalValues' order by item.ordinality), '[]'::jsonb)
+        from pg_catalog.jsonb_array_elements(p_subjects) with ordinality as item(value, ordinality))
+      and stored.named is not distinct from p_named
+    returning stored.preparation into retained;
+    return retained;
+  end if;
+  insert into pg_temp.record_change_preparations (command_id, intents, named, preparation)
+  values (p_command_id,
+    (select coalesce(pg_catalog.jsonb_agg(item.value - 'finalValues' order by item.ordinality), '[]'::jsonb)
+      from pg_catalog.jsonb_array_elements(p_subjects) with ordinality as item(value, ordinality)),
+    p_named, p_preparation)
+  on conflict (command_id) do update
+    set intents = excluded.intents, named = excluded.named, preparation = excluded.preparation;
+  return p_preparation;
+end
+$function$;
+alter function vortex_record.retain_record_change_preparation_internal(uuid,jsonb,jsonb,jsonb) owner to vortex_record_adapter;
+revoke all on function vortex_record.retain_record_change_preparation_internal(uuid,jsonb,jsonb,jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+comment on function vortex_record.retain_record_change_preparation_internal(uuid,jsonb,jsonb,jsonb) is
+  'Private: keeps a record command''s locked calculation preparation for the rest of its transaction (with a preparation), or takes it for the writer (without one), so the writer re-checks only revisions instead of preparing again.';
+
+create or replace function vortex_record.read_record_change_revisions(p_targets jsonb)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  record_type_id uuid;
+  meta jsonb;
+  found_rows jsonb;
+  revisions jsonb := '[]'::jsonb;
+begin
+  context_value := vortex_access.validated_human_request_context();
+  if pg_catalog.jsonb_typeof(p_targets) is distinct from 'array'
+    or pg_catalog.jsonb_array_length(p_targets) > 200
+    or exists (
+      select 1 from pg_catalog.jsonb_array_elements(p_targets) as item(value)
+      where pg_catalog.jsonb_typeof(item.value) is distinct from 'object'
+        or not vortex_platform.is_non_nil_uuid(item.value ->> 'recordTypeId')
+        or not vortex_platform.is_non_nil_uuid(item.value ->> 'recordId')
+    ) then
+    raise exception using errcode = '22023', message = 'Record change targets are invalid';
+  end if;
+  -- One locking read per record type of the installed application: revisions only. The record
+  -- writer decides every target's authority; no value or capability leaves here.
+  for record_type_id in
+    select distinct (item.value ->> 'recordTypeId')::uuid
+    from pg_catalog.jsonb_array_elements(p_targets) as item(value)
+    order by 1
+  loop
+    meta := vortex_record.resolve_record_action_context_internal(record_type_id, 'read');
+    if meta -> 'recordType' ? 'systemProjection' then
+      continue;
+    end if;
+    execute pg_catalog.format(
+      'select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          ''recordTypeId'', $4, ''recordId'', stored.record_id, ''revision'', stored.concurrency_number)
+          order by stored.record_id), ''[]''::jsonb)
+       from (select record_id, concurrency_number from record_data.%I
+         where organisation_id = $1 and %s and lifecycle_state = ''active''
+           and record_id = any ($2) order by record_id for update) as stored',
+      meta ->> 'table',
+      case when meta ->> 'storageScope' = 'application_contained'
+        then 'application_root_id = $3' else 'application_root_id is null' end
+    )
+    into found_rows
+    using (context_value ->> 'organizationId')::uuid,
+      (select pg_catalog.array_agg((item.value ->> 'recordId')::uuid)
+        from pg_catalog.jsonb_array_elements(p_targets) as item(value)
+        where (item.value ->> 'recordTypeId')::uuid = record_type_id),
+      (context_value ->> 'applicationRootId')::uuid, record_type_id;
+    revisions := revisions || found_rows;
+  end loop;
+  return revisions;
+end
+$function$;
+alter function vortex_record.read_record_change_revisions(jsonb) owner to vortex_record_adapter;
+revoke all on function vortex_record.read_record_change_revisions(jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.read_record_change_revisions(jsonb) to vortex_request;
+comment on function vortex_record.read_record_change_revisions(jsonb) is
+  'Locks and returns the current revisions of up to 200 active records of the installed application for one set-based change, one read per record type; the record writer still decides each target''s authority, and no value or capability is returned.';
 
 reset role;

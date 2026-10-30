@@ -57,6 +57,30 @@ export const createFlowRecordChangePort = (
       ];
     });
   },
+  readRevisions: async (targets) => {
+    const rows = await bound.transaction.query<{ revisions: unknown }>`
+      select vortex_record.read_record_change_revisions(${JSON.stringify(targets)}::text::jsonb) as revisions
+    `;
+    const revisions = rows[0]?.revisions;
+    if (rows.length !== 1 || !Array.isArray(revisions))
+      throw new Error("FLOW_RECORD_REVISIONS_INVALID");
+    return new Map(
+      revisions.map((entry) => {
+        const current = isRecord(entry) ? revision(entry.revision) : undefined;
+        if (
+          !isRecord(entry) ||
+          current === undefined ||
+          typeof entry.recordTypeId !== "string" ||
+          typeof entry.recordId !== "string"
+        )
+          throw new Error("FLOW_RECORD_REVISIONS_INVALID");
+        return [
+          `${entry.recordTypeId.toLowerCase()}:${entry.recordId.toLowerCase()}`,
+          current,
+        ] as const;
+      }),
+    );
+  },
   apply: async (commandId, intents) => {
     const result = await applyRecordChanges(bound.transaction, bound.issuedAt, commandId, intents);
     if (result.kind === "restart") throw new HumanOrganizationRequestRestart();

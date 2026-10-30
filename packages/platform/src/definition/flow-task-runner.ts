@@ -283,24 +283,8 @@ export const createFlowTaskRunner = (
   const changedRevisions = new Map<string, number>();
   const targetKey = (recordTypeId: string, recordId: string) =>
     `${recordTypeId.toLowerCase()}:${recordId.toLowerCase()}`;
-  type ReadTargets = NonNullable<FlowOrchestratorDependencies["recordChanges"]>["readTargets"];
-  type ReadTarget = Awaited<ReturnType<ReadTargets>>[number];
-  /** The targets a set-based For each read in one statement, while its calls are planned. */
-  let setTargets: Map<string, ReadTarget> | undefined;
-  const readTargets: ReadTargets = async (targets, lock) => {
-    const missing = targets.filter(
-      (target) => setTargets?.has(targetKey(target.recordTypeId, target.recordId)) !== true,
-    );
-    const read =
-      missing.length === 0 ? [] : await dependencies.recordChanges!.readTargets(missing, lock);
-    return [
-      ...targets.flatMap((target) => {
-        const cached = setTargets?.get(targetKey(target.recordTypeId, target.recordId));
-        return cached === undefined ? [] : [cached];
-      }),
-      ...read,
-    ];
-  };
+  /** The revisions a set-based For each read in one statement, while its calls are planned. */
+  let setRevisions: ReadonlyMap<string, number> | undefined;
   const resolveRecordTarget = async (
     run: Run,
     state: FlowRunState,
@@ -328,8 +312,7 @@ export const createFlowTaskRunner = (
         ? { outcome: "refused" }
         : { recordId: recordId.data, revision: current };
     }
-    const known =
-      currentRevision ?? setTargets?.get(targetKey(recordTypeId, recordId.data))?.revision;
+    const known = currentRevision ?? setRevisions?.get(targetKey(recordTypeId, recordId.data));
     const read =
       known === undefined
         ? await dependencies.subjects.read(run.authority.session, run.authority.selection, {
@@ -425,7 +408,7 @@ export const createFlowTaskRunner = (
       const copies = await planRelationshipCopies(
         run.release.recordTypes,
         call.properties,
-        readTargets,
+        dependencies.recordChanges.readTargets,
       );
       if (copies.outcome !== "planned")
         return {
@@ -464,7 +447,11 @@ export const createFlowTaskRunner = (
           "This workflow can't link records here.",
           "the admitted record change port",
         );
-      const linked = await planRecordLink(run.release.recordTypes, call.properties, readTargets);
+      const linked = await planRecordLink(
+        run.release.recordTypes,
+        call.properties,
+        dependencies.recordChanges.readTargets,
+      );
       if (linked.outcome !== "planned")
         return {
           outcome: linked.outcome,
@@ -1286,7 +1273,7 @@ export const createFlowTaskRunner = (
     calls: readonly FlowProtectedTaskCall[];
   }>;
   type SetRun = Readonly<{
-    result: TaskResult & Readonly<{ setOutputs?: Record<string, JsonValue>[]; taskId?: string }>;
+    result: TaskResult;
     replay: Extract<FlowRunResume, { kind: "task_result" }>;
     warnings: readonly BeforeSaveRuleWarning[];
   }>;
@@ -1298,7 +1285,7 @@ export const createFlowTaskRunner = (
    */
   const runSegmentSet = async (run: Run, state: FlowRunState, step: SetStep): Promise<SetRun> => {
     const stop = (taskId: string, failure: TaskResult): SetRun => {
-      const result = { ...failure, taskId };
+      const result = { ...failure, outputs: { task: taskId } };
       return { result, replay: { kind: "task_result", ...result }, warnings: [] };
     };
     const first = step.calls[0]!;
@@ -1320,11 +1307,8 @@ export const createFlowTaskRunner = (
         ? [{ recordTypeId: recordTypeId.data, recordId: recordId.data }]
         : [];
     });
-    setTargets = new Map(
-      (targets.length === 0 ? [] : await dependencies.recordChanges.readTargets(targets, true)).map(
-        (target) => [targetKey(target.recordTypeId, target.recordId), target],
-      ),
-    );
+    setRevisions =
+      targets.length === 0 ? new Map() : await dependencies.recordChanges.readRevisions(targets);
     const intents: RecordChangeIntent[] = [];
     const slices: {
       call: FlowProtectedTaskCall;
@@ -1369,7 +1353,7 @@ export const createFlowTaskRunner = (
         }
       }
     } finally {
-      setTargets = undefined;
+      setRevisions = undefined;
     }
     if (intents.length > 200) return stop(first.taskId, { outcome: "refused" });
     const changed =
@@ -1404,8 +1388,8 @@ export const createFlowTaskRunner = (
     appendWarnings(run, first, warnings);
     const outcome = changed === undefined ? "completed" : "committed";
     return {
-      result: { outcome, setOutputs },
-      replay: { kind: "task_result", outcome, setOutputs },
+      result: { outcome, outputs: { set: setOutputs } },
+      replay: { kind: "task_result", outcome, outputs: { set: setOutputs } },
       warnings,
     };
   };
