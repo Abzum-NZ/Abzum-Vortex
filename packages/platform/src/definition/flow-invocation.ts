@@ -767,6 +767,14 @@ export async function invokeInstalledFlow(
           return false;
         }
       },
+      resolveActor: async (session, selection) => {
+        const result = await requests.run(
+          session,
+          selection,
+          async (_transaction, scope) => scope.organizationAccountId,
+        );
+        return result.kind === "available" ? result.value : undefined;
+      },
       // The release was read from the trusted installation for this exact request.
       resolveRelease: async () => release,
       ...(runId === undefined ? {} : { newRunId: () => runId }),
