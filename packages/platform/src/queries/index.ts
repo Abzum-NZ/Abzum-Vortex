@@ -151,15 +151,6 @@ export {
 export { arrangeDataset, arrangeProtectedBoard } from "./arrangements";
 
 export {
-  createUsageProjectionService,
-  usageProjectionCommandSchema,
-  usageProjectionResultSchema,
-  type UsageProjectionCommand,
-  type UsageProjectionResult,
-  type UsageProjectionServiceDependencies,
-} from "./usage-projection";
-
-export {
   organizationAccountReferenceChoiceCommandSchema,
   recordReferenceChoiceCommandSchema,
   referenceChoiceCommandSchema,
@@ -199,26 +190,3 @@ export {
   type ReferenceChoiceInputValues,
   type ReferenceChoiceServiceDependencies,
 } from "./reference-choice-service";
-
-export {
-  createActivityHistoryService,
-  activityHistoryCommandSchema,
-  activityHistoryPageCommandSchema,
-  activityHistoryAggregateCommandSchema,
-  activityHistoryEntrySchema,
-  activityHistoryRefusalReasonCodes,
-  activityHistoryRefusalSchema,
-  activityHistoryPageSchema,
-  activityHistoryAggregateSchema,
-  activityHistoryResultSchema,
-  activityAggregateGroupSchema,
-  type ActivityHistoryCommand,
-  type ActivityHistoryEntry,
-  type ActivityHistoryRefusalReasonCode,
-  type ActivityHistoryRefusal,
-  type ActivityHistoryPage,
-  type ActivityHistoryAggregate,
-  type ActivityHistoryResult,
-  type ActivityAggregateGroup,
-  type ActivityHistoryServiceDependencies,
-} from "./activity-history";

@@ -107,8 +107,6 @@ export function StandardPageAdoption({
       candidateReleaseRevision: String(choice.candidate.releaseRevision),
       originalPageId: choice.original.pageId,
       replacementPageId: choice.replacement.pageId,
-      comparisonFingerprint:
-        decision === "keep_replacement" ? choice.keepFingerprint : choice.adoptFingerprint,
       decision,
       targetKind: choice.target.target.kind,
       targetId: choice.target.target.id,

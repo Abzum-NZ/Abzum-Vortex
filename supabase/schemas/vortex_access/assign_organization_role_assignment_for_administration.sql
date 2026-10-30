@@ -142,8 +142,7 @@ begin
         'ownerKind', permission.owner_kind,
         'ownerId', permission.owner_id,
         'permissionId', permission.permission_id,
-        'acceptedRegistrationRevision', permission.accepted_registration_revision,
-        'meaningFingerprint', permission.meaning_fingerprint
+        'acceptedRegistrationRevision', permission.accepted_registration_revision
       )) as permission
     from vortex_access.organization_role_permission_entries as permission
     where permission.organization_id = context_organization_id

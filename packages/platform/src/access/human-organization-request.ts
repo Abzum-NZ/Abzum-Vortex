@@ -68,14 +68,15 @@ export type BoundHumanOrganizationRequest = Readonly<{
   profileAccountId?: string;
 }>;
 
-export type HumanOrganizationRequestResult<Result> =
+export type HumanOrganizationRequestResult<Result, ExtraRefusal extends string = never> =
   | Readonly<{ kind: "available"; value: Result }>
   | Readonly<{
       kind: "unavailable";
       code?:
         | "recent_authentication_required"
         | "multi_factor_required"
-        | "role_settings_change_required";
+        | "role_settings_change_required"
+        | ExtraRefusal;
       cause?: string;
     }>
   | Readonly<{ kind: "temporarily_unavailable"; cause?: string; databaseCode?: string }>;
