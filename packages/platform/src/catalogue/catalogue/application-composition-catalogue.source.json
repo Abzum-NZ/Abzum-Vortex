@@ -1698,7 +1698,13 @@
       "accessibleName": "optional",
       "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": ["form_ready", "form_submit", "form_reset"],
+    "supportedEvents": [
+      "form_ready",
+      "form_submit",
+      "form_reset",
+      "form_cancel",
+      "guided_step_changed"
+    ],
     "supportedStateOperations": ["set_value", "reset"]
   },
   "LINK_INPUT_BLOCK_RELEASE": {

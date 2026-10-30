@@ -119,6 +119,17 @@ const suppliedByEvent: Readonly<
     { name: "record", label: "The record the form edits" },
     { name: "selected_owner_group_id", label: "The owner group chosen on the form" },
   ],
+  guided_step_changed: [
+    { name: "draft_id", label: "The person's draft" },
+    { name: "revision", label: "The revision of the draft" },
+    { name: "step", label: "The step being left" },
+    { name: "requested_step", label: "The step asked for" },
+    { name: "values", label: "The answers of the step" },
+  ],
+  form_cancel: [
+    { name: "draft_id", label: "The person's draft" },
+    { name: "revision", label: "The revision of the draft" },
+  ],
   row_clicked: [{ name: "record_id", label: "The clicked record" }],
   row_action: [{ name: "record_id", label: "The record of the row" }],
   card_moved: [

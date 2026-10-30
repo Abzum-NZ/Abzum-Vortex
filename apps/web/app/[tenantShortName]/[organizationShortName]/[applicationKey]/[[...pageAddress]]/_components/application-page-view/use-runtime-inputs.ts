@@ -16,7 +16,6 @@ import {
 } from "@vortex/ui";
 import {
   isRecord,
-  guidedFormConfirmationKey,
   projectedLinkTilesSchema,
   mountedRecordPinFrameSchema,
   recordsSelectionMaximumIds,
@@ -93,7 +92,6 @@ export function useRuntimeInputs({
   requestedStepId,
   guidedSummaryStepId,
   showPageMessage,
-  prepareGuidedSummary,
   advanceGuidedStep,
   currentEditFormBaselines,
   submittedFormsRef,
@@ -179,19 +177,8 @@ export function useRuntimeInputs({
   requestedStepId: RefObject<string | undefined>;
   guidedSummaryStepId: string | undefined;
   showPageMessage: (message: PageMessageDraft | undefined) => void;
-  prepareGuidedSummary: (
-    placementId: string,
-    binding: PlacementFlowBinding,
-    submittedValues: Readonly<Record<string, unknown>>,
-  ) => Promise<
-    | {
-        proof: string;
-        afterAccepted: () => Promise<PageMessageDraft | undefined>;
-        finish: () => void;
-      }
-    | undefined
-  >;
   advanceGuidedStep: (
+    placementId: string,
     stepId: string,
     values: Readonly<Record<string, unknown>>,
     requested?: string,
@@ -722,38 +709,37 @@ export function useRuntimeInputs({
                 showPageMessage(unavailableNotice);
                 return;
               }
-              let prepared: Awaited<ReturnType<typeof prepareGuidedSummary>>;
-              const dispatch = formBlock.submit(
-                asComponentBinding(placementId, submitBinding),
-                async (signal) => {
-                  const result = await prepareGuidedSummary(
-                    placementId,
-                    submitBinding,
-                    event.readValues(),
-                  );
-                  if (signal.aborted) {
-                    result?.finish();
-                    return undefined;
-                  }
-                  prepared = result;
-                  if (result === undefined) return undefined;
-                  return {
-                    values: { [guidedFormConfirmationKey]: result.proof },
+              // The final submit names only the stored draft; the server reads the answers from it.
+              const draft = {
+                draftId: model.guidedForm.draftId,
+                revision: model.guidedForm.revision,
+              };
+              return applyDispatch(
+                formBlock.submit(
+                  asComponentBinding(placementId, submitBinding),
+                  () => ({
+                    values: {},
+                    draft,
                     ...(event.selectedOwnerGroupId === undefined
                       ? {}
                       : { selectedOwnerGroupId: event.selectedOwnerGroupId }),
-                  };
-                },
-                event.gestureId,
-              );
-              return applyDispatch(
-                dispatch,
+                  }),
+                  event.gestureId,
+                ),
                 placementId,
-                async () => prepared?.afterAccepted(),
+                async () => {
+                  unsavedWorkRegistry?.markSaved(placementId, event.readValues());
+                  return undefined;
+                },
                 submitBinding.bindingId,
-              ).finally(() => prepared?.finish());
+              );
             }
-            return advanceGuidedStep(model.guidedForm.activeStepId, event.readValues(), requested);
+            return advanceGuidedStep(
+              placementId,
+              model.guidedForm.activeStepId,
+              event.readValues(),
+              requested,
+            );
           }
           if (submitBinding === undefined) return;
           const prepare = () => {
@@ -922,7 +908,6 @@ export function useRuntimeInputs({
     guidedFormCompleted,
     guidedSummaryStepId,
     advanceGuidedStep,
-    prepareGuidedSummary,
     model.bindings,
     model.guidedForm,
     placementEventNames,

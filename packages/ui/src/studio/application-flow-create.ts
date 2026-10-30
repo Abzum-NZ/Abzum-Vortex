@@ -10,6 +10,8 @@ import {
   builderKeySchema,
   defaultFlowBindingSettings,
   defaultChangeFlowSource,
+  defaultGuidedCancelFlowSource,
+  defaultGuidedStepFlowSource,
   defaultOperationFlowSource,
   sourceItemTree,
   sourcePageItems,
@@ -60,6 +62,8 @@ export type StudioFlowAuthoringEvent = Extract<
   | "card_moved"
   | "card_added"
   | "form_submit"
+  | "guided_step_changed"
+  | "form_cancel"
   | "row_clicked"
   | "row_action"
   | typeof recordsTableInlineEditEvent
@@ -71,6 +75,8 @@ export const studioFlowEventLabels: Readonly<Record<StudioFlowAuthoringEvent, st
   card_moved: "When a card is moved",
   card_added: "When a card is added to a column",
   form_submit: "When submitted",
+  guided_step_changed: "When the step changes",
+  form_cancel: "When cancelled",
   row_clicked: "When a row is clicked",
   row_action: "Row action",
   [recordsTableInlineEditEvent]: "When a value is edited",
@@ -826,6 +832,44 @@ export const applyStudioFlowCreate = (
           record: { kind: "caller", name: "record_id" },
           values: { kind: "caller", name: "values" },
         },
+        borrowed,
+      );
+    } else if (
+      command.kind === "action" &&
+      (command.event === "guided_step_changed" || command.event === "form_cancel")
+    ) {
+      // A guided form's step change and cancel each get their default flow, every step visible.
+      const page = body.pages.find((entry) =>
+        sourcePageItems(entry.composition).some((item) => item.props.id === command.controlAlias),
+      );
+      if (page === undefined || page.type !== "guided_form")
+        return refuse("Only a guided form's forms change step or cancel.");
+      const identity = { id: key, key };
+      flow =
+        command.event === "guided_step_changed"
+          ? {
+              ...defaultGuidedStepFlowSource({
+                ...identity,
+                form: command.controlAlias,
+                page: page.key,
+              }),
+              labels: { name },
+            }
+          : {
+              ...defaultGuidedCancelFlowSource({
+                ...identity,
+                after: { kind: "navigate", page: page.key, withRecord: false },
+              }),
+              labels: { name },
+            };
+      binding = bindControl(
+        candidate,
+        command.controlAlias,
+        command.event,
+        key,
+        Object.fromEntries(
+          Object.keys(flow.inputs).map((input) => [input, { kind: "caller", name: input }]),
+        ) as SourceBinding["inputs"],
         borrowed,
       );
     } else if (command.kind === "action") {

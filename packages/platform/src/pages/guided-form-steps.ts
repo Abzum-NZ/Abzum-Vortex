@@ -1,7 +1,5 @@
 import "server-only";
 
-
-
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestResult,
@@ -83,41 +81,6 @@ export type GuidedFormStepFields = Readonly<{
   stepId: string;
   summary: boolean;
   fields: readonly GuidedFormStepField[];
-}>;
-
-export type GuidedFormPageAddress = Readonly<{
-  tenantShortName: string;
-  organizationShortName: string;
-  applicationKey: string;
-  pageKey: string;
-  subjectRecordId?: string;
-}>;
-
-export type GuidedFormStepRequest = Readonly<{
-  address: GuidedFormPageAddress;
-  draftId: string;
-  expectedRevision: number;
-  stepId: string;
-  requestedStepId?: string;
-  values: Readonly<Record<string, unknown>>;
-}>;
-
-export type GuidedFormStepActionResult =
-  | Readonly<{
-      kind: "updated";
-      activeStepId: string;
-      computedStepId: string;
-      revision: number;
-      valid: boolean;
-    }>
-  | Readonly<{ kind: "unchanged"; activeStepId: string; computedStepId: string; revision: number }>
-  | Readonly<{ kind: "conflict"; activeStepId: string; computedStepId: string; revision: number }>
-  | Readonly<{ kind: "unavailable" | "temporarily_unavailable" }>;
-
-export type GuidedFormAbandonRequest = Readonly<{
-  address: GuidedFormPageAddress;
-  draftId: string;
-  expectedRevision: number;
 }>;
 
 const recordTypeForPage = (
