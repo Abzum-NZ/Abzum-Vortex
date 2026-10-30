@@ -9,6 +9,7 @@ import {
   recordTypeIdSchema,
 } from "../catalogue/identifiers";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
+import { tracedTaskRunner } from "./flow-task-runner-trace";
 import { describeFailure, isRecord, sameId } from "../catalogue/runtime-primitives";
 import {
   executeNamedActionCommandSchema,
@@ -44,6 +45,7 @@ import {
   type FlowEffectPrincipal,
 } from "./flow-continuation-store";
 import { reportUnexpectedFailure } from "./definition-error";
+import { runGuidedDraftTask } from "./flow-guided-draft-task";
 import {
   aliasSelectedRecordValues,
   carriesSensitive,
@@ -1085,6 +1087,25 @@ export const createFlowTaskRunner = (
       }
     }
 
+    // The guided-form draft is the person's own private scratch state, never a record or a
+    // replayable effect: the port checks ownership and revision, and a repeat answers a conflict.
+    if (call.taskType === "form.save_draft" || call.taskType === "form.discard_draft") {
+      if (run.authority.kind !== "person" || dependencies.guidedDrafts === undefined)
+        return notAvailable(
+          run,
+          call,
+          "Only a signed-in person can save this form's draft here.",
+          "a trusted guided-form draft port",
+        );
+      return runGuidedDraftTask(
+        dependencies.guidedDrafts,
+        run.authority.session,
+        run.authority.selection,
+        call,
+        run.sensitive,
+      );
+    }
+
     const principal: FlowEffectPrincipal =
       run.authority.kind === "person"
         ? { kind: "person", id: run.authority.session.identityId }
@@ -1092,6 +1113,12 @@ export const createFlowTaskRunner = (
     const organizationId = run.authority.selection.organizationId;
     const planned = await planTask(run, state, call);
     if (!("plan" in planned)) return planned;
+    // A test run claims nothing in the ledger: its effects are rolled back and a repeat is a new run.
+    if (dependencies.trace !== undefined) {
+      const tested = await runPlan(run, state, call, planned.plan);
+      appendWarnings(run, call, tested.warnings);
+      return tested.result;
+    }
 
     const key = {
       runId: state.runId,
@@ -1220,6 +1247,20 @@ export const createFlowTaskRunner = (
       call.taskType === "record.query"
     )
       return { result: await runProtectedTask(run, state, call), replay: undefined, warnings: [] };
+    // A guided-form draft write is a change that is never a record write: no plan, ledger claim or
+    // record warnings, only the segment's receipt of its safe outcome.
+    if (call.taskType === "form.save_draft" || call.taskType === "form.discard_draft") {
+      const result = await runProtectedTask(run, state, call);
+      return {
+        result,
+        replay: {
+          kind: "task_result",
+          outcome: result.outcome,
+          ...(result.outputs === undefined ? {} : { outputs: result.outputs }),
+        },
+        warnings: [],
+      };
+    }
     if (run.selectedRecordReadSeen && call.taskType !== "record.save")
       return {
         result: { outcome: "refused" },
@@ -1442,11 +1483,12 @@ export const createFlowTaskRunner = (
     return replay;
   };
 
-  return Object.freeze({
+  const runner = Object.freeze({
     run: runProtectedTask,
     runSegmentTask,
     replaySegmentTask,
     runSegmentSet,
     replaySegmentSet,
   });
+  return dependencies.trace === undefined ? runner : tracedTaskRunner(dependencies.trace, runner);
 };

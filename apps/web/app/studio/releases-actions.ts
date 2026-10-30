@@ -4,6 +4,10 @@ import {
   listStudioApplicationReleaseHistory,
   type StudioApplicationHistoryListResult,
 } from "../_lib/studio-application-history";
+import {
+  readStudioBackendRunHistory,
+  type StudioBackendRunHistoryResult,
+} from "../_lib/studio-backend-run-history";
 import { restoreStudioApplicationDraft } from "../_lib/studio-application-restore";
 import type { StudioApplicationRestoreCommandResult } from "../_lib/studio-application-restore-contracts";
 
@@ -20,6 +24,14 @@ export async function listApplicationReleaseHistory(
   candidate: unknown,
 ): Promise<StudioApplicationHistoryListResult> {
   return listStudioApplicationReleaseHistory(organizationId, candidate);
+}
+
+/** The newest back-end runs of the application, for its builders; never their outputs. */
+export async function readBackendRunHistory(
+  organizationId: string,
+  rootId: string,
+): Promise<StudioBackendRunHistoryResult> {
+  return readStudioBackendRunHistory(organizationId, rootId);
 }
 
 /** Restores one published version into the draft as a new saved draft revision; nothing is published or installed. */

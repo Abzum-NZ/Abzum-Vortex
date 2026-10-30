@@ -5,23 +5,22 @@ import { openBackendActorScope } from "../definition/flow-background-run";
 import type { FlowDefinition } from "../workflows/flow-contracts";
 import type { BackendAdapter } from "../workflows/backend-adapters";
 import type { EventConsumerAdapter } from "./dispatcher";
-import {
-  eventOccurrenceEnvelopeSchema,
-  type EventOccurrenceEnvelope,
-} from "./occurrence-contracts";
+import { eventOccurrenceEnvelopeSchema } from "./occurrence-contracts";
 
-/** Whether an Event-triggered back-end flow subscribes to this occurrence's record type and event. */
-const subscribes = (flow: FlowDefinition, occurrence: EventOccurrenceEnvelope): boolean =>
+/** The record type and event an occurrence is about: all a subscriber is matched on. */
+type OccurrenceEvent = Readonly<{ recordTypeId: string }> &
+  (Readonly<{ kind: "standard"; eventKind: string }> | Readonly<{ kind: "declared"; key: string }>);
+
+/** Whether an Event-triggered back-end flow subscribes to this record type and event. */
+export const subscribes = (flow: FlowDefinition, descriptor: OccurrenceEvent): boolean =>
   flow.execution === "background" &&
   flow.triggers.some(
     (trigger) =>
       trigger.type === "Event" &&
-      trigger.recordTypeId.toLowerCase() === occurrence.descriptor.recordTypeId.toLowerCase() &&
-      (occurrence.descriptor.kind === "standard"
-        ? trigger.event.kind === "standard" &&
-          trigger.event.eventKind === occurrence.descriptor.eventKind
-        : trigger.event.kind === "declared" &&
-          trigger.event.eventKey === occurrence.descriptor.key),
+      trigger.recordTypeId.toLowerCase() === descriptor.recordTypeId.toLowerCase() &&
+      (descriptor.kind === "standard"
+        ? trigger.event.kind === "standard" && trigger.event.eventKind === descriptor.eventKind
+        : trigger.event.kind === "declared" && trigger.event.eventKey === descriptor.key),
   );
 
 /**
@@ -92,7 +91,9 @@ export const createFlowSubscriberConsumer = (
       return { outcome: "completed" };
     }
     const subscribers = orderSubscribers(
-      [...opened.release.flows.values()].filter((flow) => subscribes(flow, occurrence.data)),
+      [...opened.release.flows.values()].filter((flow) =>
+        subscribes(flow, occurrence.data.descriptor),
+      ),
     );
     const adapter = dependencies.adapter();
     let infrastructureFailed = false;

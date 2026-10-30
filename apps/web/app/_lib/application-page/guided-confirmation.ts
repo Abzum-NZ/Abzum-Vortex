@@ -20,7 +20,7 @@ export const loadGuidedConfirmation = async (
   session: IdentitySession,
   address: ApplicationPageLoaderAddress,
   guided: Readonly<{ pageKey: string; pageId: string }>,
-  subject: Readonly<{ recordId: string; revision: number }> | undefined,
+  subject: Readonly<{ recordId: string }> | undefined,
   boundRequest?: BoundHumanOrganizationRequest,
 ) => {
   const dependencies = {
@@ -115,6 +115,9 @@ export const loadGuidedConfirmation = async (
     page,
     pageId: String(definition.pageId),
     guidedForm: draft.guidedForm,
+    steps: draft.steps,
+    recordType: draft.recordType,
+    scope: draft.scope,
     ...(currentSubject === undefined ? {} : { subject: currentSubject }),
     bindings,
   };

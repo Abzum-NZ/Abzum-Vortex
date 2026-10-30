@@ -16,7 +16,6 @@ import {
 } from "@vortex/ui";
 import {
   isRecord,
-  guidedFormConfirmationKey,
   projectedLinkTilesSchema,
   mountedRecordPinFrameSchema,
   recordsSelectionMaximumIds,
@@ -93,7 +92,6 @@ export function useRuntimeInputs({
   requestedStepId,
   guidedSummaryStepId,
   showPageMessage,
-  prepareGuidedSummary,
   advanceGuidedStep,
   currentEditFormBaselines,
   submittedFormsRef,
@@ -179,21 +177,10 @@ export function useRuntimeInputs({
   requestedStepId: RefObject<string | undefined>;
   guidedSummaryStepId: string | undefined;
   showPageMessage: (message: PageMessageDraft | undefined) => void;
-  prepareGuidedSummary: (
-    placementId: string,
-    binding: PlacementFlowBinding,
-    submittedValues: Readonly<Record<string, unknown>>,
-  ) => Promise<
-    | {
-        proof: string;
-        afterAccepted: () => Promise<PageMessageDraft | undefined>;
-        finish: () => void;
-      }
-    | undefined
-  >;
   advanceGuidedStep: (
+    placementId: string,
     stepId: string,
-    values: Readonly<Record<string, unknown>>,
+    readValues: () => Readonly<Record<string, unknown>>,
     requested?: string,
   ) => Promise<void>;
   currentEditFormBaselines: ApplicationPageModel["editFormBaselines"];
@@ -328,7 +315,7 @@ export function useRuntimeInputs({
       const supportsEvent = (eventName: string): boolean => declaredEvents?.has(eventName) === true;
       // Runtime data alone does not identify a display: forms can have projected owner-group data.
       // Give each placement only the display callbacks its own registered release declares.
-      if (data !== undefined && model.guidedForm === undefined) {
+      if (data !== undefined) {
         if (
           launcherPlacements.has(placementId) &&
           supportsEvent("row_action") &&
@@ -673,7 +660,7 @@ export function useRuntimeInputs({
       // An action inside a Record detail (its header actions) acts on the record that detail shows,
       // which is the page subject on a record page and the selected record in a panel.
       const actionBinding = bindingOfEvent(bindings, "action");
-      if (actionBinding !== undefined && model.guidedForm === undefined)
+      if (actionBinding !== undefined)
         events.action = (event: ControlSemanticEvent) => {
           if (event.event !== "action" || event.intent !== "activate") return;
           const detailOwner = recordDetailOwners[placementId];
@@ -722,38 +709,37 @@ export function useRuntimeInputs({
                 showPageMessage(unavailableNotice);
                 return;
               }
-              let prepared: Awaited<ReturnType<typeof prepareGuidedSummary>>;
-              const dispatch = formBlock.submit(
-                asComponentBinding(placementId, submitBinding),
-                async (signal) => {
-                  const result = await prepareGuidedSummary(
-                    placementId,
-                    submitBinding,
-                    event.readValues(),
-                  );
-                  if (signal.aborted) {
-                    result?.finish();
-                    return undefined;
-                  }
-                  prepared = result;
-                  if (result === undefined) return undefined;
-                  return {
-                    values: { [guidedFormConfirmationKey]: result.proof },
+              // The final submit names only the stored draft; the server reads the answers from it.
+              const draft = {
+                draftId: model.guidedForm.draftId,
+                revision: model.guidedForm.revision,
+              };
+              return applyDispatch(
+                formBlock.submit(
+                  asComponentBinding(placementId, submitBinding),
+                  () => ({
+                    values: {},
+                    draft,
                     ...(event.selectedOwnerGroupId === undefined
                       ? {}
                       : { selectedOwnerGroupId: event.selectedOwnerGroupId }),
-                  };
-                },
-                event.gestureId,
-              );
-              return applyDispatch(
-                dispatch,
+                  }),
+                  event.gestureId,
+                ),
                 placementId,
-                async () => prepared?.afterAccepted(),
+                async () => {
+                  unsavedWorkRegistry?.markSaved(placementId, event.readValues());
+                  return undefined;
+                },
                 submitBinding.bindingId,
-              ).finally(() => prepared?.finish());
+              );
             }
-            return advanceGuidedStep(model.guidedForm.activeStepId, event.readValues(), requested);
+            return advanceGuidedStep(
+              placementId,
+              model.guidedForm.activeStepId,
+              event.readValues,
+              requested,
+            );
           }
           if (submitBinding === undefined) return;
           const prepare = () => {
@@ -796,7 +782,7 @@ export function useRuntimeInputs({
           );
         };
       const readyBinding = bindings.find((binding) => binding.event === "form_ready");
-      if (readyBinding !== undefined && model.guidedForm === undefined)
+      if (readyBinding !== undefined)
         events.form_ready = (event: ControlSemanticEvent) => {
           if (event.event !== "form_ready") return;
           void applyDispatch(
@@ -813,7 +799,7 @@ export function useRuntimeInputs({
           void runBinding(placementId, tabBinding, { tab_key: event.tabKey });
         };
       const resetBinding = bindings.find((binding) => binding.event === "form_reset");
-      if (supportsEvent("form_reset") && model.guidedForm === undefined)
+      if (supportsEvent("form_reset"))
         events.form_reset = (event: ControlSemanticEvent) => {
           if (event.event !== "form_reset") return;
           const store = controlDraftsRef?.current;
@@ -928,7 +914,6 @@ export function useRuntimeInputs({
     guidedFormCompleted,
     guidedSummaryStepId,
     advanceGuidedStep,
-    prepareGuidedSummary,
     model.bindings,
     model.guidedForm,
     placementEventNames,
