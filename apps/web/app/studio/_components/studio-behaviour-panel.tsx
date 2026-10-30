@@ -30,6 +30,7 @@ import {
   applyStudioFlowCombine,
   applyStudioRebind,
   applyStudioResetToDefault,
+  applyStudioUnbind,
   studioBindingDefault,
   type StudioBorrowedChoices,
   projectStudioBehaviour,
@@ -254,6 +255,15 @@ function BehaviourEvent({
               </Label>
             </>
           )}
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={disabled}
+            onClick={() => run((current) => applyStudioUnbind(current, binding.id))}
+          >
+            Stop running this flow
+          </Button>
           {studioBindingDefault(source, binding.id) !== undefined && (
             <Button
               type="button"

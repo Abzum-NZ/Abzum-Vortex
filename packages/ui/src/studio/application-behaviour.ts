@@ -191,16 +191,20 @@ export const applyStudioRebind = (
     : result;
 };
 
-/** Removes the binding: the event runs no flow any more. */
+/** Removes the binding: the event runs no flow any more, and its flow goes when nothing else uses it. */
 export const applyStudioUnbind = (
   source: ApplicationSourceDocument,
   bindingId: string,
 ): StudioBehaviourResult => {
   const candidate = structuredClone(source);
+  const replaced = bindingIn(candidate, bindingId)?.flow;
   candidate.body.flow_bindings = candidate.body.flow_bindings.filter(
     (binding) => binding.id !== bindingId,
   );
-  return checked(candidate);
+  const result = checked(candidate);
+  return result.kind === "applied" && replaced !== undefined
+    ? { kind: "applied", source: studioWithoutUnusedFlows(result.source, [replaced]) }
+    : result;
 };
 
 type CreateCommand = Extract<StudioFlowCreateCommand, { kind: "action" }>;
