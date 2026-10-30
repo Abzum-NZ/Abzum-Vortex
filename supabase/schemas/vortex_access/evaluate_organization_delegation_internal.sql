@@ -20,8 +20,7 @@ as $function$
     select 'organization_catalogue'::text as requirement_kind,
       null::uuid as application_root_id, null::text as owner_kind,
       null::uuid as owner_id, null::uuid as permission_id,
-      null::bigint as accepted_registration_revision,
-      null::text as meaning_fingerprint
+      null::bigint as accepted_registration_revision
     where exists (
       select 1 from management_scopes as managed
       where managed.scope ->> 'kind' = 'organization_catalogue'
@@ -38,8 +37,7 @@ as $function$
       coalesce(
         (permission.value ->> 'acceptedRegistrationRevision')::bigint,
         current_entry.registration_revision
-      ),
-      coalesce(permission.value ->> 'meaningFingerprint', current_entry.meaning_fingerprint)
+      )
     from management_scopes as managed
     cross join lateral pg_catalog.jsonb_array_elements(
       case when managed.scope ->> 'kind' = 'bounded'
@@ -48,7 +46,7 @@ as $function$
       end
     ) as permission(value)
     left join lateral (
-      select catalogue.registration_revision, catalogue.meaning_fingerprint
+      select catalogue.registration_revision
       from vortex_access.permission_registrations as registration
       join vortex_access.permission_catalogue_entries as catalogue
         on catalogue.organization_id = registration.organization_id
@@ -126,7 +124,7 @@ as $function$
       (stored.value ->> 'ownerId')::uuid as owner_id,
       (stored.value ->> 'permissionId')::uuid as permission_id,
       accepted.registration_revision as accepted_registration_revision,
-      accepted.meaning_fingerprint as meaning_fingerprint
+      accepted as accepted_entry
     from current_delegation_paths as path
     cross join lateral pg_catalog.jsonb_array_elements(
       path.bounded_permissions
@@ -139,23 +137,21 @@ as $function$
       (stored.value ->> 'ownerId')::uuid,
       (stored.value ->> 'permissionId')::uuid,
       (stored.value ->> 'continuityRevision')::numeric::bigint,
-      (stored.value ->> 'acceptedRegistrationRevision')::numeric::bigint,
-      stored.value ->> 'meaningFingerprint'
+      (stored.value ->> 'acceptedRegistrationRevision')::numeric::bigint
     ) as accepted
     where path.scope_kind = 'bounded'
   ), delegation_path_candidates as (
     select requirement.requirement_kind, requirement.application_root_id,
       requirement.owner_kind, requirement.owner_id,
       requirement.permission_id, requirement.accepted_registration_revision,
-      requirement.meaning_fingerprint, path.route_rank,
+      path.route_rank,
       path.delegation_authority_id, path.membership_id,
       path.path_valid_until,
       pg_catalog.row_number() over (
         partition by requirement.requirement_kind,
           requirement.application_root_id, requirement.owner_kind,
           requirement.owner_id, requirement.permission_id,
-          requirement.accepted_registration_revision,
-          requirement.meaning_fingerprint
+          requirement.accepted_registration_revision
         order by path.route_rank, path.delegation_authority_id,
           path.membership_id nulls first
       ) as path_ordinal
@@ -176,7 +172,20 @@ as $function$
             and covered.owner_id = requirement.owner_id
             and covered.permission_id = requirement.permission_id
             and requirement.accepted_registration_revision is not null
-            and covered.meaning_fingerprint = requirement.meaning_fingerprint
+            and exists (
+              select 1 from vortex_access.permission_catalogue_entries as required_entry
+              where required_entry.organization_id = context_organization_value
+                and required_entry.application_root_id is not distinct from requirement.application_root_id
+                and required_entry.owner_kind = requirement.owner_kind
+                and required_entry.owner_id = requirement.owner_id
+                and required_entry.permission_id = requirement.permission_id
+                and required_entry.registration_revision = requirement.accepted_registration_revision
+                and required_entry.registration_kind = case
+                  when requirement.application_root_id is null then 'platform' else 'application' end
+                and required_entry.registration_owner_id = coalesce(
+                  requirement.application_root_id, requirement.owner_id)
+                and vortex_access.permission_meaning_is_same_internal(covered.accepted_entry, required_entry)
+            )
         )
       )
     where requirement.requirement_kind <> 'organization_catalogue'
@@ -184,7 +193,7 @@ as $function$
   ), selected_delegation_paths as materialized (
     select candidate.requirement_kind, candidate.application_root_id,
       candidate.owner_kind, candidate.owner_id, candidate.permission_id,
-      candidate.accepted_registration_revision, candidate.meaning_fingerprint,
+      candidate.accepted_registration_revision,
       candidate.path_valid_until
     from delegation_path_candidates as candidate
     where candidate.path_ordinal = 1
@@ -202,7 +211,6 @@ as $function$
       and selected.permission_id is not distinct from requirement.permission_id
       and selected.accepted_registration_revision is not distinct from
         requirement.accepted_registration_revision
-      and selected.meaning_fingerprint is not distinct from requirement.meaning_fingerprint
 
   )
   select summary.requirement_count, summary.selected_count, summary.path_valid_until

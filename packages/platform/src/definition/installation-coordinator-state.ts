@@ -23,7 +23,7 @@ import {
   type ModuleInstallationStorageResult,
 } from "../files/storage";
 import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
-import { fingerprintPermissionMeaning } from "../access/permission-fingerprints";
+import { canonicalJson } from "./canonical-json";
 import { BuilderAuthorityError } from "./builder-authority";
 import { InstallationProblem } from "./installation-authority";
 import {
@@ -397,7 +397,15 @@ const permissionIdentity = (entry: PermissionRegistryEntryCandidate): string =>
 const permissionAuthorityKey = (entry: PermissionRegistryEntryCandidate): string =>
   JSON.stringify([
     permissionIdentity(entry),
-    fingerprintPermissionMeaning(entry.ownerKind, entry.ownerId, entry.permission),
+    canonicalJson({
+      key: entry.permission.key,
+      recordTypeId: entry.permission.recordTypeId ?? null,
+      actionKind: entry.permission.actionKind,
+      namedAction: entry.permission.namedAction ?? null,
+      administrative: entry.permission.administrative,
+      recordScope: entry.permission.recordScope ?? null,
+      fieldPolicy: entry.permission.fieldPolicy ?? null,
+    }),
     entry.ownerKind === "application"
       ? [
           entry.sourceRelease.kind,

@@ -117,20 +117,10 @@ const managedPermissionSchema = z
     permissionId: rolePermissionEntrySchema.shape.permissionId,
     acceptedRegistrationRevision:
       rolePermissionEntrySchema.shape.acceptedRegistrationRevision.optional(),
-    meaningFingerprint: rolePermissionEntrySchema.shape.meaningFingerprint.optional(),
   })
   .strict()
   .superRefine((value, context) => {
     addExactPermissionScopeIssue(value, context);
-    if (
-      (value.acceptedRegistrationRevision === undefined) !==
-      (value.meaningFingerprint === undefined)
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["meaningFingerprint"],
-        message: "An accepted permission meaning needs its registration revision and fingerprint",
-      });
   });
 
 const boundedManagementScopeSchema = z
@@ -142,7 +132,7 @@ const boundedManagementScopeSchema = z
   .superRefine((value, context) => {
     const identities = value.permissions.map(
       (permission) =>
-        `${exactPermissionIdentity(permission)}:${permission.acceptedRegistrationRevision ?? "current"}:${permission.meaningFingerprint ?? "current"}`,
+        `${exactPermissionIdentity(permission)}:${permission.acceptedRegistrationRevision ?? "current"}`,
     );
     if (new Set(identities).size !== identities.length)
       context.addIssue({

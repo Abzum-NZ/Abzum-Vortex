@@ -2,7 +2,6 @@ create or replace function vortex_access.propose_record_share_grant_for_administ
   p_grant_id uuid,
   p_consent_request_id uuid,
   p_terms jsonb,
-  p_proposal_fingerprint text,
   p_activity_id uuid
 )
 returns jsonb
@@ -25,7 +24,6 @@ declare
 begin
   if p_grant_id is null or p_grant_id = '00000000-0000-0000-0000-000000000000'::uuid
     or p_activity_id is null or p_activity_id = '00000000-0000-0000-0000-000000000000'::uuid
-    or p_proposal_fingerprint is null or p_proposal_fingerprint !~ '^sha256:[a-f0-9]{64}$'
     or p_terms is null or pg_catalog.jsonb_typeof(p_terms) <> 'object'
     or (p_consent_request_id is not null
       and p_consent_request_id = '00000000-0000-0000-0000-000000000000'::uuid) then
@@ -87,7 +85,7 @@ begin
     export_allowed, approved_recipient_region, starts_at, expires_at, status,
     created_by_organization_account_id, consent_request_id, contract_version,
     contract_fingerprint, recipient_binding_id, definition_mapping_fingerprint,
-    proposal_fingerprint, revision, created_at, changed_at
+    revision, created_at, changed_at
   ) values (
     p_grant_id, context_organization_id, (p_terms ->> 'sourceClusterId')::uuid,
     context_application_root_id, (p_terms ->> 'recipientClusterId')::uuid,
@@ -106,7 +104,7 @@ begin
     case when cross_organization then 'pending_consent' else 'draft' end,
     context_account_id, p_consent_request_id, p_terms ->> 'contractVersion',
     p_terms ->> 'contractFingerprint', (p_terms ->> 'recipientBindingId')::uuid,
-    p_terms ->> 'definitionMappingFingerprint', p_proposal_fingerprint, 1,
+    p_terms ->> 'definitionMappingFingerprint', 1,
     now_value, now_value
   );
 
@@ -115,7 +113,7 @@ begin
   if cross_organization then
     insert into vortex_access.record_share_grant_consent_requests (
       request_id, grant_id, source_organization_id, source_cluster_id,
-      recipient_organization_id, recipient_cluster_id, proposed_grant_fingerprint,
+      recipient_organization_id, recipient_cluster_id,
       status, requested_by_organization_account_id, requested_at,
       source_authorizing_role_ids, recipient_accepting_role_ids, expires_at,
       revision, changed_at
@@ -123,7 +121,7 @@ begin
       p_consent_request_id, p_grant_id, context_organization_id,
       (p_terms ->> 'sourceClusterId')::uuid,
       (p_terms ->> 'recipientOrganizationId')::uuid,
-      (p_terms ->> 'recipientClusterId')::uuid, p_proposal_fingerprint,
+      (p_terms ->> 'recipientClusterId')::uuid,
       'pending', context_account_id, now_value,
       vortex_access.record_share_grant_uuid_array_internal(
         p_terms -> 'sourceAuthorizingRoleIds', 1, 100),
@@ -149,17 +147,17 @@ end
 $function$;
 
 revoke all on function vortex_access.propose_record_share_grant_for_administration(
-  uuid, uuid, jsonb, text, uuid
+  uuid, uuid, jsonb, uuid
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_access.propose_record_share_grant_for_administration(
-  uuid, uuid, jsonb, text, uuid
+  uuid, uuid, jsonb, uuid
 ) to vortex_request;
 
 comment on function vortex_access.propose_record_share_grant_for_administration(
-  uuid, uuid, jsonb, text, uuid
+  uuid, uuid, jsonb, uuid
 ) is
-  'Fixed protected proposer: stores one exact record-share grant proposal for the context organisation after re-checking its current share authority; cross-organisation proposals stop at pending_consent with a consent request bound to the proposal fingerprint.';
+  'Fixed protected proposer: stores one exact record-share grant proposal for the context organisation after re-checking its current share authority; cross-organisation proposals stop at pending_consent with a consent request bound to the proposal revision.';
 
-alter function vortex_access.propose_record_share_grant_for_administration(p_grant_id uuid, p_consent_request_id uuid, p_terms jsonb, p_proposal_fingerprint text, p_activity_id uuid) owner to vortex_owner;
+alter function vortex_access.propose_record_share_grant_for_administration(p_grant_id uuid, p_consent_request_id uuid, p_terms jsonb, p_activity_id uuid) owner to vortex_owner;
 
-grant execute on function vortex_access.propose_record_share_grant_for_administration(p_grant_id uuid, p_consent_request_id uuid, p_terms jsonb, p_proposal_fingerprint text, p_activity_id uuid) to postgres;
+grant execute on function vortex_access.propose_record_share_grant_for_administration(p_grant_id uuid, p_consent_request_id uuid, p_terms jsonb, p_activity_id uuid) to postgres;

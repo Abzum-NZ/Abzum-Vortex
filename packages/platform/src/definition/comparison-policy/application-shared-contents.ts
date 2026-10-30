@@ -292,8 +292,8 @@ const compareRole = (
  * Permissions compare by identity. A field policy's readable and changeable fields compare as sets,
  * and any change other than a field added in this same release (in `addedFieldIds`) joining a
  * policy is major. A field the candidate adds joining a policy removes or narrows nothing, so the
- * release is minor; it still changes that permission's meaning fingerprint, so every installed role
- * holding it needs acceptance before the wider field access applies, whatever the version class.
+ * release is minor; it still changes that permission's authority and advances its continuity, so
+ * every installed role holding it needs acceptance before the wider field access applies.
  */
 
 const compareInterface = (

@@ -2,7 +2,6 @@ create or replace function vortex_access.revise_record_share_grant_for_administr
   p_grant_id uuid,
   p_expected_revision bigint,
   p_terms jsonb,
-  p_proposal_fingerprint text,
   p_activity_id uuid
 )
 returns jsonb
@@ -27,7 +26,6 @@ begin
   if p_grant_id is null or p_grant_id = '00000000-0000-0000-0000-000000000000'::uuid
     or p_expected_revision is null or p_expected_revision not between 1 and 9007199254740991
     or p_activity_id is null or p_activity_id = '00000000-0000-0000-0000-000000000000'::uuid
-    or p_proposal_fingerprint is null or p_proposal_fingerprint !~ '^sha256:[a-f0-9]{64}$'
     or p_terms is null or pg_catalog.jsonb_typeof(p_terms) <> 'object' then
     raise exception using errcode = '22023',
       message = 'Record-share grant revision is invalid';
@@ -124,19 +122,17 @@ begin
       contract_fingerprint = p_terms ->> 'contractFingerprint',
       recipient_binding_id = (p_terms ->> 'recipientBindingId')::uuid,
       definition_mapping_fingerprint = p_terms ->> 'definitionMappingFingerprint',
-      proposal_fingerprint = p_proposal_fingerprint,
       revision = grants.revision + 1,
       changed_at = now_value
   where grants.grant_id = p_grant_id;
 
-  -- The consent request follows the new fingerprint and roles; any earlier
-  -- consent would have named the old fingerprint and is superseded.
+  -- The consent request follows the new revision and roles; earlier decisions
+  -- name the previous revision and cannot approve this proposal.
   if cross_organization then
     update vortex_access.record_share_grant_consent_requests as requests
     set recipient_organization_id = (p_terms ->> 'recipientOrganizationId')::uuid,
         recipient_cluster_id = (p_terms ->> 'recipientClusterId')::uuid,
         source_cluster_id = (p_terms ->> 'sourceClusterId')::uuid,
-        proposed_grant_fingerprint = p_proposal_fingerprint,
         status = 'pending',
         requested_by_organization_account_id = context_account_id,
         requested_at = now_value,
@@ -165,17 +161,17 @@ end
 $function$;
 
 revoke all on function vortex_access.revise_record_share_grant_for_administration(
-  uuid, bigint, jsonb, text, uuid
+  uuid, bigint, jsonb, uuid
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_access.revise_record_share_grant_for_administration(
-  uuid, bigint, jsonb, text, uuid
+  uuid, bigint, jsonb, uuid
 ) to vortex_request;
 
 comment on function vortex_access.revise_record_share_grant_for_administration(
-  uuid, bigint, jsonb, text, uuid
+  uuid, bigint, jsonb, uuid
 ) is
-  'Fixed protected reviser: replaces the terms and fingerprints of a draft or pending_consent proposal under an exact expected revision, re-checking current share authority and resetting its consent request.';
+  'Fixed protected reviser: replaces the terms of a draft or pending_consent proposal under an exact expected revision, re-checking current share authority and resetting its consent request.';
 
-alter function vortex_access.revise_record_share_grant_for_administration(p_grant_id uuid, p_expected_revision bigint, p_terms jsonb, p_proposal_fingerprint text, p_activity_id uuid) owner to vortex_owner;
+alter function vortex_access.revise_record_share_grant_for_administration(p_grant_id uuid, p_expected_revision bigint, p_terms jsonb, p_activity_id uuid) owner to vortex_owner;
 
-grant execute on function vortex_access.revise_record_share_grant_for_administration(p_grant_id uuid, p_expected_revision bigint, p_terms jsonb, p_proposal_fingerprint text, p_activity_id uuid) to postgres;
+grant execute on function vortex_access.revise_record_share_grant_for_administration(p_grant_id uuid, p_expected_revision bigint, p_terms jsonb, p_activity_id uuid) to postgres;

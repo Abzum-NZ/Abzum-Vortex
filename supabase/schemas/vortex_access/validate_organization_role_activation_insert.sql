@@ -74,7 +74,6 @@ begin
       and continuity.permission_id = permission.permission_id
       and continuity.state = 'available'
       and continuity.continuity_revision = permission.continuity_revision
-      and continuity.meaning_fingerprint = permission.meaning_fingerprint
     where permission.organization_id = new.organization_id
       and permission.role_id = new.role_id
       and permission.role_revision = new.historical_role_revision

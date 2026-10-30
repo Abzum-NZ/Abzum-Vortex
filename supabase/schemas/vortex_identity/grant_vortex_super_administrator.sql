@@ -23,7 +23,6 @@ declare
   new_assignment_id uuid := pg_catalog.gen_random_uuid();
   new_correlation_id uuid := pg_catalog.gen_random_uuid();
   evaluated_at timestamptz;
-  computed_fingerprint text;
 begin
   if p_duplicate_key is null
     or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
@@ -61,16 +60,6 @@ begin
       message = 'Super-administrator authority is unavailable';
   end if;
 
-  perform 1
-  from vortex_identity.identity_projections as identity
-  where identity.identity_id = p_identity_id
-    and identity.state = 'active'
-  for share;
-  if not found then
-    raise exception using errcode = 'V3141',
-      message = 'Super-administrator identity is unavailable';
-  end if;
-
   evaluated_at := pg_catalog.clock_timestamp();
   if vortex_access.recent_authentication_deadline_internal(
     context_value, evaluated_at,
@@ -80,23 +69,25 @@ begin
       message = 'Multi-factor authentication is required for super-administrator changes';
   end if;
 
-  computed_fingerprint := 'sha256:' || pg_catalog.encode(extensions.digest(
-    pg_catalog.convert_to(pg_catalog.concat_ws(E'\x1f', 'grant', p_identity_id::text), 'UTF8'),
-    'sha256'
-  ), 'hex');
   claimed := vortex_record.claim_scoped_command_receipt_internal(
     'vortex_super_administrator_grant', p_duplicate_key, null, null, actor_identity_id,
     'Super-administrator grant duplicate conflicts', 'V3143'
   );
   if claimed is not null then
-    if claimed ->> 'fingerprint' <> computed_fingerprint then
-      raise exception using errcode = 'V3143',
-        message = 'Super-administrator grant duplicate conflicts';
-    end if;
     return query select 'replayed'::text, (claimed ->> 'assignmentId')::uuid,
-      p_identity_id, (claimed ->> 'revision')::bigint,
+      (claimed ->> 'identityId')::uuid, (claimed ->> 'revision')::bigint,
       (claimed ->> 'correlationId')::uuid, (claimed ->> 'acceptedAt')::timestamptz;
     return;
+  end if;
+
+  perform 1
+  from vortex_identity.identity_projections as identity
+  where identity.identity_id = p_identity_id
+    and identity.state = 'active'
+  for share;
+  if not found then
+    raise exception using errcode = 'V3141',
+      message = 'Super-administrator identity is unavailable';
   end if;
 
   if exists (
@@ -121,7 +112,7 @@ begin
 
   perform vortex_record.complete_scoped_command_receipt_internal(
     p_duplicate_key, pg_catalog.jsonb_build_object(
-      'fingerprint', computed_fingerprint, 'assignmentId', new_assignment_id, 'revision', 1,
+      'identityId', p_identity_id, 'assignmentId', new_assignment_id, 'revision', 1,
       'correlationId', new_correlation_id, 'acceptedAt', evaluated_at
     )
   );
