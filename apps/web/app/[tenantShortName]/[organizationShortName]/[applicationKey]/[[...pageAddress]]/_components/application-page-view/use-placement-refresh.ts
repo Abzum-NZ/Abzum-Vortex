@@ -46,6 +46,15 @@ const flowRefreshResultSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("temporarily_unavailable") }),
 ]);
 
+type AcceptedPlacement = Readonly<{
+  key: string;
+  request: ComponentRequestGeneration;
+  placementId: string;
+  data: PageDataState;
+  editFormBaseline: EditFormBaseline | null;
+  subject?: ApplicationPageModel["subject"] | null;
+}>;
+
 const subscribeToNothing = (): (() => void) => () => undefined;
 const afterHydration = (): boolean => true;
 const duringServerRenderAndHydration = (): boolean => false;
@@ -82,6 +91,76 @@ export function usePlacementRefresh({
   setRefreshedPlacementData: Dispatch<SetStateAction<RefreshedPlacementData | undefined>>;
   refreshedPlacementData: RefreshedPlacementData | undefined;
 }>) {
+  /** Apply all placement reads through the same generation and choice invalidation path. */
+  const applyAcceptedPlacements = useCallback(
+    (
+      scopeKey: string,
+      accepted: readonly AcceptedPlacement[],
+      loadedContent?: Readonly<Record<string, unknown>>,
+      contentOnly = false,
+    ) => {
+      const scope = placementRequestsRef.current;
+      if (scope.key !== scopeKey) return;
+      const refreshedChoices = new Set(
+        accepted
+          .filter((entry) =>
+            isCurrentComponentRequestGeneration(scope.generations.get(entry.key), entry.request),
+          )
+          .map((entry) => entry.placementId),
+      );
+      if (refreshedChoices.size > 0) {
+        for (const stateKey of Object.keys(choiceRequestIdsRef.current))
+          if (
+            [...refreshedChoices].some((id) => stateKey === id || stateKey.endsWith(`\u0000${id}`))
+          )
+            choiceRequestIdsRef.current[stateKey] =
+              (choiceRequestIdsRef.current[stateKey] ?? 0) + 1;
+        setChoicePages((current) =>
+          Object.fromEntries(Object.entries(current).filter(([id]) => !refreshedChoices.has(id))),
+        );
+        setDialogChoicePages((current) =>
+          Object.fromEntries(
+            Object.entries(current).filter(
+              ([key]) => ![...refreshedChoices].some((id) => key.endsWith(`\u0000${id}`)),
+            ),
+          ),
+        );
+      }
+      setRefreshedPlacementData((current) => {
+        const live = placementRequestsRef.current;
+        if (live.key !== scopeKey) return current;
+        const same = current?.navigationKey === scopeKey;
+        const data = { ...(same ? current.data : {}) };
+        const editFormBaselines = { ...(same ? current.editFormBaselines : {}) };
+        let subject = same ? current.subject : undefined;
+        let changed = false;
+        for (const entry of accepted) {
+          if (!isCurrentComponentRequestGeneration(live.generations.get(entry.key), entry.request))
+            continue;
+          data[entry.placementId] = entry.data;
+          editFormBaselines[entry.placementId] = entry.editFormBaseline;
+          if (entry.subject !== undefined) subject = entry.subject;
+          changed = true;
+        }
+        if (!changed && !(contentOnly && loadedContent !== undefined)) return current;
+        const content = loadedContent ?? (same ? current.content : undefined);
+        return {
+          navigationKey: scopeKey,
+          data,
+          editFormBaselines,
+          subject,
+          ...(content === undefined ? {} : { content }),
+        };
+      });
+    },
+    [
+      choiceRequestIdsRef,
+      placementRequestsRef,
+      setChoicePages,
+      setDialogChoicePages,
+      setRefreshedPlacementData,
+    ],
+  );
   const refreshPlacements = useCallback(
     async (
       placementIds: readonly string[],
@@ -141,18 +220,7 @@ export function usePlacementRefresh({
           return;
         }
         if (contentResult.kind !== "available" || contentResult.content === undefined) return;
-        const refreshedContent = contentResult.content;
-        setRefreshedPlacementData((current) => {
-          if (placementRequestsRef.current?.key !== requestScope.key) return current;
-          const same = current?.navigationKey === requestScope.key;
-          return {
-            navigationKey: requestScope.key,
-            data: same ? current.data : {},
-            editFormBaselines: same ? current.editFormBaselines : {},
-            subject: same ? current.subject : undefined,
-            content: refreshedContent,
-          };
-        });
+        applyAcceptedPlacements(requestScope.key, [], contentResult.content, true);
         return;
       }
       // A refreshed board shows the same columns it showed: only those columns' cards are read.
@@ -249,14 +317,7 @@ export function usePlacementRefresh({
         }
       }
 
-      const accepted: {
-        key: string;
-        request: ComponentRequestGeneration;
-        placementId: string;
-        data: PageDataState;
-        editFormBaseline: EditFormBaseline | null;
-        subject?: ApplicationPageModel["subject"] | null;
-      }[] = [];
+      const accepted: AcceptedPlacement[] = [];
       for (const [key, request] of requests) {
         if (
           !loadedData.has(key) ||
@@ -275,81 +336,12 @@ export function usePlacementRefresh({
           ...(loadedSubjects.has(key) ? { subject: loadedSubjects.get(key) } : {}),
         });
       }
-      if (accepted.length === 0) return;
-      const refreshedChoices = new Set(
-        accepted
-          .filter((entry) =>
-            isCurrentComponentRequestGeneration(
-              requestScope.generations.get(entry.key),
-              entry.request,
-            ),
-          )
-          .map((entry) => entry.placementId),
-      );
-      if (refreshedChoices.size > 0) {
-        for (const stateKey of Object.keys(choiceRequestIdsRef.current))
-          if (
-            [...refreshedChoices].some(
-              (placementId) =>
-                stateKey === placementId || stateKey.endsWith(`\u0000${placementId}`),
-            )
-          )
-            choiceRequestIdsRef.current[stateKey] =
-              (choiceRequestIdsRef.current[stateKey] ?? 0) + 1;
-        setChoicePages((current) =>
-          Object.fromEntries(
-            Object.entries(current).filter(([placementId]) => !refreshedChoices.has(placementId)),
-          ),
-        );
-        setDialogChoicePages((current) =>
-          Object.fromEntries(
-            Object.entries(current).filter(
-              ([stateKey]) =>
-                ![...refreshedChoices].some((placementId) =>
-                  stateKey.endsWith(`\u0000${placementId}`),
-                ),
-            ),
-          ),
-        );
-      }
-      setRefreshedPlacementData((current) => {
-        const liveScope = placementRequestsRef.current;
-        if (liveScope?.key !== requestScope.key) return current;
-        const data = { ...(current?.navigationKey === requestScope.key ? current.data : {}) };
-        const editFormBaselines = {
-          ...(current?.navigationKey === requestScope.key ? current.editFormBaselines : {}),
-        };
-        let subject = current?.navigationKey === requestScope.key ? current.subject : undefined;
-        let content = current?.navigationKey === requestScope.key ? current.content : undefined;
-        let changed = false;
-        for (const entry of accepted) {
-          if (
-            !isCurrentComponentRequestGeneration(
-              liveScope.generations.get(entry.key),
-              entry.request,
-            )
-          )
-            continue;
-          data[entry.placementId] = entry.data;
-          editFormBaselines[entry.placementId] = entry.editFormBaseline;
-          if (entry.subject !== undefined) subject = entry.subject;
-          changed = true;
-        }
-        if (changed && loadedContent !== undefined) content = loadedContent;
-        return changed
-          ? {
-              navigationKey: requestScope.key,
-              data,
-              editFormBaselines,
-              subject,
-              ...(content === undefined ? {} : { content }),
-            }
-          : current;
-      });
+      if (accepted.length > 0) applyAcceptedPlacements(requestScope.key, accepted, loadedContent);
     },
     [
       address,
       application,
+      applyAcceptedPlacements,
       currentPageKey,
       model.data,
       model.editFormBaselines,
@@ -450,74 +442,36 @@ export function usePlacementRefresh({
               ? result.content
               : undefined;
           if (content !== undefined) order.contentApplied = sequence;
-          const refreshedChoices = new Set(
-            accepted.map(
-              ([key, request]) =>
-                Object.keys(model.data).find((id) => id.toLowerCase() === key) ??
-                request.componentId,
-            ),
-          );
-          for (const stateKey of Object.keys(choiceRequestIdsRef.current))
-            if (
-              [...refreshedChoices].some(
-                (id) => stateKey === id || stateKey.endsWith(`\u0000${id}`),
-              )
-            )
-              choiceRequestIdsRef.current[stateKey] =
-                (choiceRequestIdsRef.current[stateKey] ?? 0) + 1;
-          setChoicePages((current) =>
-            Object.fromEntries(Object.entries(current).filter(([id]) => !refreshedChoices.has(id))),
-          );
-          setDialogChoicePages((current) =>
-            Object.fromEntries(
-              Object.entries(current).filter(
-                ([key]) => ![...refreshedChoices].some((id) => key.endsWith(`\u0000${id}`)),
-              ),
-            ),
-          );
-          setRefreshedPlacementData((current) => {
-            const live = placementRequestsRef.current;
-            if (live.key !== scope.key) return current;
-            const same = current?.navigationKey === scope.key;
-            const data = { ...(same ? current.data : {}) };
-            const editFormBaselines = { ...(same ? current.editFormBaselines : {}) };
-            let subject = same ? current.subject : undefined;
-            let changed = false;
-            for (const [key, request] of accepted) {
-              if (!isCurrentComponentRequestGeneration(live.generations.get(key), request))
-                continue;
-              const id =
-                Object.keys(model.data).find((candidate) => candidate.toLowerCase() === key) ??
-                request.componentId;
-              const entry = Object.entries(result.data).find(
+          const entries: AcceptedPlacement[] = accepted.map(([key, request]) => {
+            const placementId =
+              Object.keys(model.data).find((candidate) => candidate.toLowerCase() === key) ??
+              request.componentId;
+            const data = Object.entries(result.data).find(
+              ([candidate]) => candidate.toLowerCase() === key,
+            )?.[1] ?? { status: "error" };
+            const baseline =
+              Object.entries(result.editFormBaselines).find(
                 ([candidate]) => candidate.toLowerCase() === key,
-              )?.[1];
-              const baseline =
-                Object.entries(result.editFormBaselines).find(
-                  ([candidate]) => candidate.toLowerCase() === key,
-                )?.[1] ?? null;
-              data[id] = entry ?? { status: "error" };
-              editFormBaselines[id] = baseline;
-              if (Object.hasOwn(model.editFormBaselines, id) || baseline !== null)
-                subject = result.subject;
-              changed = true;
-            }
-            if (!changed && !(requests.size === 0 && content !== undefined)) return current;
-            const nextContent = content ?? (same ? current.content : undefined);
+              )?.[1] ?? null;
             return {
-              navigationKey: scope.key,
+              key,
+              request,
+              placementId,
               data,
-              editFormBaselines,
-              subject,
-              ...(nextContent === undefined ? {} : { content: nextContent }),
+              editFormBaseline: baseline,
+              ...(Object.hasOwn(model.editFormBaselines, placementId) || baseline !== null
+                ? { subject: result.subject }
+                : {}),
             };
           });
+          applyAcceptedPlacements(scope.key, entries, content, requests.size === 0);
         },
       };
     },
     [
       address,
       application,
+      applyAcceptedPlacements,
       currentPageKey,
       model.data,
       model.editFormBaselines,
