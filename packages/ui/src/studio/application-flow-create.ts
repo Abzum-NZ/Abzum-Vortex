@@ -6,8 +6,10 @@ import {
 } from "@vortex/platform/schema";
 import {
   applicationSourceDocumentSchema,
+  pageDispatchedEvents,
+  pageSemanticEventKinds,
+  recordLoadedPageTypes,
   authoredRecordsTableEventAvailable,
-  builderKeySchema,
   defaultFlowBindingSettings,
   defaultBatchEditFlowSource,
   defaultBulkActionFlowSource,
@@ -30,7 +32,13 @@ import {
 import { studioOperationCallProperties } from "./application-flow-commands";
 import { studioFlowCallerNames } from "./application-flow-start";
 import { projectStudioFlowDraftChoices } from "./application-flow-step-form";
-import { describeStudioFlowLocation, studioWords } from "./application-flow-model";
+import {
+  describeStudioFlowLocation,
+  studioEventSentence,
+  studioFlowValidationOptions,
+  studioFlowKeyFrom as keyFrom,
+  studioWords,
+} from "./application-flow-model";
 import {
   traverseStudioSemanticSelectionDraft,
   type StudioSemanticSelection,
@@ -57,30 +65,11 @@ import {
 type SourceBinding = ApplicationSourceDocument["body"]["flow_bindings"][number];
 /** A control event a flow can be bound to. */
 export type StudioFlowControlEvent = SourceBinding["event"];
-export type StudioFlowAuthoringEvent = Extract<
-  StudioFlowControlEvent,
-  | "action"
-  | "card_moved"
-  | "card_added"
-  | "form_submit"
-  | "row_clicked"
-  | "row_action"
-  | "batch_edit"
-  | typeof recordsTableInlineEditEvent
-  | typeof recordsTableRowEditEvent
->;
+/** Any event a block release declares or the page raises can get a flow. */
+export type StudioFlowAuthoringEvent = StudioFlowControlEvent;
 
-export const studioFlowEventLabels: Readonly<Record<StudioFlowAuthoringEvent, string>> = {
-  action: "When used",
-  card_moved: "When a card is moved",
-  card_added: "When a card is added to a column",
-  form_submit: "When submitted",
-  row_clicked: "When a row is clicked",
-  row_action: "Row action",
-  batch_edit: "When cells are pasted, filled or undone",
-  [recordsTableInlineEditEvent]: "When a value is edited",
-  [recordsTableRowEditEvent]: "When a row is saved",
-};
+/** "When it is used": the one wording of an event, from the words every Studio surface shares. */
+export const studioFlowEventTitle = (event: string): string => studioEventSentence(event);
 
 /** Tables expose row actions through declared menu entries; other row surfaces use their own activation. */
 const hasRowActionMenu = (item: ReturnType<typeof sourcePageItems>[number] | undefined): boolean =>
@@ -273,10 +262,11 @@ export const projectStudioFlowCreateChoices = (
       page?.type === "detail" && "record_type" in page && typeof page.record_type === "string"
         ? page.record_type
         : null;
-    for (const event of Object.keys(studioFlowEventLabels) as StudioFlowAuthoringEvent[]) {
+    for (const event of (release?.supportedEvents ?? []).filter((entry) =>
+      pageDispatchedEvents.has(entry),
+    )) {
       const placed = placements.get(alias);
       if (
-        release?.supportedEvents.includes(event) !== true ||
         (bound.has(`${alias} ${event}`) && !(event === "row_action" && hasRowActionMenu(placed))) ||
         (event === "action" && node.settings.action_kind === "submit") ||
         // The action that saves an inline edit belongs to the feature, so it is offered while on;
@@ -303,26 +293,32 @@ export const projectStudioFlowCreateChoices = (
       });
     }
   });
+  // The page raises its own events: it is the control of its load and its record being shown.
+  for (const page of draft.source.body.pages) {
+    const pageRecord =
+      page.type === "detail" && "record_type" in page && typeof page.record_type === "string"
+        ? page.record_type
+        : null;
+    for (const event of pageSemanticEventKinds) {
+      if (
+        bound.has(`${page.id} ${event}`) ||
+        (event === "record_loaded" && !recordLoadedPageTypes.has(page.type))
+      )
+        continue;
+      actions.push({
+        controlAlias: page.id,
+        label: page.name,
+        recordType: pageRecord,
+        event,
+        rowActionMenu: false,
+        callerNames: studioFlowCallerNames(event),
+      });
+    }
+  }
   const operations = draft.source.body.modules.flatMap((module) =>
     module.actions.map((action) => ({ key: action.key, label: action.label })),
   );
   return { actions, operations };
-};
-
-/** A builder key from a name, unique among the taken ones. */
-const keyFrom = (name: string, taken: ReadonlySet<string>): string | undefined => {
-  const base =
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "_")
-      .replace(/^[^a-z]+|_+$/g, "")
-      .slice(0, 34)
-      .replace(/_+$/g, "") || "flow";
-  for (let n = 1; n < 1000; n += 1) {
-    const candidate = n === 1 ? base : `${base}_${n}`;
-    if (!taken.has(candidate) && builderKeySchema.safeParse(candidate).success) return candidate;
-  }
-  return undefined;
 };
 
 const message = (value: string) => ({
@@ -350,11 +346,14 @@ const bindControl = (
   rowActionCapability?: "update" | "delete" | "restore",
 ): Readonly<{ id: string; eventId: string }> => {
   const body = source.body;
-  const page = body.pages.find((candidate) =>
-    sourcePageItems(candidate.composition).some((item) => item.props.id === controlAlias),
-  );
+  // The page is the control of its own events; any other control is a block placed on a page.
+  const page =
+    body.pages.find((candidate) => candidate.id === controlAlias) ??
+    body.pages.find((candidate) =>
+      sourcePageItems(candidate.composition).some((entry) => entry.props.id === controlAlias),
+    );
   const item =
-    page === undefined
+    page === undefined || page.id === controlAlias
       ? undefined
       : sourcePageItems(page.composition).find((entry) => entry.props.id === controlAlias);
   const rowActionMenu = event === "row_action" && hasRowActionMenu(item);
@@ -543,13 +542,13 @@ const created = (
           : `The new flow is not valid: ${first.message} (${first.path.map(String).join(", ")}).`,
     };
   }
-  const issue = validateFlow(flow, {
-    targetFlow: (reference) =>
-      [
-        ...parsed.data.body.flows,
-        ...parsed.data.body.modules.flatMap((module) => module.flows),
-      ].find((entry) => entry.id === reference || entry.key === reference),
-  })[0];
+  const issue = validateFlow(
+    flow,
+    studioFlowValidationOptions(parsed.data, flow, [
+      ...parsed.data.body.flows,
+      ...parsed.data.body.modules.flatMap((module) => module.flows),
+    ]),
+  )[0];
   if (issue !== undefined)
     return {
       kind: "refused",
@@ -949,15 +948,17 @@ export const applyStudioFlowCreate = (
         );
       }
     } else if (command.kind === "action") {
+      const recordSupplied =
+        command.recordType !== null &&
+        (command.event === "form_submit" ||
+          studioFlowCallerNames(command.event).some((entry) => entry.name === "record_id"));
       flow = interactiveFlow(key, name, {
         outputs: {},
-        ...(command.recordType === null || command.event === "card_added"
-          ? {}
-          : { recordInput: "record_id" }),
+        ...(!recordSupplied || command.event === "card_added" ? {} : { recordInput: "record_id" }),
         inputs:
           command.event === "card_added"
             ? { stage: { type: "text", required: true } }
-            : command.recordType === null
+            : !recordSupplied || command.recordType === null
               ? {}
               : {
                   record_id: {
@@ -1020,7 +1021,7 @@ export const applyStudioFlowCreate = (
             }
           : command.event === "card_added"
             ? { stage: { kind: "caller", name: "value" } }
-            : command.recordType === null
+            : !recordSupplied || command.recordType === null
               ? {}
               : { record_id: { kind: "caller", name: "record_id" } },
         borrowed,

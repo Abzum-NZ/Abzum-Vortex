@@ -6,6 +6,8 @@ import {
 import {
   type ImmutablePlatformBlockCatalogue,
   applicationSourceDocumentSchema,
+  applicationUses,
+  describeApplicationUsers,
   sourceItemTree,
   sourcePlacementLayoutSchema,
   sourceSlotBreakpointOrders,
@@ -766,6 +768,18 @@ export const applyStudioCompositionCommand = (
           kind: "refused",
           reason:
             "This block holds a content outlet of its layout. Retarget the outlet in the Layout inspector before removing the block.",
+        };
+      const messageUsers =
+        selection?.kind === "placement"
+          ? applicationUses(current.source, {
+              kind: "message_target",
+              placementAlias: selection.placementAlias,
+            })
+          : [];
+      if (messageUsers.length > 0)
+        return {
+          kind: "refused",
+          reason: `This block is where ${describeApplicationUsers(messageUsers)} show${messageUsers.length === 1 ? "s" : ""} a message, so it was not removed. Change that first.`,
         };
       return applyRemoval(current, selection, command);
     }

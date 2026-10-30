@@ -93,6 +93,8 @@ export type StudioSettingChoices = Readonly<{
   relationships: readonly StudioRelationshipChoice[];
   roles: readonly Readonly<{ key: string; label: string }>[];
   records: StudioRecordReader | null;
+  /** The values the page of the selected block declares, which a display can show. */
+  pageValues: readonly Readonly<{ key: string; label: string; currency?: string }>[];
 }>;
 
 /**
@@ -122,6 +124,7 @@ export const studioDraftChoices = (
     relationships: studioRelationshipChoices(source, borrowed).map(named),
     roles: source.body.roles.map((role) => ({ key: role.key, label: role.name })),
     records,
+    pageValues: [],
   };
 };
 
@@ -467,6 +470,23 @@ function SettingControl(props: ControlProps): ReactElement {
     case "text":
     case "url": {
       const text = value?.kind === property.kind ? value.value : "";
+      // A display bound to a page value picks it among the values the page declares.
+      if (property.kind === "text" && property.key === "page_value")
+        return choices.pageValues.length === 0 ? (
+          <p className="text-sm text-muted-foreground" id={id}>
+            This page declares no values yet. Add one in the page's Page values.
+          </p>
+        ) : (
+          <StudioOptionControl
+            id={id}
+            value={text}
+            options={choices.pageValues.map((entry) => ({ value: entry.key, label: entry.label }))}
+            unset={unsetLabel(property, undefined)}
+            disabled={disabled}
+            aria-describedby={descriptionId}
+            onChange={(next) => onChange(next === "" ? undefined : { kind: "text", value: next })}
+          />
+        );
       const change = (next: string) =>
         onChange(
           next === ""

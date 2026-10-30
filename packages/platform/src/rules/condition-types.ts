@@ -63,6 +63,33 @@ export function conditionValueType(type: unknown): ConditionValueType | undefine
   if (["table", "attachment", "formatted_text", "json"].includes(type)) return "opaque_json";
   return undefined;
 }
+/**
+ * The record fields a placement's condition can compare, by the type of value they hold: a
+ * calculation or total by its result type. A plain text, number, money, yes or no, date, date and
+ * time or choice field; other kinds (links, tables, attachments) are not offered.
+ */
+const conditionComparableFieldTypes: ReadonlySet<string> = new Set([
+  "text",
+  "long_text",
+  "choice",
+  "whole_number",
+  "decimal_number",
+  "money",
+  "yes_no",
+  "date",
+  "date_time",
+]);
+export function comparableConditionFieldType(
+  field: { type?: unknown; settings?: unknown } | undefined,
+): string | undefined {
+  if (!field) return undefined;
+  const settings = field.settings as Record<string, unknown> | undefined;
+  const type =
+    field.type === "calculation" || field.type === "total"
+      ? (settings?.resultType ?? settings?.result_type)
+      : field.type;
+  return typeof type === "string" && conditionComparableFieldTypes.has(type) ? type : undefined;
+}
 export function conditionFieldType(
   field: { type?: unknown; settings?: unknown } | undefined,
 ): ConditionValueType | undefined {

@@ -1,11 +1,6 @@
 import { flowRuntimeValueOf } from "../../rules/flow-runtime-value";
 import { sourceFlowCollectionSchema } from "../../workflows/flow-source-contracts";
-import { reachablePageFlows } from "../../workflows/flow-reachability";
-import {
-  sourceItemTree,
-  sourcePageItems,
-  sourcePageShell,
-} from "../application-composition/source-composition";
+import { sourcePageItems } from "../application-composition/source-composition";
 import type {
   ModuleCompilationOutput,
   DefinitionCompilationOutput,
@@ -25,6 +20,7 @@ import {
   platformOperationLookup,
 } from "../flow-operation-calls";
 import { flowIssueLocation } from "../flow-validation";
+import { applicationFlowReferenceEnvironments } from "../flow-reference-environments";
 import { dependencyOrder } from "./dependencies";
 import type { Resolution } from "./resolution";
 import { compatibleVersion } from "./resolution";
@@ -36,10 +32,7 @@ import {
   type JsonObject,
 } from "./shared";
 import { moduleDependencies } from "../module-dependencies";
-import {
-  CONTROL_BLOCK_RELEASES,
-  FORM_CONTAINER_BLOCK_RELEASE,
-} from "../application-composition-catalogue";
+import { FORM_CONTAINER_BLOCK_RELEASE } from "../application-composition-catalogue";
 
 /**
  * Compiles the flows a module or application owns to permanent identities, refusing an
@@ -189,99 +182,13 @@ function compileOwnedFlowSources(
     referenceEnvironments:
       source.kind !== "application"
         ? undefined
-        : (flow) => {
-            const application = body as unknown as ApplicationSourceDocument["body"];
-            const controls = new Set(
-              application.flow_bindings
-                .filter((binding) =>
-                  reachablePageFlows([binding.flow], parsed.data).some(
-                    (reachable) => reachable.id === flow.id,
-                  ),
-                )
-                .map((binding) => binding.control),
-            );
-            return application.pages.flatMap((page) => {
-              const shellAlias = sourcePageShell(page.composition);
-              const shell = application.shells.find((candidate) => candidate.id === shellAlias);
-              const items = [
-                ...sourcePageItems(page.composition),
-                ...(shell === undefined ? [] : sourceItemTree(shell.layout.content)),
-              ];
-              if (!items.some((item) => controls.has(item.props.id))) return [];
-              const forms: Record<string, Readonly<Record<string, string>>> = {};
-              const formRestrictions: Record<
-                string,
-                Record<string, { readOnly: boolean; protectedKind?: "attachment" | "secret" }>
-              > = {};
-              for (const form of items) {
-                if (
-                  form.props.vortex.block.block_id !== FORM_CONTAINER_BLOCK_RELEASE.blockId ||
-                  form.props.vortex.block.release_version !==
-                    FORM_CONTAINER_BLOCK_RELEASE.releaseVersion
-                )
-                  continue;
-                const fields: Record<string, string> = {};
-                const restrictions: Record<
-                  string,
-                  { readOnly: boolean; protectedKind?: "attachment" | "secret" }
-                > = {};
-                for (const control of sourceItemTree([form])) {
-                  const release = CONTROL_BLOCK_RELEASES.find(
-                    (candidate) => candidate.rendererKey === control.type,
-                  );
-                  if (release === undefined) continue;
-                  const reference = control.props.field;
-                  const dot = typeof reference === "string" ? reference.lastIndexOf(".") : -1;
-                  const record =
-                    dot > 0 && typeof reference === "string"
-                      ? recordsByReference.get(reference.slice(0, dot))
-                      : undefined;
-                  const field =
-                    dot > 0 && typeof reference === "string" ? reference.slice(dot + 1) : undefined;
-                  const name =
-                    typeof control.props.name === "string" && control.props.name !== ""
-                      ? control.props.name
-                      : field;
-                  if (name === undefined) continue;
-                  restrictions[name] = {
-                    readOnly: control.props.read_only === true,
-                    ...(release.key === "platform.form.attachment_input"
-                      ? { protectedKind: "attachment" as const }
-                      : release.key === "platform.form.connection_secret_input"
-                        ? { protectedKind: "secret" as const }
-                        : {}),
-                  };
-                  const declared = release.value_type;
-                  const type =
-                    record !== undefined && field !== undefined
-                      ? record[field]
-                      : declared?.kind === "fixed"
-                        ? declared.type
-                        : declared?.kind === "boolean_setting"
-                          ? control.props[declared.setting] === true
-                            ? declared.when_true
-                            : declared.when_false
-                          : undefined;
-                  if (type !== undefined) fields[name] = type;
-                }
-                forms[form.props.id] = fields;
-                formRestrictions[form.props.id] = restrictions;
-              }
-              return [
-                {
-                  page: page.name,
-                  controls: items
-                    .filter((item) => controls.has(item.props.id))
-                    .map((item) => item.props.id),
-                  values: Object.fromEntries(
-                    Object.entries(page.values ?? {}).map(([key, value]) => [key, value.type]),
-                  ),
-                  forms,
-                  formRestrictions,
-                },
-              ];
-            });
-          },
+        : (flow) =>
+            applicationFlowReferenceEnvironments(
+              body as unknown as ApplicationSourceDocument["body"],
+              flow,
+              parsed.data,
+              (reference) => recordsByReference.get(reference),
+            ),
     flows: parsed.data,
     rawFlows: asObject(source.body).flows as readonly unknown[],
     declaredDefinitionKeys,

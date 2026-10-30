@@ -1,0 +1,177 @@
+"use client";
+import { useState } from "react";
+import { Button } from "@vortex/ui/components/button";
+import { Label } from "@vortex/ui/components/label";
+import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
+import { StudioInspectorGroup } from "@vortex/ui/studio";
+
+type Plain = Readonly<Record<string, unknown>>;
+type Input = Readonly<{ key: string; label: string; required: boolean }>;
+
+/** Where a field's options come from, as the field declares it (Studio flows design §2). */
+type Kind = "fixed" | "records" | "query" | "flow";
+
+const kindOf = (source: Plain | undefined, link: boolean): Kind => {
+  if (source?.kind === "flow") return "flow";
+  if (link) return source?.query === undefined ? "records" : "query";
+  return "fixed";
+};
+
+/**
+ * Where a choice or link field's options come from: a fixed list (choice), the records the person
+ * may read (link), a query over the record's own fields, or an options flow over them. It is
+ * declared on the field, so every page, import and agent is held to it. A query or flow names, for
+ * each of its inputs, the field of the same record type that supplies it.
+ */
+export function StudioOptionsSourceEditor({
+  link,
+  source,
+  fields,
+  queries,
+  flows,
+  disabled,
+  onChange,
+}: Readonly<{
+  link: boolean;
+  source: Plain | undefined;
+  /** The other fields of this record type, which an input can read. */
+  fields: readonly Readonly<{ key: string; label: string }>[];
+  /** The module's queries by qualified reference, with the inputs each declares. */
+  queries: readonly Readonly<{ reference: string; label: string; inputs: readonly Input[] }>[];
+  /** The module's flows by alias, with the inputs each declares. */
+  flows: readonly Readonly<{ alias: string; label: string; inputs: readonly Input[] }>[];
+  disabled: boolean;
+  /** Writes the declared source; answers why it was refused, if it was. */
+  onChange: (next: Plain) => string | undefined;
+}>) {
+  const current = kindOf(source, link);
+  const [kind, setKind] = useState<Kind>(current);
+  const [query, setQuery] = useState(typeof source?.query === "string" ? source.query : "");
+  const [flow, setFlow] = useState(typeof source?.flow === "string" ? source.flow : "");
+  const [inputs, setInputs] = useState<Readonly<Record<string, string>>>(
+    (source?.inputs as Readonly<Record<string, string>> | undefined) ?? {},
+  );
+  const [problem, setProblem] = useState("");
+  const declared =
+    kind === "query" ? queries.find((entry) => entry.reference === query) : undefined;
+  const declaredFlow = kind === "flow" ? flows.find((entry) => entry.alias === flow) : undefined;
+  const needed = declared?.inputs ?? declaredFlow?.inputs ?? [];
+  const kinds: readonly Readonly<{ kind: Kind; label: string }>[] = link
+    ? [
+        { kind: "records", label: "The records the person may read" },
+        { kind: "query", label: "A query over this record's fields" },
+        { kind: "flow", label: "An options flow" },
+      ]
+    : [
+        { kind: "fixed", label: "A fixed list" },
+        { kind: "flow", label: "An options flow" },
+      ];
+  const apply = () => {
+    if (kind === "fixed") return setProblem(onChange({ kind: "fixed" }) ?? "");
+    if (kind === "records") return setProblem(onChange({ kind: "query" }) ?? "");
+    const target = kind === "query" ? query : flow;
+    if (target === "") return setProblem("Choose what supplies the options.");
+    const missing = needed.find((input) => input.required && (inputs[input.key] ?? "") === "");
+    if (missing !== undefined) return setProblem(`Choose the field that fills ${missing.label}.`);
+    const filled = Object.fromEntries(
+      needed.flatMap((input) =>
+        (inputs[input.key] ?? "") === "" ? [] : [[input.key, inputs[input.key]]],
+      ),
+    );
+    setProblem(
+      onChange(
+        kind === "query"
+          ? { kind: "query", query, inputs: filled }
+          : { kind: "flow", flow, inputs: filled },
+      ) ?? "",
+    );
+  };
+  return (
+    <StudioInspectorGroup title="Where the options come from">
+      <Label className="flex flex-col items-start gap-1 text-xs">
+        Options source
+        <NativeSelect
+          value={kind}
+          disabled={disabled}
+          onChange={(event) => {
+            setKind(event.target.value as Kind);
+            setProblem("");
+          }}
+        >
+          {kinds.map((entry) => (
+            <NativeSelectOption key={entry.kind} value={entry.kind}>
+              {entry.label}
+            </NativeSelectOption>
+          ))}
+        </NativeSelect>
+      </Label>
+      {kind === "query" && (
+        <Label className="flex flex-col items-start gap-1 text-xs">
+          Query
+          <NativeSelect
+            value={query}
+            disabled={disabled}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setInputs({});
+            }}
+          >
+            <NativeSelectOption value="">Choose a query…</NativeSelectOption>
+            {queries.map((entry) => (
+              <NativeSelectOption key={entry.reference} value={entry.reference}>
+                {entry.label}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </Label>
+      )}
+      {kind === "flow" && (
+        <Label className="flex flex-col items-start gap-1 text-xs">
+          Options flow
+          <NativeSelect
+            value={flow}
+            disabled={disabled}
+            onChange={(event) => {
+              setFlow(event.target.value);
+              setInputs({});
+            }}
+          >
+            <NativeSelectOption value="">Choose a flow…</NativeSelectOption>
+            {flows.map((entry) => (
+              <NativeSelectOption key={entry.alias} value={entry.alias}>
+                {entry.label}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </Label>
+      )}
+      {needed.map((input) => (
+        <Label key={input.key} className="flex flex-col items-start gap-1 text-xs">
+          {input.label} is filled by
+          <NativeSelect
+            value={inputs[input.key] ?? ""}
+            disabled={disabled}
+            onChange={(event) => setInputs({ ...inputs, [input.key]: event.target.value })}
+          >
+            <NativeSelectOption value="">
+              {input.required ? "Choose a field…" : "Nothing"}
+            </NativeSelectOption>
+            {fields.map((field) => (
+              <NativeSelectOption key={field.key} value={field.key}>
+                {field.label}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </Label>
+      ))}
+      <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={apply}>
+        Use this source
+      </Button>
+      {problem !== "" && (
+        <p role="alert" className="text-sm text-destructive">
+          {problem}
+        </p>
+      )}
+    </StudioInspectorGroup>
+  );
+}

@@ -5,6 +5,7 @@ import { planApplicationPreview } from "./preview-release-plan";
 import { componentLabelsOf } from "./publication-component-labels";
 
 import type { SessionContext } from "../access/identity-access";
+import { comparableConditionFieldType } from "../rules/condition-types";
 import {
   recordTypeIdSchema,
   fieldIdSchema,
@@ -154,16 +155,6 @@ export type ApplicationDraftConditionContext = Readonly<{
   }>[];
 }>;
 
-const conditionFieldTypes = new Set([
-  "text",
-  "long_text",
-  "choice",
-  "whole_number",
-  "yes_no",
-  "date",
-  "date_time",
-]);
-
 const projectDraftConditionContexts = (
   source: ApplicationSourceDocument,
   sourceFingerprint: Fingerprint,
@@ -216,7 +207,7 @@ const projectDraftConditionContexts = (
     const fields: ApplicationDraftConditionContext["fields"][number][] = [];
     let valid = true;
     for (const field of record.fields) {
-      if (!conditionFieldTypes.has(field.type)) continue;
+      if (comparableConditionFieldType(field) === undefined) continue;
       const group = identities.filter((identity) => {
         if (identity.kind !== "field" || identity.scope !== `record:${record.key}`) return false;
         const identifier = fieldIdSchema.safeParse(identity.identifier);

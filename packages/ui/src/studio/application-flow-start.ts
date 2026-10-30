@@ -119,6 +119,9 @@ const suppliedByEvent: Readonly<
     { name: "record", label: "The record the form edits" },
     { name: "selected_owner_group_id", label: "The owner group chosen on the form" },
   ],
+  load: [{ name: "record_id", label: "The record the page shows" }],
+  record_loaded: [{ name: "record_id", label: "The record the page shows" }],
+  tab_changed: [{ name: "tab_key", label: "The tab that was opened" }],
   row_clicked: [{ name: "record_id", label: "The clicked record" }],
   row_action: [{ name: "record_id", label: "The record of the row" }],
   card_moved: [
@@ -246,9 +249,13 @@ export const describeStudioFlowBehaviour = (
       ),
       ...sourceItemTree(shell?.layout.content ?? []),
     ];
-    return items
-      .filter((item) => controls.has(item.props.id))
-      .map((item) => `${page.name}: ${controlLabel(item.props.id)}`);
+    return [
+      // The page itself is the control of its own events.
+      ...(controls.has(page.id) ? [`${page.name}: the page`] : []),
+      ...items
+        .filter((item) => controls.has(item.props.id))
+        .map((item) => `${page.name}: ${controlLabel(item.props.id)}`),
+    ];
   });
 };
 

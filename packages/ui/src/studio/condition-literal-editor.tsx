@@ -5,7 +5,12 @@ import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
 import { StudioOptionControl } from "./studio-setting-controls";
 import { useDateFormatOptions } from "../display/date-format-context";
-import { jsonValueSchema, isRecord, type JsonValue } from "@vortex/platform/schema";
+import {
+  currentIso4217Alpha3CodeSetV2026_01_01,
+  jsonValueSchema,
+  isRecord,
+  type JsonValue,
+} from "@vortex/platform/schema";
 import {
   type ConditionOperand,
   type ConditionPath,
@@ -17,6 +22,8 @@ import {
   literalMatchesType,
   localDateTimeInputValue,
 } from "./condition-model";
+
+const currencyCodes = [...currentIso4217Alpha3CodeSetV2026_01_01].sort();
 
 type LiteralEditorProps = Readonly<{
   operand: Extract<ConditionOperand, { source: "value" }>;
@@ -283,15 +290,15 @@ export function LiteralEditor({
         </label>
         <label className="flex flex-col gap-2 text-sm">
           Currency
-          <Input
+          <StudioOptionControl
+            aria-label="Currency"
             aria-invalid={error !== undefined}
             aria-describedby={error === undefined ? undefined : errorId}
-            maxLength={3}
-            type="text"
             value={currency}
-            onChange={(event) =>
-              onCommit({ amount, currency: event.currentTarget.value.toUpperCase() })
-            }
+            disabled={false}
+            unset="Choose a currency…"
+            options={currencyCodes.map((code) => ({ value: code, label: code }))}
+            onChange={(next) => onCommit({ amount, currency: next })}
           />
         </label>
         {error && <FieldError id={errorId}>{error}</FieldError>}

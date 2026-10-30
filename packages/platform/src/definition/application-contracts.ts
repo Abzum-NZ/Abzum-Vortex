@@ -966,7 +966,10 @@ export const applicationContentSchema = applicationSharedContentSchema
       context.addIssue({ code: "custom", path: ["flows"], message: "Flow keys must be unique" });
 
     const flowIdSet = new Set(flowIds);
-    const placementIdSet = new Set(placementIds.map(String));
+    const placementIdSet = new Set([
+      ...placementIds.map(String),
+      ...value.pages.map((page) => String(page.pageId)),
+    ]);
     const flowBindingIds = value.flowBindings.map((binding) => String(binding.bindingId));
     if (new Set(flowBindingIds).size !== flowBindingIds.length)
       context.addIssue({
@@ -999,7 +1002,8 @@ export const applicationContentSchema = applicationSharedContentSchema
         context.addIssue({
           code: "custom",
           path: ["flowBindings", bindingIndex, "controlId"],
-          message: "A flow binding control must resolve to a placement inside the application",
+          message:
+            "A flow binding control must resolve to a placement or page inside the application",
         });
     }
   });

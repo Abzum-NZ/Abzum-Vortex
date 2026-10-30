@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {
   describeFailure,
   checkFlowFormula,
+  sourcePageItems,
   type ApplicationSourceDocument,
   type ApplicationUsePlace,
   type ImmutablePlatformBlockCatalogue,
@@ -37,6 +38,9 @@ import {
   studioFlowOfSelection,
   studioFlowOutline,
   studioSemanticSelectionKey,
+  type StudioBehaviourResult,
+  type StudioBehaviourTarget,
+  type StudioFlowCombineResult,
   type StudioFlowCommand,
   type StudioFlowContext,
   type StudioFlowCreateCommand,
@@ -53,7 +57,12 @@ import type { StudioDraft, StudioDraftStep } from "./use-studio-draft";
 import { deferredStudioPart } from "./studio-deferred-part";
 import { useStudioTabVisited } from "./studio-frame";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
-import { StudioFormulaEditor, formulaReferenceName } from "./studio-formula-editor";
+import {
+  StudioFormulaEditor,
+  formulaReferenceName,
+  type FormulaReferenceChoice,
+} from "./studio-formula-editor";
+import type { StudioBehaviourEdit } from "./studio-behaviour-panel";
 import { FixedInput, startLiteral, StudioFlowValueControl } from "./studio-flow-value-control";
 import { StudioReferencesAlert } from "./studio-used-in";
 
@@ -72,9 +81,9 @@ const StudioFlowInspector = deferredStudioPart(
   () => import("./studio-flow-inspector").then((module) => module.StudioFlowInspector),
   "flow inspector",
 );
-const StudioPlacementWorkflows = deferredStudioPart(
-  () => import("./studio-placement-workflows").then((module) => module.StudioPlacementWorkflows),
-  "workflows of this control",
+const StudioBehaviourPanel = deferredStudioPart(
+  () => import("./studio-behaviour-panel").then((module) => module.StudioBehaviourPanel),
+  "behaviour of this control",
 );
 const preloadFlowsTab = () =>
   Promise.all([
@@ -140,8 +149,12 @@ export function useStudioFlowsTab({
   const controlLabel = useCallback(
     (alias: string) =>
       labels.get(studioSemanticSelectionKey({ kind: "placement", placementAlias: alias })) ??
-      "a control",
-    [labels],
+      // The page is the control of its own events (load, record loaded).
+      (() => {
+        const page = source.body.pages.find((entry) => entry.id === alias);
+        return page === undefined ? "a control" : `the page ${page.name}`;
+      })(),
+    [labels, source],
   );
   const outline = useMemo(() => {
     if (flowSelection === null) return null;
@@ -542,11 +555,52 @@ export function useStudioFlowsTab({
       />
     );
 
+  // The component's or the page's events, with the page values a start condition can read.
+  const behaviourTarget: StudioBehaviourTarget | null =
+    selected?.kind === "placement"
+      ? { kind: "placement", placementAlias: selected.placementAlias }
+      : selected?.kind === "page"
+        ? { kind: "page", pageAlias: selected.pageAlias }
+        : null;
+  const behaviourReferences = (target: StudioBehaviourTarget): FormulaReferenceChoice[] => {
+    const page = source.body.pages.find((candidate) =>
+      target.kind === "page"
+        ? candidate.id === target.pageAlias
+        : sourcePageItems(candidate.composition).some(
+            (item) => item.props.id === target.placementAlias,
+          ),
+    );
+    return Object.entries(page?.values ?? {}).map(([name, declaration]) => {
+      const reference = { source: "page", name } as const;
+      return {
+        reference,
+        name: formulaReferenceName(reference),
+        label: declaration.label,
+        type: declaration.type,
+      };
+    });
+  };
+  const behaviourEdit: StudioBehaviourEdit = (apply) => {
+    const outcome = draft.run(
+      (current): StudioDraftStep<StudioBehaviourResult | StudioFlowCombineResult> => {
+        const result = apply(current);
+        return result.kind === "applied"
+          ? { kind: "edit", source: result.source, result }
+          : { kind: "keep", result };
+      },
+    );
+    if (outcome.kind === "blocked") return outcome.message;
+    return outcome.result.kind === "applied" ? true : outcome.result.reason;
+  };
   const placementWorkflows =
-    selected?.kind !== "placement" ? null : (
-      <StudioPlacementWorkflows
+    behaviourTarget === null ? null : (
+      <StudioBehaviourPanel
         source={source}
-        placementAlias={selected.placementAlias}
+        catalogue={catalogue}
+        target={behaviourTarget}
+        references={behaviourReferences(behaviourTarget)}
+        borrowed={borrowed}
+        onEdit={behaviourEdit}
         createChoices={createChoices}
         disabled={disabled}
         onOpen={openFlow}
@@ -554,6 +608,7 @@ export function useStudioFlowsTab({
         namedActions={studioActionChoices(source, borrowed)}
         onAddRowAction={(command) => create(command, true)}
         onChangeRowActions={(expected, next) => {
+          if (selected?.kind !== "placement") return "Select the component first.";
           const outcome = draft.run(
             (current): StudioDraftStep<ReturnType<typeof applyStudioRowActionChange>> => {
               const result = applyStudioRowActionChange(
