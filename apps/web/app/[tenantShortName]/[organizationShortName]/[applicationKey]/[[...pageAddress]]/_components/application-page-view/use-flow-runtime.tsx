@@ -44,7 +44,6 @@ import type { ApplicationPageModel } from "../../../../../../_lib/application-pa
 import type { SubmittedForm, Notice } from "./types";
 import type { ControlDrafts } from "../../../_components/application-frame-state";
 import { formSurfaceComposition, runtimeInputWithFormDefault } from "./form-surface";
-import { requestRecordChoices } from "./record-choices";
 import { unavailableNotice } from "./notices";
 
 export function useFlowRuntime({
@@ -325,7 +324,9 @@ export function useFlowRuntime({
         else if (model.linkInputPlacementIds.includes(placementId))
           events.records_requested = (event: ControlSemanticEvent) => {
             if (event.event !== "records_requested") return;
-            return requestRecordChoices(model, placementId, event, () => router.refresh());
+            return import("./record-choices").then(({ requestRecordChoices }) =>
+              requestRecordChoices(model, placementId, event, () => router.refresh()),
+            );
           };
         const modalInput: Record<string, unknown> = {};
         if (input.data !== undefined) modalInput.data = input.data;
