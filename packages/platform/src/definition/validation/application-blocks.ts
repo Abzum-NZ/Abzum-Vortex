@@ -5,6 +5,7 @@ import {
   sourceItemChildSlots,
   sourceItemTree,
   sourcePageItems,
+  sourcePageZones,
 } from "../application-composition/source-composition";
 import type { ApplicationSourceDocument } from "../definition-source";
 import { duplicateFlowBindings } from "../application-contracts";
@@ -124,11 +125,27 @@ const pageFlowEvents = new Set([
   "guided_step_changed",
 ]);
 
+/** The form containers of each guided form's summary step: the only forms whose submit runs a flow. */
+const summaryFormAliases = (body: ApplicationSourceDocument["body"]): ReadonlySet<string> => {
+  const aliases = new Set<string>();
+  for (const page of body.pages) {
+    if (page.type !== "guided_form") continue;
+    const summary = page.steps.find((step) => step.summary);
+    const data = summary === undefined ? undefined : page.composition.step_content[summary.id];
+    if (data === undefined) continue;
+    for (const [, items] of sourcePageZones(data))
+      for (const item of sourceItemTree(items))
+        if (sourceBlockKey(item) === formContainerBlockKey) aliases.add(item.props.id);
+  }
+  return aliases;
+};
+
 /** Refuse a binding that the current page wiring cannot dispatch. */
 export function applicationFlowBindingPageEventRule(
   source: ApplicationSourceDocument,
 ): DefinitionRuleFailure[] {
   const placed = placedApplicationBlocks(source.body);
+  const summaryForms = summaryFormAliases(source.body);
   return array(object(source.body).flow_bindings).flatMap((binding): DefinitionRuleFailure[] => {
     const control = String(binding.control);
     const event = String(binding.event);
@@ -136,14 +153,22 @@ export function applicationFlowBindingPageEventRule(
     if (placement === undefined) return [];
     const guided = placement.pageType === "guided_form";
     const guidedOnly = event === "form_cancel" || event === "guided_step_changed";
-    if (pageFlowEvents.has(event) && (guided || !guidedOnly)) return [];
+    // A guided step's Continue is its step change; only the summary form's submit runs a flow.
+    const submitsBeforeSummary =
+      guided &&
+      event === "form_submit" &&
+      sourceBlockKey(placement.item) === formContainerBlockKey &&
+      !summaryForms.has(control);
+    if (pageFlowEvents.has(event) && (guided || !guidedOnly) && !submitsBeforeSummary) return [];
     const controlKey = builderKeySchema.safeParse(control);
     const bindingKey = builderKeySchema.safeParse(binding.id);
     return [
       {
         ruleCode: "vortex.definition.application_control_binding",
         family: "unsupported_choice",
-        sentence: `Control ${boundedBindingName(control)} does not raise ${event} on ${guided ? "a guided form" : "a page"}.`,
+        sentence: submitsBeforeSummary
+          ? `Form ${boundedBindingName(control)} is not on the summary step, so it changes step instead of submitting.`
+          : `Control ${boundedBindingName(control)} does not raise ${event} on ${guided ? "a guided form" : "a page"}.`,
         location: {
           documentKind: "application",
           documentKey: source.key,

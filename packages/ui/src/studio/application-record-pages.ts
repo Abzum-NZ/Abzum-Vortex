@@ -1083,7 +1083,13 @@ const formFields = (
 };
 
 /** The Save flow of a form: the default Save, then opening the saved record's detail or the list. */
-const saveFlow = (plan: Plan, resolved: Resolved, mode: "create" | "update", form: string) => {
+const saveFlow = (
+  plan: Plan,
+  resolved: Resolved,
+  mode: "create" | "update",
+  form: string,
+  guidedDraft?: true,
+) => {
   const found = companions(plan.source, resolved.qualified);
   const next = found.detail ?? found.list[0];
   const after: DefaultFlowAfter =
@@ -1104,6 +1110,7 @@ const saveFlow = (plan: Plan, resolved: Resolved, mode: "create" | "update", for
       "none" | "organization_account" | "group" | "inherited",
     form,
     after,
+    ...(guidedDraft === undefined ? {} : { guidedDraft }),
   });
 };
 
@@ -1376,37 +1383,57 @@ const addGuided = (
   plan.details.push("The last step, Check and save, shows the answers with a Save button.");
   const flowName = `Save new ${lowerFirst(record.name)}`;
   const summary = forms.at(-1)!.formAlias;
-  const save = saveFlow(plan, resolved, "create", summary);
-  const bindingInputs = Object.fromEntries(
-    Object.keys(save.inputs).map((input) => [input, { kind: "caller" as const, name: input }]),
-  );
+  const save = saveFlow(plan, resolved, "create", summary, true);
   bindDefault(
     plan,
     summary,
     "form_submit",
     {
       ...save,
-      description: `Saves a new ${lowerFirst(record.name)} from ${quoted(name)}.`,
+      description: `Saves a new ${lowerFirst(record.name)} from ${quoted(name)}, once, then removes the draft.`,
     },
     flowName,
   );
-  const flowKey = plan.source.body.flow_bindings.find(
-    (binding) => binding.control === summary,
-  )!.flow;
-  for (const form of forms.slice(0, -1))
+  for (const [index, form] of forms.slice(0, -1).entries())
+    flowCreate(
+      plan,
+      {
+        kind: "action",
+        controlAlias: form.formAlias,
+        name: `${name}: ${steps[index]!.name.toLowerCase()}`.slice(0, 100),
+        recordType: null,
+        event: "guided_step_changed",
+      },
+      `The step change of ${quoted(steps[index]!.name)}`,
+    );
+  const cancel = flowCreate(
+    plan,
+    {
+      kind: "action",
+      controlAlias: forms[0]!.formAlias,
+      name: `Cancel ${name}`.slice(0, 100),
+      recordType: null,
+      event: "form_cancel",
+    },
+    `The cancel of ${quoted(name)}`,
+  );
+  for (const form of forms.slice(1))
     flowCreate(
       plan,
       {
         kind: "bind",
         controlAlias: form.formAlias,
-        event: "form_submit",
-        flowKey,
-        bindingInputs,
+        event: "form_cancel",
+        flowKey: cancel.flowKey,
+        bindingInputs: {
+          draft_id: { kind: "caller", name: "draft_id" },
+          revision: { kind: "caller", name: "revision" },
+        },
       },
-      `The binding of ${quoted(name)}`,
+      `The cancel of ${quoted(name)}`,
     );
   plan.details.push(
-    `Every step's form is bound to the flow ${quoted(flowName)}, which saves once, on Check and save.`,
+    `Each step saves its answers to the person's own draft and opens the next step; Check and save runs ${quoted(flowName)}, which saves once and removes the draft. Cancel removes the draft.`,
   );
   linkFormBack(context, plan, resolved, placedPage.page, "create");
   return placedPage.page;
