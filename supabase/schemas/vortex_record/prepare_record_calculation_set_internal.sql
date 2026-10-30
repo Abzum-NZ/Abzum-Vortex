@@ -25,6 +25,7 @@ declare
   meta jsonb;
   projection_records jsonb := '[]'::jsonb;
   preview_installation jsonb;
+  lifecycle jsonb;
 begin
   if not vortex_record.record_change_set_is_valid_internal(p_subjects) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
@@ -36,6 +37,13 @@ begin
   end if;
   catalogue := case when preview_installation is null
     then vortex_record.relationship_total_catalogue_internal() else '{}'::jsonb end;
+  lifecycle := vortex_record.prepare_record_lifecycle_set_internal(p_subjects);
+  if lifecycle ->> 'outcome' is distinct from 'prepared' then return lifecycle; end if;
+  catalogue := catalogue || pg_catalog.jsonb_build_object('proposedRecords', lifecycle -> 'snapshots');
+  roots := lifecycle -> 'roots';
+  subjects := lifecycle -> 'subjects';
+  select coalesce(pg_catalog.array_agg(item.value ->> 'recordKey'), array[]::text[]) into root_keys
+  from pg_catalog.jsonb_array_elements(subjects) as item(value);
   -- Authorize every explicit source before reading or locking its dependencies.
   -- A null expected revision is the existing loader's non-locking read mode.
   for subject, subject_index in
@@ -43,9 +51,7 @@ begin
     from pg_catalog.jsonb_array_elements(p_subjects) with ordinality as item(value, ordinality)
   loop
     if subject ->> 'operation' not in ('create', 'update') then
-      return pg_catalog.jsonb_build_object(
-        'outcome', 'refused', 'index', subject_index, 'reasonCode', 'operation_unavailable'
-      );
+      continue;
     end if;
     meta := vortex_record.resolve_record_action_context_internal(
       (subject ->> 'recordTypeId')::uuid, subject ->> 'operation'
@@ -140,6 +146,7 @@ begin
     select item.value, (item.ordinality - 1)::integer
     from pg_catalog.jsonb_array_elements(p_subjects) with ordinality as item(value, ordinality)
   loop
+    if subject ->> 'operation' not in ('create', 'update') then continue; end if;
     prepared := vortex_record.prepare_record_values_internal(
       subject ->> 'operation', (subject ->> 'recordTypeId')::uuid, (subject ->> 'recordId')::uuid,
       (subject ->> 'expectedConcurrencyNumber')::bigint, subject -> 'submittedValues',
@@ -159,14 +166,28 @@ begin
   )), '[]'::jsonb) into proposals
   from pg_catalog.jsonb_array_elements(roots) as root(value)
   join pg_catalog.jsonb_array_elements(after_closure -> 'records') as record(value)
-    on root.value -> 'recordKey' = record.value -> 'recordKey';
+    on root.value -> 'recordKey' = record.value -> 'recordKey'
+  where not exists (select 1 from pg_catalog.jsonb_array_elements(lifecycle -> 'proposals') as changed(value)
+    where changed.value -> 'recordKey' = root.value -> 'recordKey');
+  proposals := proposals || (lifecycle -> 'proposals');
+  -- Restored records calculate from the recovered values, while their rule
+  -- execution retains the stored deleted snapshot supplied in lifecycleChanges.
+  select pg_catalog.jsonb_agg(case when changed.value ->> 'operation' = 'restore'
+      then item.value || pg_catalog.jsonb_build_object('existingValues', changed.value -> 'proposedValues')
+      else item.value end order by item.value ->> 'recordKey') into prepared
+  from pg_catalog.jsonb_array_elements(after_closure -> 'records') as item(value)
+  left join pg_catalog.jsonb_array_elements(lifecycle -> 'changes') as changed(value)
+    on changed.value -> 'recordKey' = item.value -> 'recordKey';
   graph := vortex_record.prepare_record_calculation_graph_internal(
-    catalogue, after_closure -> 'records', proposals, root_keys
+    catalogue, coalesce(prepared, '[]'::jsonb), proposals, root_keys
   );
   if graph ->> 'outcome' is distinct from 'prepared' then return graph; end if;
   return graph || pg_catalog.jsonb_build_object(
     'records', (graph -> 'records') || projection_records,
-    'subjects', subjects, 'correlationId', context_value -> 'correlationId',
+    'subjects', (select pg_catalog.jsonb_agg(item.value order by (item.value ->> 'index')::integer)
+      from pg_catalog.jsonb_array_elements(subjects) as item(value)),
+    'lifecycleChanges', lifecycle -> 'changes', 'lifecycleProposals', lifecycle -> 'proposals',
+    'correlationId', context_value -> 'correlationId',
     'preview', preview_installation is not null,
     'readableFieldIds', '[]'::jsonb,
     'recordCount', (after_closure ->> 'recordCount')::integer + pg_catalog.jsonb_array_length(projection_records)
@@ -177,4 +198,4 @@ alter function vortex_record.prepare_record_calculation_set_internal(jsonb) owne
 revoke all on function vortex_record.prepare_record_calculation_set_internal(jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_record.prepare_record_calculation_set_internal(jsonb) is
-  'Private create/update set calculation preflight: authorizes roots, locks their complete dependency union in concrete identity order, repeats current authority and revisions, and returns one rule and total graph.';
+  'Private record-set calculation preflight: authorizes roots and lifecycle closures, locks their complete dependency union, repeats current authority and revisions, and returns one rule and total graph for all four intents.';

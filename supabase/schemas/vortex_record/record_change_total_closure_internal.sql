@@ -20,6 +20,9 @@ declare
   record_key text;
   source_key text;
   target_key text;
+  group_key text;
+  group_records jsonb := '{}'::jsonb;
+  group_record_map jsonb;
 begin
   if pg_catalog.jsonb_typeof(p_roots) is distinct from 'array' then
     raise exception using errcode = '22023', message = 'Record calculation roots are invalid';
@@ -68,6 +71,22 @@ begin
         else coalesce(identity_keys ->> (record_value ->> 'recordKey'), record_value ->> 'recordKey') end;
       record_map := record_map || pg_catalog.jsonb_build_object(record_key,
         record_value || pg_catalog.jsonb_build_object('recordKey', record_key));
+      -- A lifecycle root can seed several changed descendants. Its bound is
+      -- over their combined transitive closure, not separately per descendant.
+      for group_key in select item.value from pg_catalog.jsonb_array_elements_text(
+        coalesce(root_value -> 'groupKeys', pg_catalog.jsonb_build_array(root_key))
+      ) as item(value)
+      loop
+        group_record_map := coalesce(group_records -> group_key, '{}'::jsonb)
+          || pg_catalog.jsonb_build_object(record_key, true);
+        if (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(group_record_map)) > 256 then
+          return pg_catalog.jsonb_build_object(
+            'outcome', 'refused', 'reasonCode', 'record_change_too_large',
+            'message', 'This change affects too many related records. Save fewer rows.', 'closureLimit', 256
+          );
+        end if;
+        group_records := group_records || pg_catalog.jsonb_build_object(group_key, group_record_map);
+      end loop;
     end loop;
     if (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(record_map)) > 1000 then
       return pg_catalog.jsonb_build_object(
