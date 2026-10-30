@@ -141,6 +141,17 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
     const pageKey = String(formData.get("pageKey") ?? "");
     const offeredReleaseRevision = Number(formData.get("targetReleaseRevision"));
     const expectedActiveReleaseRevision = Number(formData.get("expectedActiveReleaseRevision"));
+    // Posted parameters only reconstruct the destination URL; loading it authorizes the subject.
+    const postedParameters = formData.get("pageParameters");
+    if (
+      postedParameters !== null &&
+      (typeof postedParameters !== "string" || postedParameters.length > 8_192)
+    )
+      throw new Error("APPLICATION_ADOPTION_PAGE_ADDRESS_INVALID");
+    const pageParameters = new URLSearchParams(
+      typeof postedParameters === "string" ? postedParameters : "",
+    );
+    pageParameters.delete("adoption");
 
     const rechecked = await resolveApplicationAddress(
       currentIdentity.session,
@@ -186,12 +197,20 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
     }
     // A refusal, a stale revision or a failed preparation changes nothing; the page keeps showing
     // the prior release. Only a committed switch revalidates the address.
-    if (refused)
-      redirect(
-        `${back}?adoption=${multiFactorRequired ? "multi_factor_required" : recentAuthenticationRequired ? "recent_authentication_required" : "refused"}`,
+    if (refused) {
+      pageParameters.set(
+        "adoption",
+        multiFactorRequired
+          ? "multi_factor_required"
+          : recentAuthenticationRequired
+            ? "recent_authentication_required"
+            : "refused",
       );
+      redirect(`${back}?${pageParameters.toString()}`);
+    }
     revalidatePath(back);
-    redirect(`${back}?adoption=adopted`);
+    pageParameters.set("adoption", "adopted");
+    redirect(`${back}?${pageParameters.toString()}`);
   }
 
   if (identity.kind === "temporarily_unavailable")
