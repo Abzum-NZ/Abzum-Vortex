@@ -657,7 +657,7 @@ const coordinatorFor = (
     transaction: RequestDatabaseTransaction,
     scope: SelectedOrganizationScope,
   ) => Promise<void>,
-  afterActivation?: ReceiptStep,
+  completeReceipt?: ReceiptStep,
 ) => {
   let started = false;
   const runInstallerRequest = async <Result>(
@@ -698,9 +698,10 @@ const coordinatorFor = (
           await readInstallationOrdinaryRoot(transaction, selector.rootId);
           await currentInstallationStateForCoordinator(transaction, selector, baseline, context);
           if (beforeRegistration !== undefined) await beforeRegistration(transaction, scope);
-          const value = await operation(transaction, scope, issuedAt);
-          if (afterActivation !== undefined) await afterActivation(transaction);
-          return value;
+          // The receipt completes before the activation, which changes the access version the
+          // completion checks; a failed activation rolls both back.
+          if (completeReceipt !== undefined) await completeReceipt(transaction);
+          return await operation(transaction, scope, issuedAt);
         } catch (error) {
           callbackFailure = error;
           throw error;
@@ -797,7 +798,7 @@ export const activateUpgradeRelease = async (
     transaction: RequestDatabaseTransaction,
     scope: SelectedOrganizationScope,
   ) => Promise<void>,
-  afterActivation?: ReceiptStep,
+  completeReceipt?: ReceiptStep,
 ): Promise<UpgradeActivation> => {
   const priorRevision = state.active.applicationReleaseRevision;
   const result = await coordinatorFor(
@@ -805,7 +806,7 @@ export const activateUpgradeRelease = async (
     selector,
     state,
     beforeRegistration,
-    afterActivation,
+    completeReceipt,
   ).activate(session, {
     organizationId: state.active.organizationId,
     applicationRootId: selector.rootId,

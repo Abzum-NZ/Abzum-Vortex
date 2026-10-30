@@ -730,8 +730,13 @@ const startFlowInternal = async <Value>(
             const rows = await transaction.query`select vortex_record.flow_segment_receipt(${pending.commandId}::uuid, true) as result`;
             const claim = claimSchema.parse(rows[0]?.result);
             if (claim.status === "pending" && pending.replay === undefined) {
-              await recordSegmentEffects(transaction, pending.runId, pending.commandId, executed);
-              recorded = true;
+              // A workflow that did not reach its target (a refusal, a conflict) leaves its
+              // receipt pending, so a retry of the same command resumes toward the target.
+              recorded = Object.values(executed.effects).every(
+                (effect) => effect.outcome === "committed" || effect.outcome === "completed",
+              );
+              if (recorded)
+                await recordSegmentEffects(transaction, pending.runId, pending.commandId, executed);
             } else if (claim.status !== "completed") return "refused" as const;
             else recorded = pending.replay === undefined;
           } else recorded = true;

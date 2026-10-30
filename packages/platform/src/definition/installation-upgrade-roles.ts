@@ -185,7 +185,7 @@ export const upgradeWithRoleChanges = async (
     { selector, releaseSet: state.selectedReleaseSet, state: "active_exact", latest },
     complete === undefined
       ? undefined
-      : { write: "accept_roles", step: (transaction) => complete(transaction) },
+      : { write: "accept_roles", step: { complete: (transaction) => complete(transaction) } },
   );
   const result = await acceptApplicationRoleChanges(
     { ...environment, accessAdministration },
@@ -287,7 +287,7 @@ export const resumeUpgradeRoleChanges = async (
     { selector, releaseSet: state.selectedReleaseSet, state: "active_exact", latest },
     complete === undefined
       ? undefined
-      : { write: "accept_roles", step: (transaction) => complete(transaction) },
+      : { write: "accept_roles", step: { complete: (transaction) => complete(transaction) } },
   );
   const result = await acceptApplicationRoleChanges(
     { ...environment, accessAdministration },

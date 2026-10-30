@@ -260,6 +260,12 @@ export const removeApplication = async (
                 environment.permissions,
                 operation,
               );
+              // The withdrawal is the removal's target: its receipt completes in this transaction,
+              // before the withdrawal changes the access version the completion checks.
+              if (receipt !== undefined)
+                await receipt(transaction, {
+                  application_name: current.releaseSet.application.content.name,
+                });
               const value = await callback(transaction, scope, issuedAt);
               const completedAt = await readInstallationDatabaseTime(transaction);
               if (
@@ -270,11 +276,6 @@ export const removeApplication = async (
                 )
               )
                 throw new DefinitionError("APPLICATION_INSTALLATION_REFUSED");
-              // The withdrawal is the removal's target: its receipt completes with it.
-              if (receipt !== undefined)
-                await receipt(transaction, {
-                  application_name: current.releaseSet.application.content.name,
-                });
               return value;
             } catch (error) {
               failure = error;

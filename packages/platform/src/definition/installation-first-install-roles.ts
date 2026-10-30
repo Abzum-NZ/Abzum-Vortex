@@ -111,12 +111,25 @@ type AssignedMemberRole = Readonly<{
   assignee: Readonly<{ kind: string; organizationAccountId?: string }>;
 }>;
 
-/** What runs in the target-proving transaction after its write succeeded. */
-type TargetFinish<Value> = (
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
-  written: Extract<HumanOrganizationRequestResult<Value>, { kind: "available" }>,
-) => Promise<void>;
+/**
+ * What a target-proving transaction does for the journey's receipt. `complete` runs before the
+ * write, because completing checks the request's access version and the write changes it;
+ * `verify` checks the written result and, like a refused write, rolls the transaction back.
+ */
+type TargetFinish<Value> = Readonly<{
+  complete: (
+    transaction: RequestDatabaseTransaction,
+    scope: SelectedOrganizationScope,
+  ) => Promise<void>;
+  verify?: (written: Extract<HumanOrganizationRequestResult<Value>, { kind: "available" }>) => void;
+}>;
+
+/** A write that returned a refusal inside a transaction that had already completed the receipt. */
+class WriteDeclined<Value> extends Error {
+  constructor(readonly result: HumanOrganizationRequestResult<Value>) {
+    super("INSTALLATION_WRITE_DECLINED");
+  }
+}
 
 type InstallationTarget = Readonly<{
   selector: FirstInstallSelector;
@@ -127,8 +140,8 @@ type InstallationTarget = Readonly<{
 
 /**
  * Runs `operation` in one exclusive Access transaction that first proves the installation is still
- * exactly the target. When `finish` is given it runs in the same transaction after a successful
- * operation, so what it completes commits with the write.
+ * exactly the target. When `finish` is given the journey's receipt completes in the same
+ * transaction, so it commits with the write and never without it.
  */
 const inInstallationTarget = async <Value>(
   environment: FirstInstallFlowEnvironment,
@@ -162,6 +175,7 @@ const inInstallationTarget = async <Value>(
           installationProblem("installation_role_target_changed", "conflict");
         if (target.latest !== undefined)
           await firstInstallLatestReleaseMatches(transaction, target.selector, target.latest);
+        if (finish !== undefined) await finish.complete(transaction, scope);
         const written = await operation(
           environment.bindAccessAdministration({
             transaction,
@@ -172,8 +186,10 @@ const inInstallationTarget = async <Value>(
             mode: "access_change",
           }),
         );
-        if (written.kind === "available" && finish !== undefined)
-          await finish(transaction, scope, written);
+        if (finish !== undefined) {
+          if (written.kind !== "available") throw new WriteDeclined(written);
+          finish.verify?.(written);
+        }
         return written;
       } catch (error) {
         failure = error;
@@ -181,6 +197,8 @@ const inInstallationTarget = async <Value>(
       }
     },
   );
+  if (failure instanceof WriteDeclined)
+    return failure.result as HumanOrganizationRequestResult<Value>;
   if (failure !== undefined) throw failure;
   return result.kind === "available" ? result.value : result;
 };
@@ -206,7 +224,7 @@ export const completeAtInstallationTarget = async (
     session,
     selection,
     async () => ({ kind: "available", value: undefined }),
-    (transaction, scope) => finish(transaction, scope),
+    { complete: finish },
   );
   if (result.kind !== "available")
     installationProblem("installation_receipt_not_completed", "temporarily_unavailable");
@@ -290,10 +308,12 @@ const applyFirstInstallRoles = async (
     complete !== undefined && choice.kind === "accept" && !deferAssignment
       ? {
           write: "assign_role",
-          step: async (transaction, _scope, written) => {
-            const value: unknown = written.value;
-            proof.verify?.(isRecord(value) ? value.assignment : undefined);
-            await complete(transaction);
+          step: {
+            complete: (transaction) => complete(transaction),
+            verify: (written) => {
+              const value: unknown = written.value;
+              proof.verify?.(isRecord(value) ? value.assignment : undefined);
+            },
           },
         }
       : undefined,

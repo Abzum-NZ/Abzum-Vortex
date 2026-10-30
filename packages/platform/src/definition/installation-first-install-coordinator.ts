@@ -278,7 +278,7 @@ export const createFirstInstallCoordinator = (
   expected: FirstInstallExpectation,
   expectedReleaseSet: SystemApplicationBoundReleaseSetResult,
   mode: "prepare" | "activate",
-  afterActivation?: ReceiptStep,
+  completeReceipt?: ReceiptStep,
 ) => {
   let step = 0;
   let preparedRegistration: PreparedFirstInstallRegistration | undefined;
@@ -389,6 +389,10 @@ export const createFirstInstallCoordinator = (
             )
               problem("refused");
           }
+          // The activation is the install's last step: its receipt completes in this transaction,
+          // before the activation, which changes the access version the completion checks.
+          if (mode === "activate" && completeReceipt !== undefined)
+            await completeReceipt(transaction);
           const value = await operation(transaction, scope, issuedAt);
           if (currentStep === 0 && mode === "prepare") {
             if (
@@ -453,9 +457,6 @@ export const createFirstInstallCoordinator = (
             )
           )
             problem("refused");
-          // The activation is the install's last step: its receipt completes with it.
-          if (mode === "activate" && afterActivation !== undefined)
-            await afterActivation(transaction);
           return value;
         } catch (error) {
           callbackFailure = error;
