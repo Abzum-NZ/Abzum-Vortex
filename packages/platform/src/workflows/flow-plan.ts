@@ -200,7 +200,9 @@ const operationOf = (flow: FlowDefinition, task: FlowTask) => {
 const setBasedSteps = new Set([
   "record.create",
   "record.set_fields",
+  "record.link",
   "record.delete",
+  "record.restore",
   "record.changes",
 ]);
 

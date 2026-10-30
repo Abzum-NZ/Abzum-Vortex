@@ -50,14 +50,15 @@ begin
   -- Restore has no standard Event contract yet. Every changed lifecycle row
   -- still publishes its revision, including optional links cleared or recovered.
   for storage_value in
-    select distinct effect.record_type_id, effect.record_id, effect.storage_contract_id,
-      storage.storage_scope
+    select effect.record_type_id, effect.record_id, effect.storage_contract_id,
+      storage.storage_scope, pg_catalog.bool_or(effect.effect_kind = 'soft_deleted') as deleted
     from vortex_record.record_lifecycle_command_effects as effect
     join vortex_record.storage_catalogue as storage using (storage_contract_id)
     where effect.organization_id = (context_value ->> 'organizationId')::uuid
       and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
       and effect.actor_organization_account_id = (context_value ->> 'organizationAccountId')::uuid
       and effect.command_id = p_command_id
+    group by effect.record_type_id, effect.record_id, effect.storage_contract_id, storage.storage_scope
   loop
     select (item.value ->> 'concurrencyNumber')::bigint into strict revision_value
     from pg_catalog.jsonb_array_elements(p_written) as item(value)
@@ -69,7 +70,8 @@ begin
         perform vortex_platform.publish_change_notice(
           (context_value ->> 'organizationId')::uuid, (context_value ->> 'applicationRootId')::uuid,
           storage_value.record_type_id, storage_value.record_id, revision_value,
-          'changed', notice_sequence, notice_sequence, (context_value ->> 'correlationId')::uuid
+          case when storage_value.deleted then 'deleted' else 'changed' end,
+          notice_sequence, notice_sequence, (context_value ->> 'correlationId')::uuid
         );
       exception when others then
         raise warning 'Record lifecycle notice failed: [%] %', sqlstate, sqlerrm;
@@ -77,16 +79,19 @@ begin
     end if;
   end loop;
   for storage_value in
-    select distinct effect.storage_contract_id
+    select distinct effect.storage_contract_id, storage.storage_scope
     from vortex_record.record_lifecycle_command_effects as effect
     join vortex_record.storage_catalogue as storage using (storage_contract_id)
     where effect.organization_id = (context_value ->> 'organizationId')::uuid
       and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
       and effect.actor_organization_account_id = (context_value ->> 'organizationAccountId')::uuid
-      and effect.command_id = p_command_id and storage.storage_scope <> 'application_contained'
+      and effect.command_id = p_command_id and (storage.storage_scope <> 'application_contained'
+        or effect.effect_kind in ('optional_cleared', 'links_restored'))
   loop
     perform vortex_record.bump_record_data_version_internal(
-      (context_value ->> 'organizationId')::uuid, storage_value.storage_contract_id, null
+      (context_value ->> 'organizationId')::uuid, storage_value.storage_contract_id,
+      case when storage_value.storage_scope = 'application_contained'
+        then (context_value ->> 'applicationRootId')::uuid else null end
     );
   end loop;
   for plan in select item.value from pg_catalog.jsonb_array_elements(p_preparation -> 'plans') as item(value)

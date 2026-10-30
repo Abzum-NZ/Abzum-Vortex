@@ -20,6 +20,7 @@ import type {
   ViewerSafeRecordPinSelector,
 } from "../records/record-links";
 import type { SaveRecordCommand } from "../records/records";
+import type { RecordChangeIntent, RecordChangesResult } from "../records/apply-record-changes";
 import type {
   FlowDefinition,
   FlowReadFieldsScalarType,
@@ -213,6 +214,11 @@ export type FlowOrchestratorDependencies = Readonly<{
   actionRecords?: NamedActionRecordPort;
   /** Runs Save record tasks; without it a Save record task is unavailable. */
   records?: RecordSaveTaskPort;
+  /** Record intents run only through the admitted segment's transaction. */
+  recordChanges?: Readonly<{
+    apply(commandId: string, intents: readonly RecordChangeIntent[]): Promise<RecordChangesResult>;
+    restoreRevision(recordTypeId: string, recordId: string): Promise<number | undefined>;
+  }>;
   /** Verifies the viewer's read access to a claimed page subject before a protected change. */
   subjects?: FlowSubjectReadPort;
   /** Reads selected fields afresh; its result is never entered into the protected effect ledger. */

@@ -48,6 +48,7 @@ import type { createDatabaseApplicationBoundReleaseSetService } from "./applicat
 import { readPermittedApplicationsAtAddress } from "./application-address";
 import { createFlowCurrentRecordReader } from "./flow-current-record";
 import { createFlowQueryReader } from "./flow-query-reader";
+import { createFlowRecordChangePort } from "./flow-record-changes";
 import { createFlowOrchestrator } from "./flow-orchestrator";
 import type {
   FlowNamedAction,
@@ -503,6 +504,9 @@ export async function invokeInstalledFlow(
         admitFlowContinuation(admissionHost, installation, run, state, execute, openReplay),
       admitPageStart: (run, state) => admitFlowPageStart(admissionHost, installation, run, state),
       executor: executorFor(boundRequest),
+      ...(boundRequest === undefined
+        ? {}
+        : { recordChanges: createFlowRecordChangePort(boundRequest) }),
       records:
         boundRequest === undefined
           ? records

@@ -259,7 +259,7 @@ export const flowTaskRuns = Object.freeze({
   "record.set_fields": server,
   "record.link": nowhere,
   "record.delete": server,
-  "record.restore": nowhere,
+  "record.restore": server,
   "record.changes": server,
   "record.query": server,
   "record.read_fields": server,

@@ -61,6 +61,7 @@ import type {
   NamedActionExecutionResult,
   Run,
 } from "./flow-orchestrator-types";
+import type { RecordChangeIntent } from "../records/apply-record-changes";
 
 /**
  * Runs the protected tasks of one flow run: plans each task, claims its effect in the ledger and
@@ -80,6 +81,7 @@ export const createFlowTaskRunner = (
 
   /** What one protected task will run, decided before its effect is claimed. */
   type TaskPlan =
+    | Readonly<{ kind: "changes"; commandId: string; intents: readonly RecordChangeIntent[] }>
     | Readonly<{ kind: "operation"; entry: PlatformOperation; inputs: Record<string, unknown> }>
     | Readonly<{
         kind: "save";
@@ -149,14 +151,20 @@ export const createFlowTaskRunner = (
         return undefined;
       const result = isRecord(outputs.result) ? outputs.result : undefined;
       const recordId = recordIdSchema.safeParse(
-        plan.kind === "save" || plan.asSave ? outputs.record : result?.recordId,
+        plan.kind === "changes"
+          ? (outputs.record ??
+              ("recordId" in plan.intents[0]! ? plan.intents[0].recordId : undefined))
+          : plan.kind === "save" || plan.asSave
+            ? outputs.record
+            : result?.recordId,
       );
       if (!recordId.success) return undefined;
       const current = await dependencies.currentRecords.read(
         run.authority.session,
         run.authority.selection,
         {
-          recordTypeId: plan.command.recordTypeId,
+          recordTypeId:
+            plan.kind === "changes" ? plan.intents[0]!.recordTypeId : plan.command.recordTypeId,
           recordId: recordId.data,
         },
       );
@@ -261,6 +269,7 @@ export const createFlowTaskRunner = (
     call: FlowProtectedTaskCall,
     recordTypeId: string,
     candidate: unknown,
+    operation?: "restore",
   ): Promise<Readonly<{ recordId: string; revision: number }> | TaskResult> => {
     const recordId = recordIdSchema.safeParse(candidate);
     if (!recordId.success) return { outcome: "validation" };
@@ -271,6 +280,15 @@ export const createFlowTaskRunner = (
         "This workflow can't read the record here.",
         "a protected record revision read",
       );
+    if (operation === "restore") {
+      const current = await dependencies.recordChanges?.restoreRevision(
+        recordTypeId,
+        recordId.data,
+      );
+      return current === undefined
+        ? { outcome: "refused" }
+        : { recordId: recordId.data, revision: current };
+    }
     const read = await dependencies.subjects.read(run.authority.session, run.authority.selection, {
       recordTypeId,
       recordId: recordId.data,
@@ -351,6 +369,43 @@ export const createFlowTaskRunner = (
     call: FlowProtectedTaskCall,
   ): Promise<Readonly<{ plan: TaskPlan }> | TaskResult> => {
     const commandId = effectCommandId(state.runId, call.taskPath, call.iteration);
+
+    if (call.taskType === "record.delete" || call.taskType === "record.restore") {
+      if (dependencies.recordChanges === undefined)
+        return notAvailable(
+          run,
+          call,
+          "This workflow can't change records here.",
+          "the admitted record change port",
+        );
+      const recordTypeId = recordTypeIdSchema.safeParse(call.properties.record_type?.value);
+      if (!recordTypeId.success || !run.release.recordTypes?.has(recordTypeId.data.toLowerCase()))
+        return { outcome: "validation" };
+      const operation = call.taskType === "record.delete" ? "delete" : "restore";
+      const target = await resolveRecordTarget(
+        run,
+        state,
+        call,
+        recordTypeId.data,
+        call.properties.record?.value,
+        operation === "restore" ? "restore" : undefined,
+      );
+      if ("outcome" in target) return target;
+      return {
+        plan: {
+          kind: "changes",
+          commandId,
+          intents: [
+            {
+              operation,
+              recordTypeId: recordTypeId.data,
+              recordId: target.recordId,
+              expectedConcurrencyNumber: target.revision,
+            },
+          ],
+        },
+      };
+    }
 
     if (
       call.taskType === "record.save" ||
@@ -607,6 +662,33 @@ export const createFlowTaskRunner = (
     // Non-person execution contexts stay fail-closed until exact per-task grants are implemented.
     if (run.authority.kind !== "person") return { result: { outcome: "failed" }, stored: {} };
     const { session, selection } = run.authority;
+    if (plan.kind === "changes") {
+      const changed = await dependencies.recordChanges!.apply(plan.commandId, plan.intents);
+      if (changed.kind === "restart") return { result: { outcome: "conflict" }, stored: {} };
+      if (changed.kind === "refused") {
+        const failure = changed.result;
+        return {
+          result: {
+            outcome:
+              failure?.outcome === "refused" ? refusalOutcome(failure.error.code) : "refused",
+            ...(failure?.outcome === "refused" ? ruleRefusalResult(failure.error) : {}),
+          },
+          stored: {},
+        };
+      }
+      for (const [index, result] of changed.results.entries())
+        changedRevisions.set(
+          targetKey(plan.intents[index]!.recordTypeId, result.recordId),
+          result.concurrencyNumber,
+        );
+      const outputs: Record<string, JsonValue> =
+        call.taskType === "record.delete" ? {} : { record: changed.results[0]!.recordId };
+      return {
+        result: { outcome: "committed", outputs },
+        stored: outputs,
+        warnings: changed.warnings,
+      };
+    }
     if (plan.kind === "save") {
       const saved = await dependencies.records!.save(session, selection, plan.command);
       if (saved.kind !== "available")

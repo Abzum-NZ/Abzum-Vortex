@@ -3094,14 +3094,15 @@ begin
   -- Restore has no standard Event contract yet. Every changed lifecycle row
   -- still publishes its revision, including optional links cleared or recovered.
   for storage_value in
-    select distinct effect.record_type_id, effect.record_id, effect.storage_contract_id,
-      storage.storage_scope
+    select effect.record_type_id, effect.record_id, effect.storage_contract_id,
+      storage.storage_scope, pg_catalog.bool_or(effect.effect_kind = 'soft_deleted') as deleted
     from vortex_record.record_lifecycle_command_effects as effect
     join vortex_record.storage_catalogue as storage using (storage_contract_id)
     where effect.organization_id = (context_value ->> 'organizationId')::uuid
       and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
       and effect.actor_organization_account_id = (context_value ->> 'organizationAccountId')::uuid
       and effect.command_id = p_command_id
+    group by effect.record_type_id, effect.record_id, effect.storage_contract_id, storage.storage_scope
   loop
     select (item.value ->> 'concurrencyNumber')::bigint into strict revision_value
     from pg_catalog.jsonb_array_elements(p_written) as item(value)
@@ -3113,7 +3114,8 @@ begin
         perform vortex_platform.publish_change_notice(
           (context_value ->> 'organizationId')::uuid, (context_value ->> 'applicationRootId')::uuid,
           storage_value.record_type_id, storage_value.record_id, revision_value,
-          'changed', notice_sequence, notice_sequence, (context_value ->> 'correlationId')::uuid
+          case when storage_value.deleted then 'deleted' else 'changed' end,
+          notice_sequence, notice_sequence, (context_value ->> 'correlationId')::uuid
         );
       exception when others then
         raise warning 'Record lifecycle notice failed: [%] %', sqlstate, sqlerrm;
@@ -3121,16 +3123,19 @@ begin
     end if;
   end loop;
   for storage_value in
-    select distinct effect.storage_contract_id
+    select distinct effect.storage_contract_id, storage.storage_scope
     from vortex_record.record_lifecycle_command_effects as effect
     join vortex_record.storage_catalogue as storage using (storage_contract_id)
     where effect.organization_id = (context_value ->> 'organizationId')::uuid
       and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
       and effect.actor_organization_account_id = (context_value ->> 'organizationAccountId')::uuid
-      and effect.command_id = p_command_id and storage.storage_scope <> 'application_contained'
+      and effect.command_id = p_command_id and (storage.storage_scope <> 'application_contained'
+        or effect.effect_kind in ('optional_cleared', 'links_restored'))
   loop
     perform vortex_record.bump_record_data_version_internal(
-      (context_value ->> 'organizationId')::uuid, storage_value.storage_contract_id, null
+      (context_value ->> 'organizationId')::uuid, storage_value.storage_contract_id,
+      case when storage_value.storage_scope = 'application_contained'
+        then (context_value ->> 'applicationRootId')::uuid else null end
     );
   end loop;
   for plan in select item.value from pg_catalog.jsonb_array_elements(p_preparation -> 'plans') as item(value)
@@ -9775,5 +9780,47 @@ drop function vortex_record.prepare_base_record_save(uuid,text,uuid,uuid,bigint,
 drop function vortex_record.prepare_relationship_total_save(uuid,text,uuid,uuid,bigint,jsonb,uuid,uuid);
 drop function vortex_record.apply_settings_record_changes(uuid,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid);
 drop function vortex_record.apply_settings_record_changes_internal(uuid,uuid,uuid,bigint,jsonb,jsonb,uuid,uuid);
+
+create or replace function vortex_record.prepare_record_restore_target(p_record_type_id uuid, p_record_id uuid)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  loaded jsonb;
+  prepared jsonb;
+begin
+  perform vortex_access.validated_human_request_context();
+  if vortex_record.read_current_preview_installation_internal() is not null then
+    return pg_catalog.jsonb_build_object('outcome', 'unavailable');
+  end if;
+  loaded := vortex_record.load_record_access_facts_internal(
+    p_record_type_id, 'restore', p_record_id, null, null
+  );
+  if loaded ->> 'outcome' is distinct from 'loaded' then
+    return pg_catalog.jsonb_build_object('outcome', 'unavailable');
+  end if;
+  -- A retained record has no ordinary page projection. Reveal only its current
+  -- revision, and only after the existing exact closure authority check passes.
+  prepared := vortex_record.prepare_record_restore_closure_internal(
+    p_record_type_id, p_record_id, (loaded ->> 'concurrencyNumber')::bigint
+  );
+  if prepared ->> 'outcome' is distinct from 'prepared' then
+    return pg_catalog.jsonb_build_object('outcome', 'unavailable');
+  end if;
+  return pg_catalog.jsonb_build_object('outcome', 'allowed', 'concurrencyNumber', loaded -> 'concurrencyNumber');
+exception when no_data_found or insufficient_privilege or check_violation then
+  raise warning 'Restore target unavailable: [%] %', sqlstate, sqlerrm;
+  return pg_catalog.jsonb_build_object('outcome', 'unavailable');
+end
+$function$;
+alter function vortex_record.prepare_record_restore_target(uuid,uuid) owner to vortex_record_adapter;
+revoke all on function vortex_record.prepare_record_restore_target(uuid,uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.prepare_record_restore_target(uuid,uuid) to vortex_request;
+comment on function vortex_record.prepare_record_restore_target(uuid,uuid) is
+  'Protected retained-record revision lookup for a restore step: current exact closure authority is required, no stored field values are exposed and no records are written.';
 
 reset role;
