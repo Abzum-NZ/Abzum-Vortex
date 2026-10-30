@@ -1,5 +1,7 @@
 import "server-only";
 
+export { createBackendRunHistoryReader } from "./backend-run-history";
+
 export {
   createHumanApplicationDraftWriter,
   type HumanApplicationDraftWriterDependencies,
