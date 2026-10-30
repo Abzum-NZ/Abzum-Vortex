@@ -26,8 +26,6 @@ const notRunSentences: Readonly<Record<NonNullable<Step["notRun"]>, string>> = {
   scope_lock: "Not run in a test run: this step locks the account it changes.",
   external_effect: "Not run in a test run: this step sends or calls out, so nothing was sent.",
   needs_a_person: "Not run in a test run: this step waits for a person to answer.",
-  action_event:
-    "Not run in a test run: this subscriber follows an event that a named action announces.",
 };
 
 const failureSentences: Readonly<
