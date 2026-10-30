@@ -125,7 +125,14 @@ export const runFlowSegment = async (
         if (executed.warnings.length > 0) warnings[key] = executed.warnings;
       }
     }
-    step = resumeFlowRun(step.state, result, run.library, undefined, segment, receipt?.effects);
+    step = resumeFlowRun(
+      step.state,
+      result,
+      run.library,
+      dependencies.trace?.observer,
+      segment,
+      receipt?.effects,
+    );
   }
   const failure =
     (step.kind === "finished" || step.kind === "boundary") && step.result?.status === "failed"
@@ -156,7 +163,14 @@ export const runFlowSegmentFromBoundary = async (
     refusalLoggedTaskIds: [...run.refusalLoggedTaskIds],
     sensitive: [...run.sensitive],
   };
-  const first = continueFlowRun(state, attempt.library, segment, receipt?.effects);
+  const first = continueFlowRun(
+    state,
+    attempt.library,
+    segment,
+    receipt?.effects,
+    undefined,
+    dependencies.trace?.observer,
+  );
   const executed = await runFlowSegment(
     dependencies,
     runNamedAction,

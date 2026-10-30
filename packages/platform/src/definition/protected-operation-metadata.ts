@@ -6,6 +6,8 @@ type ProtectedOperationMetadata = Readonly<{
   transaction: "read" | "change" | "access_change";
   workflow: "single" | "multi_transaction";
   preScopeLock?: "organization_account";
+  /** The operation sends or calls out beyond the database, so a test run does not run it. */
+  externalEffect?: true;
 }>;
 
 /** Execution properties shared by the plan compiler and each registered runner. */
@@ -32,6 +34,7 @@ export const protectedOperationMetadata: Record<
     authorityKind: "permission",
     transaction: "change",
     workflow: "single",
+    externalEffect: true,
   },
   create_group: { authorityKind: "permission", transaction: "access_change", workflow: "single" },
   create_tenant_organization: {

@@ -80,6 +80,7 @@ export const continueFlowRun = (
   segment?: FlowServerSegment,
   replay?: FlowSegmentReplay,
   boundaryBefore?: ReadonlySet<string>,
+  observer?: FlowTaskTraceObserver,
 ) =>
   continueCore(
     previous,
@@ -89,6 +90,7 @@ export const continueFlowRun = (
     segment,
     replay,
     boundaryBefore,
+    observer,
   );
 
 export const evaluateFlowValue = (
