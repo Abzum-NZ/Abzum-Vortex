@@ -25,6 +25,7 @@ const serverStepRunners = {
   "record.read_fields": "protected_task",
   "record.pin_identity": "protected_task",
   "operation.call": "protected_task",
+  "backend.run": "protected_task",
   "record.create": "protected_task",
   "record.set_fields": "protected_task",
   "record.delete": "protected_task",

@@ -159,10 +159,7 @@ const callCodes = {
     "vortex.definition.workflow_child_reference",
     "invalid_value",
   ],
-  background_calls_non_background: [
-    "vortex.definition.workflow_child_reference",
-    "invalid_value",
-  ],
+  background_calls_non_background: ["vortex.definition.workflow_child_reference", "invalid_value"],
   run_after_target: ["vortex.definition.workflow_child_reference", "invalid_value"],
   run_after_cycle: ["vortex.definition.workflow_child_acyclic", "dependency_cycle"],
 } as const satisfies Record<

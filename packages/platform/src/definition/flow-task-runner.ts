@@ -3,6 +3,7 @@ import type { IdentitySession, OrganizationSelectionCandidate } from "../access/
 import { jsonValueSchema, type JsonValue } from "../catalogue/common";
 import {
   builderKeySchema,
+  flowIdSchema,
   groupIdSchema,
   queryIdSchema,
   recordIdSchema,
@@ -100,6 +101,13 @@ export const createFlowTaskRunner = (
         fieldKeys: ReadonlyMap<string, string>;
       }>
     | Readonly<{
+        kind: "backend";
+        flowId: string;
+        mode: "await" | "start";
+        inputs: Readonly<Record<string, JsonValue>>;
+        commandId: string;
+      }>
+    | Readonly<{
         kind: "action";
         command: ExecuteNamedActionCommand;
         /** The action stands in for a Save record task, so it reports the saved record like one. */
@@ -156,7 +164,8 @@ export const createFlowTaskRunner = (
         if (
           run.authority.kind !== "person" ||
           dependencies.currentRecords === undefined ||
-          plan.kind === "operation"
+          plan.kind === "operation" ||
+          plan.kind === "backend"
         )
           return undefined;
         const result = isRecord(outputs.result) ? outputs.result : undefined;
@@ -650,6 +659,37 @@ export const createFlowTaskRunner = (
         : { outcome: "validation" };
     }
 
+    if (call.taskType === "backend.run") {
+      if (dependencies.backend === undefined)
+        return notAvailable(
+          run,
+          call,
+          "This workflow can't run on the back end here.",
+          "the back-end adapter",
+        );
+      const flowId = flowIdSchema.safeParse(call.properties.flow?.value);
+      const mode = z.enum(["await", "start"]).safeParse(call.properties.mode?.value);
+      const inputs = z
+        .record(z.string(), jsonValueSchema)
+        .safeParse(call.properties.inputs?.value ?? {});
+      if (
+        !flowId.success ||
+        !mode.success ||
+        !inputs.success ||
+        carriesSensitive(inputs.data, run.sensitive)
+      )
+        return { outcome: "validation" };
+      return {
+        plan: {
+          kind: "backend",
+          flowId: flowId.data,
+          mode: mode.data,
+          inputs: inputs.data,
+          commandId,
+        },
+      };
+    }
+
     if (call.taskType !== "operation.call")
       return notAvailable(
         run,
@@ -771,8 +811,6 @@ export const createFlowTaskRunner = (
     stored: Record<string, JsonValue>;
     warnings?: readonly BeforeSaveRuleWarning[] | undefined;
   }> => {
-    // Non-person execution contexts stay fail-closed until exact per-task grants are implemented.
-    if (run.authority.kind !== "person") return { result: { outcome: "failed" }, stored: {} };
     const { session, selection } = run.authority;
     if (plan.kind === "changes") {
       if (plan.intents.length === 0) {
@@ -878,6 +916,50 @@ export const createFlowTaskRunner = (
           ...ruleRefusalResult(value.error),
         },
         stored: {},
+      };
+    }
+
+    if (plan.kind === "backend") {
+      const actorId =
+        run.authority.kind === "actor"
+          ? run.authority.actorId
+          : await dependencies.resolveActor?.(session, selection);
+      if (
+        actorId === undefined ||
+        dependencies.backend === undefined ||
+        selection.applicationRootId === undefined
+      )
+        return { result: { outcome: "failed" }, stored: {} };
+      const started = await dependencies.backend.run({
+        organizationId: selection.organizationId,
+        applicationRootId: selection.applicationRootId,
+        actorId,
+        flowId: plan.flowId,
+        origin: "backend_run",
+        sourceKey: plan.commandId,
+        mode: plan.mode,
+        inputs: plan.inputs,
+      });
+      if (started.kind === "unavailable") return { result: { outcome: "uncertain" }, stored: {} };
+      if (started.kind === "not_finished") {
+        console.error(
+          `[flows] back-end run ${started.backendRunId} of task ${call.taskId} ${started.state}: ${started.failureCode}`,
+        );
+        return {
+          result: { outcome: started.state === "refused" ? "refused" : "failed" },
+          stored: {},
+        };
+      }
+      const outputs: Record<string, JsonValue> =
+        started.kind === "finished"
+          ? { run: started.backendRunId, outputs: started.outputs }
+          : { run: started.backendRunId };
+      return {
+        result: {
+          outcome: started.kind === "finished" ? "completed" : "background_pending",
+          outputs,
+        },
+        stored: outputs,
       };
     }
 
@@ -1065,7 +1147,10 @@ export const createFlowTaskRunner = (
       }
     }
 
-    const principal: FlowEffectPrincipal = { kind: "person", id: run.authority.session.identityId };
+    const principal: FlowEffectPrincipal =
+      run.authority.kind === "person"
+        ? { kind: "person", id: run.authority.session.identityId }
+        : { kind: "system", id: run.authority.actorId };
     const organizationId = run.authority.selection.organizationId;
     const planned = await planTask(run, state, call);
     if (!("plan" in planned)) return planned;
