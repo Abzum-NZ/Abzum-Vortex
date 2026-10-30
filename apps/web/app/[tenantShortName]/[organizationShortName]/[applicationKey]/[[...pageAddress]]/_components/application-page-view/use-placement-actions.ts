@@ -92,6 +92,9 @@ export function usePlacementActions({
     ) => {
       const callerInputs = { ...supplied };
       for (const selectedReadInput of binding.selectedReadInputs ?? []) {
+        // A link field already supplies its selected record reference. The server checks its
+        // exact type against the installed read projection before accepting it.
+        if (binding.event === "field_changed") continue;
         delete callerInputs[selectedReadInput.callerInputName];
         if (
           binding.recordTypeId === undefined ||
