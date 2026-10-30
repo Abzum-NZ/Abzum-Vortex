@@ -11,7 +11,7 @@ export const noticeAlertVariant = {
   info: "info",
   success: "success",
   warning: "warning",
-  error: "critical",
+  error: "destructive",
 } as const satisfies Record<NoticeSeverity, string>;
 
 /** A text value or link is represented as data; notice content is never interpreted as markup. */
@@ -27,6 +27,8 @@ export interface NoticeProps {
   content: NoticeContent;
   title?: string;
   dismissible?: boolean;
+  onDismiss?: () => void;
+  action?: Readonly<{ label: string; run: () => void }>;
 }
 
 const NOTICE_BASE_ORIGIN = "https://vortex.invalid";
@@ -97,6 +99,8 @@ export function Notice({
   content,
   title,
   dismissible = false,
+  onDismiss,
+  action,
 }: NoticeProps): ReactElement | null {
   const [dismissed, setDismissed] = useState(false);
   if (dismissed) return null;
@@ -120,17 +124,27 @@ export function Notice({
             <p className="m-0">{renderNoticeContent(content)}</p>
           </AlertDescription>
         </div>
-        {dismissible ? (
+        {dismissible || action !== undefined ? (
           <AlertAction>
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              aria-label="Dismiss notice"
-              onClick={() => setDismissed(true)}
-            >
-              Dismiss
-            </Button>
+            {action === undefined ? null : (
+              <Button type="button" variant="ghost" size="xs" onClick={action.run}>
+                {action.label}
+              </Button>
+            )}
+            {dismissible ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                aria-label="Dismiss notice"
+                onClick={() => {
+                  if (onDismiss === undefined) setDismissed(true);
+                  else onDismiss();
+                }}
+              >
+                Dismiss
+              </Button>
+            ) : null}
           </AlertAction>
         ) : null}
       </Alert>

@@ -12,6 +12,7 @@ import type { FlowInvokeClient, FlowSubjectContext } from "./server-flow-client"
 import { startFlowEventCycle, type FlowEventCycle } from "./flow-cycle";
 import type { TypedFieldValue } from "../controls/projected-data";
 import { createPageValueSlots } from "./page-values";
+import { createPageMessages } from "./messages";
 
 export type FlowRuntimeOptions = Readonly<{
   client: FlowInvokeClient;
@@ -57,6 +58,7 @@ export function createFlowRuntimeState(declarations: NonNullable<PageDefinition[
   >();
   const notify = (controlId: string) => listeners.get(controlId)?.forEach((listener) => listener());
   const pageValues = createPageValueSlots(declarations, (key) => notify(`page:${key}`));
+  const messages = createPageMessages((key) => notify(`message:${key}`));
   const changeRunning = (controlId: string, amount: number) => {
     const before = running.get(controlId) ?? 0;
     const after = before + amount;
@@ -67,6 +69,7 @@ export function createFlowRuntimeState(declarations: NonNullable<PageDefinition[
   const abandoned: ServerDrivenResult = { kind: "abandoned", unanswered: true };
   return {
     pageValues,
+    messages,
     isRunning: (controlId: string) => (running.get(controlId) ?? 0) > 0,
     registerForm: (
       formId: string,

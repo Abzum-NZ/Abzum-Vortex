@@ -390,6 +390,7 @@ export function useFlowRuntime({
       state: createFlowRuntimeState((model.page as PageDefinition).values),
     };
   const runtimeState = runtimeStateRef.current.state;
+  useEffect(() => () => runtimeState.messages.dispose(), [runtimeState]);
   const bindingSettings = useMemo(() => {
     const bindings = new Map<
       string,
