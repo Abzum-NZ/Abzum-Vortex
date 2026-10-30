@@ -143,28 +143,6 @@ export function explicitSourceTargets(
     sourcePath[0] === "body" &&
     sourcePath[1] === "actions" &&
     typeof sourcePath[2] === "number" &&
-    sourcePath[3] === "tasks" &&
-    typeof sourcePath[4] === "number" &&
-    sourcePath[5] === "properties" &&
-    sourcePath[6] === "record_type" &&
-    sourcePath.length === 7
-  ) {
-    const targetPath: Path = [
-      "content",
-      "actions",
-      sourcePath[2],
-      "tasks",
-      sourcePath[4],
-      "properties",
-      "recordType",
-    ];
-    return leafPaths(valueAtPath(canonical, targetPath), targetPath);
-  }
-  if (
-    (source.kind === "module" || source.kind === "application") &&
-    sourcePath[0] === "body" &&
-    sourcePath[1] === "actions" &&
-    typeof sourcePath[2] === "number" &&
     sourcePath[3] === "protected_operation" &&
     sourcePath.length === 4
   ) {
@@ -397,33 +375,5 @@ export function explicitSourceTargets(
     sourcePath.length === 5
   )
     return [eventCarriedFieldTarget(source, canonical, sourcePath[2], sourcePath[4], resolution)];
-  if (
-    (source.kind === "module" || source.kind === "application") &&
-    sourcePath[0] === "body" &&
-    sourcePath[1] === "actions" &&
-    typeof sourcePath[2] === "number" &&
-    sourcePath[3] === "tasks" &&
-    typeof sourcePath[4] === "number" &&
-    sourcePath[5] === "properties" &&
-    sourcePath[6] === "changes" &&
-    typeof sourcePath[7] === "number" &&
-    sourcePath[8] === "relationships" &&
-    typeof sourcePath[9] === "number" &&
-    sourcePath.length === 10
-  )
-    return [
-      [
-        "content",
-        "actions",
-        sourcePath[2],
-        "tasks",
-        sourcePath[4],
-        "properties",
-        "changes",
-        sourcePath[7],
-        "relationshipIds",
-        sourcePath[9],
-      ],
-    ];
   return undefined;
 }

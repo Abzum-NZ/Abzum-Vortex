@@ -351,7 +351,6 @@ export const recordsTableBindingRefusal = async (
               actions: invoked(entry.actions),
             })),
           },
-          new Date().toISOString(),
         );
         const decision = current.availability[0]?.actions.find((action) =>
           sameId(action.action, binding.eventId),

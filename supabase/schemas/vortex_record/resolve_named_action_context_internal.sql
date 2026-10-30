@@ -31,7 +31,7 @@ declare
   event_value jsonb;
   event_descriptor jsonb;
   event_descriptors jsonb := '[]'::jsonb;
-  task_value jsonb;
+  event_key text;
   matched_count integer;
 begin
   if p_action_owner_kind is null
@@ -201,17 +201,17 @@ begin
   into required_permissions
   from pg_catalog.jsonb_array_elements(required_permissions) as item(value);
 
-  for task_value in
-    select item.value from pg_catalog.jsonb_array_elements(action_content -> 'tasks')
-      with ordinality as item(value, ordinality)
+  for event_key in
+    select item.value from pg_catalog.jsonb_array_elements_text(
+      coalesce(action_content #> '{writePolicy,eventKeys}', '[]'::jsonb)
+    ) with ordinality as item(value, ordinality)
     order by item.ordinality
   loop
-    if task_value ->> 'type' <> 'event.announce' then continue; end if;
     select item.value into strict event_value
     from pg_catalog.jsonb_array_elements(
       coalesce(action_owner_content -> 'events', '[]'::jsonb)
     ) as item(value)
-    where item.value ->> 'key' = task_value #>> '{properties,eventKey}'
+    where item.value ->> 'key' = event_key
       and (item.value ->> 'recordTypeId')::uuid = p_record_type_id;
     event_descriptor := pg_catalog.jsonb_build_object(
       'kind', 'declared',
