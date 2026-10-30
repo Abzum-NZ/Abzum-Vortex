@@ -333,7 +333,11 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       // The segment that ended before a Run on back end task has committed: the task runs now, in
       // its own claim, so its child never sees or blocks on the caller's uncommitted changes.
       if (step.kind === "protected_task" && step.call.taskType === "backend.run") {
-        const result = await createFlowTaskRunner(dependencies, namedRunner()).run(run, step.state, step.call);
+        const result = await createFlowTaskRunner(dependencies, namedRunner()).run(
+          run,
+          step.state,
+          step.call,
+        );
         step = resumeFlowRun(
           step.state,
           { kind: "task_result", ...result },
@@ -354,14 +358,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       if (segment === undefined || segment.kind !== "server") return withCommit(refused);
       const boundary = step.state;
       const admitted = await dependencies.admitSegment(run, boundary, segment, (ports, replay) =>
-        runFlowSegmentFromBoundary(
-          ports,
-          namedRunner(ports),
-          run,
-          boundary,
-          segment,
-          replay,
-        ),
+        runFlowSegmentFromBoundary(ports, namedRunner(ports), run, boundary, segment, replay),
       );
       committedNow ||= admitted.committedNow;
       replayedCommitted ||= admitted.replayedCommitted === true;
@@ -477,6 +474,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       runNamedAction(session, selection, command, ports)) as NamedActionRunner;
 
   return Object.freeze({
+    /** The one named-action path, for a host that runs flow steps itself (a back-end run). */
+    namedActionRunner: namedRunner(),
     /** Admits and executes exactly the server segment selected by the page. */
     async invokeSegment(
       request: FlowStartRequest,

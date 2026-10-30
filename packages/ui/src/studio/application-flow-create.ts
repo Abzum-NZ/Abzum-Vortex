@@ -10,6 +10,8 @@ import {
   builderKeySchema,
   defaultFlowBindingSettings,
   defaultBatchEditFlowSource,
+  defaultBulkActionFlowSource,
+  defaultBulkMatchingFlowSource,
   defaultChangeFlowSource,
   defaultOperationFlowSource,
   sourceItemTree,
@@ -134,6 +136,16 @@ export type StudioFlowCreateStep =
   | Readonly<{ kind: "message"; message: string }>;
 
 export type StudioFlowCreateCommand =
+  /** A table's bulk action that runs no flow yet: its default flow, and the matching flow that works through every matching record on the back end. */
+  | Readonly<{
+      kind: "bulk_action";
+      controlAlias: string;
+      /** The bulk action as the table declares it (its action reference). */
+      action: string;
+      /** The table's query, as the owning definition names it. */
+      query: string;
+      name: string;
+    }>
   /** On a record page, the flow gets the record the page shows as its record_id input. */
   | Readonly<{
       kind: "action";
@@ -348,6 +360,7 @@ const bindControl = (
   const rowActionMenu = event === "row_action" && hasRowActionMenu(item);
   if (
     !rowActionMenu &&
+    event !== "bulk_action" &&
     body.flow_bindings.some(
       (binding) => binding.control === controlAlias && binding.event === event,
     )
@@ -598,7 +611,12 @@ const existingRowActionFlow = (
   source: Readonly<ApplicationSourceDocument>,
   command: StudioFlowCreateCommand,
 ): SourceFlow | undefined => {
-  if (command.kind === "before_save" || command.kind === "flow" || command.event !== "row_action")
+  if (
+    command.kind === "before_save" ||
+    command.kind === "flow" ||
+    command.kind === "bulk_action" ||
+    command.event !== "row_action"
+  )
     return undefined;
   const wantedOperation =
     command.kind === "action"
@@ -801,6 +819,73 @@ export const applyStudioFlowCreate = (
         .find((recordType) => recordType.key === command.recordTypeKey)!
         .before_save_rules.push(flow.id);
       return created(candidate, flow, module.key, undefined);
+    }
+    if (command.kind === "bulk_action") {
+      const page = body.pages.find((candidate) =>
+        sourcePageItems(candidate.composition).some(
+          (item) => item.props.id === command.controlAlias,
+        ),
+      );
+      const item =
+        page === undefined
+          ? undefined
+          : sourcePageItems(page.composition).find(
+              (entry) => entry.props.id === command.controlAlias,
+            );
+      const features = isRecord(item?.props.features) ? item.props.features : {};
+      const declared = isRecord(features.bulk_actions) ? features.bulk_actions : {};
+      const entries = Array.isArray(declared.actions) ? declared.actions : [];
+      const entry = entries.find(
+        (candidate) => isRecord(candidate) && candidate.action === command.action,
+      );
+      if (item === undefined || !isRecord(entry))
+        return refuse("That bulk action is no longer on the table.");
+      if (entry.event_id !== undefined) return refuse("That bulk action already runs a flow.");
+      const operation = body.modules
+        .flatMap((module) => module.actions)
+        .find(
+          (candidate) =>
+            candidate.key === command.action || command.action.endsWith(`:${candidate.key}`),
+        );
+      if (operation === undefined) return refuse("That action is no longer in the application.");
+      const key = keyFrom(name, new Set(body.flows.flatMap((flow) => [flow.id, flow.key])));
+      const matchingKey =
+        key === undefined
+          ? undefined
+          : keyFrom(`${key}_matching`, new Set(body.flows.flatMap((flow) => [flow.id, flow.key])));
+      if (key === undefined || matchingKey === undefined)
+        return refuse("No free name could be made for this flow. Choose another name.");
+      const input = {
+        id: key,
+        key,
+        operation: operation.key,
+        query: command.query,
+        matchingFlow: matchingKey,
+        started: "Started; it will finish in the background.",
+        done: `${operation.label} done.`,
+      };
+      const flow: SourceFlow = {
+        ...defaultBulkActionFlowSource(input),
+        labels: { name },
+      };
+      body.flows.push(flow, {
+        ...defaultBulkMatchingFlowSource(input),
+        labels: { name: `${name} (every matching record)` },
+      });
+      const bound = bindControl(
+        candidate,
+        command.controlAlias,
+        "bulk_action",
+        key,
+        {
+          subjects: { kind: "caller", name: "subjects" },
+          selection: { kind: "caller", name: "selection" },
+          excluded: { kind: "caller", name: "excluded" },
+        },
+        borrowed,
+      );
+      entry.event_id = bound.eventId;
+      return created(candidate, flow, null, bound);
     }
     if (command.kind === "action" && command.event === "card_moved" && command.recordType === null)
       return { kind: "refused", reason: "Choose the board's choice field first." };

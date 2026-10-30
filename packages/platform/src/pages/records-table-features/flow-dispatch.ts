@@ -225,6 +225,16 @@ export const recordsTableBindingRefusal = async (
     if (declared === undefined) return recordsTableRequestRefusal(event, "command_not_declared");
     const subjects = inputs.subjects;
     const records = Array.isArray(subjects) ? subjects : [];
+    // Every matching record names none: its sealed selection stands for them, and the matching
+    // flow opens it under the person's own access; the chosen rows name themselves.
+    const matching = typeof inputs.selection === "string" && inputs.selection !== "";
+    const unmatched = Array.isArray(inputs.excluded)
+      ? inputs.excluded.some((id) => !recordIdSchema.safeParse(id).success)
+      : true;
+    if (matching)
+      return records.length === 0 && !unmatched
+        ? undefined
+        : recordsTableRequestRefusal(event, "record_selection_invalid");
     return records.length === 0 ||
       records.length > Math.min(200, declared.maxRecords) ||
       records.some(

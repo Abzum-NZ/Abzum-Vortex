@@ -277,6 +277,11 @@ export type FlowOrchestratorDependencies = Readonly<{
         pageSize: number | undefined;
         /** Empty for the first page. */
         continuation: string;
+        /**
+         * A table's sealed "every matching record" descriptor, as the page issued it: the page is
+         * read from the table's own query state, without the records in `excluded`.
+         */
+        matching?: Readonly<{ token: string; excluded: readonly string[] }>;
       }>,
     ): Promise<
       HumanOrganizationRequestResult<

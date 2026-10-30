@@ -39,6 +39,10 @@ type HeldScope = Readonly<{
   excluded: readonly string[];
 }>;
 
+/** How often, and how many times, the table is read while a matching run works on the back end. */
+const matchingRefreshMilliseconds = 3_000;
+const matchingRefreshReads = 20;
+
 const without = <Value>(
   current: Readonly<Record<string, Value>>,
   placementId: string,
@@ -259,23 +263,37 @@ export function useBulkSelection({
           );
           if (binding === undefined)
             throw new Error("BULK_ACTION_BINDING_MISSING: the table names no flow for the action");
-          if (selection.kind !== "ids") throw new Error("BULK_MATCHING_NOT_BOUND");
-          // One run of the action's bound flow: every record changes in one transaction, or none does.
+          // One run of the action's bound flow: the chosen rows change in one transaction, or none
+          // do; every matching record starts the flow's background run instead.
           const outcome = await runBinding(
             placementId,
             binding,
-            {
-              subjects: selection.items.map((item) => ({
-                record: item.recordId,
-                revision: item.revision,
-              })),
-            },
+            selection.kind === "ids"
+              ? {
+                  subjects: selection.items.map((item) => ({
+                    record: item.recordId,
+                    revision: item.revision,
+                  })),
+                  selection: "",
+                  excluded: [],
+                }
+              : { subjects: [], selection: selection.token, excluded: selection.excluded },
             undefined,
             undefined,
             undefined,
             crypto.randomUUID(),
             "transient",
           );
+          // Every matching record runs on the back end, a page at a time: the table is read again
+          // while it works, so the person watches the rows change until it has had time to end.
+          if (selection.kind === "matching" && outcome.confirmed)
+            for (let read = 0; read < matchingRefreshReads; read += 1) {
+              await new Promise((resolve) =>
+                window.setTimeout(resolve, matchingRefreshMilliseconds),
+              );
+              if (navigation.current !== owner) return;
+              await refreshPlacements([placementId]);
+            }
           last = {
             kind: "summary",
             total: selected,

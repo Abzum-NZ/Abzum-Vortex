@@ -289,6 +289,10 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       parameters: optional("input_map"),
       page_size: optional("whole_number"),
       continuation: optional("text"),
+      // The sealed "every matching record" token of a table that reads the query, and the records
+      // left out of it: the page is the table's own filtered and searched rows, never wider.
+      selection: optional("text"),
+      excluded: optional("json"),
     },
     outputs: [output("records", "record_reference_list"), output("continuation", "text")],
     redaction: "safe_fields",

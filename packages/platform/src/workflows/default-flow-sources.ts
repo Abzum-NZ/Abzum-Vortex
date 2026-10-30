@@ -490,6 +490,168 @@ export const defaultBatchEditFlowSource = (input: DefaultBatchEditFlowInput): So
     errors: [refreshTask("refresh_after_failure")],
   });
 
+export type DefaultBulkActionFlowInput = DefaultFlowIdentity &
+  Readonly<{
+    /** The named action's namespaced operation key. */
+    operation: string;
+    /** The table's query (its alias in the owning definition) and the key of the matching flow. */
+    query: string;
+    matchingFlow: string;
+    /** What the person is told when "every matching record" has started in the background. */
+    started: string;
+    /** The toast that tells the person the action was done on the selected records. */
+    done: string;
+  }>;
+
+/**
+ * The default for a bulk action of a table: the selected records (at most 200, each with the
+ * revision the person saw) take the named action as ONE command in one transaction, all or none;
+ * "every matching record" starts the matching flow on the back end instead. The grid supplies
+ * `subjects`, `selection` (the sealed token of the matching read, empty for chosen rows) and
+ * `excluded` (the records unticked since).
+ */
+export const defaultBulkActionFlowSource = (input: DefaultBulkActionFlowInput): SourceFlow =>
+  interactiveSource(input, {
+    inputs: {
+      subjects: { type: "json", required: true },
+      selection: { type: "text", required: true },
+      excluded: { type: "json", required: true },
+    },
+    tasks: [
+      {
+        id: "route",
+        type: "if",
+        condition: {
+          op: "is_not_empty",
+          arg: { op: "reference", reference: { source: "input", name: "selection" } },
+        },
+        then: [
+          {
+            id: "start_matching",
+            type: "backend.run",
+            version: taskVersion,
+            properties: {
+              flow: textLiteral(input.matchingFlow),
+              mode: textLiteral("start"),
+              inputs: {
+                kind: "map",
+                entries: {
+                  selection: inputReference("selection"),
+                  excluded: inputReference("excluded"),
+                  continuation: textLiteral(""),
+                },
+              },
+            },
+          } as unknown as Task,
+          showMessage("started", input.started, { severity: "info" }),
+        ],
+        else: [
+          {
+            id: "apply",
+            type: "operation.call",
+            version: taskVersion,
+            properties: {
+              operation: textLiteral(input.operation),
+              subjects: inputReference("subjects"),
+            },
+          } as unknown as Task,
+          showMessage("done", input.done),
+          refreshTask("refresh"),
+        ],
+      } as unknown as Task,
+    ],
+    outputs: {},
+  });
+
+/**
+ * The matching flow of a bulk action, run on the back end as the person who started it: it reads
+ * one page of the table's own matching rows (the token carries its filters and search), applies
+ * the named action to that page as one command in one transaction, and starts itself again with
+ * the next continuation until none is left. The only input that changes between runs is the
+ * continuation, and every page is a run in history.
+ */
+export const defaultBulkMatchingFlowSource = (input: DefaultBulkActionFlowInput): SourceFlow => ({
+  id: input.matchingFlow,
+  key: input.matchingFlow,
+  description: input.description ?? "Applies a bulk action to every matching record, a page at a time.",
+  labels: {},
+  execution: "background",
+  runAs: { kind: "initiator" },
+  inputs: {
+    selection: { type: "text", required: true },
+    excluded: { type: "json", required: true },
+    continuation: { type: "text", required: true },
+  },
+  variables: {},
+  triggers: [],
+  tasks: [
+    {
+      id: "page",
+      type: "record.query",
+      version: taskVersion,
+      properties: {
+        query: textLiteral(input.query),
+        selection: inputReference("selection"),
+        excluded: inputReference("excluded"),
+        continuation: inputReference("continuation"),
+        page_size: { kind: "literal", literal: { type: "whole_number", value: 200 } },
+      },
+    } as unknown as Task,
+    {
+      id: "apply_page",
+      type: "if",
+      condition: {
+        op: "is_not_empty",
+        arg: { op: "reference", reference: { source: "task_output", task: "page", key: "records" } },
+      },
+      then: [
+        {
+          id: "apply",
+          type: "operation.call",
+          version: taskVersion,
+          properties: {
+            operation: textLiteral(input.operation),
+            subjects: outputReference("page", "records"),
+          },
+        } as unknown as Task,
+      ],
+    } as unknown as Task,
+    {
+      id: "more",
+      type: "if",
+      condition: {
+        op: "is_not_empty",
+        arg: {
+          op: "reference",
+          reference: { source: "task_output", task: "page", key: "continuation" },
+        },
+      },
+      then: [
+        {
+          id: "next_page",
+          type: "backend.run",
+          version: taskVersion,
+          properties: {
+            flow: textLiteral(input.matchingFlow),
+            mode: textLiteral("start"),
+            inputs: {
+              kind: "map",
+              entries: {
+                selection: inputReference("selection"),
+                excluded: inputReference("excluded"),
+                continuation: outputReference("page", "continuation"),
+              },
+            },
+          },
+        } as unknown as Task,
+      ],
+    } as unknown as Task,
+  ],
+  outputs: {},
+  errors: [],
+  finally: [],
+});
+
 export type DefaultQueryFlowInput = DefaultFlowIdentity &
   Readonly<{
     /** The declared query the flow reads: its alias in the owning definition. */

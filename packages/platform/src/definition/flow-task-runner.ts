@@ -1,13 +1,8 @@
 import { z } from "zod";
-import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
-import { jsonValueSchema, type JsonValue } from "../catalogue/common";
-import {
-  builderKeySchema,
-  groupIdSchema,
-  queryIdSchema,
-  recordIdSchema,
-  recordTypeIdSchema,
-} from "../catalogue/identifiers";
+import { runQueryTask } from "./flow-query-task";
+import { namedActionInputs, planNamedActionSubjects } from "./flow-named-action-set";
+import type { JsonValue } from "../catalogue/common";
+import { groupIdSchema, recordIdSchema, recordTypeIdSchema } from "../catalogue/identifiers";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import { describeFailure, isRecord, sameId } from "../catalogue/runtime-primitives";
 import {
@@ -58,7 +53,6 @@ import {
 import type {
   FlowNamedAction,
   FlowOrchestratorDependencies,
-  NamedActionExecutionResult,
   NamedActionRunner,
   Run,
 } from "./flow-orchestrator-types";
@@ -67,9 +61,6 @@ import { planBackendTask, runBackendTask, type BackendTaskPlan } from "./flow-ba
 import { nameRecordValues, setsActionOwnedOption, withoutEmptyValues } from "./flow-record-values";
 import { planRecordLink } from "./flow-relationship-changes";
 import { planRelationshipCopies } from "./flow-relationship-copies";
-
-/** A query step reads at most one keyset page: the flow's page size, 1 to 200, when it names one. */
-const queryPageSizeSchema = z.number().int().min(1).max(200).optional();
 
 /**
  * Runs the protected tasks of one flow run: plans each task, claims its effect in the ledger and
@@ -237,6 +228,24 @@ export const createFlowTaskRunner = (
     return {};
   };
 
+  /** What a writer refusal ends the task as: the refusal's own outcome and its authored words. */
+  const refusedTask = (
+    failure:
+      | (Readonly<{ outcome: string }> & { error?: Parameters<typeof ruleRefusalResult>[0] })
+      | undefined,
+  ) => ({
+    result: {
+      outcome:
+        failure?.outcome === "refused" && failure.error !== undefined
+          ? refusalOutcome(failure.error.code)
+          : ("refused" as const),
+      ...(failure?.outcome === "refused" && failure.error !== undefined
+        ? ruleRefusalResult(failure.error)
+        : {}),
+    },
+    stored: {},
+  });
+
   /** Carries only committed saves' authored messages; logs locate the rule without record values. */
   const appendWarnings = (
     run: Run,
@@ -335,62 +344,6 @@ export const createFlowTaskRunner = (
           ? state.subject.revision
           : read.revision),
     };
-  };
-
-  /** The action's typed inputs: a reference input names its record with the type the action declares. */
-  const namedActionInputs = (named: FlowNamedAction, inputs: Record<string, unknown>) =>
-    Object.fromEntries(
-      Object.entries(inputs).map(([name, value]) => [
-        name,
-        typeof value === "string" && Object.hasOwn(named.referenceInputTypes, name)
-          ? { recordTypeId: named.referenceInputTypes[name], recordId: value }
-          : value,
-      ]),
-    );
-
-  /**
-   * The same action over the `subjects` list (a record and the revision the person saw, 1 to 200,
-   * each record once) as ONE command: every record completes or none does.
-   */
-  const planNamedActionSet = (
-    run: Run,
-    call: FlowProtectedTaskCall,
-    commandId: string,
-    named: FlowNamedAction,
-    inputs: Record<string, unknown>,
-  ): Readonly<{ plan: TaskPlan }> | TaskResult => {
-    if (dependencies.actionRecords === undefined)
-      return notAvailable(
-        run,
-        call,
-        "This workflow can't run app actions here.",
-        "a registered protected operation",
-      );
-    const subjects = z
-      .array(z.object({ record: recordIdSchema, revision: z.number().int().min(1) }).strict())
-      .min(1)
-      .max(200)
-      .safeParse(call.properties.subjects?.value);
-    if (
-      !subjects.success ||
-      new Set(subjects.data.map((subject) => subject.record.toLowerCase())).size !==
-        subjects.data.length
-    )
-      return { outcome: "validation" };
-    const commands = subjects.data.map((subject) =>
-      executeNamedActionCommandSchema.safeParse({
-        contractVersion: "2.0.0",
-        commandId,
-        action: named.action,
-        recordTypeId: named.subjectRecordTypeId,
-        recordId: subject.record,
-        expectedConcurrencyNumber: subject.revision,
-        inputs: namedActionInputs(named, inputs),
-      }),
-    );
-    if (!commands.every((command) => command.success)) return { outcome: "validation" };
-    const parsed = commands.map((command) => command.data!);
-    return { plan: { kind: "action", command: parsed[0]!, commands: parsed } };
   };
 
   const planNamedAction = async (
@@ -757,7 +710,23 @@ export const createFlowTaskRunner = (
       );
     if (Object.hasOwn(call.properties, "subjects")) {
       if (Object.hasOwn(call.properties, "record")) return { outcome: "validation" };
-      return planNamedActionSet(run, call, commandId, named, inputs);
+      if (dependencies.actionRecords === undefined)
+        return notAvailable(
+          run,
+          call,
+          "This workflow can't run app actions here.",
+          "a registered protected operation",
+        );
+      const set = await planNamedActionSubjects(
+        dependencies.recordChanges,
+        named,
+        commandId,
+        call.properties.subjects?.value,
+        inputs,
+      );
+      return "commands" in set
+        ? { plan: { kind: "action", command: set.commands[0]!, commands: set.commands } }
+        : set;
     }
     return planNamedAction(run, state, call, commandId, named, inputs);
   };
@@ -848,17 +817,7 @@ export const createFlowTaskRunner = (
       }
       const changed = await dependencies.recordChanges!.apply(plan.commandId, plan.intents);
       if (changed.kind === "restart") return { result: { outcome: "conflict" }, stored: {} };
-      if (changed.kind === "refused") {
-        const failure = changed.result;
-        return {
-          result: {
-            outcome:
-              failure?.outcome === "refused" ? refusalOutcome(failure.error.code) : "refused",
-            ...(failure?.outcome === "refused" ? ruleRefusalResult(failure.error) : {}),
-          },
-          stored: {},
-        };
-      }
+      if (changed.kind === "refused") return refusedTask(changed.result);
       for (const [index, result] of changed.results.entries())
         changedRevisions.set(
           targetKey(plan.intents[index]!.recordTypeId, result.recordId),
@@ -977,6 +936,26 @@ export const createFlowTaskRunner = (
         stored: {},
       };
     }
+    if (plan.kind === "action" && plan.commands !== undefined) {
+      const executed = await runNamedAction(session, selection, plan.commands);
+      if (executed.kind === "completed") {
+        for (const value of executed.results)
+          if (value.outcome === "completed")
+            changedRevisions.set(
+              targetKey(plan.command.recordTypeId, value.recordId),
+              value.concurrencyNumber,
+            );
+        const outputs = { count: executed.results.length };
+        return {
+          result: { outcome: "committed", outputs },
+          stored: outputs,
+          warnings: executed.warnings,
+        };
+      }
+      if (executed.kind !== "refused") return { result: { outcome: "failed" }, stored: {} };
+      run.refusalLoggedTaskIds.push(call.taskId);
+      return refusedTask(executed.result);
+    }
     if (plan.kind === "action") {
       const executed = await runNamedAction(session, selection, plan.command);
       if (executed.kind !== "available")
@@ -1069,54 +1048,14 @@ export const createFlowTaskRunner = (
     if (call.taskType === "record.read_fields") return runSelectedRecordRead(run, state, call);
 
     if (call.taskType === "record.query") {
-      if (run.authority.kind !== "person" || dependencies.queryRecords === undefined)
+      if (dependencies.queryRecords === undefined)
         return notAvailable(
           run,
           call,
           "This workflow can't read records here.",
           "the current initiator's protected query reader",
         );
-      const queryId = queryIdSchema.safeParse(call.properties.query?.value);
-      const parameters = z
-        .record(builderKeySchema, jsonValueSchema)
-        .safeParse(call.properties.parameters?.value ?? {});
-      const pageSize = queryPageSizeSchema.safeParse(call.properties.page_size?.value);
-      const continuation = z
-        .string()
-        .max(65_536)
-        .safeParse(call.properties.continuation?.value ?? "");
-      if (
-        !queryId.success ||
-        !parameters.success ||
-        !pageSize.success ||
-        !continuation.success ||
-        carriesSensitive(parameters.data, run.sensitive)
-      )
-        return { outcome: "validation" };
-      try {
-        const result = await dependencies.queryRecords.read(
-          run.authority.session,
-          run.authority.selection,
-          {
-            queryId: queryId.data,
-            parameters: parameters.data,
-            pageSize: pageSize.data,
-            continuation: continuation.data,
-          },
-        );
-        if (result.kind !== "available") return { outcome: requestOutcome(result.kind) };
-        if (result.value.outcome !== "read") return { outcome: "refused" };
-        return {
-          outcome: "completed",
-          outputs: {
-            records: [...result.value.recordIds],
-            continuation: result.value.continuation,
-          },
-        };
-      } catch (error) {
-        reportUnexpectedFailure("record query task", error);
-        return { outcome: "failed" };
-      }
+      return runQueryTask(dependencies.queryRecords, run, call.properties);
     }
 
     // Identity acquisition is a fresh protected read, never an effect-ledger replay. The tuple

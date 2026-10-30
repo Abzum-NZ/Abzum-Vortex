@@ -63,6 +63,48 @@ const refuse = (cause: string): undefined => {
   return undefined;
 };
 
+/** The query command of the descriptor, rebuilt from the installed placement's own contract. */
+export const matchingQueryCommand = (
+  placement: RecordsTablePlacement,
+  descriptor: RecordsSelectionDescriptor,
+) => {
+  const authored = authoredGridLayout(placement.contract);
+  if (authored === undefined) return refuse("layout_unavailable");
+  // Only the record identities are needed: the read shows one column, the first declared one.
+  const layout = {
+    ...authored,
+    columns: authored.columns.map((column, index) => ({ ...column, visible: index === 0 })),
+  };
+  const built = buildRecordsTableQueryCommand({
+    moduleRootId: placement.module.rootId,
+    queryId: placement.query.queryId,
+    settings: placement.settings,
+    inputValues: descriptor.inputValues as Readonly<Record<string, JsonValue>>,
+    state: {
+      sort: descriptor.sort as unknown as readonly RecordsTableSortKey[],
+      filters: descriptor.filters as unknown as readonly RecordsTableFilterValue[],
+      search: descriptor.search,
+      page: undefined,
+    },
+    layout: {
+      storage: "preview",
+      queryId: String(placement.query.queryId).toLowerCase(),
+      revision: null,
+      layout,
+      authored: layout,
+      reset: false,
+    },
+    filterTargets: fieldFilterTargetsOf(placement.module),
+    ...(descriptor.timeZone === undefined ? {} : { timeZone: descriptor.timeZone }),
+    fieldLabels: fieldLabelsOf(placement.module),
+    fieldChoiceLabels: fieldChoiceLabelsOf(placement.module),
+    fieldDateTypes: fieldDateTypesOf(placement.module),
+    fieldLinkTypes: fieldLinkTypesOf(placement.module),
+  });
+  if (built.kind === "refused") return refuse(`command_${built.part}_${built.reason}`);
+  return built;
+};
+
 export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDependencies) => {
   const requests = createHumanOrganizationRequestService(dependencies);
   const queries = createProtectedQueryService(dependencies);
@@ -112,45 +154,6 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
     return descriptor;
   };
 
-  /** The query command of the descriptor, rebuilt from the installed placement's own contract. */
-  const commandFor = (placement: BulkPlacement, descriptor: RecordsSelectionDescriptor) => {
-    const authored = authoredGridLayout(placement.contract);
-    if (authored === undefined) return refuse("layout_unavailable");
-    // Only the record identities are needed: the read shows one column, the first declared one.
-    const layout = {
-      ...authored,
-      columns: authored.columns.map((column, index) => ({ ...column, visible: index === 0 })),
-    };
-    const built = buildRecordsTableQueryCommand({
-      moduleRootId: placement.module.rootId,
-      queryId: placement.query.queryId,
-      settings: placement.settings,
-      inputValues: descriptor.inputValues as Readonly<Record<string, JsonValue>>,
-      state: {
-        sort: descriptor.sort as unknown as readonly RecordsTableSortKey[],
-        filters: descriptor.filters as unknown as readonly RecordsTableFilterValue[],
-        search: descriptor.search,
-        page: undefined,
-      },
-      layout: {
-        storage: "preview",
-        queryId: String(placement.query.queryId).toLowerCase(),
-        revision: null,
-        layout,
-        authored: layout,
-        reset: false,
-      },
-      filterTargets: fieldFilterTargetsOf(placement.module),
-      ...(descriptor.timeZone === undefined ? {} : { timeZone: descriptor.timeZone }),
-      fieldLabels: fieldLabelsOf(placement.module),
-      fieldChoiceLabels: fieldChoiceLabelsOf(placement.module),
-      fieldDateTypes: fieldDateTypesOf(placement.module),
-      fieldLinkTypes: fieldLinkTypesOf(placement.module),
-    });
-    if (built.kind === "refused") return refuse(`command_${built.part}_${built.reason}`);
-    return built;
-  };
-
   return Object.freeze({
     /** The one capped count of "Select all matching records", through the query summary path. */
     async count(
@@ -168,7 +171,7 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
         request.token,
       );
       if (descriptor === undefined) return { kind: "refused", reason: "not_available" };
-      const built = commandFor(placement, descriptor);
+      const built = matchingQueryCommand(placement, descriptor);
       if (built === undefined) return { kind: "refused", reason: "not_available" };
       const summary = await queries.summarise(session, selectionOf(address), {
         mode: "published",
