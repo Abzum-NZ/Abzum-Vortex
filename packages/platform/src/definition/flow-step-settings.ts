@@ -93,6 +93,30 @@ export const flowStepSettingIssues = (
         );
       if (target === "dialog" && properties.title === undefined)
         invalid([...path, "title"], "Show message: a dialog needs a title");
+      const dismiss = properties.dismiss_after_ms;
+      if (dismiss !== undefined) {
+        const milliseconds = dismiss.kind === "literal" ? dismiss.literal.value : undefined;
+        if (
+          dismiss.kind !== "literal" ||
+          dismiss.literal.type !== "whole_number" ||
+          typeof milliseconds !== "number" ||
+          !Number.isInteger(milliseconds) ||
+          milliseconds < 2_000 ||
+          milliseconds > 30_000
+        )
+          invalid(
+            [...path, "dismiss_after_ms"],
+            "Show message: auto-dismiss must be a literal between 2,000 and 30,000 milliseconds",
+          );
+        if (
+          (target !== "toast" && target !== "banner") ||
+          (severity !== "info" && severity !== "success")
+        )
+          invalid(
+            [...path, "dismiss_after_ms"],
+            "Show message: auto-dismiss is available only for an info or success toast or banner",
+          );
+      }
       if (target !== undefined && !runnableMessageTargets.has(target))
         notYet(
           [...path, "target"],

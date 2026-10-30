@@ -453,6 +453,8 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       /** One action the message offers, bound to a flow ("Undo"). */
       action_label: optional("message_text"),
       action_flow: optional("flow_id"),
+      /** A short-lived informational toast or banner, in milliseconds. */
+      dismiss_after_ms: optional("whole_number"),
     },
   },
   "interface.clear_message": {
