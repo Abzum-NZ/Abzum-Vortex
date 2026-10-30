@@ -353,6 +353,14 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       delete run.continuationPlan;
       delete run.continuationSegments;
       step = admitted.value.step;
+      // A segment that committed nothing in this request (refused or failed, so it rolled back)
+      // leaves no effect to count: partial is reported only when something persisted.
+      if (
+        !admitted.committedNow &&
+        admitted.replayedCommitted !== true &&
+        step.state.committedEffects !== boundary.committedEffects
+      )
+        step = { ...step, state: { ...step.state, committedEffects: boundary.committedEffects } };
       if (step.kind === "boundary")
         step = continueFlowRun(step.state, run.library, undefined, undefined, boundaries);
     }
