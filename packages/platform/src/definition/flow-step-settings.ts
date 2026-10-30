@@ -17,8 +17,6 @@ import {
 /** Where a message shows. `dialog` blocks until read; the others are part of the page. */
 const flowMessageTargets = ["dialog", "toast", "banner", "inline", "slot"] as const;
 const flowMessageSeverities = ["info", "success", "warning", "error"] as const;
-/** The message targets the page shows today. */
-const runnableMessageTargets: ReadonlySet<string> = new Set(["dialog"]);
 
 export type FlowStepSettingIssue = Readonly<{
   path: (string | number)[];
@@ -43,8 +41,6 @@ export const flowStepSettingIssues = (
   const issues: FlowStepSettingIssue[] = [];
   const invalid = (path: (string | number)[], message: string) =>
     issues.push({ path, message, notYetRunnable: false });
-  const notYet = (path: (string | number)[], message: string) =>
-    issues.push({ path, message, notYetRunnable: true });
   const visit = (tasks: readonly FlowTask[], base: (string | number)[]) =>
     tasks.forEach((task, index) => {
       const path = [...base, index];
@@ -91,8 +87,6 @@ export const flowStepSettingIssues = (
           [...path, "severity"],
           `Show message: choose its severity (${flowMessageSeverities.join(", ")})`,
         );
-      if (target === "dialog" && properties.title === undefined)
-        invalid([...path, "title"], "Show message: a dialog needs a title");
       const dismiss = properties.dismiss_after_ms;
       if (dismiss !== undefined) {
         const milliseconds = dismiss.kind === "literal" ? dismiss.literal.value : undefined;
@@ -117,18 +111,11 @@ export const flowStepSettingIssues = (
             "Show message: auto-dismiss is available only for an info or success toast or banner",
           );
       }
-      if (target !== undefined && !runnableMessageTargets.has(target))
-        notYet(
-          [...path, "target"],
-          `Show message: a ${target} message cannot show yet; use a dialog`,
-        );
       if ((properties.action_label === undefined) !== (properties.action_flow === undefined))
         invalid(
           [...path, "action_label"],
           "Show message: an action needs both its label and its flow",
         );
-      else if (properties.action_flow !== undefined)
-        notYet([...path, "action_flow"], "Show message: a message action cannot run yet");
     } else if (type === "interface.clear_message") checkTarget(properties, path, "Clear message");
     else if (type === "interface.set_value") {
       const page = properties.value !== undefined;

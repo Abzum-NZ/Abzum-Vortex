@@ -38,18 +38,11 @@ const pageStepImplementations = {
   "interface.set_panel": presentation,
   "interface.set_filter": presentation,
   "interface.set_value": presentation,
-} satisfies Record<
-  PageIntentStepType | "interface.set_value" | "interface.clear_message",
-  PageStepImplementation
->;
+} satisfies Record<PageIntentStepType, PageStepImplementation>;
 
 /** The same page implementations handle both local steps and server-returned intents. */
 export const performPageFlowIntent: PageStepImplementation = (intent, host, signal) => {
-  const implementation =
-    pageStepImplementations[
-      `interface.${intent.kind}` as
-        PageIntentStepType | "interface.set_value" | "interface.clear_message"
-    ];
+  const implementation = pageStepImplementations[`interface.${intent.kind}` as PageIntentStepType];
   if (implementation === undefined) throw new Error("FLOW_PAGE_STEP_UNAVAILABLE");
   return implementation(intent, host, signal);
 };

@@ -3,6 +3,7 @@ import {
   FORM_CONTAINER_BLOCK_RELEASE,
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
+  CONTROL_BLOCK_RELEASES,
   placementSettings,
 } from "../application-composition-catalogue";
 import { registeredBlockReleases, type JsonObject } from "./context";
@@ -413,7 +414,12 @@ export function applicationPageRules(scope: ApplicationScope): void {
     // form holds one input per field: the form keeps one draft value per field.
     const formInputs = new Map<
       string,
-      { names: Set<string>; repeated: Set<string>; dependents: [string, string][] }
+      {
+        names: Set<string>;
+        repeated: Set<string>;
+        dependents: [string, string][];
+        types: Map<string, string>;
+      }
     >();
     walkPageComposition<string>(
       page.composition,
@@ -429,11 +435,29 @@ export function applicationPageRules(scope: ApplicationScope): void {
           names: new Set<string>(),
           repeated: new Set<string>(),
           dependents: [],
+          types: new Map<string, string>(),
         };
         formInputs.set(owner, entry);
         if (name.kind === "text") {
           if (entry.names.has(String(name.value))) entry.repeated.add(String(name.value));
           entry.names.add(String(name.value));
+          const release = CONTROL_BLOCK_RELEASES.find(
+            (candidate) =>
+              String(candidate.blockId) === blockId &&
+              candidate.releaseVersion === String(object(vortex.block).releaseVersion),
+          );
+          const declared = release?.value_type;
+          const setting =
+            declared?.kind === "boolean_setting" ? object(settings[declared.setting]) : undefined;
+          const type =
+            declared?.kind === "fixed"
+              ? declared.type
+              : declared?.kind === "boolean_setting"
+                ? setting?.kind === "boolean" && setting.value === true
+                  ? declared.when_true
+                  : declared.when_false
+                : undefined;
+          if (type !== undefined) entry.types.set(String(name.value), type);
         }
         const parent = object(dependsOn.field ?? {});
         const label = object(dependsOn.label ?? {});
@@ -478,11 +502,12 @@ export function applicationPageRules(scope: ApplicationScope): void {
     const formFields = new Map(
       [...formInputs].map(([form, inputs]) => [
         form,
-        new Map(
-          recordFields
+        new Map([
+          ...[...inputs.types].map(([name, type]) => [name, { type }] as const),
+          ...recordFields
             .filter((field) => inputs.names.has(String(field.key)))
-            .map((field) => [String(field.key), field]),
-        ),
+            .map((field) => [String(field.key), field] as const),
+        ]),
       ]),
     );
     if (page.type === "guided_form") {

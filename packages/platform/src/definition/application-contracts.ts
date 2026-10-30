@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { currencyCodeSchema } from "../records/module-field-values";
+import { isIsoCurrencyCode } from "../catalogue/currencies";
 import { inspectApplicationPageReplacements } from "../pages/application-page-replacement";
 import {
   applicationDefinitionEnvelopeSchema,
@@ -486,7 +487,9 @@ export const pageValueDeclarationSchema = z
     type: z.enum(["decimal_number", "money", "text", "yes_no", "json"]),
     label: labelSchema,
     initial: jsonValueSchema,
-    currency: currencyCodeSchema.optional(),
+    currency: currencyCodeSchema
+      .refine(isIsoCurrencyCode, "Use an ISO 4217 currency code")
+      .optional(),
   })
   .strict()
   .superRefine((declaration, context) => {

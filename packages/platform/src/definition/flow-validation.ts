@@ -456,7 +456,7 @@ export function validateFlow(
         return "organization_account_reference";
       case "execution_now":
         return "date_time";
-      // Page values await the page store; form fields are resolved by the page and segment seed.
+      // Page values and form fields resolve against every page on which this flow can run.
       case "page":
       case "form": {
         const environments = options.referenceEnvironments ?? [];
@@ -483,13 +483,6 @@ export function validateFlow(
             "broken_reference",
             "Page and form references require a bound page",
           );
-        if (reference.source === "page")
-          unreadableReferences.push({
-            path,
-            ruleCode: "vortex.definition.unsupported_workflow_node",
-            family: "unsupported_choice",
-            message: `The page value ${reference.name} cannot be read yet`,
-          });
         return types.length > 0 && types.every((type) => type === types[0]) ? types[0] : undefined;
       }
       case "task_output": {

@@ -15,7 +15,4 @@ export const pageStepIntents = {
   "interface.set_panel": "set_panel",
   "interface.set_filter": "set_filter",
   "interface.set_value": "set_value",
-} as const satisfies Record<
-  PageIntentStepType | "interface.set_value" | "interface.clear_message",
-  FlowInterfaceIntent["kind"]
->;
+} as const satisfies Record<PageIntentStepType, FlowInterfaceIntent["kind"]>;
