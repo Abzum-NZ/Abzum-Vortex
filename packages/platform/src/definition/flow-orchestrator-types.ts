@@ -322,7 +322,7 @@ export type SafeIntent = Readonly<{
   properties: Readonly<Record<string, JsonValue>>;
 }>;
 
-export type FlowOrchestratorResponse =
+export type FlowOrchestratorResponse = (
   | Readonly<{
       kind: "finished";
       warnings: readonly FlowWarningNotice[];
@@ -362,7 +362,9 @@ export type FlowOrchestratorResponse =
   | Readonly<{ kind: "reload" }>
   | Readonly<{ kind: "rate_limited"; retryAfterSeconds: number }>
   | Readonly<{ kind: "already_answered" }>
-  | Readonly<{ kind: "refused" }>;
+  | Readonly<{ kind: "refused" }>
+) &
+  Readonly<{ committedNow: boolean }>;
 
 type RunAuthority = Readonly<{
   kind: "person";

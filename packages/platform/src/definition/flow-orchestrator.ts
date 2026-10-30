@@ -51,7 +51,7 @@ import { flowEntrySegmentsMatch, flowPlanFingerprint } from "../workflows/flow-p
 const flowContinuationLifetimeSeconds = 900;
 const serverMilliseconds = flowMaximumServerSeconds * 1_000;
 
-const refused: FlowOrchestratorResponse = Object.freeze({ kind: "refused" });
+const refused: FlowOrchestratorResponse = Object.freeze({ kind: "refused", committedNow: false });
 
 export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencies) => {
   const now = dependencies.now ?? (() => new Date());
@@ -85,6 +85,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         );
       return {
         kind: "finished",
+        committedNow: false,
         warnings: run.warnings,
         runId: step.state.runId,
         outcome: step.result.failure.outcome,
@@ -103,6 +104,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     }
     return {
       kind: "finished",
+      committedNow: false,
       warnings: run.warnings,
       runId: step.state.runId,
       outcome: step.state.committedEffects > 0 ? "committed" : "completed",
@@ -118,6 +120,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
 
   const limitExceeded = (run: Run, state: FlowRunState): FlowOrchestratorResponse => ({
     kind: "finished",
+    committedNow: false,
     warnings: run.warnings,
     runId: state.runId,
     outcome: "failed",
@@ -210,6 +213,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
 
   const suspensionUnavailable = (run: Run, state: FlowRunState): FlowOrchestratorResponse => ({
     kind: "finished",
+    committedNow: false,
     warnings: run.warnings,
     runId: state.runId,
     outcome: "failed",
@@ -246,7 +250,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     }
     return stored === undefined
       ? suspensionUnavailable(run, step.state)
-      : { ...prepared.reply, expiresAt: stored.expiresAt };
+      : { ...prepared.reply, expiresAt: stored.expiresAt, committedNow: false };
   };
 
   /** Server tasks stop at compiled boundaries and enter the one transactional gate. */
@@ -262,6 +266,11 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
 
   const drive = async (run: Run, first: FlowRunStep): Promise<FlowOrchestratorResponse> => {
     let step = first;
+    let committedNow = false;
+    const withCommit = (response: FlowOrchestratorResponse): FlowOrchestratorResponse => ({
+      ...response,
+      committedNow: committedNow || response.committedNow,
+    });
     const boundaries = boundariesOf(run);
     for (;;) {
       if (step.kind === "finished" || step.kind === "interface") {
@@ -297,25 +306,26 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
                   identity,
                   prepared.reply,
                 ),
-                value: (expiresAt) => ({ ...prepared.reply, expiresAt }),
+                value: (expiresAt) => ({ ...prepared.reply, expiresAt, committedNow: false }),
               };
             },
             (payload, expiresAt) =>
               openContinuationReplay(dependencies.continuationKey, identity, payload, expiresAt),
           );
-          return admitted.kind === "completed" ? admitted.value : admitted;
+          return withCommit(admitted.kind === "completed" ? admitted.value : admitted);
         }
-        if (step.kind === "finished") return finished(run, step);
-        return suspend(run, step);
+        if (step.kind === "finished") return withCommit(finished(run, step));
+        return withCommit(await suspend(run, step));
       }
-      if (elapsedMilliseconds(run) > serverMilliseconds) return limitExceeded(run, step.state);
-      if (step.kind !== "boundary" || step.nextTaskId === undefined) return refused;
+      if (elapsedMilliseconds(run) > serverMilliseconds)
+        return withCommit(limitExceeded(run, step.state));
+      if (step.kind !== "boundary" || step.nextTaskId === undefined) return withCommit(refused);
       const plan = run.release.plans.get(run.flowId);
       const segmentId = plan?.taskSegmentIds.get(step.nextTaskId);
       const segment = plan?.segments.find(
         (part) => part.kind === "server" && part.id === segmentId,
       );
-      if (segment === undefined || segment.kind !== "server") return refused;
+      if (segment === undefined || segment.kind !== "server") return withCommit(refused);
       const boundary = step.state;
       const admitted = await dependencies.admitSegment(run, boundary, segment, (ports, replay) =>
         runFlowSegmentFromBoundary(
@@ -327,7 +337,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           replay,
         ),
       );
-      if (admitted.kind !== "completed") return admitted;
+      committedNow ||= admitted.committedNow;
+      if (admitted.kind !== "completed") return withCommit(admitted);
       Object.assign(run, admitted.value.run);
       delete run.pendingContinuation;
       delete run.continuationPlan;
@@ -432,7 +443,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         if (expectation?.entrySegments !== undefined) {
           const plan = prepared.release.plans.get(binding.flowId);
           if (plan === undefined) return refused;
-          if (!flowEntrySegmentsMatch(plan, expectation.entrySegments)) return { kind: "reload" };
+          if (!flowEntrySegmentsMatch(plan, expectation.entrySegments))
+            return { kind: "reload", committedNow: false };
         }
         const actor = await dependencies.resolveActor?.(session, selection);
         const flow = prepared.library(prepared.flowId);
