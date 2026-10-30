@@ -251,6 +251,7 @@ export function useRuntimeInputs({
   });
   // Bulk actions: every matching record of a table, and the runs over a selection.
   const bulk = useBulkSelection({
+    runBinding,
     model,
     navigationKey,
     currentData,
@@ -434,7 +435,10 @@ export function useRuntimeInputs({
           supportsEvent("bulk_action") &&
           supportsEvent("selection_changed")
         )
-          Object.assign(events, bulk.eventsFor(placementId, tableData, selection[placementId]));
+          Object.assign(
+            events,
+            bulk.eventsFor(placementId, tableData, selection[placementId], bindings),
+          );
         // A table's Export streams a file from the server over the same selection, never a flow.
         if (tableData?.features?.export !== undefined)
           Object.assign(events, exported.eventsFor(placementId, tableData, selection[placementId]));

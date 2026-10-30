@@ -9,7 +9,6 @@ import {
 } from "react";
 import {
   recordsSelectionCountResultSchema,
-  recordsTableBulkRunLineSchema,
   type NamedActionAvailability,
   type RecordsSelectionInput,
   type RecordsTableBulkRunLine,
@@ -20,10 +19,13 @@ import type {
   DisplayTablePayload,
   DisplayTableSelectionScope,
 } from "@vortex/ui";
-import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
+import type {
+  ApplicationPageModel,
+  PlacementFlowBinding,
+} from "../../../../../../_lib/application-page";
 import { recordsTableAddress } from "./records-table-address";
 import { tablePayloadFor } from "./placement-helpers";
-import type { PageSelection, SelectedRecords } from "./types";
+import type { DispatchOutcome, PageSelection, SelectedRecords } from "./types";
 
 /**
  * "Every matching record" of one table: the read's sealed descriptor it was chosen on, its count
@@ -64,7 +66,18 @@ export function useBulkSelection({
   selection,
   setSelection,
   refreshPlacements,
+  runBinding,
 }: Readonly<{
+  runBinding: (
+    placementId: string,
+    binding: PlacementFlowBinding,
+    supplied: Record<string, unknown>,
+    selectedRecordId?: string,
+    gestureSubject?: undefined,
+    afterAccepted?: undefined,
+    clickId?: string,
+    reportOnControl?: "transient",
+  ) => Promise<DispatchOutcome>;
   model: ApplicationPageModel;
   navigationKey: string;
   currentData: ApplicationPageModel["data"];
@@ -207,6 +220,7 @@ export function useBulkSelection({
       table: DisplayTablePayload,
       held: SelectedRecords | undefined,
       actionKey: string,
+      bindings: readonly PlacementFlowBinding[],
     ): Promise<void> => {
       const action = table.features?.bulkActions?.find(
         (candidate) => candidate.action === actionKey,
@@ -239,45 +253,40 @@ export function useBulkSelection({
         }));
         let last: RecordsTableBulkRunLine | undefined;
         try {
-          const response = await fetch("/api/records-table/bulk-action", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            credentials: "same-origin",
-            cache: "no-store",
-            body: JSON.stringify({
-              ...recordsTableAddress(model),
-              placementId,
-              action: action.action,
-              commandId: crypto.randomUUID(),
-              selection,
-            }),
-          });
-          if (!response.ok || response.body === null)
-            throw new Error(`BULK_ACTION_REFUSED: ${response.status}`);
-          const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-          let buffered = "";
-          for (;;) {
-            const { value, done } = await reader.read();
-            if (value !== undefined) buffered += value;
-            const lines = buffered.split("\n");
-            buffered = lines.pop() ?? "";
-            for (const text of lines) {
-              if (text.trim() === "") continue;
-              const line = recordsTableBulkRunLineSchema.parse(JSON.parse(text));
-              last = line;
-              if (line.kind === "progress" && navigation.current === owner)
-                setRuns((current) => ({
-                  ...current,
-                  [placementId]: {
-                    status: "running",
-                    label,
-                    total: line.total,
-                    processed: line.processed,
-                  },
-                }));
-            }
-            if (done) break;
-          }
+          const binding = bindings.find(
+            (candidate) =>
+              candidate.event === "bulk_action" && candidate.eventId === action.eventId,
+          );
+          if (binding === undefined)
+            throw new Error("BULK_ACTION_BINDING_MISSING: the table names no flow for the action");
+          if (selection.kind !== "ids") throw new Error("BULK_MATCHING_NOT_BOUND");
+          // One run of the action's bound flow: every record changes in one transaction, or none does.
+          const outcome = await runBinding(
+            placementId,
+            binding,
+            {
+              subjects: selection.items.map((item) => ({
+                record: item.recordId,
+                revision: item.revision,
+              })),
+            },
+            undefined,
+            undefined,
+            undefined,
+            crypto.randomUUID(),
+            "transient",
+          );
+          last = {
+            kind: "summary",
+            total: selected,
+            done: outcome.confirmed ? selected : 0,
+            warnings: [],
+            refused: outcome.confirmed
+              ? []
+              : [{ reason: outcome.changed ? "changed" : "refused", count: selected }],
+            notProcessed: outcome.confirmed ? 0 : selected,
+            limited: false,
+          };
         } catch (error) {
           console.error("[page] the bulk action did not finish", error);
         }
@@ -315,7 +324,12 @@ export function useBulkSelection({
 
   /** The Bulk actions events of one table's placement. */
   const eventsFor = useCallback(
-    (placementId: string, table: DisplayTablePayload, held: SelectedRecords | undefined) => ({
+    (
+      placementId: string,
+      table: DisplayTablePayload,
+      held: SelectedRecords | undefined,
+      bindings: readonly PlacementFlowBinding[],
+    ) => ({
       selection_scope_changed: (event: DisplaySemanticEvent) => {
         if (event.event !== "selection_scope_changed") return;
         if (event.scope === "cleared") return clear(placementId);
@@ -324,7 +338,7 @@ export function useBulkSelection({
       },
       bulk_action: (event: DisplaySemanticEvent) => {
         if (event.event !== "bulk_action") return;
-        return runAction(placementId, table, held, event.action);
+        return runAction(placementId, table, held, event.action, bindings);
       },
     }),
     [clear, runAction, selectMatching],
