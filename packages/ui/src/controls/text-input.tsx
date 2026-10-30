@@ -19,6 +19,7 @@ import {
   useFieldFeedback,
   useFieldIds,
   useSeededState,
+  fieldFocusLost,
 } from "./field-parts";
 import { useFormField, useFormFieldError } from "./form-context";
 
@@ -29,7 +30,10 @@ export type TextInputProps = ControlRenderProps<TextInputPayload>;
  * typed string value and publishes that value to its enclosing form.
  */
 export function TextInput(props: TextInputProps): ReactElement {
-  const context = resolveControlContext<TextInputPayload>(props, ["field_changed"]);
+  const context = resolveControlContext<TextInputPayload>(props, [
+    "field_changed",
+    "field_focus_lost",
+  ]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();
@@ -99,6 +103,9 @@ export function TextInput(props: TextInputProps): ReactElement {
     setValue(next);
     context.events?.field_changed?.({
       event: "field_changed",
+      origin: "user",
+      depth: 0,
+      immediate: false,
       fieldKey,
       value: blankIsEmpty && next === "" ? null : next,
     });
@@ -119,6 +126,15 @@ export function TextInput(props: TextInputProps): ReactElement {
 
   return (
     <Field
+      onBlur={(event) => {
+        if (!disabled && !readOnly)
+          fieldFocusLost(
+            event,
+            context.events?.field_focus_lost,
+            fieldKey,
+            blankIsEmpty && value === "" ? null : value,
+          );
+      }}
       data-vortex-control="text-input"
       hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}

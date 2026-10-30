@@ -20,6 +20,7 @@ const identitySchema = z.object({
   applicationRootId: z.uuid(),
 }).strict();
 const payloadSchema = identitySchema.extend({
+  failure: z.object({ segmentId: z.string().min(1).max(200) }).strict().optional(),
   values: z.record(z.string().min(1).max(300), z.object({
     type: z.string().min(1).max(100),
     value: jsonValueSchema,
@@ -43,9 +44,10 @@ export const openFlowCarriedValues = (
   key: QueryContinuationKey,
   identity: CarryActor,
   segment: FlowServerSegment,
-): Readonly<{ runId?: string; values: CarryValues }> => {
+): Readonly<{ runId?: string; values: CarryValues; failure?: Readonly<{ segmentId: string }> }> => {
   let values: CarryValues = {};
   let runId: string | undefined;
+  let failure: Readonly<{ segmentId: string }> | undefined;
   if (token !== undefined) {
     if (token.length > maximumTokenLength) throw new FlowCarriedValuesError();
     const opened = openToken(key, purpose, token);
@@ -56,6 +58,7 @@ export const openFlowCarriedValues = (
     )) throw new FlowCarriedValuesError();
     values = parsed.data.values;
     runId = parsed.data.runId;
+    failure = parsed.data.failure;
   }
   for (const [name, type] of Object.entries(segment.carriedInputs)) {
     const value = values[name];
@@ -63,7 +66,7 @@ export const openFlowCarriedValues = (
       (value.value !== null && !typedValueMatchesType(value.value, type, "flow"))))
       throw new FlowCarriedValuesError();
   }
-  return { values, ...(runId === undefined ? {} : { runId }) };
+  return { values, ...(runId === undefined ? {} : { runId }), ...(failure === undefined ? {} : { failure }) };
 };
 
 /** Keep only values needed after this segment and add its new server-only outputs. */
@@ -74,6 +77,7 @@ export const sealFlowCarriedValues = (
   identity: CarryIdentity,
   segment: FlowServerSegment | undefined,
   includeRunId: boolean,
+  failure?: Readonly<{ segmentId: string }>,
 ): string | undefined => {
   const values: Record<string, FlowRuntimeValue> = Object.create(null);
   for (const name of segment?.carriedRetainKeys ?? []) {
@@ -86,8 +90,8 @@ export const sealFlowCarriedValues = (
       throw new FlowCarriedValuesError();
     values[name] = value;
   }
-  if (!includeRunId && Object.keys(values).length === 0) return undefined;
-  const token = sealToken(key, purpose, payloadSchema.parse({ ...identity, values }));
+  if (!includeRunId && failure === undefined && Object.keys(values).length === 0) return undefined;
+  const token = sealToken(key, purpose, payloadSchema.parse({ ...identity, values, ...(failure === undefined ? {} : { failure }) }));
   if (token.length > maximumTokenLength) throw new FlowCarriedValuesError();
   return token;
 };

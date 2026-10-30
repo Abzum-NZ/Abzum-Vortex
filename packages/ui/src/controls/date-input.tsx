@@ -21,6 +21,7 @@ import {
   useFieldFeedback,
   useFieldIds,
   useSeededState,
+  fieldFocusLost,
 } from "./field-parts";
 import { useRequiredFormField } from "./form-context";
 import { isIsoCalendarDate, type DateInputPayload } from "./projected-data";
@@ -41,7 +42,10 @@ const toIsoCalendarDate = calendarDay;
  * day in the surrounding locale through the date-format context.
  */
 export function DateInput(props: DateInputProps): ReactElement {
-  const context = resolveControlContext<DateInputPayload>(props, ["field_changed"]);
+  const context = resolveControlContext<DateInputPayload>(props, [
+    "field_changed",
+    "field_focus_lost",
+  ]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();
@@ -68,7 +72,14 @@ export function DateInput(props: DateInputProps): ReactElement {
   const commit = (next: string): void => {
     if (disabled || readOnly) return;
     setRaw(next);
-    context.events?.field_changed?.({ event: "field_changed", fieldKey, value: toTyped(next) });
+    context.events?.field_changed?.({
+      event: "field_changed",
+      origin: "user",
+      depth: 0,
+      immediate: false,
+      fieldKey,
+      value: toTyped(next),
+    });
   };
 
   const onChange = (event: ChangeEvent<HTMLInputElement>): void => commit(event.target.value);
@@ -82,6 +93,10 @@ export function DateInput(props: DateInputProps): ReactElement {
   const pickerUnavailable = disabled || readOnly;
   return (
     <Field
+      onBlur={(event) => {
+        if (!disabled && !readOnly)
+          fieldFocusLost(event, context.events?.field_focus_lost, fieldKey, typed);
+      }}
       data-vortex-control="date-input"
       hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}

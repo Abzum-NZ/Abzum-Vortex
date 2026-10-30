@@ -208,7 +208,8 @@ export function useGuidedFormSteps({
       placementId: string,
       binding: PlacementFlowBinding,
       submittedValues: Readonly<Record<string, unknown>>,
-      selectedOwnerGroupId?: string,
+      selectedOwnerGroupId: string | undefined,
+      gestureId: string,
     ) => {
       const guidedForm = model.guidedForm;
       if (
@@ -224,7 +225,6 @@ export function useGuidedFormSteps({
       guidedSubmitInFlight.current = true;
       setBusy(true);
       setNotice(undefined);
-      let flowStarted = false;
       try {
         const confirmed = await guidedFormActions.confirm({
           address: guidedAddress,
@@ -262,14 +262,15 @@ export function useGuidedFormSteps({
           asComponentBinding(placementId, binding),
           { $guidedFormConfirmation: confirmed.proof },
           selectedOwnerGroupId,
+          undefined,
+          gestureId,
         );
-        flowStarted = true;
         await applyDispatch(dispatch, placementId, afterAccepted, binding.bindingId);
       } catch {
         setNotice(unavailableNotice);
       } finally {
         guidedSubmitInFlight.current = false;
-        if (!flowStarted) setBusy(false);
+        setBusy(false);
       }
     },
     [

@@ -6,7 +6,6 @@ import { safeHttpsUrlSchema } from "../catalogue/common";
 import {
   compareExactDecimals,
   exactDecimalDigitCounts,
-  normalizeExactDecimal,
   parseExactDecimal,
   type ExactDecimal,
 } from "./exact-decimal";
@@ -16,7 +15,14 @@ import {
   recordIdSchema,
   sourceQualifiedRecordTypeSchema,
 } from "../catalogue/identifiers";
-import { richTextBlockSchema, richTextInlineSchema, type RichTextInline } from "./rich-text";
+import type { RichTextInline } from "./rich-text";
+import {
+  isRecordRichTextBlock,
+  isRecordRichTextDocument,
+  normalizeRecordRichTextBlock,
+  type RecordRichTextBlock,
+} from "./rich-text-predicates";
+import { currencyCodePattern, isCanonicalExactDecimal } from "./value-predicates";
 
 const exactDecimalMessage = "Use exact base-10 text without exponent notation";
 const normalizedExactDecimalMessage = "Use normalized exact base-10 text";
@@ -28,11 +34,13 @@ export const sourceExactDecimalTextSchema = z
 
 /** Canonical exact text has one representation for each base-10 value. */
 export const exactDecimalTextSchema = sourceExactDecimalTextSchema.refine(
-  (value) => normalizeExactDecimal(value) === value,
+  isCanonicalExactDecimal,
   normalizedExactDecimalMessage,
 );
 
-export const currencyCodeSchema = z.string().regex(/^[A-Z]{3}$/, "Use an uppercase currency code");
+export const currencyCodeSchema = z
+  .string()
+  .regex(currencyCodePattern, "Use an uppercase currency code");
 
 export const sourceMoneyValueSchema = z
   .object({ amount: sourceExactDecimalTextSchema, currency: currencyCodeSchema })
@@ -51,29 +59,15 @@ export const recordLinkValueSchema = z.custom<{ recordTypeId: RecordTypeId; reco
 /** Attachment order is meaningful for both single-file and multiple-file fields. */
 export const attachmentValueSchema = z.array(fileIdSchema);
 
-const recordRichTextCellSchema = z
-  .object({ children: z.array(richTextInlineSchema).min(1) })
-  .strict();
-const recordRichTextRowSchema = z
-  .object({ cells: z.array(recordRichTextCellSchema).min(1) })
-  .strict();
-const recordRichTextTableBlockSchema = z
-  .object({ kind: z.literal("table"), rows: z.array(recordRichTextRowSchema).min(1) })
-  .strict();
-const recordRichTextFileBlockSchema = z
-  .object({ kind: z.literal("file"), fileId: fileIdSchema })
-  .strict();
-
 /** Record-only blocks extend, but never mutate, the neutral Page-safe grammar. */
-export const recordRichTextBlockSchema = z.union([
-  richTextBlockSchema,
-  recordRichTextTableBlockSchema,
-  recordRichTextFileBlockSchema,
-]);
+export const recordRichTextBlockSchema = z
+  .custom<RecordRichTextBlock>(isRecordRichTextBlock, { error: "Use a valid rich-text block" })
+  .transform(normalizeRecordRichTextBlock);
 
 export const recordRichTextDocumentSchema = z
   .object({ blocks: z.array(recordRichTextBlockSchema) })
-  .strict();
+  .strict()
+  .refine(isRecordRichTextDocument);
 
 export type RecordRichTextDocument = z.infer<typeof recordRichTextDocumentSchema>;
 export type FormattedTextAllowedBlock =
