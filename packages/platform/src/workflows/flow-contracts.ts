@@ -166,6 +166,7 @@ export const flowStandardEventKindSchema = z.enum([
   "created",
   "changed",
   "deleted",
+  "restored",
   "linked",
   "unlinked",
   "reassigned",

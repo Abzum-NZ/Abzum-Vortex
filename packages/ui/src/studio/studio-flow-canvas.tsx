@@ -20,7 +20,6 @@ import {
 } from "@xyflow/react";
 import {
   ArchiveRestore,
-  Braces,
   Calculator,
   CaseSensitive,
   CircleCheck,
@@ -136,7 +135,6 @@ const taskIcons: Readonly<Record<string, LucideIcon>> = {
   "event.announce": Megaphone,
   "data.calculate": Calculator,
   "data.record_link": Link,
-  "data.set_values": Braces,
   "data.set_variable": Variable,
   "data.format": CaseSensitive,
   "rule.require": CircleCheck,

@@ -30,8 +30,9 @@ begin
       and effect.command_id = p_command_id
     order by effect.effect_sequence
   loop
-    if effect_row.effect_kind in ('soft_deleted', 'optional_cleared') then
-      event_kind := case effect_row.effect_kind when 'soft_deleted' then 'deleted' else 'unlinked' end;
+    if effect_row.effect_kind in ('soft_deleted', 'optional_cleared', 'restored') then
+      event_kind := case effect_row.effect_kind
+        when 'soft_deleted' then 'deleted' when 'restored' then 'restored' else 'unlinked' end;
       event_result := vortex_platform.append_record_occurrences(
         effect_row.storage_contract_id, effect_row.record_id,
         pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
@@ -47,8 +48,8 @@ begin
       end if;
     end if;
   end loop;
-  -- Restore has no standard Event contract yet. Every changed lifecycle row
-  -- still publishes its revision, including optional links cleared or recovered.
+  -- Every changed lifecycle row publishes its revision, including optional links
+  -- cleared or recovered.
   for storage_value in
     select effect.record_type_id, effect.record_id, effect.storage_contract_id,
       storage.storage_scope, pg_catalog.bool_or(effect.effect_kind = 'soft_deleted') as deleted
@@ -121,4 +122,4 @@ alter function vortex_record.complete_record_lifecycle_set_internal(uuid,jsonb,j
 revoke all on function vortex_record.complete_record_lifecycle_set_internal(uuid,jsonb,jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_record.complete_record_lifecycle_set_internal(uuid,jsonb,jsonb) is
-  'Completes the common record command lifecycle effects: one Event per deduplicated delete effect, current revisions and data versions for changed rows, and Activity for each explicit lifecycle root.';
+  'Completes the common record command lifecycle effects: one Event per deduplicated delete, clear or restore effect, current revisions and data versions for changed rows, and Activity for each explicit lifecycle root.';
