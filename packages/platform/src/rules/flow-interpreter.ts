@@ -19,6 +19,27 @@ import {
   type PathSegment,
 } from "./flow-interpreter-state";
 import { serverRuns } from "./flow-server-step-runners";
+import type {
+  FlowTaskOutcome,
+  FlowFailure,
+  FlowRuleFeedback,
+  FlowRuntimeValues,
+  FlowSubject,
+  FlowTaskTraceObserver,
+  FlowRunStart,
+} from "./flow-interpreter-types";
+export type {
+  FlowFailureOutcome,
+  FlowTaskOutcome,
+  FlowFailureCode,
+  FlowFailure,
+  FlowRuleFeedback,
+  FlowRuntimeValues,
+  FlowSubject,
+  FlowTaskTraceObservation,
+  FlowTaskTraceObserver,
+  FlowRunStart,
+} from "./flow-interpreter-types";
 import { formattedTaskValue, recordLinkTaskValue } from "./flow-data-tasks";
 import { typedValueMatchesType } from "./condition-types";
 import { flowPathGuardMatches } from "./flow-path-guard";
@@ -32,7 +53,6 @@ import {
   flowReadFieldsTypeMapSchema,
   flowTaskChildLists,
   type FlowDefinition,
-  type FlowExecutionKind,
   type FlowTask,
 } from "../workflows/flow-contracts";
 import {
@@ -58,6 +78,7 @@ import {
 import {
   flowMaximumForEachItemsOther,
   flowMaximumProtectedOperations,
+  flowMaximumSetBasedForEachItems,
   flowMaximumRunFlowDepth,
 } from "../workflows/flow-limits";
 
@@ -68,56 +89,6 @@ import {
 
 export { flowRunStateVersion } from "./flow-interpreter-state";
 export { flowPathGuardMatches } from "./flow-path-guard";
-
-/** The safe outcomes a failed run reports; the default error handler shows each of them. */
-export type FlowFailureOutcome = "refused" | "conflict" | "validation" | "uncertain" | "failed";
-
-/** The safe outcomes one task reports back to the interpreter. */
-export type FlowTaskOutcome = "completed" | "committed" | "background_pending" | FlowFailureOutcome;
-
-export type FlowFailureCode =
-  | "flow_unavailable"
-  | "flow_not_runnable"
-  | "inputs_invalid"
-  | "value_unresolved"
-  | "non_integral_whole_number"
-  | "task_not_available"
-  | "task_unknown"
-  | "for_each_limit"
-  | "protected_operation_limit"
-  | "run_flow_depth"
-  | "step_limit"
-  | "server_time_limit"
-  | "output_unresolved"
-  | "task_refused"
-  | "resume_mismatch"
-  | "continuation_unavailable"
-  | "replay_unavailable";
-
-export type FlowFailure = Readonly<{
-  outcome: FlowFailureOutcome;
-  code: FlowFailureCode;
-  taskId?: string;
-  diagnostic?: FlowRefusalFeedback;
-  /** The cause for the server log: names and types only, never a submitted value. */
-  reason?: string;
-  /** The authored reason, message and field of the `rule.refuse` task that refused a save. */
-  ruleRefusal?: Readonly<{ reason: string; message: string; field?: string }>;
-}>;
-
-/** What a save rule task reported while a save transaction flow ran, in flow order. */
-export type FlowRuleFeedback = Readonly<{
-  kind: "warn" | "require";
-  taskId: string;
-  message: string;
-  /** The permanent field identity a `rule.require` task requires. */
-  field?: string;
-}>;
-
-export type FlowRuntimeValues = Readonly<Record<string, FlowRuntimeValue>>;
-
-/** The page subject and revision the host supplied as evidence for this run. */
-export type FlowSubject = Readonly<{ recordId: string; revision: number }>;
 
 export type Frame = Readonly<{
   /** Address of the task list inside the activation's flow. */
@@ -151,8 +122,10 @@ export type Activation = Readonly<{
 }>;
 
 /** What the suspended run is waiting for, so a resume of the wrong kind is refused. */
+type SetCall = Readonly<{ taskId: string; taskType: string; allowRefusal: boolean }>;
 type Awaiting =
   | Readonly<{ kind: "protected_task"; taskId: string; taskType: string; allowRefusal: boolean }>
+  | Readonly<{ kind: "protected_set"; taskId: string; calls: readonly SetCall[] }>
   | Readonly<{ kind: "form"; taskId: string; answerTypes?: Readonly<Record<string, string>> }>
   | Readonly<{ kind: "confirm"; taskId: string }>;
 
@@ -235,6 +208,15 @@ export type FlowRunStep =
       call: FlowProtectedTaskCall;
       replay?: FlowRunResume;
     }>
+  /** A set-based For each: every item's record steps, applied by the host as one change. */
+  | Readonly<{
+      kind: "protected_set";
+      state: FlowRunState;
+      taskPath: string;
+      iteration: string;
+      calls: readonly FlowProtectedTaskCall[];
+      replay?: FlowRunResume;
+    }>
   | Readonly<{ kind: "boundary"; state: FlowRunState; result?: FlowRunResult; nextTaskId?: string }>
   | Readonly<{
       kind: "interface";
@@ -249,54 +231,15 @@ export type FlowRunStep =
       result: FlowRunResult;
     }>;
 
-/** Optional, read-only observation of each task the interpreter reaches. */
-export type FlowTaskTraceObservation = Readonly<{
-  flowId: string;
-  taskId: string;
-  taskType: string;
-  iteration: string;
-  outcome: "entered" | "completed" | "awaiting" | "interface" | "failed";
-  failure?: FlowFailure;
-  intent?: FlowInterfaceIntent;
-}>;
-
-/** An observer cannot change interpreter results; observer errors are ignored. */
-export type FlowTaskTraceObserver = (observation: FlowTaskTraceObservation) => void;
-
-export type FlowRunStart = Readonly<{
-  runId: string;
-  flowId: string;
-  inputs: Readonly<Record<string, unknown>>;
-  now: string;
-  actor?: string;
-  /** Page record evidence retained with the run across form and confirmation pauses. */
-  subject?: FlowSubject;
-  /**
-   * The execution kinds the host may start; interactive by default. A named action starts as a
-   * `transaction` flow through its binding, driven by the host that owns the transaction.
-   */
-  executionKinds?: readonly FlowExecutionKind[];
-  /** The record the run acts on, keyed by field key; see `FlowRunState.triggerRecord`. */
-  triggerRecord?: FlowRuntimeValues;
-  /** The record as stored before a save; see `FlowRunState.previousRecord`. */
-  previousRecord?: FlowRuntimeValues;
-  /**
-   * Inputs the host has already verified and typed under its own rules (a named action checks each
-   * input against its declaration before the run). When supplied they are the run's inputs as given,
-   * and the interpreter's own value-shape check is not applied to them.
-   */
-  verifiedInputs?: FlowRuntimeValues;
-  /** Binding input names the trusted host resolves in the page, never from a caller's claim. */
-  pageResolvedInputs?: readonly string[];
-  carriedValues?: Readonly<Record<string, FlowRuntimeValue>>; // Trusted values opened by the host.
-}>;
-
 export type FlowRunResume =
   | Readonly<{
       kind: "task_result";
       outcome: FlowTaskOutcome;
       outputs?: Readonly<Record<string, JsonValue>>;
       diagnostic?: FlowRefusalFeedback;
+      /** A set's outputs, one per call in order; a set refusal names its call's task. */
+      setOutputs?: readonly Readonly<Record<string, JsonValue>>[];
+      taskId?: string;
     }>
   | FormContinuationAnswer;
 
@@ -660,22 +603,20 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
       const node = task as Extract<FlowTask, { type: "for_each" }>;
       const items = evaluateValue(node.items, state, activation, flow, taskId);
       if (!Array.isArray(items.value)) return failed("value_unresolved", "failed", taskId);
-      if (items.value.length > Math.min(node.maximumItems, flowMaximumForEachItemsOther))
+      const setBased = machine.segment?.setBasedChanges.some((change) => change.taskId === taskId);
+      const maximum = setBased ? flowMaximumSetBasedForEachItems : flowMaximumForEachItemsOther;
+      if (items.value.length > Math.min(node.maximumItems, maximum))
         failed("for_each_limit", "failed", taskId);
+      const loop = {
+        count: items.value.length,
+        iteration: 0,
+        items: items.value as readonly JsonValue[],
+        itemType: flowListItemType(items.type),
+      };
+      if (setBased && loop.count > 0) return suspendSet(machine, node, taskPath, next, loop);
       replaceTop(
         machine,
-        items.value.length === 0
-          ? next
-          : pushFrame(next, {
-              path: [...taskPath, "tasks"],
-              index: 0,
-              loop: {
-                count: items.value.length,
-                iteration: 0,
-                items: items.value as readonly JsonValue[],
-                itemType: flowListItemType(items.type),
-              },
-            }),
+        loop.count === 0 ? next : pushFrame(next, { path: [...taskPath, "tasks"], index: 0, loop }),
       );
       return { kind: "continue" };
     }
@@ -919,6 +860,51 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
 };
 const snapshot = (machine: Machine): FlowRunState => clone(machine.state) as FlowRunState;
 
+/**
+ * A set-based For each: each item's record steps are evaluated as they would run in that
+ * iteration, then the run suspends once, as one protected operation, for the host to apply them
+ * all as one change.
+ */
+const suspendSet = (
+  machine: Machine,
+  node: Extract<FlowTask, { type: "for_each" }>,
+  taskPath: readonly PathSegment[],
+  next: Activation,
+  loop: NonNullable<Frame["loop"]>,
+): Executed => {
+  const calls: FlowProtectedTaskCall[] = [];
+  for (let iteration = 0; iteration < loop.count; iteration += 1)
+    node.tasks.forEach((child, index) => {
+      const scratch: Machine = { ...machine, state: clone(machine.state) };
+      const frame = { path: [...taskPath, "tasks"], index, loop: { ...loop, iteration } };
+      replaceTop(scratch, pushFrame(next, frame));
+      const executed = execute(scratch, child, [...taskPath, "tasks", index]);
+      if (executed.kind === "suspend" && executed.step.kind === "protected_task")
+        calls.push(executed.step.call);
+      else failed("task_not_available", "failed", child.id);
+    });
+  if (machine.state.protectedOperations >= flowMaximumProtectedOperations)
+    failed("protected_operation_limit", "failed", node.id);
+  machine.state.protectedOperations += 1;
+  machine.state.awaiting = {
+    kind: "protected_set",
+    taskId: node.id,
+    calls: calls.map(({ taskId, taskType, allowRefusal }) => ({ taskId, taskType, allowRefusal })),
+  };
+  replaceTop(machine, next);
+  const activation = topOf(machine);
+  return {
+    kind: "suspend",
+    step: {
+      kind: "protected_set",
+      state: snapshot(machine),
+      taskPath: `${activation.prefix}${pathKey(taskPath)}`,
+      iteration: iterationKey(machine.state),
+      calls,
+    },
+  };
+};
+
 /** Runs the machine until it needs the host or the run is finished. */
 const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep => {
   for (;;) {
@@ -1031,6 +1017,18 @@ const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep =>
       const activationCount = machine.state.activations.length;
       const executed = execute(machine, task, taskPath);
       if (executed.kind === "suspend") {
+        if (executed.step.kind === "protected_set" && machine.replay !== undefined) {
+          const replay =
+            machine.replay[JSON.stringify([executed.step.taskPath, executed.step.iteration])];
+          if (replay === undefined || replay === null || replay.kind !== "task_result")
+            return failed(
+              "replay_unavailable",
+              "refused",
+              task.id,
+              "the earlier result cannot be shown again; reload",
+            );
+          return { ...executed.step, replay };
+        }
         if (
           executed.step.kind === "protected_task" &&
           machine.replay !== undefined &&
@@ -1293,6 +1291,40 @@ export const resumeFlowRun = (
   if (awaiting === undefined || previous.version !== flowRunStateVersion) return mismatch();
   delete machine.state.awaiting;
   const activation = topOf(machine);
+
+  if (awaiting.kind === "protected_set") {
+    if (resume.kind !== "task_result") return mismatch();
+    if (resume.outcome === "committed" || resume.outcome === "completed") {
+      const produced = resume.setOutputs;
+      if (produced === undefined || produced.length !== awaiting.calls.length) return mismatch();
+      if (resume.outcome === "committed") machine.state.committedEffects += 1;
+      replaceTop(
+        machine,
+        awaiting.calls.reduce(
+          (top, call, index) =>
+            storeTaskOutputs(top, call.taskId, declaredOutputs(call.taskType, produced[index])),
+          activation,
+        ),
+      );
+      return drive(machine, observer);
+    }
+    const call = awaiting.calls.find((candidate) => candidate.taskId === resume.taskId);
+    if (call === undefined) return mismatch();
+    machine.state.awaiting = { kind: "protected_task", ...call };
+    return resumeFlowRun(
+      { ...machine.state, awaiting: { kind: "protected_task", ...call } },
+      {
+        kind: "task_result",
+        outcome: resume.outcome,
+        ...(resume.diagnostic === undefined ? {} : { diagnostic: resume.diagnostic }),
+      },
+      library,
+      observer,
+      segment,
+      replay,
+      boundaryBefore,
+    );
+  }
 
   if (awaiting.kind === "protected_task") {
     if (resume.kind !== "task_result") return mismatch();

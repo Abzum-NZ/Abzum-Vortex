@@ -4,7 +4,7 @@ import { descriptionSchema, jsonValueSchema } from "../catalogue/common";
 import { builderKeySchema, flowIdSchema, namespacedKeySchema, permissionIdSchema, recordTypeIdSchema, stableDefinitionReleaseVersionSchema } from "../catalogue/identifiers";
 import type { FlowId } from "../catalogue/identifiers";
 import { boundedRecord, flowFormulaSchema, flowLiteralSchema, flowFormulaValueSchema, flowLiteralValueSchema, flowReferenceValueSchema, flowValueSchema, shorthandReferenceValueSchema, templateFreeText } from "./flow-values";
-import { flowMaximumTaskCount, flowMaximumForEachItemsOther, flowMaximumRunFlowDepth } from "./flow-limits";
+import { flowMaximumTaskCount, flowMaximumSetBasedForEachItems, flowMaximumRunFlowDepth } from "./flow-limits";
 import type { FlowFormula, FlowLiteral, FlowValue } from "./flow-values";
 
 /**
@@ -385,7 +385,7 @@ const flowTaskTreeSchema: z.ZodType<FlowTask> = z.lazy(() => {
         ...taskCommonShape,
         type: z.literal("for_each"),
         items: flowValueSchema,
-        maximumItems: z.number().int().min(1).max(flowMaximumForEachItemsOther),
+        maximumItems: z.number().int().min(1).max(flowMaximumSetBasedForEachItems),
         tasks: list,
       })
       .strict(),

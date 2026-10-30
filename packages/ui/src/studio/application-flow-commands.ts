@@ -2,6 +2,8 @@ import {
   builderKeySchema,
   flowMaximumTaskCount,
   flowMaximumForEachItemsOther,
+  flowMaximumSetBasedForEachItems,
+  isSetBasedForEach,
   flowTaskRegistry,
   flowExecutionRunLocations,
   parseFlowReference,
@@ -586,7 +588,10 @@ const newStep = (
     if (
       !Number.isSafeInteger(settings.maximumItems) ||
       settings.maximumItems! < 1 ||
-      settings.maximumItems! > flowMaximumForEachItemsOther
+      settings.maximumItems! >
+        (isSetBasedForEach({ type: "for_each", tasks })
+          ? flowMaximumSetBasedForEachItems
+          : flowMaximumForEachItemsOther)
     )
       return { kind: "invalid", reason: "Enter a valid maximum number of items." };
     return {

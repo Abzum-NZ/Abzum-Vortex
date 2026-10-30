@@ -8,6 +8,7 @@ import { protectedOperationMetadata } from "../definition/protected-operation-me
 import { flowRuntimeValuesEqual } from "../rules/flow-formula";
 import { prepareFlowFormulas } from "../rules/flow-formula-preparation";
 import type { FlowDefinition, FlowTask } from "./flow-contracts";
+import { isSetBasedForEach } from "./flow-set-based";
 import { flowTaskChildLists, isFlowControlTask } from "./flow-contracts";
 import { flowTaskRegistry, type FlowTaskTypeKey } from "./flow-task-registry";
 import {
@@ -196,16 +197,6 @@ const operationOf = (flow: FlowDefinition, task: FlowTask) => {
   return { key, effect: entry[1].descriptor.effect, ...protectedOperationMetadata[key] };
 };
 
-/** Record steps a named action collects into one change; a For each over them is set-based. */
-const setBasedSteps = new Set([
-  "record.create",
-  "record.set_fields",
-  "record.link",
-  "record.delete",
-  "record.restore",
-  "record.changes",
-]);
-
 const leafLocation = (flow: FlowDefinition, task: FlowTask): UnitLocation => {
   if (task.type === "stop") return "neutral";
   const definition = registered(task);
@@ -343,15 +334,16 @@ const inputTypes = (
 };
 
 const setBasedChanges = (steps: readonly FlowTask[]) =>
-  steps.flatMap((step) => {
-    if (step.type !== "for_each") return [];
-    const body = allSteps(flowTaskChildLists(step).flatMap((list) => list.tasks)).filter(
-      (child) => !isFlowControlTask(child),
-    );
-    return body.length > 0 && body.every((child) => setBasedSteps.has(child.type))
-      ? [{ taskId: step.id, steps: body.map((child) => child.id) }]
-      : [];
-  });
+  allSteps(steps).flatMap((step) =>
+    isSetBasedForEach(step)
+      ? [
+          {
+            taskId: step.id,
+            steps: (step as Extract<FlowTask, { type: "for_each" }>).tasks.map((child) => child.id),
+          },
+        ]
+      : [],
+  );
 
 type Draft = {
   kind: "page" | "server";
