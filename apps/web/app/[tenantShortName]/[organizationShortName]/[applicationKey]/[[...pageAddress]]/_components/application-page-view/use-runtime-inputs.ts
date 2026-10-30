@@ -180,7 +180,7 @@ export function useRuntimeInputs({
   advanceGuidedStep: (
     placementId: string,
     stepId: string,
-    values: Readonly<Record<string, unknown>>,
+    readValues: () => Readonly<Record<string, unknown>>,
     requested?: string,
   ) => Promise<void>;
   currentEditFormBaselines: ApplicationPageModel["editFormBaselines"];
@@ -737,7 +737,7 @@ export function useRuntimeInputs({
             return advanceGuidedStep(
               placementId,
               model.guidedForm.activeStepId,
-              event.readValues(),
+              event.readValues,
               requested,
             );
           }

@@ -75,7 +75,7 @@ export function useGuidedFormSteps({
     async (
       placementId: string,
       binding: PlacementFlowBinding,
-      inputs: Readonly<Record<string, unknown>>,
+      inputs: () => Readonly<Record<string, unknown>>,
     ) => {
       if (busy || guidedFormCompleted) return;
       setBusy(true);
@@ -98,7 +98,7 @@ export function useGuidedFormSteps({
     async (
       placementId: string,
       stepId: string,
-      values: Readonly<Record<string, unknown>>,
+      readValues: () => Readonly<Record<string, unknown>>,
       requested?: string,
     ) => {
       const guidedForm = model.guidedForm;
@@ -111,18 +111,22 @@ export function useGuidedFormSteps({
         return;
       }
       // The answers the step saves are no longer unsaved work once the server has accepted them.
-      submittedFormsRef.current.set(binding.bindingId, {
-        formId: placementId,
-        values,
-        draftSaved: true,
-      });
-      await runGuidedBinding(placementId, binding, {
-        draft_id: guidedForm.draftId,
-        revision: guidedForm.revision,
-        step: stepId,
-        // A binding reads every input it declares, so no step asked for is the empty text.
-        requested_step: requested ?? "",
-        values,
+      await runGuidedBinding(placementId, binding, () => {
+        // Read after the form's pending field checks have settled.
+        const values = readValues();
+        submittedFormsRef.current.set(binding.bindingId, {
+          formId: placementId,
+          values,
+          draftSaved: true,
+        });
+        return {
+          draft_id: guidedForm.draftId,
+          revision: guidedForm.revision,
+          step: stepId,
+          // A binding reads every input it declares, so no step asked for is the empty text.
+          requested_step: requested ?? "",
+          values,
+        };
       });
     },
     [model.bindings, model.guidedForm, runGuidedBinding, showPageMessage, submittedFormsRef],
@@ -141,10 +145,10 @@ export function useGuidedFormSteps({
   const cancelGuidedForm = useCallback(async () => {
     const guidedForm = model.guidedForm;
     if (guidedForm === undefined || guidedCancel === undefined) return;
-    await runGuidedBinding(guidedCancel.placementId, guidedCancel.binding, {
+    await runGuidedBinding(guidedCancel.placementId, guidedCancel.binding, () => ({
       draft_id: guidedForm.draftId,
       revision: guidedForm.revision,
-    });
+    }));
   }, [guidedCancel, model.guidedForm, runGuidedBinding]);
 
   const requestGuidedStep = useCallback(
@@ -183,7 +187,7 @@ export function useGuidedFormSteps({
       requestedStepId.current = undefined;
       const stepFormId = guidedActiveFormIds[0];
       if (stepFormId === undefined) showPageMessage(unavailableNotice);
-      else void advanceGuidedStep(stepFormId, guidedForm.activeStepId, {}, requested);
+      else void advanceGuidedStep(stepFormId, guidedForm.activeStepId, () => ({}), requested);
     },
     [
       advanceGuidedStep,

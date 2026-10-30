@@ -92,6 +92,9 @@ export const createGuidedDraftPort = (
     },
     async discard(session, selection, input) {
       const own = await loadOwn(session, input.draftId, input.revision);
+      // A draft that is not the caller's current one is already gone (a replayed submit), so
+      // removing it again changes nothing and is not a failure.
+      if (own.outcome === "refused") return { outcome: "discarded" };
       if (own.outcome !== "loaded") return own;
       const result = await createGuidedFormDraftService(dependencies).abandon(session, selection, {
         draftId: platformIdSchema.parse(own.current.draftId),

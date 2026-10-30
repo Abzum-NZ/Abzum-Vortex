@@ -59,7 +59,11 @@ import { createFormContinuationService } from "./form-continuation";
 import { installedModuleClosure } from "./flow-selected-record-context";
 import { flowEntrySegmentsMatch } from "../workflows/flow-plan";
 import { flowNeedsRunStart } from "../workflows/flow-run-start";
-import { openFlowAdmissionRun, type FlowReceiptClaim } from "../workflows/start";
+import {
+  commandIdOf as flowSegmentCommandId,
+  openFlowAdmissionRun,
+  type FlowReceiptClaim,
+} from "../workflows/start";
 import {
   admitFlowContinuation,
   admitFlowPageStart,
@@ -1331,10 +1335,31 @@ export async function invokeInstalledFlow(
       // names: the draft is read for this session, so another person's draft is never found.
       const model = await dependencies.loadGuidedPage(identity.session, guided, subject);
       const draft = model?.guidedForm;
+      /** The retry of a submit whose reply was lost: its draft is gone, its stored outcome remains. */
+      const replaysCompletedSubmit = async (): Promise<boolean> => {
+        if (invocation.kind !== "binding" || invocation.segment === undefined) return false;
+        const commandId = flowSegmentCommandId(
+          identity.session,
+          selection,
+          guidedClickId(
+            named.draftId as string,
+            named.revision as number,
+            String(binding.bindingId),
+          ),
+          invocation.segment.segmentId,
+          "0",
+        );
+        const found = await requests.run(identity.session, selection, async (transaction) => {
+          const rows =
+            await transaction.query`select vortex_record.flow_segment_receipt(${commandId}::uuid, true) as result`;
+          return isRecord(rows[0]?.result) && rows[0].result.status === "completed";
+        });
+        return found.kind === "available" && found.value === true;
+      };
       const summary = Array.isArray(model?.page.steps)
         ? model.page.steps.find((step) => isRecord(step) && step.summary === true)
         : undefined;
-      if (
+      const draftIsCurrent = !(
         model === undefined ||
         draft === undefined ||
         !isRecord(summary) ||
@@ -1353,8 +1378,23 @@ export async function invokeInstalledFlow(
             held.event === "form_submit" &&
             held.bindingId.toLowerCase() === String(binding.bindingId).toLowerCase(),
         )
-      )
-        return undefined;
+      );
+      if (!draftIsCurrent) {
+        if (!(await replaysCompletedSubmit())) return undefined;
+        // Only the stored outcome is replayed; the answers of a draft that is gone are never read.
+        return adaptPrivateFormSubmit(
+          binding,
+          {
+            values: {},
+            draft: { draftId: named.draftId, revision: named.revision },
+            ...(callerInputs.selectedOwnerGroupId === undefined
+              ? {}
+              : { selectedOwnerGroupId: callerInputs.selectedOwnerGroupId }),
+          },
+          subject,
+        );
+      }
+      if (model === undefined || draft === undefined) return undefined;
       const resolved = await resolveValues(draft.values);
       if (resolved === undefined) return undefined;
       const adaptedInputs = adaptPrivateFormSubmit(

@@ -33,7 +33,8 @@ export type FormBlockRuntime = Readonly<{
   /** A guided form's step change or cancel: the bound flow with the draft and step it names. */
   guided: (
     binding: PlacementFlowBinding,
-    inputs: Readonly<Record<string, unknown>>,
+    /** Read once, after the form's pending changes have settled. */
+    inputs: () => Readonly<Record<string, unknown>>,
     gestureId: string,
   ) => Promise<ServerDrivenResult | undefined>;
   /** The form's mount event, when the placement binds it. */
@@ -85,7 +86,7 @@ export function createFormBlockRuntime(runtime: FlowRuntime): FormBlockRuntime {
     },
     guided: (binding, inputs, gestureId) =>
       binding.event === "guided_step_changed" || binding.event === "form_cancel"
-        ? dispatchOnce(binding, inputs, gestureId)
+        ? dispatchOnce(binding, async () => inputs(), gestureId)
         : Promise.resolve(undefined),
     ready: (binding, gestureId) =>
       binding.event === "form_ready"

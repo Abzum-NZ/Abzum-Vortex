@@ -226,7 +226,10 @@ export function createFlowRuntimeState(
         },
       };
       const settlesForm =
-        (event === "form_submit" || (event === "action" && exclusive === "form")) && formId;
+        (event === "form_submit" ||
+          event === "guided_step_changed" ||
+          (event === "action" && exclusive === "form")) &&
+        formId;
       const pendingChanges = settlesForm ? settler.pending(settlesForm) : [];
       const scope = {
         exclusive,
