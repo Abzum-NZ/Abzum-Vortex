@@ -28,14 +28,11 @@ export function StudioPageValuesPanel({
   source,
   pageAlias,
   disabled,
-  organisationCurrency,
   onEdit,
 }: Readonly<{
   source: ApplicationSourceDocument;
   pageAlias: string;
   disabled: boolean;
-  /** The organisation's currency, offered first for a money value. */
-  organisationCurrency: string | undefined;
   onEdit: (command: StudioPageValueCommand) => StudioPageValueResult;
 }>) {
   const page = source.body.pages.find((entry) => entry.id === pageAlias);
@@ -45,7 +42,7 @@ export function StudioPageValuesPanel({
   const [name, setName] = useState("");
   const [label, setLabel] = useState("");
   const [type, setType] = useState<StudioPageValueType>("decimal_number");
-  const [currency, setCurrency] = useState(organisationCurrency ?? "");
+  const [currency, setCurrency] = useState("");
   if (page === undefined) return null;
   const values = Object.entries(page.values ?? {});
   const run = (command: StudioPageValueCommand, subject: string): boolean => {
@@ -175,7 +172,6 @@ export function StudioPageValuesPanel({
               {currencies.map((code) => (
                 <NativeSelectOption key={code} value={code}>
                   {code}
-                  {code === organisationCurrency ? " (organisation currency)" : ""}
                 </NativeSelectOption>
               ))}
             </NativeSelect>

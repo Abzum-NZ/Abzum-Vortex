@@ -972,7 +972,6 @@ export function useStudioCanvasTab({
           source={source}
           pageAlias={selected.pageAlias}
           disabled={draft.locked}
-          organisationCurrency={undefined}
           onEdit={commandPageValue}
         />
       )}
