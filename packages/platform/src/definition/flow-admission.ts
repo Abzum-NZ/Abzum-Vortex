@@ -244,7 +244,7 @@ export const admitFlowSegment = async (
   const selection = run.authority.selection;
   const first =
     segment.preScopeLock === "organization_account"
-      ? continueFlowRun(state, run.library, segment)
+      ? (entry ?? continueFlowRun(state, run.library, segment))
       : undefined;
   const inputs = first?.kind === "protected_task" ? first.call.properties.inputs?.value : undefined;
   const profileAccountId = isRecord(inputs)
