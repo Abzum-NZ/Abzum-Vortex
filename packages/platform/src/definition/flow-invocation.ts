@@ -921,7 +921,7 @@ export async function invokeInstalledFlow(
     const installed = await readInstalled(session, selection);
     if (installed === undefined) {
       logFlowRefusal("FORM_CONTINUATION_INSTALLATION_NOT_CURRENT");
-      return { kind: "refused", reason: "unavailable" } as const;
+      return { kind: "refused", reason: "unavailable", committedNow: false } as const;
     }
     const release: FlowRelease = {
       releaseKey: installed.releaseKey,
@@ -962,7 +962,7 @@ export async function invokeInstalledFlow(
     if (request.target.awaiting !== "form") {
       if (answer.kind !== "submit") return formContinuation.continue(session, selection, request);
       logFlowRefusal("FORM_CONTINUATION_SUBMIT_WITHOUT_FORM_PAUSE");
-      return { kind: "refused", reason: "unavailable" };
+      return { kind: "refused", reason: "unavailable", committedNow: false };
     }
 
     const trustedFormId = request.target.formId;
@@ -976,7 +976,7 @@ export async function invokeInstalledFlow(
       })
     ) {
       logFlowRefusal("FORM_CONTINUATION_TARGET_NOT_CURRENT");
-      return { kind: "refused", reason: "unavailable" };
+      return { kind: "refused", reason: "unavailable", committedNow: false };
     }
     if (
       installed.applicationContent === undefined ||
@@ -984,7 +984,7 @@ export async function invokeInstalledFlow(
       !dependencies.hasAuthoredForm(installed.applicationContent, trustedFormId)
     ) {
       logFlowRefusal("FORM_CONTINUATION_FORM_NOT_AUTHORED");
-      return { kind: "refused", reason: "unavailable" };
+      return { kind: "refused", reason: "unavailable", committedNow: false };
     }
     const projectedForm = await dependencies.projectForm(session, {
       installationRevision: installed.installationRevision,
@@ -993,7 +993,7 @@ export async function invokeInstalledFlow(
     });
     if (projectedForm === undefined) {
       logFlowRefusal("FORM_CONTINUATION_FORM_NOT_PROJECTED");
-      return { kind: "refused", reason: "unavailable" };
+      return { kind: "refused", reason: "unavailable", committedNow: false };
     }
     if (answer.kind !== "submit") return formContinuation.continue(session, selection, request);
     const values = await dependencies.resolveFormValues({
@@ -1009,7 +1009,7 @@ export async function invokeInstalledFlow(
     });
     if (values === undefined) {
       logFlowRefusal("FORM_CONTINUATION_VALUES_NOT_RESOLVED");
-      return { kind: "refused", reason: "unavailable" };
+      return { kind: "refused", reason: "unavailable", committedNow: false };
     }
     return formContinuation.continue(session, selection, {
       ...request,
@@ -1099,14 +1099,15 @@ export async function invokeInstalledFlow(
   if (invocation.kind === "binding") {
     if (bindingContext === undefined || bindingInstallation === undefined) {
       logFlowRefusal("BINDING_INSTALLATION_NOT_CURRENT");
-      return { kind: "refused" };
+      return { kind: "refused", committedNow: false };
     }
     if (invocation.segment !== undefined) {
       const plan = bindingInstallation.plans.get(String(invocation.flowId));
       const segment = plan?.segments.find(
         (part) => part.kind === "server" && part.id === invocation.segment?.segmentId,
       );
-      if (segment === undefined || segment.kind !== "server") return { kind: "refused" };
+      if (segment === undefined || segment.kind !== "server")
+        return { kind: "refused", committedNow: false };
       try {
         openFlowCarriedValues(
           invocation.carriedValues,
@@ -1122,7 +1123,7 @@ export async function invokeInstalledFlow(
         );
       } catch (error) {
         logFlowRefusal(`BINDING_CARRIED_VALUES_INVALID ${describeFailure(error)}`);
-        return { kind: "refused" };
+        return { kind: "refused", committedNow: false };
       }
     }
     const binding = bindingInstallation.bindings.find(
@@ -1135,7 +1136,7 @@ export async function invokeInstalledFlow(
       (guided === null || !guided.summary || binding?.event !== "form_submit")
     ) {
       logFlowRefusal("BINDING_GUIDED_CONTROL_NOT_CONFIRMED");
-      return { kind: "refused" };
+      return { kind: "refused", committedNow: false };
     }
     // A Records table row, bulk or inline-edit command runs only for a command the installed
     // placement declares (a grid feature only while it is on) and rows the viewer may use now.
@@ -1152,7 +1153,7 @@ export async function invokeInstalledFlow(
     if (featureRefusal !== undefined) {
       logRecordsTableRequestRefusal(featureRefusal, "flow_dispatch");
       logFlowRefusal("BINDING_GRID_FEATURE_NOT_PROJECTED");
-      return { kind: "refused" };
+      return { kind: "refused", committedNow: false };
     }
   }
 

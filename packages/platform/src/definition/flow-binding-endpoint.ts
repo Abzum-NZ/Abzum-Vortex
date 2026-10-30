@@ -175,7 +175,7 @@ type FlowBindingEndpointDependencies = Readonly<{
 
 type SafeIntents = Extract<FlowOrchestratorResponse, { intents: unknown }>["intents"];
 
-export type FlowBindingEndpointResult =
+export type FlowBindingEndpointResult = (
   | Readonly<{ kind: "run_opened"; carriedValues: string }>
   /** The request named a stale installation revision: reload the page, nothing was run. */
   | Readonly<{ kind: "reload"; installationRevision: number }>
@@ -212,9 +212,11 @@ export type FlowBindingEndpointResult =
       unavailable: readonly FlowUnavailableNotice[];
     }>
   /** Unknown, not installed, foreign, expired or not permitted: one neutral result. */
-  | Readonly<{ kind: "refused"; reason?: "this step was already answered" }>;
+  | Readonly<{ kind: "refused"; reason?: "this step was already answered" }>
+) &
+  Readonly<{ committedNow: boolean }>;
 
-const refused: FlowBindingEndpointResult = Object.freeze({ kind: "refused" });
+const refused: FlowBindingEndpointResult = Object.freeze({ kind: "refused", committedNow: false });
 
 /** Logs one flow-binding refusal with its stable reason code and cause, then returns the neutral refusal. */
 const refuse = (code: string, cause?: unknown): FlowBindingEndpointResult => {
@@ -612,6 +614,7 @@ const finishedResult = (
         );
   return {
     kind: "result",
+    committedNow: response.committedNow,
     warnings: response.warnings,
     runId: response.runId,
     descriptor,
@@ -678,23 +681,32 @@ const toResult = (
 ): FlowBindingEndpointResult => {
   switch (response.kind) {
     case "reload":
-      return { kind: "reload", installationRevision: context.installationRevision };
+      return {
+        kind: "reload",
+        installationRevision: context.installationRevision,
+        committedNow: response.committedNow,
+      };
     case "rate_limited":
       return response;
     case "already_answered":
-      return { kind: "refused", reason: "this step was already answered" };
+      return {
+        kind: "refused",
+        reason: "this step was already answered",
+        committedNow: response.committedNow,
+      };
     case "finished":
       return finishedResult(response, context);
     case "suspended": {
       const target = suspendedTarget(response, context);
       // A pause the person could not answer through the one form continuation path is not offered.
-      if (target === undefined) return refused;
+      if (target === undefined) return { ...refused, committedNow: response.committedNow };
       const receipt = formContinuationReceiptSchema.safeParse({
         runId: response.runId,
         committedEffects: response.committedEffects,
       });
       return {
         kind: "intent",
+        committedNow: response.committedNow,
         runId: response.runId,
         awaiting: response.awaiting,
         intents: response.intents,
@@ -706,7 +718,7 @@ const toResult = (
       };
     }
     default:
-      return refused;
+      return { ...refused, committedNow: response.committedNow };
   }
 };
 
@@ -722,7 +734,7 @@ const continuationResult = (
 ): FlowBindingEndpointResult => {
   switch (outcome.kind) {
     case "reload":
-      return { kind: "reload", installationRevision };
+      return { kind: "reload", installationRevision, committedNow: outcome.committedNow };
     case "rate_limited":
       return outcome;
     case "finished": {
@@ -735,6 +747,7 @@ const continuationResult = (
       );
       return {
         kind: "result",
+        committedNow: outcome.committedNow,
         warnings: outcome.warnings,
         runId: outcome.runId,
         descriptor: outcome.presentation,
@@ -755,6 +768,7 @@ const continuationResult = (
     case "form_requested":
       return {
         kind: "intent",
+        committedNow: outcome.committedNow,
         runId: outcome.runId,
         awaiting: outcome.target.awaiting,
         intents: outcome.intents as SafeIntents,
@@ -766,10 +780,14 @@ const continuationResult = (
       };
     default:
       return outcome.reason === "already_answered"
-        ? { kind: "refused", reason: "this step was already answered" }
+        ? {
+            kind: "refused",
+            reason: "this step was already answered",
+            committedNow: outcome.committedNow,
+          }
         : outcome.reason === "stale_installation"
-          ? { kind: "reload", installationRevision }
-          : refused;
+          ? { kind: "reload", installationRevision, committedNow: outcome.committedNow }
+          : { ...refused, committedNow: outcome.committedNow };
   }
 };
 
@@ -817,7 +835,15 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
             return refuse("FLOW_INVOKE_BINDING_FLOW_MISMATCH");
           return dependencies.openRun === undefined
             ? refuse("FLOW_INVOKE_RUN_START_UNAVAILABLE")
-            : await dependencies.openRun(session.data, selection.data, matches[0]!, installation);
+            : {
+                ...(await dependencies.openRun(
+                  session.data,
+                  selection.data,
+                  matches[0]!,
+                  installation,
+                )),
+                committedNow: false,
+              };
         }
 
         const release: FlowRelease = {

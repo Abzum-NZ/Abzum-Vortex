@@ -71,7 +71,8 @@ const requestSchema = z
   })
   .strict();
 
-const refusedResponse = (): NextResponse => privateResponse({ kind: "refused" }, 404);
+const refusedResponse = (): NextResponse =>
+  privateResponse({ kind: "refused", committedNow: false }, 404);
 
 /** Cookie-backed starts must originate from this site's JSON client. */
 const fromOwnSite = (request: NextRequest): boolean => {
@@ -235,9 +236,12 @@ export const createFlowInvocationHandler =
         },
       });
       if (result.kind === "refused")
-        return result.reason === undefined ? refusedResponse() : privateResponse(result, 409);
+        return privateResponse(result, result.reason === undefined ? 404 : 409);
       if (result.kind === "rate_limited") {
-        const response = privateResponse({ kind: "refused", code: "flow_rate_limited" }, 429);
+        const response = privateResponse(
+          { kind: "refused", code: "flow_rate_limited", committedNow: result.committedNow },
+          429,
+        );
         response.headers.set("Retry-After", String(result.retryAfterSeconds));
         return response;
       }
