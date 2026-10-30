@@ -9,7 +9,7 @@ import { organizationRuntimeSettingsSchema } from "../access/organization-runtim
 import type { JsonValue } from "../catalogue/common";
 import { applicationRootIdSchema, fieldIdSchema } from "../catalogue/identifiers";
 import { databaseRevision, describeFailure } from "../catalogue/runtime-primitives";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   isWritableSystemProjection,
   recordTypeDefinitionSchema,
@@ -30,19 +30,13 @@ import {
   type SaveRecordResult,
 } from "./records";
 import type { calculateLockedRelationshipTotalSave } from "./relationship-total-save";
-import type {
-  LockedRelationshipTotalPreparation,
-  RelationshipTotalParentMutation,
-} from "./relationship-total-save";
+import type { LockedRelationshipTotalPreparation } from "./relationship-total-save";
 import {
   parentCycleRefusal,
   uniqueValueRefusal,
   violatedParentFieldId,
   violatedUniqueFieldId,
 } from "./unique-violation";
-
-type PreparationRow = DatabaseRow & { readonly preparation: unknown };
-type SaveRow = DatabaseRow & { readonly result: unknown };
 
 /** @internal Shared only by the fixed named-action save composition. */
 export type PreparedSave = Readonly<{
@@ -72,34 +66,6 @@ export type RelationshipTotalPreparationOutcome =
       reasonCode?: string;
     }>;
 
-type StoredResult =
-  | Readonly<{ outcome: "restart" }>
-  | Readonly<{
-      outcome: "saved";
-      recordId: string;
-      concurrencyNumber: number | bigint | string;
-      values: Readonly<Record<string, unknown>>;
-      correlationId: string;
-      backgroundDelivery: "none" | "pending";
-      replayed: boolean;
-    }>
-  | Readonly<{
-      outcome: "conflict";
-      concurrencyNumber?: number | bigint | string;
-      reasonCode?: string;
-    }>
-  | Readonly<{
-      outcome: "refused";
-      reasonCode?: string;
-      fieldId?: string;
-    }>
-  | Readonly<{
-      outcome: "refused_recorded";
-      reasonCode?: string;
-    }>;
-
-export const recordedRefusal = Symbol("recordedRecordSaveRefusal");
-export const restartRelationshipTotalSave = Symbol("restartRelationshipTotalSave");
 export const contractError = (code: string, cause: unknown): Error =>
   Object.assign(new Error(code, { cause }), { code });
 
@@ -311,26 +277,6 @@ export const safeRefusal = (
     },
   });
 
-export const prepare = async (
-  transaction: RequestDatabaseTransaction,
-  command: SaveRecordCommand,
-  activityId: string,
-): Promise<PreparationOutcome> => {
-  const rows = await transaction.query<PreparationRow>`
-    select vortex_record.prepare_base_record_save(
-      ${command.commandId}::uuid,
-      ${command.operation}::text,
-      ${command.recordTypeId}::uuid,
-      ${command.operation === "update" ? command.recordId : null}::uuid,
-      ${command.operation === "update" ? command.expectedConcurrencyNumber : null}::bigint,
-      ${JSON.stringify(command.submittedValues)}::text::jsonb,
-      ${command.operation === "create" ? (command.selectedOwnerGroupId ?? null) : null}::uuid,
-      ${activityId}::uuid
-    ) as preparation
-  `;
-  return parsePreparation(one(rows).preparation);
-};
-
 /** @internal Shared only by the fixed named-action save composition. */
 export const parseRelationshipTotalPreparation = (
   candidate: unknown,
@@ -434,84 +380,6 @@ export const parseRelationshipTotalPreparation = (
         records,
       }
     : { outcome: "refused" };
-};
-
-export const prepareRelationshipTotals = async (
-  transaction: RequestDatabaseTransaction,
-  command: SaveRecordCommand,
-  activityId: string,
-): Promise<RelationshipTotalPreparationOutcome> => {
-  const rows = await transaction.query<PreparationRow>`
-    select vortex_record.prepare_relationship_total_save(
-      ${command.commandId}::uuid,
-      ${command.operation}::text,
-      ${command.recordTypeId}::uuid,
-      ${command.operation === "update" ? command.recordId : null}::uuid,
-      ${command.operation === "update" ? command.expectedConcurrencyNumber : null}::bigint,
-      ${JSON.stringify(command.submittedValues)}::text::jsonb,
-      ${command.operation === "create" ? (command.selectedOwnerGroupId ?? null) : null}::uuid,
-      ${activityId}::uuid
-    ) as preparation
-  `;
-  return parseRelationshipTotalPreparation(one(rows).preparation);
-};
-
-export const persist = async (
-  transaction: RequestDatabaseTransaction,
-  command: SaveRecordCommand,
-  recordType: ReturnType<typeof recordTypeDefinitionSchema.parse>,
-  finalValues: Readonly<Record<string, unknown>>,
-  activityId: string,
-  occurrenceId: string,
-  parentMutations: readonly RelationshipTotalParentMutation[],
-  preview: boolean,
-): Promise<StoredResult> => {
-  if (recordType.systemProjection !== undefined) {
-    if (preview) return { outcome: "refused", reasonCode: "field_refused" };
-    if (
-      command.operation !== "update" ||
-      !writableSystemProjection(recordType) ||
-      command.recordId === undefined ||
-      command.expectedConcurrencyNumber === undefined
-    )
-      return { outcome: "refused", reasonCode: "field_refused" };
-    const rows = await transaction.query<SaveRow>`
-      select vortex_record.apply_settings_record_changes(
-        ${command.commandId}::uuid,
-        ${command.recordTypeId}::uuid,
-        ${command.recordId}::uuid,
-        ${command.expectedConcurrencyNumber}::bigint,
-        ${JSON.stringify(command.submittedValues)}::text::jsonb,
-        ${JSON.stringify(finalValues)}::text::jsonb,
-        ${activityId}::uuid,
-        ${occurrenceId}::uuid
-      ) as result
-    `;
-    const candidate = one(rows).result;
-    if (typeof candidate !== "object" || candidate === null)
-      throw new Error("RECORD_SAVE_RESULT_INVALID");
-    return candidate as StoredResult;
-  }
-
-  const rows = await transaction.query<SaveRow>`
-      select vortex_record.save_base_record_with_relationship_totals(
-        ${command.commandId}::uuid,
-        ${command.operation}::text,
-        ${command.recordTypeId}::uuid,
-        ${command.operation === "update" ? command.recordId : null}::uuid,
-        ${command.operation === "update" ? command.expectedConcurrencyNumber : null}::bigint,
-        ${JSON.stringify(command.submittedValues)}::text::jsonb,
-        ${JSON.stringify(finalValues)}::text::jsonb,
-        ${command.operation === "create" ? (command.selectedOwnerGroupId ?? null) : null}::uuid,
-        ${activityId}::uuid,
-        ${occurrenceId}::uuid,
-        ${JSON.stringify(parentMutations)}::text::jsonb
-      ) as result
-  `;
-  const candidate = one(rows).result;
-  if (typeof candidate !== "object" || candidate === null)
-    throw new Error("RECORD_SAVE_RESULT_INVALID");
-  return candidate as StoredResult;
 };
 
 /**
@@ -682,11 +550,7 @@ export type RecordBatchSaveResult =
 export type RecordSaveServiceResult = HumanOrganizationRequestResult<SaveRecordResult> &
   Readonly<{ warnings?: readonly BeforeSaveRuleWarning[] }>;
 
-export type RecordSaveServiceDependencies = HumanOrganizationRequestDependencies &
-  Readonly<{
-    activityId?: () => string;
-    occurrenceId?: () => string;
-  }>;
+export type RecordSaveServiceDependencies = HumanOrganizationRequestDependencies;
 
 type CalculatedValues =
   ReturnType<typeof calculateAndFinalize> | ReturnType<typeof calculateLockedRelationshipTotalSave>;

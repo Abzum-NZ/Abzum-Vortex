@@ -24,15 +24,18 @@ declare
   graph jsonb;
   meta jsonb;
   projection_records jsonb := '[]'::jsonb;
+  preview_installation jsonb;
 begin
   if not vortex_record.record_change_set_is_valid_internal(p_subjects) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
   end if;
   context_value := vortex_access.validated_human_request_context();
-  if vortex_record.read_current_preview_installation_internal() is not null then
+  preview_installation := vortex_record.read_current_preview_installation_internal();
+  if preview_installation ->> 'outcome' = 'refused' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'preview_unavailable');
   end if;
-  catalogue := vortex_record.relationship_total_catalogue_internal();
+  catalogue := case when preview_installation is null
+    then vortex_record.relationship_total_catalogue_internal() else '{}'::jsonb end;
   -- Authorize every explicit source before reading or locking its dependencies.
   -- A null expected revision is the existing loader's non-locking read mode.
   for subject, subject_index in
@@ -47,7 +50,7 @@ begin
     meta := vortex_record.resolve_record_action_context_internal(
       (subject ->> 'recordTypeId')::uuid, subject ->> 'operation'
     );
-    if meta -> 'recordType' ? 'systemProjection' then
+    if preview_installation is not null or meta -> 'recordType' ? 'systemProjection' then
       prepared := vortex_record.prepare_record_values_internal(
         subject ->> 'operation', (subject ->> 'recordTypeId')::uuid, (subject ->> 'recordId')::uuid,
         (subject ->> 'expectedConcurrencyNumber')::bigint, subject -> 'submittedValues',
@@ -59,9 +62,10 @@ begin
       projection_records := projection_records || pg_catalog.jsonb_build_array(
         prepared || pg_catalog.jsonb_build_object(
           'recordKey', 'intent:' || subject_index::text, 'recordTypeId', subject -> 'recordTypeId',
-          'recordId', subject -> 'recordId', 'concurrencyNumber', subject -> 'expectedConcurrencyNumber',
           'canRead', true, 'relationshipSources', '[]'::jsonb
-        )
+        ) || case when subject ->> 'operation' = 'create' then '{}'::jsonb
+          else pg_catalog.jsonb_build_object('recordId', subject -> 'recordId',
+            'concurrencyNumber', subject -> 'expectedConcurrencyNumber') end
       );
       continue;
     end if;
@@ -163,6 +167,7 @@ begin
   return graph || pg_catalog.jsonb_build_object(
     'records', (graph -> 'records') || projection_records,
     'subjects', subjects, 'correlationId', context_value -> 'correlationId',
+    'preview', preview_installation is not null,
     'readableFieldIds', '[]'::jsonb,
     'recordCount', (after_closure ->> 'recordCount')::integer + pg_catalog.jsonb_array_length(projection_records)
   );

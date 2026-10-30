@@ -32,6 +32,8 @@ declare
   changed_fields uuid[];
   event_result jsonb;
   notice_sequence bigint;
+  effective_command_id uuid;
+  preview_installation jsonb;
 begin
   if pg_catalog.jsonb_typeof(p_parent_mutations) is distinct from 'array' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
@@ -39,6 +41,11 @@ begin
   calculation := vortex_record.prepare_record_changes(p_command_id, p_subjects);
   if calculation ->> 'outcome' is distinct from 'prepared' then return calculation; end if;
   context_value := vortex_access.validated_human_request_context();
+  preview_installation := vortex_record.read_current_preview_installation_internal();
+  effective_command_id := vortex_record.preview_scoped_command_id_internal(p_command_id);
+  if effective_command_id is null then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'preview_unavailable');
+  end if;
   -- The writer independently derives the exact affected parent identities,
   -- revisions and generated fields; the caller cannot omit or add a parent.
   select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
@@ -67,18 +74,19 @@ begin
     or pg_catalog.jsonb_array_length(supplied_parents) <> pg_catalog.jsonb_array_length(p_parent_mutations) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'record_calculation_changed');
   end if;
-  receipt := vortex_record.claim_command_receipt_internal('record_changes', p_command_id, false);
+  receipt := vortex_record.claim_command_receipt_internal('record_changes', effective_command_id, false);
   if receipt ->> 'status' = 'completed' then
     return vortex_record.prepare_record_changes(p_command_id, p_subjects);
   elsif receipt ->> 'status' is distinct from 'claimed' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_identity_conflict');
   end if;
-  prepared := vortex_record.prepare_record_change_set_internal(p_command_id, p_subjects);
+  prepared := vortex_record.prepare_record_change_set_internal(effective_command_id, p_subjects);
   if prepared ->> 'outcome' is distinct from 'prepared' then
-    perform vortex_record.release_command_receipt_internal('record_changes', p_command_id);
+    perform vortex_record.release_command_receipt_internal('record_changes', effective_command_id);
     return prepared;
   end if;
-  catalogue := vortex_record.relationship_total_catalogue_internal();
+  catalogue := case when pg_catalog.jsonb_array_length(p_parent_mutations) > 0
+    then vortex_record.relationship_total_catalogue_internal() else '{}'::jsonb end;
   for parent_value in select item.value from pg_catalog.jsonb_array_elements(p_parent_mutations) as item(value)
   loop
     select item.value into strict parent_record
@@ -111,43 +119,45 @@ begin
     select coalesce(pg_catalog.array_agg(key::uuid order by key::uuid), array[]::uuid[]) into changed_fields
     from pg_catalog.jsonb_object_keys(case when subject ->> 'operation' = 'create'
       then saved -> 'values' else subject -> 'finalValues' end) as key;
-    perform vortex_record.append_record_activity_internal(
-      (subject ->> 'activityId')::uuid,
-      case when subject ->> 'operation' = 'create' then 'create_record' else 'update_record' end,
-      array[(saved ->> 'recordId')::uuid], changed_fields, 'completed'
-    );
-    event_result := vortex_platform.append_record_occurrences(
-      (plan #>> '{meta,storageContractId}')::uuid, (saved ->> 'recordId')::uuid,
-      pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-        'occurrenceId', subject -> 'occurrenceId',
-        'descriptor', pg_catalog.jsonb_build_object(
-          'kind', 'standard', 'recordTypeId', subject -> 'recordTypeId',
-          'eventKind', case when subject ->> 'operation' = 'create' then 'created' else 'changed' end
-        ),
-        'payload', case when subject ->> 'operation' = 'create'
-          then pg_catalog.jsonb_build_object('kind', 'created')
-          else pg_catalog.jsonb_build_object('kind', 'changed', 'changedFieldIds', pg_catalog.to_jsonb(changed_fields)) end
-      ))
-    );
-    if pg_catalog.jsonb_typeof(event_result) is distinct from 'array'
-      or pg_catalog.jsonb_array_length(event_result) is distinct from 1 then
-      raise exception using errcode = '55000', message = 'Record change Event append failed';
-    end if;
-    if subject ->> 'operation' = 'update' and (
-      plan #>> '{meta,storageScope}' = 'application_contained'
-      or plan #>> '{meta,recordType,systemProjection,protectedView}' = 'organization_runtime_settings'
-    ) then
-      begin
-        notice_sequence := pg_catalog.nextval('vortex_record.record_invalidation_sequence'::pg_catalog.regclass);
-        perform vortex_platform.publish_change_notice(
-          (context_value ->> 'organizationId')::uuid, (context_value ->> 'applicationRootId')::uuid,
-          (subject ->> 'recordTypeId')::uuid, (saved ->> 'recordId')::uuid,
-          (saved ->> 'concurrencyNumber')::bigint, 'changed', notice_sequence, notice_sequence,
-          (context_value ->> 'correlationId')::uuid
-        );
-      exception when others then
-        raise warning 'Record change notice failed: [%] %', sqlstate, sqlerrm;
-      end;
+    if preview_installation is null then
+      perform vortex_record.append_record_activity_internal(
+        (subject ->> 'activityId')::uuid,
+        case when subject ->> 'operation' = 'create' then 'create_record' else 'update_record' end,
+        array[(saved ->> 'recordId')::uuid], changed_fields, 'completed'
+      );
+      event_result := vortex_platform.append_record_occurrences(
+        (plan #>> '{meta,storageContractId}')::uuid, (saved ->> 'recordId')::uuid,
+        pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+          'occurrenceId', subject -> 'occurrenceId',
+          'descriptor', pg_catalog.jsonb_build_object(
+            'kind', 'standard', 'recordTypeId', subject -> 'recordTypeId',
+            'eventKind', case when subject ->> 'operation' = 'create' then 'created' else 'changed' end
+          ),
+          'payload', case when subject ->> 'operation' = 'create'
+            then pg_catalog.jsonb_build_object('kind', 'created')
+            else pg_catalog.jsonb_build_object('kind', 'changed', 'changedFieldIds', pg_catalog.to_jsonb(changed_fields)) end
+        ))
+      );
+      if pg_catalog.jsonb_typeof(event_result) is distinct from 'array'
+        or pg_catalog.jsonb_array_length(event_result) is distinct from 1 then
+        raise exception using errcode = '55000', message = 'Record change Event append failed';
+      end if;
+      if subject ->> 'operation' = 'update' and (
+        plan #>> '{meta,storageScope}' = 'application_contained'
+        or plan #>> '{meta,recordType,systemProjection,protectedView}' = 'organization_runtime_settings'
+      ) then
+        begin
+          notice_sequence := pg_catalog.nextval('vortex_record.record_invalidation_sequence'::pg_catalog.regclass);
+          perform vortex_platform.publish_change_notice(
+            (context_value ->> 'organizationId')::uuid, (context_value ->> 'applicationRootId')::uuid,
+            (subject ->> 'recordTypeId')::uuid, (saved ->> 'recordId')::uuid,
+            (saved ->> 'concurrencyNumber')::bigint, 'changed', notice_sequence, notice_sequence,
+            (context_value ->> 'correlationId')::uuid
+          );
+        exception when others then
+          raise warning 'Record change notice failed: [%] %', sqlstate, sqlerrm;
+        end;
+      end if;
     end if;
     projection := (vortex_record.read_record(
       (subject ->> 'recordTypeId')::uuid, (saved ->> 'recordId')::uuid
@@ -162,7 +172,9 @@ begin
     result_values := result_values || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
       'outcome', 'saved', 'recordTypeId', subject -> 'recordTypeId', 'recordId', saved -> 'recordId',
       'concurrencyNumber', saved -> 'concurrencyNumber', 'values', projection -> 'values',
-      'correlationId', context_value -> 'correlationId', 'backgroundDelivery', 'pending', 'replayed', false
+      'correlationId', context_value -> 'correlationId',
+      'backgroundDelivery', case when preview_installation is null then 'pending' else 'none' end,
+      'replayed', false
     ));
   end loop;
   for parent_plan in select item.value from pg_catalog.jsonb_array_elements(parent_plans) as item(value)
@@ -170,7 +182,7 @@ begin
     perform vortex_record.complete_relationship_total_parent_internal(parent_plan);
   end loop;
   perform vortex_record.complete_command_receipt_internal(
-    'record_changes', p_command_id, pg_catalog.jsonb_build_object('results', receipt_results),
+    'record_changes', effective_command_id, pg_catalog.jsonb_build_object('results', receipt_results),
     'Record change receipt is stale'
   );
   return pg_catalog.jsonb_build_object('outcome', 'completed', 'results', result_values, 'replayed', false,

@@ -22,7 +22,7 @@ declare
   submitted_fields uuid[];
   normalized_edges jsonb;
 begin
-  if p_command_id is null or not vortex_platform.is_non_nil_uuid(p_command_id::text)
+  if p_command_id is null or p_command_id = '00000000-0000-0000-0000-000000000000'::uuid
     or not vortex_record.record_change_set_is_valid_internal(p_subjects) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
   end if;

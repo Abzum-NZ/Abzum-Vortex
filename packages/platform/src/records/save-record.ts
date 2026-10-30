@@ -1,54 +1,32 @@
 import "server-only";
-import { applyRecordChanges } from "./apply-record-changes";
 
-import { randomUUID } from "node:crypto";
 import {
   createHumanOrganizationRequestService,
   HumanOrganizationRequestRestart,
 } from "../access/human-organization-request";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
-import { activityIdSchema, eventOccurrenceIdSchema } from "../catalogue/identifiers";
 import { describeFailure } from "../catalogue/runtime-primitives";
 import {
   requireRequestSavepoint,
   type RequestDatabaseTransaction,
 } from "../db/request-transaction";
 import {
-  beforeSaveFlowSetOf,
-  beginBeforeSaveRuleExecution,
-  type BeforeSaveRuleExecution,
-} from "./before-save-rules";
-import { calculateAndFinalize, operationClock } from "./field-candidate";
+  applyRecordChanges,
+  type RecordChangesResult,
+  type RecordChangeIntent,
+} from "./apply-record-changes";
+import { saveRecordCommandSchema, type SaveRecordCommand } from "./records";
 import {
-  saveRecordCommandSchema,
-  saveRecordResultSchema,
-  type SaveRecordCommand,
-  type SaveRecordResult,
-} from "./records";
-import { calculateLockedRelationshipTotalSave } from "./relationship-total-save";
-export { calculateAndFinalize, operationClock };
-
-import {
-  constraintCorrection,
   contractError,
-  finalizeCalculatedValues,
-  persist,
-  prepare,
-  prepareRelationshipTotals,
-  readOrganizationRuntimeSettings,
   recordBatchSaveMaximum,
-  recordedRefusal,
-  restartRelationshipTotalSave,
-  revision,
-  safeRefusal,
-  type PreparationOutcome,
-  type PreparedSave,
   type RecordBatchSaveProblem,
   type RecordBatchSaveResult,
   type RecordBatchSaveSubject,
   type RecordSaveServiceDependencies,
   type RecordSaveServiceResult,
 } from "./record-save-preparation";
+
+export { calculateAndFinalize, operationClock } from "./field-candidate";
 export {
   parseRelationshipTotalPreparation,
   readOrganizationRuntimeSettings,
@@ -63,176 +41,60 @@ export {
   type RelationshipTotalPreparationOutcome,
 } from "./record-save-preparation";
 
-/**
- * The ordinary-human base save. Every caller supplies the same closed command;
- * all scope, actor, installation and generated facts come from the server.
- */
+const intentOf = (command: SaveRecordCommand): RecordChangeIntent =>
+  command.operation === "create"
+    ? {
+        operation: "create",
+        recordTypeId: command.recordTypeId,
+        values: command.submittedValues,
+        ...(command.selectedOwnerGroupId === undefined
+          ? {}
+          : { selectedOwnerGroupId: command.selectedOwnerGroupId }),
+      }
+    : {
+        operation: "update",
+        recordTypeId: command.recordTypeId,
+        recordId: command.recordId,
+        expectedConcurrencyNumber: command.expectedConcurrencyNumber,
+        values: command.submittedValues,
+      };
+
+/** Forms, admitted flow segments and grid gestures compile into the same record intents. */
 export const createRecordSaveService = (dependencies: RecordSaveServiceDependencies) => {
   const requests = createHumanOrganizationRequestService(dependencies);
-  const newActivityId = dependencies.activityId ?? randomUUID;
-  const newOccurrenceId = dependencies.occurrenceId ?? randomUUID;
 
   const saveWithinTransaction = async (
     transaction: RequestDatabaseTransaction,
     issuedAt: string,
     command: SaveRecordCommand,
-    preview: boolean,
-    activityId: string,
-    identity: { occurrenceId: string | undefined },
-    attempted: { rules?: BeforeSaveRuleExecution; prepared?: PreparedSave },
-  ) => {
-    // A preview request's own selection addresses its isolated storage.
-    const totalPreparation = !preview
-      ? await prepareRelationshipTotals(transaction, command, activityId)
-      : { outcome: "not_required" as const };
-    if (totalPreparation.outcome === "restart") return restartRelationshipTotalSave;
-    if (totalPreparation.outcome === "refused_recorded") return recordedRefusal;
-    if (totalPreparation.outcome === "conflict")
-      return totalPreparation.correlationId === undefined
-        ? recordedRefusal
-        : safeRefusal(totalPreparation.correlationId, "conflict");
-    if (totalPreparation.outcome === "refused")
-      return totalPreparation.correlationId === undefined
-        ? recordedRefusal
-        : safeRefusal(totalPreparation.correlationId, "operation_refused");
-    const prepared: PreparationOutcome =
-      totalPreparation.outcome === "prepared"
-        ? {
-            outcome: "prepared",
-            recordType: totalPreparation.records.find((record) => record.recordKey === "root")!
-              .recordType,
-            existingValues: totalPreparation.records.find((record) => record.recordKey === "root")!
-              .existingValues,
-            readableFieldIds: new Set(totalPreparation.readableFieldIds),
-            correlationId: totalPreparation.correlationId,
-          }
-        : await prepare(transaction, command, activityId);
-    if (prepared.outcome === "replayed") return prepared.result;
-    if (prepared.outcome === "refused_recorded") return recordedRefusal;
-    if (prepared.outcome === "conflict")
-      return prepared.correlationId === undefined
-        ? recordedRefusal
-        : safeRefusal(prepared.correlationId, "conflict");
-    if (prepared.outcome === "unavailable")
-      return prepared.correlationId === undefined
-        ? recordedRefusal
-        : safeRefusal(prepared.correlationId, "operation_refused");
-
-    let closureRules: Map<string, BeforeSaveRuleExecution> | undefined;
-    if (totalPreparation.outcome === "prepared") {
-      closureRules = new Map();
-      for (const record of totalPreparation.records) {
-        const ruleSet = beforeSaveFlowSetOf(record.beforeSaveFlows, record.recordType.recordTypeId);
-        if (ruleSet === undefined) {
-          console.error(
-            `[record] save refused BEFORE_SAVE_RULE_SET_UNAVAILABLE: ${record.recordKey}`,
-          );
-          return safeRefusal(prepared.correlationId, "operation_refused");
-        }
-        const execution = beginBeforeSaveRuleExecution(ruleSet);
-        closureRules.set(record.recordKey, execution);
-      }
-      attempted.rules = closureRules.get("root")!;
-    } else {
-      const ruleSet = beforeSaveFlowSetOf(
-        prepared.beforeSaveFlows,
-        prepared.recordType.recordTypeId,
-      );
-      if (ruleSet === undefined) {
-        console.error("[record] save refused BEFORE_SAVE_RULE_SET_UNAVAILABLE");
-        return safeRefusal(prepared.correlationId, "operation_refused");
-      }
-      attempted.rules = beginBeforeSaveRuleExecution(ruleSet);
+  ): Promise<RecordSaveServiceResult> => {
+    const rollback = contractError("RECORD_SAVE_ROLLED_BACK", undefined);
+    let settled: RecordChangesResult | undefined;
+    try {
+      await requireRequestSavepoint(transaction).withSavepoint(async (child) => {
+        settled = await applyRecordChanges(child, issuedAt, command.commandId, [intentOf(command)]);
+        if (settled.kind !== "completed") throw rollback;
+      });
+    } catch (error) {
+      if (error !== rollback) throw error;
     }
-    attempted.prepared = prepared;
-
-    const settings = await readOrganizationRuntimeSettings(transaction);
-    const totalClock =
-      totalPreparation.outcome === "prepared"
-        ? operationClock(
-            totalPreparation.records.map((record) => record.recordType),
-            issuedAt,
-            settings?.timeZone,
-          )
-        : undefined;
-    const values =
-      totalPreparation.outcome === "prepared" && totalClock !== undefined
-        ? calculateLockedRelationshipTotalSave({
-            changes: new Map([["root", command]]),
-            preparation: totalPreparation,
-            ...(settings?.currency === undefined
-              ? {}
-              : { organizationCurrency: settings.currency }),
-            clock: totalClock,
-            rules: closureRules!,
-          })
-        : totalPreparation.outcome === "prepared"
-          ? {
-              success: false as const,
-              issues: [{ code: "invalid_input", recordKey: "root", path: ["clock"] }],
-            }
-          : calculateAndFinalize({
-              operation: command.operation,
-              submittedValues: command.submittedValues,
-              recordType: prepared.recordType,
-              existingValues: prepared.existingValues,
-              issuedAt,
-              organizationCurrency: settings?.currency,
-              timeZone: settings?.timeZone,
-              rules: attempted.rules,
-            });
-    const finalized = await finalizeCalculatedValues(
-      transaction,
-      command,
-      prepared,
-      totalPreparation,
-      values,
-      preview,
-    );
-    if (!("finalValues" in finalized)) return finalized;
-    const finalValues = finalized.finalValues;
-    identity.occurrenceId ??= eventOccurrenceIdSchema.parse(newOccurrenceId());
-    const stored = await persist(
-      transaction,
-      command,
-      prepared.recordType,
-      finalValues,
-      activityId,
-      identity.occurrenceId,
-      "parentMutations" in values ? values.parentMutations : [],
-      preview,
-    );
-    if (stored.outcome === "restart") return restartRelationshipTotalSave;
-    if (stored.outcome === "refused_recorded") return recordedRefusal;
-    if (stored.outcome === "conflict") {
-      console.error(`[record] protected save persistence conflicted (${stored.reasonCode})`);
-      return safeRefusal(prepared.correlationId, "conflict");
+    if (settled === undefined) throw contractError("RECORD_SAVE_RESULT_MISSING", undefined);
+    if (settled.kind === "restart") throw new HumanOrganizationRequestRestart();
+    if (settled.kind === "refused") {
+      if (settled.result !== undefined) return { kind: "available", value: settled.result };
+      console.error(`[record] save refused: ${settled.reasonCode ?? "record_unavailable"}`);
+      return { kind: "unavailable" };
     }
-    if (stored.outcome === "refused")
-      console.error(
-        "[record] protected save persistence refused",
-        contractError(stored.reasonCode ?? "RECORD_SAVE_REFUSED", stored.reasonCode),
-      );
-    if (stored.outcome === "refused")
-      return safeRefusal(
-        prepared.correlationId,
-        stored.reasonCode === "command_invalid" ? "invalid_request" : "operation_refused",
-      );
-    const concurrencyNumber = revision(stored.concurrencyNumber);
-    if (concurrencyNumber === undefined) throw new Error("RECORD_SAVE_RESULT_INVALID");
-    return saveRecordResultSchema.parse({
-      contractVersion: "2.0.0",
-      outcome: "saved",
-      recordId: stored.recordId,
-      concurrencyNumber,
-      readableValues: stored.values,
-      correlationId: stored.correlationId,
-      backgroundDelivery: stored.backgroundDelivery,
-    });
+    if (settled.results.length !== 1)
+      throw contractError("RECORD_SAVE_RESULT_COUNT_INVALID", undefined);
+    return {
+      kind: "available",
+      value: settled.results[0]!,
+      ...(settled.warnings.length === 0 ? {} : { warnings: settled.warnings }),
+    };
   };
 
   return Object.freeze({
-    /** Runs the same save core in a request transaction already owned by the caller. */
     async saveInTransaction(
       transaction: RequestDatabaseTransaction,
       issuedAt: string,
@@ -246,40 +108,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
         );
         return { kind: "unavailable" };
       }
-      let activityId: string;
-      try {
-        activityId = activityIdSchema.parse(newActivityId());
-      } catch (error) {
-        console.error(`[record] save identity generation failed: ${describeFailure(error)}`);
-        return { kind: "temporarily_unavailable" };
-      }
-      const attempted: { rules?: BeforeSaveRuleExecution; prepared?: PreparedSave } = {};
-      const value = await requireRequestSavepoint(transaction)
-        .withSavepoint((child) =>
-          saveWithinTransaction(
-            child,
-            issuedAt,
-            command.data,
-            selection.previewInstallationId !== undefined,
-            activityId,
-            { occurrenceId: undefined },
-            attempted,
-          ),
-        )
-        .catch((error: unknown) => {
-          const correction = constraintCorrection(error, attempted.prepared, command.data);
-          if (correction !== undefined) return correction;
-          throw error;
-        });
-      if (value === restartRelationshipTotalSave) throw new HumanOrganizationRequestRestart();
-      if (value === recordedRefusal) {
-        console.error("[record] save refused RECORD_SAVE_REFUSAL_RECORDED");
-        return { kind: "unavailable" };
-      }
-      const warnings = attempted.rules?.warnings ?? [];
-      return value.outcome === "saved" && warnings.length > 0
-        ? { kind: "available", value, warnings }
-        : { kind: "available", value };
+      return saveWithinTransaction(transaction, issuedAt, command.data);
     },
 
     async save(
@@ -294,52 +123,21 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
         );
         return { kind: "unavailable" };
       }
-
-      const preview = selection.previewInstallationId !== undefined;
-      let activityId: string;
-      const identity: { occurrenceId: string | undefined } = { occurrenceId: undefined };
-      try {
-        activityId = activityIdSchema.parse(newActivityId());
-      } catch (error) {
-        console.error(`[record] save identity generation failed: ${describeFailure(error)}`);
-        return { kind: "temporarily_unavailable" };
-      }
       for (let attempt = 0; attempt < 3; attempt += 1) {
-        const attempted: {
-          rules?: BeforeSaveRuleExecution;
-          prepared?: PreparedSave;
-        } = {};
-        const result = await requests.runChangeWithRefusal(
-          caller,
-          selection,
-          (transaction, _scope, issuedAt) =>
-            saveWithinTransaction(
-              transaction,
-              issuedAt,
-              command.data,
-              preview,
-              activityId,
-              identity,
-              attempted,
-            ),
-          (_code, error) => constraintCorrection(error, attempted.prepared, command.data),
-        );
-
-        if (result.kind !== "available") return result;
-        if (result.value === restartRelationshipTotalSave) continue;
-        if (result.value === recordedRefusal) {
-          console.error("[record] save refused RECORD_SAVE_REFUSAL_RECORDED");
-          return { kind: "unavailable" };
+        try {
+          const result = await requests.runChange(
+            caller,
+            selection,
+            (transaction, _scope, issuedAt) =>
+              saveWithinTransaction(transaction, issuedAt, command.data),
+          );
+          return result.kind === "available" ? result.value : result;
+        } catch (error) {
+          if (!(error instanceof HumanOrganizationRequestRestart)) throw error;
         }
-        const value = result.value as SaveRecordResult;
-        const warnings = attempted.rules?.warnings ?? [];
-        return value.outcome === "saved" && warnings.length > 0
-          ? { kind: "available", value, warnings }
-          : { kind: "available", value };
       }
       return { kind: "temporarily_unavailable" };
     },
-
     /** One grid gesture prepares, calculates and writes its entire set under one receipt. */
     async saveBatch(
       caller: IdentitySession,

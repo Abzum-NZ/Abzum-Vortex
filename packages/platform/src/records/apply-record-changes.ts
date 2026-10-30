@@ -4,7 +4,10 @@ import { randomUUID } from "node:crypto";
 import type { JsonValue } from "../catalogue/common";
 import { platformIdSchema } from "../catalogue/identifiers";
 import { isRecord } from "../catalogue/runtime-primitives";
-import type { RequestDatabaseTransaction } from "../db/request-transaction";
+import {
+  requireRequestSavepoint,
+  type RequestDatabaseTransaction,
+} from "../db/request-transaction";
 import { optionsSourceNarrowing } from "../definition/field-options-source";
 import type { BeforeSaveRuleWarning } from "../rules/before-save-flow-run";
 import {
@@ -15,6 +18,7 @@ import {
 import { operationClock } from "./field-candidate";
 import {
   contractError,
+  constraintCorrection,
   finalizeCalculatedValues,
   one,
   parsePreparation,
@@ -173,12 +177,15 @@ export const applyRecordChanges = async (
     );
     return refusal(preparedRow);
   }
-  const graph = parseRelationshipTotalPreparation(
+  if (typeof preparedRow.preview !== "boolean")
+    throw contractError("RECORD_CHANGES_PREVIEW_SCOPE_INVALID", undefined);
+  const preview = preparedRow.preview;
+  const parsedGraph = parseRelationshipTotalPreparation(
     preparedRow,
     commands.map((_command, index) => `intent:${index}`),
   );
   if (
-    graph.outcome !== "prepared" ||
+    parsedGraph.outcome !== "prepared" ||
     !Array.isArray(preparedRow.subjects) ||
     preparedRow.subjects.length !== commands.length
   )
@@ -192,6 +199,13 @@ export const applyRecordChanges = async (
       throw contractError("RECORD_CHANGES_SUBJECT_INVALID", undefined);
     preparations.set(candidate.recordKey, parsed);
   }
+  const graph = {
+    ...parsedGraph,
+    records: parsedGraph.records.map((record) => ({
+      ...record,
+      existingValues: preparations.get(record.recordKey)?.existingValues ?? record.existingValues,
+    })),
+  };
   const rules = new Map<string, BeforeSaveRuleExecution>();
   for (const record of graph.records) {
     const ruleSet = beforeSaveFlowSetOf(record.beforeSaveFlows, record.recordType.recordTypeId);
@@ -214,6 +228,7 @@ export const applyRecordChanges = async (
     changes,
     rules,
     clock,
+    preserveStoredTotals: preview,
     ...(settings?.currency === undefined ? {} : { organizationCurrency: settings.currency }),
   });
   // Permission decisions and dependent link reads use the existing protected
@@ -227,7 +242,7 @@ export const applyRecordChanges = async (
       if (values === undefined)
         throw contractError("RECORD_CHANGES_CALCULATED_SUBJECT_MISSING", undefined);
       for (const check of values.pendingChecks)
-        if (check.kind === "choice_permission") {
+        if (!preview && check.kind === "choice_permission") {
           const held = prepared.existingValues[check.fieldId];
           if (
             held === check.optionValue ||
@@ -307,7 +322,7 @@ export const applyRecordChanges = async (
       prepared,
       localGraph,
       localValues,
-      false,
+      preview,
       {
         choicePermission: async (permissionId) => {
           const decision = decisions.get(`${key}:permission:${permissionId.toLowerCase()}`);
@@ -357,12 +372,24 @@ export const applyRecordChanges = async (
   }
   if (!calculated.success)
     throw contractError("RECORD_CHANGES_INVALID_CALCULATION_ACCEPTED", undefined);
-  const stored = one(
-    await transaction.query<{ result: unknown }>`
+  let stored: unknown;
+  try {
+    stored = await requireRequestSavepoint(transaction).withSavepoint(
+      async (child) =>
+        one(
+          await child.query<{ result: unknown }>`
     select vortex_record.apply_record_changes(${commandId}::uuid, ${JSON.stringify(subjects)}::text::jsonb,
       ${JSON.stringify(calculated.parentMutations)}::text::jsonb) as result
   `,
-  ).result;
+        ).result,
+    );
+  } catch (error) {
+    for (const [index, command] of commands.entries()) {
+      const correction = constraintCorrection(error, preparations.get(`intent:${index}`), command);
+      if (correction !== undefined) return { kind: "refused", index, result: correction };
+    }
+    throw error;
+  }
   if (!isRecord(stored)) throw contractError("RECORD_CHANGES_RESULT_INVALID", undefined);
   if (stored.outcome === "restart") return { kind: "restart" };
   if (stored.outcome !== "completed") {

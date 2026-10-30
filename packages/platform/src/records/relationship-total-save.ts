@@ -11,7 +11,7 @@ import {
   type RecordFieldValuePendingCheck,
   type PrepareRecordFieldValuesResult,
 } from "./field-values";
-import { evaluateRecordTotals } from "./totals";
+import { emptyRecordTotals, evaluateRecordTotals } from "./totals";
 import {
   applyBeforeSaveRules,
   applyBeforeSaveLifecycleRules,
@@ -189,9 +189,15 @@ export const calculateLockedRelationshipTotalSave = (
     organizationCurrency?: string;
     clock: Readonly<{ instant: string; organizationLocalDate: string }>;
     rules?: ReadonlyMap<string, BeforeSaveRuleExecution>;
+    /** Preview saves keep their stored totals; they never discover live related records. */
+    preserveStoredTotals?: boolean;
   }>,
 ): CalculateRelationshipTotalSaveResult => {
   const records = new Map(input.preparation.records.map((record) => [record.recordKey, record]));
+  const calculatedFields = (recordType: RecordTypeDefinition) =>
+    derivedFields(recordType).filter(
+      (field) => !input.preserveStoredTotals || field.type !== "total",
+    );
   const missing = [...input.changes.keys()].find((recordKey) => !records.has(recordKey));
   if (missing !== undefined || records.size === 0)
     return {
@@ -311,6 +317,7 @@ export const calculateLockedRelationshipTotalSave = (
       // The database selected and locked the closure from the authored links.
       // A rule cannot redirect one after that selection.
       if (
+        !input.preserveStoredTotals &&
         record.recordType.fields.some(
           (field) =>
             (field.type === "link" || field.type === "link_to_one_of_several") &&
@@ -331,15 +338,20 @@ export const calculateLockedRelationshipTotalSave = (
       candidateValues = applied.candidateValues;
       requirementsByRecord.set(record.recordKey, applied.requirements);
     }
-    const values = { ...candidateValues };
-    for (const field of derivedFields(record.recordType)) delete values[field.fieldId];
+    const values = {
+      ...candidateValues,
+      ...(input.preserveStoredTotals && operation === "create"
+        ? emptyRecordTotals(record.recordType)
+        : {}),
+    };
+    for (const field of calculatedFields(record.recordType)) delete values[field.fieldId];
     valuesByRecord.set(record.recordKey, values);
   }
 
   const nodes = new Map<string, Readonly<{ recordKey: string; field: DerivedField }>>();
   for (const record of records.values())
     if (input.changes.get(record.recordKey)?.operation !== "delete")
-      for (const field of derivedFields(record.recordType))
+      for (const field of calculatedFields(record.recordType))
         nodes.set(nodeKey(record.recordKey, field.fieldId), { recordKey: record.recordKey, field });
 
   const dependencies = new Map<string, Set<string>>();
@@ -519,7 +531,7 @@ export const calculateLockedRelationshipTotalSave = (
       initialCandidate: initialByRecord.get(record.recordKey)!,
       candidateValues: valuesByRecord.get(record.recordKey)!,
       requirements: requirementsByRecord.get(record.recordKey) ?? [],
-      requiredGeneratedFieldIds: derivedFields(record.recordType).map((field) => field.fieldId),
+      requiredGeneratedFieldIds: calculatedFields(record.recordType).map((field) => field.fieldId),
       ...(input.organizationCurrency === undefined
         ? {}
         : { organizationCurrency: input.organizationCurrency }),

@@ -12,13 +12,20 @@ declare
   projection jsonb;
   results jsonb := '[]'::jsonb;
   preparation jsonb;
+  effective_command_id uuid;
+  preview_installation jsonb;
 begin
   if p_command_id is null or not vortex_platform.is_non_nil_uuid(p_command_id::text)
     or not vortex_record.record_change_set_is_valid_internal(p_subjects) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
   end if;
   context_value := vortex_access.validated_human_request_context();
-  receipt := vortex_record.claim_command_receipt_internal('record_changes', p_command_id, true);
+  preview_installation := vortex_record.read_current_preview_installation_internal();
+  effective_command_id := vortex_record.preview_scoped_command_id_internal(p_command_id);
+  if effective_command_id is null then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'preview_unavailable');
+  end if;
+  receipt := vortex_record.claim_command_receipt_internal('record_changes', effective_command_id, true);
   if receipt ->> 'status' = 'completed' then
     if pg_catalog.jsonb_typeof(receipt #> '{result,results}') is distinct from 'array'
       or pg_catalog.jsonb_array_length(receipt #> '{result,results}') not between 1 and 200 then
@@ -43,7 +50,8 @@ begin
         'outcome', 'saved', 'recordTypeId', stored_result -> 'recordTypeId',
         'recordId', projection -> 'recordId', 'concurrencyNumber', projection -> 'concurrencyNumber',
         'values', projection -> 'values', 'correlationId', context_value -> 'correlationId',
-        'backgroundDelivery', 'pending', 'replayed', true
+        'backgroundDelivery', case when preview_installation is null then 'pending' else 'none' end,
+        'replayed', true
       ));
     end loop;
     return pg_catalog.jsonb_build_object('outcome', 'completed', 'results', results, 'replayed', true);
