@@ -1,16 +1,13 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import {
   BUTTON_BLOCK_RELEASE,
   FIELD_INPUT_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE,
   automaticFieldInputSettings,
-  collectActionFlowTasks,
   contributedActionControlIds,
   fieldInputSourceField,
-  flowPlansOf,
   plainReleaseDefaults,
-  type ActionFlowRunner,
   type InstalledRuntimeContext,
   type NamedActionAvailability,
 } from "@vortex/platform/server";
@@ -406,7 +403,6 @@ export const contributedActionPreviews = (
 ) => {
   const actions = contributedActionsOf(context, pageDefinition);
   if (actions.length === 0) return undefined;
-  const library = flowPlansOf(context.releaseSet).library;
   return Object.freeze({
     references: actions.map((action) =>
       installedNamedActionReferenceSchema.parse({
@@ -416,8 +412,6 @@ export const contributedActionPreviews = (
         actionId: action.actionId,
       }),
     ),
-    runFor: (action: Readonly<{ actionId: string }>) => (seed: Parameters<ActionFlowRunner>[0]) =>
-      collectActionFlowTasks(library, action.actionId, randomUUID(), seed),
   });
 };
 

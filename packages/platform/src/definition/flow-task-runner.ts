@@ -63,6 +63,7 @@ import type {
 } from "./flow-orchestrator-types";
 import type { RecordChangeIntent } from "../records/apply-record-changes";
 import { planBackendTask, runBackendTask, type BackendTaskPlan } from "./flow-backend-task";
+import { nameRecordValues, setsActionOwnedOption, withoutEmptyValues } from "./flow-record-values";
 import { planRecordLink } from "./flow-relationship-changes";
 import { planRelationshipCopies } from "./flow-relationship-copies";
 
@@ -563,36 +564,19 @@ export const createFlowTaskRunner = (
       const values = call.properties.values?.value;
       if (!isRecord(values) || carriesSensitive(values, run.sensitive))
         return { outcome: "validation" };
-      const submittedValues: Record<string, JsonValue> = {};
-      const submittedNames = new Map<string, string>();
-      const fieldKeys = new Map<string, string>();
-      for (const [name, fieldId] of recordType.fieldIds)
-        if (name !== fieldId.toLowerCase()) fieldKeys.set(fieldId.toLowerCase(), name);
-      for (const [name, value] of Object.entries(values)) {
-        const fieldId = recordType.fieldIds.get(name.toLowerCase());
-        if (fieldId === undefined || Object.hasOwn(submittedValues, fieldId))
-          return { outcome: "validation" };
-        submittedValues[fieldId] = value as JsonValue;
-        submittedNames.set(fieldId.toLowerCase(), name);
-      }
+      const named = nameRecordValues(recordType, values);
+      if (named === undefined) return { outcome: "validation" };
+      const { submittedNames, fieldKeys } = named;
+      let submittedValues = named.submittedValues;
       // A task that names a record changes it; one that names none creates a record.
       if (
         call.taskType === "record.create" ||
         (call.taskType === "record.save" && !Object.hasOwn(call.properties, "record"))
       ) {
-        // A new record has nothing to clear, so a field the person left empty is simply not set.
-        for (const [fieldId, value] of Object.entries(submittedValues))
-          if (value === null) delete submittedValues[fieldId];
+        submittedValues = withoutEmptyValues(submittedValues);
         // A choice option that a named action sets is reached only by running that action on
         // the record, so a new record cannot be created already in it.
-        if (
-          Object.entries(submittedValues).some(
-            ([fieldId, value]) =>
-              typeof value === "string" &&
-              recordType.optionActions.get(fieldId.toLowerCase())?.has(value) === true,
-          )
-        )
-          return { outcome: "validation" };
+        if (setsActionOwnedOption(recordType, submittedValues)) return { outcome: "validation" };
         const selectedOwnerGroupId = call.properties.selected_owner_group_id?.value;
         const selectedGroup =
           selectedOwnerGroupId === undefined

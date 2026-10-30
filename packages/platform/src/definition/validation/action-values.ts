@@ -32,8 +32,8 @@ const actionValueLiteral = (value: unknown): unknown => {
   return entry.kind === "literal" ? object(entry.literal).value : undefined;
 };
 
-/** A task value map key names a field; source maps key by alias and canonical maps by field id. */
-export const actionFieldByKey = (
+/** A value map key names a field; source maps key by alias and canonical maps by field id. */
+const actionFieldByKey = (
   fields: ReadonlyMap<string, JsonObject>,
   key: string,
 ): JsonObject | undefined => {
@@ -142,38 +142,6 @@ export const applicationFieldType = (
 
 export const actionValueReferenceEntry = (entry: JsonObject): JsonObject | undefined =>
   actionValueReferenceSources.has(String(entry.source)) ? entry : actionValueReference(entry);
-
-export function applicationActionValueCompatible(
-  value: unknown,
-  target: ApplicationFieldValuePair | undefined,
-  subjectFields: ReadonlyMap<string, JsonObject>,
-  subjectModuleBound: boolean,
-  inputs: ReadonlyMap<string, JsonObject>,
-  subjectRecordTypeId: string,
-): boolean {
-  if (!target) return false;
-  const entry = object(value);
-  if (entry.kind === "literal")
-    return fieldValueMatches(actionValueLiteral(value), target.field, "canonical");
-  const reference = actionValueReference(value);
-  if (reference?.source === "trigger_record" && !subjectModuleBound) return false;
-  if (
-    reference?.source === "input" &&
-    (inputs.get(String(reference.name))?.type === "formatted_text" ||
-      (inputs.get(String(reference.name))?.type === "whole_number" &&
-        ["decimal_number", "money"].includes(applicationFieldType(target) ?? "")))
-  )
-    return false;
-  if (
-    !valueTypesCompatible(
-      actionValueType(value, subjectFields, inputs),
-      applicationFieldType(target),
-      "mapping",
-    )
-  )
-    return false;
-  return actionValueCompatible(value, target.field, subjectFields, inputs, subjectRecordTypeId);
-}
 
 export const applicationInterfaceFieldType = (
   pair: ApplicationFieldValuePair | undefined,

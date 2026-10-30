@@ -74,6 +74,8 @@ export type InstalledRecordTypeContributions = Readonly<{
     actionId: string;
     key: string;
     label: string;
+    /** The contributor's flow the action runs. */
+    flowId: string;
     contributorModuleRootId: string;
     contributorReleaseRevision: number;
   }>[];
@@ -84,7 +86,7 @@ export type InstalledRecordContributions = Readonly<{
   recordTypes: readonly InstalledRecordTypeContributions[];
   /** The contributed field definitions by `${moduleRootId}:${recordTypeId}`, lowercase. */
   fieldsByRecordType: ReadonlyMap<string, readonly z.infer<typeof moduleFieldSchema>[]>;
-  /** The compiled transaction flows the contributed actions run, by the action's identity. */
+  /** The compiled transaction flows the contributed actions run. */
   actionFlows: readonly z.infer<typeof flowSchema>[];
 }>;
 
@@ -184,6 +186,7 @@ export const parseInstalledRecordContributions = (
             actionId: contribution.contributionId,
             key: contribution.action.key,
             label: contribution.action.label,
+            flowId: contribution.action.flowId ?? "",
             contributorModuleRootId: contribution.contributorModuleRootId,
             contributorReleaseRevision: contribution.contributorReleaseRevision,
           }),

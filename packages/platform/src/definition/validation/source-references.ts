@@ -11,7 +11,6 @@ import {
   type JsonObject,
 } from "./context";
 import { object, array } from "./helpers";
-import { actionValueReferenceEntry } from "./action-values";
 import { sourceTranslationContext } from "./source-paths";
 import { moduleDependencies } from "../module-dependencies";
 
@@ -42,7 +41,6 @@ export function sourceLocalReferenceRule(
       const sharingConditions = new Map(
         array(body.sharing_conditions).map((condition) => [String(condition.key), condition]),
       );
-      const events = new Set(array(body.events).map((event) => String(event.key)));
       const qualifiedRecordValid = (qualified: unknown): boolean => {
         const value = String(qualified);
         const split = value.lastIndexOf(":");
@@ -179,9 +177,6 @@ export function sourceLocalReferenceRule(
         const fields = new Set(
           record ? array(record.fields).map((field) => String(field.key)) : [],
         );
-        const relationships = new Set(
-          record ? array(record.relationships).map((relationship) => String(relationship.key)) : [],
-        );
         const inputs = new Map(
           array(action.inputs).map((input) => [String(input.key), String(input.type)]),
         );
@@ -200,37 +195,12 @@ export function sourceLocalReferenceRule(
           !conditionValid(action.precondition, fields, new Set(inputs.keys()))
         )
           valid = false;
-        for (const task of array(action.tasks)) {
-          const properties = object(task.properties);
-          if (String(task.type) === "record.set_fields")
-            for (const field of Object.keys(object(properties.values)))
-              if (!fields.has(field)) valid = false;
-          if (String(task.type) === "record.changes")
-            for (const change of array(properties.changes))
-              if (
-                ((change.relationships as string[]) ?? []).some((key) => !relationships.has(key)) ||
-                inputs.get(String(change.target_input)) !== "record_reference"
-              )
-                valid = false;
-          if (String(task.type) === "event.announce" && !events.has(String(properties.event)))
-            valid = false;
-          if (
-            String(task.type) === "record.create" &&
-            !qualifiedRecordValid(properties.record_type)
-          )
-            valid = false;
-          walkValues(task, (entry) => {
-            const reference = actionValueReferenceEntry(entry);
-            if (
-              reference?.source === "input" &&
-              !inputs.has(String(reference.name)) &&
-              String(reference.name) !== "record"
-            )
-              valid = false;
-            if (reference?.source === "trigger_record" && !fields.has(String(reference.field)))
-              valid = false;
-          });
-        }
+        // A record action runs one flow of its Module; the flow validator checks inside it.
+        if (
+          action.protected_operation === undefined &&
+          !array(body.flows).some((flow) => flow.id === action.flow)
+        )
+          valid = false;
       }
       // Task and value references are resolved by the flow compiler and validator; a save rule or
       // reaction of this Module can only be about one of its own record types, or a declared

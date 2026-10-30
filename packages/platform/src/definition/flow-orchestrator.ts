@@ -10,7 +10,7 @@ import { resolveFlowValue } from "../rules/flow-value-runtime";
 import { parseFlowSegmentSeed } from "../rules/flow-segment-seed";
 import type { FlowRuntimeValues } from "../rules/flow-interpreter";
 import { flowWarningNoticeSchema } from "../workflows/form-continuation-contracts";
-import { collectActionFlowTasks } from "../rules/action-flow-run";
+import { namedActionFlowRunner } from "./flow-action-run";
 import {
   continueFlowRun,
   resumeFlowRun,
@@ -441,7 +441,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
   /**
    * The one path of a named action, from its binding or from a Call protected operation task:
    * resolves the exact release's action flow and hands the record port a run of that flow to call
-   * inside its transaction, where the action's permission, subject and revision are decided.
+   * inside its transaction, where the action's permission, precondition, subject and revision are
+   * decided.
    */
   const runNamedAction = async (
     session: IdentitySession,
@@ -450,12 +451,20 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     ports: FlowOrchestratorDependencies = dependencies,
   ): Promise<NamedActionExecutionResult> => {
     if (ports.actionRecords === undefined) return { kind: "unavailable" };
-    const flowId = command.action.actionId;
+    const installed = await ports.resolveRelease(selection.organizationId, command.action.actionId);
+    const flowId = [...(installed?.namedActions?.values() ?? [])].find(
+      (named) => named.action.actionId.toLowerCase() === command.action.actionId.toLowerCase(),
+    )?.flowId;
+    if (flowId === undefined) return { kind: "unavailable" };
     const prepared = await prepare(session, selection, flowId, "action", ports);
     if (prepared === undefined) return { kind: "unavailable" };
+    if (prepared.release.recordTypes === undefined) return { kind: "unavailable" };
     const runId = newRunId();
-    return ports.actionRecords.execute(session, selection, command, (seed) =>
-      collectActionFlowTasks(prepared.library, flowId, runId, seed),
+    return ports.actionRecords.execute(
+      session,
+      selection,
+      command,
+      namedActionFlowRunner(prepared.library, prepared.release.recordTypes, flowId, runId),
     );
   };
 

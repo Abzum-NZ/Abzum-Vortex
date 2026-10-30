@@ -11,13 +11,12 @@ import {
   versionRequirementSchema,
 } from "./definitions";
 import type { ResolveRecordTypeReferences } from "./definitions";
-import { refineActionTaskIds } from "./definition-source-common";
-import { actionInputChoiceSchema, refineCompiledTextInputChoices } from "./module-contracts";
 import {
-  actionTaskSchema,
-  conditionNodeSchema,
-  eventDefinitionSchema,
-} from "./module-foundation-contracts";
+  actionInputChoiceSchema,
+  actionWritePolicySchema,
+  refineCompiledTextInputChoices,
+} from "./module-contracts";
+import { conditionNodeSchema, eventDefinitionSchema } from "./module-foundation-contracts";
 import { interfaceDefinitionSchema } from "../connections/integration-contracts";
 import {
   actionIdSchema,
@@ -26,6 +25,7 @@ import {
   containedComponentIdSchema,
   fieldIdSchema,
   fingerprintSchema,
+  flowIdSchema,
   lineageIdSchema,
   moduleRootIdSchema,
   namespacedKeySchema,
@@ -222,7 +222,8 @@ export const applicationActionDefinitionSchema = z
     sharing: z.enum(["refused", "allowed"]),
     inputs: z.array(applicationActionInputDefinitionSchema).max(50),
     precondition: conditionNodeSchema.optional(),
-    tasks: z.array(actionTaskSchema).min(1).max(10).superRefine(refineActionTaskIds),
+    flowId: flowIdSchema,
+    writePolicy: actionWritePolicySchema,
   })
   .strict()
   .superRefine((value, context) => {
@@ -1010,7 +1011,7 @@ export const applicationDraftSchema = z
 export const publishedApplicationDefinitionSchema = z
   .object({
     publication: publishedApplicationReferenceSchema.extend({
-      validationContractVersion: z.literal("4.1.0"),
+      validationContractVersion: z.literal("4.2.0"),
     }),
     content: applicationContentSchema,
     dependencyManifest: z.array(publishedDefinitionReferenceSchema),

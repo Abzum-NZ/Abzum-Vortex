@@ -85,17 +85,20 @@ const literalOf = (value: unknown): unknown => {
  * so it can own that option (the action model's rule for owning a choice).
  */
 export const inlineActionSetsOption = (
+  module: InlineModule,
   record: RecordType,
   action: ModuleAction,
   fieldKey: string,
   option: string,
 ): boolean => {
   if (action.record_type !== record.key || action.protected_operation !== undefined) return false;
+  const flow = module.flows.find((candidate) => candidate.id === action.flow);
+  if (flow === undefined) return false;
   const choices: unknown[] = [];
-  for (const task of action.tasks) {
+  for (const task of flow.tasks) {
     if (task.type !== "record.set_fields") continue;
-    const values = (task.properties as { values?: Record<string, unknown> }).values ?? {};
-    for (const [key, value] of Object.entries(values))
+    const values = (task.properties as { values?: { entries?: Record<string, unknown> } }).values;
+    for (const [key, value] of Object.entries(values?.entries ?? {}))
       if (record.fields.find((field) => field.key === key)?.type === "choice")
         choices.push([key, literalOf(value)]);
   }
@@ -279,7 +282,7 @@ export const saveInlinePipeline = (
         : module.actions.find((candidate) => candidate.key === wanted);
     if (
       wanted !== undefined &&
-      (action === undefined || !inlineActionSetsOption(record, action, field.key, option))
+      (action === undefined || !inlineActionSetsOption(module, record, action, field.key, option))
     )
       gateIssues.push(
         `Gate of ${labelOf(option)}: choose an action of ${record.plural_name} that sets ${field.label} to ${labelOf(option)}.`,

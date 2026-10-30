@@ -10,15 +10,18 @@ import { fieldIdSchema } from "../catalogue/identifiers";
 import type { OptionMembershipCheck } from "../records/option-membership";
 import { applyRecordChanges } from "../records/apply-record-changes";
 import { revision } from "../records/record-save-preparation";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import type { FlowOrchestratorDependencies } from "./flow-orchestrator-types";
 import type { RecordTypeDefinition } from "./module-contracts";
 
-/** The admitted segment owns the transaction and rolls back every refused task. */
-export const createFlowRecordChangePort = (
-  bound: BoundHumanOrganizationRequest,
-  optionMember?: OptionMembershipCheck,
-): NonNullable<FlowOrchestratorDependencies["recordChanges"]> => ({
-  readTargets: async (targets, lock = false) => {
+type FlowRecordChangeTargetReader = NonNullable<
+  FlowOrchestratorDependencies["recordChanges"]
+>["readTargets"];
+
+/** Reads the targets of a record change under the caller's transaction, locking them on request. */
+export const readRecordChangeTargets =
+  (transaction: RequestDatabaseTransaction): FlowRecordChangeTargetReader =>
+  async (targets, lock = false) => {
     const unique = [
       ...new Map(
         targets.map((target) => [
@@ -27,7 +30,7 @@ export const createFlowRecordChangePort = (
         ]),
       ).values(),
     ];
-    const rows = await bound.transaction.query<{ ordinal: number; result: unknown }>`
+    const rows = await transaction.query<{ ordinal: number; result: unknown }>`
       select ordinal, result from vortex_record.read_record_change_targets(
         ${JSON.stringify(unique)}::text::jsonb, ${lock}::boolean
       ) order by ordinal
@@ -59,7 +62,14 @@ export const createFlowRecordChangePort = (
         },
       ];
     });
-  },
+  };
+
+/** The admitted segment owns the transaction and rolls back every refused task. */
+export const createFlowRecordChangePort = (
+  bound: BoundHumanOrganizationRequest,
+  optionMember?: OptionMembershipCheck,
+): NonNullable<FlowOrchestratorDependencies["recordChanges"]> => ({
+  readTargets: readRecordChangeTargets(bound.transaction),
   readRevisions: async (targets) => {
     const rows = await bound.transaction.query<{ revisions: unknown }>`
       select vortex_record.read_record_change_revisions(${JSON.stringify(targets)}::text::jsonb) as revisions

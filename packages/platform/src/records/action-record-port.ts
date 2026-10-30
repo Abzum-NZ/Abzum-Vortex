@@ -18,15 +18,14 @@ import {
   type HumanOrganizationRequestResult,
 } from "../access/human-organization-request";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
-import type { ActionFlowRunner } from "../rules/action-flow-run";
+import type { NamedActionFlowRunner } from "../definition/flow-action-run";
 import type { BeforeSaveRuleWarning } from "../rules/before-save-flow-run";
 import {
   actionFlowSeed,
-  composeFlowEffects,
+  actionPreconditionHolds,
   normalizeActionInputs,
-  type NamedActionComposition,
   type PreparedNamedAction,
-} from "./action-flow-effects";
+} from "./named-action-inputs";
 import {
   applyRecordChanges,
   type NamedRecordCommand,
@@ -36,7 +35,6 @@ import {
   completedResult,
   one,
   parsePreparation,
-  type PreparedAction,
   type ResultRow,
 } from "./action-record-preparation";
 
@@ -112,88 +110,55 @@ const preconditionReason = (prepared: PreparedNamedAction): RuleReason => {
   return { code: "action_precondition", message: message.slice(0, 300) };
 };
 
-/** What one flow run of a named action composed, or why it could not be composed. */
+/** What one flow run of a named action planned, or why it could not be. */
 type FlowComposition =
-  | Readonly<{ kind: "composed"; composition: NamedActionComposition }>
+  | Readonly<{
+      kind: "composed";
+      intents: readonly RecordChangeIntent[];
+      normalizedInputs: Readonly<Record<string, JsonValue>>;
+    }>
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "invalid"; reason: string }>;
 
 /**
- * Runs the named action's flow once for the prepared subject and turns what it collected into the
- * composition the writer applies. The flow's precondition refusal is its own outcome: the run
- * never reaches a task, and the caller records the refusal as the action always has.
+ * Decides the action's declared precondition for the prepared subject, then runs its flow once and
+ * plans the record steps it asked for. A precondition that does not hold is its own outcome: the
+ * flow never runs, and the caller records the refusal as always.
  */
-const composeFromFlow = (
+const composeFromFlow = async (
+  transaction: RequestDatabaseTransaction,
   prepared: PreparedNamedAction,
-  suppliedInputs: Readonly<Record<string, unknown>>,
+  command: ExecuteNamedActionCommand,
   issuedAt: string,
-  run: ActionFlowRunner,
-): FlowComposition => {
+  run: NamedActionFlowRunner,
+): Promise<FlowComposition> => {
+  const suppliedInputs = command.inputs;
   const normalizedInputs = normalizeActionInputs(prepared.action, suppliedInputs);
   if (normalizedInputs === undefined)
     return {
       kind: "invalid",
       reason: `the supplied inputs (${Object.keys(suppliedInputs).join(", ") || "none"}) do not match the inputs the action declares (${prepared.action.inputs.map((input) => `${input.key}: ${input.type}`).join(", ") || "none"})`,
     };
-  const outcome = run(actionFlowSeed(prepared, normalizedInputs, issuedAt));
-  if (outcome.kind === "refused") {
-    console.error("[named-action] refused NAMED_ACTION_FLOW_REFUSED");
+  const holds = actionPreconditionHolds(prepared, normalizedInputs);
+  if (holds === undefined)
+    return { kind: "invalid", reason: "the action's precondition cannot be decided" };
+  if (!holds) {
+    console.error("[named-action] refused NAMED_ACTION_PRECONDITION_REFUSED");
     return { kind: "refused" };
   }
-  if (outcome.kind !== "collected") return { kind: "invalid", reason: outcome.reason };
-  const composition = composeFlowEffects(prepared, normalizedInputs, outcome, issuedAt);
-  return composition === undefined
-    ? {
-        kind: "invalid",
-        reason: "the tasks the flow collected do not compose into the installed action's tasks",
-      }
-    : { kind: "composed", composition };
+  const outcome = await run(
+    actionFlowSeed(prepared, normalizedInputs, issuedAt),
+    {
+      recordTypeId: command.recordTypeId,
+      recordId: command.recordId,
+      revision: command.expectedConcurrencyNumber,
+    },
+    transaction,
+  );
+  return outcome.kind === "planned"
+    ? { kind: "composed", intents: outcome.intents, normalizedInputs }
+    : { kind: "invalid", reason: outcome.reason };
 };
-
-/**
- * The intents one subject's composition writes, in the order the writer checks them against the
- * installed action: the subject write or delete, each declared create, each relationship copy.
- */
-const subjectIntents = (
-  command: ExecuteNamedActionCommand,
-  prepared: PreparedAction,
-  composition: NamedActionComposition,
-): readonly RecordChangeIntent[] => [
-  ...(composition.softDeletesSubject
-    ? [
-        {
-          operation: "delete" as const,
-          recordTypeId: command.recordTypeId,
-          recordId: command.recordId,
-          expectedConcurrencyNumber: command.expectedConcurrencyNumber,
-        },
-      ]
-    : Object.keys(composition.submittedValues).length > 0
-      ? [
-          {
-            operation: "update" as const,
-            recordTypeId: command.recordTypeId,
-            recordId: command.recordId,
-            expectedConcurrencyNumber: command.expectedConcurrencyNumber,
-            values: composition.submittedValues as Readonly<Record<string, JsonValue>>,
-          },
-        ]
-      : []),
-  ...composition.creations.map((creation) => ({
-    operation: "create" as const,
-    recordTypeId: creation.recordTypeId,
-    values: creation.values as Readonly<Record<string, JsonValue>>,
-  })),
-  ...(composition.relationshipCopies.length === 0
-    ? []
-    : prepared.copyTargets.map((target) => ({
-        operation: "update" as const,
-        recordTypeId: command.recordTypeId,
-        recordId: target.recordId,
-        expectedConcurrencyNumber: target.concurrencyNumber,
-        values: target.submittedValues as Readonly<Record<string, JsonValue>>,
-      }))),
-];
 
 type NamedIdentities = Readonly<{ activity: () => string; occurrence: () => string }>;
 
@@ -231,7 +196,7 @@ const runNamedCommand = async (
   issuedAt: string,
   commandId: string,
   commands: readonly ExecuteNamedActionCommand[],
-  run: ActionFlowRunner,
+  run: NamedActionFlowRunner,
   ids: NamedIdentities,
 ): Promise<NamedCommandOutcome> => {
   const head = commands[0]!;
@@ -308,7 +273,7 @@ const runNamedCommand = async (
   for (const [index, command] of commands.entries()) {
     const subject = parsePreparation({ ...(prepared.subjects[index] as object), correlationId });
     if (subject.outcome !== "prepared") throw new Error("NAMED_ACTION_PREPARATION_INVALID");
-    const composed = composeFromFlow(subject, command.inputs, issuedAt, run);
+    const composed = await composeFromFlow(transaction, subject, command, issuedAt, run);
     if (composed.kind === "invalid")
       return {
         kind: "refused",
@@ -336,11 +301,11 @@ const runNamedCommand = async (
         ),
       };
     }
-    const own = subjectIntents(command, subject, composed.composition);
+    const own = composed.intents;
     subjects.push({
       recordId: command.recordId,
       expectedConcurrencyNumber: command.expectedConcurrencyNumber,
-      inputs: composed.composition.normalizedInputs,
+      inputs: composed.normalizedInputs,
       intentIndexes: own.map((_intent, position) => intents.length + position),
       activityId: activityIds[index]!,
       declaredOccurrenceIds: Array.from({ length: subject.eventDescriptorCount }, () =>
@@ -470,7 +435,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
       issuedAt: string,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
-      run: ActionFlowRunner,
+      run: NamedActionFlowRunner,
     ): Promise<NamedActionServiceResult> {
       const command = parsedCommand(commandCandidate);
       if (command === undefined || selection.applicationRootId === undefined)
@@ -484,7 +449,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
-      run: ActionFlowRunner,
+      run: NamedActionFlowRunner,
     ): Promise<NamedActionServiceResult> {
       const command = parsedCommand(commandCandidate);
       if (command === undefined) return { kind: "unavailable" };
@@ -517,7 +482,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
       commandCandidates: readonly unknown[],
-      run: ActionFlowRunner,
+      run: NamedActionFlowRunner,
     ): Promise<NamedActionBatchResult> {
       if (commandCandidates.length === 0 || commandCandidates.length > namedActionBatchMaximum)
         return { kind: "unavailable" };
