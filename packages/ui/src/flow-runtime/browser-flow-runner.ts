@@ -57,7 +57,6 @@ export async function runBrowserFlow(
       pageInputs: ReadonlySet<string>;
       subject?: FlowSubjectContext;
       sourceTablePlacementId?: string;
-      committed?: () => void;
     }>;
   }>,
 ): Promise<BrowserFlowResult> {
@@ -218,7 +217,6 @@ export async function runBrowserFlow(
       carriedValues = result.carriedValues;
       if (result.descriptor.commit === "confirmed" || result.descriptor.commit === "partial") {
         committed = true;
-        server!.committed?.();
         if (result.warnings.length > 0)
           await host.showMessage(
             {
@@ -325,7 +323,6 @@ export async function startBrowserFlow(
       binding: FlowBindingReference;
       subject?: FlowSubjectContext;
       sourceTablePlacementId?: string;
-      committed?: () => void;
     }>;
   }>,
 ): Promise<BrowserFlowResult> {

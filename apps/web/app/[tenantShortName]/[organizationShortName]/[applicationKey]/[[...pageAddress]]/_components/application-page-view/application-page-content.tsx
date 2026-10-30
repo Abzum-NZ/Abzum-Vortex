@@ -235,6 +235,8 @@ export function ApplicationPageViewContent({
     currentSearch,
     application,
   });
+  // Running gestures and kept retry identities belong to the page address they started on.
+  useEffect(() => () => runtimeState.dispose(), [runtimeState, addressKey]);
   if (controlDraftsRef !== undefined && controlDraftsRef.current.scope !== addressKey)
     controlDraftsRef.current = {
       ...emptyControlDrafts(),
@@ -273,6 +275,7 @@ export function ApplicationPageViewContent({
   const {
     currentData,
     refreshPlacements,
+    prepareFlowRefresh,
     refreshTargetsForBinding,
     currentEditFormBaselines,
     pinActivationInFlightRef,
@@ -342,7 +345,7 @@ export function ApplicationPageViewContent({
       currentData,
       dialogFormRef,
       platformThemeTokens,
-      committed: (bindingId) => {
+      prepareRefresh: (bindingId) => {
         let targets = refreshTargetsForBinding(bindingId);
         if (targets.length === 0) {
           // Identity and Access writes have no record target. Only reread displayed data:
@@ -358,7 +361,7 @@ export function ApplicationPageViewContent({
           );
           targets = Object.keys(currentData).filter((id) => displayed.has(id.toLowerCase()));
         }
-        void refreshPlacements(targets, undefined, { content: true });
+        return prepareFlowRefresh(targets);
       },
       setPanelRef,
       applyMessageActionRef,
@@ -433,7 +436,7 @@ export function ApplicationPageViewContent({
     guidedActiveFormIds,
     guidedActivePlacementIds,
     guidedSummaryStepId,
-    submitGuidedSummary,
+    prepareGuidedSummary,
     advanceGuidedStep,
     guidedPreviousStepId,
     requestGuidedStep,
@@ -453,8 +456,6 @@ export function ApplicationPageViewContent({
     requestedStepId,
     guidedSubmitInFlight,
     unsavedWorkRegistry,
-    formBlock,
-    applyDispatch,
   });
 
   const {
@@ -590,7 +591,7 @@ export function ApplicationPageViewContent({
     requestedStepId,
     guidedSummaryStepId,
     showPageMessage,
-    submitGuidedSummary,
+    prepareGuidedSummary,
     advanceGuidedStep,
     currentEditFormBaselines,
     choiceEvidenceFor,

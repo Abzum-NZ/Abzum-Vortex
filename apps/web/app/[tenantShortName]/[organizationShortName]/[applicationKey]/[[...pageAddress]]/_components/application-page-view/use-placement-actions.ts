@@ -77,7 +77,7 @@ export function usePlacementActions({
     (
       placementId: string,
       binding: PlacementFlowBinding,
-      supplied: Record<string, unknown>,
+      supplied: Record<string, unknown> | (() => Record<string, unknown>),
       selectedRecordId?: string,
       /** The one record this gesture is about, when it is not the record the page shows. */
       gestureSubject?: Readonly<{ recordId: string; revision: number }>,
@@ -90,30 +90,34 @@ export function usePlacementActions({
       /** A field change initiated by another flow continues that same cycle. */
       cycle?: FlowEventCycle,
     ) => {
-      const callerInputs = { ...supplied };
-      for (const selectedReadInput of binding.selectedReadInputs ?? []) {
-        // A link field already supplies its selected record reference. The server checks its
-        // exact type against the installed read projection before accepting it.
-        if (binding.event === "field_changed") continue;
-        delete callerInputs[selectedReadInput.callerInputName];
-        if (
-          binding.recordTypeId === undefined ||
-          binding.recordTypeId.toLowerCase() !== selectedReadInput.recordTypeId.toLowerCase()
-        )
-          continue;
-        const parsedRecordId = recordIdSchema.safeParse(selectedRecordId);
-        if (!parsedRecordId.success) continue;
-        callerInputs[selectedReadInput.callerInputName] = {
-          recordTypeId: binding.recordTypeId,
-          recordId: parsedRecordId.data,
-        };
-      }
+      const callerInputs = () => {
+        const values = typeof supplied === "function" ? supplied() : supplied;
+        const callerInputs = { ...values };
+        for (const selectedReadInput of binding.selectedReadInputs ?? []) {
+          // A link field already supplies its selected record reference. The server checks its
+          // exact type against the installed read projection before accepting it.
+          if (binding.event === "field_changed") continue;
+          delete callerInputs[selectedReadInput.callerInputName];
+          if (
+            binding.recordTypeId === undefined ||
+            binding.recordTypeId.toLowerCase() !== selectedReadInput.recordTypeId.toLowerCase()
+          )
+            continue;
+          const parsedRecordId = recordIdSchema.safeParse(selectedRecordId);
+          if (!parsedRecordId.success) continue;
+          callerInputs[selectedReadInput.callerInputName] = {
+            recordTypeId: binding.recordTypeId,
+            recordId: parsedRecordId.data,
+          };
+        }
+        return Object.fromEntries(
+          Object.entries(callerInputs).filter(([name]) => binding.callerInputs.includes(name)),
+        );
+      };
       return applyDispatch(
         flowRuntime.dispatch(
           asComponentBinding(placementId, binding),
-          Object.fromEntries(
-            Object.entries(callerInputs).filter(([name]) => binding.callerInputs.includes(name)),
-          ),
+          callerInputs,
           clickId ?? crypto.randomUUID(),
           gestureSubject,
           sourceTablePlacementId,

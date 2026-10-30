@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type PendingGesture = Readonly<{
-  /** The gesture's flow is still running; the control shows busy and cannot be activated. */
+  /** At least one gesture is still running; the control shows busy. */
   pending: boolean;
   /** True from the gesture's own event turn, before the busy state has rendered. */
   running: () => boolean;
@@ -19,13 +19,13 @@ const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
 /**
  * The one pending state of a gesture that starts a flow, shared by action buttons and form
  * submission. An event handler returns the promise of the flow it started; the control is busy from
- * the same event turn until that promise settles, so the person sees the press in the next frame
- * and a second press cannot start the same flow again.
+ * the same event turn until every tracked promise settles, so the person sees pending work in the
+ * next frame. The form or shared flow scheduler decides whether another gesture may start.
  */
 export function usePendingGesture(): PendingGesture {
   const [pending, setPending] = useState(false);
-  // Guards the gap before the busy state renders, so a second press in the same frame is ignored.
-  const runningNow = useRef(false);
+  // Counts from the event turn, before the busy state has rendered.
+  const runningNow = useRef(0);
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -35,14 +35,14 @@ export function usePendingGesture(): PendingGesture {
   }, []);
   const track = useCallback((outcome: unknown) => {
     if (!isPromiseLike(outcome)) return;
-    runningNow.current = true;
+    runningNow.current += 1;
     setPending(true);
     const settle = (): void => {
-      runningNow.current = false;
-      if (mounted.current) setPending(false);
+      runningNow.current -= 1;
+      if (mounted.current && runningNow.current === 0) setPending(false);
     };
     outcome.then(settle, settle);
   }, []);
-  const running = useCallback(() => runningNow.current, []);
+  const running = useCallback(() => runningNow.current > 0, []);
   return { pending, running, track };
 }

@@ -13,15 +13,18 @@ import type { ServerDrivenResult } from "./server-driven-run";
  */
 
 export type FormFieldAnswers = Readonly<Record<string, unknown>>;
+type PreparedForm = Readonly<{
+  values: FormFieldAnswers;
+  selectedOwnerGroupId?: string;
+  recordChanges?: readonly string[];
+}>;
 
 export type FormBlockRuntime = Readonly<{
   /** One form_submit gesture: dispatch the bound flow under its concurrency setting. */
   submit: (
     binding: PlacementFlowBinding,
-    values: FormFieldAnswers,
-    selectedOwnerGroupId: string | undefined,
-    /** Names included in the whole-record patch; individual answers remain complete. */
-    recordChanges: readonly string[] | undefined,
+    /** Builds the submission once, after the form's pending changes have settled. */
+    prepare: (signal: AbortSignal) => PreparedForm | undefined | Promise<PreparedForm | undefined>,
     gestureId: string,
     sourceTablePlacementId?: string,
   ) => Promise<ServerDrivenResult | undefined>;
@@ -37,70 +40,37 @@ export type FormBlockRuntime = Readonly<{
   ) => Promise<ServerDrivenResult | undefined>;
 }>;
 
-/**
- * Whether the server's answer is unknown, so the same request may be sent again under the same
- * gesture identity: the request failed or the server could not answer. Every other result is the
- * server's definitive answer for that gesture.
- */
-const outcomeUnknown = (result: ServerDrivenResult): boolean =>
-  result.kind === "unavailable" || result.kind === "abandoned";
-
 export function createFormBlockRuntime(runtime: FlowRuntime): FormBlockRuntime {
-  // The gesture identity of a submission whose outcome is still unknown, keyed by the binding and
-  // the exact answers it carried. Sending the same answers again (a retry after a failed request)
-  // reaches the same run, so the effect ledger replays its outcome instead of committing twice.
-  // Once the server has answered definitively the identity is released: submitting again is a new
-  // gesture, even with the same answers.
-  const unsettled = new Map<string, string>();
-
-  const dispatchOnce = async (
+  const dispatchOnce = (
     binding: PlacementFlowBinding,
-    callerInputs: Readonly<Record<string, unknown>>,
-    eventGestureId: string,
-    retryKey?: string,
+    callerInputs:
+      | Readonly<Record<string, unknown>>
+      | ((signal: AbortSignal) => Promise<Readonly<Record<string, unknown>> | undefined>),
+    gestureId: string,
     sourceTablePlacementId?: string,
-  ): Promise<ServerDrivenResult | undefined> => {
-    const gestureId =
-      (retryKey === undefined ? undefined : unsettled.get(retryKey)) ?? eventGestureId;
-    let unknown = true;
-    try {
-      const result = await runtime.dispatch(
-        binding,
-        callerInputs,
-        gestureId,
-        undefined,
-        sourceTablePlacementId,
-      );
-      unknown = outcomeUnknown(result);
-      return result;
-    } finally {
-      if (retryKey !== undefined) {
-        if (unknown) unsettled.set(retryKey, gestureId);
-        else unsettled.delete(retryKey);
-      }
-    }
-  };
+  ): Promise<ServerDrivenResult | undefined> =>
+    runtime.dispatch(binding, callerInputs, gestureId, undefined, sourceTablePlacementId);
 
   return Object.freeze({
-    submit: (
-      binding,
-      values,
-      selectedOwnerGroupId,
-      recordChanges,
-      gestureId,
-      sourceTablePlacementId,
-    ) => {
+    submit: (binding, prepare, gestureId, sourceTablePlacementId) => {
       if (binding.event !== "form_submit") return Promise.resolve(undefined);
-      const callerInputs = {
-        values,
-        ...(recordChanges === undefined ? {} : { recordChanges }),
-        ...(selectedOwnerGroupId === undefined ? {} : { selectedOwnerGroupId }),
-      };
       return dispatchOnce(
         binding,
-        callerInputs,
+        async (signal) => {
+          const submission = await prepare(signal);
+          return submission === undefined
+            ? undefined
+            : {
+                values: submission.values,
+                ...(submission.recordChanges === undefined
+                  ? {}
+                  : { recordChanges: submission.recordChanges }),
+                ...(submission.selectedOwnerGroupId === undefined
+                  ? {}
+                  : { selectedOwnerGroupId: submission.selectedOwnerGroupId }),
+              };
+        },
         gestureId,
-        `${binding.bindingId}|${sourceTablePlacementId ?? ""}|${JSON.stringify(callerInputs)}`,
         sourceTablePlacementId,
       );
     },

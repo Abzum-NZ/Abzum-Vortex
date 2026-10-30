@@ -129,6 +129,8 @@ export type FlowWarningNotice = z.infer<typeof flowWarningNoticeSchema>;
 
 const resultCommon = {
   committedNow: z.boolean(),
+  /** This request replayed a segment that committed earlier, whose reply may have been lost. */
+  replayedCommitted: z.literal(true).optional(),
   runId: z.uuid(),
   receipt: formContinuationReceiptSchema,
   intents: z.array(formContinuationIntentSchema).max(200),

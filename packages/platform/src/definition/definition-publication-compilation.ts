@@ -28,6 +28,10 @@ import type { PlatformPermissionSource } from "../access/platform-permissions";
 import { DefinitionCompilationError } from "./compilation-error";
 import { validateDefinitionSet } from "./validation";
 import {
+  applicationFlowBindingPageEventRule,
+  applicationFlowBindingUniquenessRule,
+} from "./validation/application-blocks";
+import {
   deriveSavedConditionRevisions,
   type SavedConditionLike,
 } from "./saved-condition-revisions";
@@ -227,6 +231,18 @@ export const compileApplicationCandidate = (
     dependencies.composition === undefined
   )
     return refuse("DEFINITION_COMPILATION_REFUSED");
+  const duplicate = [
+    ...applicationFlowBindingUniquenessRule(candidate.draft.source),
+    ...applicationFlowBindingPageEventRule(candidate.draft.source),
+  ][0];
+  if (duplicate !== undefined)
+    throw new DefinitionCompilationError(
+      duplicate.ruleCode,
+      duplicate.family,
+      duplicate.location,
+      duplicate.code,
+      duplicate.sentence,
+    );
   // Dependency resolution authenticated these outputs and checked that they parse, but passes them
   // as stored: schema defaults (such as a Module's empty `queries`) are not filled in here.
   const dependencyOutputs = [

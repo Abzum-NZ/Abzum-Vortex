@@ -250,8 +250,6 @@ export {
   getGuidedFormRecordType,
   getGuidedFormStepFields,
   getGuidedFormVisiblePlacementIds,
-  guidedFormConfirmationKey,
-  guidedFormConfirmationReference,
   guidedFormDraftScope,
   guidedFormInitialValues,
   guidedFormInputData,

@@ -1,11 +1,6 @@
 import { workflowValueTypeSchema } from "../catalogue/catalogues";
 import { flowTaskChildLists, type FlowTask } from "../workflows/flow-contracts";
 import type { FlowValue } from "../workflows/flow-values";
-import {
-  componentEventBindingDefaults,
-  type ComponentSemanticEventKind,
-  type FlowBindingSettings,
-} from "./component-semantic-events";
 
 /**
  * The closed settings of contract 4's steps and bindings, checked at publication: the values each
@@ -140,45 +135,4 @@ export const flowStepSettingIssues = (
   visit(flow.errors, ["errors"]);
   visit(flow.finally, ["finally"]);
   return issues;
-};
-
-/**
- * The first binding setting that does not run yet, by name. Field changes honour their configured
- * debounce and the events dispatched through the shared flow runtime honour their concurrency
- * setting. Other debounce settings, page-wide exclusive scope and a non-default timeout still
- * need their runtime implementations. The plan check handles conditions that need the gate.
- */
-const scheduledEvents = new Set<ComponentSemanticEventKind>([
-  "action",
-  "row_clicked",
-  "row_action",
-  "inline_edit",
-  "row_edit",
-  "card_moved",
-  "card_added",
-  "field_changed",
-  "field_focus_lost",
-  "form_ready",
-  "form_reset",
-  "form_submit",
-]);
-
-export const flowBindingSettingNotYetRunnable = (
-  event: ComponentSemanticEventKind,
-  settings: FlowBindingSettings,
-): string | undefined => {
-  const defaults = componentEventBindingDefaults[event];
-  if (event !== "field_changed" && settings.debounceMs !== defaults.debounceMs)
-    return `a debounce other than ${defaults.debounceMs} ms cannot run yet`;
-  if (
-    !scheduledEvents.has(event) &&
-    settings.concurrency !== defaults.concurrency &&
-    settings.concurrency !== "ignore_while_running"
-  )
-    return `${settings.concurrency === "latest_wins" ? "latest wins" : "queued starts"} cannot run yet`;
-  if (settings.exclusive !== defaults.exclusive && settings.exclusive === "page")
-    return "exclusive to the page cannot run yet";
-  if (settings.timeoutMs !== defaults.timeoutMs)
-    return "a timeout other than the default cannot run yet";
-  return undefined;
 };

@@ -26,7 +26,7 @@ export type ServerDrivenResult =
   /** The surface is older than the installation: nothing ran and the page must reload. */
   | Readonly<{ kind: "reload"; installationRevision: number }>
   /** Unknown, expired, foreign, tampered or not permitted: the one neutral refusal. */
-  | Readonly<{ kind: "refused" }>
+  | Readonly<{ kind: "refused"; reason?: string }>
   | Readonly<{ kind: "unavailable" }>
   | Readonly<{ kind: "unknown"; controlId?: string; retry?: () => Promise<ServerDrivenResult> }>
   /**
@@ -52,8 +52,7 @@ const refuseInvalidServerFlowState = (stage: string): Readonly<{ kind: "refused"
  * intents and sends back only the continuation exactly as issued together with the person's
  * answer. It never chooses a path, never reuses a continuation and never resumes a run whose intent
  * does not match what the server said it awaits; the server re-checks everything on resume. When
- * the run committed, `committed` is told before the closing messages are shown, so the page re-reads
- * what it displays while the person reads the result.
+ * the run committed, the reply itself carries the refreshed rows (see the client's refresh).
  */
 export async function driveServerFlow(
   client: FlowInvokeClient,
@@ -61,8 +60,8 @@ export async function driveServerFlow(
   first: ServerFlowResponse,
   host: FlowIntentHost,
   signal?: AbortSignal,
-  committed?: () => void,
   sourceTablePlacementId?: string,
+  bindingId?: string,
 ): Promise<ServerDrivenResult> {
   let response = first;
   let awaitingSurface = false;
@@ -83,11 +82,6 @@ export async function driveServerFlow(
         case "unknown":
           return response;
         case "result": {
-          if (
-            response.descriptor.commit === "confirmed" ||
-            response.descriptor.commit === "partial"
-          )
-            committed?.();
           if (
             response.warnings.length > 0 &&
             (response.descriptor.commit === "confirmed" || response.descriptor.commit === "partial")
@@ -167,6 +161,7 @@ export async function driveServerFlow(
               undefined,
               sourceTablePlacementId,
               carriedValues,
+              bindingId,
             );
             if (retried.kind === "unknown") return { kind: "unknown", retry: retryResume };
             return driveServerFlow(
@@ -175,8 +170,8 @@ export async function driveServerFlow(
               retried,
               host,
               undefined,
-              committed,
               sourceTablePlacementId,
+              bindingId,
             );
           };
           response = await client.resume(
@@ -187,6 +182,7 @@ export async function driveServerFlow(
             signal,
             sourceTablePlacementId,
             carriedValues,
+            bindingId,
           );
           if (response.kind === "unknown") return { kind: "unknown", retry: retryResume };
           break;

@@ -54,9 +54,6 @@ export async function runFlowBinding(
           ? {}
           : { subject: subject ?? options.subject }),
         ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
-        ...(options.committed === undefined
-          ? {}
-          : { committed: () => options.committed?.(binding.bindingId) }),
       },
     });
     if (result.kind === "abandoned") return { kind: "abandoned", unanswered: true };
@@ -107,7 +104,7 @@ export async function runFlowBinding(
     first,
     options.host,
     runSignal,
-    options.committed === undefined ? undefined : () => options.committed?.(binding.bindingId),
     sourceTablePlacementId,
+    binding.bindingId,
   );
 }

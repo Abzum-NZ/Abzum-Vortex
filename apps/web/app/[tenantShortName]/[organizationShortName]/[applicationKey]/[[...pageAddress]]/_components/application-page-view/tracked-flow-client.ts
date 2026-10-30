@@ -86,6 +86,7 @@ export function trackFlowInvokeClient(
       signal,
       sourceTablePlacementId,
       carriedValues,
+      bindingId,
     ) => {
       if (answer.kind === "cancel") formCancelledRef.current = true;
       const submission = continuingFormsRef.current.get(continuation);
@@ -97,6 +98,7 @@ export function trackFlowInvokeClient(
         signal,
         sourceTablePlacementId,
         carriedValues,
+        bindingId,
       );
       if (response.kind !== "unknown") continuingFormsRef.current.delete(continuation);
       recordResponse(response, submission);

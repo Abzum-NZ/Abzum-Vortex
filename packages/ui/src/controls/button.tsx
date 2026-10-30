@@ -50,8 +50,7 @@ export function Button(props: ButtonProps): ReactElement {
   const form = useFormScope();
   const reactions = usePlacementReactions();
   const noteId = useId();
-  // An action handler may return the promise of the flow it started; the button stays busy until it
-  // settles, so one gesture cannot start the same flow twice.
+  // The shared scheduler decides whether another action queues, supersedes or is ignored.
   const gesture = usePendingGesture();
   if (mode !== "action" && form === undefined)
     throw new DefinitionRenderError(
@@ -66,7 +65,7 @@ export function Button(props: ButtonProps): ReactElement {
   const disabled =
     context.inactive ||
     reactions.readOnly === true ||
-    pending ||
+    (mode !== "action" && pending) ||
     settings.boolean("disabled") ||
     (mode !== "action" && form?.inactive === true);
   const note = context.unavailable ? "Unavailable" : context.disabledReason;
@@ -84,12 +83,12 @@ export function Button(props: ButtonProps): ReactElement {
         aria-busy={pending}
         {...(note === undefined ? {} : { "aria-describedby": noteId })}
         onClick={() => {
-          if (mode !== "action" || disabled || gesture.running()) return;
+          if (mode !== "action" || disabled) return;
           gesture.track(
             context.events?.action?.({
               event: "action",
               intent: "activate",
-              ...(form === undefined ? {} : { values: form.values() }),
+              ...(form === undefined ? {} : { readValues: form.values }),
             }),
           );
         }}

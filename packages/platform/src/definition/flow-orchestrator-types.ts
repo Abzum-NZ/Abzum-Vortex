@@ -415,7 +415,7 @@ export type FlowOrchestratorResponse = (
   | Readonly<{ kind: "already_answered" }>
   | Readonly<{ kind: "refused" }>
 ) &
-  Readonly<{ committedNow: boolean }>;
+  Readonly<{ committedNow: boolean; replayedCommitted?: true }>;
 
 /**
  * Whose authority a run uses. A person's run holds that person's verified session. A back-end run
