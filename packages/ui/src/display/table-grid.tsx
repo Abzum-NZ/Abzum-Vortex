@@ -21,8 +21,14 @@ import {
   type ReactNode,
 } from "react";
 import {
-  getCoreRowModel,
-  useReactTable,
+  columnOrderingFeature,
+  columnResizingFeature,
+  columnSizingFeature,
+  columnVisibilityFeature,
+  rowSelectionFeature,
+  rowSortingFeature,
+  tableFeatures,
+  useTable,
   type ColumnDef,
   type Header,
   type RowSelectionState,
@@ -74,6 +80,15 @@ import {
 /** TanStack Virtual loads only for a table whose page can hold more than one hundred rows. */
 const loadVirtualRows = () => import("./table-grid-virtual");
 const VirtualRows = lazy(loadVirtualRows);
+
+const gridFeatures = tableFeatures({
+  columnOrderingFeature,
+  columnSizingFeature,
+  columnResizingFeature,
+  columnVisibilityFeature,
+  rowSelectionFeature,
+  rowSortingFeature,
+});
 
 const RESIZE_STEP = 16;
 const TOTALS_ROW = "vortex-totals";
@@ -408,7 +423,7 @@ export function RecordsGrid({
   // state, so a layout change never rebuilds them.
   const selectable = selection !== undefined;
   const expandable = expansion !== undefined;
-  const definitions = useMemo<ColumnDef<DisplayRow>[]>(
+  const definitions = useMemo<ColumnDef<typeof gridFeatures, DisplayRow>[]>(
     () => [
       ...(expandable
         ? [
@@ -430,7 +445,7 @@ export function RecordsGrid({
             },
           ]
         : []),
-      ...columns.map((column): ColumnDef<DisplayRow> => ({
+      ...columns.map((column): ColumnDef<typeof gridFeatures, DisplayRow> => ({
         id: column.key,
         accessorFn: (row) => row.cells[column.key],
         size: column.width,
@@ -482,14 +497,12 @@ export function RecordsGrid({
       setWidths((current) => (typeof updater === "function" ? updater(current) : updater)),
     [setWidths],
   );
-  const table = useReactTable<DisplayRow>({
+  const table = useTable({
+    features: gridFeatures,
     data: rows as DisplayRow[],
     columns: definitions,
-    getCoreRowModel: getCoreRowModel(),
     getRowId: (row) => row.recordId,
     manualSorting: true,
-    manualFiltering: true,
-    manualPagination: true,
     enableMultiSort: true,
     enableRowSelection: selectable,
     columnResizeMode: "onChange",
@@ -1049,7 +1062,7 @@ export function RecordsGrid({
   const headerSlots = slots;
 
   const renderHeader = (
-    header: Header<DisplayRow, unknown> | undefined,
+    header: Header<typeof gridFeatures, DisplayRow, unknown> | undefined,
     slot: CellSlot,
     index: number,
   ): ReactElement => {

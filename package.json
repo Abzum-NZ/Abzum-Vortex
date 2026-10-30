@@ -27,14 +27,14 @@
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build"
   },
   "devDependencies": {
-    "@eslint/js": "9.39.5",
+    "@eslint/js": "catalog:",
     "@types/node": "catalog:",
-    "eslint": "9.39.5",
+    "eslint": "catalog:",
     "knip": "catalog:",
-    "prettier": "3.9.8",
+    "prettier": "catalog:",
     "supabase": "catalog:",
-    "turbo": "2.11.2",
+    "turbo": "catalog:",
     "typescript": "catalog:",
-    "typescript-eslint": "8.70.0"
+    "typescript-eslint": "catalog:"
   }
 }
