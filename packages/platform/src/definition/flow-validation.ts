@@ -290,15 +290,6 @@ export function validateFlow(
     flow.triggers.forEach((trigger, index) => {
       if (Object.keys(trigger.inputs).length > 0)
         unsupported(["triggers", index, "inputs"], "A save trigger supplies only its record");
-      // Not yet runnable: the one record writer applies rules to deletes and restores later.
-      if (trigger.type === "BeforeSave")
-        trigger.operations.forEach((operation, operationIndex) => {
-          if (operation.kind === "delete" || operation.kind === "restore")
-            unsupported(
-              ["triggers", index, "operations", operationIndex],
-              `A rule before a record is ${operation.kind === "delete" ? "deleted" : "restored"} cannot run yet; cover create or update`,
-            );
-        });
     });
   }
 

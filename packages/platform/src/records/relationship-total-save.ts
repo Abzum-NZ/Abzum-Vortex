@@ -4,7 +4,6 @@ import {
   type ModuleField,
   type RecordTypeDefinition,
 } from "../definition/module-contracts";
-import type { SaveRecordCommand } from "./records";
 import { evaluateRecordCalculations } from "./calculations";
 import {
   finalizeRecordFieldCandidate,
@@ -15,6 +14,7 @@ import {
 import { evaluateRecordTotals } from "./totals";
 import {
   applyBeforeSaveRules,
+  applyBeforeSaveLifecycleRules,
   beforeSaveRuleRefusedIssueCode,
   beforeSaveRuleUnavailableIssueCode,
   type BeforeSaveRuleExecution,
@@ -62,29 +62,30 @@ export type RelationshipTotalParentMutation = Readonly<{
   finalValues: Readonly<Record<string, JsonValue | null>>;
 }>;
 
-/** One composed creation evaluated as its own root inside the merged closure. */
-type RelationshipTotalCreationRoot = Readonly<{
-  ordinal: number;
-  values: Readonly<Record<string, JsonValue | null>>;
-}>;
+/** Explicit operations in the locked graph; other records are generated-value parents. */
+export type RecordCalculationChange =
+  | Readonly<{
+      operation: "create" | "update";
+      submittedValues: Readonly<Record<string, JsonValue | null>>;
+    }>
+  | Readonly<{
+      operation: "delete" | "restore";
+      storedValues: Readonly<Record<string, unknown>>;
+    }>;
 
 export type CalculateRelationshipTotalSaveResult =
   | Readonly<{
       success: true;
-      sourceFinalValues: Readonly<Record<string, JsonValue | null>>;
-      creationFinalValues: Readonly<Record<number, Readonly<Record<string, JsonValue | null>>>>;
-      creationPendingChecks: Readonly<Record<number, readonly RecordFieldValuePendingCheck[]>>;
+      records: ReadonlyMap<
+        string,
+        Readonly<{
+          finalValues: Readonly<Record<string, JsonValue | null>>;
+          pendingChecks: readonly RecordFieldValuePendingCheck[];
+        }>
+      >;
       parentMutations: readonly RelationshipTotalParentMutation[];
-      pendingChecks: PrepareRecordFieldValuesResult extends infer Result
-        ? Result extends { success: true; pendingChecks: infer Checks }
-          ? Checks
-          : never
-        : never;
     }>
   | Readonly<{ success: false; issues: readonly RelationshipTotalCalculationIssue[] }>;
-
-/** Record key of creation `ordinal` inside one merged command closure. */
-const creationRecordKey = (ordinal: number) => `create:${ordinal}`;
 
 const hasOwn = (value: object, key: string): boolean =>
   Object.prototype.hasOwnProperty.call(value, key);
@@ -183,27 +184,20 @@ const issue = (
  */
 export const calculateLockedRelationshipTotalSave = (
   input: Readonly<{
-    command: Pick<SaveRecordCommand, "operation" | "submittedValues">;
+    changes: ReadonlyMap<string, RecordCalculationChange>;
     preparation: LockedRelationshipTotalPreparation;
-    creations?: readonly RelationshipTotalCreationRoot[];
     organizationCurrency?: string;
     clock: Readonly<{ instant: string; organizationLocalDate: string }>;
     rules?: ReadonlyMap<string, BeforeSaveRuleExecution>;
   }>,
 ): CalculateRelationshipTotalSaveResult => {
   const records = new Map(input.preparation.records.map((record) => [record.recordKey, record]));
-  const root = records.get("root");
-  if (root === undefined)
-    return { success: false, issues: [{ code: "invalid_input", recordKey: "root", path: [] }] };
-  // Each composed creation is its own `create` root inside the one merged
-  // closure. Locking and evaluating every root together is what keeps a shared
-  // total parent authoritative; a second preparation would read the subject's
-  // pre-mutation values.
-  const creationRoots = new Map(
-    (input.creations ?? []).map((creation) => [creationRecordKey(creation.ordinal), creation]),
-  );
-  if ([...creationRoots.keys()].some((recordKey) => !records.has(recordKey)))
-    return { success: false, issues: [{ code: "invalid_input", recordKey: "root", path: [] }] };
+  const missing = [...input.changes.keys()].find((recordKey) => !records.has(recordKey));
+  if (missing !== undefined || records.size === 0)
+    return {
+      success: false,
+      issues: [{ code: "invalid_input", recordKey: missing ?? "", path: [] }],
+    };
 
   const initialByRecord = new Map<
     string,
@@ -212,18 +206,66 @@ export const calculateLockedRelationshipTotalSave = (
   const valuesByRecord = new Map<string, Record<string, JsonValue>>();
   const requirementsByRecord = new Map<string, readonly RecordFieldValueRequirement[]>();
   for (const record of records.values()) {
-    const creationRoot = creationRoots.get(record.recordKey);
-    const operation =
-      record.recordKey === "root"
-        ? input.command.operation
-        : creationRoot !== undefined
-          ? ("create" as const)
-          : ("update" as const);
+    const change = input.changes.get(record.recordKey);
+    const lifecycle = change?.operation === "delete" || change?.operation === "restore";
+    const operation = change?.operation === "create" ? "create" : "update";
+    const submittedValues =
+      change !== undefined && "submittedValues" in change ? change.submittedValues : {};
+    const execution = input.rules?.get(record.recordKey);
+    if (
+      input.rules !== undefined &&
+      execution === undefined &&
+      !(change?.operation === "update" && Object.keys(change.submittedValues).length === 0)
+    )
+      return {
+        success: false,
+        issues: [
+          {
+            code: beforeSaveRuleUnavailableIssueCode,
+            recordKey: record.recordKey,
+            path: ["rules"],
+          },
+        ],
+      };
+    if (lifecycle && execution !== undefined) {
+      const applied = applyBeforeSaveLifecycleRules({
+        execution,
+        recordType: record.recordType,
+        operation: change.operation,
+        existingValues: change.storedValues,
+        ...(input.organizationCurrency === undefined
+          ? {}
+          : { organizationCurrency: input.organizationCurrency }),
+      });
+      if (!applied.success)
+        return {
+          success: false,
+          issues: [
+            {
+              code:
+                applied.reason === "refused"
+                  ? beforeSaveRuleRefusedIssueCode
+                  : beforeSaveRuleUnavailableIssueCode,
+              recordKey: record.recordKey,
+              ...(applied.reason === "refused"
+                ? {
+                    ruleKey: applied.ruleKey,
+                    requirement: { code: applied.code, message: applied.message },
+                  }
+                : {}),
+              ...(applied.reason === "refused" && applied.fieldId !== undefined
+                ? { fieldId: applied.fieldId }
+                : {}),
+              path: ["rules"],
+            },
+          ],
+        };
+    }
+    if (change?.operation === "delete") continue;
     const initial = prepareInitialRecordFieldCandidate({
       operation,
       recordType: record.recordType,
-      submittedValues:
-        record.recordKey === "root" ? input.command.submittedValues : (creationRoot?.values ?? {}),
+      submittedValues,
       ...(operation === "create" ? {} : { existingValues: record.existingValues }),
       ...(input.organizationCurrency === undefined
         ? {}
@@ -236,23 +278,7 @@ export const calculateLockedRelationshipTotalSave = (
       };
     initialByRecord.set(record.recordKey, initial.candidate);
     let candidateValues = initial.candidate.candidateValues;
-    const execution = input.rules?.get(record.recordKey);
-    if (
-      input.rules !== undefined &&
-      execution === undefined &&
-      (record.recordKey !== "root" || Object.keys(input.command.submittedValues).length > 0)
-    )
-      return {
-        success: false,
-        issues: [
-          {
-            code: beforeSaveRuleUnavailableIssueCode,
-            recordKey: record.recordKey,
-            path: ["rules"],
-          },
-        ],
-      };
-    if (execution !== undefined && (record.recordKey === "root" || creationRoot !== undefined)) {
+    if (execution !== undefined && change !== undefined && !lifecycle) {
       const applied = applyBeforeSaveRules({
         execution,
         recordType: record.recordType,
@@ -302,27 +328,6 @@ export const calculateLockedRelationshipTotalSave = (
             },
           ],
         };
-      if (
-        record.recordKey !== "root" &&
-        creationRoot === undefined &&
-        record.recordType.fields.some(
-          (field) =>
-            field.type !== "calculation" &&
-            field.type !== "total" &&
-            JSON.stringify(applied.candidateValues[field.fieldId] ?? null) !==
-              JSON.stringify(initial.candidate.candidateValues[field.fieldId] ?? null),
-        )
-      )
-        return {
-          success: false,
-          issues: [
-            {
-              code: beforeSaveRuleUnavailableIssueCode,
-              recordKey: record.recordKey,
-              path: ["rules"],
-            },
-          ],
-        };
       candidateValues = applied.candidateValues;
       requirementsByRecord.set(record.recordKey, applied.requirements);
     }
@@ -333,8 +338,9 @@ export const calculateLockedRelationshipTotalSave = (
 
   const nodes = new Map<string, Readonly<{ recordKey: string; field: DerivedField }>>();
   for (const record of records.values())
-    for (const field of derivedFields(record.recordType))
-      nodes.set(nodeKey(record.recordKey, field.fieldId), { recordKey: record.recordKey, field });
+    if (input.changes.get(record.recordKey)?.operation !== "delete")
+      for (const field of derivedFields(record.recordType))
+        nodes.set(nodeKey(record.recordKey, field.fieldId), { recordKey: record.recordKey, field });
 
   const dependencies = new Map<string, Set<string>>();
   for (const [key, node] of nodes) {
@@ -401,12 +407,18 @@ export const calculateLockedRelationshipTotalSave = (
         relationshipSources: record.relationshipSources.map((source) => ({
           relationshipId: source.relationshipId,
           sourceRecordType: source.sourceRecordType,
-          records: source.records.map((related) => ({
-            fieldValues:
-              related.recordKey === undefined
-                ? related.fieldValues
-                : (valuesByRecord.get(related.recordKey) ?? related.fieldValues),
-          })),
+          records: source.records
+            .filter(
+              (related) =>
+                related.recordKey === undefined ||
+                input.changes.get(related.recordKey)?.operation !== "delete",
+            )
+            .map((related) => ({
+              fieldValues:
+                related.recordKey === undefined
+                  ? related.fieldValues
+                  : (valuesByRecord.get(related.recordKey) ?? related.fieldValues),
+            })),
         })),
       });
       if (!evaluated.success)
@@ -443,7 +455,7 @@ export const calculateLockedRelationshipTotalSave = (
   // Parent rules see the newly calculated totals. Their requirements are then
   // checked by the same field finalizer as root requirements.
   for (const record of records.values()) {
-    if (record.recordKey === "root" || creationRoots.has(record.recordKey)) continue;
+    if (input.changes.has(record.recordKey)) continue;
     const execution = input.rules?.get(record.recordKey);
     if (execution === undefined) continue;
     const proposedValues = valuesByRecord.get(record.recordKey)!;
@@ -501,6 +513,7 @@ export const calculateLockedRelationshipTotalSave = (
 
   const finalized = new Map<string, Extract<PrepareRecordFieldValuesResult, { success: true }>>();
   for (const record of records.values()) {
+    if (input.changes.get(record.recordKey)?.operation === "delete") continue;
     const result = finalizeRecordFieldCandidate({
       recordType: record.recordType,
       initialCandidate: initialByRecord.get(record.recordKey)!,
@@ -519,21 +532,22 @@ export const calculateLockedRelationshipTotalSave = (
     finalized.set(record.recordKey, result);
   }
 
-  const source = finalized.get("root")!;
-  const sourceFinalValues: Record<string, JsonValue | null> = { ...source.setValues };
-  for (const fieldId of source.clearFieldIds) sourceFinalValues[fieldId] = null;
-  const creationFinalValues: Record<number, Record<string, JsonValue | null>> = {};
-  const creationPendingChecks: Record<number, readonly RecordFieldValuePendingCheck[]> = {};
-  for (const [recordKey, creation] of creationRoots) {
-    const created = finalized.get(recordKey)!;
-    const values: Record<string, JsonValue | null> = { ...created.setValues };
-    for (const fieldId of created.clearFieldIds) values[fieldId] = null;
-    creationFinalValues[creation.ordinal] = values;
-    creationPendingChecks[creation.ordinal] = created.pendingChecks;
+  const calculatedRecords = new Map<
+    string,
+    Readonly<{
+      finalValues: Readonly<Record<string, JsonValue | null>>;
+      pendingChecks: readonly RecordFieldValuePendingCheck[];
+    }>
+  >();
+  for (const [recordKey, result] of finalized) {
+    const finalValues: Record<string, JsonValue | null> = { ...result.setValues };
+    for (const fieldId of result.clearFieldIds) finalValues[fieldId] = null;
+    calculatedRecords.set(recordKey, { finalValues, pendingChecks: result.pendingChecks });
   }
   const parentMutations: RelationshipTotalParentMutation[] = [];
   for (const record of records.values()) {
-    if (record.recordKey === "root" || creationRoots.has(record.recordKey)) continue;
+    const change = input.changes.get(record.recordKey);
+    if (change !== undefined && change.operation !== "restore") continue;
     if (
       record.recordId === undefined ||
       record.concurrencyNumber === undefined ||
@@ -564,10 +578,7 @@ export const calculateLockedRelationshipTotalSave = (
   }
   return {
     success: true,
-    sourceFinalValues,
-    creationFinalValues,
-    creationPendingChecks,
+    records: calculatedRecords,
     parentMutations,
-    pendingChecks: source.pendingChecks,
   };
 };

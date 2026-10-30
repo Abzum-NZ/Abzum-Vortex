@@ -5610,7 +5610,6 @@ declare
   lifecycle_effect record;
   lifecycle_loaded jsonb;
   lifecycle_type jsonb;
-  lifecycle_proposed jsonb;
   lifecycle_records jsonb := '[]'::jsonb;
 begin
   if p_operation is null or p_operation not in ('delete', 'restore')
@@ -5872,10 +5871,6 @@ begin
     where storage.storage_contract_id = lifecycle_effect.storage_contract_id
       and storage.record_type_id = lifecycle_effect.record_type_id
       and storage.state = 'active';
-    select item.value into lifecycle_proposed
-    from pg_catalog.jsonb_array_elements(p_proposed_records) as item(value)
-    where (item.value ->> 'recordTypeId')::uuid = lifecycle_effect.record_type_id
-      and (item.value ->> 'recordId')::uuid = lifecycle_effect.record_id;
     lifecycle_records := lifecycle_records || pg_catalog.jsonb_build_array(
       pg_catalog.jsonb_build_object(
         'recordKey', case when lifecycle_effect.record_type_id = p_record_type_id
@@ -5888,8 +5883,6 @@ begin
             and lifecycle_effect.record_type_id = p_record_type_id
             and lifecycle_effect.record_id = p_record_id
           then p_root_snapshot -> 'existingValues'
-          when p_operation = 'restore' and lifecycle_proposed is not null
-            then lifecycle_proposed -> 'existingValues'
           else lifecycle_loaded -> 'fieldValues' end,
         'canRead', lifecycle_effect.record_type_id = p_record_type_id and lifecycle_effect.record_id = p_record_id,
         'relationshipSources', '[]'::jsonb,

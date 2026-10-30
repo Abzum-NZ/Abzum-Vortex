@@ -800,10 +800,12 @@ const finalizeCalculatedValues = async (
 
   // A gated option is stored only when the person may use it on this record now (the decision that
   // offered it). An option the record already holds is not chosen again, so it is not re-checked.
+  const pendingChecks =
+    "records" in values ? values.records.get("root")!.pendingChecks : values.pendingChecks;
   const choiceDecisions = new Map<string, boolean>();
   const refusedChoices: RecordFieldValuePendingCheck[] = [];
   if (!preview)
-    for (const check of values.pendingChecks) {
+    for (const check of pendingChecks) {
       if (check.kind !== "choice_permission") continue;
       const held = prepared.existingValues[check.fieldId];
       if (held === check.optionValue || (Array.isArray(held) && held.includes(check.optionValue)))
@@ -822,7 +824,7 @@ const finalizeCalculatedValues = async (
       if (!allowed) refusedChoices.push(check);
     }
   const unsupportedChecks = [
-    ...values.pendingChecks.filter(
+    ...pendingChecks.filter(
       (check) =>
         check.kind !== "record_reference" &&
         check.kind !== "file_reference" &&
@@ -857,7 +859,7 @@ const finalizeCalculatedValues = async (
   }
 
   const finalValues: Record<string, unknown> =
-    "sourceFinalValues" in values ? { ...values.sourceFinalValues } : { ...values.setValues };
+    "records" in values ? { ...values.records.get("root")!.finalValues } : { ...values.setValues };
   if ("clearFieldIds" in values)
     for (const fieldId of values.clearFieldIds) finalValues[fieldId] = null;
   if (prepared.recordType.systemProjection === undefined) {
@@ -1010,7 +1012,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
     const values =
       totalPreparation.outcome === "prepared" && totalClock !== undefined
         ? calculateLockedRelationshipTotalSave({
-            command: command,
+            changes: new Map([["root", command]]),
             preparation: totalPreparation,
             ...(settings?.currency === undefined
               ? {}
@@ -1338,7 +1340,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
                 continue;
               }
               values = calculateLockedRelationshipTotalSave({
-                command,
+                changes: new Map([["root", command]]),
                 preparation: totals,
                 ...(settings?.currency === undefined
                   ? {}

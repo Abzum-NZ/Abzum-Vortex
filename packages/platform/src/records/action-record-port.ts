@@ -824,9 +824,20 @@ const planNamedAction = async (
     const calculated =
       totalPreparation.outcome === "prepared" && clock !== undefined
         ? calculateLockedRelationshipTotalSave({
-            command: saveCommand,
+            changes: new Map([
+              [
+                "root",
+                { operation: saveCommand.operation, submittedValues: saveCommand.submittedValues },
+              ],
+              ...composition.creations.map(
+                (creation) =>
+                  [
+                    `create:${creation.ordinal}`,
+                    { operation: "create" as const, submittedValues: creation.values },
+                  ] as const,
+              ),
+            ]),
             preparation: totalPreparation,
-            creations: composition.creations,
             ...(settings?.currency ? { organizationCurrency: settings.currency } : {}),
             clock,
             ...(closureRules === undefined ? {} : { rules: closureRules }),
@@ -862,9 +873,10 @@ const planNamedAction = async (
         "the prepared relationship totals hold no root record for the subject",
       );
     if (
-      calculated.pendingChecks.some(
-        (check) => !pendingCheckIsAuthorized(check, prepared.singleRequiredPermissionId),
-      )
+      ("records" in calculated
+        ? calculated.records.get("root")!.pendingChecks
+        : calculated.pendingChecks
+      ).some((check) => !pendingCheckIsAuthorized(check, prepared.singleRequiredPermissionId))
     )
       return safeRefusal(
         prepared.correlationId,
@@ -872,11 +884,13 @@ const planNamedAction = async (
         "a pending check on the subject values is not authorised",
       );
     if (
-      "creationPendingChecks" in calculated &&
-      Object.values(calculated.creationPendingChecks).some((checks) =>
-        checks.some(
-          (check) => !pendingCheckIsAuthorized(check, prepared.singleRequiredPermissionId),
-        ),
+      "records" in calculated &&
+      composition.creations.some((creation) =>
+        calculated.records
+          .get(`create:${creation.ordinal}`)!
+          .pendingChecks.some(
+            (check) => !pendingCheckIsAuthorized(check, prepared.singleRequiredPermissionId),
+          ),
       )
     ) {
       return safeRefusal(
@@ -886,8 +900,8 @@ const planNamedAction = async (
       );
     }
     finalValues =
-      "sourceFinalValues" in calculated
-        ? { ...calculated.sourceFinalValues }
+      "records" in calculated
+        ? { ...calculated.records.get("root")!.finalValues }
         : { ...calculated.setValues };
     if ("clearFieldIds" in calculated)
       for (const fieldId of calculated.clearFieldIds) finalValues[fieldId] = null;
@@ -916,8 +930,15 @@ const planNamedAction = async (
         "the created records changed derived subject values that require its before-save flows",
       );
     const createdFinalValues =
-      "creationFinalValues" in calculated
-        ? { values: calculated.creationFinalValues }
+      "records" in calculated
+        ? {
+            values: Object.fromEntries(
+              composition.creations.map((creation) => [
+                creation.ordinal,
+                calculated.records.get(`create:${creation.ordinal}`)!.finalValues,
+              ]),
+            ),
+          }
         : creationFinalValues(
             prepared,
             composition.creations,

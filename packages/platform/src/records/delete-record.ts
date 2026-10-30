@@ -3,13 +3,11 @@ import { databaseCode, isRecord } from "../catalogue/runtime-primitives";
 
 import { correlationIdSchema } from "../catalogue/common";
 import { recordIdSchema } from "../catalogue/identifiers";
-import type { SaveRecordCommand } from "./records";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   calculateLockedRelationshipTotalSave,
-  type CalculateRelationshipTotalSaveResult,
   type LockedRelationshipTotalPreparation,
-  type RelationshipTotalParentMutation,
+  type RecordCalculationChange,
 } from "./relationship-total-save";
 import {
   parseRelationshipTotalPreparation,
@@ -17,14 +15,12 @@ import {
   revision,
 } from "./save-record";
 import { operationClock } from "./field-candidate";
-import type { JsonValue } from "../catalogue/common";
 import type { BeforeSaveRuleWarning } from "../rules/before-save-flow-run";
 import {
   beforeSaveRuleRefusedIssueCode,
   beforeSaveRuleUnavailableIssueCode,
   beginBeforeSaveRuleExecution,
   beforeSaveFlowSetOf,
-  applyBeforeSaveLifecycleRules,
   type BeforeSaveRuleExecution,
 } from "./before-save-rules";
 
@@ -292,53 +288,6 @@ const refuseCalculation = (
   });
 };
 
-// A lifecycle change submits no field values: every closure record is
-// recalculated from its locked current values and live related records.
-const unchangedSubmission: Pick<SaveRecordCommand, "operation" | "submittedValues"> = {
-  operation: "update",
-  submittedValues: {},
-};
-
-type RuntimeSettings = Awaited<ReturnType<typeof readOrganizationRuntimeSettings>>;
-
-const calculateGeneratedValues = (
-  preparation: LockedRelationshipTotalPreparation,
-  issuedAt: string,
-  settings: RuntimeSettings,
-  lifecycleRecordKeys: ReadonlySet<string>,
-): CalculateRelationshipTotalSaveResult | undefined => {
-  const clock = operationClock(
-    preparation.records.map((record) => record.recordType),
-    issuedAt,
-    settings?.timeZone,
-  );
-  if (clock === undefined) return undefined;
-  const rules = new Map<string, BeforeSaveRuleExecution>();
-  for (const record of preparation.records) {
-    if (lifecycleRecordKeys.has(record.recordKey)) continue;
-    const ruleSet = beforeSaveFlowSetOf(record.beforeSaveFlows, record.recordType.recordTypeId);
-    if (ruleSet === undefined)
-      return {
-        success: false,
-        issues: [
-          {
-            code: beforeSaveRuleUnavailableIssueCode,
-            recordKey: record.recordKey,
-            path: ["rules"],
-          },
-        ],
-      };
-    rules.set(record.recordKey, beginBeforeSaveRuleExecution(ruleSet));
-  }
-  return calculateLockedRelationshipTotalSave({
-    command: unchangedSubmission,
-    preparation,
-    ...(settings?.currency === undefined ? {} : { organizationCurrency: settings.currency }),
-    clock,
-    rules,
-  });
-};
-
 /**
  * The protected lifecycle change inside the caller's request transaction:
  * the record writer prepares the proposed closure, the runtime evaluates
@@ -380,89 +329,64 @@ const performRecordLifecycle = async (
   const root = preparation.records.find((record) => record.recordKey === "root");
   if (root === undefined) throw new Error("RECORD_LIFECYCLE_ROOT_MISSING");
   const settings = await readOrganizationRuntimeSettings(transaction);
-  const warnings: BeforeSaveRuleWarning[] = [];
   if (!lifecyclePreparation.records.some((record) => record.recordKey === "root"))
     throw new Error("RECORD_LIFECYCLE_RULE_ROOT_MISSING");
-  for (const record of lifecyclePreparation.records) {
+  // The total closure has proposed values; lifecycle rules must inspect the
+  // original stored values. Include deleted descendants even when no total
+  // depends on them, so each gets its lifecycle rule exactly once.
+  const records = new Map(lifecyclePreparation.records.map((record) => [record.recordKey, record]));
+  for (const record of preparation.records) records.set(record.recordKey, record);
+  const combined = { ...preparation, records: [...records.values()] };
+  const changes = new Map<string, RecordCalculationChange>(
+    lifecyclePreparation.records.map((record) => [
+      record.recordKey,
+      { operation, storedValues: record.existingValues },
+    ]),
+  );
+  const rules = new Map<string, BeforeSaveRuleExecution>();
+  for (const record of combined.records) {
     const ruleSet = beforeSaveFlowSetOf(record.beforeSaveFlows, record.recordType.recordTypeId);
     if (ruleSet === undefined)
-      return refuseCalculation(command.recordId, preparation.correlationId, lifecyclePreparation, [
+      return refuseCalculation(command.recordId, preparation.correlationId, combined, [
         { code: beforeSaveRuleUnavailableIssueCode, recordKey: record.recordKey },
       ]);
-    const execution = beginBeforeSaveRuleExecution(ruleSet);
-    const rules = applyBeforeSaveLifecycleRules({
-      execution,
-      recordType: record.recordType,
-      operation,
-      existingValues: record.existingValues,
-      ...(settings?.currency === undefined ? {} : { organizationCurrency: settings.currency }),
-    });
-    if (!rules.success)
-      return refuseCalculation(command.recordId, preparation.correlationId, lifecyclePreparation, [
-        rules.reason === "refused"
-          ? {
-              code: beforeSaveRuleRefusedIssueCode,
-              recordKey: record.recordKey,
-              ruleKey: rules.ruleKey,
-              requirement: { code: rules.code, message: rules.message },
-            }
-          : { code: beforeSaveRuleUnavailableIssueCode, recordKey: record.recordKey },
-      ]);
-    warnings.push(
-      ...(record.canRead
-        ? execution.warnings
-        : execution.warnings.map((warning) => ({
-            ...warning,
-            messageIsLiteral: true,
-            code: "related_record_rule_warning",
-            message: "This change raised a warning on a related record",
-          }))),
-    );
+    rules.set(record.recordKey, beginBeforeSaveRuleExecution(ruleSet));
   }
-  let parentMutations: readonly RelationshipTotalParentMutation[] = [];
-  // The deleted root is only the evaluator's required anchor; it is never
-  // written, so a delete without affected parents needs no calculation.
-  if (
-    operation === "restore" ||
-    preparation.records.some((record) => record.recordKey !== "root")
-  ) {
-    const calculated = calculateGeneratedValues(
-      preparation,
-      issuedAt,
-      settings,
-      new Set(lifecyclePreparation.records.map((record) => record.recordKey)),
+  const clock = operationClock(
+    combined.records
+      .filter((record) => changes.get(record.recordKey)?.operation !== "delete")
+      .map((record) => record.recordType),
+    issuedAt,
+    settings?.timeZone,
+  );
+  if (clock === undefined)
+    return refuseCalculation(command.recordId, preparation.correlationId, combined);
+  const calculated = calculateLockedRelationshipTotalSave({
+    changes,
+    preparation: combined,
+    clock,
+    rules,
+    ...(settings?.currency === undefined ? {} : { organizationCurrency: settings.currency }),
+  });
+  if (!calculated.success)
+    return refuseCalculation(
+      command.recordId,
+      preparation.correlationId,
+      combined,
+      calculated.issues,
     );
-    if (calculated === undefined || !calculated.success)
-      return refuseCalculation(
-        command.recordId,
-        preparation.correlationId,
-        preparation,
-        calculated?.issues,
-      );
-    parentMutations = calculated.parentMutations;
-    if (operation === "restore") {
-      if (root.recordId === undefined || root.concurrencyNumber === undefined)
-        throw new Error("RECORD_LIFECYCLE_ROOT_MISSING");
-      parentMutations = [
-        ...parentMutations,
-        {
-          recordTypeId: root.recordType.recordTypeId,
-          recordId: root.recordId,
-          expectedConcurrencyNumber: root.concurrencyNumber,
-          finalValues: Object.fromEntries(
-            root.recordType.fields
-              .filter((field) => field.type === "calculation" || field.type === "total")
-              .map((field) => [
-                field.fieldId,
-                Object.hasOwn(calculated.sourceFinalValues, field.fieldId)
-                  ? calculated.sourceFinalValues[field.fieldId]!
-                  : ((root.existingValues[field.fieldId] ?? null) as JsonValue | null),
-              ]),
-          ),
-        },
-      ];
-    }
-  }
+  const parentMutations = calculated.parentMutations;
+  const warnings: BeforeSaveRuleWarning[] = combined.records.flatMap((record) => {
+    const recordWarnings = rules.get(record.recordKey)!.warnings;
+    return record.canRead
+      ? recordWarnings
+      : recordWarnings.map((warning) => ({
+          ...warning,
+          messageIsLiteral: true,
+          code: "related_record_rule_warning",
+          message: "This change raised a warning on a related record",
+        }));
+  });
 
   const finalized = parseDatabaseOutcome(
     one(
