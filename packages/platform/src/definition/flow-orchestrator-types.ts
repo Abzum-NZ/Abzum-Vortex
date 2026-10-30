@@ -28,6 +28,7 @@ import type {
   FlowTriggerOrigin,
 } from "../workflows/flow-contracts";
 import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
+import type { BackendRunRequest, BackendRunResult } from "../workflows/backend-adapters";
 import type { FlowPlan, FlowServerSegment } from "../workflows/flow-plan";
 import type {
   FlowContinuationExecution,
@@ -289,6 +290,8 @@ export type FlowOrchestratorDependencies = Readonly<{
     selection: OrganizationSelectionCandidate,
     flow: FlowDefinition,
   ) => Promise<boolean>;
+  /** The back-end adapter a Run on back end task hands its child flow to; absent means unavailable. */
+  backend?: Readonly<{ run(request: BackendRunRequest): Promise<BackendRunResult> }>;
   /** The initiator's organisation account, for `{{ execution.actor }}`; absent means unresolved. */
   resolveActor?: (
     session: IdentitySession,
@@ -414,11 +417,25 @@ export type FlowOrchestratorResponse = (
 ) &
   Readonly<{ committedNow: boolean; replayedCommitted?: true }>;
 
-type RunAuthority = Readonly<{
-  kind: "person";
-  session: IdentitySession;
-  selection: OrganizationSelectionCandidate;
-}>;
+/**
+ * Whose authority a run uses. A person's run holds that person's verified session. A back-end run
+ * acts as an organisation account (`actorId`): its `session` is minted for this run alone from the
+ * account's identity, single-factor with no authentication evidence, never persisted or reused, so
+ * the account's current memberships and permissions decide and no step needing recent sign-in or
+ * two-step verification can pass.
+ */
+type RunAuthority =
+  | Readonly<{
+      kind: "person";
+      session: IdentitySession;
+      selection: OrganizationSelectionCandidate;
+    }>
+  | Readonly<{
+      kind: "actor";
+      actorId: string;
+      session: IdentitySession;
+      selection: OrganizationSelectionCandidate;
+    }>;
 
 export type PreparedPersonRun = Readonly<{
   session: IdentitySession;

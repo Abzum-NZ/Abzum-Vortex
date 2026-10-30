@@ -49,34 +49,35 @@ export type FlowTaskTypeKey = FlowControlTaskTypeKey | FlowRegisteredTaskTypeKey
 
 const page = { page: true, server: false, backend: false } as const;
 const server = { page: false, server: true, backend: false } as const;
-const pageAndServer = { page: true, server: true, backend: false } as const;
+const serverAndBackend = { page: false, server: true, backend: true } as const;
+const everywhere = { page: true, server: true, backend: true } as const;
 const nowhere = { page: false, server: false, backend: false } as const;
 
 /** Where each step runs today; each later batch flips a flag when it lands the implementation. */
 export const flowTaskRuns = Object.freeze({
-  if: pageAndServer,
-  switch: pageAndServer,
-  for_each: pageAndServer,
-  sequential: pageAndServer,
-  run_flow: server,
-  stop: pageAndServer,
-  "record.save": server,
-  "record.create": server,
-  "record.set_fields": server,
-  "record.link": server,
-  "record.delete": server,
-  "record.restore": server,
-  "record.changes": server,
+  if: everywhere,
+  switch: everywhere,
+  for_each: everywhere,
+  sequential: everywhere,
+  run_flow: serverAndBackend,
+  stop: everywhere,
+  "record.save": serverAndBackend,
+  "record.create": serverAndBackend,
+  "record.set_fields": serverAndBackend,
+  "record.link": serverAndBackend,
+  "record.delete": serverAndBackend,
+  "record.restore": serverAndBackend,
+  "record.changes": serverAndBackend,
   "record.query": server,
   "record.read_fields": server,
   "record.pin_identity": server,
-  "operation.call": server,
-  "backend.run": nowhere,
+  "operation.call": serverAndBackend,
+  "backend.run": server,
   "event.announce": server,
-  "data.calculate": pageAndServer,
-  "data.record_link": server,
-  "data.set_variable": pageAndServer,
-  "data.format": server,
+  "data.calculate": everywhere,
+  "data.record_link": serverAndBackend,
+  "data.set_variable": everywhere,
+  "data.format": serverAndBackend,
   "rule.require": server,
   "rule.warn": server,
   "rule.refuse": server,

@@ -25,6 +25,7 @@ import { loadProjectedReferenceChoiceForm } from "../../../_lib/application-page
 import { loadGuidedConfirmation } from "../../../_lib/application-page/guided-confirmation";
 import { installedReleaseCatalogue } from "../../../_lib/definition-catalogue";
 import { applicationStoreService } from "../../../_lib/application-store-service";
+import { backendAdapter } from "../../../_lib/backend-adapter";
 import {
   getGuidedFormControlIds,
   getGuidedFormFlowId,
@@ -222,6 +223,7 @@ export const createFlowInvocationHandler =
               authorityId: getIdentityAuthorityConfiguration().authorityId,
               ...(bound === undefined ? {} : { boundRequest: bound }),
               applicationStore: applicationStoreService(),
+              backend: backendAdapter(),
               channel,
               telemetry: appTelemetry,
               releaseCatalogue: installedReleaseCatalogue,

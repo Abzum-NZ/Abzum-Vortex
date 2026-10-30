@@ -289,6 +289,13 @@ const resolveTriggers = (ctx: Context, source: SourceFlow): unknown[] =>
       return {
         ...trigger,
         inputs,
+        ...(trigger.runAfter === undefined
+          ? {}
+          : {
+              runAfter: trigger.runAfter.map((alias, position) =>
+                resolveAt(ctx, ctx.resolver.flow(alias), [...path, "runAfter", position]),
+              ),
+            }),
         recordTypeId: resolveAt(ctx, ctx.resolver.recordType(trigger.recordTypeId), [
           ...path,
           "recordTypeId",

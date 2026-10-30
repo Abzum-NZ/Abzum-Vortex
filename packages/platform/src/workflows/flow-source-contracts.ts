@@ -95,6 +95,7 @@ export const sourceFlowTriggerSchema = z.discriminatedUnion("type", [
         z.object({ kind: z.literal("declared"), eventKey: namespacedKeySchema }).strict(),
       ]),
       duplicateProtection: z.literal("committed_occurrence"),
+      runAfter: z.array(flowAliasSchema).max(10).optional(),
     })
     .strict(),
 ]);
