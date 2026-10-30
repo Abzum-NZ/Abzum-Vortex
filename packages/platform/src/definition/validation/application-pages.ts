@@ -356,7 +356,11 @@ export function applicationPageRules(scope: ApplicationScope): void {
     );
     const pageFlowIds = new Set(
       array(content.flowBindings)
-        .filter((binding) => placementById.has(String(binding.controlId).toLowerCase()))
+        .filter(
+          (binding) =>
+            placementById.has(String(binding.controlId).toLowerCase()) ||
+            String(binding.controlId).toLowerCase() === String(page.pageId).toLowerCase(),
+        )
         .map((binding) => String(object(binding.flow).flowId)),
     );
     for (const flow of reachablePageFlows([...pageFlowIds], array(content.flows))) {
@@ -1090,6 +1094,22 @@ export function applicationPageRules(scope: ApplicationScope): void {
       const orderable = grouped ? lower(array(bound.groupByFieldIds)) : selected;
       const mapped = (fields: readonly string[], allowed: ReadonlySet<string>): boolean =>
         fields.every((field) => allowed.has(field.toLowerCase()));
+      // A table never asks for a larger page than its bound query allows: say so in the block's words.
+      if (
+        table !== undefined &&
+        !table.features.board.enabled &&
+        table.pageSize > Number(bound.pageSize)
+      )
+        failures.push(
+          placementFailure(
+            output,
+            "vortex.definition.application_block_settings",
+            "invalid_value",
+            undefined,
+            undefined,
+            `This query allows at most ${Number(bound.pageSize)} rows at a time, and this table asks for ${table.pageSize}. Lower the table's page size or raise the query's.`,
+          ),
+        );
       // A table in Board mode shows no columns, sort or column filters, so only the Board feature's
       // own check (above) judges its fields; the table's own mappings are not read.
       if (
@@ -1099,8 +1119,6 @@ export function applicationPageRules(scope: ApplicationScope): void {
             table.columns.map((column) => column.field),
             selected,
           ) ||
-            // A table never asks for a larger page than its bound query allows.
-            table.pageSize > Number(bound.pageSize) ||
             !mapped(table.sortableFields, orderable) ||
             (table.features.columnFilters.enabled &&
               !mapped(table.features.columnFilters.fields, orderable)) ||

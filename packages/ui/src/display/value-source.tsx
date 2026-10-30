@@ -61,7 +61,9 @@ export function ValueSourceView({
     if (projection === undefined) return invalid();
     return <DisplayCellView value={projection} />;
   }
-  if (pageValue === undefined) return invalid();
+  // Where no page is running (Studio's canvas) a page value has nothing to show yet.
+  if (pageValue === undefined)
+    return runtime === undefined ? <DisplayCellView value={{ kind: "empty" }} /> : invalid();
   if (pageValue === null) return <DisplayCellView value={{ kind: "empty" }} />;
   const properties = source.properties;
   const format = string(properties.format);

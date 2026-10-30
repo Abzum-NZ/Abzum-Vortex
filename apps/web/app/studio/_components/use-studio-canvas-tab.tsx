@@ -12,7 +12,7 @@ import {
 } from "@vortex/platform/schema";
 import {
   applyStudioCompositionCommand,
-  applyStudioVisibilityCondition,
+  applyStudioReactionCondition,
   describeStudioCompositionAddTargets,
   studioDraftChoices,
   resolveStudioSelectionInspectorContext,
@@ -52,7 +52,14 @@ import type {
 import { FirstRecordTypeEmptyState } from "../../_components/first-record-type-empty-state";
 import { readStudioCanvasRecords, readStudioDataRecords } from "../_lib/studio-preview-reader";
 import { readWhenPreviewReady } from "../_lib/studio-preview-gate";
-import { applyStudioItemLabels, type StudioPlacementDescriber } from "@vortex/ui/studio";
+import {
+  applyStudioItemLabels,
+  applyStudioPageValue,
+  studioReactionSlots,
+  type StudioPageValueCommand,
+  type StudioPageValueResult,
+  type StudioPlacementDescriber,
+} from "@vortex/ui/studio";
 import { studioDraftNavigation } from "../_lib/studio-draft-navigation";
 import { studioUseTargetOf } from "../_lib/studio-places";
 import { pageUsingLayout } from "../_lib/studio-view-request";
@@ -60,7 +67,7 @@ import type { StudioApplicationCanvasFrames } from "../../_lib/studio-applicatio
 import { studioMenuPosition, type StudioInspectorAction } from "@vortex/ui/studio";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
 import { StudioBlockGate } from "./studio-block-gate";
-import { ApplicationVisibilityConditionEditor } from "./application-visibility-condition-editor";
+import { ApplicationReactionConditionEditor } from "./application-reaction-condition-editor";
 import { StudioBlockSetupDialog, type StudioBlockSetupRequest } from "./studio-block-setup-dialog";
 import { StudioQuerySheet } from "./studio-query-sheet";
 import { StudioCanvasToolbar, type StudioCanvasZoom } from "./studio-canvas-toolbar";
@@ -72,7 +79,8 @@ import { StudioUsedIn } from "./studio-used-in";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
 import { StudioBlockOutlinePanel } from "./studio-outline-panels";
 import type { StudioRailKey } from "./studio-rail-tabs";
-import type { StudioDraft } from "./use-studio-draft";
+import type { StudioDraft, StudioDraftStep } from "./use-studio-draft";
+import { StudioPageValuesPanel } from "./studio-page-values-panel";
 import type { useStudioDraftTheme } from "./use-studio-draft-theme";
 
 // The Puck editor is the heaviest Studio dependency; load it only when a page is selected.
@@ -604,6 +612,18 @@ export function useStudioCanvasTab({
     () => studioDraftChoices(source, view.borrowedChoices, readRecordChoices, applicationName),
     [source, view.borrowedChoices, readRecordChoices, applicationName],
   );
+  // The values the selected block's page declares, which a display can show.
+  const blockChoices = useMemo(
+    () => ({
+      ...draftChoices,
+      pageValues: Object.entries(canvasPage?.values ?? {}).map(([key, declaration]) => ({
+        key,
+        label: declaration.label,
+        ...(declaration.currency === undefined ? {} : { currency: declaration.currency }),
+      })),
+    }),
+    [draftChoices, canvasPage],
+  );
   // The records of the canvas's data blocks, read once per area for the compiled saved revision,
   // when the builder's preview runs that revision's data shape.
   const readCanvasRecords = useCallback(
@@ -672,9 +692,26 @@ export function useStudioCanvasTab({
     ],
   );
 
-  const commandVisibility: Parameters<
-    typeof ApplicationVisibilityConditionEditor
-  >[0]["onCommand"] = (expected, expectedSelection, metadata, condition) => {
+  // The page's declared values, added, changed and removed as one undoable edit each.
+  const commandPageValue = (command: StudioPageValueCommand): StudioPageValueResult => {
+    const outcome = draft.run((current): StudioDraftStep<StudioPageValueResult> => {
+      const result = applyStudioPageValue(current, command);
+      return result.kind === "applied"
+        ? { kind: "edit", source: result.source, result }
+        : { kind: "keep", result };
+    });
+    return outcome.kind === "blocked"
+      ? { kind: "refused", reason: outcome.message }
+      : outcome.result;
+  };
+
+  const commandReaction: Parameters<typeof ApplicationReactionConditionEditor>[0]["onCommand"] = (
+    expected,
+    expectedSelection,
+    metadata,
+    condition,
+    slot,
+  ) => {
     const currentSelection = draft.selection.getSelection();
     if (
       currentSelection?.kind !== "placement" ||
@@ -687,24 +724,25 @@ export function useStudioCanvasTab({
         | {
             kind: "edit";
             source: ApplicationSourceDocument;
-            result: ReturnType<typeof applyStudioVisibilityCondition>;
+            result: ReturnType<typeof applyStudioReactionCondition>;
           }
         | {
             kind: "keep";
-            result: ReturnType<typeof applyStudioVisibilityCondition>;
+            result: ReturnType<typeof applyStudioReactionCondition>;
           } => {
-        const result = applyStudioVisibilityCondition(
+        const result = applyStudioReactionCondition(
           expected,
           liveContext(),
           currentSelection,
           metadata,
           condition,
+          slot,
         );
         return result.kind === "applied"
           ? { kind: "edit", source: result.source, result }
           : { kind: "keep", result };
       },
-      { merge: `visibility:${currentSelection.placementAlias}` },
+      { merge: `${slot}:${currentSelection.placementAlias}` },
     );
     return outcome.kind === "done" ? outcome.result : { kind: "stale" };
   };
@@ -900,7 +938,7 @@ export function useStudioCanvasTab({
           context={compositionContext}
           selection={selected}
           disabled={draft.locked}
-          choices={draftChoices}
+          choices={blockChoices}
           compiledFields={view.compiledFields}
           canvasArrangement={studioCanvasGridArrangement(gridStates.get(selected.placementAlias))}
           onCommand={commandComposition}
@@ -916,14 +954,25 @@ export function useStudioCanvasTab({
           onCommand={commandComposition}
         />
       )}
-      {selected?.kind === "placement" && inspector.status === "resolved" && (
-        <ApplicationVisibilityConditionEditor
-          key={`${draft.lifetime}:${selectionKey}`}
-          context={compositionContext}
-          selection={selected}
-          saved={draft.saved}
+      {selected?.kind === "placement" &&
+        inspector.status === "resolved" &&
+        studioReactionSlots.map(({ slot }) => (
+          <ApplicationReactionConditionEditor
+            key={`${draft.lifetime}:${selectionKey}:${slot}`}
+            slot={slot}
+            context={compositionContext}
+            selection={selected}
+            saved={draft.saved}
+            disabled={draft.locked}
+            onCommand={commandReaction}
+          />
+        ))}
+      {selected?.kind === "page" && inspector.status === "resolved" && (
+        <StudioPageValuesPanel
+          source={source}
+          pageAlias={selected.pageAlias}
           disabled={draft.locked}
-          onCommand={commandVisibility}
+          onEdit={commandPageValue}
         />
       )}
       {inspector.status === "resolved" && placementWorkflows}

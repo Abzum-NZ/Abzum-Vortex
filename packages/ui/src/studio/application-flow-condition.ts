@@ -55,7 +55,10 @@ const parameterType = (type: string | undefined): StudioConditionParameterType =
 };
 
 const roles: Readonly<
-  Record<StudioFlowReferenceChoice["group"], Exclude<StudioConditionOperandRole, "current_field">>
+  Record<
+    StudioFlowReferenceChoice["group"],
+    Exclude<StudioConditionOperandRole, "current_field" | "page_value" | "form_field">
+  >
 > = {
   "Flow inputs": "declared_input",
   "From the triggering event": "event_value",

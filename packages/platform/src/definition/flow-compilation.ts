@@ -939,9 +939,12 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
           const held = bindingEnvironments.get(String(flow.id)) ?? [];
           held.push({
             page: environment.page,
-            controls: (environment.controls ?? []).map(
-              (alias) => resolver.placement(alias).identifier,
-            ),
+            controls: [
+              ...(environment.controls ?? []).map((alias) => resolver.placement(alias).identifier),
+              ...(environment.pageControl === undefined
+                ? []
+                : [resolver.page(environment.pageControl).identifier]),
+            ],
             values: environment.values,
             forms: canonicalForms,
           });

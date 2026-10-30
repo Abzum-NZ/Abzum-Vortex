@@ -445,20 +445,18 @@ export const studioFlowReferenceChoices = (
     const shell = source.body.shells.find(
       (entry) => entry.id === sourcePageShell(page.composition),
     );
-    return [
-      ...sourcePageItems(page.composition),
-      ...(shell === undefined ? [] : sourceItemTree(shell.layout.content)),
-    ].some((item) => controls.has(item.props.id));
+    return (
+      controls.has(page.id) ||
+      [
+        ...sourcePageItems(page.composition),
+        ...(shell === undefined ? [] : sourceItemTree(shell.layout.content)),
+      ].some((item) => controls.has(item.props.id))
+    );
   });
   if (boundPages.length > 0)
     for (const [name, declaration] of Object.entries(boundPages[0]!.values ?? {}))
       if (boundPages.every((page) => page.values?.[name]?.type === declaration.type))
-        add(
-          { source: "page", name },
-          `${declaration.label} (not yet runnable)`,
-          "Page values",
-          declaration.type,
-        );
+        add({ source: "page", name }, declaration.label, "Page values", declaration.type);
   for (const form of forms) {
     const placed = boundPages.flatMap((page) => {
       const shell = source.body.shells.find(
@@ -501,7 +499,7 @@ export const studioFlowReferenceChoices = (
       named.add(name);
       add(
         { source: "form", form: form.alias, field: name },
-        `${form.label}: ${field.label} (not yet runnable)`,
+        `${form.label}: ${field.label}`,
         "Form fields",
         field.type === "calculation" || field.type === "total"
           ? field.settings.result_type
