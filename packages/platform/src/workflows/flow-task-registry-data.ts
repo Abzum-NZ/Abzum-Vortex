@@ -50,7 +50,6 @@ export type FlowTaskTypeKey = FlowControlTaskTypeKey | FlowRegisteredTaskTypeKey
 
 const page = { page: true, server: false, backend: false } as const;
 const server = { page: false, server: true, backend: false } as const;
-const pageAndServer = { page: true, server: true, backend: false } as const;
 const serverAndBackend = { page: false, server: true, backend: true } as const;
 const everywhere = { page: true, server: true, backend: true } as const;
 const nowhere = { page: false, server: false, backend: false } as const;
