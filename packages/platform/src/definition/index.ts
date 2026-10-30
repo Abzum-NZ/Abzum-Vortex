@@ -5,6 +5,8 @@ export * from "./app-index";
 export { createFlowBindingEndpoint, type InstalledFlowBindings } from "./flow-binding-endpoint";
 export type { FlowGuidedDraftPort } from "./flow-orchestrator-types";
 export { createBackgroundFlowExecutor } from "./flow-background-run";
+export { runFlowTest, type FlowTestRunDependencies, type FlowTestRunResult } from "./flow-test-run";
+export type { FlowTraceStep, FlowTraceNotRun } from "./flow-test-trace";
 export {
   invokeInstalledFlow,
   type FlowInvocationAddress,

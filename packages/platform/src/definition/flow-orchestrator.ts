@@ -234,6 +234,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     run: Run,
     step: Extract<FlowRunStep, { kind: "interface" }>,
   ): Promise<FlowOrchestratorResponse> => {
+    // A test run shows the pause in its trace and stores no continuation.
+    if (dependencies.trace !== undefined) return refused;
     const prepared = prepareSuspension(run, step);
     if (prepared === undefined) return suspensionUnavailable(run, step.state);
     let stored: Awaited<ReturnType<typeof issueFlowContinuation>> | undefined;
@@ -338,7 +340,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           step.state,
           { kind: "task_result", ...result },
           run.library,
-          undefined,
+          dependencies.trace?.observer,
           undefined,
           undefined,
           boundaries,
@@ -380,7 +382,14 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       )
         step = { ...step, state: { ...step.state, committedEffects: boundary.committedEffects } };
       if (step.kind === "boundary")
-        step = continueFlowRun(step.state, run.library, undefined, undefined, boundaries);
+        step = continueFlowRun(
+          step.state,
+          run.library,
+          undefined,
+          undefined,
+          boundaries,
+          dependencies.trace?.observer,
+        );
     }
   };
 
@@ -716,7 +725,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
             ...(triggerRecord === undefined ? {} : { triggerRecord }),
           },
           run.library,
-          undefined,
+          dependencies.trace?.observer,
           boundariesOf(run),
         );
         if (first.kind === "finished" || first.kind === "interface") {
@@ -832,7 +841,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
             triggerRecord === undefined ? state : { ...state, triggerRecord },
             answer,
             run.library,
-            undefined,
+            dependencies.trace?.observer,
             undefined,
             undefined,
             boundariesOf(run),

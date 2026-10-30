@@ -24,7 +24,7 @@ export const railShowsCanvas = (key: StudioRailKey): boolean =>
   key !== "data" && key !== "flows" && key !== "access" && key !== "releases";
 
 /** What the Releases tab can open in the centre. */
-export type StudioReleasesSection = "history" | "page-adoption" | "import";
+export type StudioReleasesSection = "history" | "backend-runs" | "page-adoption" | "import";
 export const studioReleasesSections: readonly Readonly<{
   value: StudioReleasesSection;
   label: string;
@@ -35,6 +35,11 @@ export const studioReleasesSections: readonly Readonly<{
     label: "Published versions",
     description:
       "Every published version: when, by whom and what changed. Restore one into the draft.",
+  },
+  {
+    value: "backend-runs",
+    label: "Back-end runs",
+    description: "The newest runs on the back end: flow, origin, state, failure reason and times.",
   },
   {
     value: "page-adoption",
