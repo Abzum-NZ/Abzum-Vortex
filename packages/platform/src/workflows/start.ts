@@ -115,8 +115,9 @@ export type SegmentExecution<Value> = Readonly<{
 const recordSegmentEffects = async <Value>(
   transaction: SegmentContext["transaction"],
   runId: string,
+  commandId: string,
   executed: SegmentExecution<Value>,
-): Promise<z.infer<typeof receiptSchema>> => {
+): Promise<void> => {
   const safeEffects: Record<string, FlowSegmentReplay[string]> = {};
   const entries = Object.entries(executed.effects).map(([key, effect]) => {
     const [taskPath, iteration] = z
@@ -127,15 +128,14 @@ const recordSegmentEffects = async <Value>(
     safeEffects[key] = effect.replay;
     return { taskPath, iteration, outcome: effect.outcome, outputs: effect.replay?.outputs ?? {} };
   });
-  if (entries.length > 0)
-    await transaction.query`select vortex_platform.record_flow_segment_effect(
-      ${runId}::uuid, entry."taskPath", entry.iteration, entry.outcome, entry.outputs
-    ) from pg_catalog.jsonb_to_recordset(${JSON.stringify(entries)}::text::jsonb)
-      as entry("taskPath" text, iteration text, outcome text, outputs jsonb)`;
   const warnings = Object.fromEntries(
     Object.entries(executed.warnings).map(([key, entries]) => [key, entries.map(storeFlowWarning)]),
   );
-  return receiptSchema.parse({ effects: safeEffects, warnings });
+  const receipt = receiptSchema.parse({ effects: safeEffects, warnings });
+  await transaction.query`select vortex_platform.complete_flow_segment(
+    ${runId}::uuid, ${commandId}::uuid, ${JSON.stringify(entries)}::text::jsonb,
+    ${JSON.stringify(receipt)}::text::jsonb
+  )`;
 };
 
 type StartFlowExecutionResult<Value> =
@@ -643,8 +643,7 @@ const startFlowInternal = async <Value>(
           declined = { value: executed.value, outcome: executed.outcome };
           throw rollback;
         }
-        const receipt = await recordSegmentEffects(child, runId, executed);
-        await child.query`select vortex_record.complete_flow_segment_receipt(${commandId}::uuid, ${JSON.stringify(receipt)}::text::jsonb)`;
+        await recordSegmentEffects(child, runId, commandId, executed);
         return {
           value: executed.value,
           committedNow: Object.values(executed.effects).some((effect) => effect.outcome === "committed"),
@@ -696,8 +695,7 @@ const startFlowInternal = async <Value>(
           const claim = claimSchema.parse(rows[0]?.result);
           if (claim.status === "completed") return "replayed" as const;
           if (claim.status !== "pending") return "refused" as const;
-          const receipt = await recordSegmentEffects(transaction, pending.runId, executed);
-          await transaction.query`select vortex_record.complete_flow_segment_receipt(${pending.commandId}::uuid, ${JSON.stringify(receipt)}::text::jsonb)`;
+          await recordSegmentEffects(transaction, pending.runId, pending.commandId, executed);
           if (hasCompletion) {
             const updated =
               await transaction.query`select vortex_access.flow_run_evidence(${"succeeded"}::text, ${pending.runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${pending.commandId}::uuid) as result`;
