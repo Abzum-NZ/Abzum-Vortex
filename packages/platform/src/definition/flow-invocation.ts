@@ -1,3 +1,4 @@
+import { createDetachedSegmentInvoker } from "./flow-detached-invocation";
 import "server-only";
 
 import { createHash } from "node:crypto";
@@ -59,7 +60,8 @@ import {
   installedModuleClosure,
   installedSelectedRecordReadContext,
 } from "./flow-selected-record-context";
-import { flowPlansOf } from "../workflows/flow-plan";
+import { flowEntrySegmentsMatch, flowPlansOf } from "../workflows/flow-plan";
+import { flowNeedsRunStart } from "../workflows/flow-run-start";
 import { openFlowAdmissionRun } from "../workflows/start";
 import {
   admitFlowContinuation,
@@ -438,6 +440,7 @@ export async function invokeInstalledFlow(
       canonicalJson(selection) === canonicalJson(boundRequest.selection);
     const admissionHost: AdmissionHost = {
       requests: requestDependencies,
+      continuationKey: dependencies.continuationKey,
       invocation,
       installationOf: installedFlowBindings,
       pageAccess: async (context, bound) => {
@@ -764,6 +767,14 @@ export async function invokeInstalledFlow(
           console.error(`[flows] invocation evidence check refused: ${describeFailure(error)}`);
           return false;
         }
+      },
+      resolveActor: async (session, selection) => {
+        const result = await requests.run(
+          session,
+          selection,
+          async (_transaction, scope) => scope.organizationAccountId,
+        );
+        return result.kind === "available" ? result.value : undefined;
       },
       // The release was read from the trusted installation for this exact request.
       resolveRelease: async () => release,
@@ -1173,9 +1184,14 @@ export async function invokeInstalledFlow(
   const endpoint = createFlowBindingEndpoint({
     readInstallation:
       invocation.kind !== "continuation" ? async () => bindingInstallation : readInstalled,
-    openRun: async (session, selection, binding, installation) => {
+    openRun: async (session, selection, binding, installation, request) => {
       const plan = installation.plans?.get(String(binding.flow.flowId));
-      if (plan === undefined) return { kind: "refused" };
+      if (
+        plan === undefined ||
+        !flowEntrySegmentsMatch(plan, request.entrySegments) ||
+        !flowNeedsRunStart(plan.segments)
+      )
+        return { kind: "reload", installationRevision: installation.installationRevision };
       const release: FlowRelease = {
         releaseKey: installation.releaseKey,
         installationRevision: installation.installationRevision,
@@ -1423,6 +1439,7 @@ export async function invokeInstalledFlow(
         ? undefined
         : adaptSelectedReadInputs(adaptedInputs, resolved);
     },
+    invokeSegment: createDetachedSegmentInvoker(dependencies.continuationKey, orchestratorFor),
     continueForm,
     orchestratorFor,
   });

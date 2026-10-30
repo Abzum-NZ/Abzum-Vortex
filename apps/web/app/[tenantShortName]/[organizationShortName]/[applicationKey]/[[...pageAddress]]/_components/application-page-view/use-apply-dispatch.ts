@@ -23,7 +23,6 @@ import { formSurfaceComposition, visibleOwningFormFieldLabel } from "./form-surf
 export function useApplyDispatch({
   placementRequestsRef,
   navigationKey,
-  setBusy,
   setNotice,
   setFormFeedback,
   router,
@@ -39,7 +38,6 @@ export function useApplyDispatch({
     generations: Map<string, ComponentRequestGeneration>;
   }>;
   navigationKey: string;
-  setBusy: Dispatch<SetStateAction<boolean>>;
   setNotice: Dispatch<SetStateAction<Notice | undefined>>;
   setFormFeedback: Dispatch<SetStateAction<Readonly<Record<string, FormFlowFeedback>>>>;
   router: ReturnType<typeof useRouter>;
@@ -71,7 +69,6 @@ export function useApplyDispatch({
     ): Promise<DispatchOutcome> => {
       let outcome: DispatchOutcome = { notice: undefined, confirmed: false, changed: false };
       const isCurrentNavigation = (): boolean => placementRequestsRef.current.key === navigationKey;
-      setBusy(true);
       setNotice(undefined);
       if (formPlacementId !== undefined)
         setFormFeedback((current) => {
@@ -128,12 +125,10 @@ export function useApplyDispatch({
           }));
         }
       };
-      let settles = true;
       try {
         const server = await dispatch;
         if (!isCurrentNavigation()) return outcome;
         if (server === undefined) {
-          settles = false;
           return outcome;
         }
         if (server.kind === "reload") {
@@ -298,6 +293,7 @@ export function useApplyDispatch({
             });
           return outcome;
         }
+        if (server.kind === "skipped") return outcome;
         if (server.kind === "refused") {
           showResult(unavailableNotice);
           return outcome;
@@ -319,8 +315,6 @@ export function useApplyDispatch({
       } catch {
         if (isCurrentNavigation()) showResult(unavailableNotice);
         return outcome;
-      } finally {
-        if (settles && isCurrentNavigation()) setBusy(false);
       }
     },
     [

@@ -1,11 +1,35 @@
 "use client";
 
-import { useId, useState, type ReactElement } from "react";
+import { useId, useState, type FocusEvent, type ReactElement } from "react";
+import type { TypedFieldValue } from "@vortex/platform/schema";
 import { FieldDescription, FieldError } from "../components/field";
 import type { ControlContext } from "./control-context";
 import { FieldDraftFeedback, type FormFieldDraftFeedback } from "./draft-feedback";
+import type { ControlEventHandler } from "./projected-data";
 
 export { useFieldFeedback } from "./draft-feedback";
+
+/** Emits once when focus leaves the whole field, not when it moves between its controls. */
+export function fieldFocusLost(
+  event: FocusEvent<HTMLElement>,
+  handler: ControlEventHandler | undefined,
+  fieldKey: string,
+  value: TypedFieldValue,
+): void {
+  const next = event.relatedTarget;
+  if (next !== null) {
+    if (event.currentTarget.contains(next)) return;
+    // Select and calendar popups can be portalled outside the field's DOM subtree. Their trigger
+    // names the popup with aria-controls, and moving into it does not leave the field.
+    for (const trigger of event.currentTarget.querySelectorAll("[aria-controls]")) {
+      for (const id of (trigger.getAttribute("aria-controls") ?? "").split(/\s+/)) {
+        if (id !== "" && event.currentTarget.ownerDocument.getElementById(id)?.contains(next))
+          return;
+      }
+    }
+  }
+  void handler?.({ event: "field_focus_lost", fieldKey, value });
+}
 
 /** Element identities for one field and the descriptions its control references. */
 type FieldIds = Readonly<{

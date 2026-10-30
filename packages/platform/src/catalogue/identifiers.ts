@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isBuilderKey } from "./identifier-predicates";
 import { isStableId } from "./stable-id";
 
 const nonNilUuidSchema = z.string().refine(isStableId, {
@@ -69,9 +70,7 @@ export const meteringEventIdSchema = stableId<"MeteringEventId">();
 
 export const builderKeySchema = z
   .string()
-  .min(1)
-  .max(40)
-  .regex(/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/, "Use lowercase words separated by underscores");
+  .refine(isBuilderKey, "Use lowercase words separated by underscores, up to 40 characters");
 
 export const sourceQualifiedRecordTypeSchema = z
   .string()

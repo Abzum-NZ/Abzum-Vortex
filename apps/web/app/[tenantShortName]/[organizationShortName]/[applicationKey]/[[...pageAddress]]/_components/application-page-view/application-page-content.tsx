@@ -54,12 +54,14 @@ import { useNavigationScope } from "./use-navigation-scope";
 import { usePlacementRefresh } from "./use-placement-refresh";
 import { useReferenceChoices } from "./use-reference-choices";
 import { useFlowRuntime } from "./use-flow-runtime";
+import { useFieldFlowEvents } from "./use-field-flow-events";
 import { useApplyDispatch } from "./use-apply-dispatch";
 import { useGuidedFormSteps } from "./use-guided-form-steps";
 import { usePlacementActions } from "./use-placement-actions";
 import { useTablePageAddress } from "./use-table-page-address";
 import { usePageAddress } from "./page-address";
 import { useRuntimeInputs } from "./use-runtime-inputs";
+import { draftControls } from "./control-drafts";
 import { useGridLayout } from "./use-grid-layout";
 import { useRowDetail } from "./use-row-detail";
 import { usePivot } from "./use-pivot";
@@ -68,6 +70,7 @@ import { WebMcpAdapter } from "../../../../../../_components/webmcp-adapter";
 import {
   useApplicationFrame,
   useFramePageState,
+  emptyControlDrafts,
 } from "../../../_components/application-frame-state";
 
 /** Every placement id of the page's own content, nested placements and guided step content included. */
@@ -151,6 +154,7 @@ export function ApplicationPageViewContent({
     [],
   );
   const applicationFrame = useApplicationFrame();
+  const controlDraftsRef = applicationFrame?.controlDraftsRef;
   const navigation = model.navigation ?? applicationFrame?.navigation;
   // A page rendered without its frame (the layout found none for the address it first loaded)
   // asks the server once for the frame of the address it shows now.
@@ -160,9 +164,7 @@ export function ApplicationPageViewContent({
     frameRequested.current = true;
     router.refresh();
   }, [applicationFrame, router]);
-  const [busy, setBusy] = useState(false);
-  const currentBusyRef = useRef(busy);
-  currentBusyRef.current = busy;
+  const [guidedBusy, setGuidedBusy] = useState(false);
   const [completedGuidedNavigationKey, setCompletedGuidedNavigationKey] = useState<string>();
   const requestedStepId = useRef<string | undefined>(undefined);
   const guidedSubmitInFlight = useRef(false);
@@ -211,6 +213,7 @@ export function ApplicationPageViewContent({
     [model.page, platformComponentRegistry],
   );
   const {
+    addressKey,
     navigationKey,
     placementRequestsRef,
     boardContinuationInFlightRef,
@@ -221,13 +224,12 @@ export function ApplicationPageViewContent({
     currentSearch,
     application,
   });
-  // The flow client sits outside form scopes, so retain the controls' forwarded draft events.
-  const controlDraftsRef = useRef<{ scope: string; values: Record<string, unknown> }>({
-    scope: navigationKey,
-    values: {},
-  });
-  if (controlDraftsRef.current.scope !== navigationKey)
-    controlDraftsRef.current = { scope: navigationKey, values: {} };
+  if (controlDraftsRef !== undefined && controlDraftsRef.current.scope !== addressKey)
+    controlDraftsRef.current = {
+      ...emptyControlDrafts(),
+      scope: addressKey,
+      model,
+    };
 
   const guidedFormCompleted = completedGuidedNavigationKey === navigationKey;
   const subject =
@@ -281,7 +283,7 @@ export function ApplicationPageViewContent({
   });
 
   useEffect(() => {
-    setBusy(false);
+    setGuidedBusy(false);
     setNotice(undefined);
     setFormFeedback({});
   }, [navigationKey]);
@@ -301,49 +303,51 @@ export function ApplicationPageViewContent({
     requestChoicePageRef,
   });
 
-  const { formBlock, flowRuntime, webMcpRuntime, intentHostElement } = useFlowRuntime({
-    application,
-    subject,
-    continuingFormsRef,
-    formCancelledRef,
-    unsavedWorkRegistry,
-    submittedFormsRef,
-    router,
-    resolvePageHref,
-    basePath,
-    unsavedWork,
-    model,
-    platformComponentRegistry,
-    runtimeInputsRef,
-    controlDraftsRef,
-    choicePayloadFor,
-    fieldInputControlReleases,
-    setNotice,
-    choiceEvidenceFor,
-    requestChoicePageRef,
-    currentData,
-    dialogFormRef,
-    platformThemeTokens,
-    committed: (bindingId) => {
-      let targets = refreshTargetsForBinding(bindingId);
-      if (targets.length === 0) {
-        // Identity and Access writes have no record target. Only reread displayed data:
-        // the page payload also holds inputs for dialogs that are not part of this projection.
-        const displayed = new Set(
-          Array.from(
-            compositionRootRef.current?.querySelectorAll<HTMLElement>(
-              "[data-vortex-placement-id]",
-            ) ?? [],
-          )
-            .filter((element) => element.getClientRects().length > 0)
-            .map((element) => element.dataset.vortexPlacementId?.toLowerCase()),
-        );
-        targets = Object.keys(currentData).filter((id) => displayed.has(id.toLowerCase()));
-      }
-      void refreshPlacements(targets, undefined, { content: true });
+  const { formBlock, flowRuntime, webMcpRuntime, runtimeState, intentHostElement } = useFlowRuntime(
+    {
+      application,
+      subject,
+      continuingFormsRef,
+      formCancelledRef,
+      unsavedWorkRegistry,
+      submittedFormsRef,
+      router,
+      resolvePageHref,
+      basePath,
+      unsavedWork,
+      model,
+      platformComponentRegistry,
+      runtimeInputsRef,
+      controlDraftsRef,
+      choicePayloadFor,
+      fieldInputControlReleases,
+      setNotice,
+      choiceEvidenceFor,
+      requestChoicePageRef,
+      currentData,
+      dialogFormRef,
+      platformThemeTokens,
+      committed: (bindingId) => {
+        let targets = refreshTargetsForBinding(bindingId);
+        if (targets.length === 0) {
+          // Identity and Access writes have no record target. Only reread displayed data:
+          // the page payload also holds inputs for dialogs that are not part of this projection.
+          const displayed = new Set(
+            Array.from(
+              compositionRootRef.current?.querySelectorAll<HTMLElement>(
+                "[data-vortex-placement-id]",
+              ) ?? [],
+            )
+              .filter((element) => element.getClientRects().length > 0)
+              .map((element) => element.dataset.vortexPlacementId?.toLowerCase()),
+          );
+          targets = Object.keys(currentData).filter((id) => displayed.has(id.toLowerCase()));
+        }
+        void refreshPlacements(targets, undefined, { content: true });
+      },
+      setPanelRef,
     },
-    setPanelRef,
-  });
+  );
 
   /** A page-level address change (a guided form step) renders the page again on the server. */
   const setQuery = useCallback(
@@ -359,7 +363,6 @@ export function ApplicationPageViewContent({
   const { applyDispatch } = useApplyDispatch({
     placementRequestsRef,
     navigationKey,
-    setBusy,
     setNotice,
     setFormFeedback,
     router,
@@ -373,16 +376,13 @@ export function ApplicationPageViewContent({
   const invokeWebMcpTool = useCallback(
     async (tool: PageWebMcpTool, input: unknown, signal?: AbortSignal): Promise<unknown> => {
       if (signal?.aborted) return { outcome: "cancelled" };
-      if (currentBusyRef.current) return { outcome: "busy" };
       if (!isRecord(input)) return { outcome: "refused" };
-      currentBusyRef.current = true;
-      setBusy(true);
       setNotice(undefined);
       try {
         const result = await webMcpRuntime.dispatchReference(
           tool.binding,
           input,
-          undefined,
+          crypto.randomUUID(),
           signal,
         );
         await applyDispatch(Promise.resolve(result), undefined, undefined, tool.binding.bindingId);
@@ -396,9 +396,6 @@ export function ApplicationPageViewContent({
       } catch (error) {
         console.error(`[webmcp] flow dispatch failed for ${tool.name}: ${describeFailure(error)}`);
         return { outcome: "unavailable" };
-      } finally {
-        currentBusyRef.current = false;
-        setBusy(false);
       }
     },
     [applyDispatch, webMcpRuntime],
@@ -427,9 +424,9 @@ export function ApplicationPageViewContent({
     formOwners,
     application,
     subject,
-    busy,
+    busy: guidedBusy,
     guidedFormCompleted,
-    setBusy,
+    setBusy: setGuidedBusy,
     setNotice,
     guidedFormActions,
     searchParams,
@@ -463,7 +460,6 @@ export function ApplicationPageViewContent({
     applyDispatch,
     flowRuntime,
     formOwners,
-    busy,
     placementRequestsRef,
     navigationKey,
     currentPageKey,
@@ -510,6 +506,36 @@ export function ApplicationPageViewContent({
     changeTableQuery,
   });
 
+  const controls = useMemo(
+    () => draftControls(currentContent, platformComponentRegistry, fieldInputControlReleases),
+    [currentContent, platformComponentRegistry, fieldInputControlReleases],
+  );
+  const drafts = controlDraftsRef?.current;
+  if (drafts !== undefined && drafts.model !== model) {
+    drafts.model = model;
+    if (Object.keys(drafts.drafts).length === 0) {
+      drafts.restored = {};
+      delete drafts.pending;
+      delete drafts.restoreBaselines;
+    } else {
+      const promise = import("./restore-control-drafts").then(
+        ({ restoreDrafts, restoreBaselines }) => {
+          if (controlDraftsRef?.current !== drafts || drafts.pending !== promise) return;
+          restoreDrafts(drafts, controls, tableData, formOwners);
+          drafts.restoreBaselines = restoreBaselines(drafts);
+          delete drafts.pending;
+        },
+      );
+      drafts.pending = promise;
+    }
+  }
+  if (drafts?.pending !== undefined) use(drafts.pending);
+  useEffect(() => {
+    if (unsavedWorkRegistry !== undefined)
+      controlDraftsRef?.current.restoreBaselines?.(unsavedWorkRegistry);
+  }, [navigationKey, model, controlDraftsRef, unsavedWorkRegistry]);
+
+  const fieldFlowEvents = useFieldFlowEvents(navigationKey, runtimeState, runBinding, setNotice);
   const { runtimeInputs } = useRuntimeInputs({
     currentData: tableData,
     model,
@@ -521,10 +547,10 @@ export function ApplicationPageViewContent({
     formOwners,
     recordDetailOwners,
     launcherPlacements,
-    busy,
     unsavedWork,
     onOpenApplication,
     runBinding,
+    fieldFlowEvents,
     readBoardColumns,
     continueTablePage,
     refreshPlacements,
@@ -558,7 +584,6 @@ export function ApplicationPageViewContent({
     navigationKey,
     currentTileDataRef,
     currentPageKey,
-    currentBusyRef,
     currentSearch,
     address,
     rereadTables,
@@ -566,6 +591,8 @@ export function ApplicationPageViewContent({
     requestChoicePage,
     runtimeInputsRef,
     controlDraftsRef,
+    controls,
+    unsavedWorkRegistry,
     setPanelRef,
   });
 
@@ -715,11 +742,12 @@ export function ApplicationPageViewContent({
                 guidedSummaryValues: model.guidedForm.values,
               })}
           runtimeInputs={contentRuntimeInputs}
+          runtimeState={runtimeState}
           {...(model.guidedForm === undefined
             ? {}
             : {
                 guidedStepNavigation: {
-                  disabled: busy || guidedFormCompleted,
+                  disabled: guidedBusy || guidedFormCompleted,
                   onBack: () => {
                     if (guidedPreviousStepId !== undefined) requestGuidedStep(guidedPreviousStepId);
                   },

@@ -44,6 +44,7 @@ export type ServerFlowResponse =
       runId: string;
       descriptor: Readonly<{ outcome: string; commit: string; outputs: string; recovery: string }>;
       outputs: Readonly<Record<string, JsonValue>>;
+      stopped?: string;
       intents: readonly FlowIntent[];
       carriedValues?: string;
       failure?: Readonly<{ code: string; taskId?: string; diagnostic?: FlowRefusalFeedback }>;
@@ -64,7 +65,7 @@ export type ServerFlowResponse =
 
 export type FlowInvokeClient = Readonly<{
   openRun: (
-    binding: Pick<PlacementFlowBinding, "bindingId" | "flowId">,
+    binding: Pick<PlacementFlowBinding, "bindingId" | "flowId" | "entrySegments">,
     clickId: string,
     signal?: AbortSignal,
     sourceTablePlacementId?: string,
@@ -81,6 +82,7 @@ export type FlowInvokeClient = Readonly<{
     segmentValues?: Readonly<{
       seed: Readonly<Record<string, JsonValue>>;
       iteration: string;
+      phase?: "success" | "page_failure";
       segment?: Readonly<{ segmentId: string; fingerprint: string }>;
     }>,
   ) => Promise<ServerFlowResponse>;
@@ -204,6 +206,7 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         typeof descriptor.outputs !== "string" ||
         typeof descriptor.recovery !== "string" ||
         !isRecord(candidate.outputs) ||
+        (candidate.stopped !== undefined && typeof candidate.stopped !== "string") ||
         !isCarriedValues(candidate.carriedValues)
       )
         return invalidServerResponse();
@@ -245,6 +248,7 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
           recovery: descriptor.recovery,
         },
         outputs: candidate.outputs as Readonly<Record<string, JsonValue>>,
+        ...(candidate.stopped === undefined ? {} : { stopped: candidate.stopped as string }),
         intents,
         ...(candidate.carriedValues === undefined
           ? {}
@@ -307,6 +311,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
           kind: "run_start",
           bindingId: binding.bindingId,
           flowId: binding.flowId,
+          entrySegments: [...binding.entrySegments],
           clickId,
           ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
         },
@@ -332,6 +337,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
           clickId,
           seed: segmentValues?.seed ?? {},
           iteration: segmentValues?.iteration ?? "0",
+          ...(segmentValues?.phase === undefined ? {} : { phase: segmentValues.phase }),
           callerInputs,
           ...(carriedValues === undefined ? {} : { carriedValues }),
           ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
