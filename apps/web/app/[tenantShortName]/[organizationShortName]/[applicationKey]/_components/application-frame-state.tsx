@@ -13,7 +13,7 @@ import type { ProjectedApplicationFrame, ProjectedNavigation } from "@vortex/pla
 import type { ApplicationWebMcpRuntime, PagePuckRendererProps, UnsavedWorkGuard } from "@vortex/ui";
 
 /** The current page's in-memory control drafts, kept by the surrounding frame. */
-export type ControlDraft = {
+type ControlDraft = {
   kind: string;
   value: unknown;
   fieldKey: string;
