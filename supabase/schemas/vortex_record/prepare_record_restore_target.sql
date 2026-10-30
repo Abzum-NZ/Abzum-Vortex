@@ -13,9 +13,7 @@ begin
   if vortex_record.read_current_preview_installation_internal() is not null then
     return pg_catalog.jsonb_build_object('outcome', 'unavailable');
   end if;
-  loaded := vortex_record.load_record_access_facts_internal(
-    p_record_type_id, 'restore', p_record_id, null, null
-  );
+  loaded := (vortex_record.load_record_access_facts_internal('restore', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', p_record_type_id, 'recordId', p_record_id))) -> 0);
   if loaded ->> 'outcome' is distinct from 'loaded' then
     return pg_catalog.jsonb_build_object('outcome', 'unavailable');
   end if;

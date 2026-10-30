@@ -253,18 +253,14 @@ begin
     );
   end if;
 
-  loaded := vortex_record.load_record_access_facts_internal(
-    p_record_type_id, 'read', p_record_id, null, null::jsonb
-  );
+  loaded := (vortex_record.load_record_access_facts_internal('read', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', p_record_type_id, 'recordId', p_record_id))) -> 0);
   if loaded ->> 'outcome' <> 'loaded' then
     return pg_catalog.jsonb_build_object(
       'outcome', 'refused', 'reasonCode', 'record_unavailable',
       'correlationId', correlation_id_value
     );
   end if;
-  read_decision := vortex_access.evaluate_organization_record_access_internal(
-    loaded -> 'declaration', p_record_id, loaded -> 'facts'
-  );
+  read_decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', loaded -> 'declaration', 'recordId', p_record_id, 'facts', loaded -> 'facts'))) -> 0);
   if read_decision ->> 'outcome' is distinct from 'allowed' then
     return pg_catalog.jsonb_build_object(
       'outcome', 'refused', 'reasonCode', 'record_unavailable',
@@ -846,9 +842,13 @@ begin
       );
     end if;
     ownership_mode := record_type_fact ->> 'ownershipMode';
-    decision := vortex_access.evaluate_organization_record_access_internal(
-      loaded -> 'declaration', p_record_id, loaded -> 'facts'
-    );
+    decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'declaration', loaded -> 'declaration',
+        'recordId', p_record_id,
+        'facts', loaded -> 'facts'
+      )
+    )) -> 0);
     if decision ->> 'outcome' = 'refused' then
       perform vortex_record.append_record_activity_internal(p_activity_id, 'transfer_record_ownership', array[organization_id_value]::uuid[], array[]::uuid[], 'refused');
       perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
@@ -1247,9 +1247,7 @@ begin
       action_id_value, p_record_type_id, p_record_id, p_expected_concurrency_number
     );
   else
-    loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'update', p_record_id, p_expected_concurrency_number, null::jsonb
-    );
+    loaded := (vortex_record.load_record_access_facts_internal('update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', p_record_type_id, 'recordId', p_record_id, 'expectedConcurrencyNumber', p_expected_concurrency_number))) -> 0);
   end if;
   if loaded ->> 'outcome' = 'conflict' then
     perform vortex_record.release_command_receipt_internal(receipt_kind, effective_command_id);
@@ -1267,12 +1265,7 @@ begin
     );
   end if;
   if preview_installation is null then
-    decision := vortex_access.evaluate_organization_record_access_internal(
-      meta -> 'declaration', p_record_id,
-      (loaded -> 'facts') || pg_catalog.jsonb_build_object(
-        'binding', meta -> 'declaration' -> 'recordBinding'
-      )
-    );
+    decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', meta -> 'declaration', 'recordId', p_record_id, 'facts', (loaded -> 'facts') || pg_catalog.jsonb_build_object( 'binding', meta -> 'declaration' -> 'recordBinding' )))) -> 0);
     if decision ->> 'outcome' = 'refused' then
       if action_mode then
         activity_time := vortex_record.append_record_activity_internal(p_activity_id, 'execute_named_action', array[p_record_id]::uuid[], array[]::uuid[], 'refused');
@@ -1364,9 +1357,7 @@ begin
         );
       end if;
 
-      target_loaded := vortex_record.load_record_access_facts_internal(
-        target_record_type_id, 'read', target_record_id, null, null::jsonb
-      );
+      target_loaded := (vortex_record.load_record_access_facts_internal('read', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', target_record_type_id, 'recordId', target_record_id))) -> 0);
       if target_loaded ->> 'outcome' <> 'loaded'
         or pg_catalog.jsonb_typeof(target_loaded -> 'declaration') <> 'object' then
         perform vortex_record.release_command_receipt_internal(receipt_kind, effective_command_id);
@@ -1393,10 +1384,7 @@ begin
             'outcome', 'refused', 'reasonCode', 'relationship_unavailable'
           );
         end if;
-        target_decision := vortex_access.evaluate_organization_record_access_internal(
-          pg_catalog.jsonb_set(target_loaded -> 'declaration', '{authority}',
-            '{"kind":"permission"}'::jsonb), target_record_id, target_loaded -> 'facts'
-        );
+        target_decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', pg_catalog.jsonb_set(target_loaded -> 'declaration', '{authority}', '{"kind":"permission"}'::jsonb), 'recordId', target_record_id, 'facts', target_loaded -> 'facts'))) -> 0);
       end if;
       if target_decision ->> 'outcome' <> 'allowed' then
         perform vortex_record.release_command_receipt_internal(receipt_kind, effective_command_id);
@@ -1484,9 +1472,7 @@ begin
     'edges', proposed_edges
   );
   if preview_installation is null then
-    decision := vortex_access.evaluate_organization_record_access_internal(
-      loaded -> 'declaration', p_record_id, proposed_facts
-    );
+    decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', loaded -> 'declaration', 'recordId', p_record_id, 'facts', proposed_facts))) -> 0);
     if decision ->> 'outcome' <> 'allowed' then
       if action_mode then
         activity_time := vortex_record.append_record_activity_internal(p_activity_id, 'execute_named_action', array[p_record_id]::uuid[], array[]::uuid[], 'refused');
@@ -2776,9 +2762,7 @@ begin
   select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[])
   into p_submitted_field_ids
   from pg_catalog.jsonb_array_elements_text(p_prepared -> 'submittedFieldIds') item(value);
-  loaded := vortex_record.load_record_access_facts_internal(
-    p_record_type_id, 'create', record_id_value, null, null::jsonb
-  );
+  loaded := (vortex_record.load_record_access_facts_internal('create', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', p_record_type_id, 'recordId', record_id_value))) -> 0);
   if loaded ->> 'outcome' <> 'loaded' then
     refusal_reason := 'record_unavailable';
     raise exception using errcode = 'P4020', message = refusal_reason;
@@ -2787,9 +2771,7 @@ begin
     'binding', meta -> 'declaration' -> 'recordBinding'
   );
   if preview_installation is null then
-    decision := vortex_access.evaluate_organization_record_access_internal(
-      meta -> 'declaration', record_id_value, facts
-    );
+    decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', meta -> 'declaration', 'recordId', record_id_value, 'facts', facts))) -> 0);
     if decision ->> 'outcome' <> 'allowed' then
       refusal_reason := 'access_refused';
       raise exception using errcode = 'P4020', message = refusal_reason;
@@ -2947,9 +2929,12 @@ begin
 
     -- The writable system projection is prepared through its protected read
     -- model. Its final write remains inside apply_record_changes.
-    loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'read', p_record_id, null, null::jsonb
-    );
+    loaded := (vortex_record.load_record_access_facts_internal(
+      'read', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordTypeId', p_record_type_id,
+        'recordId', p_record_id
+      ))
+    ) -> 0);
     if loaded ->> 'outcome' <> 'loaded' then
       return pg_catalog.jsonb_build_object('outcome', 'refused');
     end if;
@@ -2961,9 +2946,13 @@ begin
       );
     end if;
     if preview_installation is null then
-      decision := vortex_access.evaluate_organization_record_access_internal(
-        loaded -> 'declaration', p_record_id, loaded -> 'facts'
-      );
+      decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+        pg_catalog.jsonb_build_object(
+          'declaration', loaded -> 'declaration',
+          'recordId', p_record_id,
+          'facts', loaded -> 'facts'
+        )
+      )) -> 0);
       if decision ->> 'outcome' <> 'allowed' then
         perform vortex_record.append_record_activity_internal(p_activity_id, 'update_record', array[organization_id_value]::uuid[], array[]::uuid[], 'refused');
         return pg_catalog.jsonb_build_object(
@@ -2997,9 +2986,13 @@ begin
   end if;
 
   if p_operation = 'update' then
-    loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'update', p_record_id, p_expected_concurrency_number, null::jsonb
-    );
+    loaded := (vortex_record.load_record_access_facts_internal(
+      'update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordTypeId', p_record_type_id,
+        'recordId', p_record_id,
+        'expectedConcurrencyNumber', p_expected_concurrency_number
+      ))
+    ) -> 0);
     if loaded ->> 'outcome' = 'conflict' then
       return pg_catalog.jsonb_build_object(
         'outcome', 'conflict',
@@ -3020,9 +3013,13 @@ begin
       end if;
       bounds := preview_bounds;
     else
-      decision := vortex_access.evaluate_organization_record_access_internal(
-        loaded -> 'declaration', p_record_id, loaded -> 'facts'
-      );
+      decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+        pg_catalog.jsonb_build_object(
+          'declaration', loaded -> 'declaration',
+          'recordId', p_record_id,
+          'facts', loaded -> 'facts'
+        )
+      )) -> 0);
       if decision ->> 'outcome' <> 'allowed' then
         perform vortex_record.append_record_activity_internal(p_activity_id, 'update_record', array[organization_id_value]::uuid[], array[]::uuid[], 'refused');
         return pg_catalog.jsonb_build_object(
@@ -3117,9 +3114,13 @@ begin
     );
   end if;
 
-  loaded := vortex_record.load_record_access_facts_internal(
-    p_record_type_id, 'update', p_record_id, p_expected_concurrency_number, null::jsonb
-  );
+  loaded := (vortex_record.load_record_access_facts_internal(
+    'update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'recordTypeId', p_record_type_id,
+      'recordId', p_record_id,
+      'expectedConcurrencyNumber', p_expected_concurrency_number
+    ))
+  ) -> 0);
   if loaded ->> 'outcome' = 'conflict' then
     return pg_catalog.jsonb_build_object(
       'outcome', 'conflict', 'concurrencyNumber', loaded -> 'concurrencyNumber'
@@ -3149,9 +3150,13 @@ begin
       );
     end if;
   else
-    decision := vortex_access.evaluate_organization_record_access_internal(
-      loaded -> 'declaration', p_record_id, loaded -> 'facts'
-    );
+    decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'declaration', loaded -> 'declaration',
+        'recordId', p_record_id,
+        'facts', loaded -> 'facts'
+      )
+    )) -> 0);
     if decision ->> 'outcome' <> 'allowed' then
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'record_unavailable'
@@ -3225,9 +3230,13 @@ begin
     || pg_catalog.jsonb_build_object('records', proposed_records);
 
   if not (loaded ? 'previewInstallationId') then
-    decision := vortex_access.evaluate_organization_record_access_internal(
-      loaded -> 'declaration', p_record_id, proposed_facts
-    );
+    decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'declaration', loaded -> 'declaration',
+        'recordId', p_record_id,
+        'facts', proposed_facts
+      )
+    )) -> 0);
     if decision ->> 'outcome' <> 'allowed' then
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'proposed_record_refused'
@@ -3322,9 +3331,13 @@ begin
   end if;
   p_visited := pg_catalog.array_append(p_visited, identity_value);
 
-  loaded := vortex_record.load_record_access_facts_internal(
-    p_record_type_id, 'delete', p_record_id, p_expected_concurrency_number, null::jsonb
-  );
+  loaded := (vortex_record.load_record_access_facts_internal(
+    'delete', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'recordTypeId', p_record_type_id,
+      'recordId', p_record_id,
+      'expectedConcurrencyNumber', p_expected_concurrency_number
+    ))
+  ) -> 0);
   if loaded ->> 'outcome' = 'conflict' then
     raise exception using errcode = '40001', message = 'Record delete revision is stale';
   end if;
@@ -3341,9 +3354,13 @@ begin
   facts := (loaded -> 'facts') || pg_catalog.jsonb_build_object(
     'binding', meta -> 'declaration' -> 'recordBinding'
   );
-  decision := vortex_access.evaluate_organization_record_access_internal(
-    meta -> 'declaration', p_record_id, facts
-  );
+  decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+    pg_catalog.jsonb_build_object(
+      'declaration', meta -> 'declaration',
+      'recordId', p_record_id,
+      'facts', facts
+    )
+  )) -> 0);
   if decision ->> 'outcome' <> 'allowed' then
     raise exception using errcode = 'P0002', message = 'Record is unavailable';
   end if;
@@ -3424,10 +3441,13 @@ begin
       or source_link_value ->> 'recordId' is distinct from p_record_id::text then
       continue;
     end if;
-    source_loaded := vortex_record.load_record_access_facts_internal(
-      source_catalogue.record_type_id, source_action_kind, incoming.from_record_id,
-      source_concurrency, null::jsonb
-    );
+    source_loaded := (vortex_record.load_record_access_facts_internal(
+      source_action_kind, pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordTypeId', source_catalogue.record_type_id,
+        'recordId', incoming.from_record_id,
+        'expectedConcurrencyNumber', source_concurrency
+      ))
+    ) -> 0);
     if source_loaded ->> 'outcome' <> 'loaded' then
       continue;
     end if;
@@ -3443,12 +3463,13 @@ begin
     if pg_catalog.jsonb_typeof(source_meta -> 'declaration') <> 'object' then
       raise exception using errcode = '42501', message = 'Affected record is unavailable';
     end if;
-    source_decision := vortex_access.evaluate_organization_record_access_internal(
-      source_meta -> 'declaration', incoming.from_record_id,
-      (source_loaded -> 'facts') || pg_catalog.jsonb_build_object(
-        'binding', source_meta -> 'declaration' -> 'recordBinding'
+    source_decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'declaration', source_meta -> 'declaration',
+        'recordId', incoming.from_record_id,
+        'facts', (source_loaded -> 'facts') || pg_catalog.jsonb_build_object( 'binding', source_meta -> 'declaration' -> 'recordBinding' )
       )
-    );
+    )) -> 0);
     if source_decision ->> 'outcome' <> 'allowed' then
       raise exception using errcode = '42501', message = 'Affected record is unavailable';
     end if;
@@ -3663,12 +3684,7 @@ begin
         subject := subject || pg_catalog.jsonb_build_object('expectedConcurrencyNumber', current_revision);
       end if;
     end if;
-    loaded := vortex_record.load_record_access_facts_internal(
-      (subject ->> 'recordTypeId')::uuid,
-      case when (subject ->> 'deleted')::boolean then 'restore' else 'update' end,
-      (subject ->> 'recordId')::uuid,
-      (subject ->> 'expectedConcurrencyNumber')::bigint, null
-    );
+    loaded := (vortex_record.load_record_access_facts_internal(case when (subject ->> 'deleted')::boolean then 'restore' else 'update' end, pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', (subject ->> 'recordTypeId')::uuid, 'recordId', (subject ->> 'recordId')::uuid, 'expectedConcurrencyNumber', (subject ->> 'expectedConcurrencyNumber')::bigint))) -> 0);
     if loaded ->> 'outcome' = 'conflict' then
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'restore_closure_changed',
@@ -3709,9 +3725,7 @@ begin
           with ordinality as item(value, ordinality)
       )
     );
-    decision := vortex_access.evaluate_organization_record_access_internal(
-      meta -> 'declaration', (subject ->> 'recordId')::uuid, facts
-    );
+    decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', meta -> 'declaration', 'recordId', (subject ->> 'recordId')::uuid, 'facts', facts))) -> 0);
     if decision ->> 'outcome' is distinct from 'allowed' then
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'record_unavailable',
@@ -3862,10 +3876,7 @@ begin
     select storage.record_type_id into strict record_type_id_value
     from vortex_record.storage_catalogue as storage
     where storage.storage_contract_id = (change_value ->> 'storageContractId')::uuid;
-    loaded := vortex_record.load_record_access_facts_internal(
-      record_type_id_value, 'update', (change_value ->> 'recordId')::uuid,
-      (change_value ->> 'expectedConcurrencyNumber')::bigint, null
-    );
+    loaded := (vortex_record.load_record_access_facts_internal('update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', record_type_id_value, 'recordId', (change_value ->> 'recordId')::uuid, 'expectedConcurrencyNumber', (change_value ->> 'expectedConcurrencyNumber')::bigint))) -> 0);
     if loaded ->> 'outcome' is distinct from 'loaded'
       or loaded #> '{recordTypeMeta,storageContractId}' is distinct from change_value -> 'storageContractId' then
       raise exception using errcode = '40001', message = 'Prepared record storage closure changed';
@@ -4127,9 +4138,7 @@ begin
     (source_context ->> 'organizationId')::uuid
   );
 
-  target_loaded := vortex_record.load_record_access_facts_internal(
-    target_type_id, 'read', target_record_id, null, null::jsonb
-  );
+  target_loaded := (vortex_record.load_record_access_facts_internal('read', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', target_type_id, 'recordId', target_record_id))) -> 0);
   if target_loaded ->> 'outcome' <> 'loaded'
     or pg_catalog.jsonb_typeof(target_loaded -> 'declaration') <> 'object' then
     raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
@@ -4148,10 +4157,7 @@ begin
     ) = 0 then
       raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
     end if;
-    target_decision := vortex_access.evaluate_organization_record_access_internal(
-      pg_catalog.jsonb_set(target_loaded -> 'declaration', '{authority}',
-        '{"kind":"permission"}'::jsonb), target_record_id, target_loaded -> 'facts'
-    );
+    target_decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', pg_catalog.jsonb_set(target_loaded -> 'declaration', '{authority}', '{"kind":"permission"}'::jsonb), 'recordId', target_record_id, 'facts', target_loaded -> 'facts'))) -> 0);
   end if;
   if target_decision ->> 'outcome' <> 'allowed' then
     raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
@@ -4553,9 +4559,13 @@ begin
       )
     );
   end if;
-  decision := vortex_access.evaluate_organization_record_access_internal(
-    loaded -> 'declaration', p_record_id, evaluation_facts
-  );
+  decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+    pg_catalog.jsonb_build_object(
+      'declaration', loaded -> 'declaration',
+      'recordId', p_record_id,
+      'facts', evaluation_facts
+    )
+  )) -> 0);
   if decision ->> 'outcome' = 'refused' then
     perform vortex_record.append_record_activity_internal(p_activity_id, 'transfer_record_ownership', array[organization_id_value]::uuid[], array[]::uuid[], 'refused');
     perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
@@ -4744,18 +4754,12 @@ begin
   -- links, before exposing preparation to the runtime rule evaluator.
   for subject in select item.value from pg_catalog.jsonb_array_elements(subjects) as item(value)
   loop
-    loaded := vortex_record.load_record_access_facts_internal(
-      (subject ->> 'recordTypeId')::uuid,
-      case when (subject ->> 'deleted')::boolean then 'restore' else 'update' end,
-      (subject ->> 'recordId')::uuid, null, null
-    );
+    loaded := (vortex_record.load_record_access_facts_internal(case when (subject ->> 'deleted')::boolean then 'restore' else 'update' end, pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', (subject ->> 'recordTypeId')::uuid, 'recordId', (subject ->> 'recordId')::uuid))) -> 0);
     if loaded ->> 'outcome' is distinct from 'loaded'
       or pg_catalog.jsonb_typeof(loaded -> 'declaration') is distinct from 'object' then
       raise exception using errcode = '42501', message = 'Restored record is unavailable';
     end if;
-    decision := vortex_access.evaluate_organization_record_access_internal(
-      loaded -> 'declaration', (subject ->> 'recordId')::uuid, loaded -> 'facts'
-    );
+    decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', loaded -> 'declaration', 'recordId', (subject ->> 'recordId')::uuid, 'facts', loaded -> 'facts'))) -> 0);
     if decision ->> 'outcome' is distinct from 'allowed' then
       raise exception using errcode = '42501', message = 'Restored record is unavailable';
     end if;
@@ -4901,9 +4905,13 @@ begin
   columns_value := loaded -> 'columns';
 
   -- The old row's own update decision, and the changeable set it carries.
-  decision := vortex_access.evaluate_organization_record_access_internal(
-    loaded -> 'declaration', p_record_id, loaded -> 'facts'
-  );
+  decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+    pg_catalog.jsonb_build_object(
+      'declaration', loaded -> 'declaration',
+      'recordId', p_record_id,
+      'facts', loaded -> 'facts'
+    )
+  )) -> 0);
   if decision ->> 'outcome' <> 'allowed' then
     return pg_catalog.jsonb_build_object(
       'outcome', 'refused', 'reasonCode', 'record_unavailable'
@@ -4988,9 +4996,13 @@ begin
   proposed_facts := (loaded -> 'facts')
     || pg_catalog.jsonb_build_object('records', proposed_records);
 
-  decision := vortex_access.evaluate_organization_record_access_internal(
-    loaded -> 'declaration', p_record_id, proposed_facts
-  );
+  decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+    pg_catalog.jsonb_build_object(
+      'declaration', loaded -> 'declaration',
+      'recordId', p_record_id,
+      'facts', proposed_facts
+    )
+  )) -> 0);
   if decision ->> 'outcome' <> 'allowed' then
     return pg_catalog.jsonb_build_object(
       'outcome', 'refused', 'reasonCode', 'proposed_record_refused'
@@ -5370,17 +5382,24 @@ begin
       p_action_id, target_type_id, target_record_id, null
     );
   else
-    target_loaded := vortex_record.load_record_access_facts_internal(
-      target_type_id, 'read', target_record_id, null, null::jsonb
-    );
+    target_loaded := (vortex_record.load_record_access_facts_internal(
+      'read', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordTypeId', target_type_id,
+        'recordId', target_record_id
+      ))
+    ) -> 0);
   end if;
   if target_loaded ->> 'outcome' <> 'loaded'
     or pg_catalog.jsonb_typeof(target_loaded -> 'declaration') <> 'object' then
     raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
   end if;
-  target_decision := vortex_access.evaluate_organization_record_access_internal(
-    target_loaded -> 'declaration', target_record_id, target_loaded -> 'facts'
-  );
+  target_decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+    pg_catalog.jsonb_build_object(
+      'declaration', target_loaded -> 'declaration',
+      'recordId', target_record_id,
+      'facts', target_loaded -> 'facts'
+    )
+  )) -> 0);
   if target_decision ->> 'outcome' <> 'allowed' then
     raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
   end if;
@@ -5492,10 +5511,7 @@ begin
     for restored_subject in
       select item.value from pg_catalog.jsonb_array_elements(plan #> '{prepared,subjects}') as item(value)
     loop
-      loaded := vortex_record.load_record_access_facts_internal(
-        (restored_subject ->> 'recordTypeId')::uuid, 'update',
-        (restored_subject ->> 'recordId')::uuid, null, null
-      );
+      loaded := (vortex_record.load_record_access_facts_internal('update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', (restored_subject ->> 'recordTypeId')::uuid, 'recordId', (restored_subject ->> 'recordId')::uuid))) -> 0);
       if loaded ->> 'outcome' is distinct from 'loaded' then
         raise exception using errcode = '42501', message = 'Restored record is unavailable';
       end if;
@@ -5584,18 +5600,13 @@ begin
           (subject ->> 'recordTypeId')::uuid, (subject ->> 'recordId')::uuid, null
         );
       else
-        loaded := vortex_record.load_record_access_facts_internal(
-          (subject ->> 'recordTypeId')::uuid, 'update', (subject ->> 'recordId')::uuid, null, null
-        );
+        loaded := (vortex_record.load_record_access_facts_internal('update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', (subject ->> 'recordTypeId')::uuid, 'recordId', (subject ->> 'recordId')::uuid))) -> 0);
       end if;
       if loaded ->> 'outcome' is distinct from 'loaded' then
         raise exception using errcode = '42501', message = 'Changed record is unavailable';
       end if;
       if preview_installation is null then
-        decision := vortex_access.evaluate_organization_record_access_internal(
-          meta -> 'declaration', (subject ->> 'recordId')::uuid,
-          (loaded -> 'facts') || pg_catalog.jsonb_build_object('binding', meta #> '{declaration,recordBinding}')
-        );
+        decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', meta -> 'declaration', 'recordId', (subject ->> 'recordId')::uuid, 'facts', (loaded -> 'facts') || pg_catalog.jsonb_build_object('binding', meta #> '{declaration,recordBinding}')))) -> 0);
         if decision ->> 'outcome' is distinct from 'allowed' then
           raise exception using errcode = '42501', message = 'Changed record is unavailable';
         end if;
@@ -6115,9 +6126,7 @@ begin
     operation_value := case storage_change #>> '{values,lifecycle_state}'
       when 'soft_deleted' then 'delete' when 'active' then 'restore' else 'update' end;
     meta := vortex_record.resolve_record_action_context_internal(record_type_id_value, operation_value);
-    loaded := vortex_record.load_record_access_facts_internal(
-      record_type_id_value, operation_value, (storage_change ->> 'recordId')::uuid, null, null
-    );
+    loaded := (vortex_record.load_record_access_facts_internal(operation_value, pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', record_type_id_value, 'recordId', (storage_change ->> 'recordId')::uuid))) -> 0);
     if loaded ->> 'outcome' is distinct from 'loaded' then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'record_unavailable');
     end if;
@@ -6264,18 +6273,14 @@ begin
       -- The action's own authority and revision were verified with the named scope.
       null;
     elsif subject ->> 'operation' = 'update' then
-      loaded := vortex_record.load_record_access_facts_internal(
-        (subject ->> 'recordTypeId')::uuid, 'update', (subject ->> 'recordId')::uuid, null, null
-      );
+      loaded := (vortex_record.load_record_access_facts_internal('update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', (subject ->> 'recordTypeId')::uuid, 'recordId', (subject ->> 'recordId')::uuid))) -> 0);
       if loaded ->> 'outcome' is distinct from 'loaded'
         or pg_catalog.jsonb_typeof(loaded -> 'declaration') is distinct from 'object' then
         return pg_catalog.jsonb_build_object(
           'outcome', 'refused', 'index', subject_index, 'reasonCode', 'record_unavailable'
         );
       end if;
-      decision := vortex_access.evaluate_organization_record_access_internal(
-        loaded -> 'declaration', (subject ->> 'recordId')::uuid, loaded -> 'facts'
-      );
+      decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', loaded -> 'declaration', 'recordId', (subject ->> 'recordId')::uuid, 'facts', loaded -> 'facts'))) -> 0);
       if decision ->> 'outcome' is distinct from 'allowed' then
         return pg_catalog.jsonb_build_object(
           'outcome', 'refused', 'index', subject_index, 'reasonCode', 'record_unavailable'
@@ -6598,9 +6603,7 @@ begin
   if vortex_record.read_current_preview_installation_internal() is not null then
     return pg_catalog.jsonb_build_object('outcome', 'unavailable');
   end if;
-  loaded := vortex_record.load_record_access_facts_internal(
-    p_record_type_id, 'restore', p_record_id, null, null
-  );
+  loaded := (vortex_record.load_record_access_facts_internal('restore', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', p_record_type_id, 'recordId', p_record_id))) -> 0);
   if loaded ->> 'outcome' is distinct from 'loaded' then
     return pg_catalog.jsonb_build_object('outcome', 'unavailable');
   end if;
@@ -6681,11 +6684,7 @@ begin
         return next;
         continue;
       end if;
-      loaded := vortex_record.load_record_access_facts_internal(
-        (target.value #>> '{target,recordTypeId}')::uuid, 'read',
-        (target.value #>> '{target,recordId}')::uuid,
-        (target.value #>> '{projection,concurrencyNumber}')::bigint, null
-      );
+      loaded := (vortex_record.load_record_access_facts_internal('read', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', (target.value #>> '{target,recordTypeId}')::uuid, 'recordId', (target.value #>> '{target,recordId}')::uuid, 'expectedConcurrencyNumber', (target.value #>> '{projection,concurrencyNumber}')::bigint))) -> 0);
       if loaded ->> 'outcome' is distinct from 'loaded' then
         raise exception using errcode = '40001', message = 'Record copy source changed';
       end if;
@@ -6790,9 +6789,7 @@ begin
   if loaded ->> 'outcome' is distinct from 'loaded' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'record_unavailable');
   end if;
-  decision := vortex_access.evaluate_organization_record_access_internal(
-    loaded -> 'declaration', (p_named_action ->> 'recordId')::uuid, loaded -> 'facts'
-  );
+  decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', loaded -> 'declaration', 'recordId', (p_named_action ->> 'recordId')::uuid, 'facts', loaded -> 'facts'))) -> 0);
   if decision ->> 'outcome' is distinct from 'allowed' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'record_unavailable');
   end if;
@@ -7071,21 +7068,25 @@ begin
     target_meta := vortex_record.resolve_record_action_context_internal(
       p_record_type_id, 'update'
     );
-    target_loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'update', copy_target.record_id, null, null::jsonb
-    );
+    target_loaded := (vortex_record.load_record_access_facts_internal(
+      'update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordTypeId', p_record_type_id,
+        'recordId', copy_target.record_id
+      ))
+    ) -> 0);
     if target_loaded ->> 'outcome' is distinct from 'loaded' then
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'relationship_copy_target_unavailable',
         'correlationId', context_value -> 'correlationId'
       );
     end if;
-    target_decision := vortex_access.evaluate_organization_record_access_internal(
-      target_meta -> 'declaration', copy_target.record_id,
-      (target_loaded -> 'facts') || pg_catalog.jsonb_build_object(
-        'binding', target_meta -> 'declaration' -> 'recordBinding'
+    target_decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'declaration', target_meta -> 'declaration',
+        'recordId', copy_target.record_id,
+        'facts', (target_loaded -> 'facts') || pg_catalog.jsonb_build_object( 'binding', target_meta -> 'declaration' -> 'recordBinding' )
       )
-    );
+    )) -> 0);
     if target_decision ->> 'outcome' is distinct from 'allowed' then
       return pg_catalog.jsonb_build_object(
         'outcome', 'permission_refused',
@@ -7403,10 +7404,7 @@ begin
     select item.value from pg_catalog.jsonb_array_elements(p_result -> 'results') as item(value)
   loop
     if stored_result ->> 'operation' in ('delete', 'restore') then
-      loaded := vortex_record.load_record_access_facts_internal(
-        (stored_result ->> 'recordTypeId')::uuid, stored_result ->> 'operation',
-        (stored_result ->> 'recordId')::uuid, null, null
-      );
+      loaded := (vortex_record.load_record_access_facts_internal(stored_result ->> 'operation', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', (stored_result ->> 'recordTypeId')::uuid, 'recordId', (stored_result ->> 'recordId')::uuid))) -> 0);
       if loaded ->> 'outcome' = 'loaded' and pg_catalog.jsonb_typeof(loaded -> 'declaration') = 'object' then
         -- Recheck the original delete authority against today's retained
         -- ownership and scopes. Only rows journaled by this exact command
@@ -7425,9 +7423,7 @@ begin
             from pg_catalog.jsonb_array_elements(loaded #> '{facts,records}') with ordinality as item(value, ordinality)
           ));
         end if;
-        decision := vortex_access.evaluate_organization_record_access_internal(
-          loaded -> 'declaration', (stored_result ->> 'recordId')::uuid, loaded -> 'facts'
-        );
+        decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', loaded -> 'declaration', 'recordId', (stored_result ->> 'recordId')::uuid, 'facts', loaded -> 'facts'))) -> 0);
       else
         decision := null;
       end if;
@@ -7920,9 +7916,12 @@ begin
       if requested_id = '00000000-0000-0000-0000-000000000000'::uuid then
         continue;
       end if;
-      loaded := vortex_record.load_record_access_facts_internal(
-        p_record_type_id, 'read', requested_id, null, null::jsonb
-      );
+      loaded := (vortex_record.load_record_access_facts_internal(
+        'read', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+          'recordTypeId', p_record_type_id,
+          'recordId', requested_id
+        ))
+      ) -> 0);
       if loaded ->> 'outcome' = 'loaded'
         and pg_catalog.jsonb_typeof(loaded -> 'declaration') = 'object' then
         page_declaration := loaded -> 'declaration';

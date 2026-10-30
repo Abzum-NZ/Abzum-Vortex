@@ -40,10 +40,7 @@ begin
     for restored_subject in
       select item.value from pg_catalog.jsonb_array_elements(plan #> '{prepared,subjects}') as item(value)
     loop
-      loaded := vortex_record.load_record_access_facts_internal(
-        (restored_subject ->> 'recordTypeId')::uuid, 'update',
-        (restored_subject ->> 'recordId')::uuid, null, null
-      );
+      loaded := (vortex_record.load_record_access_facts_internal('update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', (restored_subject ->> 'recordTypeId')::uuid, 'recordId', (restored_subject ->> 'recordId')::uuid))) -> 0);
       if loaded ->> 'outcome' is distinct from 'loaded' then
         raise exception using errcode = '42501', message = 'Restored record is unavailable';
       end if;
@@ -132,18 +129,13 @@ begin
           (subject ->> 'recordTypeId')::uuid, (subject ->> 'recordId')::uuid, null
         );
       else
-        loaded := vortex_record.load_record_access_facts_internal(
-          (subject ->> 'recordTypeId')::uuid, 'update', (subject ->> 'recordId')::uuid, null, null
-        );
+        loaded := (vortex_record.load_record_access_facts_internal('update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', (subject ->> 'recordTypeId')::uuid, 'recordId', (subject ->> 'recordId')::uuid))) -> 0);
       end if;
       if loaded ->> 'outcome' is distinct from 'loaded' then
         raise exception using errcode = '42501', message = 'Changed record is unavailable';
       end if;
       if preview_installation is null then
-        decision := vortex_access.evaluate_organization_record_access_internal(
-          meta -> 'declaration', (subject ->> 'recordId')::uuid,
-          (loaded -> 'facts') || pg_catalog.jsonb_build_object('binding', meta #> '{declaration,recordBinding}')
-        );
+        decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', meta -> 'declaration', 'recordId', (subject ->> 'recordId')::uuid, 'facts', (loaded -> 'facts') || pg_catalog.jsonb_build_object('binding', meta #> '{declaration,recordBinding}')))) -> 0);
         if decision ->> 'outcome' is distinct from 'allowed' then
           raise exception using errcode = '42501', message = 'Changed record is unavailable';
         end if;

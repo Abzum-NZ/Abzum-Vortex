@@ -30,10 +30,7 @@ begin
     select item.value from pg_catalog.jsonb_array_elements(p_result -> 'results') as item(value)
   loop
     if stored_result ->> 'operation' in ('delete', 'restore') then
-      loaded := vortex_record.load_record_access_facts_internal(
-        (stored_result ->> 'recordTypeId')::uuid, stored_result ->> 'operation',
-        (stored_result ->> 'recordId')::uuid, null, null
-      );
+      loaded := (vortex_record.load_record_access_facts_internal(stored_result ->> 'operation', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', (stored_result ->> 'recordTypeId')::uuid, 'recordId', (stored_result ->> 'recordId')::uuid))) -> 0);
       if loaded ->> 'outcome' = 'loaded' and pg_catalog.jsonb_typeof(loaded -> 'declaration') = 'object' then
         -- Recheck the original delete authority against today's retained
         -- ownership and scopes. Only rows journaled by this exact command
@@ -52,9 +49,7 @@ begin
             from pg_catalog.jsonb_array_elements(loaded #> '{facts,records}') with ordinality as item(value, ordinality)
           ));
         end if;
-        decision := vortex_access.evaluate_organization_record_access_internal(
-          loaded -> 'declaration', (stored_result ->> 'recordId')::uuid, loaded -> 'facts'
-        );
+        decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', loaded -> 'declaration', 'recordId', (stored_result ->> 'recordId')::uuid, 'facts', loaded -> 'facts'))) -> 0);
       else
         decision := null;
       end if;

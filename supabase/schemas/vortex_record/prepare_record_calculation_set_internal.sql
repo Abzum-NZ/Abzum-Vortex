@@ -84,18 +84,14 @@ begin
       -- The action's own authority and revision were verified with the named scope.
       null;
     elsif subject ->> 'operation' = 'update' then
-      loaded := vortex_record.load_record_access_facts_internal(
-        (subject ->> 'recordTypeId')::uuid, 'update', (subject ->> 'recordId')::uuid, null, null
-      );
+      loaded := (vortex_record.load_record_access_facts_internal('update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', (subject ->> 'recordTypeId')::uuid, 'recordId', (subject ->> 'recordId')::uuid))) -> 0);
       if loaded ->> 'outcome' is distinct from 'loaded'
         or pg_catalog.jsonb_typeof(loaded -> 'declaration') is distinct from 'object' then
         return pg_catalog.jsonb_build_object(
           'outcome', 'refused', 'index', subject_index, 'reasonCode', 'record_unavailable'
         );
       end if;
-      decision := vortex_access.evaluate_organization_record_access_internal(
-        loaded -> 'declaration', (subject ->> 'recordId')::uuid, loaded -> 'facts'
-      );
+      decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', loaded -> 'declaration', 'recordId', (subject ->> 'recordId')::uuid, 'facts', loaded -> 'facts'))) -> 0);
       if decision ->> 'outcome' is distinct from 'allowed' then
         return pg_catalog.jsonb_build_object(
           'outcome', 'refused', 'index', subject_index, 'reasonCode', 'record_unavailable'

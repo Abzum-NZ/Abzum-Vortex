@@ -128,12 +128,7 @@ begin
         subject := subject || pg_catalog.jsonb_build_object('expectedConcurrencyNumber', current_revision);
       end if;
     end if;
-    loaded := vortex_record.load_record_access_facts_internal(
-      (subject ->> 'recordTypeId')::uuid,
-      case when (subject ->> 'deleted')::boolean then 'restore' else 'update' end,
-      (subject ->> 'recordId')::uuid,
-      (subject ->> 'expectedConcurrencyNumber')::bigint, null
-    );
+    loaded := (vortex_record.load_record_access_facts_internal(case when (subject ->> 'deleted')::boolean then 'restore' else 'update' end, pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', (subject ->> 'recordTypeId')::uuid, 'recordId', (subject ->> 'recordId')::uuid, 'expectedConcurrencyNumber', (subject ->> 'expectedConcurrencyNumber')::bigint))) -> 0);
     if loaded ->> 'outcome' = 'conflict' then
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'restore_closure_changed',
@@ -174,9 +169,7 @@ begin
           with ordinality as item(value, ordinality)
       )
     );
-    decision := vortex_access.evaluate_organization_record_access_internal(
-      meta -> 'declaration', (subject ->> 'recordId')::uuid, facts
-    );
+    decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', meta -> 'declaration', 'recordId', (subject ->> 'recordId')::uuid, 'facts', facts))) -> 0);
     if decision ->> 'outcome' is distinct from 'allowed' then
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'record_unavailable',

@@ -53,11 +53,7 @@ begin
         return next;
         continue;
       end if;
-      loaded := vortex_record.load_record_access_facts_internal(
-        (target.value #>> '{target,recordTypeId}')::uuid, 'read',
-        (target.value #>> '{target,recordId}')::uuid,
-        (target.value #>> '{projection,concurrencyNumber}')::bigint, null
-      );
+      loaded := (vortex_record.load_record_access_facts_internal('read', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', (target.value #>> '{target,recordTypeId}')::uuid, 'recordId', (target.value #>> '{target,recordId}')::uuid, 'expectedConcurrencyNumber', (target.value #>> '{projection,concurrencyNumber}')::bigint))) -> 0);
       if loaded ->> 'outcome' is distinct from 'loaded' then
         raise exception using errcode = '40001', message = 'Record copy source changed';
       end if;

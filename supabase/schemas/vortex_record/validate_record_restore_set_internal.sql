@@ -17,18 +17,12 @@ begin
   -- links, before exposing preparation to the runtime rule evaluator.
   for subject in select item.value from pg_catalog.jsonb_array_elements(subjects) as item(value)
   loop
-    loaded := vortex_record.load_record_access_facts_internal(
-      (subject ->> 'recordTypeId')::uuid,
-      case when (subject ->> 'deleted')::boolean then 'restore' else 'update' end,
-      (subject ->> 'recordId')::uuid, null, null
-    );
+    loaded := (vortex_record.load_record_access_facts_internal(case when (subject ->> 'deleted')::boolean then 'restore' else 'update' end, pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', (subject ->> 'recordTypeId')::uuid, 'recordId', (subject ->> 'recordId')::uuid))) -> 0);
     if loaded ->> 'outcome' is distinct from 'loaded'
       or pg_catalog.jsonb_typeof(loaded -> 'declaration') is distinct from 'object' then
       raise exception using errcode = '42501', message = 'Restored record is unavailable';
     end if;
-    decision := vortex_access.evaluate_organization_record_access_internal(
-      loaded -> 'declaration', (subject ->> 'recordId')::uuid, loaded -> 'facts'
-    );
+    decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', loaded -> 'declaration', 'recordId', (subject ->> 'recordId')::uuid, 'facts', loaded -> 'facts'))) -> 0);
     if decision ->> 'outcome' is distinct from 'allowed' then
       raise exception using errcode = '42501', message = 'Restored record is unavailable';
     end if;

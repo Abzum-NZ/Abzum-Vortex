@@ -114,9 +114,7 @@ begin
     operation_value := case storage_change #>> '{values,lifecycle_state}'
       when 'soft_deleted' then 'delete' when 'active' then 'restore' else 'update' end;
     meta := vortex_record.resolve_record_action_context_internal(record_type_id_value, operation_value);
-    loaded := vortex_record.load_record_access_facts_internal(
-      record_type_id_value, operation_value, (storage_change ->> 'recordId')::uuid, null, null
-    );
+    loaded := (vortex_record.load_record_access_facts_internal(operation_value, pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', record_type_id_value, 'recordId', (storage_change ->> 'recordId')::uuid))) -> 0);
     if loaded ->> 'outcome' is distinct from 'loaded' then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'record_unavailable');
     end if;

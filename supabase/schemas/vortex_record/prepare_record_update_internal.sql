@@ -71,9 +71,7 @@ begin
       action_id_value, p_record_type_id, p_record_id, p_expected_concurrency_number
     );
   else
-    loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'update', p_record_id, p_expected_concurrency_number, null::jsonb
-    );
+    loaded := (vortex_record.load_record_access_facts_internal('update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', p_record_type_id, 'recordId', p_record_id, 'expectedConcurrencyNumber', p_expected_concurrency_number))) -> 0);
   end if;
   if loaded ->> 'outcome' = 'conflict' then
     perform vortex_record.release_command_receipt_internal(receipt_kind, effective_command_id);
@@ -91,12 +89,7 @@ begin
     );
   end if;
   if preview_installation is null then
-    decision := vortex_access.evaluate_organization_record_access_internal(
-      meta -> 'declaration', p_record_id,
-      (loaded -> 'facts') || pg_catalog.jsonb_build_object(
-        'binding', meta -> 'declaration' -> 'recordBinding'
-      )
-    );
+    decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', meta -> 'declaration', 'recordId', p_record_id, 'facts', (loaded -> 'facts') || pg_catalog.jsonb_build_object( 'binding', meta -> 'declaration' -> 'recordBinding' )))) -> 0);
     if decision ->> 'outcome' = 'refused' then
       if action_mode then
         activity_time := vortex_record.append_record_activity_internal(p_activity_id, 'execute_named_action', array[p_record_id]::uuid[], array[]::uuid[], 'refused');
@@ -188,9 +181,7 @@ begin
         );
       end if;
 
-      target_loaded := vortex_record.load_record_access_facts_internal(
-        target_record_type_id, 'read', target_record_id, null, null::jsonb
-      );
+      target_loaded := (vortex_record.load_record_access_facts_internal('read', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', target_record_type_id, 'recordId', target_record_id))) -> 0);
       if target_loaded ->> 'outcome' <> 'loaded'
         or pg_catalog.jsonb_typeof(target_loaded -> 'declaration') <> 'object' then
         perform vortex_record.release_command_receipt_internal(receipt_kind, effective_command_id);
@@ -217,10 +208,7 @@ begin
             'outcome', 'refused', 'reasonCode', 'relationship_unavailable'
           );
         end if;
-        target_decision := vortex_access.evaluate_organization_record_access_internal(
-          pg_catalog.jsonb_set(target_loaded -> 'declaration', '{authority}',
-            '{"kind":"permission"}'::jsonb), target_record_id, target_loaded -> 'facts'
-        );
+        target_decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', pg_catalog.jsonb_set(target_loaded -> 'declaration', '{authority}', '{"kind":"permission"}'::jsonb), 'recordId', target_record_id, 'facts', target_loaded -> 'facts'))) -> 0);
       end if;
       if target_decision ->> 'outcome' <> 'allowed' then
         perform vortex_record.release_command_receipt_internal(receipt_kind, effective_command_id);
@@ -308,9 +296,7 @@ begin
     'edges', proposed_edges
   );
   if preview_installation is null then
-    decision := vortex_access.evaluate_organization_record_access_internal(
-      loaded -> 'declaration', p_record_id, proposed_facts
-    );
+    decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', loaded -> 'declaration', 'recordId', p_record_id, 'facts', proposed_facts))) -> 0);
     if decision ->> 'outcome' <> 'allowed' then
       if action_mode then
         activity_time := vortex_record.append_record_activity_internal(p_activity_id, 'execute_named_action', array[p_record_id]::uuid[], array[]::uuid[], 'refused');

@@ -70,9 +70,13 @@ begin
   columns_value := loaded -> 'columns';
 
   -- The old row's own update decision, and the changeable set it carries.
-  decision := vortex_access.evaluate_organization_record_access_internal(
-    loaded -> 'declaration', p_record_id, loaded -> 'facts'
-  );
+  decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+    pg_catalog.jsonb_build_object(
+      'declaration', loaded -> 'declaration',
+      'recordId', p_record_id,
+      'facts', loaded -> 'facts'
+    )
+  )) -> 0);
   if decision ->> 'outcome' <> 'allowed' then
     return pg_catalog.jsonb_build_object(
       'outcome', 'refused', 'reasonCode', 'record_unavailable'
@@ -157,9 +161,13 @@ begin
   proposed_facts := (loaded -> 'facts')
     || pg_catalog.jsonb_build_object('records', proposed_records);
 
-  decision := vortex_access.evaluate_organization_record_access_internal(
-    loaded -> 'declaration', p_record_id, proposed_facts
-  );
+  decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+    pg_catalog.jsonb_build_object(
+      'declaration', loaded -> 'declaration',
+      'recordId', p_record_id,
+      'facts', proposed_facts
+    )
+  )) -> 0);
   if decision ->> 'outcome' <> 'allowed' then
     return pg_catalog.jsonb_build_object(
       'outcome', 'refused', 'reasonCode', 'proposed_record_refused'

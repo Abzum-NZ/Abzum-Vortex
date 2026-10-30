@@ -55,18 +55,14 @@ begin
     );
   end if;
 
-  loaded := vortex_record.load_record_access_facts_internal(
-    p_record_type_id, 'read', p_record_id, null, null::jsonb
-  );
+  loaded := (vortex_record.load_record_access_facts_internal('read', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', p_record_type_id, 'recordId', p_record_id))) -> 0);
   if loaded ->> 'outcome' <> 'loaded' then
     return pg_catalog.jsonb_build_object(
       'outcome', 'refused', 'reasonCode', 'record_unavailable',
       'correlationId', correlation_id_value
     );
   end if;
-  read_decision := vortex_access.evaluate_organization_record_access_internal(
-    loaded -> 'declaration', p_record_id, loaded -> 'facts'
-  );
+  read_decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', loaded -> 'declaration', 'recordId', p_record_id, 'facts', loaded -> 'facts'))) -> 0);
   if read_decision ->> 'outcome' is distinct from 'allowed' then
     return pg_catalog.jsonb_build_object(
       'outcome', 'refused', 'reasonCode', 'record_unavailable',

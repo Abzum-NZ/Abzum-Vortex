@@ -152,9 +152,7 @@ begin
     (source_context ->> 'organizationId')::uuid
   );
 
-  target_loaded := vortex_record.load_record_access_facts_internal(
-    target_type_id, 'read', target_record_id, null, null::jsonb
-  );
+  target_loaded := (vortex_record.load_record_access_facts_internal('read', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', target_type_id, 'recordId', target_record_id))) -> 0);
   if target_loaded ->> 'outcome' <> 'loaded'
     or pg_catalog.jsonb_typeof(target_loaded -> 'declaration') <> 'object' then
     raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
@@ -173,10 +171,7 @@ begin
     ) = 0 then
       raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
     end if;
-    target_decision := vortex_access.evaluate_organization_record_access_internal(
-      pg_catalog.jsonb_set(target_loaded -> 'declaration', '{authority}',
-        '{"kind":"permission"}'::jsonb), target_record_id, target_loaded -> 'facts'
-    );
+    target_decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', pg_catalog.jsonb_set(target_loaded -> 'declaration', '{authority}', '{"kind":"permission"}'::jsonb), 'recordId', target_record_id, 'facts', target_loaded -> 'facts'))) -> 0);
   end if;
   if target_decision ->> 'outcome' <> 'allowed' then
     raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';

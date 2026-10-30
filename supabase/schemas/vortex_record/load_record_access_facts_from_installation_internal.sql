@@ -1,11 +1,7 @@
 create or replace function vortex_record.load_record_access_facts_from_installation_internal(
-  p_record_type_id uuid,
   p_action_kind text,
-  p_record_id uuid,
-  p_expected_concurrency_number bigint,
-  p_installation jsonb,
-  p_projection_row jsonb,
-  p_requested_field_ids jsonb default null
+  p_targets jsonb,
+  p_installation jsonb
 )
 returns jsonb
 language plpgsql
@@ -15,12 +11,10 @@ set search_path = ''
 as $function$
 begin
   -- The access plan is resolved here, once for this call, and the one facts
-  -- body consumes it. A caller that loads many records resolves the plan itself
-  -- and calls load_record_access_facts_with_plan_internal directly.
+  -- body consumes it for every target of the call.
   return vortex_record.load_record_access_facts_with_plan_internal(
-    p_record_type_id, p_action_kind, p_record_id, p_expected_concurrency_number,
-    p_installation, vortex_record.resolve_installation_access_plan_internal(p_installation),
-    p_projection_row, p_requested_field_ids
+    p_action_kind, p_targets, p_installation,
+    vortex_record.resolve_installation_access_plan_internal(p_installation)
   );
 exception
   when no_data_found then
@@ -32,10 +26,10 @@ exception
 end
 $function$;
 
-alter function vortex_record.load_record_access_facts_from_installation_internal(uuid,text,uuid,bigint,jsonb,jsonb,jsonb) owner to vortex_record_adapter;
+alter function vortex_record.load_record_access_facts_from_installation_internal(text,jsonb,jsonb) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.load_record_access_facts_from_installation_internal(
-  uuid, text, uuid, bigint, jsonb, jsonb, jsonb
+  text, jsonb, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
-grant execute on function vortex_record.load_record_access_facts_from_installation_internal(uuid,text,uuid,bigint,jsonb,jsonb,jsonb) to vortex_owner;
+grant execute on function vortex_record.load_record_access_facts_from_installation_internal(text,jsonb,jsonb) to vortex_owner;

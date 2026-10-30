@@ -47,9 +47,13 @@ begin
   end if;
   p_visited := pg_catalog.array_append(p_visited, identity_value);
 
-  loaded := vortex_record.load_record_access_facts_internal(
-    p_record_type_id, 'delete', p_record_id, p_expected_concurrency_number, null::jsonb
-  );
+  loaded := (vortex_record.load_record_access_facts_internal(
+    'delete', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'recordTypeId', p_record_type_id,
+      'recordId', p_record_id,
+      'expectedConcurrencyNumber', p_expected_concurrency_number
+    ))
+  ) -> 0);
   if loaded ->> 'outcome' = 'conflict' then
     raise exception using errcode = '40001', message = 'Record delete revision is stale';
   end if;
@@ -66,9 +70,13 @@ begin
   facts := (loaded -> 'facts') || pg_catalog.jsonb_build_object(
     'binding', meta -> 'declaration' -> 'recordBinding'
   );
-  decision := vortex_access.evaluate_organization_record_access_internal(
-    meta -> 'declaration', p_record_id, facts
-  );
+  decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+    pg_catalog.jsonb_build_object(
+      'declaration', meta -> 'declaration',
+      'recordId', p_record_id,
+      'facts', facts
+    )
+  )) -> 0);
   if decision ->> 'outcome' <> 'allowed' then
     raise exception using errcode = 'P0002', message = 'Record is unavailable';
   end if;
@@ -149,10 +157,13 @@ begin
       or source_link_value ->> 'recordId' is distinct from p_record_id::text then
       continue;
     end if;
-    source_loaded := vortex_record.load_record_access_facts_internal(
-      source_catalogue.record_type_id, source_action_kind, incoming.from_record_id,
-      source_concurrency, null::jsonb
-    );
+    source_loaded := (vortex_record.load_record_access_facts_internal(
+      source_action_kind, pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordTypeId', source_catalogue.record_type_id,
+        'recordId', incoming.from_record_id,
+        'expectedConcurrencyNumber', source_concurrency
+      ))
+    ) -> 0);
     if source_loaded ->> 'outcome' <> 'loaded' then
       continue;
     end if;
@@ -168,12 +179,13 @@ begin
     if pg_catalog.jsonb_typeof(source_meta -> 'declaration') <> 'object' then
       raise exception using errcode = '42501', message = 'Affected record is unavailable';
     end if;
-    source_decision := vortex_access.evaluate_organization_record_access_internal(
-      source_meta -> 'declaration', incoming.from_record_id,
-      (source_loaded -> 'facts') || pg_catalog.jsonb_build_object(
-        'binding', source_meta -> 'declaration' -> 'recordBinding'
+    source_decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'declaration', source_meta -> 'declaration',
+        'recordId', incoming.from_record_id,
+        'facts', (source_loaded -> 'facts') || pg_catalog.jsonb_build_object( 'binding', source_meta -> 'declaration' -> 'recordBinding' )
       )
-    );
+    )) -> 0);
     if source_decision ->> 'outcome' <> 'allowed' then
       raise exception using errcode = '42501', message = 'Affected record is unavailable';
     end if;

@@ -145,10 +145,13 @@ begin
     decided_decisions := array[]::jsonb[];
     decided_bounds := array[]::jsonb[];
     page_eligibility := null;
-    page_loaded := vortex_record.load_record_access_facts_from_installation_internal(
-      p_record_type_id, 'read', batch_ids[1], null,
-      vortex_definition.read_current_active_installation(), null
-    );
+    page_loaded := (vortex_record.load_record_access_facts_from_installation_internal(
+      'read', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordTypeId', p_record_type_id,
+        'recordId', batch_ids[1]
+      )),
+      vortex_definition.read_current_active_installation()
+    ) -> 0);
     if page_loaded ->> 'outcome' = 'loaded'
       and pg_catalog.jsonb_typeof(page_loaded -> 'declaration') = 'object' then
       page_declaration := page_loaded -> 'declaration';

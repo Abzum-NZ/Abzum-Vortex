@@ -344,18 +344,20 @@ begin
       p_declaration, ctx, checked_at
     );
   else
-    -- Only the fixed record adapter supplies page-local eligibility. The
-    -- request role cannot execute this variant or supply a forged decision.
+    -- Only the fixed record adapter supplies eligibility it decided once for a
+    -- page or a set of targets; a refusal is supplied as decided. The request
+    -- role cannot execute this variant or supply a forged decision.
     eligibility := p_eligibility;
-    if eligibility ->> 'outcome' is distinct from 'eligible'
+    if coalesce(eligibility ->> 'outcome', '') not in ('eligible', 'refused')
       or eligibility -> 'recordBinding' is distinct from p_declaration -> 'recordBinding'
       or eligibility -> 'target' is distinct from p_declaration -> 'target'
       or eligibility ->> 'organizationId' is distinct from ctx ->> 'organizationId'
       or eligibility ->> 'organizationAccountId' is distinct from ctx ->> 'organizationAccountId'
       or eligibility ->> 'accessVersion' is distinct from ctx ->> 'accessVersion'
       or eligibility ->> 'correlationId' is distinct from ctx ->> 'correlationId'
-      or (eligibility ->> 'validUntil')::timestamptz <= checked_at then
-      raise exception using errcode = '22023', message = 'Page record eligibility is invalid';
+      or (eligibility ->> 'outcome' = 'eligible'
+        and (eligibility ->> 'validUntil')::timestamptz <= checked_at) then
+      raise exception using errcode = '22023', message = 'Supplied record eligibility is invalid';
     end if;
   end if;
 
@@ -465,4 +467,4 @@ revoke all on function vortex_access.evaluate_record_access_with_validated_types
 grant execute on function vortex_access.evaluate_record_access_with_validated_types_internal(jsonb,uuid,jsonb,jsonb,jsonb)
   to vortex_record_adapter, postgres;
 comment on function vortex_access.evaluate_record_access_with_validated_types_internal(jsonb,uuid,jsonb,jsonb,jsonb) is
-  'Exact record access evaluation for the ordinary wrapper or page-local eligibility supplied by the fixed record adapter; validates each record fact set and composes each record scope independently.';
+  'Exact record access evaluation of one target, with eligibility computed here or supplied by the fixed record adapter (decided once per declaration for a set of targets or a page); validates each record fact set and composes each record scope independently.';

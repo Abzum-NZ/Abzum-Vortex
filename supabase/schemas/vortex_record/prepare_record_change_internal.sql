@@ -46,9 +46,13 @@ begin
     );
   end if;
 
-  loaded := vortex_record.load_record_access_facts_internal(
-    p_record_type_id, 'update', p_record_id, p_expected_concurrency_number, null::jsonb
-  );
+  loaded := (vortex_record.load_record_access_facts_internal(
+    'update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'recordTypeId', p_record_type_id,
+      'recordId', p_record_id,
+      'expectedConcurrencyNumber', p_expected_concurrency_number
+    ))
+  ) -> 0);
   if loaded ->> 'outcome' = 'conflict' then
     return pg_catalog.jsonb_build_object(
       'outcome', 'conflict', 'concurrencyNumber', loaded -> 'concurrencyNumber'
@@ -78,9 +82,13 @@ begin
       );
     end if;
   else
-    decision := vortex_access.evaluate_organization_record_access_internal(
-      loaded -> 'declaration', p_record_id, loaded -> 'facts'
-    );
+    decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'declaration', loaded -> 'declaration',
+        'recordId', p_record_id,
+        'facts', loaded -> 'facts'
+      )
+    )) -> 0);
     if decision ->> 'outcome' <> 'allowed' then
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'record_unavailable'
@@ -154,9 +162,13 @@ begin
     || pg_catalog.jsonb_build_object('records', proposed_records);
 
   if not (loaded ? 'previewInstallationId') then
-    decision := vortex_access.evaluate_organization_record_access_internal(
-      loaded -> 'declaration', p_record_id, proposed_facts
-    );
+    decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'declaration', loaded -> 'declaration',
+        'recordId', p_record_id,
+        'facts', proposed_facts
+      )
+    )) -> 0);
     if decision ->> 'outcome' <> 'allowed' then
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'proposed_record_refused'

@@ -122,9 +122,13 @@ begin
       )
     );
   end if;
-  decision := vortex_access.evaluate_organization_record_access_internal(
-    loaded -> 'declaration', p_record_id, evaluation_facts
-  );
+  decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+    pg_catalog.jsonb_build_object(
+      'declaration', loaded -> 'declaration',
+      'recordId', p_record_id,
+      'facts', evaluation_facts
+    )
+  )) -> 0);
   if decision ->> 'outcome' = 'refused' then
     perform vortex_record.append_record_activity_internal(p_activity_id, 'transfer_record_ownership', array[organization_id_value]::uuid[], array[]::uuid[], 'refused');
     perform vortex_record.release_command_receipt_internal('record_save', p_command_id);

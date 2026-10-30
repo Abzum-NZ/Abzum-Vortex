@@ -21,10 +21,7 @@ begin
     select storage.record_type_id into strict record_type_id_value
     from vortex_record.storage_catalogue as storage
     where storage.storage_contract_id = (change_value ->> 'storageContractId')::uuid;
-    loaded := vortex_record.load_record_access_facts_internal(
-      record_type_id_value, 'update', (change_value ->> 'recordId')::uuid,
-      (change_value ->> 'expectedConcurrencyNumber')::bigint, null
-    );
+    loaded := (vortex_record.load_record_access_facts_internal('update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', record_type_id_value, 'recordId', (change_value ->> 'recordId')::uuid, 'expectedConcurrencyNumber', (change_value ->> 'expectedConcurrencyNumber')::bigint))) -> 0);
     if loaded ->> 'outcome' is distinct from 'loaded'
       or loaded #> '{recordTypeMeta,storageContractId}' is distinct from change_value -> 'storageContractId' then
       raise exception using errcode = '40001', message = 'Prepared record storage closure changed';
