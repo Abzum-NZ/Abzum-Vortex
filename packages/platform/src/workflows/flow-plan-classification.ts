@@ -14,6 +14,15 @@ const keyOf = (reference: FlowReference): string | undefined => {
   return undefined;
 };
 
+/** The variable keys one data.set_variable step may write (a computed name may write any). */
+const variableWriteKeys = (flow: FlowDefinition, task: FlowTask): string[] => {
+  if (task.type !== "data.set_variable" || !("properties" in task)) return [];
+  const name = task.properties.variable;
+  const names = name?.kind === "literal" && typeof name.literal.value === "string"
+    ? [name.literal.value] : Object.keys(flow.variables);
+  return names.filter((variable) => flow.variables[variable] !== undefined).map((variable) => `vars.${variable}`);
+};
+
 /** Classifies explicit handoffs once for all bindings of a flow. */
 export const classifyFlowSegments = (
   flow: FlowDefinition,
@@ -47,10 +56,14 @@ export const classifyFlowSegments = (
     };
     segments.push(completion);
   }
-  const pageReads = new Set(references([
-    ...segments.flatMap((segment) => [segment.guard, ...(segment.kind === "page" ? [segment.tasks] : [])]),
-    ...Object.values(flow.outputs).map((output) => output.value),
-  ]).flatMap((reference) => { const key = keyOf(reference); return key === undefined ? [] : [key]; }));
+  const pageReads = new Set([
+    ...references([
+      ...segments.flatMap((segment) => [segment.guard, ...(segment.kind === "page" ? [segment.tasks] : [])]),
+      ...Object.values(flow.outputs).map((output) => output.value),
+    ]).flatMap((reference) => { const key = keyOf(reference); return key === undefined ? [] : [key]; }),
+    // A variable a page step writes lives in page state, so a later server segment is seeded with it.
+    ...segments.flatMap((segment) => segment.kind === "page" ? stepsOf(segment.tasks).flatMap((task) => variableWriteKeys(flow, task)) : []),
+  ]);
   const allTasks = stepsOf([...flow.tasks, ...flow.errors, ...flow.finally]);
   const childOutputType = (name: string): string | undefined => {
     const parts = name.split(".");
@@ -69,14 +82,7 @@ export const classifyFlowSegments = (
         for (const [name, declaration] of Object.entries(child?.outputs ?? {}))
           result[`outputs.${task.id}.${name}`] = declaration.type;
       }
-      if (task.type !== "data.set_variable" || !("properties" in task)) continue;
-      const name = task.properties.variable;
-      const names = name?.kind === "literal" && typeof name.literal.value === "string"
-        ? [name.literal.value] : Object.keys(flow.variables);
-      for (const variable of names) {
-        const declaration = flow.variables[variable];
-        if (declaration !== undefined) result[`vars.${variable}`] = declaration.type;
-      }
+      for (const key of variableWriteKeys(flow, task)) result[key] = flow.variables[key.slice(5)]!.type;
     }
     return result;
   });
