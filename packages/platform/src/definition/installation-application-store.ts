@@ -12,9 +12,12 @@ import {
 import { describeFailure } from "../catalogue/runtime-primitives";
 import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
 import { canonicalJson } from "./canonical-json";
-import type {
-  InstallationMemberRoleRefusal,
-  InstallationProblemShape,
+import {
+  InstallationProblem,
+  type InstallationMemberRoleRefusal,
+  type InstallationProblemShape,
+  type ReceiptStep,
+  type StoreReceiptCompletion,
 } from "./installation-authority";
 import { maximumApplicationRoles } from "./application-contracts";
 import { classifyInstallationFailure } from "./installation-failure";
@@ -26,17 +29,23 @@ import {
   type FirstInstallFlowEnvironment,
 } from "./installation-first-install-app";
 import { createFirstInstallCoordinator } from "./installation-first-install-coordinator";
-import { activateFirstInstall, readMemberRoleAssignable } from "./installation-first-install-roles";
+import {
+  activateFirstInstall,
+  readMemberRoleAssignable,
+  resumeFirstInstallRoles,
+} from "./installation-first-install-roles";
 import { releaseMemberRole, type ApplicationRoleChange } from "./installation-role-templates";
 import { readApplicationRemoval, removeApplication } from "./installation-removal";
 import {
   readUpgradeAuthorizedState,
+  sameUpgradeSelectedSnapshot,
   sameUpgradeSnapshotState,
   type UpgradeSelector,
   type UpgradeSnapshot,
 } from "./installation-upgrade";
 import {
   readUpgradeRoleChanges,
+  resumeUpgradeRoleChanges,
   upgradeWithRoleChanges,
   type UpgradeRoleEnvironment,
 } from "./installation-upgrade-roles";
@@ -56,15 +65,18 @@ import {
  */
 export type ApplicationStoreEnvironment = FirstInstallFlowEnvironment & UpgradeRoleEnvironment;
 
+export type { StoreReceiptCompletion };
+
 type Outputs = Readonly<Record<string, JsonValue>>;
 
 /** A result the protected operation executor maps: available outputs, a refusal, a failure or a conflict. */
 type ApplicationStoreResult =
   | HumanOrganizationRequestResult<Outputs>
   | "conflict"
+  | "uncertain"
   | Readonly<{
       kind: "confirmed_failure";
-      outcome: "refused";
+      outcome: "refused" | "conflict";
       diagnostic: FlowRefusalFeedback;
     }>;
 
@@ -245,8 +257,28 @@ const commandFailureOf = (error: unknown): ApplicationStoreResult => {
     console.error(`[installation] application command unavailable: ${describeFailure(error)}`);
     return error.reason === "already_installed" ? "conflict" : { kind: "unavailable" };
   }
+  if (error instanceof InstallationProblem && error.code === "first_install_latest_release_moved") {
+    console.error(`[installation] application release changed: ${describeFailure(error)}`);
+    return releaseChanged();
+  }
   return commandFailure(classifyInstallationFailure(error));
 };
+
+/**
+ * A failure after the release was activated leaves part of the journey saved, so it is reported as
+ * uncertain: a retry of the same command resumes toward the target. Before activation it is a
+ * plain failure that changed nothing.
+ */
+const afterActivation = (result: ApplicationStoreResult): ApplicationStoreResult =>
+  result !== "conflict" && result !== "uncertain" && result.kind === "temporarily_unavailable"
+    ? "uncertain"
+    : result;
+
+const releaseChanged = (): ApplicationStoreResult => ({
+  kind: "confirmed_failure",
+  outcome: "conflict",
+  diagnostic: { code: "application_release_changed" },
+});
 
 const expectedOf = (snapshot: unknown): JsonValue =>
   JSON.parse(canonicalJson(snapshot)) as JsonValue;
@@ -340,11 +372,15 @@ const review = async (
         role_template_ids: changes.map((change) => change.sourceRoleId),
         expected: expectedOf({
           ...authorized.snapshot,
-          roleRevisions: changes.map(({ sourceRoleId, roleId, liveRevision }) => ({
-            sourceRoleId,
-            roleId: roleId ?? null,
-            liveRevision: liveRevision ?? null,
-          })),
+          latest,
+          roleRevisions: changes.map(
+            ({ sourceRoleId, roleId, liveRevision, registrationRevision }) => ({
+              sourceRoleId,
+              roleId: roleId ?? null,
+              liveRevision: liveRevision ?? null,
+              registrationRevision: registrationRevision ?? null,
+            }),
+          ),
         }),
       }),
     };
@@ -362,14 +398,14 @@ const firstInstallExpectedSchema = z
 /**
  * Installs the reviewed version for the first time: registers its access if that is not done yet,
  * makes every role it offers an organisation role, applies the installer's choice for the default
- * member role and activates the release. Each step runs only while the state is exactly the one the
- * person reviewed.
+ * member role and activates the release. A retry reuses progress toward the reviewed target.
  */
 const install = async (
   environment: ApplicationStoreEnvironment,
   session: IdentitySession,
   selection: OrganizationSelectionCandidate,
   inputs: Readonly<Record<string, unknown>>,
+  receipt?: StoreReceiptCompletion,
 ): Promise<ApplicationStoreResult> => {
   const rootId = applicationRootInput(inputs.application_root_id);
   const expected = firstInstallExpectedSchema.safeParse(inputs.expected);
@@ -380,6 +416,7 @@ const install = async (
     rootId: rootId.data,
     releaseRevision: expected.data.selected.releaseRevision,
   };
+  let activated = false;
   try {
     const reviewed = expected.data as unknown as FirstInstallCandidate["snapshot"];
     let candidate = await readCurrentFirstInstallCandidate(
@@ -389,6 +426,7 @@ const install = async (
       reviewed,
     );
     const state = candidate.snapshot.registrationState;
+    activated = state === "active_exact";
     if (state === "unprepared" || state === "registration_aligned_partial") {
       await createFirstInstallCoordinator(
         environment,
@@ -401,32 +439,46 @@ const install = async (
         applicationRootId: rootId.data,
         applicationReleaseRevision: selector.releaseRevision,
       });
-      candidate = await readCurrentFirstInstallCandidate(environment, session, selector);
-      if (
-        canonicalJson(candidate.snapshot.selected) !== canonicalJson(reviewed.selected) ||
-        canonicalJson(candidate.snapshot.roles) !== canonicalJson(reviewed.roles)
-      )
-        return "conflict";
+      candidate = await readCurrentFirstInstallCandidate(environment, session, selector, reviewed);
     }
-    if (candidate.snapshot.registrationState !== "provisioned_inactive") return "conflict";
     const acceptRole = yes(inputs.accept_member_role);
-    await activateFirstInstall(
-      environment,
-      candidate,
-      acceptRole
-        ? { kind: "accept", sourceRoleId: releaseMemberRole(candidate.snapshot.roles).sourceRoleId }
-        : { kind: "decline" },
-    );
-    return {
-      kind: "available",
-      value: {
-        application_name: candidate.releaseSet.application.content.name,
-        release_version: candidate.snapshot.selected.releaseVersion,
-        member_role_granted: acceptRole,
-      },
+    const choice = acceptRole
+      ? {
+          kind: "accept" as const,
+          sourceRoleId: releaseMemberRole(candidate.snapshot.roles).sourceRoleId,
+        }
+      : { kind: "decline" as const };
+    const reported = {
+      application_name: candidate.releaseSet.application.content.name,
+      release_version: candidate.snapshot.selected.releaseVersion,
+      member_role_granted: acceptRole,
     };
+    // Reaching the install's target (activation, or the member assignment that follows it)
+    // completes the claimed receipt in that same transaction.
+    const complete: ReceiptStep | undefined =
+      receipt === undefined ? undefined : (transaction) => receipt(transaction, reported);
+    if (candidate.snapshot.registrationState === "provisioned_inactive") {
+      await activateFirstInstall(environment, candidate, choice, complete);
+      activated = true;
+      if (choice.kind === "accept") {
+        candidate = await readCurrentFirstInstallCandidate(
+          environment,
+          session,
+          selector,
+          reviewed,
+        );
+        if (candidate.snapshot.registrationState !== "active_exact") return "conflict";
+        await resumeFirstInstallRoles(environment, candidate, choice, complete);
+      }
+    } else if (candidate.snapshot.registrationState === "active_exact") {
+      await resumeFirstInstallRoles(environment, candidate, choice, complete);
+      candidate = await readCurrentFirstInstallCandidate(environment, session, selector, reviewed);
+      if (candidate.snapshot.registrationState !== "active_exact") return "conflict";
+    } else return "conflict";
+    return { kind: "available", value: reported };
   } catch (error) {
-    return commandFailureOf(error);
+    const failure = commandFailureOf(error);
+    return activated ? afterActivation(failure) : failure;
   }
 };
 
@@ -434,6 +486,14 @@ const upgradeExpectedSchema = z
   .object({
     selected: z.object({ releaseRevision: z.number().int().positive() }).passthrough(),
     active: z.object({ releaseRevision: z.number().int().positive() }).passthrough(),
+    latest: z
+      .object({
+        definitionKey: z.string().min(1),
+        releaseRevision: z.number().int().positive(),
+        releaseVersion: z.string().min(1),
+        releaseNote: z.string(),
+      })
+      .strict(),
     validUntil: z.string().min(1),
     roleRevisions: z
       .array(
@@ -442,6 +502,7 @@ const upgradeExpectedSchema = z
             sourceRoleId: roleIdSchema,
             roleId: roleIdSchema.nullable(),
             liveRevision: z.number().int().positive().nullable(),
+            registrationRevision: z.number().int().positive().nullable(),
           })
           .strict(),
       )
@@ -459,6 +520,7 @@ const upgrade = async (
   session: IdentitySession,
   selection: OrganizationSelectionCandidate,
   inputs: Readonly<Record<string, unknown>>,
+  receipt?: StoreReceiptCompletion,
 ): Promise<ApplicationStoreResult> => {
   const rootId = applicationRootInput(inputs.application_root_id);
   const expected = upgradeExpectedSchema.safeParse(inputs.expected);
@@ -473,38 +535,85 @@ const upgrade = async (
     rootId: rootId.data,
     releaseRevision: expected.data.selected.releaseRevision,
   };
+  let activated = false;
   try {
     const reviewed = expected.data as unknown as UpgradeSnapshot;
+    const latest = await readCurrentApplicationLatestRelease(
+      environment,
+      session,
+      selector.organizationId,
+      selector.rootId,
+    );
+    if (
+      selector.releaseRevision !== expected.data.latest.releaseRevision ||
+      canonicalJson(latest) !== canonicalJson(expected.data.latest)
+    )
+      return releaseChanged();
     // Reviewing an installed version offers only its role changes still to accept.
     const rolesOnly = reviewed.selected.releaseRevision === reviewed.active.releaseRevision;
-    const current = await readUpgradeAuthorizedState(environment, selector, session, rolesOnly);
+    const current = await readUpgradeAuthorizedState(environment, selector, session, true);
     const now = Date.parse(current.checkedAt);
+    const reviewedDeadline = Date.parse(reviewed.validUntil);
+    const currentDeadline = Date.parse(current.snapshot.validUntil);
+    const atTarget = current.snapshot.active.releaseRevision === selector.releaseRevision;
+    activated = atTarget;
+    // The review deadline guards the confirmation, not the completion: once the claimed receipt
+    // records progress (the release is already active), only current authority is re-proved.
+    const resumed = receipt !== undefined && atTarget;
     if (
       !Number.isFinite(now) ||
-      Date.parse(reviewed.validUntil) <= now ||
-      Date.parse(current.snapshot.validUntil) <= now ||
-      !sameUpgradeSnapshotState(reviewed, current.snapshot)
+      !Number.isFinite(currentDeadline) ||
+      (!resumed && (!Number.isFinite(reviewedDeadline) || reviewedDeadline <= now)) ||
+      currentDeadline <= now ||
+      !(atTarget && !rolesOnly
+        ? sameUpgradeSelectedSnapshot(reviewed, current.snapshot)
+        : sameUpgradeSnapshotState(reviewed, current.snapshot))
     )
       return "conflict";
-    const { accepted, notAccepted } = await upgradeWithRoleChanges(
-      environment,
-      selector,
-      current.state,
-      session,
-      roleTemplateIds.data,
-      expected.data.roleRevisions,
-    );
-    return {
-      kind: "available",
-      value: {
-        application_name: current.state.selectedReleaseSet.application.content.name,
-        release_version: current.snapshot.selected.releaseVersion,
-        accepted_role_count: accepted.length,
-        waiting_role_count: notAccepted.length,
-      },
+    const reported = {
+      application_name: current.state.selectedReleaseSet.application.content.name,
+      release_version: current.snapshot.selected.releaseVersion,
+      accepted_role_count: roleTemplateIds.data.length,
+      waiting_role_count: 0,
     };
+    // Reaching the target (activation, or the last role acceptance) completes the receipt there.
+    const complete: ReceiptStep | undefined =
+      receipt === undefined ? undefined : (transaction) => receipt(transaction, reported);
+    if (atTarget)
+      await resumeUpgradeRoleChanges(
+        environment,
+        selector,
+        current.state,
+        session,
+        roleTemplateIds.data,
+        expected.data.roleRevisions,
+        !rolesOnly,
+        expected.data.latest,
+        complete,
+      );
+    else
+      await upgradeWithRoleChanges(
+        environment,
+        selector,
+        current.state,
+        session,
+        roleTemplateIds.data,
+        expected.data.roleRevisions,
+        expected.data.latest,
+        complete,
+        () => {
+          activated = true;
+        },
+      );
+    // Every reviewed role is accepted or the journey refused, so the counts are the reviewed ones.
+    return { kind: "available", value: reported };
   } catch (error) {
-    return commandFailureOf(error);
+    if (error instanceof InstallationProblem && error.problem.unavailableReason === "not_newer") {
+      classifyInstallationFailure(error);
+      return "conflict";
+    }
+    const failure = commandFailureOf(error);
+    return activated ? afterActivation(failure) : failure;
   }
 };
 
@@ -541,6 +650,7 @@ export const createApplicationStoreService = (environment: ApplicationStoreEnvir
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
     inputs: Readonly<Record<string, unknown>>,
+    receipt?: StoreReceiptCompletion,
   ): Promise<ApplicationStoreResult> => {
     const rootId = applicationRootInput(inputs.application_root_id);
     if (!rootId.success) return { kind: "unavailable" };
@@ -553,6 +663,7 @@ export const createApplicationStoreService = (environment: ApplicationStoreEnvir
           organizationOf(selection),
           rootId.data,
           inputs.expected,
+          receipt,
         ),
       };
     } catch (error) {
@@ -568,12 +679,14 @@ export const createApplicationStoreService = (environment: ApplicationStoreEnvir
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
     inputs: Readonly<Record<string, unknown>>,
-  ) => install(environment, session, selection, inputs),
+    receipt?: StoreReceiptCompletion,
+  ) => install(environment, session, selection, inputs, receipt),
   upgrade: (
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
     inputs: Readonly<Record<string, unknown>>,
-  ) => upgrade(environment, session, selection, inputs),
+    receipt?: StoreReceiptCompletion,
+  ) => upgrade(environment, session, selection, inputs, receipt),
 });
 
 export type ApplicationStoreService = ReturnType<typeof createApplicationStoreService>;

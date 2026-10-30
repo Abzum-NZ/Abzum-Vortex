@@ -2,11 +2,22 @@ import "server-only";
 
 import type { createOrganizationAccessAdministrationService } from "../access/organization-access-administration-access";
 import type { IdentitySession } from "../access/identity-access";
+import type { FirstInstallFlowEnvironment } from "./installation-first-install-app";
+import {
+  accessForInstallationTarget,
+  completeAtInstallationTarget,
+} from "./installation-first-install-roles";
+import {
+  firstInstallLatestReleaseMatches,
+  type ApplicationLatestRelease,
+} from "./installation-first-install";
+import { sameId } from "../catalogue/runtime-primitives";
 import { canonicalJson } from "./canonical-json";
-import { installationProblem } from "./installation-authority";
+import { installationProblem, type ReceiptStep } from "./installation-authority";
 import {
   acceptApplicationRoleChanges,
   applicationRoleChanges,
+  inInstallerRequest,
   readInstallationRoles,
   readInstallationRolesIn,
   requireRoleAcceptanceAuthority,
@@ -33,7 +44,10 @@ const roleChangesJson = (changes: readonly ApplicationRoleChange[]): string =>
 
 /** What an upgrade that accepts role changes needs beyond the upgrade itself. */
 export type UpgradeRoleEnvironment = UpgradeEnvironment &
-  Readonly<{ accessAdministration: AccessAdministration }>;
+  Readonly<{
+    accessAdministration: AccessAdministration;
+    bindAccessAdministration: FirstInstallFlowEnvironment["bindAccessAdministration"];
+  }>;
 
 /**
  * The roles the selected version changes for this organisation, read under the upgrader's
@@ -55,6 +69,37 @@ export const readUpgradeRoleChanges = async (
   );
   return applicationRoleChanges(roles.roles, state.selectedReleaseSet, [state.activeReleaseSet]);
 };
+
+/**
+ * Completes the receipt when no role write is left: proves, in the completing transaction, that
+ * every role the selected version offers already matches its template.
+ */
+const completeWhenRolesMatch = (
+  environment: UpgradeRoleEnvironment,
+  selector: UpgradeSelector,
+  state: UpgradeState,
+  session: IdentitySession,
+  latest: ApplicationLatestRelease,
+  complete: ReceiptStep,
+): Promise<void> =>
+  completeAtInstallationTarget(
+    environment,
+    { selector, releaseSet: state.selectedReleaseSet, state: "active_exact", latest },
+    session,
+    { organizationId: selector.organizationId },
+    async (transaction, scope) => {
+      const locked = await readInstallationRolesIn(
+        transaction,
+        scope,
+        environment,
+        selector,
+        environment.containsCustomComponents(state.selectedReleaseSet),
+      );
+      if (applicationRoleChanges(locked.roles, state.selectedReleaseSet, []).length > 0)
+        installationProblem("upgrade_role_revision_changed", "conflict");
+      await complete(transaction);
+    },
+  );
 
 type UpgradeWithRoleChangesResult = Readonly<{
   /** Source role ids whose role now matches the selected version's template. */
@@ -79,15 +124,19 @@ export const upgradeWithRoleChanges = async (
   session: IdentitySession,
   reviewedSourceRoleIds: readonly string[],
   reviewedChanges: readonly unknown[],
+  latest: ApplicationLatestRelease,
+  complete?: ReceiptStep,
+  onActivated?: () => void,
 ): Promise<UpgradeWithRoleChangesResult> => {
   const listed = await readUpgradeRoleChanges(environment, session, selector, state);
   const reviewed = new Set(reviewedSourceRoleIds.map((id) => id.toLowerCase()));
   if (
     canonicalJson(
-      listed.map(({ sourceRoleId, roleId, liveRevision }) => ({
+      listed.map(({ sourceRoleId, roleId, liveRevision, registrationRevision }) => ({
         sourceRoleId,
         roleId: roleId ?? null,
         liveRevision: liveRevision ?? null,
+        registrationRevision: registrationRevision ?? null,
       })),
     ) !== canonicalJson(reviewedChanges) ||
     reviewed.size !== reviewedSourceRoleIds.length ||
@@ -115,6 +164,7 @@ export const upgradeWithRoleChanges = async (
       state,
       session,
       async (transaction, scope) => {
+        await firstInstallLatestReleaseMatches(transaction, selector, latest);
         const locked = await readInstallationRolesIn(
           transaction,
           scope,
@@ -128,9 +178,19 @@ export const upgradeWithRoleChanges = async (
         if (roleChangesJson(lockedChanges) !== roleChangesJson(listed))
           installationProblem("upgrade_role_revision_changed", "conflict");
       },
+      // With no role to accept, activating is the upgrade's last step.
+      listed.length === 0 ? complete : undefined,
     );
-  return acceptApplicationRoleChanges(
+  onActivated?.();
+  const accessAdministration = accessForInstallationTarget(
     environment,
+    { selector, releaseSet: state.selectedReleaseSet, state: "active_exact", latest },
+    complete === undefined
+      ? undefined
+      : { write: "accept_roles", step: { complete: (transaction) => complete(transaction) } },
+  );
+  const result = await acceptApplicationRoleChanges(
+    { ...environment, accessAdministration },
     session,
     selector,
     state.selectedReleaseSet,
@@ -138,4 +198,107 @@ export const upgradeWithRoleChanges = async (
       switching ? { ...change, liveRevision: change.registrationRevision } : change,
     ),
   );
+  if (complete !== undefined && listed.length > 0 && !result.wrote)
+    await completeWhenRolesMatch(environment, selector, state, session, latest, complete);
+  return result;
+};
+
+/** Resume the role acceptance after the reviewed release has already been activated. */
+export const resumeUpgradeRoleChanges = async (
+  environment: UpgradeRoleEnvironment,
+  selector: UpgradeSelector,
+  state: UpgradeState,
+  session: IdentitySession,
+  reviewedSourceRoleIds: readonly string[],
+  reviewedChanges: readonly Readonly<{
+    sourceRoleId: string;
+    roleId: string | null;
+    liveRevision: number | null;
+    registrationRevision: number | null;
+  }>[],
+  registeredByUpgrade: boolean,
+  latest: ApplicationLatestRelease,
+  complete?: ReceiptStep,
+): Promise<UpgradeWithRoleChangesResult> => {
+  const reviewed = new Set(reviewedSourceRoleIds.map((id) => id.toLowerCase()));
+  if (
+    reviewed.size !== reviewedSourceRoleIds.length ||
+    reviewedChanges.length !== reviewed.size ||
+    new Set(reviewedChanges.map((change) => change.sourceRoleId.toLowerCase())).size !==
+      reviewed.size ||
+    reviewedChanges.some((change) => !reviewed.has(change.sourceRoleId.toLowerCase()))
+  )
+    installationProblem("upgrade_role_changes_not_reviewed", "conflict");
+  const roles = await inInstallerRequest(environment, session, selector, (transaction, scope) =>
+    readInstallationRolesIn(
+      transaction,
+      scope,
+      environment,
+      selector,
+      environment.containsCustomComponents(state.selectedReleaseSet),
+    ),
+  );
+  const listed = applicationRoleChanges(roles.roles, state.selectedReleaseSet, []);
+  if (listed.some((change) => !reviewed.has(change.sourceRoleId.toLowerCase())))
+    installationProblem("upgrade_role_changes_not_reviewed", "conflict");
+  const alreadyAccepted: string[] = [];
+  for (const expected of reviewedChanges) {
+    const role = roles.roles.find((candidate) =>
+      sameId(candidate.sourceRoleId, expected.sourceRoleId),
+    );
+    const pending = listed.find((change) => sameId(change.sourceRoleId, expected.sourceRoleId));
+    if (expected.roleId === null) {
+      if (expected.liveRevision !== null || expected.registrationRevision !== null)
+        installationProblem("upgrade_role_revision_changed", "conflict");
+      if (role === undefined && pending !== undefined) continue;
+      if (role?.lifecycle === "active" && role.liveRevision === 1 && pending === undefined) {
+        alreadyAccepted.push(expected.sourceRoleId);
+        continue;
+      }
+    } else if (
+      role !== undefined &&
+      sameId(role.roleId, expected.roleId) &&
+      expected.liveRevision !== null &&
+      expected.registrationRevision !== null
+    ) {
+      const startingRevision = registeredByUpgrade
+        ? expected.registrationRevision
+        : expected.liveRevision;
+      if (pending !== undefined && role.liveRevision === startingRevision) continue;
+      if (
+        pending === undefined &&
+        role.lifecycle === "active" &&
+        (role.liveRevision === startingRevision || role.liveRevision === startingRevision + 1)
+      ) {
+        alreadyAccepted.push(expected.sourceRoleId);
+        continue;
+      }
+    }
+    installationProblem("upgrade_role_revision_changed", "conflict");
+  }
+  await requireRoleAcceptanceAuthority(
+    environment,
+    session,
+    selector,
+    environment.containsCustomComponents(state.selectedReleaseSet),
+    state.selectedReleaseSet,
+    reviewedSourceRoleIds,
+  );
+  const accessAdministration = accessForInstallationTarget(
+    environment,
+    { selector, releaseSet: state.selectedReleaseSet, state: "active_exact", latest },
+    complete === undefined
+      ? undefined
+      : { write: "accept_roles", step: { complete: (transaction) => complete(transaction) } },
+  );
+  const result = await acceptApplicationRoleChanges(
+    { ...environment, accessAdministration },
+    session,
+    selector,
+    state.selectedReleaseSet,
+    listed,
+  );
+  if (complete !== undefined && !result.wrote)
+    await completeWhenRolesMatch(environment, selector, state, session, latest, complete);
+  return { accepted: [...alreadyAccepted, ...result.accepted], notAccepted: result.notAccepted };
 };

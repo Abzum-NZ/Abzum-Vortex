@@ -650,11 +650,13 @@ export const acceptApplicationRoleChanges = async (
   selector: Selector,
   releaseSet: SystemApplicationBoundReleaseSetResult,
   changes: readonly ApplicationRoleChange[],
-): Promise<Readonly<{ accepted: readonly string[]; notAccepted: readonly string[] }>> => {
+): Promise<
+  Readonly<{ accepted: readonly string[]; notAccepted: readonly string[]; wrote: boolean }>
+> => {
   const accepted: string[] = [];
   const commands: { evidence: PreparedOrganizationRoleChange }[] = [];
   const notAccepted: string[] = [];
-  if (changes.length === 0) return { accepted, notAccepted };
+  if (changes.length === 0) return { accepted, notAccepted, wrote: false };
   const administration = environment.accessAdministration;
   const selection = { organizationId: selector.organizationId };
   const templates = releaseRoleTemplates(releaseSet);
@@ -769,5 +771,5 @@ export const acceptApplicationRoleChanges = async (
       );
     }
   }
-  return { accepted, notAccepted };
+  return { accepted, notAccepted, wrote: commands.length > 0 };
 };

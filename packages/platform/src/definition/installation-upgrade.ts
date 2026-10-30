@@ -41,6 +41,7 @@ import {
   requireInstallationAuthority,
   type InstallationHumanContext,
   type InstallationProblemShape,
+  type ReceiptStep,
 } from "./installation-authority";
 import {
   readCurrentActiveApplicationInstallation,
@@ -656,6 +657,7 @@ const coordinatorFor = (
     transaction: RequestDatabaseTransaction,
     scope: SelectedOrganizationScope,
   ) => Promise<void>,
+  completeReceipt?: ReceiptStep,
 ) => {
   let started = false;
   const runInstallerRequest = async <Result>(
@@ -696,6 +698,9 @@ const coordinatorFor = (
           await readInstallationOrdinaryRoot(transaction, selector.rootId);
           await currentInstallationStateForCoordinator(transaction, selector, baseline, context);
           if (beforeRegistration !== undefined) await beforeRegistration(transaction, scope);
+          // The receipt completes before the activation, which changes the access version the
+          // completion checks; a failed activation rolls both back.
+          if (completeReceipt !== undefined) await completeReceipt(transaction);
           return await operation(transaction, scope, issuedAt);
         } catch (error) {
           callbackFailure = error;
@@ -793,17 +798,21 @@ export const activateUpgradeRelease = async (
     transaction: RequestDatabaseTransaction,
     scope: SelectedOrganizationScope,
   ) => Promise<void>,
+  completeReceipt?: ReceiptStep,
 ): Promise<UpgradeActivation> => {
   const priorRevision = state.active.applicationReleaseRevision;
-  const result = await coordinatorFor(environment, selector, state, beforeRegistration).activate(
-    session,
-    {
-      organizationId: state.active.organizationId,
-      applicationRootId: selector.rootId,
-      applicationReleaseRevision: selector.releaseRevision,
-      expectedActiveReleaseRevision: priorRevision,
-    },
-  );
+  const result = await coordinatorFor(
+    environment,
+    selector,
+    state,
+    beforeRegistration,
+    completeReceipt,
+  ).activate(session, {
+    organizationId: state.active.organizationId,
+    applicationRootId: selector.rootId,
+    applicationReleaseRevision: selector.releaseRevision,
+    expectedActiveReleaseRevision: priorRevision,
+  });
   const verified = verifyCoordinatorActivation(
     result,
     selector,

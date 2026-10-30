@@ -62,7 +62,7 @@ import {
 } from "./flow-selected-record-context";
 import { flowEntrySegmentsMatch, flowPlansOf } from "../workflows/flow-plan";
 import { flowNeedsRunStart } from "../workflows/flow-run-start";
-import { openFlowAdmissionRun } from "../workflows/start";
+import { openFlowAdmissionRun, type FlowReceiptClaim } from "../workflows/start";
 import {
   admitFlowContinuation,
   admitFlowPageStart,
@@ -335,7 +335,10 @@ export async function invokeInstalledFlow(
         : undefined;
     },
   });
-  const executorFor = (boundRequest?: BoundHumanOrganizationRequest) => {
+  const executorFor = (
+    boundRequest?: BoundHumanOrganizationRequest,
+    receipt?: FlowReceiptClaim,
+  ) => {
     const scopedDependencies = {
       ...requestDependencies,
       ...(boundRequest === undefined ? {} : { boundRequest }),
@@ -352,6 +355,7 @@ export async function invokeInstalledFlow(
           checkConnectionHealth(transaction, scope, command),
         ),
       applicationStore: dependencies.applicationStore,
+      ...(receipt === undefined ? {} : { receipt }),
       tenantGovernance: {
         run: (session, selection, operation) =>
           scopedRequests.runAccessChange(session, selection, (transaction, scope) =>
@@ -432,6 +436,7 @@ export async function invokeInstalledFlow(
     installation: InstalledFlowBindings,
     boundRequest?: BoundHumanOrganizationRequest,
     pin?: Readonly<{ target: FlowPinTarget; storedTargetResume: boolean }>,
+    receipt?: FlowReceiptClaim,
   ): FlowOrchestratorDependencies => {
     const scopedDependencies = {
       ...requestDependencies,
@@ -510,7 +515,7 @@ export async function invokeInstalledFlow(
       admitContinuation: (run, state, execute, openReplay) =>
         admitFlowContinuation(admissionHost, installation, run, state, execute, openReplay),
       admitPageStart: (run, state) => admitFlowPageStart(admissionHost, installation, run, state),
-      executor: executorFor(boundRequest),
+      executor: executorFor(boundRequest, receipt),
       records:
         boundRequest === undefined
           ? records

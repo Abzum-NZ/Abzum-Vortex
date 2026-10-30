@@ -23,6 +23,7 @@ import {
   organizationPermissionEligibilitySchema,
   type OrganizationAccessDeclaration,
 } from "../access/organization-access-decision";
+import type { JsonValue } from "../catalogue/common";
 import { timestampSchema } from "../catalogue/identifiers";
 import { databaseTimestamp, sameId } from "../catalogue/runtime-primitives";
 import {
@@ -471,3 +472,15 @@ export const readBuilderOperationDeadlines = async (
   }
   return deadlines;
 };
+
+/**
+ * Completes a journey's claimed flow receipt with the outputs it reports, inside the given
+ * transaction. Only the transaction that reaches the journey's target calls it.
+ */
+export type StoreReceiptCompletion = (
+  transaction: RequestDatabaseTransaction,
+  value: Readonly<Record<string, JsonValue>>,
+) => Promise<void>;
+
+/** A receipt completion already bound to the value its journey reports. */
+export type ReceiptStep = (transaction: RequestDatabaseTransaction) => Promise<void>;

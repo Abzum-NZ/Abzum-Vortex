@@ -64,7 +64,11 @@ import type { ProtectedOperationDescriptor } from "./application-flow-bindings";
 import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
 import type { createOrganizationAccessAdministrationService } from "../access/organization-access-administration-access";
-import type { ApplicationStoreService } from "./installation-application-store";
+import type {
+  ApplicationStoreService,
+  StoreReceiptCompletion,
+} from "./installation-application-store";
+import { completeClaimedSegment, type FlowReceiptClaim } from "../workflows/start";
 import { z } from "zod";
 import { assignRoleAssignment, prepareRoleAssignment } from "./role-assignment-operation";
 import { protectedOperationMetadata } from "./protected-operation-metadata";
@@ -131,6 +135,7 @@ type ProtectedOperationValue = JsonValue;
 type ProtectedOperationFailure =
   | Readonly<{ outcome: "refused" | "validation"; diagnostic?: FlowRefusalFeedback }>
   | Readonly<{ outcome: "conflict"; diagnostic?: FlowRefusalFeedback }>
+  | Readonly<{ outcome: "uncertain" }>
   | Readonly<{ outcome: "failed" }>;
 
 type ProtectedOperationExecution =
@@ -225,6 +230,11 @@ type ProtectedOperationServices = Readonly<{
    * supplies them; without them those operations are refused like any unavailable one.
    */
   applicationStore?: ApplicationStoreService;
+  /**
+   * The pending receipt of the multi-transaction segment this executor runs for; an operation that
+   * reaches its target in its own transaction completes it there.
+   */
+  receipt?: FlowReceiptClaim;
 }>;
 
 type ProtectedOperationExecutorDependencies = ProtectedOperationServices;
@@ -233,6 +243,7 @@ type ProtectedOperationCaller = Readonly<{
   session: IdentitySession;
   selection: OrganizationSelectionCandidate;
   effectKey?: ProtectedOperationEffectKey;
+  descriptor: ProtectedOperationDescriptor;
 }>;
 
 type TenantOrganizationMutationResult =
@@ -248,7 +259,11 @@ type ConfirmedOperationFailure = Readonly<{
 }>;
 
 type OperationResult =
-  HumanOrganizationRequestResult<Outputs> | "validation" | "conflict" | ConfirmedOperationFailure;
+  | HumanOrganizationRequestResult<Outputs>
+  | "validation"
+  | "conflict"
+  | "uncertain"
+  | ConfirmedOperationFailure;
 
 type OperationRunner = (
   services: ProtectedOperationExecutorDependencies,
@@ -352,13 +367,46 @@ const operation = <Schema extends z.ZodType>(definition: {
     },
   });
 
-/** One application catalogue journey, run by the installation service under the person's own authority. */
-const applicationStoreOperation = (journey: keyof ApplicationStoreService): Operation =>
+/** A read-only application catalogue review, run under the person's own authority. */
+const applicationStoreReview = (journey: "review" | "reviewRemoval"): Operation =>
   Object.freeze({
     execute: async (services, caller, inputs) => {
       const store = services.applicationStore;
       if (store === undefined) return { kind: "unavailable" };
       return store[journey](caller.session, caller.selection, inputs);
+    },
+  });
+
+/**
+ * One application catalogue journey that changes the installation. It receives the means to
+ * complete the claimed receipt with its own reported outputs, in the transaction that reaches its
+ * target.
+ */
+const applicationStoreJourney = (journey: "install" | "upgrade" | "remove"): Operation =>
+  Object.freeze({
+    execute: async (services, caller, inputs) => {
+      const store = services.applicationStore;
+      if (store === undefined) return { kind: "unavailable" };
+      const { receipt } = services;
+      const { effectKey, descriptor } = caller;
+      const completion: StoreReceiptCompletion | undefined =
+        receipt === undefined || effectKey === undefined
+          ? undefined
+          : async (transaction, produced) => {
+              const outputs = declaredOutputs(descriptor, produced);
+              if (outputs === undefined) throw new Error("STORE_RECEIPT_OUTPUTS_INVALID");
+              await completeClaimedSegment(transaction, receipt, {
+                [JSON.stringify([effectKey.taskPath, effectKey.iteration])]: {
+                  outcome: "committed",
+                  replay: {
+                    kind: "task_result",
+                    outcome: "committed",
+                    outputs: { result: outputs },
+                  },
+                },
+              });
+            };
+      return store[journey](caller.session, caller.selection, inputs, completion);
     },
   });
 
@@ -1179,11 +1227,11 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
       };
     },
   }),
-  review_application_installation: applicationStoreOperation("review"),
-  install_application: applicationStoreOperation("install"),
-  upgrade_application: applicationStoreOperation("upgrade"),
-  review_application_removal: applicationStoreOperation("reviewRemoval"),
-  remove_application: applicationStoreOperation("remove"),
+  review_application_installation: applicationStoreReview("review"),
+  install_application: applicationStoreJourney("install"),
+  upgrade_application: applicationStoreJourney("upgrade"),
+  review_application_removal: applicationStoreReview("reviewRemoval"),
+  remove_application: applicationStoreJourney("remove"),
 } satisfies Record<PlatformServiceOperationKey, Operation>);
 
 /** A value of a declared type the executor does not carry yet is refused, never coerced. */
@@ -1302,11 +1350,13 @@ export const createProtectedOperationExecutor = (
           session: session.data,
           selection: selection.data,
           ...(request.effectKey === undefined ? {} : { effectKey: request.effectKey }),
+          descriptor: registered.descriptor,
         },
         checkedInputs.inputs,
       );
       if (result === "validation") return { outcome: "validation" };
       if (result === "conflict") return { outcome: "conflict" };
+      if (result === "uncertain") return { outcome: "uncertain" };
       if (result.kind === "confirmed_failure")
         return { outcome: result.outcome, diagnostic: result.diagnostic };
       if (result.kind === "unavailable") {
