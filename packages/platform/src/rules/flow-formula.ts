@@ -404,7 +404,10 @@ const dateDiff = (
 const isEmpty = (candidate: FlowRuntimeValue): boolean =>
   candidate.value === null ||
   candidate.value === "" ||
-  (Array.isArray(candidate.value) && candidate.value.length === 0);
+  (Array.isArray(candidate.value) && candidate.value.length === 0) ||
+  (typeof candidate.value === "object" &&
+    !Array.isArray(candidate.value) &&
+    Object.keys(candidate.value).length === 0);
 
 export const flowJsonValuesEqual = (left: JsonValue, right: JsonValue): boolean => {
   if (left === right) return true;

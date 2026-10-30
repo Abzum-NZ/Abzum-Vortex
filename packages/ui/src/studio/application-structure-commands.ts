@@ -39,7 +39,8 @@ import {
   type StudioStructureContext,
   type StudioStructureResult,
 } from "./application-structure-common";
-import { addRecordPage, type StudioRecordPageCommand } from "./application-record-pages";
+import { addRecordPage } from "./application-record-pages";
+import type { StudioRecordPageCommand } from "./application-record-page-kinds";
 import { movePage, type StudioPageLayoutCommand } from "./application-page-layout";
 import { editLayoutOutlet, type StudioLayoutOutletCommand } from "./application-layout-outlets";
 import { applyStudioMenuCommand } from "./application-menu-commands";

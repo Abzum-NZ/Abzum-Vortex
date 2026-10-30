@@ -82,24 +82,6 @@ export async function driveServerFlow(
         case "unknown":
           return response;
         case "result": {
-          if (
-            response.warnings.length > 0 &&
-            (response.descriptor.commit === "confirmed" || response.descriptor.commit === "partial")
-          ) {
-            // The authored warnings of a committed save come first, before a Navigate intent can
-            // replace the page that saved; the page reports the outcome itself once the run ends.
-            awaitingSurface = true;
-            await host.showMessage(
-              {
-                title: "Saved, with a warning",
-                target: "dialog",
-                text: response.warnings.map((warning) => warning.message).join(" "),
-                severity: "warning",
-              },
-              signal,
-            );
-            awaitingSurface = false;
-          }
           for (const intent of response.intents) {
             if (signal?.aborted) return abandoned();
             // A success message of a run that ended refused or failed described an outcome that
