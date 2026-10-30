@@ -5,12 +5,18 @@ import { containedComponentIdSchema, recordIdSchema, revisionSchema } from "../c
 import { flowIdSchema } from "../catalogue/identifiers";
 import { jsonValueSchema } from "../catalogue/common";
 
+const entrySegmentsSchema = z.array(z.object({
+  segmentId: z.string().min(1).max(200),
+  fingerprint: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+}).strict()).max(500);
+
 const runStartInvocationSchema = z
   .object({
     kind: z.literal("run_start"),
     bindingId: containedComponentIdSchema,
     flowId: flowIdSchema,
     clickId: z.uuid(),
+    entrySegments: entrySegmentsSchema,
     sourceTablePlacementId: containedComponentIdSchema.optional(),
   })
   .strict();
@@ -22,10 +28,7 @@ const bindingInvocationSchema = z
     flowId: flowIdSchema,
     /** A row form's source table; the gate revalidates it and the subject against that table. */
     sourceTablePlacementId: containedComponentIdSchema.optional(),
-    entrySegments: z.array(z.object({
-      segmentId: z.string().min(1).max(200),
-      fingerprint: z.string().regex(/^sha256:[0-9a-f]{64}$/),
-    }).strict()).max(500),
+    entrySegments: entrySegmentsSchema,
     segment: z.object({
       segmentId: z.string().min(1).max(200),
       fingerprint: z.string().regex(/^sha256:[0-9a-f]{64}$/),

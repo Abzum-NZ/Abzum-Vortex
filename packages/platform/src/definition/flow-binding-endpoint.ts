@@ -134,8 +134,11 @@ export type FlowBindingEndpointDependencies = Readonly<{
     selection: OrganizationSelectionCandidate,
     binding: ComponentFlowBinding,
     installation: InstalledFlowBindings,
+    request: Extract<FlowBindingInvocation, { kind: "run_start" }>,
   ) => Promise<
-    Readonly<{ kind: "run_opened"; carriedValues: string }> | Readonly<{ kind: "refused" }>
+    | Readonly<{ kind: "run_opened"; carriedValues: string }>
+    | Readonly<{ kind: "reload"; installationRevision: number }>
+    | Readonly<{ kind: "refused" }>
   >;
   /**
    * The orchestrator bound to exactly this release. `runId` is the binding start's, so a
@@ -828,7 +831,13 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
             return refuse("FLOW_INVOKE_BINDING_FLOW_MISMATCH");
           return dependencies.openRun === undefined
             ? refuse("FLOW_INVOKE_RUN_START_UNAVAILABLE")
-            : await dependencies.openRun(session.data, selection.data, matches[0]!, installation);
+            : await dependencies.openRun(
+                session.data,
+                selection.data,
+                matches[0]!,
+                installation,
+                request,
+              );
         }
 
         const release: FlowRelease = {

@@ -65,7 +65,7 @@ export type ServerFlowResponse =
 
 export type FlowInvokeClient = Readonly<{
   openRun: (
-    binding: Pick<PlacementFlowBinding, "bindingId" | "flowId">,
+    binding: Pick<PlacementFlowBinding, "bindingId" | "flowId" | "entrySegments">,
     clickId: string,
     signal?: AbortSignal,
     sourceTablePlacementId?: string,
@@ -311,6 +311,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
           kind: "run_start",
           bindingId: binding.bindingId,
           flowId: binding.flowId,
+          entrySegments: [...binding.entrySegments],
           clickId,
           ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
         },
