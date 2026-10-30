@@ -38,6 +38,7 @@ const pageStepImplementations = {
   "interface.set_panel": presentation,
   "interface.set_filter": presentation,
   "interface.set_value": presentation,
+  "interface.validate_form": presentation,
 } satisfies Record<PageIntentStepType, PageStepImplementation>;
 
 /** The same page implementations handle both local steps and server-returned intents. */

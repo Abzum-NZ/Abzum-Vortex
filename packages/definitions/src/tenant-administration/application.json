@@ -2094,96 +2094,6 @@
         "outputs": {},
         "errors": [],
         "finally": []
-      },
-      {
-        "id": "flow_open_tenant_organization",
-        "key": "open_tenant_organization",
-        "labels": {
-          "name": "Open organisation details"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "organization_id": {
-            "type": "record_reference",
-            "required": true,
-            "recordTypeIds": ["vortex.system_directory:organization"]
-          }
-        },
-        "variables": {},
-        "triggers": [],
-        "tasks": [
-          {
-            "id": "open_detail",
-            "type": "interface.navigate",
-            "version": "1.0.0",
-            "properties": {
-              "page": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "tenant_organization_detail"
-                }
-              },
-              "parameters": {
-                "kind": "map",
-                "entries": {
-                  "record_id": "{{ inputs.organization_id }}"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {},
-        "errors": [],
-        "finally": []
-      },
-      {
-        "id": "flow_open_tenant_administrator",
-        "key": "open_tenant_administrator",
-        "labels": {
-          "name": "Open tenant administrator details"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "tenant_administrator_id": {
-            "type": "record_reference",
-            "required": true,
-            "recordTypeIds": ["vortex.system_directory:tenant_administrator"]
-          }
-        },
-        "variables": {},
-        "triggers": [],
-        "tasks": [
-          {
-            "id": "open_detail",
-            "type": "interface.navigate",
-            "version": "1.0.0",
-            "properties": {
-              "page": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "tenant_administrator_detail"
-                }
-              },
-              "parameters": {
-                "kind": "map",
-                "entries": {
-                  "record_id": "{{ inputs.tenant_administrator_id }}"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {},
-        "errors": [],
-        "finally": []
       }
     ],
     "flow_bindings": [
@@ -2194,7 +2104,7 @@
         "event": "row_clicked",
         "flow": "flow_open_tenant_organization",
         "inputs": {
-          "organization_id": {
+          "record_id": {
             "kind": "caller",
             "name": "record_id"
           }
@@ -2214,7 +2124,7 @@
         "event": "row_clicked",
         "flow": "flow_open_tenant_organization",
         "inputs": {
-          "organization_id": {
+          "record_id": {
             "kind": "caller",
             "name": "record_id"
           }
@@ -2234,7 +2144,7 @@
         "event": "row_clicked",
         "flow": "flow_open_tenant_administrator",
         "inputs": {
-          "tenant_administrator_id": {
+          "record_id": {
             "kind": "caller",
             "name": "record_id"
           }

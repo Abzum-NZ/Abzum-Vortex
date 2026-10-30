@@ -88,6 +88,7 @@ export function createFlowRuntimeState(
     Readonly<{
       read: (fieldKey: string) => TypedFieldValue | undefined;
       write: (fieldKey: string, value: unknown, cycle: FlowEventCycle) => boolean;
+      validate: () => boolean;
     }>
   >();
   const notify = (controlId: string) => listeners.get(controlId)?.forEach((listener) => listener());
@@ -141,10 +142,11 @@ export function createFlowRuntimeState(
       formId: string,
       read: (fieldKey: string) => TypedFieldValue | undefined,
       write: (fieldKey: string, value: unknown, cycle: FlowEventCycle) => boolean,
+      validate: () => boolean,
     ) => {
       const key = formId.toLowerCase();
       if (forms.has(key)) throw new Error(`Form '${formId}' is registered more than once`);
-      const form = { read, write };
+      const form = { read, write, validate };
       forms.set(key, form);
       for (const fieldKey of Object.keys(formTypes[formId] ?? {}))
         notify(`form:${key}:${fieldKey}`);
@@ -160,6 +162,7 @@ export function createFlowRuntimeState(
       forms.get(formId.toLowerCase())?.read(fieldKey),
     writeFormValue: (formId: string, fieldKey: string, value: unknown, cycle: FlowEventCycle) =>
       forms.get(formId.toLowerCase())?.write(fieldKey, value, cycle) ?? false,
+    validateForm: (formId: string) => forms.get(formId.toLowerCase())?.validate() ?? false,
     cycleFor: (gestureId: string) => cycles.get(gestureId)?.cycle,
     trackCycle: (gestureId: string, cycle: FlowEventCycle) => {
       const held = { cycle };

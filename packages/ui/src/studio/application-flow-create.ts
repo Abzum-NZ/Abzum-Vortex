@@ -9,7 +9,8 @@ import {
   authoredRecordsTableEventAvailable,
   builderKeySchema,
   defaultFlowBindingSettings,
-  defaultSaveFlowSource,
+  defaultChangeFlowSource,
+  defaultOperationFlowSource,
   sourceItemTree,
   sourcePageItems,
   validateFlow,
@@ -151,8 +152,20 @@ export type StudioFlowCreateCommand =
       inputs: SourceFlow["inputs"];
       tasks: SourceFlow["tasks"];
       outputs: SourceFlow["outputs"];
+      /** The tasks that run when the flow fails; none when absent. */
+      errors?: SourceFlow["errors"];
       bindingInputs: SourceBinding["inputs"];
       rowActionLabel?: string;
+    }>
+  /** A flow no control starts, such as the one a message's Undo runs. */
+  | Readonly<{
+      kind: "flow";
+      name: string;
+      description: string;
+      inputs: SourceFlow["inputs"];
+      tasks: SourceFlow["tasks"];
+      outputs: SourceFlow["outputs"];
+      errors?: SourceFlow["errors"];
     }>
   | Readonly<{
       kind: "bind";
@@ -452,7 +465,7 @@ const interactiveFlow = (
   key: string,
   name: string,
   parts: Pick<SourceFlow, "inputs" | "tasks" | "outputs"> &
-    Readonly<{ description?: string; recordInput?: string }>,
+    Readonly<{ description?: string; recordInput?: string; errors?: SourceFlow["errors"] }>,
 ): SourceFlow => ({
   id: key,
   key,
@@ -466,7 +479,7 @@ const interactiveFlow = (
   triggers: [],
   tasks: parts.tasks,
   outputs: parts.outputs,
-  errors: [],
+  errors: parts.errors ?? [],
   finally: [],
 });
 
@@ -487,7 +500,13 @@ const created = (
           : `The new flow is not valid: ${first.message} (${first.path.map(String).join(", ")}).`,
     };
   }
-  const issue = validateFlow(flow)[0];
+  const issue = validateFlow(flow, {
+    targetFlow: (reference) =>
+      [
+        ...parsed.data.body.flows,
+        ...parsed.data.body.modules.flatMap((module) => module.flows),
+      ].find((entry) => entry.id === reference || entry.key === reference),
+  })[0];
   if (issue !== undefined)
     return {
       kind: "refused",
@@ -564,7 +583,7 @@ export const applyStudioFlowCreate = (
     const name = uniqueFlowName(
       candidate,
       wantedName,
-      command.kind === "before_save" ? undefined : command.controlAlias,
+      command.kind === "before_save" || command.kind === "flow" ? undefined : command.controlAlias,
     );
     if (command.kind === "before_save") {
       if (!command.message.trim())
@@ -721,7 +740,7 @@ export const applyStudioFlowCreate = (
         reason: "No free name could be made for this flow. Choose another name.",
       };
     let flow: SourceFlow;
-    let binding: Readonly<{ id: string; eventId: string }>;
+    let binding: Readonly<{ id: string; eventId: string }> | undefined;
     if (
       command.kind === "action" &&
       command.recordType !== null &&
@@ -730,13 +749,7 @@ export const applyStudioFlowCreate = (
       // A board's card move and a table's inline edit each save the changed value of one record
       // through the one Save record task: the record and the changed field with its new value.
       flow = {
-        ...defaultSaveFlowSource({
-          id: key,
-          key,
-          recordType: command.recordType,
-          mode: "update",
-          ownershipMode: "none",
-        }),
+        ...defaultChangeFlowSource({ id: key, key, recordType: command.recordType }),
         labels: { name },
         recordInput: "record",
       };
@@ -796,14 +809,15 @@ export const applyStudioFlowCreate = (
           .find((entry) => entry.key === step.operation);
         if (operation === undefined)
           return refuse("That operation is no longer in the application.");
-        flow.tasks = [
-          {
-            id: "run_operation",
-            type: "operation.call",
-            version: "1.0.0",
-            properties: studioOperationCallProperties(flow, operation),
-          },
-        ];
+        // The default for a named action: call it, say it was done, refresh the page's data.
+        const properties = studioOperationCallProperties(flow, operation);
+        flow.tasks = defaultOperationFlowSource({
+          id: key,
+          key,
+          operation: operation.key,
+          inputs: {},
+          done: `${operation.label} done.`,
+        }).tasks.map((task) => (task.id === "call" ? { ...task, properties } : task));
       }
       if (command.event === "form_submit") {
         flow.inputs = { ...flow.inputs, values: { type: "json", required: true } };
@@ -834,16 +848,20 @@ export const applyStudioFlowCreate = (
         inputs: command.inputs,
         tasks: command.tasks,
         outputs: command.outputs,
+        ...(command.errors === undefined ? {} : { errors: command.errors }),
       });
-      binding = bindControl(
-        candidate,
-        command.controlAlias,
-        command.event,
-        key,
-        command.bindingInputs,
-        borrowed,
-        command.rowActionLabel,
-      );
+      binding =
+        command.kind === "flow"
+          ? undefined
+          : bindControl(
+              candidate,
+              command.controlAlias,
+              command.event,
+              key,
+              command.bindingInputs,
+              borrowed,
+              command.rowActionLabel,
+            );
     }
     body.flows.push(flow);
     return created(candidate, flow, null, binding);

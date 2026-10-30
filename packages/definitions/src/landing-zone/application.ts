@@ -11,4 +11,5 @@ export const landingZoneApplication: ApplicationSourceDocument = loadApplication
   authoredSource,
   DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
   landingZoneModules,
+  [],
 );

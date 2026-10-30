@@ -3,8 +3,12 @@ import {
   DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY,
   DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
+  defaultDeleteFlowSource,
+  defaultOpenFlowSource,
   defaultOperationFlowSource,
+  defaultRestoreFlowSource,
   defaultSaveFlowSource,
+  recordsTableRowActionsFeature,
   type ApplicationSourceDocument,
   type PlatformBlockReleaseIdentity,
   type SourceItemVortex,
@@ -44,7 +48,10 @@ const readIncidentsPage = "application.operations.incident.read";
 const createIncidentPage = "application.operations.incident.create";
 const attachAction = "vortex.operations.incidents.incident.attach";
 const attachIncidentView = "application.operations.incident.attach";
+const deleteIncidentView = "application.operations.incident.delete";
 const incidentActionEventId = "event_operations_incident_action";
+const incidentDeleteRowEventId = "event_operations_incident_delete_row";
+const deleteIncidentButton = "button_operations_incident_delete";
 const incidentRowClickEventId = "event_operations_open_incident";
 
 /**
@@ -75,6 +82,7 @@ const incidentOperations = [
     name: "Acknowledge incident",
     label: "Acknowledge",
     variant: "primary",
+    done: "Incident acknowledged.",
     description:
       "Acknowledges the current open incident through the bound incident.acknowledge named action.",
   },
@@ -88,6 +96,13 @@ const incidentOperations = [
     name: "Escalate incident",
     label: "Escalate",
     variant: "danger",
+    done: "Incident escalated.",
+    confirm: {
+      title: "Escalate this incident?",
+      message: "The incident goes to its owning role.",
+      confirmLabel: "Escalate",
+      destructive: true,
+    },
     description:
       "Escalates the current open incident to its owning role through the bound incident.escalate named action.",
   },
@@ -101,6 +116,7 @@ const incidentOperations = [
     name: "Resolve incident",
     label: "Resolve",
     variant: "secondary",
+    done: "Incident resolved.",
     description:
       "Resolves the current open incident through the bound incident.resolve named action.",
   },
@@ -259,7 +275,19 @@ const pages = [
         TABLE_BLOCK_RELEASE,
         {
           empty_message: "No open incidents",
-          features: { pinning: { enabled: true }, spreadsheet: { enabled: false } },
+          features: {
+            pinning: { enabled: true },
+            spreadsheet: { enabled: false },
+            [recordsTableRowActionsFeature.key]: { enabled: true },
+          },
+          row_actions: [
+            {
+              event_id: incidentDeleteRowEventId,
+              label: "Delete",
+              icon: "workflow",
+              placement: "menu",
+            },
+          ],
           columns: incidentColumns.map(([field, label], index) => ({
             field: `${incidentRecordType}.${field}`,
             label,
@@ -290,12 +318,13 @@ const pages = [
         { text: "Incident", level: "two" },
         {
           actions: slot(
-            Object.fromEntries(
-              incidentOperations.map((operation) => [
+            Object.fromEntries([
+              ...incidentOperations.map((operation) => [
                 operation.button,
                 actionButton(operation.label, operation.variant, operation.viewPermission),
               ]),
-            ),
+              [deleteIncidentButton, actionButton("Delete", "danger", deleteIncidentView)],
+            ]),
           ),
         },
       ),
@@ -544,6 +573,15 @@ export const operationsApplication: ApplicationSourceDocument =
           named_action: "incident_attach",
           administrative: false,
         },
+        {
+          id: "app_permission_operations_incident_delete",
+          key: deleteIncidentView,
+          label: "See the Delete action",
+          description: "Allows seeing the Delete button on an incident page.",
+          action_kind: "named" as const,
+          named_action: "incident_delete",
+          administrative: false,
+        },
         ...incidentOperations.map((operation) => ({
           id: operation.viewPermissionAlias,
           key: operation.viewPermission,
@@ -573,6 +611,7 @@ export const operationsApplication: ApplicationSourceDocument =
             "vortex.operations.incidents.incident.export",
             attachAction,
             attachIncidentView,
+            deleteIncidentView,
             ...incidentOperations.flatMap((operation) => [
               operation.action,
               operation.viewPermission,
@@ -648,6 +687,14 @@ export const operationsApplication: ApplicationSourceDocument =
           personal_or_sensitive_values_allowed: false,
         },
         {
+          id: incidentDeleteRowEventId,
+          key: "vortex.app.events.vortex_app_operations_delete_row",
+          label: "Delete incident",
+          record_type: incidentRecordType,
+          carries: [],
+          personal_or_sensitive_values_allowed: false,
+        },
+        {
           id: incidentRowClickEventId,
           key: "vortex.app.events.vortex_app_operations_open_incident",
           label: "Open incident",
@@ -669,37 +716,14 @@ export const operationsApplication: ApplicationSourceDocument =
         {
           // Clicking an incident row opens its own detail page with the record identity the row
           // carries, so the page subject is read through the normal record read path.
-          id: openIncidentRowClick.flow,
-          key: openIncidentRowClick.flow,
-          description: openIncidentRowClick.description,
+          ...defaultOpenFlowSource({
+            id: openIncidentRowClick.flow,
+            key: openIncidentRowClick.flow,
+            description: openIncidentRowClick.description,
+            page: "operations_incident_detail",
+            recordType: incidentRecordType,
+          }),
           labels: { name: openIncidentRowClick.label },
-          execution: "interactive",
-          runAs: { kind: "initiator" },
-          inputs: {
-            record_id: {
-              type: "record_reference",
-              required: true,
-              recordTypeIds: [incidentRecordType],
-            },
-          },
-          tasks: [
-            {
-              id: "open_detail",
-              type: "interface.navigate",
-              version: "1.0.0",
-              properties: {
-                page: {
-                  kind: "literal",
-                  literal: { type: "text", value: "operations_incident_detail" },
-                },
-                parameters: {
-                  kind: "map",
-                  entries: { record_id: "{{ inputs.record_id }}" },
-                },
-              },
-            },
-          ],
-          outputs: {},
         },
         {
           ...defaultSaveFlowSource({
@@ -710,8 +734,46 @@ export const operationsApplication: ApplicationSourceDocument =
             recordType: incidentRecordType,
             mode: "create",
             ownershipMode: "none",
+            form: createForm,
+            after: { kind: "navigate", page: "operations_incident_detail", withRecord: true },
           }),
           labels: { name: "Create incident" },
+        },
+        {
+          ...defaultDeleteFlowSource({
+            id: "operations_delete_incident",
+            key: "operations_delete_incident",
+            description: "Deletes the incident of the clicked row after asking, and offers Undo.",
+            recordType: incidentRecordType,
+            recordName: "incident",
+            restoreFlow: "operations_restore_incident",
+            after: { kind: "refresh" },
+          }),
+          labels: { name: "Delete incident" },
+        },
+        {
+          ...defaultDeleteFlowSource({
+            id: "operations_delete_open_incident",
+            key: "operations_delete_open_incident",
+            description:
+              "Deletes the open incident after asking, offers Undo and returns to the incident list.",
+            recordType: incidentRecordType,
+            recordName: "incident",
+            restoreFlow: "operations_restore_incident",
+            after: { kind: "navigate", page: "operations_incidents", withRecord: false },
+          }),
+          labels: { name: "Delete open incident" },
+        },
+        {
+          ...defaultRestoreFlowSource({
+            id: "operations_restore_incident",
+            key: "operations_restore_incident",
+            description: "Brings a deleted incident back; the Undo of the Deleted message runs it.",
+            recordType: incidentRecordType,
+            recordName: "incident",
+            after: { kind: "refresh" },
+          }),
+          labels: { name: "Restore incident" },
         },
         {
           ...defaultOperationFlowSource({
@@ -734,6 +796,8 @@ export const operationsApplication: ApplicationSourceDocument =
             description: operation.description,
             operation: operation.action,
             inputs: {},
+            done: operation.done,
+            ...("confirm" in operation ? { confirm: operation.confirm } : {}),
           }),
           labels: { name: operation.name },
         })),
@@ -759,6 +823,24 @@ export const operationsApplication: ApplicationSourceDocument =
             evidence: { kind: "caller", name: "evidence" },
           },
           settings: defaultFlowBindingSettings("form_submit"),
+        },
+        {
+          id: "row_binding_operations_delete_incident",
+          control: "operations_incidents_table",
+          event_id: incidentDeleteRowEventId,
+          event: "row_action" as const,
+          flow: "operations_delete_incident",
+          inputs: { record_id: { kind: "caller" as const, name: "record_id" } },
+          settings: defaultFlowBindingSettings("row_action"),
+        },
+        {
+          id: "button_binding_operations_delete_open_incident",
+          control: deleteIncidentButton,
+          event_id: incidentActionEventId,
+          event: "action" as const,
+          flow: "operations_delete_open_incident",
+          inputs: { record_id: { kind: "caller" as const, name: "record_id" } },
+          settings: defaultFlowBindingSettings("action"),
         },
         // Clicking an incident row starts the one flow that opens that incident's detail page,
         // with the record identity the row carries as its only input.

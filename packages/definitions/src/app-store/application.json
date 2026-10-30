@@ -2780,51 +2780,6 @@
         "finally": []
       },
       {
-        "id": "flow_open_store_application",
-        "key": "open_store_application",
-        "labels": {
-          "name": "Open application details"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "application_root_id": {
-            "type": "record_reference",
-            "required": true,
-            "recordTypeIds": ["vortex.app_store:store_application"]
-          }
-        },
-        "variables": {},
-        "triggers": [],
-        "tasks": [
-          {
-            "id": "open_detail",
-            "type": "interface.navigate",
-            "version": "1.0.0",
-            "properties": {
-              "page": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "app_store_application"
-                }
-              },
-              "parameters": {
-                "kind": "map",
-                "entries": {
-                  "record_id": "{{ inputs.application_root_id }}"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {},
-        "errors": [],
-        "finally": []
-      },
-      {
         "id": "flow_remove_application",
         "key": "remove_application",
         "description": "Removes an installed ordinary application after confirming the retained records and withdrawn access.",
@@ -3502,7 +3457,7 @@
         "event": "row_clicked",
         "flow": "flow_open_store_application",
         "inputs": {
-          "application_root_id": {
+          "record_id": {
             "kind": "caller",
             "name": "record_id"
           }
