@@ -452,13 +452,16 @@ export const changeInlineModuleField = (
       };
     wasPersonLink = isPersonLink(field);
     if (publication.fields.has(`${qualifiedRecord}.${field.key}`)) {
-      // The display name is editable even after publication; stored relationship settings are fixed.
+      // The display name and the source of the offered options are editable even after publication
+      // (which values are offered is behaviour); stored relationship settings are fixed.
       const storedSettings = (value: Readonly<Record<string, unknown>>) =>
         Object.fromEntries(
-          Object.entries(value).filter(([key]) =>
-            change.type === "calculation"
-              ? ["result_type", "decimal_places", "evaluation"].includes(key)
-              : change.type !== "link" || key !== "reverse_name",
+          Object.entries(value).filter(
+            ([key]) =>
+              key !== "options_source" &&
+              (change.type === "calculation"
+                ? ["result_type", "decimal_places", "evaluation"].includes(key)
+                : change.type !== "link" || key !== "reverse_name"),
           ),
         );
       const fixed = [

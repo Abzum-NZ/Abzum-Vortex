@@ -363,8 +363,10 @@ const setFieldsSeed = (
       (candidate.type === "text" || candidate.type === "long_text") &&
       changeable.has(candidate.key),
   );
-  // A flow that names its record keeps the field's current value until the builder changes it;
-  // otherwise an optional field starts empty.
+  // A flow that names its record keeps the field's current value until the builder changes it; a
+  // save transaction has no triggering record to read, and otherwise an optional field starts empty.
+  if (flow.execution === "transaction" && fields[0] !== undefined)
+    return { kind: "map", entries: { [fields[0].key]: text("") } };
   if (flow.recordInput !== undefined && fields[0] !== undefined)
     return {
       kind: "map",
