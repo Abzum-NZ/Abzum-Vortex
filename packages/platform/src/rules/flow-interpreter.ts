@@ -9,8 +9,16 @@ import {
   iterationKey,
   pathKey,
   observe,
+  advanceFrame,
+  declaredOutputs,
+  failActivation,
+  pushFrame,
+  storeTaskOutputs,
+  stringOutcomeOutputs,
+  withFrames,
   type PathSegment,
 } from "./flow-interpreter-state";
+import { serverRuns } from "./flow-server-step-runners";
 import { formattedTaskValue, recordLinkTaskValue } from "./flow-data-tasks";
 import { typedValueMatchesType } from "./condition-types";
 import { flowPathGuardMatches } from "./flow-path-guard";
@@ -34,7 +42,6 @@ import {
 import {
   flowTaskRegistry,
   type PageStepType,
-  type ServerStepType,
 } from "../workflows/flow-task-registry";
 import {
   flowMaximumTaskOutputPathDepth,
@@ -114,7 +121,7 @@ export type FlowRuntimeValues = Readonly<Record<string, FlowRuntimeValue>>;
 /** The page subject and revision the host supplied as evidence for this run. */
 export type FlowSubject = Readonly<{ recordId: string; revision: number }>;
 
-type Frame = Readonly<{
+export type Frame = Readonly<{
   /** Address of the task list inside the activation's flow. */
   path: readonly PathSegment[];
   /** The next task to run in that list. */
@@ -125,7 +132,7 @@ type Frame = Readonly<{
 
 type Phase = "tasks" | "errors" | "finally";
 
-type Activation = Readonly<{
+export type Activation = Readonly<{
   flowId: string;
   /** The call chain that reached this flow, so every task path is unique within the run. */
   prefix: string;
@@ -297,7 +304,6 @@ export type FlowSegmentReplay = Readonly<
 
 const maximumSteps = 10_000;
 const typed = (type: string, value: JsonValue): FlowRuntimeValue => ({ type, value });
-const text = (value: string): FlowRuntimeValue => typed("text", value);
 
 const clone = <Value>(input: Value): Value => JSON.parse(JSON.stringify(input)) as Value;
 
@@ -503,31 +509,6 @@ const replaceTop = (machine: Machine, next: Activation): void => {
 const flowOf = (machine: Machine, activation: Activation): FlowDefinition =>
   machine.library(activation.flowId) ?? failed("flow_unavailable", "failed");
 
-const withFrames = (activation: Activation, frames: readonly Frame[]): Activation => ({
-  ...activation,
-  frames,
-});
-
-const advanceFrame = (activation: Activation): Activation =>
-  withFrames(activation, [
-    ...activation.frames.slice(0, -1),
-    {
-      ...activation.frames[activation.frames.length - 1]!,
-      index: activation.frames[activation.frames.length - 1]!.index + 1,
-    },
-  ]);
-
-const pushFrame = (activation: Activation, frame: Frame): Activation =>
-  withFrames(activation, [...activation.frames, frame]);
-
-/** Records the first failure of an activation and leaves the task list. */
-const failActivation = (activation: Activation, failure: FlowFailure): Activation => {
-  const recorded = activation.failure ?? failure;
-  return { ...activation, failure: recorded, frames: [] };
-};
-
-const stringOutcomeOutputs = (outcome: string): FlowRuntimeValues => ({ outcome: text(outcome) });
-
 /**
  * Ends the current phase's task list and starts the next: tasks, then errors (only after a
  * failure), then finally. Returns false when every phase is done.
@@ -581,34 +562,6 @@ const finishActivation = (machine: Machine, activation: Activation): FlowRunResu
   };
 };
 
-const storeTaskOutputs = (
-  activation: Activation,
-  taskId: string,
-  outputs: FlowRuntimeValues,
-): Activation => ({ ...activation, outputs: { ...activation.outputs, [taskId]: outputs } });
-
-const outputTypes = (taskType: string): Readonly<Record<string, string>> =>
-  Object.fromEntries(
-    (flowTaskRegistry[taskType as keyof typeof flowTaskRegistry]?.outputs ?? []).map((output) => [
-      output.key,
-      output.type,
-    ]),
-  );
-
-const declaredOutputs = (
-  taskType: string,
-  produced: Readonly<Record<string, JsonValue>> | undefined,
-): FlowRuntimeValues => {
-  const declared = outputTypes(taskType);
-  const outputs: Record<string, FlowRuntimeValue> = {};
-  for (const [key, type] of Object.entries(declared)) {
-    const value = produced?.[key];
-    if (value === undefined || value === null) continue;
-    if (typedValueMatchesType(value, type, "flow")) outputs[key] = typed(type, value);
-  }
-  return outputs;
-};
-
 /**
  * The page's implementation map: the intent the page performs for each step that runs in the page
  * today (`PageStepType`). The page runner's own map replaces it when page segments run in the page.
@@ -622,44 +575,6 @@ export const pageStepIntents = {
   "interface.set_panel": "set_panel",
   "interface.set_filter": "set_filter",
 } as const satisfies Record<PageStepType, FlowInterfaceIntent["kind"]>;
-
-/**
- * Which server runner executes each step that runs on the server today (`ServerStepType`): this
- * interpreter, the protected task runner (`definition/flow-task-runner.ts`), or a named action's
- * transaction flow (`rules/action-flow-run.ts`, which collects record steps into one change).
- */
-export type ServerStepRunner = "interpreter" | "protected_task" | "action_flow";
-export const serverStepRunners = {
-  if: "interpreter",
-  switch: "interpreter",
-  for_each: "interpreter",
-  sequential: "interpreter",
-  run_flow: "interpreter",
-  stop: "interpreter",
-  "data.calculate": "interpreter",
-  "data.record_link": "interpreter",
-  "data.format": "interpreter",
-  "data.set_variable": "interpreter",
-  "rule.require": "interpreter",
-  "rule.warn": "interpreter",
-  "rule.refuse": "interpreter",
-  "record.save": "protected_task",
-  "record.query": "protected_task",
-  "record.read_fields": "protected_task",
-  "record.pin_identity": "protected_task",
-  "operation.call": "protected_task",
-  "record.create": "protected_task",
-  "record.set_fields": "protected_task",
-  "record.delete": "protected_task",
-  "record.restore": "protected_task",
-  "record.link": "protected_task",
-  "record.changes": "protected_task",
-  "event.announce": "action_flow",
-} as const satisfies Record<ServerStepType, ServerStepRunner>;
-
-/** Whether the server runs this step with the given runner. */
-export const serverRuns = (type: string, runner: ServerStepRunner): boolean =>
-  Object.hasOwn(serverStepRunners, type) && serverStepRunners[type as ServerStepType] === runner;
 
 const branch = (
   machine: Machine,

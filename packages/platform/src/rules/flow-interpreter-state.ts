@@ -1,5 +1,11 @@
 import { describeFailure } from "../catalogue/runtime-primitives";
+import type { JsonValue } from "../catalogue/common";
+import { typedValueMatchesType } from "./condition-types";
+import type { FlowRuntimeValue } from "./flow-formula";
+import { flowTaskRegistry } from "../workflows/flow-task-registry";
 import type {
+  Activation,
+  Frame,
   FlowFailure,
   FlowFailureCode,
   FlowFailureOutcome,
@@ -108,3 +114,60 @@ export const observe = (
 };
 
 // ─── Values ───────────────────────────────────────────────────────────────────────────────────
+
+const typed = (type: string, value: JsonValue): FlowRuntimeValue => ({ type, value });
+
+export const withFrames = (activation: Activation, frames: readonly Frame[]): Activation => ({
+  ...activation,
+  frames,
+});
+
+export const advanceFrame = (activation: Activation): Activation =>
+  withFrames(activation, [
+    ...activation.frames.slice(0, -1),
+    {
+      ...activation.frames[activation.frames.length - 1]!,
+      index: activation.frames[activation.frames.length - 1]!.index + 1,
+    },
+  ]);
+
+export const pushFrame = (activation: Activation, frame: Frame): Activation =>
+  withFrames(activation, [...activation.frames, frame]);
+
+/** Records the first failure of an activation and leaves the task list. */
+export const failActivation = (activation: Activation, failure: FlowFailure): Activation => {
+  const recorded = activation.failure ?? failure;
+  return { ...activation, failure: recorded, frames: [] };
+};
+
+export const stringOutcomeOutputs = (outcome: string): FlowRuntimeValues => ({
+  outcome: typed("text", outcome),
+});
+
+export const storeTaskOutputs = (
+  activation: Activation,
+  taskId: string,
+  outputs: FlowRuntimeValues,
+): Activation => ({ ...activation, outputs: { ...activation.outputs, [taskId]: outputs } });
+
+const outputTypes = (taskType: string): Readonly<Record<string, string>> =>
+  Object.fromEntries(
+    (flowTaskRegistry[taskType as keyof typeof flowTaskRegistry]?.outputs ?? []).map((output) => [
+      output.key,
+      output.type,
+    ]),
+  );
+
+export const declaredOutputs = (
+  taskType: string,
+  produced: Readonly<Record<string, JsonValue>> | undefined,
+): FlowRuntimeValues => {
+  const declared = outputTypes(taskType);
+  const outputs: Record<string, FlowRuntimeValue> = {};
+  for (const [key, type] of Object.entries(declared)) {
+    const value = produced?.[key];
+    if (value === undefined || value === null) continue;
+    if (typedValueMatchesType(value, type, "flow")) outputs[key] = typed(type, value);
+  }
+  return outputs;
+};
