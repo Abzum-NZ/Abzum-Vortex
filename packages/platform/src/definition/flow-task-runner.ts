@@ -1237,11 +1237,23 @@ export const createFlowTaskRunner = (
     if (
       call.taskType === "record.read_fields" ||
       call.taskType === "record.pin_identity" ||
-      call.taskType === "form.save_draft" ||
-      call.taskType === "form.discard_draft" ||
       call.taskType === "record.query"
     )
       return { result: await runProtectedTask(run, state, call), replay: undefined, warnings: [] };
+    // A guided-form draft write is a change that is never a record write: no plan, ledger claim or
+    // record warnings, only the segment's receipt of its safe outcome.
+    if (call.taskType === "form.save_draft" || call.taskType === "form.discard_draft") {
+      const result = await runProtectedTask(run, state, call);
+      return {
+        result,
+        replay: {
+          kind: "task_result",
+          outcome: result.outcome,
+          ...(result.outputs === undefined ? {} : { outputs: result.outputs }),
+        },
+        warnings: [],
+      };
+    }
     if (run.selectedRecordReadSeen && call.taskType !== "record.save")
       return {
         result: { outcome: "refused" },

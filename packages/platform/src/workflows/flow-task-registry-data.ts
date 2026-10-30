@@ -329,7 +329,7 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     summary:
       "Checks one guided-form step's answers and saves them to the person's private draft, answering the step the form reaches.",
     runLocations: ["server"],
-    effect: "read",
+    effect: "change",
     properties: {
       draft_id: required("text"),
       revision: required("whole_number"),
@@ -342,15 +342,13 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       output("revision", "whole_number"),
       output("valid", "yes_no"),
     ],
-    redaction: "no_payload",
   },
   "form.discard_draft": {
     title: "Discard guided-form draft",
     summary: "Removes the person's private draft of a guided form.",
     runLocations: ["server"],
-    effect: "read",
+    effect: "change",
     properties: { draft_id: required("text"), revision: required("whole_number") },
-    redaction: "no_payload",
   },
   "operation.call": {
     title: "Call protected operation",

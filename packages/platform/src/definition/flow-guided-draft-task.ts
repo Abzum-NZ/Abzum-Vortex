@@ -26,7 +26,7 @@ export const runGuidedDraftTask = async (
   try {
     if (call.taskType === "form.discard_draft") {
       const discarded = await drafts.discard(session, selection, { draftId, revision });
-      if (discarded.outcome === "discarded") return { outcome: "completed", outputs: {} };
+      if (discarded.outcome === "discarded") return { outcome: "committed", outputs: {} };
       return { outcome: discarded.outcome === "conflict" ? "conflict" : "refused" };
     }
     const step = call.properties.step?.value;
@@ -48,7 +48,7 @@ export const runGuidedDraftTask = async (
     });
     if (saved.outcome === "saved")
       return {
-        outcome: "completed",
+        outcome: "committed",
         outputs: { step_id: saved.stepId, revision: saved.revision, valid: saved.valid },
       };
     return { outcome: saved.outcome === "conflict" ? "conflict" : "refused" };
