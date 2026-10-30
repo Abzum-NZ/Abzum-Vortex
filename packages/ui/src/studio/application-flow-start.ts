@@ -61,8 +61,19 @@ export type StudioFlowTriggerDraft =
       /** The record writes it covers; the order it runs in is its record type's rule list. */
       operations: readonly FlowBeforeSaveOperation[];
     }>
-  | Readonly<{ kind: "event"; recordType: string; eventKind: string }>
-  | Readonly<{ kind: "declared_event"; recordType: string; eventKey: string }>;
+  | Readonly<{
+      kind: "event";
+      recordType: string;
+      eventKind: string;
+      /** The other subscribers of this event that finish before this one runs (order only). */
+      runAfter: readonly string[];
+    }>
+  | Readonly<{
+      kind: "declared_event";
+      recordType: string;
+      eventKey: string;
+      runAfter: readonly string[];
+    }>;
 
 /** A control that starts the flow; `inputs` is keyed by the input's form identity (`StudioFlowInputDraft.id`). */
 export type StudioFlowBindingDraft = Readonly<{
@@ -86,6 +97,8 @@ export type StudioFlowStartProjection =
       kind: "available";
       draft: StudioFlowStartDraft;
       execution: SourceFlow["execution"];
+      /** The other back-end flows of this collection that start on an event, to run this one after. */
+      subscribers: readonly Readonly<{ key: string; label: string }>[];
       /** Declared events, each with its record type as this flow's triggers name it. */
       events: readonly Readonly<{ key: string; label: string; recordType: string }>[];
       /** For each binding, the values its control supplies by name. */
@@ -144,12 +157,18 @@ const triggerDraft = (trigger: FlowTrigger): StudioFlowTriggerDraft => {
       operations: trigger.operations.map((operation) => operation.kind),
     };
   if (trigger.type === "Event" && trigger.event.kind === "standard")
-    return { kind: "event", recordType: trigger.recordTypeId, eventKind: trigger.event.eventKind };
+    return {
+      kind: "event",
+      recordType: trigger.recordTypeId,
+      eventKind: trigger.event.eventKind,
+      runAfter: trigger.runAfter ?? [],
+    };
   if (trigger.type === "Event" && trigger.event.kind === "declared")
     return {
       kind: "declared_event",
       recordType: trigger.recordTypeId,
       eventKey: trigger.event.eventKey,
+      runAfter: trigger.runAfter ?? [],
     };
   throw new TypeError("The flow contains an unknown start type.");
 };
@@ -180,6 +199,16 @@ const renameInputReferences = (value: unknown, renames: ReadonlyMap<string, stri
   return Object.fromEntries(
     Object.entries(entry).map(([key, child]) => [key, renameInputReferences(child, renames)]),
   );
+};
+
+/** The run-after list of an event start, left out when it is empty. */
+const runAfterOf = (edited: Readonly<{ runAfter: readonly string[] }>) =>
+  edited.runAfter.length === 0 ? {} : { runAfter: [...edited.runAfter] };
+
+const withoutRunAfter = <Trigger extends { runAfter?: unknown }>(trigger: Trigger) => {
+  const { runAfter, ...rest } = trigger;
+  void runAfter;
+  return rest;
 };
 
 const flowOf = (
@@ -256,6 +285,17 @@ export const projectStudioFlowStart = (
   return {
     kind: "available",
     execution: flow.execution,
+    subscribers: (studioFlowCollection(source, selection.moduleKey) ?? [])
+      .filter(
+        (candidate) =>
+          candidate.id !== flow.id &&
+          candidate.execution === "background" &&
+          candidate.triggers.some((trigger) => trigger.type === "Event"),
+      )
+      .map((candidate) => ({
+        key: candidate.id,
+        label: candidate.labels?.name ?? studioWords(candidate.key),
+      })),
     events: source.body.modules.flatMap((module) =>
       module.events.flatMap((event) => {
         const recordType = triggerRecordType(selection, module.key, event.record_type);
@@ -414,15 +454,17 @@ export const applyStudioFlowStart = (
       };
     if (edited.kind === "event" && trigger.type === "Event")
       return {
-        ...trigger,
+        ...withoutRunAfter(trigger),
         recordTypeId: edited.recordType,
         event: { kind: "standard", eventKind: edited.eventKind as never },
+        ...runAfterOf(edited),
       };
     if (edited.kind === "declared_event" && trigger.type === "Event")
       return {
-        ...trigger,
+        ...withoutRunAfter(trigger),
         recordTypeId: edited.recordType,
         event: { kind: "declared", eventKey: edited.eventKey },
+        ...runAfterOf(edited),
       };
     return trigger;
   });

@@ -16,7 +16,7 @@ import type { RecordTypeDefinition } from "./module-contracts";
 /** The admitted segment owns the transaction and rolls back every refused task. */
 export const createFlowRecordChangePort = (
   bound: BoundHumanOrganizationRequest,
-  optionMember: OptionMembershipCheck,
+  optionMember?: OptionMembershipCheck,
 ): NonNullable<FlowOrchestratorDependencies["recordChanges"]> => ({
   readTargets: async (targets, lock = false) => {
     const unique = [

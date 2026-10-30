@@ -3,6 +3,7 @@ export * from "./definition-index";
 export * from "./module-index";
 export * from "./app-index";
 export { createFlowBindingEndpoint, type InstalledFlowBindings } from "./flow-binding-endpoint";
+export { createBackgroundFlowExecutor } from "./flow-background-run";
 export {
   invokeInstalledFlow,
   type FlowInvocationAddress,
