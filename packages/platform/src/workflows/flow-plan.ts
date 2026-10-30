@@ -1193,27 +1193,6 @@ export const flowBindingPlanIssue = (
     ]).some((reference) => reference.source === "trigger_previous")
   )
     return `Flow ${plan.definition.key} reads a previous record, which is unavailable to a page binding`;
-  // Until the segment gate is connected, a form reference can only run entirely in the page.
-  const readsForm = flowValueReferences([plan.definition, binding.inputs]).some(
-    (reference) => reference.source === "form",
-  );
-  if (
-    readsForm &&
-    (plan.segments.some((segment) => segment.kind !== "page" || segment.guard.length !== 0) ||
-      Object.values(plan.browser.outputs).some(
-        ({ value }) => value.kind === "reference" && value.reference.source === "final_output",
-      ))
-  )
-    return "A form reference in a server segment or completion cannot run yet";
-  // The page driver evaluates conditions only for plans it can run without the segment gate.
-  if (
-    binding.settings?.condition != null &&
-    (plan.segments.some((segment) => segment.kind !== "page" || segment.guard.length !== 0) ||
-      Object.values(plan.browser.outputs).some(
-        ({ value }) => value.kind === "reference" && value.reference.source === "final_output",
-      ))
-  )
-    return "A start condition on a server segment or completion cannot run yet";
   // An aborted request does not stop the server: an earlier change can still commit.
   if (binding.settings?.concurrency === "latest_wins" && plan.changes)
     return "Latest wins cannot be used on a flow that changes data; use Queue";
