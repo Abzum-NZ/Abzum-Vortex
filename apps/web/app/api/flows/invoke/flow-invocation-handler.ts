@@ -49,6 +49,11 @@ import {
   requestDependencies,
 } from "../../../_lib/application-page/installed-context";
 import { prepareRuntimePreviewChoices } from "../../../_lib/runtime-preview-demand";
+import {
+  boardReadsSchema,
+  placementIdsSchema,
+  placementRefreshAddressSchema,
+} from "../../../_lib/placement-refresh";
 
 const maximumRequestBodyLength = 131_072;
 const requestSchema = z
@@ -68,6 +73,14 @@ const requestSchema = z
       })
       .strict(),
     invocation: flowBindingInvocationSchema,
+    refresh: z
+      .object({
+        address: placementRefreshAddressSchema,
+        placementIds: placementIdsSchema,
+        boardReads: boardReadsSchema,
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -116,6 +129,14 @@ export const createFlowInvocationHandler =
         return refusedResponse();
       }
       const body = parsedBody.data;
+      if (
+        body.refresh !== undefined &&
+        (body.refresh.address.tenantShortName !== body.tenantShortName ||
+          body.refresh.address.organizationShortName !== body.organizationShortName ||
+          body.refresh.address.applicationKey !== body.applicationKey ||
+          body.refresh.address.pageKey !== body.pageKey)
+      )
+        return refusedResponse();
       const address = await resolveApplicationAddress(
         identity.session,
         body.tenantShortName,

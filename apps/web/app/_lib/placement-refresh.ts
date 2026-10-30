@@ -41,7 +41,7 @@ const boardReadTargetSchema = z
   .strict();
 
 /** At most one read per board; a continuation is a read of a single placement. */
-const boardReadsSchema = z
+export const boardReadsSchema = z
   .array(boardReadTargetSchema)
   .max(500)
   .refine(

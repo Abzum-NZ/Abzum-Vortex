@@ -70,6 +70,7 @@ export function useFlowRuntime({
   currentData,
   dialogFormRef,
   platformThemeTokens,
+  prepareRefresh,
   committed,
   setPanelRef,
 }: Readonly<{
@@ -106,6 +107,9 @@ export function useFlowRuntime({
   currentData: ApplicationPageModel["data"];
   dialogFormRef: RefObject<HTMLDivElement | null>;
   platformThemeTokens: PlatformThemeTokens;
+  prepareRefresh: (
+    bindingId: string,
+  ) => Readonly<{ request: unknown; apply: (result: unknown) => void }> | undefined;
   /** Re-reads what a binding writes once one of its server runs committed. */
   committed: (bindingId: string) => void;
   /** Filled by the page's panel host once it has rendered. */
@@ -116,6 +120,8 @@ export function useFlowRuntime({
    * and the runtime carries out every pause (another form or a confirmation) through a continuation,
    * which is returned exactly as the server issued it.
    */
+  const prepareRefreshRef = useRef(prepareRefresh);
+  prepareRefreshRef.current = prepareRefresh;
   const { flowClient, webMcpClient, beginSubmission } = useMemo(() => {
     const options = {
       address: {
@@ -125,6 +131,7 @@ export function useFlowRuntime({
         pageKey: application.pageKey,
         ...(subject === undefined ? {} : { pageRecordId: subject.recordId }),
       },
+      prepareRefresh: (bindingId: string) => prepareRefreshRef.current(bindingId),
       pageInputs: () => {
         const search = new URLSearchParams(window.location.search);
         const parameters: Record<string, string | string[]> = {};

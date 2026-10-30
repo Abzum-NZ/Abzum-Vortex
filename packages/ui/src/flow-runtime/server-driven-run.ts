@@ -62,6 +62,7 @@ export async function driveServerFlow(
   signal?: AbortSignal,
   committed?: () => void,
   sourceTablePlacementId?: string,
+  bindingId?: string,
 ): Promise<ServerDrivenResult> {
   let response = first;
   let awaitingSurface = false;
@@ -162,6 +163,7 @@ export async function driveServerFlow(
             signal,
             sourceTablePlacementId,
             response.carriedValues,
+            bindingId,
           );
           break;
         }

@@ -87,5 +87,6 @@ export async function runFlowBinding(
     runSignal,
     options.committed === undefined ? undefined : () => options.committed?.(binding.bindingId),
     sourceTablePlacementId,
+    binding.bindingId,
   );
 }

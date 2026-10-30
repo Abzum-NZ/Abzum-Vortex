@@ -262,6 +262,7 @@ export function ApplicationPageViewContent({
   const {
     currentData,
     refreshPlacements,
+    prepareFlowRefresh,
     refreshTargetsForBinding,
     currentEditFormBaselines,
     pinActivationInFlightRef,
@@ -328,11 +329,27 @@ export function ApplicationPageViewContent({
       currentData,
       dialogFormRef,
       platformThemeTokens,
-      committed: (bindingId) => {
+      prepareRefresh: (bindingId) => {
         let targets = refreshTargetsForBinding(bindingId);
         if (targets.length === 0) {
           // Identity and Access writes have no record target. Only reread displayed data:
           // the page payload also holds inputs for dialogs that are not part of this projection.
+          const displayed = new Set(
+            Array.from(
+              compositionRootRef.current?.querySelectorAll<HTMLElement>(
+                "[data-vortex-placement-id]",
+              ) ?? [],
+            )
+              .filter((element) => element.getClientRects().length > 0)
+              .map((element) => element.dataset.vortexPlacementId?.toLowerCase()),
+          );
+          targets = Object.keys(currentData).filter((id) => displayed.has(id.toLowerCase()));
+        }
+        return prepareFlowRefresh(targets);
+      },
+      committed: (bindingId) => {
+        let targets = refreshTargetsForBinding(bindingId);
+        if (targets.length === 0) {
           const displayed = new Set(
             Array.from(
               compositionRootRef.current?.querySelectorAll<HTMLElement>(

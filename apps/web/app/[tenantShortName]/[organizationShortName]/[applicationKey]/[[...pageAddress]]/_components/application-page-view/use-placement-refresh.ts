@@ -17,7 +17,11 @@ import {
   nextComponentRequestGeneration,
   type ComponentRequestGeneration,
   containedComponentIdSchema,
+  jsonValueSchema,
+  recordIdSchema,
+  revisionSchema,
 } from "@vortex/platform/schema";
+import { z } from "zod";
 import type { ApplicationPageModel, PageDataState } from "../../../../../../_lib/application-page";
 import { rereadApplicationPlacements } from "../../placement-refresh-action";
 import {
@@ -28,6 +32,19 @@ import type { RefreshedPlacementData, TableContinuationTarget, EditFormBaseline 
 import { useProjectionRefresh } from "./use-projection-refresh";
 import type { PageAddress } from "./page-address";
 import { boardPayloadFor, loadedBoardColumns } from "./placement-helpers";
+
+const flowRefreshResultSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("available"),
+    data: z.record(z.string(), z.record(z.string(), z.unknown())),
+    editFormBaselines: z.record(z.string(), z.record(z.string(), jsonValueSchema).nullable()),
+    subject: z.object({ recordId: recordIdSchema, revision: revisionSchema }).nullable(),
+    content: z.record(z.string(), z.unknown()).optional(),
+  }),
+  z.object({ kind: z.literal("reload") }),
+  z.object({ kind: z.literal("unavailable") }),
+  z.object({ kind: z.literal("temporarily_unavailable") }),
+]);
 
 const subscribeToNothing = (): (() => void) => () => undefined;
 const afterHydration = (): boolean => true;
@@ -341,6 +358,174 @@ export function usePlacementRefresh({
       router,
     ],
   );
+  const flowRefreshOrder = useRef<{
+    key: string;
+    next: number;
+    contentApplied: number;
+    applied: Map<string, { sequence: number; generation: ComponentRequestGeneration }>;
+  }>({ key: navigationKey, next: 0, contentApplied: 0, applied: new Map() });
+  if (flowRefreshOrder.current.key !== navigationKey)
+    flowRefreshOrder.current = {
+      key: navigationKey,
+      next: 0,
+      contentApplied: 0,
+      applied: new Map(),
+    };
+
+  /** Capture generations when a flow request starts; only its still-current reply may paint. */
+  const prepareFlowRefresh = useCallback(
+    (placementIds: readonly string[]) => {
+      const pageKey = currentPageKey;
+      const scope = placementRequestsRef.current;
+      if (pageKey === undefined || scope.key !== navigationKey) return undefined;
+      const order = flowRefreshOrder.current;
+      const sequence = ++order.next;
+      const requests = new Map<
+        string,
+        {
+          componentId: z.infer<typeof containedComponentIdSchema>;
+          observed: ComponentRequestGeneration | undefined;
+        }
+      >();
+      for (const placementId of new Set(placementIds)) {
+        const parsed = containedComponentIdSchema.safeParse(placementId);
+        if (!parsed.success) continue;
+        const key = parsed.data.toLowerCase();
+        requests.set(key, { componentId: parsed.data, observed: scope.generations.get(key) });
+      }
+      const shown =
+        refreshedPlacementData?.navigationKey === scope.key
+          ? refreshedPlacementData.data
+          : undefined;
+      const boardReads = [...requests.values()].flatMap((request) => {
+        const key = request.componentId.toLowerCase();
+        const find = (data: Readonly<Record<string, PageDataState>> | undefined) =>
+          Object.entries(data ?? {}).find(([id]) => id.toLowerCase() === key)?.[1];
+        const board = boardPayloadFor(find(shown) ?? find(model.data));
+        const columns = board === undefined ? [] : loadedBoardColumns(board);
+        return columns.length === 0
+          ? []
+          : [{ placementId: request.componentId, request: { columns } }];
+      });
+      return {
+        request: {
+          address: {
+            tenantShortName: application.tenantShortName,
+            organizationShortName: application.organizationShortName,
+            applicationKey: application.applicationKey,
+            pageKey,
+            installationRevision: application.installationRevision,
+            search: address.search(),
+          },
+          placementIds: [...requests.values()].map((entry) => entry.componentId),
+          boardReads,
+        },
+        apply: (candidate: unknown) => {
+          const result = flowRefreshResultSchema.parse(candidate);
+          if (placementRequestsRef.current.key !== scope.key) return;
+          if (result.kind === "reload") {
+            router.refresh();
+            return;
+          }
+          if (result.kind !== "available") throw new Error("FLOW_PLACEMENT_REFRESH_UNAVAILABLE");
+          const accepted = [...requests.entries()].flatMap(([key, request]) => {
+            const current = scope.generations.get(key);
+            const previous = order.applied.get(key);
+            if (
+              (previous !== undefined && previous.sequence >= sequence) ||
+              (current !== request.observed && current !== previous?.generation)
+            )
+              return [];
+            const generation = nextComponentRequestGeneration(
+              current,
+              request.componentId,
+              scope.key,
+            );
+            scope.generations.set(key, generation);
+            order.applied.set(key, { sequence, generation });
+            return [[key, generation] as const];
+          });
+          const content =
+            result.content !== undefined && sequence > order.contentApplied
+              ? result.content
+              : undefined;
+          if (content !== undefined) order.contentApplied = sequence;
+          const refreshedChoices = new Set(
+            accepted.map(
+              ([key, request]) =>
+                Object.keys(model.data).find((id) => id.toLowerCase() === key) ??
+                request.componentId,
+            ),
+          );
+          for (const stateKey of Object.keys(choiceRequestIdsRef.current))
+            if (
+              [...refreshedChoices].some(
+                (id) => stateKey === id || stateKey.endsWith(`\u0000${id}`),
+              )
+            )
+              choiceRequestIdsRef.current[stateKey] =
+                (choiceRequestIdsRef.current[stateKey] ?? 0) + 1;
+          setChoicePages((current) =>
+            Object.fromEntries(Object.entries(current).filter(([id]) => !refreshedChoices.has(id))),
+          );
+          setDialogChoicePages((current) =>
+            Object.fromEntries(
+              Object.entries(current).filter(
+                ([key]) => ![...refreshedChoices].some((id) => key.endsWith(`\u0000${id}`)),
+              ),
+            ),
+          );
+          setRefreshedPlacementData((current) => {
+            const live = placementRequestsRef.current;
+            if (live.key !== scope.key) return current;
+            const same = current?.navigationKey === scope.key;
+            const data = { ...(same ? current.data : {}) };
+            const editFormBaselines = { ...(same ? current.editFormBaselines : {}) };
+            let subject = same ? current.subject : undefined;
+            let changed = false;
+            for (const [key, request] of accepted) {
+              if (!isCurrentComponentRequestGeneration(live.generations.get(key), request))
+                continue;
+              const id =
+                Object.keys(model.data).find((candidate) => candidate.toLowerCase() === key) ??
+                request.componentId;
+              const entry = Object.entries(result.data).find(
+                ([candidate]) => candidate.toLowerCase() === key,
+              )?.[1];
+              const baseline =
+                Object.entries(result.editFormBaselines).find(
+                  ([candidate]) => candidate.toLowerCase() === key,
+                )?.[1] ?? null;
+              data[id] = entry ?? { status: "error" };
+              editFormBaselines[id] = baseline;
+              if (Object.hasOwn(model.editFormBaselines, id) || baseline !== null)
+                subject = result.subject;
+              changed = true;
+            }
+            if (!changed && !(requests.size === 0 && content !== undefined)) return current;
+            const nextContent = content ?? (same ? current.content : undefined);
+            return {
+              navigationKey: scope.key,
+              data,
+              editFormBaselines,
+              subject,
+              ...(nextContent === undefined ? {} : { content: nextContent }),
+            };
+          });
+        },
+      };
+    },
+    [
+      address,
+      application,
+      currentPageKey,
+      model.data,
+      model.editFormBaselines,
+      navigationKey,
+      refreshedPlacementData,
+      router,
+    ],
+  );
   const refreshTargetsForBinding = useCallback(
     (bindingId: string): readonly string[] => {
       const match = Object.entries(model.refreshPlacementsByBinding).find(
@@ -471,6 +656,7 @@ export function usePlacementRefresh({
   return {
     currentData,
     refreshPlacements,
+    prepareFlowRefresh,
     refreshTargetsForBinding,
     currentEditFormBaselines,
     pinActivationInFlightRef,
