@@ -108,7 +108,7 @@ export const recordMeteringEvent = async (
       )
     `;
   } catch (error) {
-    throw new Error(failureFor(error));
+    throw new Error(failureFor(error), { cause: error });
   }
   return parseResult(rows, meteringEventRecordResultSchema, meteringEventErrorCodes.unavailable);
 };
