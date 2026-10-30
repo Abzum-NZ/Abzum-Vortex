@@ -141,15 +141,22 @@ export const openBackendActorScope = async (
 export const createBackgroundFlowExecutor =
   (dependencies: BackgroundRunDependencies) =>
   async (claimed: ClaimedBackendRun): Promise<BackendRunOutcome> => {
+    // Every request of the run is on the system channel and carries the run as its correlation, so
+    // each Activity row it writes is the account's change by the back end, linked to its backend_runs row.
+    const requestDependencies: HumanOrganizationRequestDependencies = {
+      ...dependencies.requests,
+      channel: "system",
+      correlationId: () => claimed.backendRunId,
+    };
     const opened = await openBackendActorScope(
-      dependencies.requests,
+      requestDependencies,
       claimed.organizationId,
       claimed.applicationRootId,
       claimed.actorId,
     );
     if ("reason" in opened) return refused(opened.reason);
     const { identityId, session, selection, installation, release } = opened;
-    const requests = createHumanOrganizationRequestService(dependencies.requests);
+    const requests = createHumanOrganizationRequestService(requestDependencies);
     const flow = release.flows.get(claimed.flowId);
     if (flow === undefined) return refused("flow_unavailable");
     if (flow.execution !== "background") return refused("flow_not_background");
@@ -167,14 +174,14 @@ export const createBackgroundFlowExecutor =
       if (result.kind !== "available") throw new Error("BACKEND_RUN_REQUEST_UNAVAILABLE");
       return result.value;
     };
-    const subjectReader = createPageSubjectReader(dependencies.requests);
+    const subjectReader = createPageSubjectReader(requestDependencies);
     const ports: FlowOrchestratorDependencies = {
       continuationKey: undefined as never,
       admitSegment: () => Promise.reject(new Error("BACKEND_RUN_HAS_NO_SEGMENTS")),
       admitContinuation: () => Promise.reject(new Error("BACKEND_RUN_HAS_NO_CONTINUATION")),
       admitPageStart: () => Promise.reject(new Error("BACKEND_RUN_HAS_NO_PAGE")),
-      executor: createFlowProtectedExecutor(dependencies.requests, dependencies.applicationStore),
-      records: createRecordSaveService(dependencies.requests),
+      executor: createFlowProtectedExecutor(requestDependencies, dependencies.applicationStore),
+      records: createRecordSaveService(requestDependencies),
       recordChanges: {
         readTargets: (targets, lock) =>
           inActor((bound) => createFlowRecordChangePort(bound).readTargets(targets, lock)),

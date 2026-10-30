@@ -28,6 +28,16 @@ export type BackendRunRequest = Readonly<{
   inputs: Readonly<Record<string, JsonValue>>;
 }>;
 
+/** An occurrence that ran nothing because its account could not act; no flow is named. */
+export type BackendRunRefusal = Readonly<{
+  organizationId: string;
+  applicationRootId: string;
+  actorId: string;
+  origin: BackendRunOrigin;
+  sourceKey: string;
+  failureCode: string;
+}>;
+
 /** A run an executor has claimed and must now run to a final state. */
 export type ClaimedBackendRun = Readonly<{
   backendRunId: string;
@@ -125,6 +135,19 @@ const finishRun = async (backendRunId: string, outcome: BackendRunOutcome): Prom
   if (rows.length !== 1) throw new Error("BACKEND_RUN_FINISH_INVALID");
 };
 
+const recordRefusal = async (refusal: BackendRunRefusal): Promise<void> => {
+  const rows = await withRuntimeTransaction(
+    (transaction) => transaction.query`
+      select vortex_platform.record_refused_backend_run(
+        ${refusal.organizationId}::uuid, ${refusal.applicationRootId}::uuid,
+        ${refusal.actorId}::uuid, ${refusal.origin}::text, ${refusal.sourceKey}::text,
+        ${refusal.failureCode}::text
+      ) as recorded
+    `,
+  );
+  if (rows.length !== 1) throw new Error("BACKEND_RUN_REFUSAL_INVALID");
+};
+
 const listPending = async (limit: number): Promise<readonly string[]> => {
   const rows = await withRuntimeTransaction(
     (transaction) => transaction.query`
@@ -201,6 +224,8 @@ export const createSimulatedBackendAdapter = (dependencies: BackendAdapterDepend
     async enqueue(request: BackendRunRequest): Promise<string> {
       return (await requestRun(request)).backendRunId;
     },
+    /** Records once that an occurrence ran nothing, with the named reason. */
+    recordRefusal,
     /** Runs one recorded run if it is still waiting; the recovery tick and `after` both call it. */
     runRecorded: runClaimed,
     /** The recovery tick: runs the oldest waiting runs, one at a time. */

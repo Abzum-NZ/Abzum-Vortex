@@ -74,9 +74,21 @@ export const createFlowSubscriberConsumer = (
       actorId,
     );
     if ("reason" in opened) {
-      console.error(
-        `[subscribers] occurrence ${occurrenceId} not delivered to subscribers: ${opened.reason}`,
-      );
+      // The account's scope is what lists the subscribers, so the history gets one refusal for the
+      // whole occurrence, with the named reason.
+      try {
+        await dependencies.adapter().recordRefusal({
+          organizationId,
+          applicationRootId: installation.applicationRootId,
+          actorId,
+          origin: "event",
+          sourceKey: occurrenceId,
+          failureCode: opened.reason,
+        });
+      } catch (error) {
+        console.error(`[subscribers] refusal of occurrence ${occurrenceId} not recorded`, error);
+        return { outcome: "retryable_failure", failureCode: "unclassified" };
+      }
       return { outcome: "completed" };
     }
     const subscribers = orderSubscribers(

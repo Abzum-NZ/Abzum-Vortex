@@ -7,7 +7,7 @@ import type { IdentitySession } from "./identity-access";
 
 const historyRowSchema = z.object({
   backend_run_id: z.uuid(),
-  flow_id: z.uuid(),
+  flow_id: z.uuid().nullable(),
   origin_kind: z.enum(["backend_run", "event"]),
   source_key: z.string(),
   state: z.enum(["pending", "running", "succeeded", "refused", "failed"]),
@@ -18,7 +18,8 @@ const historyRowSchema = z.object({
 
 type BackendRunHistoryEntry = Readonly<{
   backendRunId: string;
-  flowId: string;
+  /** Null on an occurrence refused before its subscribers could be listed. */
+  flowId: string | null;
   origin: "backend_run" | "event";
   source: string;
   state: "pending" | "running" | "succeeded" | "refused" | "failed";
