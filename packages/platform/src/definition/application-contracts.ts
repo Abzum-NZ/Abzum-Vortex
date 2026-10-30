@@ -1002,7 +1002,8 @@ export const applicationContentSchema = applicationSharedContentSchema
         context.addIssue({
           code: "custom",
           path: ["flowBindings", bindingIndex, "controlId"],
-          message: "A flow binding control must resolve to a placement or page inside the application",
+          message:
+            "A flow binding control must resolve to a placement or page inside the application",
         });
     }
   });

@@ -168,7 +168,9 @@ function BehaviourEvent({
   const [problem, setProblem] = useState("");
   const binding = entry.binding;
   const flow =
-    binding === null ? undefined : source.body.flows.find((candidate) => candidate.key === binding.flowKey);
+    binding === null
+      ? undefined
+      : source.body.flows.find((candidate) => candidate.key === binding.flowKey);
   const others = interactive.filter((candidate) => candidate.key !== binding?.flowKey);
   const run = (apply: Parameters<StudioBehaviourEdit>[0]) => {
     const result = onEdit(apply);
@@ -211,8 +213,7 @@ function BehaviourEvent({
                   disabled={disabled}
                   onChange={(event) => {
                     const key = event.target.value;
-                    if (key !== "")
-                      run((current) => applyStudioRebind(current, binding.id, key));
+                    if (key !== "") run((current) => applyStudioRebind(current, binding.id, key));
                   }}
                 >
                   <NativeSelectOption value="">Choose a flow…</NativeSelectOption>
@@ -230,7 +231,8 @@ function BehaviourEvent({
                   disabled={disabled}
                   onChange={(event) => {
                     const key = event.target.value;
-                    if (key !== "") run((current) => applyStudioFlowCombine(current, binding.id, key));
+                    if (key !== "")
+                      run((current) => applyStudioFlowCombine(current, binding.id, key));
                   }}
                 >
                   <NativeSelectOption value="">Choose a flow…</NativeSelectOption>

@@ -42,7 +42,10 @@ export type ComponentSemanticEventKind = z.infer<typeof componentSemanticEventKi
  * The events the page itself raises, bound with the page as the control: `load` once when the page
  * opens, `record_loaded` when a record page's record settles. A block never declares them.
  */
-export const pageSemanticEventKinds = ["load", "record_loaded"] as const satisfies readonly ComponentSemanticEventKind[];
+export const pageSemanticEventKinds = [
+  "load",
+  "record_loaded",
+] as const satisfies readonly ComponentSemanticEventKind[];
 
 /** The page types that show one record and so raise `record_loaded`. */
 export const recordLoadedPageTypes: ReadonlySet<string> = new Set(["detail", "form"]);

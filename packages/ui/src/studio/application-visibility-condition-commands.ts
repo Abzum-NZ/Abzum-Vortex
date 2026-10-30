@@ -12,6 +12,7 @@ import {
   semanticVersionSchema,
   moduleFieldSchema,
   moduleFieldValueSchemas,
+  comparableConditionFieldType,
   builderKeySchema,
   sourceItemChildSlots,
   sourcePageZones,
@@ -70,15 +71,6 @@ export type StudioApplicationConditionContextResult =
   | Readonly<{ kind: "available"; context: StudioApplicationConditionContext }>
   | Readonly<{ kind: "refused" | "conflict" | "temporarily_unavailable" }>;
 
-const supportedTypes = new Set([
-  "text",
-  "long_text",
-  "choice",
-  "whole_number",
-  "yes_no",
-  "date",
-  "date_time",
-]);
 const exactKeys = (value: Record<string, unknown>, keys: readonly string[]): boolean =>
   Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 const sourceAliasValid = (value: unknown): value is string =>
@@ -175,7 +167,7 @@ export function parseStudioApplicationConditionContext(
     const parsed = moduleFieldSchema.safeParse(item.field);
     if (
       !parsed.success ||
-      !supportedTypes.has(parsed.data.type) ||
+      comparableConditionFieldType(parsed.data) === undefined ||
       parsed.data.key !== item.preferredAlias ||
       !item.aliases.includes(item.preferredAlias) ||
       identifiers.has(parsed.data.fieldId) ||
@@ -380,7 +372,10 @@ export function validateStudioVisibilityCondition(
         continue;
       const field = metadata.fields.find((item) => item.field.fieldId === reference.fieldId)?.field;
       if (field === undefined) continue;
-      const leaf = moduleFieldValueSchemas[field.type];
+      const leaf =
+        moduleFieldValueSchemas[
+          comparableConditionFieldType(field) as keyof typeof moduleFieldValueSchemas
+        ];
       const collection = side === "right" && (node.operator === "in" || node.operator === "not_in");
       const valid =
         collection && Array.isArray(literal.value)
