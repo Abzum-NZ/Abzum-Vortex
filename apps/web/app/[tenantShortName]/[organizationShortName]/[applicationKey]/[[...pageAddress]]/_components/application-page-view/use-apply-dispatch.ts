@@ -9,7 +9,12 @@ import type {
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import { applicationPageAddressPath } from "../../../../../../_lib/address-paths";
 import type { ComponentRequestGeneration } from "@vortex/platform/schema";
-import type { ControlReport, DispatchOutcome, Notice, TableContinuationTarget } from "./types";
+import type {
+  ControlReport,
+  DispatchOutcome,
+  PageMessageDraft,
+  TableContinuationTarget,
+} from "./types";
 import {
   unavailableNotice,
   finishedNotice,
@@ -23,7 +28,7 @@ import { formSurfaceComposition, visibleOwningFormFieldLabel } from "./form-surf
 export function useApplyDispatch({
   placementRequestsRef,
   navigationKey,
-  setNotice,
+  showPageMessage,
   runtimeState,
   router,
   model,
@@ -38,7 +43,7 @@ export function useApplyDispatch({
     generations: Map<string, ComponentRequestGeneration>;
   }>;
   navigationKey: string;
-  setNotice: Dispatch<SetStateAction<Notice | undefined>>;
+  showPageMessage: (message: PageMessageDraft | undefined) => void;
   runtimeState: FlowRuntimeState;
   router: ReturnType<typeof useRouter>;
   model: ApplicationPageModel;
@@ -62,17 +67,17 @@ export function useApplyDispatch({
     async (
       dispatch: Promise<ServerDrivenResult | undefined>,
       formPlacementId?: string,
-      afterAccepted?: () => Promise<Notice | undefined>,
+      afterAccepted?: () => Promise<PageMessageDraft | undefined>,
       sourceBindingId?: string,
       /** The control reports its outcome; what must not vanish with it also stays on the page. */
       reportOnControl?: ControlReport,
     ): Promise<DispatchOutcome> => {
       let outcome: DispatchOutcome = { notice: undefined, confirmed: false, changed: false };
       const isCurrentNavigation = (): boolean => placementRequestsRef.current.key === navigationKey;
-      setNotice(undefined);
+      showPageMessage(undefined);
       if (formPlacementId !== undefined) runtimeState.messages.clear("inline", formPlacementId);
       const showResult = (
-        resultNotice: Notice,
+        resultNotice: PageMessageDraft,
         refusalFeedback?: Extract<FormFlowFeedback, { kind: "refusal" }>,
       ): void => {
         outcome = { ...outcome, notice: resultNotice };
@@ -80,8 +85,8 @@ export function useApplyDispatch({
         // stay visible and actionable on the page.
         if (
           reportOnControl !== undefined &&
-          resultNotice.link === undefined &&
-          (reportOnControl === "in_place" || resultNotice.tone !== "problem")
+          resultNotice.action === undefined &&
+          (reportOnControl === "in_place" || resultNotice.severity !== "error")
         )
           return;
         // A form on the page shows its own outcome where the person is looking; the page repeats
@@ -97,7 +102,7 @@ export function useApplyDispatch({
           ) !== undefined;
         if (
           formOnPage &&
-          resultNotice.link === undefined &&
+          resultNotice.action === undefined &&
           refusalFeedback?.corrections !== undefined
         ) {
           runtimeState.messages.show({
@@ -108,13 +113,11 @@ export function useApplyDispatch({
             text: resultNotice.text,
             refusal: refusalFeedback,
           });
-        } else
-          setNotice((current) => {
-            // A client intent can refuse after the server has completed (for example, a page the
-            // viewer cannot open). A successful run must not erase that more specific refusal.
-            if (current?.tone === "problem" && resultNotice.tone !== "problem") return current;
-            return resultNotice;
-          });
+        } else if (
+          runtimeState.messages.read("banner")?.severity !== "error" ||
+          resultNotice.severity === "error"
+        )
+          showPageMessage(resultNotice);
       };
       try {
         const server = await dispatch;
@@ -183,17 +186,18 @@ export function useApplyDispatch({
                   ...(recovery === undefined ? {} : { recovery }),
                 };
           if (diagnostic !== undefined) {
-            const reason: Notice =
+            const reason: PageMessageDraft =
               ruleMessages === undefined
                 ? refusalNotices[diagnostic.code]
-                : { tone: "problem", text: ruleMessages.join(" ") };
+                : { target: "banner", severity: "error", text: ruleMessages.join(" ") };
             const presentation = diagnostic.presentation;
             resultNotice = {
               ...reason,
               ...(presentation === undefined
                 ? {}
                 : {
-                    link: {
+                    action: {
+                      kind: "link" as const,
                       label: presentation.link_label,
                       href: applicationPageAddressPath(
                         model.invocation.tenantShortName,
@@ -210,15 +214,17 @@ export function useApplyDispatch({
             };
           }
           // Signing in again, or verifying, comes back to this page and record, where the person can retry.
+          const recoveryAction =
+            resultNotice.action?.kind === "link" ? resultNotice.action : undefined;
           if (
-            resultNotice.link?.href === reauthenticationPath ||
-            resultNotice.link?.href === multiFactorPath
+            recoveryAction?.href === reauthenticationPath ||
+            recoveryAction?.href === multiFactorPath
           )
             resultNotice = {
               ...resultNotice,
-              link: {
-                ...resultNotice.link,
-                href: `${resultNotice.link.href}&${new URLSearchParams({
+              action: {
+                ...recoveryAction,
+                href: `${recoveryAction.href}&${new URLSearchParams({
                   continuation: JSON.stringify({
                     kind: "application_page",
                     tenantShortName: model.invocation.tenantShortName,

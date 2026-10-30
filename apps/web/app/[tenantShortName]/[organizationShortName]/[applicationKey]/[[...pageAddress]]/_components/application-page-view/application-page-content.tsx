@@ -7,8 +7,6 @@ import {
   useState,
   type ReactElement,
   type ReactNode,
-  type Dispatch,
-  type SetStateAction,
 } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -44,7 +42,7 @@ import type { ApplicationPageModel } from "../../../../../../_lib/application-pa
 import type { PageWebMcpTool } from "../../../../../../_lib/application-page";
 import type {
   GuidedFormActions,
-  Notice,
+  PageMessageDraft,
   SubmittedForm,
   RefreshedPlacementData,
   PageSelection,
@@ -150,31 +148,12 @@ export function ApplicationPageViewContent({
   const [refreshedPlacementData, setRefreshedPlacementData] = useState<
     RefreshedPlacementData | undefined
   >(undefined);
-  const setNotice = useCallback<Dispatch<SetStateAction<Notice | undefined>>>(
-    (change) => {
-      const held = runtimeState.messages.read("banner") ?? runtimeState.messages.read("toast");
-      const previous: Notice | undefined =
-        held === undefined
-          ? undefined
-          : {
-              tone: held.severity === "error" || held.severity === "warning" ? "problem" : "info",
-              text: held.text,
-              ...(held.action?.kind === "link"
-                ? { link: { label: held.action.label, href: held.action.href } }
-                : {}),
-            };
-      const next = typeof change === "function" ? change(previous) : change;
-      if (next === previous) return;
+  const showPageMessage = useCallback<(message: PageMessageDraft | undefined) => void>(
+    (message) => {
       runtimeState.messages.clear("banner");
       runtimeState.messages.clear("toast");
-      if (next !== undefined)
-        runtimeState.messages.show({
-          id: crypto.randomUUID(),
-          target: next.tone === "info" ? "toast" : "banner",
-          severity: next.tone === "info" ? "success" : "error",
-          text: next.text,
-          ...(next.link === undefined ? {} : { action: { kind: "link", ...next.link } }),
-        });
+      if (message !== undefined)
+        runtimeState.messages.show({ ...message, id: crypto.randomUUID() });
     },
     [runtimeState],
   );
@@ -314,7 +293,7 @@ export function ApplicationPageViewContent({
 
   useEffect(() => {
     setGuidedBusy(false);
-    setNotice(undefined);
+    showPageMessage(undefined);
     runtimeState.messages.clearAll();
   }, [navigationKey]);
 
@@ -329,7 +308,7 @@ export function ApplicationPageViewContent({
     currentData,
     application,
     router,
-    setNotice,
+    showPageMessage,
     requestChoicePageRef,
   });
 
@@ -352,7 +331,7 @@ export function ApplicationPageViewContent({
       controlDraftsRef,
       choicePayloadFor,
       fieldInputControlReleases,
-      setNotice,
+      showPageMessage,
       choiceEvidenceFor,
       requestChoicePageRef,
       currentData,
@@ -393,7 +372,7 @@ export function ApplicationPageViewContent({
   const { applyDispatch } = useApplyDispatch({
     placementRequestsRef,
     navigationKey,
-    setNotice,
+    showPageMessage,
     runtimeState,
     router,
     model,
@@ -407,7 +386,7 @@ export function ApplicationPageViewContent({
     async (tool: PageWebMcpTool, input: unknown, signal?: AbortSignal): Promise<unknown> => {
       if (signal?.aborted) return { outcome: "cancelled" };
       if (!isRecord(input)) return { outcome: "refused" };
-      setNotice(undefined);
+      showPageMessage(undefined);
       try {
         const result = await webMcpRuntime.dispatchReference(
           tool.binding,
@@ -457,7 +436,7 @@ export function ApplicationPageViewContent({
     busy: guidedBusy,
     guidedFormCompleted,
     setBusy: setGuidedBusy,
-    setNotice,
+    showPageMessage,
     guidedFormActions,
     searchParams,
     router,
@@ -565,7 +544,12 @@ export function ApplicationPageViewContent({
       controlDraftsRef?.current.restoreBaselines?.(unsavedWorkRegistry);
   }, [navigationKey, model, controlDraftsRef, unsavedWorkRegistry]);
 
-  const fieldFlowEvents = useFieldFlowEvents(navigationKey, runtimeState, runBinding, setNotice);
+  const fieldFlowEvents = useFieldFlowEvents(
+    navigationKey,
+    runtimeState,
+    runBinding,
+    showPageMessage,
+  );
   const { runtimeInputs } = useRuntimeInputs({
     currentData: tableData,
     model,
@@ -596,7 +580,7 @@ export function ApplicationPageViewContent({
     subject,
     requestedStepId,
     guidedSummaryStepId,
-    setNotice,
+    showPageMessage,
     submitGuidedSummary,
     advanceGuidedStep,
     currentEditFormBaselines,

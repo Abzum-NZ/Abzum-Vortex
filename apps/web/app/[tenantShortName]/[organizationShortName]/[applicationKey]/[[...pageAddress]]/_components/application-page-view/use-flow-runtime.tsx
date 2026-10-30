@@ -3,8 +3,6 @@ import {
   useEffect,
   useMemo,
   useRef,
-  type Dispatch,
-  type SetStateAction,
   type RefObject,
 } from "react";
 import type { useRouter } from "next/navigation";
@@ -42,7 +40,7 @@ import { Button } from "@vortex/ui/components/button";
 import { DialogFooter } from "@vortex/ui/components/dialog";
 import { useApplicationFrame } from "../../../_components/application-frame-state";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
-import type { SubmittedForm, Notice } from "./types";
+import type { SubmittedForm, PageMessageDraft } from "./types";
 import type { ControlDrafts } from "../../../_components/application-frame-state";
 import { formSurfaceComposition, runtimeInputWithFormDefault } from "./form-surface";
 import { unavailableNotice } from "./notices";
@@ -65,7 +63,7 @@ export function useFlowRuntime({
   controlDraftsRef,
   choicePayloadFor,
   fieldInputControlReleases,
-  setNotice,
+  showPageMessage,
   choiceEvidenceFor,
   requestChoicePageRef,
   currentData,
@@ -91,7 +89,7 @@ export function useFlowRuntime({
   controlDraftsRef: RefObject<ControlDrafts> | undefined;
   choicePayloadFor: (placementId: string, formId?: string) => ChoiceInputPayload | undefined;
   fieldInputControlReleases: FieldInputControlReleaseMap;
-  setNotice: Dispatch<SetStateAction<Notice | undefined>>;
+  showPageMessage: (message: PageMessageDraft | undefined) => void;
   choiceEvidenceFor: (
     formId: string,
     values: Readonly<Record<string, unknown>>,
@@ -205,7 +203,7 @@ export function useFlowRuntime({
           return true;
         // The projected page list is a rendering hint; the destination still authorises its read.
         // A page it does not offer must not resolve to the application's home address.
-        setNotice(unavailableNotice);
+        showPageMessage(unavailableNotice);
         return false;
       },
       navigateInternal: (target) => {
@@ -223,7 +221,7 @@ export function useFlowRuntime({
       resolveInternalAddress: (target) =>
         target.kind === "page" ? resolvePageHref(target.pageId) : basePath,
     }),
-    [basePath, model.pages, resolvePageHref, router, setNotice, startPageChange, unsavedWork],
+    [basePath, model.pages, resolvePageHref, router, showPageMessage, startPageChange, unsavedWork],
   );
   const renderForm = useCallback(
     (
@@ -311,7 +309,7 @@ export function useFlowRuntime({
               values: event.values,
             });
             if (!answer.success || answer.data.kind !== "submit") {
-              setNotice(unavailableNotice);
+              showPageMessage(unavailableNotice);
               return;
             }
             controls.submit(
@@ -466,7 +464,7 @@ export function useFlowRuntime({
     );
     if (action === undefined) {
       console.error("[flow] message action binding unavailable");
-      setNotice(unavailableNotice);
+      showPageMessage(unavailableNotice);
       return;
     }
     void flowRuntime.dispatch(action, message.actionInputs, crypto.randomUUID());

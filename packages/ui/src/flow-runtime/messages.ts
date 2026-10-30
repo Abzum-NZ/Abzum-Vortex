@@ -15,6 +15,7 @@ export type PageMessage = Readonly<{
   dismissAfterMs?: number;
   refusal?: Extract<FormFlowFeedback, { kind: "refusal" }>;
 }>;
+export type PageMessageDraft = Omit<PageMessage, "id">;
 
 /** Messages are slots of the page's runtime state, keyed by their presentation target. */
 export function createPageMessages(notify: (key: string) => void) {

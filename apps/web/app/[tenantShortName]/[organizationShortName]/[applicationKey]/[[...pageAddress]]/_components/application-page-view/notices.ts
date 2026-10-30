@@ -1,40 +1,57 @@
 import { flowRefusalFeedbackSentences } from "@vortex/platform/schema";
 import type { FormFlowFeedback } from "@vortex/ui";
-import type { Notice } from "./types";
+import type { PageMessageDraft } from "./types";
 
 /**
  * The fixed sentence for each safe flow outcome. The endpoint returns the outcome and, for a rule
  * refusal, the rule's own authored message (shown instead of the sentence here); never a service message.
  */
-export const outcomeNotices: Readonly<Record<string, Notice>> = {
-  completed: { tone: "info", text: "Done." },
-  committed: { tone: "info", text: "Saved." },
+export const outcomeNotices: Readonly<Record<string, PageMessageDraft>> = {
+  completed: { target: "toast", severity: "success", text: "Done." },
+  committed: { target: "toast", severity: "success", text: "Saved." },
   refused: {
-    tone: "problem",
+    target: "banner",
+    severity: "error",
     text: "This was not allowed. Check your access and the values, or ask your administrator.",
   },
-  conflict: { tone: "problem", text: "This changed since you opened it. Refresh and review it." },
+  conflict: {
+    target: "banner",
+    severity: "error",
+    text: "This changed since you opened it. Refresh and review it.",
+  },
   validation: {
-    tone: "problem",
+    target: "banner",
+    severity: "error",
     text: "Some values were not accepted. Check each field and try again.",
   },
   partial: {
-    tone: "problem",
+    target: "banner",
+    severity: "error",
     text: "Only part of this was saved. Refresh and review what changed.",
   },
   uncertain: {
-    tone: "problem",
+    target: "banner",
+    severity: "error",
     text: "The result is not certain yet. Refresh before trying again.",
   },
-  background_pending: { tone: "info", text: "Started. It will finish in the background." },
-  failed: { tone: "problem", text: "That did not work. Try again." },
+  background_pending: {
+    target: "toast",
+    severity: "success",
+    text: "Started. It will finish in the background.",
+  },
+  failed: { target: "banner", severity: "error", text: "That did not work. Try again." },
 };
 
 /** A board move the person backed out of at its form: nothing was saved. */
-export const cancelledMoveNotice: Notice = { tone: "info", text: "Move cancelled." };
+export const cancelledMoveNotice: PageMessageDraft = {
+  target: "toast",
+  severity: "success",
+  text: "Move cancelled.",
+};
 
-export const unavailableNotice: Notice = {
-  tone: "problem",
+export const unavailableNotice: PageMessageDraft = {
+  target: "banner",
+  severity: "error",
   text: "That is not available right now.",
 };
 
@@ -42,11 +59,16 @@ export const unavailableNotice: Notice = {
  * A run that reached a task the platform cannot run yet. It is not a refusal, so the person is
  * never told they lack a permission for it.
  */
-const notAvailableNotice: Notice = { tone: "problem", text: "This is not available yet." };
+const notAvailableNotice: PageMessageDraft = {
+  target: "banner",
+  severity: "error",
+  text: "This is not available yet.",
+};
 
 /** A failed run that committed nothing: the person may simply try again. */
-const failedUnchangedNotice: Notice = {
-  tone: "problem",
+const failedUnchangedNotice: PageMessageDraft = {
+  target: "banner",
+  severity: "error",
   text: "That did not work, and nothing was changed. Try again.",
 };
 
@@ -55,7 +77,7 @@ export const finishedNotice = (
   outcome: string | undefined,
   failureCode: unknown,
   commit: string | undefined,
-): Notice =>
+): PageMessageDraft =>
   failureCode === "task_not_available"
     ? notAvailableNotice
     : (outcome ?? "failed") === "failed" && commit === "none"
@@ -69,14 +91,24 @@ export const reauthenticationPath = "/auth/session-ended?status=reauthenticate";
 export const multiFactorPath = "/auth/sign-in?mfa=1";
 
 export const refusalNotices: Readonly<
-  Record<Extract<FormFlowFeedback, { kind: "refusal" }>["code"], Notice>
+  Record<Extract<FormFlowFeedback, { kind: "refusal" }>["code"], PageMessageDraft>
 > = Object.fromEntries(
   Object.entries(flowRefusalFeedbackSentences).map(([code, text]) => [
     code,
     code === "recent_authentication_required"
-      ? { tone: "problem", text, link: { label: "Sign in again", href: reauthenticationPath } }
+      ? {
+          target: "banner",
+          severity: "error",
+          text,
+          action: { kind: "link", label: "Sign in again", href: reauthenticationPath },
+        }
       : code === "multi_factor_required"
-        ? { tone: "problem", text, link: { label: "Verify", href: multiFactorPath } }
-        : { tone: "problem", text },
+        ? {
+            target: "banner",
+            severity: "error",
+            text,
+            action: { kind: "link", label: "Verify", href: multiFactorPath },
+          }
+        : { target: "banner", severity: "error", text },
   ]),
-) as Readonly<Record<Extract<FormFlowFeedback, { kind: "refusal" }>["code"], Notice>>;
+) as Readonly<Record<Extract<FormFlowFeedback, { kind: "refusal" }>["code"], PageMessageDraft>>;

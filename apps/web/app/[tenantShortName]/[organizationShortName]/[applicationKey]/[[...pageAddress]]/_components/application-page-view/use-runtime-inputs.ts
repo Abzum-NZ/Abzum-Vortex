@@ -41,7 +41,7 @@ import type {
   DispatchOutcome,
   PageSelection,
   TableContinuationTarget,
-  Notice,
+  PageMessageDraft,
   SubmittedForm,
   EventHandlers,
   ControlReport,
@@ -93,7 +93,7 @@ export function useRuntimeInputs({
   subject,
   requestedStepId,
   guidedSummaryStepId,
-  setNotice,
+  showPageMessage,
   submitGuidedSummary,
   advanceGuidedStep,
   currentEditFormBaselines,
@@ -140,7 +140,7 @@ export function useRuntimeInputs({
     supplied: Record<string, unknown>,
     selectedRecordId?: string,
     gestureSubject?: Readonly<{ recordId: string; revision: number }>,
-    afterAccepted?: () => Promise<Notice | undefined>,
+    afterAccepted?: () => Promise<PageMessageDraft | undefined>,
     clickId?: string,
     reportOnControl?: ControlReport,
     sourceTablePlacementId?: string,
@@ -189,7 +189,7 @@ export function useRuntimeInputs({
   subject: ApplicationPageModel["subject"];
   requestedStepId: RefObject<string | undefined>;
   guidedSummaryStepId: string | undefined;
-  setNotice: Dispatch<SetStateAction<Notice | undefined>>;
+  showPageMessage: (message: PageMessageDraft | undefined) => void;
   submitGuidedSummary: (
     placementId: string,
     binding: PlacementFlowBinding,
@@ -213,7 +213,7 @@ export function useRuntimeInputs({
   applyDispatch: (
     dispatch: Promise<ServerDrivenResult | undefined>,
     formPlacementId?: string,
-    afterAccepted?: () => Promise<Notice | undefined>,
+    afterAccepted?: () => Promise<PageMessageDraft | undefined>,
     sourceBindingId?: string,
   ) => Promise<unknown>;
   formBlock: ReturnType<typeof createFormBlockRuntime>;
@@ -409,7 +409,10 @@ export function useRuntimeInputs({
         )
           events.card_moved = (event: DisplaySemanticEvent) =>
             import("./display-write-events").then(({ cardMoved }) =>
-              cardMoved({ placementId, bindings, runBinding, setNotice, formCancelledRef }, event),
+              cardMoved(
+                { placementId, bindings, runBinding, showPageMessage, formCancelledRef },
+                event,
+              ),
             );
         if (
           boardData !== undefined &&
@@ -418,7 +421,7 @@ export function useRuntimeInputs({
         )
           events.card_added = (event: DisplaySemanticEvent) =>
             import("./display-write-events").then(({ cardAdded }) =>
-              cardAdded({ placementId, bindings, runBinding, setNotice }, event),
+              cardAdded({ placementId, bindings, runBinding, showPageMessage }, event),
             );
         if (boardData !== undefined && supportsEvent("page_changed"))
           events.page_changed = (event: DisplaySemanticEvent) =>
@@ -462,8 +465,9 @@ export function useRuntimeInputs({
               selected.length >= recordsSelectionMaximumIds &&
               !selected.some((item) => item.recordId === event.recordId)
             ) {
-              setNotice({
-                tone: "problem",
+              showPageMessage({
+                target: "banner",
+                severity: "error",
                 text: `Select at most ${recordsSelectionMaximumIds} records. Clear some selections before adding another.`,
               });
               return;
@@ -481,8 +485,9 @@ export function useRuntimeInputs({
               // so the cap is also decided here, where the rows already added are known.
               if (held.length >= recordsSelectionMaximumIds) {
                 queueMicrotask(() =>
-                  setNotice({
-                    tone: "problem",
+                  showPageMessage({
+                    target: "banner",
+                    severity: "error",
                     text: `Select at most ${recordsSelectionMaximumIds} records. Clear some selections before adding another.`,
                   }),
                 );
@@ -708,7 +713,7 @@ export function useRuntimeInputs({
             requestedStepId.current = undefined;
             if (model.guidedForm.activeStepId === guidedSummaryStepId) {
               if (submitBinding === undefined) {
-                setNotice(unavailableNotice);
+                showPageMessage(unavailableNotice);
                 return;
               }
               return submitGuidedSummary(
@@ -742,7 +747,7 @@ export function useRuntimeInputs({
             recordSubmission &&
             Object.keys(recordValues).length === 0
           ) {
-            setNotice(undefined);
+            showPageMessage(undefined);
             runtimeState.messages.show({
               id: crypto.randomUUID(),
               target: "inline",
