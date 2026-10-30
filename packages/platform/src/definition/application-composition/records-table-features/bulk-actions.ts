@@ -21,7 +21,7 @@ import {
  * selection runs on the back end and the person is told it started. Read by the table's dispatch
  * check and by the grid.
  */
-export const recordsTableBulkRequestMaximum = 100;
+export const recordsTableBulkRequestMaximum = 50;
 
 /** The maximum authored action limit; explicit selections also have a 200-record page cap. */
 export const recordsTableBulkActionRecordLimit = 5_000;

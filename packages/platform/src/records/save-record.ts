@@ -19,10 +19,6 @@ import {
 import { saveRecordCommandSchema, type SaveRecordCommand } from "./records";
 import {
   contractError,
-  recordBatchSaveMaximum,
-  type RecordBatchSaveProblem,
-  type RecordBatchSaveResult,
-  type RecordBatchSaveSubject,
   type RecordSaveServiceDependencies,
   type RecordSaveServiceResult,
 } from "./record-save-preparation";
@@ -31,12 +27,8 @@ export { calculateAndFinalize, operationClock } from "./field-candidate";
 export {
   parseRelationshipTotalPreparation,
   readOrganizationRuntimeSettings,
-  recordBatchSaveMaximum,
   revision,
   type PreparedSave,
-  type RecordBatchSaveProblem,
-  type RecordBatchSaveResult,
-  type RecordBatchSaveSubject,
   type RecordSaveServiceDependencies,
   type RecordSaveServiceResult,
   type RelationshipTotalPreparationOutcome,
@@ -145,87 +137,6 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
         } catch (error) {
           if (!(error instanceof HumanOrganizationRequestRestart)) throw error;
         }
-      }
-      return { kind: "temporarily_unavailable" };
-    },
-    /** One grid gesture prepares, calculates and writes its entire set under one receipt. */
-    async saveBatch(
-      caller: IdentitySession,
-      selection: OrganizationSelectionCandidate,
-      commandId: string,
-      recordTypeId: string,
-      subjects: readonly RecordBatchSaveSubject[],
-    ): Promise<RecordBatchSaveResult> {
-      if (
-        selection.applicationRootId === undefined ||
-        selection.previewInstallationId !== undefined ||
-        subjects.length === 0 ||
-        subjects.length > recordBatchSaveMaximum
-      )
-        return { kind: "unavailable" };
-      const rollback = new Error("RECORD_BATCH_SAVE_ROLLED_BACK");
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        let settled: RecordBatchSaveResult | Readonly<{ kind: "restart" }> | undefined;
-        const result = await requests.runChange(
-          caller,
-          selection,
-          async (transaction, _scope, issuedAt) => {
-            const changed = await applyRecordChanges(
-              transaction,
-              issuedAt,
-              commandId,
-              subjects.map((subject) => ({
-                operation: "update",
-                recordTypeId,
-                recordId: subject.recordId,
-                expectedConcurrencyNumber: subject.expectedConcurrencyNumber,
-                values: subject.submittedValues,
-              })),
-            );
-            if (changed.kind === "completed")
-              return changed.results.map((saved, index) => ({
-                recordId: saved.recordId,
-                concurrencyNumber: saved.concurrencyNumber,
-                previous: changed.previous[index] ?? {},
-              }));
-            if (changed.kind === "restart") settled = changed;
-            else {
-              const recordId = subjects[changed.index]?.recordId ?? subjects[0]!.recordId;
-              const failure = changed.result;
-              const problems: RecordBatchSaveProblem[] =
-                failure?.outcome === "correction_required"
-                  ? failure.corrections.map((correction) => ({
-                      recordId,
-                      fieldId: correction.fieldId,
-                      reason: correction.code,
-                      ...(correction.message === undefined ? {} : { message: correction.message }),
-                    }))
-                  : [
-                      {
-                        recordId,
-                        reason:
-                          failure?.outcome === "refused" && failure.error.code === "conflict"
-                            ? "changed"
-                            : "refused",
-                        ...(failure?.outcome === "refused" &&
-                        "reason" in failure.error &&
-                        failure.error.reason !== undefined
-                          ? { message: failure.error.reason.message }
-                          : {}),
-                      },
-                    ];
-              console.error(
-                `[record] batch change refused: ${changed.reasonCode ?? failure?.outcome ?? "unknown"}`,
-              );
-              settled = { kind: "refused", problems };
-            }
-            throw rollback;
-          },
-        );
-        if (settled?.kind === "restart") continue;
-        if (settled !== undefined) return settled;
-        if (result.kind !== "available") return result;
-        return { kind: "saved", rows: result.value };
       }
       return { kind: "temporarily_unavailable" };
     },
