@@ -3,7 +3,9 @@ create or replace function vortex_record.prepare_record_change_internal(
   p_record_id uuid,
   p_expected_concurrency_number bigint,
   p_final_values jsonb,
-  p_submitted_field_ids uuid[]
+  p_submitted_field_ids uuid[],
+  p_loaded jsonb default null,
+  p_memo jsonb default null
 )
 returns jsonb
 language plpgsql
@@ -46,13 +48,13 @@ begin
     );
   end if;
 
-  loaded := (vortex_record.load_record_access_facts_internal(
+  loaded := coalesce(p_loaded, (vortex_record.load_record_access_facts_internal(
     'update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
       'recordTypeId', p_record_type_id,
       'recordId', p_record_id,
       'expectedConcurrencyNumber', p_expected_concurrency_number
     ))
-  ) -> 0);
+  ) -> 0));
   if loaded ->> 'outcome' = 'conflict' then
     return pg_catalog.jsonb_build_object(
       'outcome', 'conflict', 'concurrencyNumber', loaded -> 'concurrencyNumber'
@@ -82,13 +84,9 @@ begin
       );
     end if;
   else
-    decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
-      pg_catalog.jsonb_build_object(
-        'declaration', loaded -> 'declaration',
-        'recordId', p_record_id,
-        'facts', loaded -> 'facts'
-      )
-    )) -> 0);
+    decision := vortex_record.decide_record_access_internal(
+      p_memo, loaded -> 'declaration', p_record_id, loaded -> 'facts'
+    );
     if decision ->> 'outcome' <> 'allowed' then
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'record_unavailable'
@@ -162,13 +160,9 @@ begin
     || pg_catalog.jsonb_build_object('records', proposed_records);
 
   if not (loaded ? 'previewInstallationId') then
-    decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
-      pg_catalog.jsonb_build_object(
-        'declaration', loaded -> 'declaration',
-        'recordId', p_record_id,
-        'facts', proposed_facts
-      )
-    )) -> 0);
+    decision := vortex_record.decide_record_access_internal(
+      p_memo, loaded -> 'declaration', p_record_id, proposed_facts
+    );
     if decision ->> 'outcome' <> 'allowed' then
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'proposed_record_refused'
@@ -203,13 +197,13 @@ begin
   );
 end
 $function$;
-alter function vortex_record.prepare_record_change_internal(uuid,uuid,bigint,jsonb,uuid[]) owner to vortex_record_adapter;
+alter function vortex_record.prepare_record_change_internal(uuid,uuid,bigint,jsonb,uuid[],jsonb,jsonb) owner to vortex_record_adapter;
 
 
-alter function vortex_record.prepare_record_change_internal(uuid, uuid, bigint, jsonb, uuid[])
+alter function vortex_record.prepare_record_change_internal(uuid, uuid, bigint, jsonb, uuid[], jsonb, jsonb)
   owner to vortex_record_adapter;
 
-revoke all on function vortex_record.prepare_record_change_internal(uuid, uuid, bigint, jsonb, uuid[])
+revoke all on function vortex_record.prepare_record_change_internal(uuid, uuid, bigint, jsonb, uuid[], jsonb, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-comment on function vortex_record.prepare_record_change_internal(uuid, uuid, bigint, jsonb, uuid[]) is
+comment on function vortex_record.prepare_record_change_internal(uuid, uuid, bigint, jsonb, uuid[], jsonb, jsonb) is
   'Private record update preparation. Locks the current revision, checks current and proposed authority and field bounds, and returns the storage mutation and permitted projection for the set writer.';

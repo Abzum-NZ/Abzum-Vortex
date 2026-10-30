@@ -8,7 +8,9 @@ create or replace function vortex_record.prepare_record_update_internal(
   p_final_values jsonb,
   p_activity_id uuid,
   p_action jsonb,
-  p_meta jsonb
+  p_meta jsonb,
+  p_loaded jsonb default null,
+  p_memo jsonb default null
 )
 returns jsonb
 language plpgsql
@@ -71,7 +73,7 @@ begin
       action_id_value, p_record_type_id, p_record_id, p_expected_concurrency_number
     );
   else
-    loaded := (vortex_record.load_record_access_facts_internal('update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', p_record_type_id, 'recordId', p_record_id, 'expectedConcurrencyNumber', p_expected_concurrency_number))) -> 0);
+    loaded := coalesce(p_loaded, (vortex_record.load_record_access_facts_internal('update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', p_record_type_id, 'recordId', p_record_id, 'expectedConcurrencyNumber', p_expected_concurrency_number))) -> 0));
   end if;
   if loaded ->> 'outcome' = 'conflict' then
     perform vortex_record.release_command_receipt_internal(receipt_kind, effective_command_id);
@@ -89,7 +91,10 @@ begin
     );
   end if;
   if preview_installation is null then
-    decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', meta -> 'declaration', 'recordId', p_record_id, 'facts', (loaded -> 'facts') || pg_catalog.jsonb_build_object( 'binding', meta -> 'declaration' -> 'recordBinding' )))) -> 0);
+    decision := vortex_record.decide_record_access_internal(
+      p_memo, meta -> 'declaration', p_record_id,
+      (loaded -> 'facts') || pg_catalog.jsonb_build_object( 'binding', meta -> 'declaration' -> 'recordBinding' )
+    );
     if decision ->> 'outcome' = 'refused' then
       if action_mode then
         activity_time := vortex_record.append_record_activity_internal(p_activity_id, 'execute_named_action', array[p_record_id]::uuid[], array[]::uuid[], 'refused');
@@ -296,7 +301,7 @@ begin
     'edges', proposed_edges
   );
   if preview_installation is null then
-    decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', loaded -> 'declaration', 'recordId', p_record_id, 'facts', proposed_facts))) -> 0);
+    decision := vortex_record.decide_record_access_internal(p_memo, loaded -> 'declaration', p_record_id, proposed_facts);
     if decision ->> 'outcome' <> 'allowed' then
       if action_mode then
         activity_time := vortex_record.append_record_activity_internal(p_activity_id, 'execute_named_action', array[p_record_id]::uuid[], array[]::uuid[], 'refused');
@@ -324,7 +329,7 @@ begin
   else
     mutation := vortex_record.prepare_record_change_internal(
       p_record_type_id, p_record_id, p_expected_concurrency_number,
-      value_final_values, value_submitted_field_ids
+      value_final_values, value_submitted_field_ids, loaded, p_memo
     );
   end if;
 
@@ -363,9 +368,9 @@ begin
   return mutation;
 end
 $function$;
-alter function vortex_record.prepare_record_update_internal(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,jsonb,jsonb)
+alter function vortex_record.prepare_record_update_internal(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,jsonb,jsonb,jsonb,jsonb)
   owner to vortex_record_adapter;
-revoke all on function vortex_record.prepare_record_update_internal(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,jsonb,jsonb)
+revoke all on function vortex_record.prepare_record_update_internal(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,jsonb,jsonb,jsonb,jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-comment on function vortex_record.prepare_record_update_internal(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,jsonb,jsonb) is
+comment on function vortex_record.prepare_record_update_internal(uuid,text,uuid,uuid,bigint,jsonb,jsonb,uuid,jsonb,jsonb,jsonb,jsonb) is
   'Private common update preparation for ordinary and named-action records: locks the current revision and relationship targets, checks current and proposed authority and field bounds, and returns one combined scalar/link storage mutation and its edges.';
