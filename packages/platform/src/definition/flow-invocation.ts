@@ -443,6 +443,16 @@ export async function invokeInstalledFlow(
       ...(boundRequest === undefined ? {} : { boundRequest }),
     };
     const requests = createHumanOrganizationRequestService(scopedDependencies);
+    // The one check a save makes that a value is among the options its field's source offers now.
+    const optionMember =
+      boundRequest === undefined
+        ? undefined
+        : createOptionMembershipCheck({
+            dependencies: { ...scopedDependencies, continuationKey: dependencies.continuationKey },
+            installation,
+            session: boundRequest.session,
+            selection: boundRequest.selection,
+          });
     const subjectReader = createPageSubjectReader(scopedDependencies);
     const matchesBound = (session: IdentitySession, selection: OrganizationSelectionCandidate) =>
       boundRequest !== undefined &&
@@ -518,20 +528,7 @@ export async function invokeInstalledFlow(
       executor: executorFor(boundRequest, receipt),
       ...(boundRequest === undefined
         ? {}
-        : {
-            recordChanges: createFlowRecordChangePort(
-              boundRequest,
-              createOptionMembershipCheck({
-                dependencies: {
-                  ...scopedDependencies,
-                  continuationKey: dependencies.continuationKey,
-                },
-                installation,
-                session: boundRequest.session,
-                selection: boundRequest.selection,
-              }),
-            ),
-          }),
+        : { recordChanges: createFlowRecordChangePort(boundRequest, optionMember!) }),
       records:
         boundRequest === undefined
           ? records
@@ -543,6 +540,7 @@ export async function invokeInstalledFlow(
                       boundRequest.issuedAt,
                       selection,
                       command,
+                      optionMember,
                     )
                   : { kind: "unavailable" },
             },

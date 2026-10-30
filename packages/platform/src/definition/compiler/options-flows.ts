@@ -1,4 +1,9 @@
-import type { FlowDefinition } from "../../workflows/flow-contracts";
+import {
+  flowTaskChildLists,
+  type FlowDefinition,
+  type FlowTask,
+} from "../../workflows/flow-contracts";
+import { flowTaskRuns } from "../../workflows/flow-task-registry-data";
 import { compileFlowPlans, FlowPlanError } from "../../workflows/flow-plan";
 import { DefinitionCompilationError } from "../compilation-error";
 import type { JsonObject } from "./shared";
@@ -6,8 +11,19 @@ import type { JsonObject } from "./shared";
 /**
  * Refuses a field whose options a flow works out when that flow cannot be an options source: it
  * must be interactive, hold only pure and read steps, and declare the `options` output the field
- * reads. The same plan check refuses an options binding that changes data or holds page steps.
+ * reads. It refuses a step that runs only in the page and any step that changes data.
  */
+const holdsPageOnlyStep = (tasks: readonly FlowTask[]): boolean =>
+  tasks.some((task) => {
+    const runs = (flowTaskRuns as Readonly<Record<string, { server: boolean } | undefined>>)[
+      task.type
+    ];
+    return (
+      (runs !== undefined && !runs.server) ||
+      flowTaskChildLists(task).some((child) => holdsPageOnlyStep(child.tasks))
+    );
+  });
+
 export const validateFieldOptionsFlows = (
   recordTypes: readonly JsonObject[],
   flows: readonly FlowDefinition[],
@@ -38,7 +54,7 @@ export const validateFieldOptionsFlows = (
         const plan = compileFlowPlans(flows, undefined, undefined, undefined, moduleKey).plans.get(
           String(flow.id),
         );
-        if (plan === undefined || plan.pageSteps || plan.changes)
+        if (plan === undefined || plan.changes || holdsPageOnlyStep(flow.tasks))
           refuse(field, "only reads: it can hold no page steps and no changes");
       } catch (error) {
         if (!(error instanceof FlowPlanError)) throw error;

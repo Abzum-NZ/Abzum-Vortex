@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { OptionMembershipCheck } from "./option-membership";
 import {
   createHumanOrganizationRequestService,
   HumanOrganizationRequestRestart,
@@ -67,12 +68,20 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
     transaction: RequestDatabaseTransaction,
     issuedAt: string,
     command: SaveRecordCommand,
+    optionMember?: OptionMembershipCheck,
   ): Promise<RecordSaveServiceResult> => {
     const rollback = contractError("RECORD_SAVE_ROLLED_BACK", undefined);
     let settled: RecordChangesResult | undefined;
     try {
       await requireRequestSavepoint(transaction).withSavepoint(async (child) => {
-        settled = await applyRecordChanges(child, issuedAt, command.commandId, [intentOf(command)]);
+        settled = await applyRecordChanges(
+          child,
+          issuedAt,
+          command.commandId,
+          [intentOf(command)],
+          undefined,
+          optionMember,
+        );
         if (settled.kind !== "completed") throw rollback;
       });
     } catch (error) {
@@ -100,6 +109,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
       issuedAt: string,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
+      optionMember?: OptionMembershipCheck,
     ): Promise<RecordSaveServiceResult> {
       const command = saveRecordCommandSchema.safeParse(commandCandidate);
       if (!command.success || selection.applicationRootId === undefined) {
@@ -108,7 +118,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
         );
         return { kind: "unavailable" };
       }
-      return saveWithinTransaction(transaction, issuedAt, command.data);
+      return saveWithinTransaction(transaction, issuedAt, command.data, optionMember);
     },
 
     async save(

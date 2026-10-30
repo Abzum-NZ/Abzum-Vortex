@@ -8,7 +8,7 @@ import { readCurrentOrganizationRuntimeSettingsAfterAuthorization } from "../acc
 import { organizationRuntimeSettingsSchema } from "../access/organization-runtime-settings-schema";
 import type { JsonValue } from "../catalogue/common";
 import { applicationRootIdSchema, fieldIdSchema } from "../catalogue/identifiers";
-import { databaseRevision, describeFailure } from "../catalogue/runtime-primitives";
+import { databaseRevision, describeFailure, sameId } from "../catalogue/runtime-primitives";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   isWritableSystemProjection,
@@ -765,7 +765,13 @@ export const finalizeCalculatedValues = async (
       console.error(
         `[record] save refused OPTION_SOURCE_${sourced.reason.toUpperCase()}: field=${sourced.fieldId}`,
       );
-      if (!prepared.readableFieldIds.has(sourced.fieldId.toLowerCase()))
+      // The person is told about a field they submitted or may read; no other.
+      if (
+        !prepared.readableFieldIds.has(sourced.fieldId.toLowerCase()) &&
+        !Object.keys(command.submittedValues).some((submitted) =>
+          sameId(submitted, sourced.fieldId),
+        )
+      )
         return safeRefusal(prepared.correlationId, "operation_refused");
       const label =
         prepared.recordType.fields.find(
