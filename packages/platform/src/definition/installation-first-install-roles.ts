@@ -179,17 +179,18 @@ export const accessForInstallationTarget = (
  * until it is assigned. All role acceptances commit together through the existing Access
  * operation, which re-checks Manage applications, the delegated scope over every permission and a
  * recent primary sign-in. With the installer's explicit choice (offered only when they may manage
- * assignments) the default member role is then assigned to them.
+ * assignments) the default member role is assigned after activation.
  *
- * A refusal leaves nothing installed. Roles accepted before a failed activation open nothing,
- * because the application is not active: a retry finds them and does not accept them again, and
- * declining the member role on a retry revokes the assignment the installer gave themselves. A
- * role that was retired (for example before an uninstall) is never accepted a second time.
+ * Roles accepted before a failed activation open nothing because the application is not active.
+ * Once activated, a refused assignment leaves the installation as progress for a retry. A retry
+ * reuses accepted roles, and declining the member role revokes an assignment the installer gave
+ * themselves. A retired role is never accepted a second time.
  */
 const applyFirstInstallRoles = async (
   environment: FirstInstallFlowEnvironment,
   candidate: FirstInstallCandidate,
   choice: FirstInstallMemberRoleChoice,
+  deferAssignment = false,
 ): Promise<void> => {
   const { session, selector, releaseSet } = candidate;
   const accessAdministration = accessForInstallationTarget(environment, {
@@ -243,6 +244,7 @@ const applyFirstInstallRoles = async (
   );
   // Authority was proved just before; a role not accepted now means access changed meanwhile.
   if (notAccepted.length > 0) installationProblem("first_install_roles_not_accepted", "conflict");
+  if (deferAssignment && choice.kind === "accept") return;
 
   const selection = { organizationId: selector.organizationId };
   if (choice.kind === "decline") {
@@ -330,15 +332,15 @@ export const resumeFirstInstallRoles = async (
 
 /**
  * The one first-install activation. It first makes every role of the release an organisation
- * role and applies the installer's choice for the default member role (above); then it activates
- * the exact prepared release and proves the result names it.
+ * role, then activates the exact prepared release and proves the result names it. A selected
+ * member assignment is applied afterward, as the last step of the install target.
  */
 export const activateFirstInstall = async (
   environment: FirstInstallFlowEnvironment,
   candidate: FirstInstallCandidate,
   choice: FirstInstallMemberRoleChoice,
 ): Promise<ApplicationInstallationActivationResult<unknown>> => {
-  await applyFirstInstallRoles(environment, candidate, choice);
+  await applyFirstInstallRoles(environment, candidate, choice, true);
   const coordinator = createFirstInstallCoordinator(
     environment,
     candidate.selector,

@@ -433,6 +433,16 @@ const install = async (
     let memberRoleGranted = acceptRole;
     if (candidate.snapshot.registrationState === "provisioned_inactive") {
       await activateFirstInstall(environment, candidate, choice);
+      if (choice.kind === "accept") {
+        candidate = await readCurrentFirstInstallCandidate(
+          environment,
+          session,
+          selector,
+          reviewed,
+        );
+        if (candidate.snapshot.registrationState !== "active_exact") return "conflict";
+        memberRoleGranted = await resumeFirstInstallRoles(environment, candidate, choice);
+      }
     } else if (candidate.snapshot.registrationState === "active_exact") {
       memberRoleGranted = await resumeFirstInstallRoles(environment, candidate, choice);
       candidate = await readCurrentFirstInstallCandidate(environment, session, selector, reviewed);
