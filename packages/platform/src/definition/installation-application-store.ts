@@ -31,12 +31,14 @@ import { releaseMemberRole, type ApplicationRoleChange } from "./installation-ro
 import { readApplicationRemoval, removeApplication } from "./installation-removal";
 import {
   readUpgradeAuthorizedState,
+  sameUpgradeSelectedSnapshot,
   sameUpgradeSnapshotState,
   type UpgradeSelector,
   type UpgradeSnapshot,
 } from "./installation-upgrade";
 import {
   readUpgradeRoleChanges,
+  resumeUpgradeRoleChanges,
   upgradeWithRoleChanges,
   type UpgradeRoleEnvironment,
 } from "./installation-upgrade-roles";
@@ -340,11 +342,14 @@ const review = async (
         role_template_ids: changes.map((change) => change.sourceRoleId),
         expected: expectedOf({
           ...authorized.snapshot,
-          roleRevisions: changes.map(({ sourceRoleId, roleId, liveRevision }) => ({
-            sourceRoleId,
-            roleId: roleId ?? null,
-            liveRevision: liveRevision ?? null,
-          })),
+          roleRevisions: changes.map(
+            ({ sourceRoleId, roleId, liveRevision, registrationRevision }) => ({
+              sourceRoleId,
+              roleId: roleId ?? null,
+              liveRevision: liveRevision ?? null,
+              registrationRevision: registrationRevision ?? null,
+            }),
+          ),
         }),
       }),
     };
@@ -440,6 +445,7 @@ const upgradeExpectedSchema = z
             sourceRoleId: roleIdSchema,
             roleId: roleIdSchema.nullable(),
             liveRevision: z.number().int().positive().nullable(),
+            registrationRevision: z.number().int().positive().nullable(),
           })
           .strict(),
       )
@@ -475,23 +481,40 @@ const upgrade = async (
     const reviewed = expected.data as unknown as UpgradeSnapshot;
     // Reviewing an installed version offers only its role changes still to accept.
     const rolesOnly = reviewed.selected.releaseRevision === reviewed.active.releaseRevision;
-    const current = await readUpgradeAuthorizedState(environment, selector, session, rolesOnly);
+    const current = await readUpgradeAuthorizedState(environment, selector, session, true);
     const now = Date.parse(current.checkedAt);
+    const reviewedDeadline = Date.parse(reviewed.validUntil);
+    const currentDeadline = Date.parse(current.snapshot.validUntil);
+    const atTarget = current.snapshot.active.releaseRevision === selector.releaseRevision;
     if (
       !Number.isFinite(now) ||
-      Date.parse(reviewed.validUntil) <= now ||
-      Date.parse(current.snapshot.validUntil) <= now ||
-      !sameUpgradeSnapshotState(reviewed, current.snapshot)
+      !Number.isFinite(reviewedDeadline) ||
+      !Number.isFinite(currentDeadline) ||
+      reviewedDeadline <= now ||
+      currentDeadline <= now ||
+      !(atTarget && !rolesOnly
+        ? sameUpgradeSelectedSnapshot(reviewed, current.snapshot)
+        : sameUpgradeSnapshotState(reviewed, current.snapshot))
     )
       return "conflict";
-    const { accepted, notAccepted } = await upgradeWithRoleChanges(
-      environment,
-      selector,
-      current.state,
-      session,
-      roleTemplateIds.data,
-      expected.data.roleRevisions,
-    );
+    const { accepted, notAccepted } = atTarget
+      ? await resumeUpgradeRoleChanges(
+          environment,
+          selector,
+          current.state,
+          session,
+          roleTemplateIds.data,
+          expected.data.roleRevisions,
+          !rolesOnly,
+        )
+      : await upgradeWithRoleChanges(
+          environment,
+          selector,
+          current.state,
+          session,
+          roleTemplateIds.data,
+          expected.data.roleRevisions,
+        );
     return {
       kind: "available",
       value: {

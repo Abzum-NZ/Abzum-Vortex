@@ -52,6 +52,7 @@ export const readApplicationRemoval = async (
   session: IdentitySession,
   organizationId: z.infer<typeof organizationIdSchema>,
   rootId: z.infer<typeof applicationRootIdSchema>,
+  reviewed?: RemovalExpected,
 ) => {
   let failure: unknown;
   const result = await environment.requests.runChange(
@@ -73,10 +74,28 @@ export const readApplicationRemoval = async (
         );
         const bindings = await readInstallationBindings(transaction, rootId);
         const revision = bindings.registeredReleaseRevision;
+        const removed =
+          reviewed !== undefined &&
+          revision === null &&
+          canonicalJson(sortedBindingTuples(bindings.moduleBindings)) ===
+            canonicalJson(
+              sortedBindingTuples(
+                reviewed.moduleBindings.map((binding) =>
+                  binding.state === "detached"
+                    ? binding
+                    : {
+                        ...binding,
+                        state: "detached" as const,
+                        bindingRevision: binding.bindingRevision + 1,
+                      },
+                ),
+              ),
+            );
         // Never installed, or every module already detached: there is nothing here to remove.
         if (
-          revision === null ||
-          bindings.moduleBindings.every((binding) => binding.state === "detached")
+          !removed &&
+          (revision === null ||
+            bindings.moduleBindings.every((binding) => binding.state === "detached"))
         )
           installationProblem("removal_not_installed", "refused", "not_installed");
         if (
@@ -93,7 +112,7 @@ export const readApplicationRemoval = async (
           {
             organizationId,
             rootId,
-            releaseRevision: revision,
+            releaseRevision: removed ? reviewed.applicationReleaseRevision : revision!,
           },
           context,
           "replace_or_remove",
@@ -121,12 +140,15 @@ export const readApplicationRemoval = async (
           installationProblem("removal_authority_lapsed", "refused");
         return {
           releaseSet,
-          expected: removalExpectedSchema.parse({
-            organizationId,
-            applicationRootId: rootId,
-            applicationReleaseRevision: revision,
-            moduleBindings: bindings.moduleBindings,
-          }),
+          removed,
+          expected: removed
+            ? reviewed
+            : removalExpectedSchema.parse({
+                organizationId,
+                applicationRootId: rootId,
+                applicationReleaseRevision: revision,
+                moduleBindings: bindings.moduleBindings,
+              }),
         };
       } catch (error) {
         failure = error;
@@ -169,8 +191,15 @@ export const removeApplication = async (
   )
     installationProblem("removal_expectation_invalid", "conflict");
   const expected = parsed.data;
-  const current = await readApplicationRemoval(environment, session, organizationId, rootId);
+  const current = await readApplicationRemoval(
+    environment,
+    session,
+    organizationId,
+    rootId,
+    expected,
+  );
   if (!sameRemoval(expected, current.expected)) installationProblem("removal_changed", "conflict");
+  if (current.removed) return { application_name: current.releaseSet.application.content.name };
   const operation = removalOperation(
     rootId,
     environment.containsCustomComponents(current.releaseSet),
