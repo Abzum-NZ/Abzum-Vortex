@@ -5563,8 +5563,8 @@ declare
   create_indexes integer[] := array[]::integer[];
   update_targets jsonb := '[]'::jsonb;
   update_indexes integer[] := array[]::integer[];
-  update_loaded jsonb := '{}'::jsonb;
-  update_decisions jsonb := '{}'::jsonb;
+  update_loaded jsonb[] := array[]::jsonb[];
+  update_decisions jsonb[] := array[]::jsonb[];
   loaded_set jsonb;
   decision_set jsonb;
   set_position integer;
@@ -5666,13 +5666,9 @@ begin
     end if;
     set_position := 0;
     for target_position in 1 .. pg_catalog.jsonb_array_length(loaded_set) loop
-      update_loaded := update_loaded || pg_catalog.jsonb_build_object(
-        update_indexes[target_position]::text, loaded_set -> (target_position - 1)
-      );
+      update_loaded[update_indexes[target_position] + 1] := loaded_set -> (target_position - 1);
       if loaded_set -> (target_position - 1) ->> 'outcome' = 'loaded' and preview_installation is null then
-        update_decisions := update_decisions || pg_catalog.jsonb_build_object(
-          update_indexes[target_position]::text, decision_set -> set_position
-        );
+        update_decisions[update_indexes[target_position] + 1] := decision_set -> set_position;
         set_position := set_position + 1;
       end if;
     end loop;
@@ -5731,7 +5727,7 @@ begin
           (subject ->> 'recordTypeId')::uuid, (subject ->> 'recordId')::uuid, null
         );
       else
-        loaded := update_loaded -> (plan ->> 'index');
+        loaded := update_loaded[(plan ->> 'index')::integer + 1];
       end if;
       if loaded ->> 'outcome' is distinct from 'loaded' then
         raise exception using errcode = '42501', message = 'Changed record is unavailable';
@@ -5739,7 +5735,7 @@ begin
       if preview_installation is null then
         decision := case when plan -> 'action' is not null and plan -> 'action' <> 'null'::jsonb
           then (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', meta -> 'declaration', 'recordId', (subject ->> 'recordId')::uuid, 'facts', (loaded -> 'facts') || pg_catalog.jsonb_build_object('binding', meta #> '{declaration,recordBinding}')))) -> 0)
-          else update_decisions -> (plan ->> 'index') end;
+          else update_decisions[(plan ->> 'index')::integer + 1] end;
         if decision ->> 'outcome' is distinct from 'allowed' then
           raise exception using errcode = '42501', message = 'Changed record is unavailable';
         end if;
@@ -6369,8 +6365,8 @@ declare
   cache_key text;
   update_targets jsonb := '[]'::jsonb;
   update_indexes integer[] := array[]::integer[];
-  update_loaded jsonb := '{}'::jsonb;
-  update_decisions jsonb := '{}'::jsonb;
+  update_loaded jsonb[] := array[]::jsonb[];
+  update_decisions jsonb[] := array[]::jsonb[];
   loaded_set jsonb;
   decision_set jsonb;
   set_position integer;
@@ -6434,14 +6430,10 @@ begin
     end if;
     set_position := 0;
     for target_position in 1 .. pg_catalog.jsonb_array_length(loaded_set) loop
-      update_loaded := update_loaded || pg_catalog.jsonb_build_object(
-        update_indexes[target_position]::text, loaded_set -> (target_position - 1)
-      );
+      update_loaded[update_indexes[target_position] + 1] := loaded_set -> (target_position - 1);
       if loaded_set -> (target_position - 1) ->> 'outcome' = 'loaded'
         and pg_catalog.jsonb_typeof(loaded_set -> (target_position - 1) -> 'declaration') = 'object' then
-        update_decisions := update_decisions || pg_catalog.jsonb_build_object(
-          update_indexes[target_position]::text, decision_set -> set_position
-        );
+        update_decisions[update_indexes[target_position] + 1] := decision_set -> set_position;
         set_position := set_position + 1;
       end if;
     end loop;
@@ -6480,14 +6472,14 @@ begin
       -- The action's own authority and revision were verified with the named scope.
       null;
     elsif subject ->> 'operation' = 'update' then
-      loaded := update_loaded -> subject_index::text;
+      loaded := update_loaded[subject_index + 1];
       if loaded ->> 'outcome' is distinct from 'loaded'
         or pg_catalog.jsonb_typeof(loaded -> 'declaration') is distinct from 'object' then
         return pg_catalog.jsonb_build_object(
           'outcome', 'refused', 'index', subject_index, 'reasonCode', 'record_unavailable'
         );
       end if;
-      decision := update_decisions -> subject_index::text;
+      decision := update_decisions[subject_index + 1];
       if decision ->> 'outcome' is distinct from 'allowed' then
         return pg_catalog.jsonb_build_object(
           'outcome', 'refused', 'index', subject_index, 'reasonCode', 'record_unavailable'
