@@ -4,10 +4,6 @@ import { z } from "zod";
 import { organizationIdSchema } from "../catalogue/identifiers";
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
 import type { IdentitySession } from "./identity-access";
-import { createBuilderAuthority, readBuilderApplicationOrigin } from "./builder-authority";
-import type { BuilderTargetFactsReader } from "./builder-authority";
-import type { PlatformPermissionSource } from "./platform-permissions";
-import { BuilderAuthorityError, requireBuilderAuthority } from "../definition/builder-authority";
 
 const historyRowSchema = z.object({
   backend_run_id: z.uuid(),
@@ -36,24 +32,15 @@ type BackendRunHistoryResult =
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
-const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId) => {
-  if (rootId === undefined) return { isSystemApplication: false };
-  const origin = await readBuilderApplicationOrigin(transaction, rootId);
-  if (origin === undefined) throw new Error("BACKEND_RUN_HISTORY_APPLICATION_UNKNOWN");
-  return { isSystemApplication: origin === "platform_system_application" };
-};
-
 const iso = (value: Date | string): string => (value instanceof Date ? value.toISOString() : value);
 
 /**
  * Reads the newest back-end runs of one application: flow, origin, source, state, failure code and
- * times, never outputs. The same builder authority Studio uses to open the application gates it.
+ * times, never outputs. The database function decides authority from the caller's own request
+ * context (definition-draft management, as Studio requires to open the application).
  */
 export const createBackendRunHistoryReader = (
-  dependencies: Readonly<{
-    requests: ReturnType<typeof createHumanOrganizationRequestService>;
-    permissions: PlatformPermissionSource;
-  }>,
+  dependencies: Readonly<{ requests: ReturnType<typeof createHumanOrganizationRequestService> }>,
 ) => ({
   async read(
     session: IdentitySession,
@@ -61,39 +48,20 @@ export const createBackendRunHistoryReader = (
     applicationRootId: string,
     limit = 50,
   ): Promise<BackendRunHistoryResult> {
-    let refused = false;
     const result = await dependencies.requests.run(
       session,
       { organizationId: organizationIdSchema.parse(organizationId) },
-      async (transaction, scope): Promise<readonly z.infer<typeof historyRowSchema>[]> => {
-        const authority = createBuilderAuthority({
-          transaction,
-          scope,
-          targetFacts,
-          permissions: dependencies.permissions,
-        });
-        try {
-          await requireBuilderAuthority(authority, {
-            kind: "draft_change",
-            rootId: applicationRootId,
-          });
-        } catch (error) {
-          if (error instanceof BuilderAuthorityError) {
-            refused = true;
-            return [];
-          }
-          throw error;
-        }
+      async (transaction): Promise<readonly z.infer<typeof historyRowSchema>[]> => {
         const rows = await transaction.query`
           select * from vortex_platform.read_backend_run_history(
-            ${scope.organizationId}::uuid, ${applicationRootId}::uuid, ${limit}::integer
+            ${applicationRootId}::uuid, ${limit}::integer
           )
         `;
         return rows.map((row) => historyRowSchema.parse(row));
       },
     );
-    if (result.kind !== "available") return { kind: "temporarily_unavailable" };
-    if (refused) return { kind: "refused" };
+    if (result.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
+    if (result.kind !== "available") return { kind: "refused" };
     return {
       kind: "available",
       runs: result.value.map((row) => ({
