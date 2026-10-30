@@ -20,6 +20,7 @@ export async function runFlowBinding(
     const result = await startBrowserFlow({
       plan: browser.plan,
       bindings: browser.inputs,
+      event: binding.event,
       caller: callerInputs ?? {},
       runId: clickId,
       timeZone: options.timeZone,
