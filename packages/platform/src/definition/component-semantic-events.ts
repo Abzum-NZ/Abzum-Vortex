@@ -74,6 +74,8 @@ export const pageDispatchedEvents: ReadonlySet<string> = new Set([
   "form_ready",
   "form_reset",
   "form_submit",
+  "form_cancel",
+  "guided_step_changed",
   "tab_changed",
   ...pageSemanticEventKinds,
 ]);

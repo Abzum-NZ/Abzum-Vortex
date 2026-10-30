@@ -24,6 +24,8 @@ const serverStepRunners = {
   "record.query": "protected_task",
   "record.read_fields": "protected_task",
   "record.pin_identity": "protected_task",
+  "form.save_draft": "protected_task",
+  "form.discard_draft": "protected_task",
   "operation.call": "protected_task",
   "backend.run": "protected_task",
   "record.create": "protected_task",

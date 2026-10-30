@@ -12,7 +12,6 @@ import {
 } from "@vortex/ui";
 import type { PlatformBlockRelease, ProjectedApplicationFrame } from "@vortex/platform/schema";
 import type { ApplicationPageModel } from "../../../../../_lib/application-page";
-import type { GuidedFormActions } from "./application-page-view/types";
 import { ApplicationPageViewContent } from "./application-page-view/application-page-content";
 
 /** The page model with one streamed placement's settled state served as ready data. */
@@ -78,7 +77,6 @@ export function ApplicationPageView({
   model,
   content,
   frame,
-  guidedFormActions,
   onOpenApplication,
   adoptReleaseAction,
   pageFeedback,
@@ -90,7 +88,6 @@ export function ApplicationPageView({
   /** The page's own placements, rendered in the frame's outlet. */
   content: Readonly<Record<string, unknown>>;
   frame: ProjectedApplicationFrame;
-  guidedFormActions: GuidedFormActions;
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
   adoptReleaseAction?: ((formData: FormData) => Promise<void>) | undefined;
   pageFeedback?: ReactNode;
@@ -109,7 +106,6 @@ export function ApplicationPageView({
       model={shown}
       content={content}
       frame={frame}
-      guidedFormActions={guidedFormActions}
       onOpenApplication={onOpenApplication}
       adoptReleaseAction={adoptReleaseAction}
       pageFeedback={pageFeedback}

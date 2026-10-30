@@ -40,7 +40,6 @@ import { FirstRecordTypeEmptyState } from "../../../../../../_components/first-r
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import type { PageWebMcpTool } from "../../../../../../_lib/application-page";
 import type {
-  GuidedFormActions,
   PageMessageDraft,
   SubmittedForm,
   RefreshedPlacementData,
@@ -86,7 +85,6 @@ export function ApplicationPageViewContent({
   model,
   content,
   frame,
-  guidedFormActions,
   onOpenApplication,
   adoptReleaseAction,
   pageFeedback,
@@ -99,7 +97,6 @@ export function ApplicationPageViewContent({
   content: Readonly<Record<string, unknown>>;
   /** The frame projected with this page, handed to the application frame around it. */
   frame: ProjectedApplicationFrame;
-  guidedFormActions: GuidedFormActions;
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
   adoptReleaseAction?: ((formData: FormData) => Promise<void>) | undefined;
   pageFeedback?: ReactNode;
@@ -169,7 +166,6 @@ export function ApplicationPageViewContent({
   const [guidedBusy, setGuidedBusy] = useState(false);
   const [completedGuidedNavigationKey, setCompletedGuidedNavigationKey] = useState<string>();
   const requestedStepId = useRef<string | undefined>(undefined);
-  const guidedSubmitInFlight = useRef(false);
   const runtimeInputsRef = useRef<Readonly<Record<string, unknown>>>({});
   const setPanelRef = useRef<FlowIntentHost["setPanel"]>(undefined);
   const dialogFormRef = useRef<HTMLDivElement>(null);
@@ -402,26 +398,23 @@ export function ApplicationPageViewContent({
     guidedActiveFormIds,
     guidedActivePlacementIds,
     guidedSummaryStepId,
-    prepareGuidedSummary,
     advanceGuidedStep,
     guidedPreviousStepId,
     requestGuidedStep,
+    guidedCanCancel,
+    cancelGuidedForm,
   } = useGuidedFormSteps({
     model,
     formOwners,
-    application,
-    subject,
     busy: guidedBusy,
     guidedFormCompleted,
     setBusy: setGuidedBusy,
     showPageMessage,
-    guidedFormActions,
-    searchParams,
-    router,
+    applyDispatch,
+    formBlock,
+    submittedFormsRef,
     setQuery,
     requestedStepId,
-    guidedSubmitInFlight,
-    unsavedWorkRegistry,
   });
 
   const {
@@ -558,7 +551,6 @@ export function ApplicationPageViewContent({
     requestedStepId,
     guidedSummaryStepId,
     showPageMessage,
-    prepareGuidedSummary,
     advanceGuidedStep,
     currentEditFormBaselines,
     submittedFormsRef,
@@ -713,6 +705,7 @@ export function ApplicationPageViewContent({
                     if (guidedPreviousStepId !== undefined) requestGuidedStep(guidedPreviousStepId);
                   },
                   onNext: () => requestGuidedStep(),
+                  ...(guidedCanCancel ? { onCancel: () => void cancelGuidedForm() } : {}),
                 },
               })}
         />

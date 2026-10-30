@@ -3,6 +3,27 @@ import type { FlowRuntimeOptions, FlowBindingReference } from "./flow-runtime";
 import type { FlowSubjectContext } from "./server-flow-client";
 import type { ServerDrivenResult } from "./server-driven-run";
 
+/** The page host of one binding's run: while a call waits on the person, the binding's timeout clock stands still. */
+const hostWaitingOnPerson = (
+  host: FlowRuntimeOptions["host"],
+  hold: () => () => void,
+): FlowRuntimeOptions["host"] => {
+  const waiting = async <T>(call: () => T | Promise<T>): Promise<T> => {
+    const release = hold();
+    try {
+      return await call();
+    } finally {
+      release();
+    }
+  };
+  return {
+    ...host,
+    showMessage: (message, signal) => waiting(() => host.showMessage(message, signal)),
+    showForm: (form, signal) => waiting(() => host.showForm(form, signal)),
+    confirm: (confirmation, signal) => waiting(() => host.confirm(confirmation, signal)),
+  };
+};
+
 /** Runs one scheduled binding after the page has loaded the flow driver. */
 export async function runFlowBinding(
   options: FlowRuntimeOptions,
@@ -14,6 +35,9 @@ export async function runFlowBinding(
   sourceTablePlacementId: string | undefined,
   settings: NonNullable<ReturnType<FlowRuntimeOptions["bindingSettings"]>>,
 ): Promise<ServerDrivenResult> {
+  const pageHost = hostWaitingOnPerson(options.host, () =>
+    options.state.holdTimeouts(binding.bindingId),
+  );
   const browser = options.browserBinding?.(binding.bindingId);
   if (browser !== undefined && options.timeZone !== undefined) {
     const { startBrowserFlow } = await import("./browser-flow-runner");
@@ -25,9 +49,9 @@ export async function runFlowBinding(
       runId: clickId,
       timeZone: options.timeZone,
       host: {
-        ...options.host,
+        ...pageHost,
         showMessage: (message, signal) =>
-          options.host.showMessage(
+          pageHost.showMessage(
             {
               ...message,
               originBindingId: binding.bindingId,
@@ -103,7 +127,7 @@ export async function runFlowBinding(
     options.client,
     binding.flowId,
     first,
-    options.host,
+    pageHost,
     runSignal,
     sourceTablePlacementId,
     binding.bindingId,

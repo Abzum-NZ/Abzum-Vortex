@@ -9,7 +9,6 @@ import {
   sourcePageItems,
   sourcePageZones,
   standardPermissionKey,
-  type SourceFlow,
   type SourceItem,
   type ImmutablePlatformBlockCatalogue,
 } from "@vortex/platform/schema";
@@ -27,7 +26,14 @@ import {
   studioRecordPageKinds,
   type StudioRecordPageCommand,
 } from "./application-record-page-kinds";
-import { applyStudioFlowCreate, type StudioFlowCreateCommand } from "./application-flow-create";
+import { applyStudioFlowCreate } from "./application-flow-create";
+import {
+  bindDefault,
+  flowCreate,
+  flowParts,
+  freshAlias,
+  type Plan,
+} from "./application-record-plan";
 import { ensureStudioRecordQuery } from "./default-record-query";
 import { STUDIO_ROW_ACTION_EVENT_SETTING, studioRowActionEventId } from "./contextual-palette";
 import {
@@ -220,14 +226,6 @@ export const companions = (source: Source, qualified: string) => {
   };
 };
 
-/** A plan being written: the draft so far, the words describing it, and fresh aliases. */
-type Plan = { source: Source; details: string[]; taken: Set<string> };
-const freshAlias = (plan: Plan, base: string): string => {
-  const alias = uniqueKey(base, "", plan.taken, 160);
-  plan.taken.add(alias);
-  return alias;
-};
-
 const release = (
   context: StudioStructureContext,
   identity: Readonly<{ blockId: string }>,
@@ -302,55 +300,6 @@ const tableColumns = (
     visible: true,
   }));
 };
-
-/** Creates one flow bound to a control, or binds one more control to it, by the one flow-create path. */
-const flowCreate = (
-  plan: Plan,
-  command: StudioFlowCreateCommand,
-  what: string,
-): Readonly<{ id: string; eventId: string; flowKey: string }> => {
-  const result = applyStudioFlowCreate(judged(plan.source), command, null);
-  if (result.kind === "refused") return refuse(`${what} could not be made: ${result.reason}`);
-  plan.source = result.source;
-  return { ...result.binding!, flowKey: result.selection.flowAlias };
-};
-
-/** The parts of a flow the one flow-create command takes, from a default flow builder's source. */
-const flowParts = ({ description, inputs, tasks, outputs, errors }: SourceFlow, name: string) => ({
-  name,
-  description: description ?? "",
-  inputs,
-  tasks,
-  outputs,
-  ...(errors.length === 0 ? {} : { errors }),
-});
-
-/** Binds a control event to a flow made from a default flow builder's source; the binding carries each flow input by name. */
-const bindDefault = (
-  plan: Plan,
-  controlAlias: string,
-  event: "action" | "row_clicked" | "row_action" | "form_submit",
-  flow: SourceFlow,
-  name: string,
-  extra: Readonly<{
-    rowActionLabel?: string;
-    rowActionCapability?: "update" | "delete" | "restore";
-  }> = {},
-) =>
-  flowCreate(
-    plan,
-    {
-      kind: "control",
-      controlAlias,
-      event,
-      ...flowParts(flow, name),
-      bindingInputs: Object.fromEntries(
-        Object.keys(flow.inputs).map((input) => [input, { kind: "caller" as const, name: input }]),
-      ),
-      ...extra,
-    },
-    `The flow ${quoted(name)}`,
-  );
 
 /** A flow bound to a row click or an action that opens one page, with the clicked or current record when given. */
 const openFlow = (
@@ -1083,7 +1032,13 @@ const formFields = (
 };
 
 /** The Save flow of a form: the default Save, then opening the saved record's detail or the list. */
-const saveFlow = (plan: Plan, resolved: Resolved, mode: "create" | "update", form: string) => {
+const saveFlow = (
+  plan: Plan,
+  resolved: Resolved,
+  mode: "create" | "update",
+  form: string,
+  guidedDraft?: true,
+) => {
   const found = companions(plan.source, resolved.qualified);
   const next = found.detail ?? found.list[0];
   const after: DefaultFlowAfter =
@@ -1104,6 +1059,7 @@ const saveFlow = (plan: Plan, resolved: Resolved, mode: "create" | "update", for
       "none" | "organization_account" | "group" | "inherited",
     form,
     after,
+    ...(guidedDraft === undefined ? {} : { guidedDraft }),
   });
 };
 
@@ -1376,37 +1332,57 @@ const addGuided = (
   plan.details.push("The last step, Check and save, shows the answers with a Save button.");
   const flowName = `Save new ${lowerFirst(record.name)}`;
   const summary = forms.at(-1)!.formAlias;
-  const save = saveFlow(plan, resolved, "create", summary);
-  const bindingInputs = Object.fromEntries(
-    Object.keys(save.inputs).map((input) => [input, { kind: "caller" as const, name: input }]),
-  );
+  const save = saveFlow(plan, resolved, "create", summary, true);
   bindDefault(
     plan,
     summary,
     "form_submit",
     {
       ...save,
-      description: `Saves a new ${lowerFirst(record.name)} from ${quoted(name)}.`,
+      description: `Saves a new ${lowerFirst(record.name)} from ${quoted(name)}, once, then removes the draft.`,
     },
     flowName,
   );
-  const flowKey = plan.source.body.flow_bindings.find(
-    (binding) => binding.control === summary,
-  )!.flow;
-  for (const form of forms.slice(0, -1))
+  for (const [index, form] of forms.slice(0, -1).entries())
+    flowCreate(
+      plan,
+      {
+        kind: "action",
+        controlAlias: form.formAlias,
+        name: `${name}: ${steps[index]!.name.toLowerCase()}`.slice(0, 100),
+        recordType: null,
+        event: "guided_step_changed",
+      },
+      `The step change of ${quoted(steps[index]!.name)}`,
+    );
+  const cancel = flowCreate(
+    plan,
+    {
+      kind: "action",
+      controlAlias: forms[0]!.formAlias,
+      name: `Cancel ${name}`.slice(0, 100),
+      recordType: null,
+      event: "form_cancel",
+    },
+    `The cancel of ${quoted(name)}`,
+  );
+  for (const form of forms.slice(1))
     flowCreate(
       plan,
       {
         kind: "bind",
         controlAlias: form.formAlias,
-        event: "form_submit",
-        flowKey,
-        bindingInputs,
+        event: "form_cancel",
+        flowKey: cancel.flowKey,
+        bindingInputs: {
+          draft_id: { kind: "caller", name: "draft_id" },
+          revision: { kind: "caller", name: "revision" },
+        },
       },
-      `The binding of ${quoted(name)}`,
+      `The cancel of ${quoted(name)}`,
     );
   plan.details.push(
-    `Every step's form is bound to the flow ${quoted(flowName)}, which saves once, on Check and save.`,
+    `Each step saves its answers to the person's own draft and opens the next step; Check and save runs ${quoted(flowName)}, which saves once and removes the draft. Cancel removes the draft.`,
   );
   linkFormBack(context, plan, resolved, placedPage.page, "create");
   return placedPage.page;

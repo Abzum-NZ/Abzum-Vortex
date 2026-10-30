@@ -67,7 +67,7 @@ const evidenceStateSchema = z.discriminatedUnion("state", [
 ]);
 
 /** A gesture, segment and loop iteration identify one logical command for this actor. */
-const commandIdOf = (
+export const commandIdOf = (
   session: IdentitySession,
   selection: OrganizationSelectionCandidate,
   gestureId: string,

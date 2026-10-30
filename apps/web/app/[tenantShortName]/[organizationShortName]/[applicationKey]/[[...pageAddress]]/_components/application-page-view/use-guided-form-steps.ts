@@ -1,47 +1,40 @@
 import { isRecord } from "@vortex/platform/schema";
 import { useCallback, useMemo, type Dispatch, type SetStateAction, type RefObject } from "react";
-import type { useRouter, useSearchParams } from "next/navigation";
-import type { useUnsavedWorkRegistry } from "@vortex/ui";
+import type { createFormBlockRuntime } from "@vortex/ui";
 import type {
   ApplicationPageModel,
   PlacementFlowBinding,
 } from "../../../../../../_lib/application-page";
-import type { PageMessageDraft, GuidedFormActions } from "./types";
+import type { PageMessageDraft, SubmittedForm } from "./types";
+import type { useApplyDispatch } from "./use-apply-dispatch";
+import { asComponentBinding } from "./event-values";
 import { placementIdsInLayout } from "./placement-helpers";
 import { unavailableNotice } from "./notices";
 
 export function useGuidedFormSteps({
   model,
   formOwners,
-  application,
-  subject,
   busy,
   guidedFormCompleted,
   setBusy,
   showPageMessage,
-  guidedFormActions,
-  searchParams,
-  router,
+  applyDispatch,
+  formBlock,
+  submittedFormsRef,
   setQuery,
   requestedStepId,
-  guidedSubmitInFlight,
-  unsavedWorkRegistry,
 }: Readonly<{
   model: ApplicationPageModel;
   formOwners: Readonly<Record<string, string>>;
-  application: ApplicationPageModel["invocation"];
-  subject: ApplicationPageModel["subject"];
   busy: boolean;
   guidedFormCompleted: boolean;
   setBusy: Dispatch<SetStateAction<boolean>>;
   showPageMessage: (message: PageMessageDraft | undefined) => void;
-  guidedFormActions: GuidedFormActions;
-  searchParams: ReturnType<typeof useSearchParams>;
-  router: ReturnType<typeof useRouter>;
+  applyDispatch: ReturnType<typeof useApplyDispatch>["applyDispatch"];
+  formBlock: ReturnType<typeof createFormBlockRuntime>;
+  submittedFormsRef: RefObject<Map<string, SubmittedForm>>;
   setQuery: (change: (parameters: URLSearchParams) => void) => void;
   requestedStepId: RefObject<string | undefined>;
-  guidedSubmitInFlight: RefObject<boolean>;
-  unsavedWorkRegistry: ReturnType<typeof useUnsavedWorkRegistry>;
 }>) {
   const guidedActivePlacementIds = useMemo(() => {
     const guidedForm = model.guidedForm;
@@ -59,17 +52,6 @@ export function useGuidedFormSteps({
           ),
     [formOwners, guidedActivePlacementIds],
   );
-  const guidedAddress = useMemo(
-    () => ({
-      tenantShortName: application.tenantShortName,
-      organizationShortName: application.organizationShortName,
-      applicationKey: application.applicationKey,
-      pageKey: application.pageKey,
-      ...(subject === undefined ? {} : { subjectRecordId: subject.recordId }),
-    }),
-    [application, subject],
-  );
-
   const guidedSummaryStepId = useMemo(() => {
     if (!Array.isArray(model.page.steps)) return undefined;
     const summary = model.page.steps.find(
@@ -88,72 +70,94 @@ export function useGuidedFormSteps({
     return isRecord(previous) && typeof previous.id === "string" ? previous.id : undefined;
   }, [model.guidedForm?.activeStepId, model.page]);
 
-  const advanceGuidedStep = useCallback(
-    async (stepId: string, values: Readonly<Record<string, unknown>>, requested?: string) => {
-      const guidedForm = model.guidedForm;
-      if (guidedForm === undefined || busy || guidedFormCompleted) return;
+  /** One flow dispatch of the guided form's own bound event, carrying the draft it names. */
+  const runGuidedBinding = useCallback(
+    async (
+      placementId: string,
+      binding: PlacementFlowBinding,
+      inputs: () => Readonly<Record<string, unknown>>,
+    ) => {
+      if (busy || guidedFormCompleted) return;
       setBusy(true);
       showPageMessage(undefined);
       try {
-        const result = await guidedFormActions.advance({
-          address: guidedAddress,
-          draftId: guidedForm.draftId,
-          expectedRevision: guidedForm.revision,
-          stepId,
-          ...(requested === undefined ? {} : { requestedStepId: requested }),
-          values,
-        });
-        if (result.kind === "updated" || result.kind === "unchanged") {
-          if (result.kind === "updated" && !result.valid && result.activeStepId === stepId)
-            showPageMessage({
-              target: "banner",
-              severity: "error",
-              text: "Review the fields in this step before continuing.",
-            });
-          const queryStep =
-            result.activeStepId === result.computedStepId ? null : result.activeStepId;
-          if (searchParams.get("step") === queryStep) router.refresh();
-          else
-            setQuery((parameters) => {
-              if (queryStep === null) parameters.delete("step");
-              else parameters.set("step", queryStep);
-            });
-          return;
-        }
-        if (result.kind === "conflict") {
-          showPageMessage({
-            target: "banner",
-            severity: "error",
-            text: "This draft changed in another session. Review the latest step.",
-          });
-          router.refresh();
-          return;
-        }
-        showPageMessage(unavailableNotice);
-      } catch {
-        showPageMessage(unavailableNotice);
+        await applyDispatch(
+          formBlock.guided(asComponentBinding(placementId, binding), inputs, crypto.randomUUID()),
+          placementId,
+          undefined,
+          binding.bindingId,
+        );
       } finally {
         setBusy(false);
       }
     },
-    [
-      busy,
-      guidedAddress,
-      guidedFormActions,
-      guidedFormCompleted,
-      model.guidedForm,
-      router,
-      searchParams,
-      setQuery,
-    ],
+    [applyDispatch, busy, formBlock, guidedFormCompleted, setBusy, showPageMessage],
   );
+
+  const advanceGuidedStep = useCallback(
+    async (
+      placementId: string,
+      stepId: string,
+      readValues: () => Readonly<Record<string, unknown>>,
+      requested?: string,
+    ) => {
+      const guidedForm = model.guidedForm;
+      if (guidedForm === undefined) return;
+      const binding = (model.bindings[placementId] ?? []).find(
+        (held) => held.event === "guided_step_changed",
+      );
+      if (binding === undefined) {
+        showPageMessage(unavailableNotice);
+        return;
+      }
+      // The answers the step saves are no longer unsaved work once the server has accepted them.
+      await runGuidedBinding(placementId, binding, () => {
+        // Read after the form's pending field checks have settled.
+        const values = readValues();
+        submittedFormsRef.current.set(binding.bindingId, {
+          formId: placementId,
+          values,
+          draftSaved: true,
+        });
+        return {
+          draft_id: guidedForm.draftId,
+          revision: guidedForm.revision,
+          step: stepId,
+          // A binding reads every input it declares, so no step asked for is the empty text.
+          requested_step: requested ?? "",
+          values,
+        };
+      });
+    },
+    [model.bindings, model.guidedForm, runGuidedBinding, showPageMessage, submittedFormsRef],
+  );
+
+  const guidedCancel = useMemo(() => {
+    for (const placementId of guidedActiveFormIds) {
+      const binding = (model.bindings[placementId] ?? []).find(
+        (held) => held.event === "form_cancel",
+      );
+      if (binding !== undefined) return { placementId, binding };
+    }
+    return undefined;
+  }, [guidedActiveFormIds, model.bindings]);
+
+  const cancelGuidedForm = useCallback(async () => {
+    const guidedForm = model.guidedForm;
+    if (guidedForm === undefined || guidedCancel === undefined) return;
+    await runGuidedBinding(guidedCancel.placementId, guidedCancel.binding, () => ({
+      draft_id: guidedForm.draftId,
+      revision: guidedForm.revision,
+    }));
+  }, [guidedCancel, model.guidedForm, runGuidedBinding]);
 
   const requestGuidedStep = useCallback(
     (requested?: string) => {
       const guidedForm = model.guidedForm;
       if (guidedForm === undefined || busy || guidedFormCompleted) return;
+      // Going back from the summary changes nothing in the draft: only the page address changes.
       if (requested !== undefined && guidedForm.activeStepId === guidedSummaryStepId) {
-        void advanceGuidedStep(guidedForm.activeStepId, {}, requested);
+        setQuery((parameters) => parameters.set("step", requested));
         return;
       }
       requestedStepId.current = requested;
@@ -181,7 +185,9 @@ export function useGuidedFormSteps({
         return;
       }
       requestedStepId.current = undefined;
-      void advanceGuidedStep(guidedForm.activeStepId, {}, requested);
+      const stepFormId = guidedActiveFormIds[0];
+      if (stepFormId === undefined) showPageMessage(unavailableNotice);
+      else void advanceGuidedStep(stepFormId, guidedForm.activeStepId, () => ({}), requested);
     },
     [
       advanceGuidedStep,
@@ -194,98 +200,12 @@ export function useGuidedFormSteps({
     ],
   );
 
-  const prepareGuidedSummary = useCallback(
-    async (
-      placementId: string,
-      binding: PlacementFlowBinding,
-      submittedValues: Readonly<Record<string, unknown>>,
-    ) => {
-      const guidedForm = model.guidedForm;
-      if (
-        guidedForm === undefined ||
-        guidedSummaryStepId === undefined ||
-        guidedForm.activeStepId !== guidedSummaryStepId ||
-        binding.flowId.toLowerCase() !== guidedForm.flowId.toLowerCase() ||
-        busy ||
-        guidedFormCompleted ||
-        guidedSubmitInFlight.current
-      )
-        return;
-      guidedSubmitInFlight.current = true;
-      setBusy(true);
-      showPageMessage(undefined);
-      let handedOff = false;
-      try {
-        const confirmed = await guidedFormActions.confirm({
-          address: guidedAddress,
-          draftId: guidedForm.draftId,
-          expectedRevision: guidedForm.revision,
-          stepId: guidedForm.activeStepId,
-        });
-        if (confirmed.kind !== "confirmed") {
-          showPageMessage(
-            confirmed.kind === "conflict"
-              ? {
-                  target: "banner",
-                  severity: "error",
-                  text: "This draft changed in another session. Review the latest step.",
-                }
-              : unavailableNotice,
-          );
-          if (confirmed.kind === "conflict") router.refresh();
-          return;
-        }
-        const afterAccepted = async (): Promise<PageMessageDraft | undefined> => {
-          unsavedWorkRegistry?.markSaved(placementId, submittedValues);
-          const abandoned = await guidedFormActions.abandon({
-            address: guidedAddress,
-            draftId: guidedForm.draftId,
-            expectedRevision: guidedForm.revision,
-          });
-          return abandoned.kind === "abandoned"
-            ? undefined
-            : {
-                target: "banner",
-                severity: "error",
-                text: "The submission finished, but the saved draft could not be cleared. Refresh before submitting again.",
-              };
-        };
-        handedOff = true;
-        return {
-          proof: confirmed.proof,
-          afterAccepted,
-          finish: () => {
-            guidedSubmitInFlight.current = false;
-            setBusy(false);
-          },
-        };
-      } catch {
-        showPageMessage(unavailableNotice);
-      } finally {
-        if (!handedOff) {
-          guidedSubmitInFlight.current = false;
-          setBusy(false);
-        }
-      }
-    },
-    [
-      busy,
-      guidedAddress,
-      guidedFormActions,
-      guidedFormCompleted,
-      guidedSummaryStepId,
-      guidedSubmitInFlight,
-      model.guidedForm,
-      router,
-      unsavedWorkRegistry,
-    ],
-  );
-
   return {
     guidedActiveFormIds,
     guidedActivePlacementIds,
     guidedSummaryStepId,
-    prepareGuidedSummary,
+    guidedCanCancel: guidedCancel !== undefined,
+    cancelGuidedForm,
     advanceGuidedStep,
     guidedPreviousStepId,
     requestGuidedStep,

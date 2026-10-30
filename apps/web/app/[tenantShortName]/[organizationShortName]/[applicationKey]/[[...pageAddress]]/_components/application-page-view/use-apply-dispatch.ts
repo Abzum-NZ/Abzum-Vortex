@@ -138,6 +138,16 @@ export function useApplyDispatch({
           return { ...outcome, cellProblems: server.problems };
         }
         if (server.kind === "finished") {
+          // A later run of the same binding that went through settles the earlier unknown outcome.
+          const sourceControlId = Object.values(model.bindings)
+            .flat()
+            .find((held) => held.bindingId === sourceBindingId)?.controlId;
+          if (
+            sourceControlId !== undefined &&
+            server.failure === undefined &&
+            ["completed", "committed"].includes(server.descriptor.outcome)
+          )
+            runtimeState.messages.clear("inline", `retry:${sourceControlId}`);
           let resultNotice = finishedNotice(
             server.descriptor.outcome,
             server.failure?.code,

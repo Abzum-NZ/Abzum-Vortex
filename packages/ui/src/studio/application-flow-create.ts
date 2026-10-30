@@ -16,6 +16,8 @@ import {
   defaultBulkIdsFlowSource,
   defaultBulkMatchingFlowSource,
   defaultChangeFlowSource,
+  defaultGuidedCancelFlowSource,
+  defaultGuidedStepFlowSource,
   defaultOperationFlowSource,
   sourceItemTree,
   sourcePageItems,
@@ -960,6 +962,44 @@ export const applyStudioFlowCreate = (
           borrowed,
         );
       }
+    } else if (
+      command.kind === "action" &&
+      (command.event === "guided_step_changed" || command.event === "form_cancel")
+    ) {
+      // A guided form's step change and cancel each get their default flow, every step visible.
+      const page = body.pages.find((entry) =>
+        sourcePageItems(entry.composition).some((item) => item.props.id === command.controlAlias),
+      );
+      if (page === undefined || page.type !== "guided_form")
+        return refuse("Only a guided form's forms change step or cancel.");
+      const identity = { id: key, key };
+      flow =
+        command.event === "guided_step_changed"
+          ? {
+              ...defaultGuidedStepFlowSource({
+                ...identity,
+                form: command.controlAlias,
+                page: page.key,
+              }),
+              labels: { name },
+            }
+          : {
+              ...defaultGuidedCancelFlowSource({
+                ...identity,
+                after: { kind: "navigate", page: page.key, withRecord: false },
+              }),
+              labels: { name },
+            };
+      binding = bindControl(
+        candidate,
+        command.controlAlias,
+        command.event,
+        key,
+        Object.fromEntries(
+          Object.keys(flow.inputs).map((input) => [input, { kind: "caller", name: input }]),
+        ) as SourceBinding["inputs"],
+        borrowed,
+      );
     } else if (command.kind === "action") {
       const recordSupplied =
         command.recordType !== null &&
