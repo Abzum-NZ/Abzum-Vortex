@@ -99,7 +99,7 @@ export const classifyFlowSegments = (
     }
     for (const [name, type] of Object.entries(inputs)) {
       if (pageReads.has(name)) continue;
-      if (writes.slice(0, index).some((part) => Object.hasOwn(part, name))) carriedInputs[name] = type;
+      if (name.startsWith("vars.") || writes.slice(0, index).some((part) => Object.hasOwn(part, name))) carriedInputs[name] = type;
     }
     const carriedRetainKeys = [...new Set(
       writes.slice(0, index).flatMap((part) => Object.keys(part)).filter((name) =>
