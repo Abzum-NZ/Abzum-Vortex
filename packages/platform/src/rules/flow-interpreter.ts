@@ -405,7 +405,9 @@ const scopeOf = (
           : undefined;
       }
       case "loop_item": {
-        const loop = [...activation.frames].reverse().find((frame) => frame.loop !== undefined)?.loop;
+        const loop = [...activation.frames]
+          .reverse()
+          .find((frame) => frame.loop !== undefined)?.loop;
         const item = loop?.items[loop.iteration];
         if (loop === undefined || item === undefined) return undefined;
         if (reference.path === undefined)
