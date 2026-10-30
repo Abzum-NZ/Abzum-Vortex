@@ -19,11 +19,17 @@ begin
   if prepared ->> 'outcome' is distinct from 'prepared' then
     return prepared;
   end if;
-  perform vortex_record.apply_record_storage_changes_internal(
-    pg_catalog.jsonb_build_array(prepared -> 'storageChange')
-  );
-  perform vortex_record.apply_relationship_edges_internal(prepared -> 'edgeChanges');
-  return vortex_record.complete_record_create_internal(prepared);
+  return vortex_record.apply_prepared_record_set_internal(pg_catalog.jsonb_build_object(
+    'outcome', 'prepared', 'storageChanges', pg_catalog.jsonb_build_array(prepared -> 'storageChange'),
+    'edgeChanges', prepared -> 'edgeChanges',
+    'plans', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'index', 0, 'prepared', prepared,
+      'meta', vortex_record.resolve_record_action_context_internal(p_record_type_id, 'create'),
+      'subject', pg_catalog.jsonb_build_object(
+        'operation', 'create', 'recordTypeId', p_record_type_id, 'finalValues', prepared -> 'values'
+      )
+    ))
+  )) #> '{results,0}';
 exception
   when sqlstate 'P4020' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', sqlerrm);

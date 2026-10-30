@@ -223,10 +223,16 @@ begin
       (storage_set -> 'storageChanges') || (generated_plan -> 'storageChanges')
     );
     storage_changes := storage_set -> 'storageChanges';
-    perform vortex_record.apply_record_storage_changes_internal(storage_changes);
-    perform vortex_record.apply_relationship_edges_internal((
-      select coalesce(pg_catalog.jsonb_agg(distinct item.value order by item.value), '[]'::jsonb)
-      from pg_catalog.jsonb_array_elements(deletion_plan -> 'edgeChanges') as item(value)
+    perform vortex_record.apply_prepared_record_set_internal(pg_catalog.jsonb_build_object(
+      'outcome', 'prepared', 'storageChanges', storage_changes,
+      'edgeChanges', deletion_plan -> 'edgeChanges',
+      'plans', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'index', 0, 'prepared', deletion_plan,
+        'subject', pg_catalog.jsonb_build_object(
+          'operation', 'delete', 'recordTypeId', p_record_type_id, 'recordId', p_record_id,
+          'expectedConcurrencyNumber', p_expected_concurrency_number
+        )
+      ))
     ));
         for storage_change in
           select distinct pg_catalog.jsonb_build_object(
@@ -384,11 +390,16 @@ begin
     storage_set := vortex_record.prepare_record_storage_set_internal(
       (storage_set -> 'storageChanges') || (generated_plan -> 'storageChanges')
     );
-    written_revisions := vortex_record.apply_record_storage_changes_internal(storage_set -> 'storageChanges');
-    perform vortex_record.apply_relationship_edges_internal(
-      vortex_record.prepare_record_restore_edges_internal(deletion_plan -> 'subjects')
-    );
-    perform vortex_record.validate_record_restore_set_internal(deletion_plan -> 'subjects');
+    written_revisions := vortex_record.apply_prepared_record_set_internal(pg_catalog.jsonb_build_object(
+      'outcome', 'prepared', 'storageChanges', storage_set -> 'storageChanges', 'edgeChanges', '[]'::jsonb,
+      'plans', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'index', 0, 'prepared', deletion_plan,
+        'subject', pg_catalog.jsonb_build_object(
+          'operation', 'restore', 'recordTypeId', p_record_type_id, 'recordId', p_record_id,
+          'expectedConcurrencyNumber', p_expected_concurrency_number
+        )
+      ))
+    )) -> 'written';
     select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
       'recordKey', prepared.value -> 'recordKey',
       'concurrencyNumber', coalesce(written.value -> 'concurrencyNumber', prepared.value -> 'concurrencyNumber')

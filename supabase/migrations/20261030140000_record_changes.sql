@@ -664,10 +664,16 @@ begin
       (storage_set -> 'storageChanges') || (generated_plan -> 'storageChanges')
     );
     storage_changes := storage_set -> 'storageChanges';
-    perform vortex_record.apply_record_storage_changes_internal(storage_changes);
-    perform vortex_record.apply_relationship_edges_internal((
-      select coalesce(pg_catalog.jsonb_agg(distinct item.value order by item.value), '[]'::jsonb)
-      from pg_catalog.jsonb_array_elements(deletion_plan -> 'edgeChanges') as item(value)
+    perform vortex_record.apply_prepared_record_set_internal(pg_catalog.jsonb_build_object(
+      'outcome', 'prepared', 'storageChanges', storage_changes,
+      'edgeChanges', deletion_plan -> 'edgeChanges',
+      'plans', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'index', 0, 'prepared', deletion_plan,
+        'subject', pg_catalog.jsonb_build_object(
+          'operation', 'delete', 'recordTypeId', p_record_type_id, 'recordId', p_record_id,
+          'expectedConcurrencyNumber', p_expected_concurrency_number
+        )
+      ))
     ));
         for storage_change in
           select distinct pg_catalog.jsonb_build_object(
@@ -825,11 +831,16 @@ begin
     storage_set := vortex_record.prepare_record_storage_set_internal(
       (storage_set -> 'storageChanges') || (generated_plan -> 'storageChanges')
     );
-    written_revisions := vortex_record.apply_record_storage_changes_internal(storage_set -> 'storageChanges');
-    perform vortex_record.apply_relationship_edges_internal(
-      vortex_record.prepare_record_restore_edges_internal(deletion_plan -> 'subjects')
-    );
-    perform vortex_record.validate_record_restore_set_internal(deletion_plan -> 'subjects');
+    written_revisions := vortex_record.apply_prepared_record_set_internal(pg_catalog.jsonb_build_object(
+      'outcome', 'prepared', 'storageChanges', storage_set -> 'storageChanges', 'edgeChanges', '[]'::jsonb,
+      'plans', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'index', 0, 'prepared', deletion_plan,
+        'subject', pg_catalog.jsonb_build_object(
+          'operation', 'restore', 'recordTypeId', p_record_type_id, 'recordId', p_record_id,
+          'expectedConcurrencyNumber', p_expected_concurrency_number
+        )
+      ))
+    )) -> 'written';
     select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
       'recordKey', prepared.value -> 'recordKey',
       'concurrencyNumber', coalesce(written.value -> 'concurrencyNumber', prepared.value -> 'concurrencyNumber')
@@ -2657,10 +2668,17 @@ begin
       p_activity_id, p_action, meta
     );
     if mutation ->> 'outcome' = 'allowed' then
-      perform vortex_record.apply_record_storage_changes_internal(
-        pg_catalog.jsonb_build_array(mutation -> 'storageChange')
-      );
-      perform vortex_record.apply_relationship_edges_internal(mutation -> 'edgeChanges');
+      perform vortex_record.apply_prepared_record_set_internal(pg_catalog.jsonb_build_object(
+        'outcome', 'prepared', 'storageChanges', pg_catalog.jsonb_build_array(mutation -> 'storageChange'),
+        'edgeChanges', mutation -> 'edgeChanges',
+        'plans', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+          'index', 0, 'prepared', mutation, 'meta', meta, 'action', p_action,
+          'subject', pg_catalog.jsonb_build_object(
+            'operation', 'update', 'recordTypeId', p_record_type_id, 'recordId', p_record_id,
+            'submittedValues', p_submitted_values, 'finalValues', final_values
+          )
+        ))
+      ));
       named_relationship_subject_saved := action_mode
         and preview_installation is null
         and meta ->> 'storageScope' = 'application_contained';
@@ -4532,11 +4550,17 @@ begin
   if prepared ->> 'outcome' is distinct from 'prepared' then
     return prepared;
   end if;
-  perform vortex_record.apply_record_storage_changes_internal(
-    pg_catalog.jsonb_build_array(prepared -> 'storageChange')
-  );
-  perform vortex_record.apply_relationship_edges_internal(prepared -> 'edgeChanges');
-  return vortex_record.complete_record_create_internal(prepared);
+  return vortex_record.apply_prepared_record_set_internal(pg_catalog.jsonb_build_object(
+    'outcome', 'prepared', 'storageChanges', pg_catalog.jsonb_build_array(prepared -> 'storageChange'),
+    'edgeChanges', prepared -> 'edgeChanges',
+    'plans', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'index', 0, 'prepared', prepared,
+      'meta', vortex_record.resolve_record_action_context_internal(p_record_type_id, 'create'),
+      'subject', pg_catalog.jsonb_build_object(
+        'operation', 'create', 'recordTypeId', p_record_type_id, 'finalValues', prepared -> 'values'
+      )
+    ))
+  )) #> '{results,0}';
 exception
   when sqlstate 'P4020' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', sqlerrm);
@@ -6438,7 +6462,6 @@ declare
   target_application_root_id uuid;
   mapping_row vortex_record.relationship_storage_mappings%rowtype;
   application_root_required boolean;
-  existing_other boolean;
 
 begin
   if p_source_record_type_id is null or p_source_record_id is null
@@ -6627,28 +6650,13 @@ begin
       target_record_id
     )
   );
-  if mapping_row.cardinality = 'one_to_one' then
-    select exists (
-      select 1 from vortex_record.relationship_edges as edge
-      where edge.relationship_id = p_relationship_id
-        and edge.to_organisation_id = (source_context ->> 'organizationId')::uuid
-        and edge.to_storage_contract_id = (target_meta ->> 'storageContractId')::uuid
-        and edge.to_record_id = target_record_id
-        and edge.from_storage_contract_id = (source_meta ->> 'storageContractId')::uuid
-        and edge.from_record_id <> p_source_record_id
-    ) into existing_other;
-    if existing_other then
-      raise exception using errcode = '23514', message = 'Relationship cardinality is exceeded';
-    end if;
-  end if;
-
+  -- Parent proposals serialize before storage and edge writes, but cardinality
+  -- and cycles are checked by the edge writer on the complete resulting graph.
+  -- Checking the old graph here would reject valid swaps within one set.
   if mapping_row.cardinality = 'many_to_one' and target_type_id = p_source_record_type_id then
-    -- A record type's one-record link to itself is a parent link: it must never make a cycle.
-    perform vortex_record.assert_relationship_acyclic_internal(
-      p_relationship_id, (source_context ->> 'organizationId')::uuid,
-      (source_meta ->> 'storageContractId')::uuid, (field_value ->> 'fieldId')::uuid,
-      p_source_record_id, target_record_id
-    );
+    perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+      'parent:' || (source_context ->> 'organizationId') || ':' || p_relationship_id::text, 0
+    ));
   end if;
 
   return pg_catalog.jsonb_build_object(
@@ -6671,7 +6679,7 @@ revoke all on function vortex_record.prepare_relationship_value_internal(uuid, u
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_record.prepare_relationship_value_internal(uuid, uuid, uuid, jsonb, boolean) is
-  'Private relationship preparation: validates the declared relationship and target eligibility, locks target and edge identities, checks cardinality and cycles, and returns the typed field and edge mutation for the record writer.';
+  'Private relationship preparation: validates the declared relationship and target eligibility, locks target and edge identities, and returns the typed field and edge mutation for the record writer.';
 
 create or replace function vortex_record.record_lifecycle_total_closure_internal(
   p_catalogue jsonb,
@@ -8118,7 +8126,6 @@ declare
   target_application_root_id uuid;
   mapping_row vortex_record.relationship_storage_mappings%rowtype;
   application_root_required boolean;
-  existing_other boolean;
 begin
   if p_source_record_type_id is null or p_source_record_id is null
     or p_relationship_id is null
@@ -8276,28 +8283,13 @@ begin
       target_record_id
     )
   );
-  if mapping_row.cardinality = 'one_to_one' then
-    select exists (
-      select 1 from vortex_record.relationship_edges as edge
-      where edge.relationship_id = p_relationship_id
-        and edge.to_organisation_id = (source_context ->> 'organizationId')::uuid
-        and edge.to_storage_contract_id = (target_meta ->> 'storageContractId')::uuid
-        and edge.to_record_id = target_record_id
-        and edge.from_storage_contract_id = (source_meta ->> 'storageContractId')::uuid
-        and edge.from_record_id <> p_source_record_id
-    ) into existing_other;
-    if existing_other then
-      raise exception using errcode = '23514', message = 'Relationship cardinality is exceeded';
-    end if;
-  end if;
-
+  -- Parent proposals serialize before storage and edge writes, but cardinality
+  -- and cycles are checked by the edge writer on the complete resulting graph.
+  -- Checking the old graph here would reject valid swaps within one set.
   if mapping_row.cardinality = 'many_to_one' and target_type_id = p_source_record_type_id then
-    -- A record type's one-record link to itself is a parent link: it must never make a cycle.
-    perform vortex_record.assert_relationship_acyclic_internal(
-      p_relationship_id, (source_context ->> 'organizationId')::uuid,
-      (source_meta ->> 'storageContractId')::uuid, (field_value ->> 'fieldId')::uuid,
-      p_source_record_id, target_record_id
-    );
+    perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+      'parent:' || (source_context ->> 'organizationId') || ':' || p_relationship_id::text, 0
+    ));
   end if;
 
   return pg_catalog.jsonb_build_object(
@@ -8324,5 +8316,175 @@ grant execute on function
 
 comment on function vortex_record.prepare_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) is
   'Private named-action edge preparation: checks current application access for flagged Person links, uses the ordinary or protected projection target lock and edge flow, and authorises the command subject by re-evaluating the exact installed named action rather than ordinary read.';
+
+create or replace function vortex_record.apply_prepared_record_set_internal(p_preparation jsonb)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  storage_changes jsonb;
+  edge_changes jsonb := p_preparation -> 'edgeChanges';
+  written jsonb;
+  plan jsonb;
+  subject jsonb;
+  restored_subject jsonb;
+  restored_subjects jsonb := '[]'::jsonb;
+  prepared jsonb;
+  meta jsonb;
+  loaded jsonb;
+  decision jsonb;
+  bounds jsonb;
+  preview_installation jsonb;
+  relationship_value jsonb;
+  results jsonb := '[]'::jsonb;
+  result_value jsonb;
+begin
+  if p_preparation ->> 'outcome' is distinct from 'prepared'
+    or pg_catalog.jsonb_typeof(p_preparation -> 'plans') is distinct from 'array'
+    or pg_catalog.jsonb_typeof(edge_changes) is distinct from 'array' then
+    raise exception using errcode = '22023', message = 'Prepared record set is invalid';
+  end if;
+  preview_installation := vortex_record.read_current_preview_installation_internal();
+  storage_changes := vortex_record.combine_record_storage_changes_internal(p_preparation -> 'storageChanges');
+  written := vortex_record.apply_record_storage_changes_internal(storage_changes);
+
+  -- Restores can overlap, and generated totals can change the same row. Reload
+  -- the combined persisted values rather than validate a root's partial copy.
+  for plan in select item.value from pg_catalog.jsonb_array_elements(p_preparation -> 'plans') as item(value)
+    where item.value #>> '{subject,operation}' = 'restore'
+  loop
+    for restored_subject in
+      select item.value from pg_catalog.jsonb_array_elements(plan #> '{prepared,subjects}') as item(value)
+    loop
+      loaded := vortex_record.load_record_access_facts_internal(
+        (restored_subject ->> 'recordTypeId')::uuid, 'update',
+        (restored_subject ->> 'recordId')::uuid, null, null
+      );
+      if loaded ->> 'outcome' is distinct from 'loaded' then
+        raise exception using errcode = '42501', message = 'Restored record is unavailable';
+      end if;
+      restored_subjects := restored_subjects || pg_catalog.jsonb_build_array(
+        restored_subject || pg_catalog.jsonb_build_object(
+          'values', loaded -> 'fieldValues'
+        )
+      );
+    end loop;
+  end loop;
+  edge_changes := edge_changes || vortex_record.prepare_record_restore_edges_internal(restored_subjects);
+  if exists (
+    select 1 from pg_catalog.jsonb_array_elements(edge_changes) as item(value)
+    group by item.value -> 'relationshipId', item.value -> 'sourceStorageContractId', item.value -> 'sourceRecordId'
+    having pg_catalog.count(distinct pg_catalog.jsonb_build_array(
+      item.value -> 'targetStorageContractId', item.value -> 'targetRecordId'
+    )) > 1
+  ) then
+    raise exception using errcode = '23514', message = 'Record relationship changes conflict';
+  end if;
+  select coalesce(pg_catalog.jsonb_agg(candidate.value order by candidate.value ->> 'relationshipId',
+    candidate.value ->> 'sourceStorageContractId', candidate.value ->> 'sourceRecordId'), '[]'::jsonb)
+  into edge_changes
+  from (
+    select distinct on (item.value -> 'relationshipId', item.value -> 'sourceStorageContractId', item.value -> 'sourceRecordId')
+      item.value
+    from pg_catalog.jsonb_array_elements(edge_changes) as item(value)
+    order by item.value -> 'relationshipId', item.value -> 'sourceStorageContractId', item.value -> 'sourceRecordId'
+  ) as candidate;
+  perform vortex_record.apply_relationship_edges_internal(edge_changes);
+
+  -- Every decision below sees the complete storage and relationship graph. A
+  -- refusal raises, so callers cannot commit a partially authorized set.
+  perform vortex_record.validate_record_restore_set_internal(restored_subjects);
+  for plan in select item.value from pg_catalog.jsonb_array_elements(p_preparation -> 'plans') as item(value)
+    order by (item.value ->> 'index')::integer
+  loop
+    subject := plan -> 'subject';
+    prepared := plan -> 'prepared';
+    meta := plan -> 'meta';
+    if subject ->> 'operation' in ('create', 'update') then
+      -- A different intent may have deleted or changed a link target since its
+      -- preparation. Recheck target eligibility against the completed graph.
+      for relationship_value in
+        select item.value from pg_catalog.jsonb_array_elements(meta #> '{recordType,relationships}') as item(value)
+        where (subject -> 'finalValues') ? (item.value ->> 'fromFieldId')
+      loop
+        if plan -> 'action' is not null and plan -> 'action' <> 'null'::jsonb then
+          perform vortex_record.prepare_named_action_relationship_value_internal(
+            (subject ->> 'recordTypeId')::uuid, (prepared ->> 'recordId')::uuid,
+            (relationship_value ->> 'relationshipId')::uuid,
+            subject -> 'finalValues' -> (relationship_value ->> 'fromFieldId'),
+            plan #>> '{action,ownerKind}', (plan #>> '{action,ownerId}')::uuid,
+            (plan #>> '{action,releaseRevision}')::bigint, (plan #>> '{action,actionId}')::uuid,
+            (subject ->> 'recordTypeId')::uuid, (prepared ->> 'recordId')::uuid
+          );
+        else
+          perform vortex_record.prepare_relationship_value_internal(
+            (subject ->> 'recordTypeId')::uuid, (prepared ->> 'recordId')::uuid,
+            (relationship_value ->> 'relationshipId')::uuid,
+            subject -> 'finalValues' -> (relationship_value ->> 'fromFieldId'), false
+          );
+        end if;
+      end loop;
+    end if;
+    if subject ->> 'operation' = 'create' then
+      result_value := vortex_record.complete_record_create_internal(prepared);
+    elsif subject ->> 'operation' = 'update' then
+      if plan -> 'action' is not null and plan -> 'action' <> 'null'::jsonb then
+        loaded := vortex_record.load_named_action_facts_internal(
+          plan #>> '{action,ownerKind}', (plan #>> '{action,ownerId}')::uuid,
+          (plan #>> '{action,releaseRevision}')::bigint, (plan #>> '{action,actionId}')::uuid,
+          (subject ->> 'recordTypeId')::uuid, (subject ->> 'recordId')::uuid, null
+        );
+      else
+        loaded := vortex_record.load_record_access_facts_internal(
+          (subject ->> 'recordTypeId')::uuid, 'update', (subject ->> 'recordId')::uuid, null, null
+        );
+      end if;
+      if loaded ->> 'outcome' is distinct from 'loaded' then
+        raise exception using errcode = '42501', message = 'Changed record is unavailable';
+      end if;
+      if preview_installation is null then
+        decision := vortex_access.evaluate_organization_record_access_internal(
+          meta -> 'declaration', (subject ->> 'recordId')::uuid,
+          (loaded -> 'facts') || pg_catalog.jsonb_build_object('binding', meta #> '{declaration,recordBinding}')
+        );
+        if decision ->> 'outcome' is distinct from 'allowed' then
+          raise exception using errcode = '42501', message = 'Changed record is unavailable';
+        end if;
+        bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+      else
+        bounds := vortex_record.preview_record_field_bounds_internal(
+          (subject ->> 'recordTypeId')::uuid, (meta ->> 'storageContractId')::uuid, meta -> 'recordType'
+        );
+        if bounds is null then
+          raise exception using errcode = '42501', message = 'Changed record is unavailable';
+        end if;
+      end if;
+      if exists (
+        select 1 from pg_catalog.jsonb_object_keys(subject -> 'submittedValues') as field(key)
+        where not (bounds -> 'changeableFieldIds') ? field.key
+      ) then
+        raise exception using errcode = '42501', message = 'Changed field is unavailable';
+      end if;
+      result_value := prepared - array['storageChange', 'edgeChanges']::text[];
+    else
+      result_value := pg_catalog.jsonb_build_object(
+        'outcome', case subject ->> 'operation' when 'delete' then 'deleted' else 'restored' end,
+        'recordId', subject -> 'recordId',
+        'concurrencyNumber', (subject ->> 'expectedConcurrencyNumber')::bigint + 1
+      );
+    end if;
+    results := results || pg_catalog.jsonb_build_array(result_value);
+  end loop;
+  return pg_catalog.jsonb_build_object('outcome', 'completed', 'results', results, 'written', written);
+end
+$function$;
+alter function vortex_record.apply_prepared_record_set_internal(jsonb) owner to vortex_record_adapter;
+revoke all on function vortex_record.apply_prepared_record_set_internal(jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+comment on function vortex_record.apply_prepared_record_set_internal(jsonb) is
+  'Private prepared-set persistence: one physical write per storage table and one edge write, followed by current authority and relationship checks over the complete graph; any refusal aborts the set.';
 
 reset role;

@@ -31,7 +31,6 @@ declare
   target_application_root_id uuid;
   mapping_row vortex_record.relationship_storage_mappings%rowtype;
   application_root_required boolean;
-  existing_other boolean;
 
 begin
   if p_source_record_type_id is null or p_source_record_id is null
@@ -220,28 +219,13 @@ begin
       target_record_id
     )
   );
-  if mapping_row.cardinality = 'one_to_one' then
-    select exists (
-      select 1 from vortex_record.relationship_edges as edge
-      where edge.relationship_id = p_relationship_id
-        and edge.to_organisation_id = (source_context ->> 'organizationId')::uuid
-        and edge.to_storage_contract_id = (target_meta ->> 'storageContractId')::uuid
-        and edge.to_record_id = target_record_id
-        and edge.from_storage_contract_id = (source_meta ->> 'storageContractId')::uuid
-        and edge.from_record_id <> p_source_record_id
-    ) into existing_other;
-    if existing_other then
-      raise exception using errcode = '23514', message = 'Relationship cardinality is exceeded';
-    end if;
-  end if;
-
+  -- Parent proposals serialize before storage and edge writes, but cardinality
+  -- and cycles are checked by the edge writer on the complete resulting graph.
+  -- Checking the old graph here would reject valid swaps within one set.
   if mapping_row.cardinality = 'many_to_one' and target_type_id = p_source_record_type_id then
-    -- A record type's one-record link to itself is a parent link: it must never make a cycle.
-    perform vortex_record.assert_relationship_acyclic_internal(
-      p_relationship_id, (source_context ->> 'organizationId')::uuid,
-      (source_meta ->> 'storageContractId')::uuid, (field_value ->> 'fieldId')::uuid,
-      p_source_record_id, target_record_id
-    );
+    perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+      'parent:' || (source_context ->> 'organizationId') || ':' || p_relationship_id::text, 0
+    ));
   end if;
 
   return pg_catalog.jsonb_build_object(
@@ -264,4 +248,4 @@ revoke all on function vortex_record.prepare_relationship_value_internal(uuid, u
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_record.prepare_relationship_value_internal(uuid, uuid, uuid, jsonb, boolean) is
-  'Private relationship preparation: validates the declared relationship and target eligibility, locks target and edge identities, checks cardinality and cycles, and returns the typed field and edge mutation for the record writer.';
+  'Private relationship preparation: validates the declared relationship and target eligibility, locks target and edge identities, and returns the typed field and edge mutation for the record writer.';
