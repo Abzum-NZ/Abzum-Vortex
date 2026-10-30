@@ -20,16 +20,9 @@ as $function$
 declare
   context_value jsonb;
   action_context jsonb;
-  creation_plan jsonb;
   loaded jsonb;
   decision jsonb;
   bounds jsonb;
-  copy_plan jsonb;
-  copy_targets jsonb := '[]'::jsonb;
-  copy_target record;
-  target_meta jsonb;
-  target_loaded jsonb;
-  target_decision jsonb;
   record_type_meta jsonb;
   reused_read_facts boolean := false;
 begin
@@ -48,26 +41,9 @@ begin
     p_action_owner_kind, p_action_owner_id, p_action_release_revision,
     p_action_id, p_record_type_id
   ));
-  if pg_catalog.jsonb_typeof(action_context -> 'action' -> 'tasks') is distinct from 'array'
-    or pg_catalog.jsonb_array_length(action_context -> 'action' -> 'tasks') not between 1 and 10
-    or exists (
-      select 1 from pg_catalog.jsonb_array_elements(
-        action_context -> 'action' -> 'tasks'
-      ) item(value)
-      where item.value ->> 'type' not in ('record.set_fields', 'record.create', 'record.changes', 'record.delete', 'event.announce')
-    ) then
+  if pg_catalog.jsonb_typeof(action_context -> 'action' -> 'writePolicy') is distinct from 'object' then
     return pg_catalog.jsonb_build_object(
       'outcome', 'unsupported', 'correlationId', context_value -> 'correlationId'
-    );
-  end if;
-  creation_plan := vortex_record.named_action_creation_plan_internal(
-    p_action_owner_kind, p_action_owner_id, p_action_release_revision,
-    p_action_id, p_record_type_id, null, action_context
-  );
-  if creation_plan ->> 'outcome' <> 'planned' then
-    return pg_catalog.jsonb_build_object(
-      'outcome', 'unsupported', 'reasonCode', creation_plan -> 'reasonCode',
-      'correlationId', context_value -> 'correlationId'
     );
   end if;
   -- A preview of a record its caller has just read in this invocation reuses
@@ -141,81 +117,6 @@ begin
     );
   end if;
   bounds := vortex_record.decide_record_field_bounds_internal(decision);
-  -- Use the same locked copy plan the writer re-derives. Only rows with an
-  -- actual new edge are evaluated; a no-op copy does not save its target.
-  copy_plan := vortex_record.prepare_named_action_relationship_copies_internal(
-    p_action_owner_kind, p_action_owner_id, p_action_release_revision,
-    p_action_id, p_record_type_id, p_record_id, p_inputs, action_context
-  );
-  if copy_plan ->> 'outcome' = 'refused' then
-    return pg_catalog.jsonb_build_object(
-      'outcome', 'refused', 'reasonCode', copy_plan -> 'reasonCode',
-      'correlationId', context_value -> 'correlationId'
-    );
-  end if;
-  for copy_target in
-    select (item.value ->> 'targetRecordId')::uuid as record_id,
-      pg_catalog.jsonb_object_agg(
-        item.value ->> 'fromFieldId', item.value -> 'value'
-      ) as submitted_values
-    from pg_catalog.jsonb_array_elements(
-      coalesce(copy_plan -> 'copies', '[]'::jsonb)
-    ) item(value)
-    group by 1
-    order by 1
-  loop
-    target_meta := vortex_record.resolve_record_action_context_internal(
-      p_record_type_id, 'update'
-    );
-    target_loaded := (vortex_record.load_record_access_facts_internal(
-      'update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-        'recordTypeId', p_record_type_id,
-        'recordId', copy_target.record_id
-      ))
-    ) -> 0);
-    if target_loaded ->> 'outcome' is distinct from 'loaded' then
-      return pg_catalog.jsonb_build_object(
-        'outcome', 'refused', 'reasonCode', 'relationship_copy_target_unavailable',
-        'correlationId', context_value -> 'correlationId'
-      );
-    end if;
-    target_decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
-      pg_catalog.jsonb_build_object(
-        'declaration', target_meta -> 'declaration',
-        'recordId', copy_target.record_id,
-        'facts', (target_loaded -> 'facts') || pg_catalog.jsonb_build_object( 'binding', target_meta -> 'declaration' -> 'recordBinding' )
-      )
-    )) -> 0);
-    if target_decision ->> 'outcome' is distinct from 'allowed' then
-      return pg_catalog.jsonb_build_object(
-        'outcome', 'permission_refused',
-        'correlationId', context_value -> 'correlationId'
-      );
-    end if;
-    if exists (
-      select 1 from pg_catalog.jsonb_object_keys(copy_target.submitted_values) field_id
-      where not exists (
-        select 1 from pg_catalog.jsonb_array_elements_text(
-          vortex_record.decide_record_field_bounds_internal(target_decision)
-            -> 'changeableFieldIds'
-        ) allowed(value)
-        where pg_catalog.lower(allowed.value) = pg_catalog.lower(field_id)
-      )
-    ) then
-      return pg_catalog.jsonb_build_object(
-        'outcome', 'permission_refused',
-        'correlationId', context_value -> 'correlationId'
-      );
-    end if;
-    copy_targets := copy_targets || pg_catalog.jsonb_build_array(
-      pg_catalog.jsonb_build_object(
-        'recordId', copy_target.record_id,
-        'concurrencyNumber', target_loaded -> 'concurrencyNumber',
-        'existingValues', target_loaded -> 'fieldValues',
-        'submittedValues', copy_target.submitted_values
-      )
-    );
-  end loop;
   return pg_catalog.jsonb_build_object(
     'outcome', case when p_preview then 'previewed' else 'prepared' end,
     'action', action_context -> 'action',
@@ -227,18 +128,6 @@ begin
       (action_context ->> 'moduleReleaseRevision')::bigint,
       p_record_type_id
     ),
-    'createTargets', coalesce((
-      select pg_catalog.jsonb_agg(
-        pg_catalog.jsonb_build_object(
-          'ordinal', item.value -> 'ordinal',
-          'recordTypeId', item.value -> 'recordTypeId',
-          'recordType', item.value -> 'recordType',
-          'beforeSaveFlows', item.value -> 'beforeSaveFlows'
-        ) order by (item.value ->> 'ordinal')::integer
-      )
-      from pg_catalog.jsonb_array_elements(creation_plan -> 'createTargets') item(value)
-    ), '[]'::jsonb),
-    'copyTargets', copy_targets,
     'recordId', p_record_id,
     'existingValues', loaded -> 'fieldValues',
     -- A singleton required permission was decided by the named-action access
@@ -262,4 +151,4 @@ alter function vortex_record.prepare_named_action_subject_internal(boolean,text,
 revoke all on function vortex_record.prepare_named_action_subject_internal(boolean,text,uuid,bigint,uuid,uuid,uuid,bigint,jsonb,jsonb,jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_record.prepare_named_action_subject_internal(boolean,text,uuid,bigint,uuid,uuid,uuid,bigint,jsonb,jsonb,jsonb) is
-  'Private named-action subject preparation shared by preview and command execution: resolves current action authority, locked facts, creation metadata and relationship copies without reading or writing a command receipt or Activity.';
+  'Private named-action subject preparation shared by preview and command execution: resolves current action authority and locked facts without reading or writing a command receipt or Activity.';

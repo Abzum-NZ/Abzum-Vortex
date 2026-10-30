@@ -1,15 +1,10 @@
 import { z } from "zod";
-import {
-  builderKeySchema,
-  namespacedKeySchema,
-  sourceQualifiedRecordTypeSchema,
-} from "../catalogue/identifiers";
+import { builderKeySchema, namespacedKeySchema } from "../catalogue/identifiers";
 import {
   conditionMaximumNestingDepth,
   conditionMaximumOperandCount,
   jsonValueSchema,
 } from "../catalogue/common";
-import { flowValueSchema } from "../workflows/flow-values";
 
 export type SourceProvenanceAnnotation = Readonly<{
   /** Canonical path suffixes; use `#` for an array index and `**` for descendant paths. */
@@ -380,117 +375,6 @@ export const sourceQualifiedConditionSchema: z.ZodType<SourceQualifiedCondition>
         message: `Condition operands cannot exceed ${conditionMaximumOperandCount}`,
       });
   });
-/**
- * The task ids of one named action's ordered task list. Each id becomes the id of its compiled
- * flow task, so the ids are unique within the action and never one the compiled flow reserves for
- * the precondition.
- */
-export const refineActionTaskIds = (
-  tasks: readonly Readonly<{ id: string }>[],
-  context: z.RefinementCtx,
-): void => {
-  const seen = new Set<string>();
-  for (const [index, task] of tasks.entries()) {
-    if (seen.has(task.id) || task.id === "precondition" || task.id === "precondition_refused")
-      context.addIssue({
-        code: "custom",
-        path: [index, "id"],
-        message: "An action task id is unique within the action and not a reserved flow task id",
-      });
-    seen.add(task.id);
-  }
-};
-/**
- * One registry record task of an authored Module or Application action. The task type and property
- * names are the flow task registry's, and each property value uses the same flow value grammar as
- * an authored flow (`flowValueSchema`). The `values` property is the flow `field_values` map: its
- * keys are field aliases of the task's record type and each entry is a flow value, so `input`,
- * subject-field and actor/time reads are the same closed references a flow authors.
- */
-export const sourceActionTaskSchema = z.discriminatedUnion("type", [
-  z
-    .object({
-      id: sourceProvenanceUnchanged(builderKeySchema),
-      type: sourceProvenanceUnchanged(z.literal("record.set_fields")),
-      properties: sourceProvenanceUnchanged(
-        z
-          .object({
-            values: sourceProvenanceTarget(
-              z.record(builderKeySchema, flowValueSchema),
-              ["values/**"],
-              true,
-            ),
-          })
-          .strict(),
-      ),
-    })
-    .strict(),
-  z
-    .object({
-      id: sourceProvenanceUnchanged(builderKeySchema),
-      type: sourceProvenanceUnchanged(z.literal("record.create")),
-      properties: sourceProvenanceUnchanged(
-        z
-          .object({
-            record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
-            values: sourceProvenanceTarget(
-              z.record(builderKeySchema, flowValueSchema),
-              ["values/**"],
-              true,
-            ),
-          })
-          .strict(),
-      ),
-    })
-    .strict(),
-  z
-    .object({
-      id: sourceProvenanceUnchanged(builderKeySchema),
-      type: sourceProvenanceUnchanged(z.literal("record.changes")),
-      properties: sourceProvenanceUnchanged(
-        z
-          .object({
-            changes: sourceProvenanceUnchanged(
-              z
-                .array(
-                  z
-                    .object({
-                      kind: sourceProvenanceUnchanged(z.literal("copy_relationships")),
-                      relationships: sourceProvenanceTarget(
-                        z.array(builderKeySchema).min(1),
-                        ["relationshipIds/#"],
-                        true,
-                      ),
-                      target_input: sourceProvenanceTarget(builderKeySchema, ["targetInputKey"]),
-                    })
-                    .strict(),
-                )
-                .min(1)
-                .max(10),
-            ),
-          })
-          .strict(),
-      ),
-    })
-    .strict(),
-  z
-    .object({
-      id: sourceProvenanceUnchanged(builderKeySchema),
-      type: sourceProvenanceUnchanged(z.literal("record.delete")),
-      properties: sourceProvenanceUnchanged(z.object({}).strict()),
-    })
-    .strict(),
-  z
-    .object({
-      id: sourceProvenanceUnchanged(builderKeySchema),
-      type: sourceProvenanceUnchanged(z.literal("event.announce")),
-      properties: sourceProvenanceUnchanged(
-        z.object({ event: sourceProvenanceTarget(namespacedKeySchema, ["eventKey"]) }).strict(),
-      ),
-    })
-    .strict(),
-]);
-
 export const authoredSourceBase = {
   source_contract_version: sourceProvenanceUnchanged(z.literal(definitionSourceContractVersion)),
   root_alias: sourceProvenanceTarget(sourceAliasSchema, ["rootId", "connectionTypeId"]),

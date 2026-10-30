@@ -1,30 +1,28 @@
 import { builderKeySchema } from "../catalogue/identifiers";
-import type { FlowValue } from "../workflows/flow-values";
 import {
   applicationSourceDocumentSchema,
   type ApplicationSourceDocument,
 } from "./application-source-contracts";
-import { changeableByPeople } from "./module-field-shape";
 import { applicationUses, type ApplicationUsePlace } from "./application-uses";
 import { fullRecordAccessRoleKeys } from "./module-permission-shape";
-import { actionValueCompatible } from "./validation/action-values";
 
 type InlineModule = ApplicationSourceDocument["body"]["modules"][number];
 type RecordType = InlineModule["record_types"][number];
 type ModuleAction = InlineModule["actions"][number];
 type ModulePermission = InlineModule["permissions"][number];
-type ActionTask = ModuleAction["tasks"][number];
+type ModuleFlow = InlineModule["flows"][number];
 
 /** A named action's precondition: the authored condition tree a module action holds. */
 export type InlineModuleActionPrecondition = NonNullable<ModuleAction["precondition"]>;
 
-/** One field the action sets, and the value it sets it to (a fixed value, an input, the person or the time). */
-type InlineModuleActionEffect = Readonly<{ field: string; value: FlowValue }>;
+/** One field the action's flow sets, and the authored value it sets it to. */
+type InlineModuleActionEffect = Readonly<{ field: string; value: unknown }>;
 
 /**
  * A named action of an owned Module's record type as Studio edits it: its label, when it may run,
- * the fields it sets, the permission that gates it and whether it owns the choice option it sets.
+ * its inputs, the permission that gates it and whether it owns the choice option its flow sets.
  * Saving that option anywhere else (a form, a board card, a Save record step) then runs this action.
+ * What the action does is its flow, edited in the flow editor.
  */
 export type InlineModuleActionChange = Readonly<{
   moduleKey: string;
@@ -33,15 +31,22 @@ export type InlineModuleActionChange = Readonly<{
   actionKey?: string;
   label: string;
   precondition: InlineModuleActionPrecondition | undefined;
-  tasks: readonly ActionTask[];
   inputs: ModuleAction["inputs"];
   /** The action's own permission (created with it), or another named permission of its record type. */
   permission: Readonly<{ kind: "own" }> | Readonly<{ kind: "existing"; key: string }>;
   ownsChoice: boolean;
+  /** A new action's first step: sets this choice field to this option. */
+  initialEffect?: Readonly<{ field: string; option: string }>;
 }>;
 
 export type InlineModuleActionResult =
-  | Readonly<{ kind: "changed"; source: ApplicationSourceDocument; actionKey: string }>
+  | Readonly<{
+      kind: "changed";
+      source: ApplicationSourceDocument;
+      actionKey: string;
+      /** The action's flow, which the flow editor opens. */
+      flowAlias?: string;
+    }>
   | Readonly<{ kind: "invalid"; issues: readonly string[] }>
   /** A permission the change would leave behind is still used elsewhere; nothing was changed. */
   | Readonly<{ kind: "referenced"; issue: string; references: readonly ApplicationUsePlace[] }>;
@@ -73,6 +78,7 @@ const moduleAliases = (module: InlineModule): Set<string> =>
     ]),
     ...module.permissions.map((permission) => permission.id),
     ...module.actions.map((action) => action.id),
+    ...module.flows.map((flow) => flow.id),
     ...module.events.map((event) => event.id),
     ...module.queries.map((query) => query.id),
   ]);
@@ -95,41 +101,28 @@ const conditionFields = (condition: unknown): string[] => {
 };
 
 /** The text of a fixed value, when an effect sets one. */
-const fixedText = (value: FlowValue): string | undefined =>
-  value.kind === "literal" && typeof value.literal.value === "string"
-    ? value.literal.value
+const fixedText = (value: unknown): string | undefined => {
+  const entry = value as { kind?: string; literal?: { value?: unknown } } | null;
+  return entry?.kind === "literal" && typeof entry.literal?.value === "string"
+    ? entry.literal.value
     : undefined;
-
-const effectProblems = (
-  record: RecordType,
-  effects: readonly InlineModuleActionEffect[],
-): string[] => {
-  const issues: string[] = [];
-  const seen = new Set<string>();
-  for (const effect of effects) {
-    const field = record.fields.find((candidate) => candidate.key === effect.field);
-    if (field === undefined) {
-      issues.push(`Sets: ${record.name} has no field ${effect.field}.`);
-      continue;
-    }
-    if (seen.has(field.key)) issues.push(`Sets: ${field.label} is set twice. Set each field once.`);
-    seen.add(field.key);
-    if (!changeableByPeople(field))
-      issues.push(
-        `Sets: ${field.label} is worked out by the platform, so an action cannot set it.`,
-      );
-    if (field.type === "choice") {
-      const options =
-        (field.settings as { options?: readonly { value: string; label: string }[] }).options ?? [];
-      const chosen = fixedText(effect.value);
-      if (effect.value.kind === "literal" && !options.some((option) => option.value === chosen))
-        issues.push(
-          `Sets: ${chosen ?? "this value"} is not an option of ${field.label}. Choose one of ${options.map((option) => option.label).join(", ")}.`,
-        );
-    }
-  }
-  return issues;
 };
+
+const initialEffectValue = (effect: Readonly<{ field: string; option: string }>) => ({
+  kind: "literal",
+  literal: { type: "choice", value: effect.option },
+});
+
+/** The `record.set_fields` entries of one authored flow, in task order. */
+const flowEffects = (flow: ModuleFlow | undefined): InlineModuleActionEffect[] =>
+  (flow?.tasks ?? []).flatMap((task) =>
+    task.type === "record.set_fields"
+      ? Object.entries(
+          (task.properties as { values?: { entries?: Record<string, unknown> } }).values?.entries ??
+            {},
+        ).map(([field, value]) => ({ field, value }))
+      : [],
+  );
 
 /** The one choice field and option the effects set, when the action can own that option. */
 const ownedOption = (
@@ -148,10 +141,132 @@ const ownedOption = (
     : { field: first.field, option };
 };
 
-const parsed = (source: ApplicationSourceDocument, actionKey: string): InlineModuleActionResult => {
+const actionFlowInputs = (
+  recordKey: string,
+  inputs: ModuleAction["inputs"],
+): ModuleFlow["inputs"] => ({
+  record: {
+    type: "record_reference",
+    required: true,
+    recordTypeIds: [recordKey],
+    description: "The record the action runs on.",
+  },
+  ...Object.fromEntries(
+    inputs.map((input) => [
+      input.key,
+      {
+        type: input.type,
+        required: input.required,
+        ...(input.type === "record_reference" ? { recordTypeIds: input.record_types } : {}),
+      },
+    ]),
+  ),
+});
+
+/** A new action's flow: the record input and the action's inputs, and nothing done yet. */
+const starterActionFlow = (
+  id: string,
+  key: string,
+  recordKey: string,
+  inputs: ModuleAction["inputs"],
+  effect?: Readonly<{ field: string; option: string }>,
+): ModuleFlow =>
+  ({
+    id,
+    key,
+    labels: {},
+    execution: "transaction",
+    runAs: { kind: "saver" },
+    inputs: actionFlowInputs(recordKey, inputs),
+    recordInput: "record",
+    variables: {},
+    triggers: [],
+    tasks:
+      effect === undefined
+        ? [{ id: "done", type: "stop", outcome: "completed" }]
+        : [
+            {
+              id: "set_fields",
+              type: "record.set_fields",
+              version: "1.0.0",
+              properties: {
+                values: {
+                  kind: "map",
+                  entries: { [effect.field]: initialEffectValue(effect) },
+                },
+              },
+            },
+          ],
+    outputs: {},
+    errors: [],
+    finally: [],
+  }) as unknown as ModuleFlow;
+
+/**
+ * What an action's own permission reads and changes: the fields its condition and its flow read of
+ * the record, the fields its flow sets, the carried fields of the events it announces and the link
+ * fields of the relationships it copies.
+ */
+export const actionFieldPolicy = (
+  module: InlineModule,
+  record: RecordType,
+  action: ModuleAction,
+): Readonly<{ readable_fields: string[]; changeable_fields: string[] }> => {
+  const flow = module.flows.find((candidate) => candidate.id === action.flow);
+  const effects = flowEffects(flow);
+  const readFields = new Set([
+    ...conditionFields(action.precondition),
+    ...effects.map((effect) => effect.field),
+  ]);
+  const collectReads = (value: unknown): void => {
+    if (value === null || typeof value !== "object") return;
+    if (
+      "source" in value &&
+      value.source === "trigger_record" &&
+      "field" in value &&
+      typeof value.field === "string"
+    )
+      readFields.add(value.field);
+    for (const entry of Object.values(value)) collectReads(entry);
+  };
+  collectReads(flow?.tasks);
+  for (const task of flow?.tasks ?? []) {
+    const properties = (task as { properties?: Record<string, unknown> }).properties ?? {};
+    if (task.type === "event.announce")
+      for (const key of module.events.find((event) => event.key === fixedText(properties.event))
+        ?.carries ?? [])
+        readFields.add(key);
+    if (task.type === "record.changes") {
+      const changes = (properties.changes as { literal?: { value?: unknown } } | undefined)?.literal
+        ?.value;
+      for (const item of Array.isArray(changes) ? changes : [])
+        for (const key of (item as { relationshipIds?: string[] }).relationshipIds ?? []) {
+          const field = record.relationships.find(
+            (relationship) => relationship.key === key,
+          )?.from_field;
+          if (field !== undefined) readFields.add(field);
+        }
+    }
+  }
+  return {
+    readable_fields: [...readFields],
+    changeable_fields: [...new Set(effects.map((effect) => effect.field))],
+  };
+};
+
+const parsed = (
+  source: ApplicationSourceDocument,
+  actionKey: string,
+  flowAlias?: string,
+): InlineModuleActionResult => {
   const result = applicationSourceDocumentSchema.safeParse(source);
   return result.success
-    ? { kind: "changed", source: result.data, actionKey }
+    ? {
+        kind: "changed",
+        source: result.data,
+        actionKey,
+        ...(flowAlias === undefined ? {} : { flowAlias }),
+      }
     : {
         kind: "invalid",
         issues: result.error.issues.map((issue) => `${issue.message} (${issue.path.join(" / ")})`),
@@ -194,52 +309,16 @@ export const saveInlineModuleAction = (
         "This action runs a registered operation of the platform, so what it sets is not changed here.",
       ],
     };
-  const effects = change.tasks.flatMap((task) =>
-    task.type === "record.set_fields"
-      ? Object.entries(task.properties.values).map(([field, value]) => ({ field, value }))
-      : [],
-  );
-  const checkValue = (value: FlowValue): void => {
-    const reference = value.kind === "reference" ? value.reference : undefined;
-    if (
-      reference?.source === "input" &&
-      reference.name !== "record" &&
-      !change.inputs.some((input) => input.key === reference.name)
-    )
-      issues.push("Task value: choose an input declared by this action.");
-    if (
-      reference?.source === "trigger_record" &&
-      !record.fields.some((field) => field.key === reference.field)
-    )
-      issues.push("Task value: choose a field of this action's record type.");
-    if (value.kind === "map") Object.values(value.entries).forEach(checkValue);
-    if (value.kind === "array") value.items.forEach(checkValue);
-  };
-  const checkMappings = (target: RecordType, values: Record<string, FlowValue>): void => {
-    issues.push(
-      ...effectProblems(
-        target,
-        Object.entries(values).map(([field, value]) => ({ field, value })),
-      ),
-    );
-    const fields = new Map(record.fields.map((field) => [field.key, field]));
-    const inputs = new Map(change.inputs.map((input) => [input.key, input]));
-    for (const [key, value] of Object.entries(values)) {
-      const field = target.fields.find((entry) => entry.key === key);
-      if (
-        field !== undefined &&
-        !actionValueCompatible(
-          value,
-          field,
-          fields,
-          inputs,
-          `${module.key}:${record.key}`,
-          "source",
-        )
-      )
-        issues.push(`${target.name}: choose a compatible value for ${field.label}.`);
-    }
-  };
+  const existingFlow =
+    existing === undefined
+      ? undefined
+      : module.flows.find((candidate) => candidate.id === existing.flow);
+  const effects: InlineModuleActionEffect[] =
+    existingFlow !== undefined
+      ? flowEffects(existingFlow)
+      : change.initialEffect === undefined
+        ? []
+        : [{ field: change.initialEffect.field, value: initialEffectValue(change.initialEffect) }];
   for (const input of change.inputs)
     if (input.type === "record_reference")
       for (const reference of input.record_types) {
@@ -253,45 +332,8 @@ export const saveInlineModuleAction = (
         )
           issues.push(`Input ${input.label}: choose a record type in this application.`);
       }
-  for (const task of change.tasks) {
-    if (task.type === "record.create" || task.type === "record.set_fields")
-      Object.values(task.properties.values).forEach(checkValue);
-    if (task.type === "record.create") {
-      const [owner, key] = task.properties.record_type.split(":");
-      const target = source.body.modules
-        .find((entry) => entry.key === owner)
-        ?.record_types.find((entry) => entry.key === key);
-      if (target === undefined)
-        issues.push("Create record: choose a record type in this application.");
-      else checkMappings(target, task.properties.values);
-    }
-    if (task.type === "record.set_fields") checkMappings(record, task.properties.values);
-    if (
-      task.type === "event.announce" &&
-      !module.events.some(
-        (event) => event.key === task.properties.event && event.record_type === record.key,
-      )
-    )
-      issues.push("Announce event: choose a declared event of this record type.");
-    if (task.type === "record.changes")
-      for (const entry of task.properties.changes) {
-        const target = change.inputs.find((input) => input.key === entry.target_input);
-        if (
-          target?.type !== "record_reference" ||
-          !target.record_types.includes(`${module.key}:${record.key}`)
-        )
-          issues.push("Copy relationships: choose a record input that admits this record type.");
-        if (
-          entry.relationships.some(
-            (key) => !record.relationships.some((relationship) => relationship.key === key),
-          )
-        )
-          issues.push("Copy relationships: choose relationships of this record type.");
-      }
-  }
   if (new Set(change.inputs.map((input) => input.key)).size !== change.inputs.length)
     issues.push("Inputs: give each input a unique key.");
-  if (change.tasks.length === 0) issues.push("Tasks: add at least one task.");
   const precondition = change.precondition;
   for (const field of conditionFields(precondition))
     if (!record.fields.some((candidate) => candidate.key === field))
@@ -317,6 +359,7 @@ export const saveInlineModuleAction = (
   const name =
     existing === undefined ? undefined : existing.key.slice(existing.key.lastIndexOf(".") + 1);
   const taken = moduleAliases(module);
+  const flowKeys = new Set(module.flows.map((flow) => flow.key));
   const keys = new Set([
     ...module.actions.map((action) => action.key),
     ...module.permissions.map((permission) => permission.key),
@@ -371,9 +414,12 @@ export const saveInlineModuleAction = (
         (entry) => entry !== actionKey,
       );
   }
+  const actionId = existing?.id ?? uniqueAlias(`act_${record.key}_${newName}`, taken);
+  const flowId = existing?.flow ?? uniqueAlias(`flow_${actionId.slice(4)}`, taken);
+  const flowKey = uniqueAlias(`${record.key}_${newName}`.slice(0, 32).replace(/_+$/, ""), flowKeys);
   const action = {
     ...existing,
-    id: existing?.id ?? uniqueAlias(`act_${record.key}_${newName}`, taken),
+    id: actionId,
     key: actionKey,
     label,
     record_type: record.key,
@@ -381,7 +427,7 @@ export const saveInlineModuleAction = (
     shareable: existing?.shareable ?? false,
     inputs: structuredClone(change.inputs),
     ...(precondition === undefined ? {} : { precondition: structuredClone(precondition) }),
-    tasks: structuredClone(change.tasks),
+    flow: flowId,
     ...(owned === undefined
       ? {}
       : { sets_choice_field: owned.field, sets_choice_option: owned.option }),
@@ -394,41 +440,20 @@ export const saveInlineModuleAction = (
   if (existing === undefined) {
     module.actions.push(action);
     (record.custom_actions as string[]).push(action.id);
-  } else module.actions[module.actions.indexOf(existing)] = action;
-
-  // The action's own permission reads what its condition reads and changes what it sets.
-  const readFields = new Set([
-    ...conditionFields(precondition),
-    ...effects.map((effect) => effect.field),
-  ]);
-  const collectReads = (value: unknown): void => {
-    if (value === null || typeof value !== "object") return;
-    if (
-      "source" in value &&
-      value.source === "trigger_record" &&
-      "field" in value &&
-      typeof value.field === "string"
-    )
-      readFields.add(value.field);
-    for (const entry of Object.values(value)) collectReads(entry);
-  };
-  collectReads(change.tasks);
-  for (const task of change.tasks) {
-    if (task.type === "event.announce")
-      for (const key of module.events.find((event) => event.key === task.properties.event)
-        ?.carries ?? [])
-        readFields.add(key);
-    if (task.type === "record.changes")
-      for (const item of task.properties.changes)
-        for (const key of item.relationships) {
-          const field = record.relationships.find(
-            (relationship) => relationship.key === key,
-          )?.from_field;
-          if (field !== undefined) readFields.add(field);
-        }
+    module.flows.push(
+      starterActionFlow(flowId, flowKey, record.key, change.inputs, change.initialEffect),
+    );
+  } else {
+    module.actions[module.actions.indexOf(existing)] = action;
+    if (existingFlow !== undefined)
+      existingFlow.inputs = actionFlowInputs(record.key, change.inputs);
   }
-  const readable = [...readFields];
-  const changeable = [...new Set(effects.map((effect) => effect.field))];
+
+  const { readable_fields: readable, changeable_fields: changeable } = actionFieldPolicy(
+    module,
+    record,
+    action,
+  );
   const own = module.permissions.find((permission) => permission.key === actionKey);
   if (change.permission.kind === "own") {
     const policy = { readable_fields: readable, changeable_fields: changeable };
@@ -456,12 +481,11 @@ export const saveInlineModuleAction = (
       }
     } else if (
       existing === undefined ||
-      JSON.stringify(existing.tasks) !== JSON.stringify(change.tasks) ||
       JSON.stringify(existing.precondition) !== JSON.stringify(precondition)
     )
       (own as { field_policy?: unknown }).field_policy = policy;
   }
-  return parsed(source, actionKey);
+  return parsed(source, actionKey, flowId);
 };
 
 /**

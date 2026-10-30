@@ -75,7 +75,6 @@ const directSourceKeyMap: Readonly<Record<string, string>> = Object.freeze({
   message: "messageKey",
   component: "componentId",
   workflow: "workflowId",
-  target_input: "targetInputKey",
   page: "pageId",
   query: "queryId",
   flow: "flowId",
@@ -235,6 +234,8 @@ export function sourceToCanonicalPath(
     const leaf = sourcePath.at(-1);
     if (leaf === "record_type") mapped[mapped.length - 1] = "recordTypeId";
     if (leaf === "record_id") mapped[mapped.length - 1] = "recordId";
+    if (leaf === "flow" && sourcePath[1] === "actions" && sourcePath.length === 4)
+      mapped[mapped.length - 1] = "flowId";
     if (leaf === "organization_account_id") mapped[mapped.length - 1] = "organizationAccountId";
   }
   if (isOpaqueDataPath(positions, sourcePath))

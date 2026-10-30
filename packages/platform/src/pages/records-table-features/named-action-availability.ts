@@ -13,8 +13,6 @@ import {
 import { createInstalledContextLoader } from "../../definition/installed-page-bundle-context";
 import { installedNamedActions } from "../../definition/installed-named-actions";
 import { recordsTableBulkActions } from "../../definition/application-composition/records-table-features/bulk-actions";
-import { collectActionFlowTasks } from "../../rules/action-flow-run";
-import { flowPlansOf } from "../../workflows/flow-plan";
 import type {
   NamedActionAvailability,
   NamedActionAvailabilityRequest,
@@ -34,7 +32,6 @@ export const projectNamedActionAvailability = async (
   recordTypeId: string,
   targets: NamedActionAvailabilityRequest["targets"],
   actions: readonly (NamedActionEligibilityAction & Readonly<{ key: string }>)[],
-  issuedAt: string,
 ): Promise<NamedActionAvailability> => {
   if (targets.length === 0) return [];
   const rows = await readNamedActionEligibility(
@@ -42,7 +39,6 @@ export const projectNamedActionAvailability = async (
     recordTypeId,
     actions,
     targets.map((target) => ({ recordId: target.recordId, commandId: randomUUID() })),
-    issuedAt,
   );
   return rows.map((row, index) => ({
     recordId: targets[index]!.recordId,
@@ -81,7 +77,7 @@ export const readRecordsTableNamedActionAvailability = async (
   const result = await createHumanOrganizationRequestService(dependencies).run(
     session,
     address.selection,
-    async (transaction, scope, issuedAt): Promise<NamedActionAvailabilityResult> => {
+    async (transaction, scope): Promise<NamedActionAvailabilityResult> => {
       if (scope.applicationRootId === undefined) return refuse("application_scope_missing");
       // Load in this request transaction rather than trusting a previous read's projection.
       const installed = await createInstalledContextLoader(transaction, scope).load();
@@ -111,27 +107,12 @@ export const readRecordsTableNamedActionAvailability = async (
       const recordTypeId = String(query.recordType.recordTypeId);
       const application = installed.releaseSet.application;
       const named = installedNamedActions(application, installed.releaseSet.modules);
-      const library = flowPlansOf(installed.releaseSet).library;
       const actions: (NamedActionEligibilityAction & { key: string })[] = [];
       for (const declaration of declared) {
         const action = named.get(declaration.action);
         if (action === undefined || !sameId(action.subjectRecordTypeId, recordTypeId))
           return refuse("action_not_installed");
-        const flowId = action.action.actionId;
-        const flow = library(flowId);
-        if (
-          flow === undefined ||
-          flow.execution !== "transaction" ||
-          flow.runAs.kind !== "saver" ||
-          flow.triggers.length > 0
-        )
-          return refuse("action_flow_unavailable");
-        const runId = randomUUID();
-        actions.push({
-          key: declaration.action,
-          action: action.action,
-          run: (seed) => collectActionFlowTasks(library, flowId, runId, seed),
-        });
+        actions.push({ key: declaration.action, action: action.action });
       }
       return {
         kind: "available",
@@ -140,7 +121,6 @@ export const readRecordsTableNamedActionAvailability = async (
           recordTypeId,
           request.targets,
           actions,
-          issuedAt,
         ),
       };
     },

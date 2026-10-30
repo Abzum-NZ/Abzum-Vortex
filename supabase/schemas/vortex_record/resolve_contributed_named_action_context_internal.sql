@@ -55,8 +55,9 @@ begin
   end if;
   select coalesce(pg_catalog.jsonb_agg(distinct pg_catalog.lower(set_key.value)), '[]'::jsonb)
   into set_field_ids
-  from pg_catalog.jsonb_array_elements(action_content -> 'tasks') as task(value)
-  cross join lateral pg_catalog.jsonb_object_keys(task.value #> '{properties,values}') as set_key(value);
+  from pg_catalog.jsonb_array_elements_text(
+    coalesce(action_content #> '{writePolicy,subjectFieldIds}', '[]'::jsonb)
+  ) as set_key(value);
 
   return p_base_context || pg_catalog.jsonb_build_object(
     'actionOwner', pg_catalog.jsonb_build_object(

@@ -18,7 +18,7 @@ import { fingerprintCanonicalValue, compareCanonicalStrings } from "../canonical
 import { applicationSearchFieldIsSelectable } from "../application-resolution";
 import { type ApplicationFieldValuePair, actionValueReferenceEntry } from "./action-values";
 import { permissionRecordScopesValid } from "./permission-scopes";
-import { actionPermissionKeys } from "./source-paths";
+import { actionFlowOf, actionPermissionKeys } from "./source-paths";
 import { versionRequirementAccepts } from "./publication-rules";
 import { moduleQueryBorrowable } from "../module-query-exposure";
 
@@ -287,33 +287,46 @@ export function applicationScope(
       });
     };
     inspectSubjectReferences(action.precondition);
-    for (const task of array(action.tasks)) {
+    const flow = actionFlowOf(action, flowsForCommits);
+    if (flow === undefined) return false;
+    const keyedFieldIds = (record: JsonObject | undefined) =>
+      new Map(
+        record
+          ? array(record.fields).map((field) => [String(field.key), String(field.fieldId)] as const)
+          : [],
+      );
+    for (const task of array(flow.tasks)) {
       const properties = object(task.properties);
+      const entries = (values: unknown) => Object.entries(object(object(values).entries));
       if (String(task.type) === "record.set_fields") {
-        for (const [fieldId, value] of Object.entries(object(properties.values))) {
-          if (!subjectFieldIds.has(fieldId)) safe = false;
+        for (const [fieldKey, value] of entries(properties.values)) {
+          const fieldId = subjectFieldIdsByKey.get(fieldKey);
+          if (fieldId === undefined || !subjectFieldIds.has(fieldId)) safe = false;
           inspectSubjectReferences(value);
         }
       }
       if (String(task.type) === "record.create") {
-        const targetRecord = records.get(String(object(properties.recordType).recordTypeId));
-        const targetRecordId = String(object(properties.recordType).recordTypeId);
+        const targetRecordId = String(object(object(properties.record_type).literal).value);
+        const targetRecord = records.get(targetRecordId);
         const targetPublicFields =
           expectedSubjectRecordId !== undefined
             ? (restrictedSubjectFieldIds ?? new Set<string>())
             : publicFieldIds(targetRecord);
+        const targetFieldIds = keyedFieldIds(targetRecord);
         if (
           !targetRecord ||
           (expectedSubjectRecordId !== undefined && targetRecordId !== expectedSubjectRecordId) ||
-          Object.keys(object(properties.values)).some((fieldId) => !targetPublicFields.has(fieldId))
+          entries(properties.values).some(([fieldKey]) => {
+            const fieldId = targetFieldIds.get(fieldKey);
+            return fieldId === undefined || !targetPublicFields.has(fieldId);
+          })
         )
           safe = false;
-        for (const value of Object.values(object(properties.values)))
-          inspectSubjectReferences(value);
+        for (const [, value] of entries(properties.values)) inspectSubjectReferences(value);
       }
       if (
         String(task.type) === "record.changes" &&
-        array(properties.changes).some((change) =>
+        array(object(object(properties.changes).literal).value).some((change) =>
           array(change.relationshipIds).some((id) => !allowedRelationshipIds.has(String(id))),
         )
       )

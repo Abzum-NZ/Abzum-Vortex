@@ -914,7 +914,7 @@ export function compileParsedApplicationRequest(
     };
     const output = applicationCompilationOutputSchema.safeParse({
       kind: "application",
-      validationContractVersion: "4.1.0",
+      validationContractVersion: "4.2.0",
       platformCompatibilityVersion: APPLICATION_PLATFORM_COMPATIBILITY_VERSION,
       canonical,
       artifact,

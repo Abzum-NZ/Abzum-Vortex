@@ -29,7 +29,8 @@ import {
   createNamedActionRecordPort,
   namedActionBatchMaximum,
 } from "../../records/action-record-port";
-import { collectActionFlowTasks, type ActionFlowRunner } from "../../rules/action-flow-run";
+import { namedActionFlowRunner } from "../../definition/flow-action-run";
+import { installedFlowRelease } from "../../definition/flow-installed-release";
 import { flowPlansOf } from "../../workflows/flow-plan";
 import {
   fieldChoiceLabelsOf,
@@ -304,11 +305,12 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
         refuse("action_not_installed");
         return report({ kind: "refused", reason: "not_available" });
       }
-      // The action's own compiled transaction flow, from the exact installed release.
+      // The action's own transaction flow, from the exact installed release.
       const library = flowPlansOf(placement.installed.releaseSet).library;
-      const flowId = named.action.actionId;
-      const flow = library(flowId);
+      const flowId = named.flowId;
+      const flow = flowId === undefined ? undefined : library(flowId);
       if (
+        flowId === undefined ||
         flow === undefined ||
         flow.execution !== "transaction" ||
         flow.runAs.kind !== "saver" ||
@@ -318,8 +320,12 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
         return report({ kind: "refused", reason: "not_available" });
       }
       const runId = randomUUID();
-      const runner: ActionFlowRunner = (seed) =>
-        collectActionFlowTasks(library, flowId, runId, seed);
+      const recordTypes = installedFlowRelease(placement.installed).recordTypes;
+      if (recordTypes === undefined) {
+        refuse("action_flow_unavailable");
+        return report({ kind: "refused", reason: "not_available" });
+      }
+      const runner = namedActionFlowRunner(library, recordTypes, flowId, runId);
 
       // The records the run covers, with the revision each is bound at.
       let targets: readonly Readonly<{ recordId: string; revision?: number }>[];
@@ -397,16 +403,15 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
         // One command per batch: a resubmitted gesture replays the batch it already completed.
         const batchCommandId = recordCommandId("records.bulk", request.commandId, `batch:${start}`);
         // ONE call decides every record of the batch under current access.
-        const decided = await requests.run(session, selection, (transaction, _scope, issuedAt) =>
+        const decided = await requests.run(session, selection, (transaction) =>
           readNamedActionEligibility(
             transaction,
             placement.recordTypeId,
-            [{ action: named.action, run: runner }],
+            [{ action: named.action }],
             batch.map((target) => ({
               recordId: target.recordId,
               commandId: batchCommandId,
             })),
-            issuedAt,
           ).then((rows) =>
             rows.map(({ actions, ...row }) => ({ ...row, eligibility: actions[0]!.eligibility })),
           ),

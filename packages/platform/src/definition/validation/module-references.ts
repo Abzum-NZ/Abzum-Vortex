@@ -31,12 +31,10 @@ import {
   actionPermissionKeys,
   actionPermissionsMatch,
   actionDeleteEffectsSupported,
+  actionFlowOf,
+  actionFlowSetFields,
 } from "./source-paths";
-import {
-  actionValueCompatible,
-  actionValueReferenceEntry,
-  actionFieldByKey,
-} from "./action-values";
+import {} from "./action-values";
 import { evaluateSavedSharingCondition } from "./saved-conditions";
 import { queryGroupFieldTypes } from "../module-query-edit";
 import { linkDependencyProblem, type LinkDependencyField } from "../module-link-dependencies";
@@ -283,10 +281,10 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
     const modulePermissionsByKey = new Map(
       modulePermissions.map((permission) => [String(permission.key), permission]),
     );
+    const flowsById = new Map(array(content.flows).map((flow) => [String(flow.id), flow]));
     const actionsById = new Map(
       array(content.actions).map((action) => [String(action.actionId), action]),
     );
-    const events = new Set(array(content.events).map((event) => String(event.key)));
     const relationships = new Map(
       [...moduleRecords.values()].flatMap((record) =>
         array(record.relationships).map(
@@ -607,13 +605,7 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
         subject ? array(subject.fields).map((field) => [String(field.fieldId), field]) : [],
       );
       const fields = new Set(fieldMap.keys());
-      const relationships = new Set(
-        subject
-          ? array(subject.relationships).map((relationship) => String(relationship.relationshipId))
-          : [],
-      );
       const inputMap = new Map(array(action.inputs).map((input) => [String(input.key), input]));
-      const inputKeys = new Set(inputMap.keys());
       const inputTypes = new Map(
         [...inputMap].map(([key, input]) => [key, typedSemanticFieldType(input.type) ?? ""]),
       );
@@ -632,77 +624,15 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
           )
         )
           valid = false;
-      for (const task of array(action.tasks)) {
-        const properties = object(task.properties);
-        if (String(task.type) === "record.set_fields") {
-          for (const [id, value] of Object.entries(object(properties.values)))
-            if (
-              !fields.has(id) ||
-              !actionValueCompatible(
-                value,
-                fieldMap.get(id),
-                fieldMap,
-                inputMap,
-                String(action.subjectRecordTypeId),
-              )
-            )
-              valid = false;
-        }
-        if (String(task.type) === "record.changes") {
-          for (const change of array(properties.changes)) {
-            if (
-              (change.relationshipIds as string[]).some((id) => !relationships.has(id)) ||
-              inputMap.get(String(change.targetInputKey))?.type !== "record_reference" ||
-              !array(inputMap.get(String(change.targetInputKey))?.recordTypes)
-                .map((reference) => String(reference.recordTypeId))
-                .includes(String(action.subjectRecordTypeId))
-            )
-              valid = false;
-          }
-        }
-        if (String(task.type) === "event.announce" && !events.has(String(properties.eventKey)))
-          valid = false;
-        if (String(task.type) === "record.create") {
-          const target = recordReference(properties.recordType, allowedModuleRoots);
-          const targetFields = new Map(
-            target ? array(target.fields).map((field) => [String(field.fieldId), field]) : [],
-          );
-          if (
-            !target ||
-            Object.entries(object(properties.values)).some(
-              ([id, value]) =>
-                !targetFields.has(id) ||
-                !actionValueCompatible(
-                  value,
-                  targetFields.get(id),
-                  fieldMap,
-                  inputMap,
-                  String(action.subjectRecordTypeId),
-                ),
-            )
-          )
-            valid = false;
-        }
-        walkValues(task, (entry) => {
-          const reference = actionValueReferenceEntry(entry);
-          if (
-            reference?.source === "input" &&
-            !inputKeys.has(String(reference.name)) &&
-            String(reference.name) !== "record"
-          )
-            valid = false;
-          if (
-            reference?.source === "trigger_record" &&
-            actionFieldByKey(fieldMap, String(reference.field)) === undefined
-          )
-            valid = false;
-        });
-      }
+      // A record action runs one Module flow; the flow validator checks everything inside it.
+      const flow =
+        action.protectedOperation === undefined ? actionFlowOf(action, flowsById) : undefined;
+      if (action.protectedOperation === undefined && flow === undefined) valid = false;
       if (!valid)
         failures.push(
           failure(output, "vortex.definition.module_action_references", "broken_reference"),
         );
-      if (!actionDeleteEffectsSupported(action))
+      if (!actionDeleteEffectsSupported(actionFlowOf(action, flowsById)))
         failures.push(
           failure(output, "vortex.definition.module_action_references", "unsupported_choice"),
         );
@@ -720,13 +650,14 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
       const optionKey = `${String(action.setsChoiceFieldId)}:${String(action.setsChoiceOption)}`;
       // Every assignment the action makes to the field must be the declared option, so a later
       // task cannot leave the record in another stage.
-      const assignments = array(action.tasks).flatMap((task) => {
-        if (String(task.type) !== "record.set_fields") return [];
-        const values = object(object(task.properties).values);
-        return String(action.setsChoiceFieldId) in values
-          ? [object(values[String(action.setsChoiceFieldId)])]
-          : [];
-      });
+      const flow = actionFlowOf(action, flowsById);
+      const setFieldKey = field === undefined ? undefined : String(field.key);
+      const assignments =
+        flow === undefined
+          ? []
+          : actionFlowSetFields(flow)
+              .filter((entry) => entry.field === setFieldKey)
+              .map((entry) => entry.value);
       const valid =
         field?.type === "choice" &&
         array(object(field.settings).options).some(

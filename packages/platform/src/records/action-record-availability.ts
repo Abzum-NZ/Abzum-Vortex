@@ -3,8 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import type { ExecuteNamedActionCommand } from "./named-actions";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
-import type { ActionFlowRunner } from "../rules/action-flow-run";
-import { actionFlowSeed } from "./action-flow-effects";
+import { actionPreconditionHolds } from "./named-action-inputs";
 import {
   one,
   parsePreparation,
@@ -19,11 +18,7 @@ export type NamedActionAvailability =
   /** The preview cannot decide without the inputs the person has yet to supply; submit decides. */
   | Readonly<{ kind: "undecided"; reason: string }>;
 
-const availabilityFromPreview = (
-  preview: ActionPreparation,
-  issuedAt: string,
-  run: ActionFlowRunner,
-): NamedActionAvailability => {
+const availabilityFromPreview = (preview: ActionPreparation): NamedActionAvailability => {
   if (preview.outcome === "permission_refused") return { kind: "refused", cause: "permission" };
   if (preview.outcome !== "previewed") {
     const reasonCode = "reasonCode" in preview ? preview.reasonCode : undefined;
@@ -32,11 +27,10 @@ const availabilityFromPreview = (
       reason: `the preview was ${preview.outcome}, not previewed (${reasonCode ?? "no reason code"})`,
     };
   }
-  const outcome = run(actionFlowSeed(preview, {}, issuedAt));
-  if (outcome.kind === "refused") return { kind: "refused", cause: "precondition" };
-  return outcome.kind === "collected"
-    ? { kind: "available" }
-    : { kind: "undecided", reason: outcome.reason };
+  const holds = actionPreconditionHolds(preview, {});
+  if (holds === undefined)
+    return { kind: "undecided", reason: "the precondition compares with inputs not supplied yet" };
+  return holds ? { kind: "available" } : { kind: "refused", cause: "precondition" };
 };
 
 /** Whether a named action can run on one selected record now, as a bulk run decides it. */
@@ -52,20 +46,14 @@ export type NamedActionEligibility =
 /** Decides one record's eligibility from its action preview (no inputs), writing nothing. */
 export const namedActionPreviewEligibility = (
   previewCandidate: unknown,
-  issuedAt: string,
-  run: ActionFlowRunner,
 ): NamedActionEligibility => {
   const preview = parsePreparation(previewCandidate);
   if (preview.outcome === "completed") return "replayed";
   if (preview.outcome === "permission_refused") return "not_permitted";
   if (preview.outcome === "conflict") return "changed";
   if (preview.outcome !== "previewed") return "refused";
-  const outcome = run(actionFlowSeed(preview, {}, issuedAt));
-  return outcome.kind === "collected"
-    ? "eligible"
-    : outcome.kind === "refused"
-      ? "not_applicable"
-      : "refused";
+  const holds = actionPreconditionHolds(preview, {});
+  return holds === undefined ? "refused" : holds ? "eligible" : "not_applicable";
 };
 
 /** A page subject read together with the availability of every named action bound to it. */
@@ -92,8 +80,6 @@ export const readSubjectWithNamedActionAvailability = async (
     requestedFieldIds: readonly string[] | null;
   }>,
   actions: readonly ExecuteNamedActionCommand["action"][],
-  issuedAt: string,
-  runFor: (action: ExecuteNamedActionCommand["action"]) => ActionFlowRunner,
 ): Promise<SubjectWithNamedActionAvailability> => {
   const requests = actions.map((action) => ({
     commandId: randomUUID(),
@@ -130,10 +116,7 @@ export const readSubjectWithNamedActionAvailability = async (
         throw new Error("NAMED_ACTION_PREVIEW_MISSING");
       continue;
     }
-    availability.set(
-      key,
-      availabilityFromPreview(parsePreparation(entry.preview), issuedAt, runFor(action)),
-    );
+    availability.set(key, availabilityFromPreview(parsePreparation(entry.preview)));
   }
   return { record: read.record, capabilities: read.capabilities, availability };
 };

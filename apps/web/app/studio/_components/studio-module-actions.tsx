@@ -42,9 +42,8 @@ import {
   type StudioConditionValidation,
 } from "@vortex/ui/studio";
 import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
-import { StudioReferencesAlert, StudioUsedIn } from "./studio-used-in";
+import { StudioReferencesAlert, StudioUsedIn, useStudioPlaceOpener } from "./studio-used-in";
 import { StudioActionInputs } from "./studio-action-inputs";
-import { StudioActionTasks } from "./studio-action-tasks";
 
 type Module = ApplicationSourceDocument["body"]["modules"][number];
 type RecordType = Module["record_types"][number];
@@ -55,7 +54,7 @@ const choiceOptions = (field: Field | undefined): readonly { value: string; labe
     ? ((field.settings as { options?: { value: string; label: string }[] }).options ?? [])
     : [];
 
-/** A complete action edit keeps ordered task values intact until the author saves. */
+/** An action edit: its name, inputs, condition and permission. Its steps are its flow. */
 export function ActionDialog({
   source,
   module,
@@ -75,32 +74,11 @@ export function ActionDialog({
   onOpenChange: (open: boolean) => void;
   edit: StudioDataEdit;
   initialEffect?: Readonly<{ field: string; option: string }>;
-  onSaved?: (actionKey: string) => void;
+  onSaved?: (actionKey: string, flowAlias: string | undefined) => void;
 }>) {
   const [label, setLabel] = useState(action?.label ?? "");
   const [inputs, setInputs] = useState<Action["inputs"]>(() =>
     structuredClone(action?.inputs ?? []),
-  );
-  const [tasks, setTasks] = useState<Action["tasks"]>(() =>
-    structuredClone(
-      action?.tasks ??
-        (initialEffect === undefined
-          ? []
-          : [
-              {
-                id: "set_fields",
-                type: "record.set_fields",
-                properties: {
-                  values: {
-                    [initialEffect.field]: {
-                      kind: "literal",
-                      literal: { type: "choice", value: initialEffect.option },
-                    },
-                  },
-                },
-              },
-            ]),
-    ),
   );
   const [permission, setPermission] = useState(
     action?.permission === action?.key ? "own" : (action?.permission ?? "own"),
@@ -139,17 +117,17 @@ export function ActionDialog({
         ...(action === undefined ? {} : { actionKey: action.key }),
         label,
         precondition,
-        tasks,
         inputs,
         permission: permission === "own" ? { kind: "own" } : { kind: "existing", key: permission },
         ownsChoice,
+        ...(initialEffect === undefined ? {} : { initialEffect }),
       }),
     );
     if (result.kind === "referenced") setWhere(result.references);
     const problem = studioEditProblem(result);
     setIssues(problem === undefined ? [] : [problem]);
     if (result.kind === "changed") {
-      onSaved?.(result.actionKey);
+      onSaved?.(result.actionKey, result.flowAlias);
       onOpenChange(false);
     }
   };
@@ -191,23 +169,6 @@ export function ActionDialog({
         return;
       showCondition(remapped, next, valid);
     }
-    if (renamed === undefined) return;
-    // Only unsaved inputs are renamed. Carry their task references along, leaving literal data alone.
-    const rename = (value: unknown): unknown => {
-      if (Array.isArray(value)) return value.map(rename);
-      if (value === null || typeof value !== "object") return value;
-      const entry = value as Record<string, unknown>;
-      if (entry.kind === "literal") return value;
-      if (entry.source === "input" && entry.name === renamed.from)
-        return { ...entry, name: renamed.to };
-      return Object.fromEntries(
-        Object.entries(entry).map(([key, child]) => [
-          key,
-          key === "target_input" && child === renamed.from ? renamed.to : rename(child),
-        ]),
-      );
-    };
-    setTasks((current) => rename(current) as Action["tasks"]);
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -220,7 +181,8 @@ export function ActionDialog({
                 : `Change ${action.label}`}
             </DialogTitle>
             <DialogDescription>
-              Choose the information this action needs and the steps it runs in order.
+              Choose the information this action needs and when it may run. What it does is its
+              flow, edited in the flow editor.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
@@ -265,14 +227,6 @@ export function ActionDialog({
               </p>
             )}
           </fieldset>
-          <StudioActionTasks
-            source={source}
-            module={module}
-            record={record}
-            inputs={inputs}
-            tasks={tasks}
-            onChange={setTasks}
-          />
           <div className="flex items-start gap-2">
             <Checkbox
               id="action-owns"
@@ -341,6 +295,7 @@ export function StudioModuleActions({
   edit: StudioDataEdit;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
+  const opener = useStudioPlaceOpener();
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [issues, setIssues] = useState<readonly string[]>([]);
   const [refused, setRefused] =
@@ -420,6 +375,21 @@ export function StudioModuleActions({
                 <ItemTitle>{action.label}</ItemTitle>
                 {option === undefined ? null : <Badge variant="outline">Owns {option.label}</Badge>}
                 <ItemActions className="gap-1">
+                  {action.flow === undefined ? null : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        opener.open({
+                          label: action.label,
+                          open: { kind: "flow", flowAlias: action.flow!, moduleKey: module.key },
+                        })
+                      }
+                    >
+                      Edit flow
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     size="sm"
@@ -488,6 +458,13 @@ export function StudioModuleActions({
             if (!open) setEditing(null);
           }}
           edit={edit}
+          onSaved={(_actionKey, flowAlias) => {
+            if (editing === "new" && flowAlias !== undefined)
+              opener.open({
+                label: "New action",
+                open: { kind: "flow", flowAlias, moduleKey: module.key },
+              });
+          }}
         />
       )}
       {confirmDialog}
