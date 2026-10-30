@@ -57,7 +57,7 @@ const seededPick = (values: LinkInputPayload | undefined): Picked | null =>
 
 /**
  * A link field: a searchable, paged picker over the records of the record types the field may
- * point at. It asks its page for records through its `records_requested` event (search text and a
+ * point at. It asks its page for records through its `options_requested` event (search text and a
  * continuation, nothing else) and shows each by its title; the server reads them under the
  * person's own access. It emits `field_changed` with the picked record's typed reference and
  * publishes it to its enclosing form. Without a page to ask, it offers no records.
@@ -66,7 +66,7 @@ export function LinkInput(props: LinkInputProps): ReactElement {
   const context = resolveControlContext<LinkInputPayload>(props, [
     "field_changed",
     "field_focus_lost",
-    "records_requested",
+    "options_requested",
   ]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds(props.placementId);
@@ -154,8 +154,8 @@ export function LinkInput(props: LinkInputProps): ReactElement {
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   const generation = useRef(0);
-  const requestRecords = useRef(context.events?.records_requested);
-  requestRecords.current = context.events?.records_requested;
+  const requestRecords = useRef(context.events?.options_requested);
+  requestRecords.current = context.events?.options_requested;
   const parent = useRef(parentRecordId);
   parent.current = parentRecordId;
   const location = useRef(context.location);
@@ -172,7 +172,7 @@ export function LinkInput(props: LinkInputProps): ReactElement {
     const bounded = search.trim().slice(0, 100);
     void Promise.resolve(
       handler({
-        event: "records_requested",
+        event: "options_requested",
         ...(bounded === "" ? {} : { search: bounded }),
         ...(continuationToken === undefined ? {} : { continuationToken }),
         ...(parent.current === undefined ? {} : { parentRecordId: parent.current }),

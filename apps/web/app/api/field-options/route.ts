@@ -1,13 +1,14 @@
 import type { NextRequest, NextResponse } from "next/server";
 import {
   containedComponentIdSchema,
+  jsonValueSchema,
   logRefusal,
   recordIdSchema,
   revisionSchema,
 } from "@vortex/platform/schema";
 import { z } from "zod";
 import { resolveApplicationAddress } from "../../_lib/application-address";
-import { loadRecordChoicePage } from "../../_lib/application-page/link-input";
+import { loadFieldOptionsPage } from "../../_lib/application-page/link-input";
 import { readBoundedRequestText } from "../_lib/bounded-request-body";
 import { getIdentityJourneyConfiguration } from "../../auth/_lib/authority-configuration";
 import { resolveIdentitySession } from "../../auth/_lib/session-server";
@@ -38,6 +39,8 @@ const requestSchema = z
     subjectRecordId: recordIdSchema.optional(),
     /** For a dependent link field: the record chosen in the field it depends on, in the draft (a form field or an edited cell). */
     parentRecordId: recordIdSchema.optional(),
+    /** For a field whose options a flow works out: the form's draft values, by field key. */
+    draft: z.record(z.string().min(1).max(200), jsonValueSchema).optional(),
     search: z.string().trim().max(100).optional(),
     pageSize: z.number().int().min(1).max(200).optional(),
     continuationToken: z.string().min(1).max(65_536).optional(),
@@ -53,7 +56,7 @@ const requestSchema = z
   );
 
 const refusedResponse = (code: string, cause?: unknown): NextResponse => {
-  logRefusal("record-choices", "record choice page", code, cause);
+  logRefusal("field-options", "options page", code, cause);
   return privateResponse({ kind: "refused", code }, 404);
 };
 
@@ -70,7 +73,7 @@ const fromOwnSite = (request: NextRequest): boolean => {
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     if (!fromOwnSite(request)) {
-      logRefusal("record-choices", "record choice page", "request_not_from_own_site");
+      logRefusal("field-options", "options page", "request_not_from_own_site");
       return privateResponse({ kind: "refused", code: "request_not_from_own_site" }, 403);
     }
     const identity = await resolveIdentitySession();
@@ -80,7 +83,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const read = await readBoundedRequestText(request, maximumRequestBodyLength);
     if (read.kind === "too_large") {
-      logRefusal("record-choices", "record choice page", "body_too_large");
+      logRefusal("field-options", "options page", "body_too_large");
       return privateResponse({ kind: "refused", code: "body_too_large" }, 413);
     }
     if (read.kind !== "read") return refusedResponse("body_unreadable");
@@ -104,7 +107,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return privateResponse({ kind: "temporarily_unavailable" }, 503);
     if (address.kind !== "application_page") return refusedResponse(`address_${address.kind}`);
 
-    const result = await loadRecordChoicePage(identity.session, address, {
+    const result = await loadFieldOptionsPage(identity.session, address, {
       placementId: body.placementId,
       ...(body.fieldId === undefined || body.purpose === undefined
         ? {}
@@ -113,6 +116,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       releaseKey: body.releaseKey,
       ...(body.subjectRecordId === undefined ? {} : { subjectRecordId: body.subjectRecordId }),
       ...(body.parentRecordId === undefined ? {} : { parentRecordId: body.parentRecordId }),
+      ...(body.draft === undefined ? {} : { draft: body.draft }),
       ...(body.search === undefined ? {} : { search: body.search }),
       ...(body.pageSize === undefined ? {} : { pageSize: body.pageSize }),
       ...(body.continuationToken === undefined
@@ -124,7 +128,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         return privateResponse(
           {
             kind: "completed",
-            choices: result.choices,
+            ...(result.choices === undefined ? {} : { choices: result.choices }),
+            ...(result.options === undefined ? {} : { options: result.options }),
             ...(result.nextContinuationToken === undefined
               ? {}
               : { nextContinuationToken: result.nextContinuationToken }),
@@ -134,21 +139,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       case "reload":
         return privateResponse({ kind: "reload" }, 409);
       case "temporarily_unavailable":
-        logRefusal("record-choices", "record choice page", "temporarily_unavailable");
+        logRefusal("field-options", "options page", "temporarily_unavailable");
         return privateResponse({ kind: "temporarily_unavailable" }, 503);
       default: {
         // A cause may name the fields involved after its code; those stay in the log only.
         const [code, ...detail] = result.cause.split(" ");
-        logRefusal(
-          "record-choices",
-          "record choice page",
-          [`record_choices_${code}`, ...detail].join(" "),
-        );
-        return privateResponse({ kind: "refused", code: `record_choices_${code}` }, 404);
+        logRefusal("field-options", "record choice page", [`options_${code}`, ...detail].join(" "));
+        return privateResponse({ kind: "refused", code: `options_${code}` }, 404);
       }
     }
   } catch (error) {
-    logRefusal("record-choices", "record choice page", "record_choices_failed", error);
+    logRefusal("field-options", "options page", "options_failed", error);
     return privateResponse({ kind: "temporarily_unavailable" }, 503);
   }
 }

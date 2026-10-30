@@ -352,8 +352,6 @@ export const readStudioCanvasRecords = async (
       data,
       page: areaPage,
       context,
-      referenceChoiceInputs: [],
-      referenceChoices: services.referenceChoices,
       session,
       selection,
       address: { application: { key: draft.key }, pageKey: page.key },

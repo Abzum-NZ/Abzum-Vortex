@@ -70,3 +70,10 @@ export {
 export type { OfflineSourceFailure } from "./offline-source-validation";
 export { applicationModuleSources } from "./application-module-lowering";
 export { validateApplicationsOffline } from "./offline-application-validation";
+export { createFlowQueryReader } from "./flow-query-reader";
+export {
+  runFieldOptionsFlow,
+  type FieldOptionsFlowOption,
+  type FieldOptionsFlowResult,
+} from "./field-options-flow";
+export { createOptionMembershipCheck } from "./option-membership-check";

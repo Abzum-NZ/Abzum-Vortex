@@ -1,90 +1,39 @@
 import {
   ATTACHMENT_LIST_BLOCK_RELEASE,
   isStreamableQueryPlacement,
-  logPlacementFailure,
-  projectReferenceChoiceInputValues,
   readQueryPlacement,
-  type createReferenceChoiceService,
   type HumanOrganizationRequestDependencies,
   type PageSubjectReadResult,
   type PlacementReadInput,
 } from "@vortex/platform/server";
 import { isRecord, sameId } from "@vortex/platform/schema";
-import { hasReferenceChoiceSource, projectedReferenceChoiceForm } from "../reference-choices";
 import type { collectPlacements } from "./placement-helpers";
-import type { ApplicationPageModel } from "./types";
 import { readAttachmentListPlacement } from "./attachment-placement";
 
 /**
  * One page's placement read on the web: the platform's read of every query-bound block plus the two
- * placements whose data is the web page's own concern, a reference-choice field's first page of
- * choices and an attachment list.
+ * placement whose data is the web page's own concern, an attachment list.
  */
 export type PlacementReaderInput = PlacementReadInput &
   Readonly<{
     page: Parameters<typeof collectPlacements>[0];
     pageSubjectRecordTypeId: string | undefined;
-    referenceChoiceInputs: Array<ApplicationPageModel["referenceChoiceInputs"][number]>;
-    referenceChoices: ReturnType<typeof createReferenceChoiceService>;
     dependencies: HumanOrganizationRequestDependencies;
     adoptSubjectRead: (subject: PageSubjectReadResult) => void;
   }>;
 
 /**
  * Whether a placement's data comes only from its own bound query, so the page may stream it after
- * the frame (a reference-choice field never streams: its form waits for its choices).
+ * the frame.
  */
 export const isStreamablePlacement = (
   placement: ReturnType<typeof collectPlacements>[number],
-): boolean => !hasReferenceChoiceSource(placement) && isStreamableQueryPlacement(placement);
-
-const readReferenceChoices = async (
-  input: PlacementReaderInput,
-  placement: ReturnType<typeof collectPlacements>[number],
-): Promise<void> => {
-  const { placementId, formId } = placement;
-  const { data } = input;
-  const form =
-    formId === undefined
-      ? undefined
-      : projectedReferenceChoiceForm(input.page, input.context.releaseSet.modules, formId);
-  const field = form?.placements.get(placementId);
-  if (field === undefined || formId === undefined) {
-    logPlacementFailure(input.address, placementId, "choice_settings_invalid");
-    data[placementId] = { status: "disabled", reason: "Choices unavailable" };
-    return;
-  }
-  input.referenceChoiceInputs.push({ placementId, formId, fieldKey: field.fieldKey });
-  const result = await input.referenceChoices.run(input.session, input.selection, field.command);
-  if (
-    result.kind !== "available" ||
-    result.value.outcome !== "completed" ||
-    result.value.kind !== "record_reference"
-  ) {
-    data[placementId] = { status: "disabled", reason: "Choices unavailable" };
-    return;
-  }
-  data[placementId] = {
-    status: "ready",
-    values: projectReferenceChoiceInputValues(
-      result.value.choices,
-      undefined,
-      undefined,
-      result.value.nextContinuationToken === undefined
-        ? {}
-        : { nextContinuationToken: result.value.nextContinuationToken },
-    ),
-  };
-};
+): boolean => isStreamableQueryPlacement(placement);
 
 export const readPlacement = async (
   input: PlacementReaderInput,
   placement: ReturnType<typeof collectPlacements>[number],
 ): Promise<void> => {
-  if (hasReferenceChoiceSource(placement)) {
-    await readReferenceChoices(input, placement);
-    return;
-  }
   const block = placement.vortex.block;
   if (
     isRecord(block) &&

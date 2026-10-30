@@ -9,6 +9,7 @@ import {
   type RequestDatabaseTransaction,
 } from "../db/request-transaction";
 import { optionsSourceNarrowing } from "../definition/field-options-source";
+import type { OptionMembershipCheck } from "./option-membership";
 import type { BeforeSaveRuleWarning } from "../rules/before-save-flow-run";
 import {
   beforeSaveFlowSetOf,
@@ -195,6 +196,7 @@ export const applyRecordChanges = async (
   commandId: string,
   intents: readonly RecordChangeIntent[],
   named?: NamedRecordCommand,
+  optionMember?: OptionMembershipCheck,
 ): Promise<RecordChangesResult> => {
   if (
     !platformIdSchema.safeParse(commandId).success ||
@@ -487,6 +489,7 @@ export const applyRecordChanges = async (
       localValues,
       preview,
       {
+        ...(optionMember === undefined ? {} : { optionMember }),
         choicePermission: async (permissionId) => {
           const decision = decisions.get(`${key}:permission:${permissionId.toLowerCase()}`);
           if (typeof decision !== "boolean")
