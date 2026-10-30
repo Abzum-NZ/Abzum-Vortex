@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Field, FieldDescription } from "@vortex/ui/components/field";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
@@ -14,7 +14,13 @@ export function MfaForm({
   initial: MfaFormState;
   continuation?: string;
 }) {
-  const [state, action] = useActionState(completeMfa, initial);
+  const [secret, setSecret] = useState<string>();
+  const [state, action] = useActionState(async (previous: MfaFormState, formData: FormData) => {
+    const result = await completeMfa(formData);
+    if (result.kind === "error") return { ...previous, error: result.error };
+    setSecret(result.secret);
+    return { kind: "enrolled", factorId: result.factorId };
+  }, initial);
   return (
     <form className="flex flex-col gap-5" action={action}>
       {continuation === undefined ? null : (
@@ -36,8 +42,7 @@ export function MfaForm({
         <>
           {state.kind === "enrolled" ? (
             <FieldDescription>
-              Add an account in your authenticator app using this setup key:{" "}
-              <code>{state.secret}</code>
+              Add an account in your authenticator app using this setup key: <code>{secret}</code>
             </FieldDescription>
           ) : null}
           <input type="hidden" name="factor_id" value={state.factorId} />
