@@ -360,8 +360,9 @@ const serverOnlyReference = (
 
 const outputTypes = (steps: readonly FlowTask[]): Record<string, string> =>
   Object.fromEntries(
-    steps.flatMap((step) =>
-      (registered(step)?.outputs ?? []).map((output) => {
+    steps.flatMap((step) => {
+      const entry = registered(step);
+      const outputs = (entry?.outputs ?? []).map((output) => {
         if (step.type === "data.calculate" && output.key === "value" && "properties" in step) {
           const result = step.properties.result_type;
           if (result?.kind !== "literal" || typeof result.literal.value !== "string")
@@ -369,8 +370,11 @@ const outputTypes = (steps: readonly FlowTask[]): Record<string, string> =>
           return [`outputs.${step.id}.${output.key}`, result.literal.value];
         }
         return [`outputs.${step.id}.${output.key}`, output.type];
-      }),
-    ),
+      });
+      if (entry?.effect === "read" || entry?.effect === "change" || entry?.effect === "background_start")
+        outputs.push([`outputs.${step.id}.outcome`, "text"]);
+      return outputs;
+    }),
   );
 
 const outputMemberTypes = (steps: readonly FlowTask[]): Record<string, string> => {
