@@ -15,12 +15,15 @@ export function MfaForm({
   continuation?: string;
 }) {
   const [secret, setSecret] = useState<string>();
-  const [state, action] = useActionState(async (previous: MfaFormState, formData: FormData) => {
-    const result = await completeMfa(formData);
-    if (result.kind === "error") return { ...previous, error: result.error };
-    setSecret(result.secret);
-    return { kind: "enrolled", factorId: result.factorId };
-  }, initial);
+  const [state, action] = useActionState(
+    async (previous: MfaFormState, formData: FormData): Promise<MfaFormState> => {
+      const result = await completeMfa(formData);
+      if (result.kind === "error") return { ...previous, error: result.error };
+      setSecret(result.secret);
+      return { kind: "enrolled", factorId: result.factorId };
+    },
+    initial,
+  );
   return (
     <form className="flex flex-col gap-5" action={action}>
       {continuation === undefined ? null : (
