@@ -211,7 +211,13 @@ export const createRecordsTableBatchEditService = (
           stored: row.values,
           submitted: submitted.values as Readonly<Record<string, JsonValue>>,
         });
-        if (row.revision !== submitted.revision) {
+        // A record that already holds every submitted value is a batch the person sent again after
+        // its reply was lost: it goes on to the write, which replays what that gesture committed.
+        const holdsAll = Object.entries(submitted.values).every(([field, value]) => {
+          const held = Object.entries(row.values).find(([key]) => sameId(key, field));
+          return held !== undefined && JSON.stringify(held[1]) === JSON.stringify(value);
+        });
+        if (row.revision !== submitted.revision && !holdsAll) {
           log(`revision_not_current:${submitted.recordId}`);
           problems.push(problem(submitted.recordId, "changed"));
           continue;

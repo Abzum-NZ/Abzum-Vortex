@@ -306,7 +306,9 @@ export function useBatchEdit(
           );
           return answer;
         }
-        refuse("Nothing was changed. That is not available right now.", []);
+        if (result.kind === "unknown")
+          refuse("The outcome is not known. Retry it, or reload the page to see what changed.", []);
+        else refuse("Nothing was changed. That is not available right now.", []);
         return answer;
       } catch (error) {
         console.error("[grid] a batch edit could not be sent", error);

@@ -147,5 +147,7 @@ export const recordsTableBatchEditResultSchema = z.discriminatedUnion("kind", [
     .strict(),
   recordsTableRequestRejectionSchema,
   z.object({ kind: z.literal("unavailable") }).strict(),
+  /** The run may have committed: the page offers its Retry, which replays the same gesture. */
+  z.object({ kind: z.literal("unknown") }).strict(),
 ]);
 export type RecordsTableBatchEditResult = z.infer<typeof recordsTableBatchEditResultSchema>;

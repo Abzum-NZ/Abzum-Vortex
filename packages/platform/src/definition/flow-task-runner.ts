@@ -229,7 +229,7 @@ export const createFlowTaskRunner = (
     return {};
   };
 
-  /** What a writer refusal ends the task as: the refusal's own outcome and its authored words. */
+  /** A writer refusal ends the task with its own outcome and authored words. */
   const refusedTask = (
     failure:
       | (Readonly<{ outcome: string }> & { error?: Parameters<typeof ruleRefusalResult>[0] })

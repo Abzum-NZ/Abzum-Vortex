@@ -131,7 +131,11 @@ export function useBatchUndo({
       );
       if (outcome.cellProblems !== undefined)
         return { kind: "cells_refused", problems: [...outcome.cellProblems] };
-      return outcome.confirmed ? savedOf(outcome.applied) : { kind: "unavailable" };
+      if (outcome.confirmed) return savedOf(outcome.applied);
+      // No notice and no change reported: the run may have committed (the page offers Retry).
+      return outcome.notice === undefined && !outcome.changed
+        ? { kind: "unknown" }
+        : { kind: "unavailable" };
     },
     [runBinding],
   );
