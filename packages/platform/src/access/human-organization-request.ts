@@ -1,8 +1,14 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 import { correlationIdSchema } from "../catalogue/common";
-import { identityAuthorityIdSchema, type IdentityAuthorityId } from "../catalogue/identifiers";
+import {
+  builderKeySchema,
+  namespacedKeySchema,
+  identityAuthorityIdSchema,
+  type IdentityAuthorityId,
+} from "../catalogue/identifiers";
 import { databaseRevision, databaseCode, describeFailure } from "../catalogue/runtime-primitives";
 import {
   protectedOperationChannelSchema,
@@ -164,20 +170,40 @@ export const createHumanOrganizationRequestService = (
   const runWithMode = async <Result, Special = never>(
     mode: HumanOrganizationRequestMode,
     session: IdentitySession,
-    candidate: OrganizationSelectionCandidate,
+    candidate: OrganizationSelectionCandidate | undefined,
     operation: (
       transaction: RequestDatabaseTransaction,
       scope: SelectedOrganizationScope,
       issuedAt: string,
+      selection: OrganizationSelectionCandidate,
+      accountDisplayName: string | undefined,
     ) => Promise<Result>,
     prepare?: ChangePreparation,
     suspendedAccountResult?: () => Special,
     mapDatabaseRefusal?: (code: string, error: unknown) => Result | undefined,
     changedAccountId?: string,
+    address?: Readonly<{
+      tenantShortName: string;
+      organizationShortName: string;
+      applicationKey: string;
+    }>,
   ): Promise<HumanOrganizationRequestResult<Result> | Special> => {
     const verifiedSession = identitySessionSchema.safeParse(session);
-    const verifiedCandidate = organizationSelectionCandidateSchema.safeParse(candidate);
-    if (!verifiedSession.success || !verifiedCandidate.success) return { kind: "unavailable" };
+    const verifiedCandidate =
+      candidate === undefined
+        ? undefined
+        : organizationSelectionCandidateSchema.safeParse(candidate);
+    if (
+      !verifiedSession.success ||
+      (address === undefined && !verifiedCandidate?.success) ||
+      (address !== undefined &&
+        (!builderKeySchema.safeParse(address.tenantShortName).success ||
+          !builderKeySchema.safeParse(address.organizationShortName).success ||
+          !namespacedKeySchema.safeParse(address.applicationKey).success))
+    )
+      return { kind: "unavailable" };
+    let selected = verifiedCandidate?.success ? verifiedCandidate.data : undefined;
+    let accountDisplayName: string | undefined;
 
     let issuedAt: string;
     let correlationId: string;
@@ -211,22 +237,20 @@ export const createHumanOrganizationRequestService = (
     try {
       const bound = dependencies.boundRequest;
       if (bound !== undefined) {
+        if (selected === undefined) throw new Error("BOUND_REQUEST_SCOPE_MISMATCH");
         const boundScope = selectedOrganizationScopeSchema.parse(bound.scope);
         if (
           JSON.stringify(verifiedSession.data) !==
             JSON.stringify(identitySessionSchema.parse(bound.session)) ||
-          JSON.stringify(verifiedCandidate.data) !==
+          JSON.stringify(selected) !==
             JSON.stringify(organizationSelectionCandidateSchema.parse(bound.selection)) ||
-          !representsSameUuid(boundScope.organizationId, verifiedCandidate.data.organizationId) ||
+          !representsSameUuid(boundScope.organizationId, selected.organizationId) ||
           (boundScope.applicationRootId === undefined) !==
-            (verifiedCandidate.data.applicationRootId === undefined) ||
+            (selected.applicationRootId === undefined) ||
           (boundScope.applicationRootId !== undefined &&
-            verifiedCandidate.data.applicationRootId !== undefined &&
-            !representsSameUuid(
-              boundScope.applicationRootId,
-              verifiedCandidate.data.applicationRootId,
-            )) ||
-          boundScope.previewInstallationId !== verifiedCandidate.data.previewInstallationId ||
+            selected.applicationRootId !== undefined &&
+            !representsSameUuid(boundScope.applicationRootId, selected.applicationRootId)) ||
+          boundScope.previewInstallationId !== selected.previewInstallationId ||
           !Number.isFinite(Date.parse(bound.issuedAt)) ||
           Date.parse(bound.issuedAt) >= Date.parse(verifiedSession.data.accessTokenExpiresAt) ||
           (mode === "access_change" && bound.mode !== "access_change") ||
@@ -239,7 +263,7 @@ export const createHumanOrganizationRequestService = (
         const value = await requireRequestSavepoint(bound.transaction).withSavepoint(
           async (child) => {
             if (prepare !== undefined) await prepare(child, boundScope);
-            return operation(child, boundScope, issuedAt);
+            return operation(child, boundScope, issuedAt, selected!, accountDisplayName);
           },
         );
         appendTelemetry(correlationId, "success", startedAtMs);
@@ -247,14 +271,35 @@ export const createHumanOrganizationRequestService = (
       }
       const value = await runTransaction(
         async (transaction) => {
+          let addressedRows: readonly ScopeRow[] | undefined;
+          if (address !== undefined) {
+            addressedRows = await transaction.query<ScopeRow>`
+              select * from vortex_access.resolve_human_application_address_scope(
+                ${verifiedSession.data.identityId}::uuid, ${address.tenantShortName}::text,
+                ${address.organizationShortName}::text, ${address.applicationKey}::text
+              )
+            `;
+            const addressedScope = parseScope(addressedRows);
+            if (addressedScope.applicationRootId === undefined)
+              throw new Error("INVALID_SCOPE_RESULT");
+            selected = organizationSelectionCandidateSchema.parse({
+              organizationId: addressedScope.organizationId,
+              applicationRootId: addressedScope.applicationRootId,
+            });
+            const display = addressedRows[0]?.account_display_name;
+            if (display !== null && display !== undefined && typeof display !== "string")
+              throw new Error("INVALID_ADDRESS_RESULT");
+            accountDisplayName = display ?? undefined;
+          }
+          if (selected === undefined) throw new Error("INVALID_SCOPE_RESULT");
           // A preview request runs the preview's installation and registration in every read and
           // change of this transaction, the scope check included; the database refuses an address
           // its builder may not run.
-          if (verifiedCandidate.data.previewInstallationId !== undefined)
+          if (selected.previewInstallationId !== undefined)
             await transaction.query`
               select pg_catalog.set_config(
                 'vortex_record.preview_installation_id',
-                ${verifiedCandidate.data.previewInstallationId}, true
+                ${selected.previewInstallationId}, true
               )
             `;
           // A profile change locks the accounts it writes before the scope holds the actor's
@@ -263,25 +308,26 @@ export const createHumanOrganizationRequestService = (
             await transaction.query`
               select vortex_access.lock_organization_accounts_for_profile_change(
                 ${verifiedSession.data.identityId}::uuid,
-                ${verifiedCandidate.data.organizationId}::uuid,
+                ${selected.organizationId}::uuid,
                 ${changedAccountId}::uuid
               )
             `;
           const rows =
-            verifiedCandidate.data.applicationRootId === undefined
+            addressedRows ??
+            (selected.applicationRootId === undefined
               ? mode === "access_change"
                 ? await transaction.query<ScopeRow>`
                   select scope.*, pg_catalog.clock_timestamp() as completed_at
                   from vortex_access.resolve_human_organization_access_change_scope(
                     ${verifiedSession.data.identityId}::uuid,
-                    ${verifiedCandidate.data.organizationId}::uuid
+                    ${selected.organizationId}::uuid
                   ) as scope
                 `
                 : await transaction.query<ScopeRow>`
                   select scope.*, pg_catalog.clock_timestamp() as completed_at
                   from vortex_access.resolve_human_organization_scope(
                     ${verifiedSession.data.identityId}::uuid,
-                    ${verifiedCandidate.data.organizationId}::uuid
+                    ${selected.organizationId}::uuid
                   ) as scope
                 `
               : mode === "access_change"
@@ -289,35 +335,32 @@ export const createHumanOrganizationRequestService = (
                   select scope.*, pg_catalog.clock_timestamp() as completed_at
                   from vortex_access.resolve_human_application_access_change_scope(
                     ${verifiedSession.data.identityId}::uuid,
-                    ${verifiedCandidate.data.organizationId}::uuid,
-                    ${verifiedCandidate.data.applicationRootId}::uuid
+                    ${selected.organizationId}::uuid,
+                    ${selected.applicationRootId}::uuid
                   ) as scope
                 `
                 : await transaction.query<ScopeRow>`
                   select scope.*, pg_catalog.clock_timestamp() as completed_at
                   from vortex_access.resolve_human_application_scope(
                     ${verifiedSession.data.identityId}::uuid,
-                    ${verifiedCandidate.data.organizationId}::uuid,
-                    ${verifiedCandidate.data.applicationRootId}::uuid
+                    ${selected.organizationId}::uuid,
+                    ${selected.applicationRootId}::uuid
                   ) as scope
-                `;
+                `);
           const parsedScope = parseScope(rows);
           const scope: SelectedOrganizationScope =
-            verifiedCandidate.data.previewInstallationId === undefined
+            selected.previewInstallationId === undefined
               ? parsedScope
               : {
                   ...parsedScope,
-                  previewInstallationId: verifiedCandidate.data.previewInstallationId,
+                  previewInstallationId: selected.previewInstallationId,
                 };
           if (
-            (verifiedCandidate.data.applicationRootId === undefined) !==
+            (selected.applicationRootId === undefined) !==
               (scope.applicationRootId === undefined) ||
-            (verifiedCandidate.data.applicationRootId !== undefined &&
+            (selected.applicationRootId !== undefined &&
               scope.applicationRootId !== undefined &&
-              !representsSameUuid(
-                verifiedCandidate.data.applicationRootId,
-                scope.applicationRootId,
-              ))
+              !representsSameUuid(selected.applicationRootId, scope.applicationRootId))
           )
             throw new Error("INVALID_SCOPE_RESULT");
           // Live context and permission deadlines are checked on the database clock. Issue the
@@ -358,7 +401,8 @@ export const createHumanOrganizationRequestService = (
           if (prepare !== undefined) await prepare(transaction, scope);
           return { context, scope, channel: configuredChannel };
         },
-        (transaction, scope) => operation(transaction, scope, issuedAt),
+        (transaction, scope) =>
+          operation(transaction, scope, issuedAt, selected!, accountDisplayName),
       );
       appendTelemetry(correlationId, "success", startedAtMs);
       return { kind: "available", value };
@@ -386,6 +430,7 @@ export const createHumanOrganizationRequestService = (
         error instanceof Error &&
         error.message.startsWith("permission denied for ");
       const refused =
+        (address !== undefined && code === "P0002") ||
         (code === "42501" && !missingPrivilege) ||
         recentAuthenticationRequired ||
         multiFactorRequired ||
@@ -419,6 +464,56 @@ export const createHumanOrganizationRequestService = (
   };
 
   return Object.freeze({
+    /** Resolves an address and opens exactly one application scope for a flow invocation. */
+    runAddressed: <Result>(
+      session: IdentitySession,
+      address: Readonly<{
+        tenantShortName: string;
+        organizationShortName: string;
+        applicationKey: string;
+      }>,
+      operation: (
+        bound: BoundHumanOrganizationRequest,
+        accountDisplayName: string | undefined,
+        addressIdentity: unknown,
+      ) => Promise<Result>,
+    ): Promise<HumanOrganizationRequestResult<Result>> =>
+      runWithMode(
+        "shared",
+        session,
+        undefined,
+        async (transaction, scope, issuedAt, selection, accountDisplayName) => {
+          // This must be the first operation in the scoped request: the hint conveys no authority.
+          const rows =
+            await transaction.query`select vortex_definition.resolve_addressed_active_application_identity(${address.applicationKey}::text) as identity`;
+          const identity = z
+            .object({
+              organizationId: z.uuid(),
+              applicationRootId: z.uuid(),
+              definitionKey: z.string(),
+              applicationReleaseRevision: z.number().int().nonnegative(),
+            })
+            .strict()
+            .parse(rows[0]?.identity);
+          if (
+            scope.applicationRootId === undefined ||
+            !representsSameUuid(identity.organizationId, scope.organizationId) ||
+            !representsSameUuid(identity.applicationRootId, scope.applicationRootId) ||
+            identity.definitionKey !== address.applicationKey
+          )
+            throw new Error("ADDRESSED_SCOPE_IDENTITY_MISMATCH");
+          return operation(
+            { transaction, scope, issuedAt, selection, session, mode: "shared" },
+            accountDisplayName,
+            identity,
+          );
+        },
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        address,
+      ),
     run: <Result>(
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,

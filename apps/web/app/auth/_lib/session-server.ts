@@ -12,6 +12,7 @@ import {
   createIdentityVerifier,
   type VerifiedSignInResult,
   type IdentityVerificationExecution,
+  type RequestDatabaseTransaction,
 } from "@vortex/platform/server";
 import { cookies, headers } from "next/headers";
 import { cache } from "react";
@@ -165,6 +166,7 @@ type RequestIdentityResolution = Readonly<{
 
 const resolveRequestIdentity = async (
   execution?: IdentityVerificationExecution,
+  transaction?: RequestDatabaseTransaction,
 ): Promise<RequestIdentityResolution> => {
   execution?.checkpoint();
   const proxyState = (await headers()).get(identitySessionProxyHeader);
@@ -207,7 +209,10 @@ const resolveRequestIdentity = async (
   const staged = boundary.stage.snapshot();
   if (staged.refused || staged.mutations.length > 0) return { resolution: unavailable() };
   const accessToken = current.data.session.access_token;
-  const { resolution, identity } = await sessionService(execution).resolveVerified(accessToken);
+  const { resolution, identity } = await sessionService(execution).resolveVerified(
+    accessToken,
+    transaction,
+  );
   execution?.checkpoint();
   if (resolution.kind !== "active" || identity === undefined) return { resolution };
   return { resolution, accessToken, verified: identity };
@@ -220,8 +225,14 @@ const resolveRequestIdentity = async (
  */
 const resolveRenderIdentity = cache(() => resolveRequestIdentity());
 
-export const resolveIdentitySession = async (): Promise<IdentitySessionResolution> =>
-  (await resolveRenderIdentity()).resolution;
+export const resolveIdentitySession = async (
+  transaction?: RequestDatabaseTransaction,
+): Promise<IdentitySessionResolution> =>
+  (
+    await (transaction === undefined
+      ? resolveRenderIdentity()
+      : resolveRequestIdentity(undefined, transaction))
+  ).resolution;
 
 /** Explicit recovery after a refused save; the route commits the pair before the browser retries. */
 export const refreshIdentitySession = async (): Promise<IdentitySessionResolution> => {

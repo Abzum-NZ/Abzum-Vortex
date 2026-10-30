@@ -19,6 +19,8 @@ export type FlowRuntimeOptions = Readonly<{
     | Readonly<{ plan: BrowserFlowPlan; inputs: Readonly<Record<string, FlowBindingInput>> }>
     | undefined;
   timeZone?: string;
+  /** The record the page was rendered for: the form-submit mapping fills a declared `record` input from it. */
+  subject?: FlowSubjectContext;
   host: FlowIntentHost;
   state: FlowRuntimeState;
   bindingSettings: (bindingId: string) =>

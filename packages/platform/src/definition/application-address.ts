@@ -41,7 +41,10 @@ import {
   type PermittedApplication,
   type PermittedApplicationsRead,
 } from "./application-launcher-read";
-import { createHumanOrganizationRequestService } from "../access/human-organization-request";
+import {
+  createHumanOrganizationRequestService,
+  type BoundHumanOrganizationRequest,
+} from "../access/human-organization-request";
 import { decideOrganizationAccessBatch } from "../access/organization-access-decision-access";
 import { readCurrentOrganizationDefaultApplicationAfterAuthorization } from "../access/organization-runtime-settings-administration";
 import {
@@ -784,6 +787,107 @@ export const readAddressedApplicationAtAddress = (
     applicationKeyCandidate,
   );
 
+/** Projects the addressed application using its already established human scope. */
+const projectAddressedApplicationInRequest = async (
+  permissions: PlatformPermissionSource,
+  bound: BoundHumanOrganizationRequest,
+  addressedIdentity: Readonly<{
+    organizationId: string;
+    identity: AddressedActiveApplicationIdentity;
+  }>,
+  addressedPageKey: string | undefined,
+) => {
+  const { transaction, scope } = bound;
+  if (
+    scope.applicationRootId === undefined ||
+    !sameId(scope.applicationRootId, addressedIdentity.identity.applicationRootId)
+  )
+    return undefined;
+  const context = await createInstalledContextLoader(transaction, scope).load();
+  const application = context.releaseSet.application;
+  const identity = addressedIdentity.identity;
+  if (
+    !sameId(context.organizationId, addressedIdentity.organizationId) ||
+    !sameId(context.applicationRootId, identity.applicationRootId) ||
+    (identity.previewInstallationId === undefined &&
+      application.releaseRevision !== identity.applicationReleaseRevision) ||
+    application.definitionKey !== identity.definitionKey ||
+    application.releaseRevision !== context.applicationReleaseRevision
+  )
+    return undefined;
+  const permitted = await projectPermittedApplication(
+    permissions,
+    transaction,
+    scope,
+    applicationCandidateFromInstalledContext(context),
+    undefined,
+    (reasonCodes) => logApplicationRefusal(application.definitionKey, reasonCodes),
+    addressedPageKey,
+    false,
+    addressedPageKey === undefined
+      ? loadStoredNavigationProjection({ context, permissions })
+      : undefined,
+  );
+  return permitted === null ? undefined : { context, permitted };
+};
+
+/** Resolves and projects a flow's address inside its established application request. */
+export const readAddressedApplicationForFlowInRequest = async (
+  permissions: PlatformPermissionSource,
+  bound: BoundHumanOrganizationRequest,
+  input: Readonly<{
+    tenantShortName: string;
+    organizationShortName: string;
+    applicationKey: string;
+    pageKey: string;
+    accountDisplayName?: string;
+    addressIdentity: unknown;
+  }>,
+): Promise<AddressedApplicationBundleRead> => {
+  const unavailable = (): AddressedApplicationBundleRead => ({
+    read: { kind: "unavailable" },
+    experiences: [],
+  });
+  if (
+    bound.scope.applicationRootId === undefined ||
+    isReservedTenantSegment(input.tenantShortName) ||
+    !builderKeySchema.safeParse(input.pageKey).success ||
+    !namespacedKeySchema.safeParse(input.applicationKey).success
+  )
+    return unavailable();
+  const identity = addressedActiveApplicationIdentitySchema.parse(input.addressIdentity);
+  if (
+    !sameId(identity.organizationId, bound.scope.organizationId) ||
+    !sameId(identity.applicationRootId, bound.scope.applicationRootId) ||
+    identity.definitionKey !== input.applicationKey
+  )
+    return unavailable();
+  const projected = await projectAddressedApplicationInRequest(
+    permissions,
+    bound,
+    { organizationId: identity.organizationId, identity },
+    input.pageKey,
+  );
+  if (projected === undefined) return unavailable();
+  const { context, permitted } = projected;
+  return {
+    read: permittedApplicationsReadSchema.parse({
+      kind: "available",
+      organizationId: identity.organizationId,
+      tenantShortName: input.tenantShortName,
+      organizationShortName: input.organizationShortName,
+      defaultApplicationRootId: null,
+      ...(input.accountDisplayName === undefined
+        ? {}
+        : { accountDisplayName: input.accountDisplayName }),
+      applications: [permitted.application],
+    }),
+    experiences: permitted.experiences,
+    context,
+    identity,
+  };
+};
+
 /**
  * Resolves one addressed App from the current HUMAN installed bundle and page authority.
  * A page key limits authority to a placement refresh: its page and the application home only.
@@ -850,41 +954,26 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
           ? {}
           : { previewInstallationId: addressedIdentity.identity.previewInstallationId }),
       },
-      async (transaction, scope) => {
-        if (
-          scope.applicationRootId === undefined ||
-          !sameId(scope.applicationRootId, addressedIdentity.identity.applicationRootId)
-        )
-          return undefined;
-        const context = await createInstalledContextLoader(transaction, scope).load();
-        const application = context.releaseSet.application;
-        const identity = addressedIdentity.identity;
-        if (
-          !sameId(context.organizationId, addressedIdentity.organizationId) ||
-          !sameId(context.applicationRootId, identity.applicationRootId) ||
-          (identity.previewInstallationId === undefined &&
-            application.releaseRevision !== identity.applicationReleaseRevision) ||
-          application.definitionKey !== identity.definitionKey ||
-          application.releaseRevision !== context.applicationReleaseRevision
-        )
-          return undefined;
-        const permitted = await projectPermittedApplication(
+      (transaction, scope, issuedAt) =>
+        projectAddressedApplicationInRequest(
           permissions,
-          transaction,
-          scope,
-          applicationCandidateFromInstalledContext(context),
-          undefined,
-          (reasonCodes) => logApplicationRefusal(application.definitionKey, reasonCodes),
+          {
+            transaction,
+            scope,
+            issuedAt,
+            session: session.data,
+            selection: {
+              organizationId: organizationId.data,
+              applicationRootId: addressedIdentity.identity.applicationRootId,
+              ...(addressedIdentity.identity.previewInstallationId === undefined
+                ? {}
+                : { previewInstallationId: addressedIdentity.identity.previewInstallationId }),
+            },
+            mode: "shared",
+          },
+          addressedIdentity,
           addressedPageKeyCandidate,
-          false,
-          // A whole-application read also decides the navigation the frame shows; a placement
-          // refresh shows none.
-          addressedPageKeyCandidate === undefined
-            ? loadStoredNavigationProjection({ context, permissions })
-            : undefined,
-        );
-        return permitted === null ? undefined : { context, permitted };
-      },
+        ),
     );
     if (addressedResult.kind === "temporarily_unavailable")
       return temporarilyUnavailable(addressedResult.cause);

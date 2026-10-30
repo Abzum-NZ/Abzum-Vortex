@@ -128,6 +128,7 @@ export const flowWarningNoticeSchema = z
 export type FlowWarningNotice = z.infer<typeof flowWarningNoticeSchema>;
 
 const resultCommon = {
+  committedNow: z.boolean(),
   runId: z.uuid(),
   receipt: formContinuationReceiptSchema,
   intents: z.array(formContinuationIntentSchema).max(200),
@@ -182,9 +183,9 @@ export const formContinuationOutcomeSchema = z.discriminatedUnion("kind", [
       draft: formContinuationDraftEvidenceSchema.optional(),
     })
     .strict(),
-  z.object({ kind: z.literal("reload") }).strict(),
-  z.object({ kind: z.literal("rate_limited"), retryAfterSeconds: z.number().int().nonnegative() }).strict(),
-  z.object({ kind: z.literal("refused"), reason: formContinuationRefusalReasonSchema }).strict(),
+  z.object({ kind: z.literal("reload"), committedNow: z.boolean() }).strict(),
+  z.object({ kind: z.literal("rate_limited"), retryAfterSeconds: z.number().int().nonnegative(), committedNow: z.boolean() }).strict(),
+  z.object({ kind: z.literal("refused"), reason: formContinuationRefusalReasonSchema, committedNow: z.boolean() }).strict(),
 ]);
 
 export type FormContinuationInstallation = z.infer<typeof formContinuationInstallationSchema>;

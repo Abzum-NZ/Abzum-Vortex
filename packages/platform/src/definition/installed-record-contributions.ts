@@ -7,7 +7,6 @@ import { flowSchema } from "../workflows/flow-contracts";
 import { componentFlowBindingSchema } from "./application-flow-bindings";
 import { defaultFlowBindingSettings } from "./component-semantic-events";
 import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import { DefinitionError } from "./definition-error";
 import { contributedActionKey } from "./installed-named-actions";
 import { actionDefinitionSchema, moduleFieldSchema } from "./module-contracts";
@@ -98,8 +97,6 @@ export const noInstalledRecordContributions: InstalledRecordContributions = Obje
 const recordTypeKey = (moduleRootId: string, recordTypeId: string): string =>
   `${moduleRootId.toLowerCase()}:${recordTypeId.toLowerCase()}`;
 
-type ContributionRow = DatabaseRow & { readonly contributions: unknown };
-
 /** Keeps at most `limit` entries; the oldest leaves first. Nothing is replaced in place. */
 const remember = <Value>(cache: Map<string, Value>, key: string, value: Value, limit: number) => {
   cache.set(key, value);
@@ -132,16 +129,11 @@ const contributedFlowOf = (
   return parsed.success ? remember(contributedFlows, key, parsed.data, 2_000) : undefined;
 };
 
-/** Reads the contributions under the verified human request transaction, failing loudly on any malformed row. */
-export const readInstalledRecordContributions = async (
-  transaction: RequestDatabaseTransaction,
-): Promise<InstalledRecordContributions> => {
-  const rows = await transaction.query<ContributionRow>`
-    select vortex_record.read_installed_record_contributions() as contributions
-  `;
-  if (rows.length !== 1 || rows[0] === undefined)
-    throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
-  const parsed = installedRecordContributionsSchema.safeParse(rows[0].contributions);
+/** Parses contributions read under the verified human request, failing loudly on malformed data. */
+export const parseInstalledRecordContributions = (
+  candidate: unknown,
+): InstalledRecordContributions => {
+  const parsed = installedRecordContributionsSchema.safeParse(candidate);
   if (!parsed.success) {
     console.error(
       `[contributions] installed record contributions are malformed: ${parsed.error.message}`,
