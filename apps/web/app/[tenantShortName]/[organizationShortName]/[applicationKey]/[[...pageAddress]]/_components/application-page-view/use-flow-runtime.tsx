@@ -32,6 +32,7 @@ import {
 import {
   formContinuationAnswerSchema,
   type ComponentFlowBinding,
+  type PageDefinition,
   type ReferenceChoiceSelectionEvidenceMap,
   isRecord,
   sameId,
@@ -378,7 +379,17 @@ export function useFlowRuntime({
   });
   const committedRef = useRef(committed);
   committedRef.current = committed;
-  const runtimeState = useMemo(() => createFlowRuntimeState(), []);
+  const runtimeStateRef = useRef<{
+    identity: string;
+    state: ReturnType<typeof createFlowRuntimeState>;
+  } | null>(null);
+  const pageIdentity = `${model.pageId}:${application.releaseKey}`;
+  if (runtimeStateRef.current?.identity !== pageIdentity)
+    runtimeStateRef.current = {
+      identity: pageIdentity,
+      state: createFlowRuntimeState((model.page as PageDefinition).values),
+    };
+  const runtimeState = runtimeStateRef.current.state;
   const bindingSettings = useMemo(() => {
     const bindings = new Map<
       string,

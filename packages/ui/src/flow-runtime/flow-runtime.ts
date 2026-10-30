@@ -4,12 +4,14 @@ import type {
   ComponentFlowBinding,
   FlowBindingConcurrency,
   FlowFormula,
+  PageDefinition,
 } from "@vortex/platform/schema";
 import type { FlowIntentHost } from "./intents";
 import type { ServerDrivenResult } from "./server-driven-run";
 import type { FlowInvokeClient, FlowSubjectContext } from "./server-flow-client";
 import { startFlowEventCycle, type FlowEventCycle } from "./flow-cycle";
 import type { TypedFieldValue } from "../controls/projected-data";
+import { createPageValueSlots } from "./page-values";
 
 export type FlowRuntimeOptions = Readonly<{
   client: FlowInvokeClient;
@@ -38,7 +40,7 @@ export type FlowRuntimeOptions = Readonly<{
 }>;
 
 /** State shared by page and agent dispatches, with subscriptions scoped to a component. */
-export function createFlowRuntimeState() {
+export function createFlowRuntimeState(declarations: NonNullable<PageDefinition["values"]> = {}) {
   const entries = new Map<
     string,
     { sequence: number; controller?: AbortController; tail?: Promise<void> }
@@ -48,6 +50,7 @@ export function createFlowRuntimeState() {
   const listeners = new Map<string, Set<() => void>>();
   const forms = new Map<string, (fieldKey: string) => TypedFieldValue | undefined>();
   const notify = (controlId: string) => listeners.get(controlId)?.forEach((listener) => listener());
+  const pageValues = createPageValueSlots(declarations, (key) => notify(`page:${key}`));
   const changeRunning = (controlId: string, amount: number) => {
     const before = running.get(controlId) ?? 0;
     const after = before + amount;
@@ -57,6 +60,7 @@ export function createFlowRuntimeState() {
   };
   const abandoned: ServerDrivenResult = { kind: "abandoned", unanswered: true };
   return {
+    pageValues,
     isRunning: (controlId: string) => (running.get(controlId) ?? 0) > 0,
     registerForm: (formId: string, read: (fieldKey: string) => TypedFieldValue | undefined) => {
       const key = formId.toLowerCase();

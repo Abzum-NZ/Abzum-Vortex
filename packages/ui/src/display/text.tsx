@@ -13,23 +13,25 @@ import { displayValueSource, ValueSourceView } from "./value-source";
  */
 export function PlainTextDisplay(props: DisplayRenderProps<TextPayload>): ReactElement {
   const literal = Object.hasOwn(props.settings, "text") ? props.settings.text : undefined;
+  const source = displayValueSource(props.settings.value_source);
   const effectiveProps: DisplayRenderProps<TextPayload> =
-    props.data === undefined && literal?.kind === "text" && literal.value.length > 0
-      ? {
-          ...props,
-          data: {
-            status: "ready",
-            values: { kind: "text", value: { kind: "text", text: literal.value } },
-          },
-        }
-      : props;
+    props.data === undefined && source.source === "page_value"
+      ? { ...props, data: { status: "ready", values: { kind: "text", value: { kind: "empty" } } } }
+      : props.data === undefined && literal?.kind === "text" && literal.value.length > 0
+        ? {
+            ...props,
+            data: {
+              status: "ready",
+              values: { kind: "text", value: { kind: "text", text: literal.value } },
+            },
+          }
+        : props;
   const { title, accessibleName, values, state, emptyMessage, events } =
     resolveDisplayContext<TextPayload>(
       effectiveProps,
-      (text) => text.value.kind === "empty",
+      (text) => source.source === "projection" && text.value.kind === "empty",
       "No text to show",
     );
-  const source = displayValueSource(props.settings.value_source);
 
   return (
     <DisplayStateContainer

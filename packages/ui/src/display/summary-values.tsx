@@ -36,18 +36,29 @@ export function SummaryValuesDisplay(props: DisplayRenderProps<SummaryPayload>):
       "Summary card minimum width must be set to a positive number",
       location,
     );
-  const { title, accessibleName, values, state, emptyMessage, events } =
-    resolveDisplayContext<SummaryPayload>(
-      props,
-      (summary) => summary.values.length === 0,
-      "No values to show",
-    );
   const sourceList = props.settings.value_sources;
   if (sourceList?.kind !== "list")
     throw new DefinitionRenderError(
       "INVALID_COMPOSITION",
       "Summary value sources are invalid",
       location,
+    );
+  const pageOnly =
+    sourceList.items.length > 0 &&
+    sourceList.items.every(
+      (item) =>
+        item.kind === "group" &&
+        displayValueSource(item.properties.value_source).source === "page_value",
+    );
+  const effectiveProps: DisplayRenderProps<SummaryPayload> =
+    props.data === undefined && pageOnly
+      ? { ...props, data: { status: "ready", values: { kind: "summary_values", values: [] } } }
+      : props;
+  const { title, accessibleName, values, state, emptyMessage, events } =
+    resolveDisplayContext<SummaryPayload>(
+      effectiveProps,
+      (summary) => !pageOnly && summary.values.length === 0,
+      "No values to show",
     );
 
   return (

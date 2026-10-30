@@ -5,8 +5,9 @@ import {
   type BlockPropertyValueContract,
   type PageFormatOptions,
 } from "@vortex/platform/schema";
-import type { ReactElement } from "react";
+import { useContext, useSyncExternalStore, type ReactElement } from "react";
 import { DefinitionRenderError } from "../definition-error";
+import { FlowRuntimeStateContext } from "../flow-runtime/flow-runtime-state-context";
 import { DisplayCellView } from "./cell";
 import type { DisplayScalarCell } from "./projected-data";
 
@@ -36,16 +37,26 @@ const severityClass = {
   error: "text-destructive",
 } as const;
 
-/** A single display value. The caller supplies only the page slot this item reads. */
+const neverChanges = () => () => undefined;
+
+/** A single display value subscribes only to its declared page slot. */
 export function ValueSourceView({
   source,
   projection,
-  pageValue,
 }: Readonly<{
   source: ReturnType<typeof displayValueSource>;
   projection?: DisplayScalarCell;
-  pageValue?: unknown;
 }>): ReactElement {
+  const runtime = useContext(FlowRuntimeStateContext);
+  const key = source.source === "page_value" ? string(source.properties.page_value) : undefined;
+  const pageValue = useSyncExternalStore(
+    (listener) =>
+      key === undefined
+        ? neverChanges()
+        : (runtime?.subscribe(`page:${key}`, listener) ?? neverChanges()),
+    () => (key === undefined ? undefined : runtime?.pageValues.read(key)),
+    () => (key === undefined ? undefined : runtime?.pageValues.read(key)),
+  );
   if (source.source === "projection") {
     if (projection === undefined) return invalid();
     return <DisplayCellView value={projection} />;
