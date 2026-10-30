@@ -1,10 +1,6 @@
 import "server-only";
 
 import { guidedFormConfirmationReference } from "./guided-form-confirmation";
-export {
-  guidedFormConfirmationKey,
-  guidedFormConfirmationReference,
-} from "./guided-form-confirmation";
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 

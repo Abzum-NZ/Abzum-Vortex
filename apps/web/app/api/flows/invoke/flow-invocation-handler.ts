@@ -2,6 +2,8 @@ import type { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
   flowBindingInvocationSchema,
+  guidedFormConfirmationKey,
+  guidedFormConfirmationReference,
   logRefusal,
   recordIdSchema,
   sameId,
@@ -26,8 +28,6 @@ import { applicationStoreService } from "../../../_lib/application-store-service
 import {
   getGuidedFormControlIds,
   getGuidedFormFlowId,
-  guidedFormConfirmationKey,
-  guidedFormConfirmationReference,
   verifiesGuidedFormConfirmation,
 } from "@vortex/platform/server";
 import { getQueryContinuationKey } from "../../../_lib/query-continuation-key";
