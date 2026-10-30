@@ -632,13 +632,7 @@
       "permission": "vortex.landing_zone.tile.remove",
       "shareable": false,
       "inputs": [],
-      "tasks": [
-        {
-          "id": "delete_subject",
-          "type": "record.delete",
-          "properties": {}
-        }
-      ]
+      "flow": "flow_landing_zone_tile_remove"
     }
   ],
   "events": [],
@@ -1653,6 +1647,52 @@
           ]
         }
       ]
+    },
+    {
+      "id": "flow_landing_zone_tile_remove",
+      "key": "tile_remove",
+      "labels": {},
+      "execution": "transaction",
+      "runAs": {
+        "kind": "saver"
+      },
+      "inputs": {
+        "record": {
+          "type": "record_reference",
+          "required": true,
+          "recordTypeIds": ["tile"],
+          "description": "The record the action runs on."
+        }
+      },
+      "recordInput": "record",
+      "variables": {},
+      "triggers": [],
+      "tasks": [
+        {
+          "id": "delete_subject",
+          "type": "record.delete",
+          "version": "1.0.0",
+          "properties": {
+            "record_type": {
+              "kind": "literal",
+              "literal": {
+                "type": "text",
+                "value": "tile"
+              }
+            },
+            "record": {
+              "kind": "reference",
+              "reference": {
+                "source": "input",
+                "name": "record"
+              }
+            }
+          }
+        }
+      ],
+      "outputs": {},
+      "errors": [],
+      "finally": []
     }
   ],
   "extension_points": [],

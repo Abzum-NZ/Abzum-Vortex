@@ -17,7 +17,6 @@ import {
   readSubjectWithNamedActionAvailability,
   type NamedActionAvailability,
 } from "../records/action-record-availability";
-import type { ActionFlowRunner } from "../rules/action-flow-run";
 import {
   protectedQueryRowCapabilitiesSchema,
   protectedQueryRowSchema,
@@ -123,10 +122,9 @@ export const pageSubjectFromRead = (
   return { kind: "read", row };
 };
 
-/** The named actions a subject read previews on its record, and how each one's flow is run. */
+/** The named actions a subject read previews on its record. */
 type PageSubjectActionPreviews = Readonly<{
   references: readonly ExecuteNamedActionCommand["action"][];
-  runFor: (action: ExecuteNamedActionCommand["action"]) => ActionFlowRunner;
 }>;
 
 type PageSubjectRequest = Readonly<{
@@ -153,11 +151,6 @@ export const readPageSubjectInTransaction = async (
         requestedFieldIds: subject.requestedFieldIds ?? null,
       },
       subject.actions?.references ?? [],
-      new Date().toISOString(),
-      subject.actions?.runFor ??
-        (() => {
-          throw new Error("PAGE_ACTION_UNEXPECTED");
-        }),
     );
     const read = pageSubjectFromRead(combined.record, combined.capabilities, recordId.data);
     return read.kind === "read" && subject.actions !== undefined

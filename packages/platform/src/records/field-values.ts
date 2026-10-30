@@ -34,13 +34,7 @@ export const storedRecordCandidateValues = (
 ): Record<string, unknown> => {
   const candidate = { ...values };
   for (const field of recordType.fields) {
-    if (
-      !field.required &&
-      field.type !== "reference_number" &&
-      field.type !== "calculation" &&
-      field.type !== "total" &&
-      candidate[field.fieldId] === null
-    )
+    if (!field.required && field.type !== "reference_number" && candidate[field.fieldId] === null)
       delete candidate[field.fieldId];
   }
   return candidate;

@@ -120,30 +120,29 @@ begin
       if action_definition is null then
         continue;
       end if;
-      -- The action's behaviour is its compiled transaction flow, which the record service runs.
+      -- The action's behaviour is its transaction flow, which the record service runs.
       select flow.value into action_flow
       from pg_catalog.jsonb_array_elements(coalesce(contributor_content -> 'flows', '[]'::jsonb)) as flow(value)
-      where pg_catalog.lower(flow.value ->> 'id') = pg_catalog.lower(contribution ->> 'actionId')
+      where pg_catalog.lower(flow.value ->> 'id') = pg_catalog.lower(action_definition ->> 'flowId')
         and flow.value ->> 'execution' = 'transaction';
       if action_flow is null then
         continue;
       end if;
-      -- A contributed action is a plain value change: it takes no inputs, runs only
-      -- record.set_fields tasks, and sets only fields its own Module contributed to this record
-      -- type. Anything else would act on the owner's record beyond what the owner admitted.
+      -- A contributed action is a plain value change: it takes no inputs, its flow only sets
+      -- fields (no delete, creation, copy or Event), and it sets only fields its own Module
+      -- contributed to this record type. Anything else would act on the owner's record beyond
+      -- what the owner admitted.
       if pg_catalog.jsonb_array_length(coalesce(action_definition -> 'inputs', '[]'::jsonb)) <> 0
-        or pg_catalog.jsonb_typeof(action_definition -> 'tasks') is distinct from 'array'
-        or pg_catalog.jsonb_array_length(action_definition -> 'tasks') = 0
+        or pg_catalog.jsonb_typeof(action_definition -> 'writePolicy') is distinct from 'object'
+        or pg_catalog.jsonb_array_length(action_definition #> '{writePolicy,subjectFieldIds}') = 0
+        or (action_definition #>> '{writePolicy,deletesSubject}')::boolean
+        or pg_catalog.jsonb_array_length(action_definition #> '{writePolicy,creates}') <> 0
+        or pg_catalog.jsonb_array_length(action_definition #> '{writePolicy,relationshipCopies}') <> 0
+        or pg_catalog.jsonb_array_length(action_definition #> '{writePolicy,eventKeys}') <> 0
         or exists (
           select 1
-          from pg_catalog.jsonb_array_elements(action_definition -> 'tasks') as task(value)
-          where task.value ->> 'type' <> 'record.set_fields'
-            or pg_catalog.jsonb_typeof(task.value #> '{properties,values}') is distinct from 'object'
-            or exists (
-              select 1
-              from pg_catalog.jsonb_object_keys(task.value #> '{properties,values}') as set_key(value)
-              where pg_catalog.lower(set_key.value) <> all (contributed_field_ids)
-            )
+          from pg_catalog.jsonb_array_elements_text(action_definition #> '{writePolicy,subjectFieldIds}') as set_key(value)
+          where pg_catalog.lower(set_key.value) <> all (contributed_field_ids)
         ) then
         continue;
       end if;

@@ -1,20 +1,23 @@
 "use client";
 import { useIntentPreload } from "../_lib/use-intent-preload";
 import dynamic from "next/dynamic";
-import { useCallback, useMemo, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {
   describeFailure,
   checkFlowFormula,
   type ApplicationSourceDocument,
+  type ApplicationUsePlace,
   type ImmutablePlatformBlockCatalogue,
 } from "@vortex/platform/schema";
 import { useAppearanceMode } from "@vortex/ui/appearance";
+import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import {
   studioActionChoices,
   applyStudioRowActionChange,
   applyStudioFlowCommand,
   applyStudioFlowCreate,
   applyStudioFlowStart,
+  deleteStudioFlow,
   describeStudioFlowStarts,
   describeStudioFlowBehaviour,
   projectStudioFlowCreateChoices,
@@ -30,6 +33,7 @@ import {
   studioFlowValueOf,
   studioFlowValueSourceOf,
   samePath,
+  studioFlowLabel,
   studioFlowOfSelection,
   studioFlowOutline,
   studioSemanticSelectionKey,
@@ -42,6 +46,7 @@ import {
   type StudioFlowSelection,
   type StudioFlowStartDraft,
   type StudioFlowStepPickerContext,
+  type StudioInspectorAction,
   type StudioSemanticSelection,
 } from "@vortex/ui/studio";
 import type { StudioDraft, StudioDraftStep } from "./use-studio-draft";
@@ -50,6 +55,9 @@ import { useStudioTabVisited } from "./studio-frame";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
 import { StudioFormulaEditor, formulaReferenceName } from "./studio-formula-editor";
 import { FixedInput, startLiteral, StudioFlowValueControl } from "./studio-flow-value-control";
+import { StudioReferencesAlert } from "./studio-used-in";
+
+type StudioFlowDeleteResult = ReturnType<typeof deleteStudioFlow>;
 
 // The workflow canvas pulls in @xyflow/react; load it only when the Flows tab shows a flow.
 const StudioFlowCanvas = dynamic(
@@ -318,6 +326,15 @@ export function useStudioFlowsTab({
     });
     if (outcome.kind === "blocked") return outcome.message;
     const result = outcome.result;
+    // A new workflow for a row action the table already has opens that flow; the row-action list refuses.
+    if (
+      result.kind === "refused" &&
+      result.existing !== undefined &&
+      createCommand.kind === "action"
+    ) {
+      openFlow(result.existing);
+      return true;
+    }
     if (result.kind !== "applied") return result.reason;
     if (!stayOnPlacement) {
       openFlowsTab();
@@ -559,5 +576,80 @@ export function useStudioFlowsTab({
       />
     );
 
-  return { panel, centre, inspector, placementWorkflows };
+  // Delete flow: the header menu entry of the selected flow. Refused, naming where, while anything of the
+  // draft still uses it (the "Used in" index); otherwise confirmed and run as one draft edit.
+  const [confirm, confirmDialog] = useConfirm();
+  const [deleteRefusal, setDeleteRefusal] = useState<
+    Readonly<{ key: string; name: string; references: readonly ApplicationUsePlace[] }> | undefined
+  >(undefined);
+  const [deleteProblem, setDeleteProblem] = useState<
+    Readonly<{ key: string; text: string }> | undefined
+  >(undefined);
+  const deleteFlow = async (flow: StudioFlowSelection): Promise<void> => {
+    setDeleteRefusal(undefined);
+    setDeleteProblem(undefined);
+    const flows = [...source.body.flows, ...source.body.modules.flatMap((module) => module.flows)];
+    const found = flows.find((entry) => entry.id === flow.flowAlias);
+    const name = found === undefined ? "This flow" : studioFlowLabel(found);
+    const check = deleteStudioFlow(source, flow.flowAlias, flow.moduleKey);
+    if (check.kind === "referenced") {
+      setDeleteRefusal({ key: selectionKey, name, references: check.references });
+      return;
+    }
+    if (check.kind === "refused") {
+      setDeleteProblem({ key: selectionKey, text: check.reason });
+      return;
+    }
+    if (
+      !(await confirm({
+        title: `Delete ${name}?`,
+        confirmLabel: "Delete flow",
+        description: "The flow leaves the draft. Undo brings it back.",
+      }))
+    )
+      return;
+    const outcome = draft.run((current): StudioDraftStep<StudioFlowDeleteResult> => {
+      const result = deleteStudioFlow(current, flow.flowAlias, flow.moduleKey);
+      return result.kind === "deleted"
+        ? { kind: "edit", source: result.source, result }
+        : { kind: "keep", result };
+    });
+    if (outcome.kind === "blocked") setDeleteProblem({ key: selectionKey, text: outcome.message });
+    else if (outcome.result.kind === "deleted") draft.select(null);
+    else if (outcome.result.kind === "referenced")
+      setDeleteRefusal({ key: selectionKey, name, references: outcome.result.references });
+    else setDeleteProblem({ key: selectionKey, text: outcome.result.reason });
+  };
+  const deleteActions: readonly StudioInspectorAction[] =
+    flowSelection === null || selected?.kind !== "flow"
+      ? []
+      : [
+          {
+            label: "Delete flow",
+            destructive: true,
+            disabled,
+            onSelect: () => {
+              void deleteFlow(flowSelection);
+            },
+          },
+        ];
+  const deleteNotice: ReactNode = (
+    <>
+      {confirmDialog}
+      {deleteProblem?.key === selectionKey && (
+        <p role="alert" className="text-sm text-destructive">
+          {deleteProblem.text}
+        </p>
+      )}
+      {deleteRefusal?.key === selectionKey && (
+        <StudioReferencesAlert
+          name={deleteRefusal.name}
+          action="deleted"
+          references={deleteRefusal.references}
+        />
+      )}
+    </>
+  );
+
+  return { panel, centre, inspector, placementWorkflows, deleteActions, deleteNotice };
 }

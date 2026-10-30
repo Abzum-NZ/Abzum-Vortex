@@ -324,7 +324,6 @@ export const readRecordsTable = async (
               placementId,
               resolvedRecordTypeId,
               implied,
-              issuedAt,
             );
           return decisions;
         };

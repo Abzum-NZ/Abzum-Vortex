@@ -9,7 +9,8 @@ import {
 import { moduleDraftSchema, isWritableSystemProjection } from "../module-contracts";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "../canonical-json-definition";
 import { DefinitionCompilationError } from "../compilation-error";
-import { compileActionFlow, platformServiceProtectedOperationReference } from "./action-flows";
+import { actionWritePolicy } from "./action-write-policy";
+import { platformServiceProtectedOperationReference } from "./protected-operation-reference";
 import { dependencyOrder, resolvedDependencies } from "./dependencies";
 import { fieldSettings, validatePersonLinkApplicationAccess } from "./field-settings";
 import { compileCheckedFlowSources } from "./flow-sources";
@@ -34,7 +35,6 @@ import {
 } from "./shared";
 import {
   actionInput,
-  actionTaskValue,
   condition,
   type ModuleValueContext,
   normaliseModuleFieldValue,
@@ -262,110 +262,18 @@ function compileModule(
       ...(action.precondition
         ? { precondition: condition(action.precondition, localField, valueContext) }
         : {}),
-      tasks: (action.tasks as JsonObject[]).map((task) => {
-        const id = String(task.id);
-        const properties = asObject(task.properties);
-        switch (String(task.type)) {
-          case "record.set_fields":
-            return {
-              id,
-              type: "record.set_fields",
-              properties: {
-                values: objectFromUniqueEntries(
-                  Object.entries(asObject(properties.values)).map(([key, value]) => {
-                    const fieldId = localField(key);
-                    return [fieldId, actionTaskValue(value, fieldsById.get(fieldId), valueContext)];
-                  }),
-                ),
-              },
-            };
-          case "record.create": {
-            const target = String(properties.record_type);
-            return {
-              id,
-              type: "record.create",
-              properties: {
-                recordType: resolution.recordType(target),
-                values: objectFromUniqueEntries(
-                  Object.entries(asObject(properties.values)).map(([key, value]) => {
-                    const fieldId = resolution.field(target, key);
-                    return [fieldId, actionTaskValue(value, fieldsById.get(fieldId), valueContext)];
-                  }),
-                ),
-              },
-            };
+      ...(action.flow
+        ? {
+            flowId: resolution.id(definitionKey, "flow", String(action.flow), "content"),
+            writePolicy: actionWritePolicy(
+              (body.flows as JsonObject[]).find((flow) => flow.id === action.flow),
+              action.record_type,
+              qualifiedForRecord,
+              resolution,
+            ),
           }
-          case "record.changes":
-            return {
-              id,
-              type: "record.changes",
-              properties: {
-                changes: (properties.changes as JsonObject[]).map((change) => ({
-                  kind: "copy_relationships",
-                  relationshipIds: (change.relationships as string[]).map((alias) =>
-                    resolution.relationship(record, alias),
-                  ),
-                  targetInputKey: change.target_input,
-                })),
-              },
-            };
-          case "record.delete":
-            return { id, type: "record.delete", properties: {} };
-          case "event.announce":
-            return {
-              id,
-              type: "event.announce",
-              properties: { eventKey: properties.event },
-            };
-          default:
-            return fail("vortex.definition.invalid_compilation_output", "invalid_value");
-        }
-      }),
+        : {}),
     };
-  });
-  // Every record-task Module named action also compiles to one `transaction` flow. A
-  // protected-operation action instead targets one registered platform-service operation that
-  // takes the subject row's identity and expected revision automatically. Its execution is not
-  // built yet, so it compiles to no flow here, and the record runtime refuses to prepare it
-  // because its canonical action and system projection record type are not record-task shapes.
-  const usedFlowKeys = new Set(flows.map((flow) => String(flow.key)));
-  const actionFlows = (body.actions as JsonObject[]).flatMap((action, actionIndex) => {
-    if (action.protected_operation !== undefined) return [];
-    const recordKey = String(action.record_type);
-    const subjectRecord = (body.record_types as JsonObject[]).find(
-      (candidate) => String(candidate.key) === recordKey,
-    );
-    const subjectFieldKeyById = new Map<string, string>();
-    for (const field of (subjectRecord?.fields as JsonObject[] | undefined) ?? [])
-      subjectFieldKeyById.set(
-        resolution.id(definitionKey, "field", String(field.id), `record:${recordKey}`),
-        String(field.key),
-      );
-    // The flow key is the action key's last segment, kept a builder key with room for a suffix
-    // that separates it from an authored flow or another action of the same name.
-    const keySegment = String(action.key).slice(String(action.key).lastIndexOf(".") + 1);
-    const baseKey = keySegment.slice(0, 32).replace(/_+$/, "");
-    let flowKey = baseKey;
-    for (let suffix = 1; usedFlowKeys.has(flowKey); suffix += 1) flowKey = `${baseKey}_${suffix}`;
-    usedFlowKeys.add(flowKey);
-    const canonicalAction = actions[actionIndex]! as unknown as JsonObject;
-    return [
-      compileActionFlow(
-        action,
-        canonicalAction,
-        flowKey,
-        definitionKey,
-        subjectFieldKeyById,
-        // An action with permission alternatives has no single invocation permission; a flow holds
-        // exactly one, so its binding keeps checking the alternatives.
-        canonicalAction.permissionKey === undefined
-          ? undefined
-          : (resolution.permission(
-              String(canonicalAction.permissionKey),
-              permissionOwners,
-            ) as FlowDefinition["invocationPermissionId"]),
-      ),
-    ];
   });
   const events = (body.events as JsonObject[]).map((event) => {
     const record = qualifiedForRecord(String(event.record_type));
@@ -614,7 +522,7 @@ function compileModule(
       permissions,
       actions,
       events,
-      flows: [...flows, ...actionFlows],
+      flows,
       sharingConditions,
       extensionPoints: (body.extension_points as JsonObject[]).map((point) => ({
         extensionPointId: resolution.id(
@@ -703,7 +611,7 @@ export function compileParsedModuleRequest(
     const ownDefinition = resolution.definition(definitionKey, "module");
     const output = moduleCompilationOutputSchema.safeParse({
       kind: "module",
-      validationContractVersion: "4.1.0",
+      validationContractVersion: "4.2.0",
       canonical,
       artifact: {
         kind: "module",

@@ -203,15 +203,7 @@ export const projectFlowBindingTargets = (input: {
           String(action.key).toLowerCase(),
           [
             String(action.subjectRecordTypeId),
-            ...(action.tasks as readonly unknown[]).flatMap((task) => {
-              const recordType =
-                isRecord(task) && isRecord(task.properties)
-                  ? task.properties.recordType
-                  : undefined;
-              return isRecord(task) && task.type === "record.create" && isRecord(recordType)
-                ? [String(recordType.recordTypeId)]
-                : [];
-            }),
+            ...(action.writePolicy?.creates.map((create) => String(create.recordTypeId)) ?? []),
           ],
         ] as const,
     ),
