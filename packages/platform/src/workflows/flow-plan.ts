@@ -236,7 +236,7 @@ const unitLocation = (
   if (containsBackendRun(task)) return "mixed";
   if (
     allSteps(flowTaskChildLists(task).flatMap((list) => list.tasks)).some((child) =>
-      isCrossApplicationPin(child, applicationKey),
+      isIsolatedWorkflow(flow, child, applicationKey),
     )
   )
     return "mixed";
@@ -379,11 +379,11 @@ const cut = (
     const current = drafts.at(-1);
     const kind =
       location === "neutral" ? (current?.kind ?? "server") : (location as "page" | "server");
-    const isolatedPin = isCrossApplicationPin(task, applicationKey);
+    const isolatedWorkflow = isIsolatedWorkflow(flow, task, applicationKey);
     if (
       current !== undefined &&
       !current.closed &&
-      !isolatedPin &&
+      !isolatedWorkflow &&
       current.kind === kind &&
       current.lastTaskIndex + 1 === index &&
       current.listPath.length === listPath.length &&
@@ -403,7 +403,7 @@ const cut = (
         lastTaskIndex: index,
         closed: false,
       });
-    if (task.type === "backend.run" || isolatedPin) drafts.at(-1)!.closed = true;
+    if (task.type === "backend.run" || isolatedWorkflow) drafts.at(-1)!.closed = true;
   };
   const walk = (
     list: readonly FlowTask[],
@@ -514,6 +514,15 @@ const isCrossApplicationPin = (step: FlowTask, applicationKey: string | undefine
   );
 };
 
+/** A multi-transaction workflow must run alone, after its admission transaction commits. */
+const isIsolatedWorkflow = (
+  flow: FlowDefinition,
+  step: FlowTask,
+  applicationKey: string | undefined,
+): boolean =>
+  isCrossApplicationPin(step, applicationKey) ||
+  operationOf(flow, step)?.workflow === "multi_transaction";
+
 /** Compiles one validated flow into its plan. Throws `FlowPlanError` naming the step it refuses. */
 export const compileFlowPlan = (flow: FlowDefinition, applicationKey?: string): FlowPlan => {
   prepareFlowFormulas(flow);
@@ -527,6 +536,15 @@ export const compileFlowPlan = (flow: FlowDefinition, applicationKey?: string): 
           flow.id,
           pin.id,
           `Cross-application pin ${pin.id} cannot run inside For each ${step.id}`,
+        );
+      const workflow = allSteps(flowTaskChildLists(step).flatMap((list) => list.tasks)).find(
+        (child) => operationOf(flow, child)?.workflow === "multi_transaction",
+      );
+      if (workflow !== undefined)
+        throw new FlowPlanError(
+          flow.id,
+          workflow.id,
+          `Multi-transaction step ${workflow.id} cannot run inside For each ${step.id}`,
         );
     }
     if (step.type !== "switch") continue;
