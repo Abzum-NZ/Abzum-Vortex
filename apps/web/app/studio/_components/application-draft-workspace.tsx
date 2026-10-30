@@ -187,6 +187,8 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     theme,
     flowsInspector: flows.inspector,
     placementWorkflows: flows.placementWorkflows,
+    flowDeleteActions: flows.deleteActions,
+    flowDeleteNotice: flows.deleteNotice,
     applications,
     openTab: setTab,
   });

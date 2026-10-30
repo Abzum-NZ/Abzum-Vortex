@@ -10,7 +10,10 @@ import {
 } from "@vortex/ui/studio";
 import { Icon } from "@vortex/ui";
 import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from "@vortex/ui/components/empty";
-import type { resolveStudioSelectionInspectorContext } from "@vortex/ui/studio";
+import type {
+  StudioInspectorAction,
+  resolveStudioSelectionInspectorContext,
+} from "@vortex/ui/studio";
 import { StudioPanelShell } from "./studio-frame";
 import { studioKindLabel } from "../_lib/studio-labels";
 import { useStudioDraftText } from "./use-studio-draft-text";
@@ -79,6 +82,7 @@ export function StudioInspector({
   labels,
   labelsKey,
   note,
+  extraActions = [],
   children,
 }: Readonly<{
   inspector: InspectorContext;
@@ -89,6 +93,8 @@ export function StudioInspector({
   labelsKey: string;
   /** Shown instead of the name form when the selection has none and no editor below. */
   note: string | undefined;
+  /** More header menu entries for the selection, after Copy alias. */
+  extraActions?: readonly StudioInspectorAction[];
   children: ReactNode;
 }>) {
   if (inspector.status !== "resolved")
@@ -123,6 +129,7 @@ export function StudioInspector({
                   void navigator.clipboard.writeText(descriptor.alias);
                 },
               },
+              ...extraActions,
             ]}
           />
         </header>

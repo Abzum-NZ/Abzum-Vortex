@@ -57,7 +57,7 @@ import { studioDraftNavigation } from "../_lib/studio-draft-navigation";
 import { studioUseTargetOf } from "../_lib/studio-places";
 import { pageUsingLayout } from "../_lib/studio-view-request";
 import type { StudioApplicationCanvasFrames } from "../../_lib/studio-application-draft";
-import { studioMenuPosition } from "@vortex/ui/studio";
+import { studioMenuPosition, type StudioInspectorAction } from "@vortex/ui/studio";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
 import { StudioBlockGate } from "./studio-block-gate";
 import { ApplicationVisibilityConditionEditor } from "./application-visibility-condition-editor";
@@ -135,6 +135,8 @@ export function useStudioCanvasTab({
   theme,
   flowsInspector,
   placementWorkflows,
+  flowDeleteActions,
+  flowDeleteNotice,
   openTab,
   applications,
 }: Readonly<{
@@ -154,6 +156,8 @@ export function useStudioCanvasTab({
   flowsInspector: ReactNode;
   /** The selected block's workflows, from the Flows tab. */
   placementWorkflows: ReactNode;
+  flowDeleteActions: readonly StudioInspectorAction[];
+  flowDeleteNotice: ReactNode;
   openTab: (tab: StudioRailKey) => void;
   /** The organisation's applications, which name the owner of a choice from a used Module. */
   applications: readonly StudioModuleOwnerApplication[];
@@ -847,6 +851,7 @@ export function useStudioCanvasTab({
             }
           : undefined
       }
+      extraActions={selected?.kind === "flow" ? flowDeleteActions : []}
       note={
         selected?.kind === "placement"
           ? undefined
@@ -925,6 +930,7 @@ export function useStudioCanvasTab({
       {selected?.kind === "placement" && (
         <StudioLayoutOutletUses source={source} placementAlias={selected.placementAlias} />
       )}
+      {selected?.kind === "flow" && flowDeleteNotice}
       {usedIn !== null && (
         <StudioUsedIn source={source} target={usedIn} name={selectedName ?? "it"} />
       )}
