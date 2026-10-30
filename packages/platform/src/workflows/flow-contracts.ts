@@ -10,11 +10,10 @@ import { flowMaximumTaskCount, flowMaximumForEachItemsOther, flowMaximumRunFlowD
 import type { FlowFormula, FlowLiteral, FlowValue } from "./flow-values";
 import {
   flowReadFieldsScalarTypeKeys,
+  flowMaximumRecordReadFields,
   isFlowReadFieldsProjection,
   isFlowReadFieldsTypeMap,
-  type FlowReadFieldsProjectionEntry,
   type FlowReadFieldsScalarType,
-  type FlowReadFieldsTypeMap,
 } from "./flow-read-fields";
 export {
   flowMaximumRecordReadFields,
@@ -51,14 +50,20 @@ export type FlowExecutionKind = z.infer<typeof flowExecutionKindSchema>;
 export const flowReadFieldsScalarTypeSchema = z.enum(flowReadFieldsScalarTypeKeys);
 
 /** Compiler-owned scalar types keyed by the aliases in a selected-record projection. */
-export const flowReadFieldsTypeMapSchema = z.custom<FlowReadFieldsTypeMap>(isFlowReadFieldsTypeMap, {
-  error: "A selected-record type map must contain 1 to 20 named scalar members",
-});
+export const flowReadFieldsTypeMapSchema = z
+  .record(builderKeySchema, flowReadFieldsScalarTypeSchema)
+  .refine(isFlowReadFieldsTypeMap, {
+    error: "A selected-record type map must contain 1 to 20 named scalar members",
+  });
 
 /** The closed, ordered projection carried by `record.read_fields`. */
-export const flowReadFieldsProjectionSchema = z.custom<FlowReadFieldsProjectionEntry[]>(isFlowReadFieldsProjection, {
-  error: "Select 1 to 20 fields with unique aliases and field references",
-});
+export const flowReadFieldsProjectionSchema = z
+  .array(z.object({ alias: builderKeySchema, field: z.string().min(1).max(281) }).strict())
+  .min(1)
+  .max(flowMaximumRecordReadFields)
+  .refine(isFlowReadFieldsProjection, {
+    error: "Select 1 to 20 fields with unique aliases and field references",
+  });
 
 /** The projection is authored as one JSON literal, never a runtime map or computed value. */
 export const flowReadFieldsProjectionValueSchema = flowValueSchema.superRefine((value, context) => {
