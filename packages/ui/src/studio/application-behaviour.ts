@@ -239,10 +239,11 @@ export const studioBindingDefault = (
   if (flow === undefined) return undefined;
   const recordType =
     source.body.events.find((event) => event.id === binding.event_id)?.record_type ?? null;
+  // The new flow is the default of the event, not a copy of the flow it replaces.
   const base = {
     kind: "action",
     controlAlias: binding.control,
-    name: studioFlowLabel(flow),
+    name: `${studioEventSentence(binding.event)} (default)`,
   } as const;
   if (studioFlowCreateSavesChange(binding.event, recordType))
     return { ...base, event: binding.event, recordType };
