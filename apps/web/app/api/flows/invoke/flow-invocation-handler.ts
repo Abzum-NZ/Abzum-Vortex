@@ -19,10 +19,8 @@ import {
   type BoundHumanOrganizationRequest,
 } from "@vortex/platform/server";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
-import {
-  loadApplicationPage,
-  loadProjectedReferenceChoiceForm,
-} from "../../../_lib/application-page";
+import { loadProjectedReferenceChoiceForm } from "../../../_lib/application-page";
+import { loadGuidedConfirmation } from "../../../_lib/application-page/guided-confirmation";
 import { installedReleaseCatalogue } from "../../../_lib/definition-catalogue";
 import { applicationStoreService } from "../../../_lib/application-store-service";
 import {
@@ -236,8 +234,8 @@ export const createFlowInvocationHandler =
               projectForm: (session, form) =>
                 loadProjectedReferenceChoiceForm(session, address, form, bound),
               resolveFormValues: resolveReferenceChoiceFormValues,
-              loadGuidedPage: async (session, guided, subject) => {
-                const page = await loadApplicationPage(
+              loadGuidedPage: (session, guided, subject) =>
+                loadGuidedConfirmation(
                   session,
                   {
                     tenantShortName: body.tenantShortName,
@@ -246,11 +244,14 @@ export const createFlowInvocationHandler =
                     application: address.application,
                     pageKey: guided.pageKey,
                     ...(address.navigation === undefined ? {} : { navigation: address.navigation }),
+                    ...(address.installedContext === undefined
+                      ? {}
+                      : { installedContext: address.installedContext }),
                   },
-                  subject === undefined ? {} : { record_id: subject.recordId },
-                );
-                return page.kind === "available" ? page.model : undefined;
-              },
+                  guided,
+                  subject,
+                  bound,
+                ),
             });
             if (result.kind === "refused")
               return privateResponse(result, result.reason === undefined ? 404 : 409);

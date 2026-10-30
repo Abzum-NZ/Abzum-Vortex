@@ -114,7 +114,6 @@ type GuidedInvocationPage = Readonly<{
     computedStepId: string;
     values: Readonly<Record<string, JsonValue>>;
   }>;
-  invocation: Readonly<{ installationRevision: number; releaseKey: string }>;
   subject?: Readonly<{ recordId: string; revision: number }>;
   bindings: Readonly<Record<string, readonly Readonly<{ event: string; bindingId: string }>[]>>;
 }>;
