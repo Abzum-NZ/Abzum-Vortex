@@ -212,8 +212,32 @@ export const recordsTableBindingRefusal = async (
   const contract = recordsTableContractOrLog(placementSettings(props), "flow dispatch");
   if (contract === undefined)
     return recordsTableRequestRefusal("contract", "placement_contract_unreadable");
-  // A bulk action runs a named action through the table's own bulk run, never a flow binding.
-  if (event === "bulk_action") return recordsTableRequestRefusal(event, "command_not_declared");
+  // A bulk action runs its bound flow over the selected rows: the binding must be the one the
+  // table declares for an action, and the rows a bounded list of distinct records at their
+  // displayed revisions. The action itself decides each record under current access when it runs.
+  if (event === "bulk_action") {
+    const { bulkActions } = contract.features;
+    const declared = bulkActions.enabled
+      ? bulkActions.actions.find(
+          (action) => action.eventId !== undefined && sameId(action.eventId, binding.eventId),
+        )
+      : undefined;
+    if (declared === undefined) return recordsTableRequestRefusal(event, "command_not_declared");
+    const subjects = inputs.subjects;
+    const records = Array.isArray(subjects) ? subjects : [];
+    return records.length === 0 ||
+      records.length > Math.min(200, declared.maxRecords) ||
+      records.some(
+        (entry) =>
+          !isRecord(entry) ||
+          !recordIdSchema.safeParse(entry.record).success ||
+          typeof entry.revision !== "number",
+      ) ||
+      new Set(records.map((entry) => String((entry as { record: string }).record).toLowerCase()))
+        .size !== records.length
+      ? recordsTableRequestRefusal(event, "record_selection_invalid")
+      : undefined;
+  }
   // A batch of pasted, filled or undone cells names its rows itself; every cell is decided when
   // the batch is prepared, so only the feature and its declared binding are checked here.
   if (event === "batch_edit") {

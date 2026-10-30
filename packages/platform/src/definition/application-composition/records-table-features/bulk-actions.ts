@@ -3,6 +3,7 @@ import {
   featureAvailable,
   featureEnabled,
   featureNotPossible,
+  optionalText,
   requiredBoolean,
   requiredGroup,
   requiredItems,
@@ -29,6 +30,8 @@ export type RecordsTableBulkActionContract = Readonly<{
   label: string;
   confirm: boolean;
   maxRecords: number;
+  /** The flow binding that runs the action over the selection; the action needs it to be offered. */
+  eventId?: string;
 }>;
 
 /**
@@ -61,6 +64,9 @@ const readBulkActions = (
       label: requiredText(entry["label"], `${at}.label`),
       confirm: requiredBoolean(entry["confirm"], `${at}.confirm`),
       maxRecords: requiredNumber(entry["max_records"], `${at}.max_records`),
+      ...(optionalText(entry["event_id"], `${at}.event_id`) === undefined
+        ? {}
+        : { eventId: optionalText(entry["event_id"], `${at}.event_id`)! }),
     };
   });
 
@@ -143,6 +149,15 @@ const featureSettings = {
             },
           },
           {
+            kind: "text",
+            key: "event_id",
+            label: "Event identity",
+            help: "The flow that runs the action over the selection; it is set when the workflow for the action is added",
+            required: false,
+            minLength: 1,
+            maxLength: 60,
+          },
+          {
             kind: "number",
             key: "max_records",
             integer: true,
@@ -185,6 +200,7 @@ export const recordsTableBulkActionsFeature: RecordsTableFeatureDefinition<
   settings: featureSettings,
   refusals: [featureRefusal],
   onBoard: "unsupported",
+  events: { bulk_action: {} },
   label: "Bulk actions",
   description: "Select rows, or every matching record, and run a named action over them",
   read: (group) =>
@@ -194,7 +210,7 @@ export const recordsTableBulkActionsFeature: RecordsTableFeatureDefinition<
   // A selection of records needs rows that are records (a grouped or summarised query has none)
   // and a named action of their record type that runs on several records, each on its own.
   project: (state) => {
-    const actions = recordsTableBulkActions(state);
+    const actions = recordsTableBulkActions(state).filter((action) => action.eventId !== undefined);
     return actions.length === 0 ? undefined : actions;
   },
   check: (state, facts) => {
@@ -216,6 +232,8 @@ export const recordsTableBulkActionsFeature: RecordsTableFeatureDefinition<
     for (const declared of state.actions) {
       const action = facts.actions.find((candidate) => sameKey(candidate.key, declared.action));
       if (action === undefined) return needed;
+      if (declared.eventId === undefined)
+        return featureNotPossible(featureRefusal, `Add the flow that runs ${action.label}`);
       if (!action.acceptsSelection)
         return featureNotPossible(
           featureRefusal,

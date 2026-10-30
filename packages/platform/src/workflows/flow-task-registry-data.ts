@@ -337,10 +337,12 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     properties: {
       operation: required("protected_operation_key"),
       record: optional("record_reference"),
+      // A named action over several records as one command: each record with the revision seen.
+      subjects: optional("json"),
       inputs: optional("input_map"),
       refusal_feedback: optional("input_map"),
     },
-    outputs: [output("result", "json")],
+    outputs: [output("result", "json"), output("count", "whole_number")],
   },
   "backend.run": {
     title: "Run on back end",

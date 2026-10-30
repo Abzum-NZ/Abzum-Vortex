@@ -59,6 +59,7 @@ import type {
   FlowNamedAction,
   FlowOrchestratorDependencies,
   NamedActionExecutionResult,
+  NamedActionRunner,
   Run,
 } from "./flow-orchestrator-types";
 import type { RecordChangeIntent } from "../records/apply-record-changes";
@@ -77,11 +78,7 @@ const queryPageSizeSchema = z.number().int().min(1).max(200).optional();
  */
 export const createFlowTaskRunner = (
   dependencies: FlowOrchestratorDependencies,
-  runNamedAction: (
-    session: IdentitySession,
-    selection: OrganizationSelectionCandidate,
-    command: ExecuteNamedActionCommand,
-  ) => Promise<NamedActionExecutionResult>,
+  runNamedAction: NamedActionRunner,
 ) => {
   type PlatformOperation =
     (typeof PLATFORM_SERVICE_OPERATIONS)[keyof typeof PLATFORM_SERVICE_OPERATIONS];
@@ -110,6 +107,8 @@ export const createFlowTaskRunner = (
         command: ExecuteNamedActionCommand;
         /** The action stands in for a Save record task, so it reports the saved record like one. */
         asSave?: true;
+        /** The same action over several records as one command; `command` is the first of them. */
+        commands?: readonly ExecuteNamedActionCommand[];
       }>;
 
   type TaskResult = {
@@ -338,6 +337,62 @@ export const createFlowTaskRunner = (
     };
   };
 
+  /** The action's typed inputs: a reference input names its record with the type the action declares. */
+  const namedActionInputs = (named: FlowNamedAction, inputs: Record<string, unknown>) =>
+    Object.fromEntries(
+      Object.entries(inputs).map(([name, value]) => [
+        name,
+        typeof value === "string" && Object.hasOwn(named.referenceInputTypes, name)
+          ? { recordTypeId: named.referenceInputTypes[name], recordId: value }
+          : value,
+      ]),
+    );
+
+  /**
+   * The same action over the `subjects` list (a record and the revision the person saw, 1 to 200,
+   * each record once) as ONE command: every record completes or none does.
+   */
+  const planNamedActionSet = (
+    run: Run,
+    call: FlowProtectedTaskCall,
+    commandId: string,
+    named: FlowNamedAction,
+    inputs: Record<string, unknown>,
+  ): Readonly<{ plan: TaskPlan }> | TaskResult => {
+    if (dependencies.actionRecords === undefined)
+      return notAvailable(
+        run,
+        call,
+        "This workflow can't run app actions here.",
+        "a registered protected operation",
+      );
+    const subjects = z
+      .array(z.object({ record: recordIdSchema, revision: z.number().int().min(1) }).strict())
+      .min(1)
+      .max(200)
+      .safeParse(call.properties.subjects?.value);
+    if (
+      !subjects.success ||
+      new Set(subjects.data.map((subject) => subject.record.toLowerCase())).size !==
+        subjects.data.length
+    )
+      return { outcome: "validation" };
+    const commands = subjects.data.map((subject) =>
+      executeNamedActionCommandSchema.safeParse({
+        contractVersion: "2.0.0",
+        commandId,
+        action: named.action,
+        recordTypeId: named.subjectRecordTypeId,
+        recordId: subject.record,
+        expectedConcurrencyNumber: subject.revision,
+        inputs: namedActionInputs(named, inputs),
+      }),
+    );
+    if (!commands.every((command) => command.success)) return { outcome: "validation" };
+    const parsed = commands.map((command) => command.data!);
+    return { plan: { kind: "action", command: parsed[0]!, commands: parsed } };
+  };
+
   const planNamedAction = async (
     run: Run,
     state: FlowRunState,
@@ -373,14 +428,7 @@ export const createFlowTaskRunner = (
       recordTypeId: named.subjectRecordTypeId,
       recordId: target.recordId,
       expectedConcurrencyNumber: target.revision,
-      inputs: Object.fromEntries(
-        Object.entries(inputs).map(([name, value]) => [
-          name,
-          typeof value === "string" && Object.hasOwn(named.referenceInputTypes, name)
-            ? { recordTypeId: named.referenceInputTypes[name], recordId: value }
-            : value,
-        ]),
-      ),
+      inputs: namedActionInputs(named, inputs),
     });
     if (!command.success) {
       console.error(
@@ -707,6 +755,10 @@ export const createFlowTaskRunner = (
         "This workflow step names an action this app doesn't have.",
         "a registered protected operation",
       );
+    if (Object.hasOwn(call.properties, "subjects")) {
+      if (Object.hasOwn(call.properties, "record")) return { outcome: "validation" };
+      return planNamedActionSet(run, call, commandId, named, inputs);
+    }
     return planNamedAction(run, state, call, commandId, named, inputs);
   };
 
@@ -898,6 +950,33 @@ export const createFlowTaskRunner = (
 
     if (plan.kind === "backend") return runBackendTask(dependencies, run, plan, call.taskId);
 
+    if (plan.kind === "action" && plan.commands !== undefined) {
+      const executed = await runNamedAction(session, selection, plan.commands);
+      if (executed.kind === "completed") {
+        for (const value of executed.results)
+          if (value.outcome === "completed")
+            changedRevisions.set(
+              targetKey(plan.command.recordTypeId, value.recordId),
+              value.concurrencyNumber,
+            );
+        const outputs = { count: executed.results.length };
+        return {
+          result: { outcome: "committed", outputs },
+          stored: outputs,
+          warnings: executed.warnings,
+        };
+      }
+      if (executed.kind !== "refused") return { result: { outcome: "failed" }, stored: {} };
+      run.refusalLoggedTaskIds.push(call.taskId);
+      const failure = executed.result;
+      return {
+        result: {
+          outcome: failure?.outcome === "refused" ? refusalOutcome(failure.error.code) : "refused",
+          ...(failure?.outcome === "refused" ? ruleRefusalResult(failure.error) : {}),
+        },
+        stored: {},
+      };
+    }
     if (plan.kind === "action") {
       const executed = await runNamedAction(session, selection, plan.command);
       if (executed.kind !== "available")
