@@ -24,8 +24,27 @@ export async function runFlowBinding(
       caller: callerInputs ?? {},
       runId: clickId,
       timeZone: options.timeZone,
-      host: options.host,
+      host: {
+        ...options.host,
+        showMessage: (message, signal) =>
+          options.host.showMessage(
+            {
+              ...message,
+              originBindingId: binding.bindingId,
+              sourceFlowId: binding.flowId,
+              ...(subject === undefined ? {} : { subject }),
+              ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
+            },
+            signal,
+          ),
+        setPageValues: options.state.pageValues.write,
+        setFormValue: (form, field, value) => {
+          const cycle = options.state.cycleFor(clickId);
+          return cycle !== undefined && options.state.writeFormValue(form, field, value, cycle);
+        },
+      },
       readFormValue: options.state.readFormValue,
+      readPageValues: options.state.pageValues.snapshot,
       condition: settings.condition,
       signal: runSignal,
       server: {

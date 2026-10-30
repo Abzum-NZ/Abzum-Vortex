@@ -6,6 +6,7 @@ import { LAYOUT_BREAKPOINT_MEDIA } from "../layout-styles";
 import { cn } from "../lib/utils";
 import type { PlatformBlockRenderProps } from "../registry";
 import { readControlSettings } from "../controls/control-context";
+import { InlineMessage, inlineMessageId } from "../flow-runtime/inline-message";
 
 export type ContainerProps = PlatformBlockRenderProps;
 
@@ -142,6 +143,7 @@ export function Container(props: ContainerProps): ReactElement {
   return (
     <div
       data-vortex-control="container"
+      aria-describedby={inlineMessageId(props.placementId)}
       data-vortex-direction={direction}
       data-vortex-gap={gap}
       {...(menuGeometryDeclared ? { "data-vortex-container-scope": scope } : {})}
@@ -155,6 +157,7 @@ export function Container(props: ContainerProps): ReactElement {
     >
       {menuGeometryDeclared ? <style>{responsiveCss}</style> : null}
       {regions}
+      <InlineMessage placementId={props.placementId} />
     </div>
   );
 }

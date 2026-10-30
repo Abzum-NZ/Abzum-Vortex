@@ -4,6 +4,7 @@ import type {
   ComponentFlowBinding,
   FlowBindingConcurrency,
   FlowFormula,
+  PageDefinition,
 } from "@vortex/platform/schema";
 import {
   guidedFormConfirmationKey,
@@ -17,6 +18,9 @@ import { startFlowEventCycle, type FlowEventCycle } from "./flow-cycle";
 import type { TypedFieldValue } from "../controls/projected-data";
 import { createExclusiveScopes } from "./exclusive";
 import { createFormSettler } from "./settle";
+
+import { createPageValueSlots } from "./page-values";
+import { createPageMessages } from "./messages";
 
 type CallerInputs =
   | Readonly<Record<string, unknown>>
@@ -66,7 +70,11 @@ export type FlowRuntimeOptions = Readonly<{
 }>;
 
 /** State shared by page and agent dispatches, with subscriptions scoped to a component. */
-export function createFlowRuntimeState() {
+export function createFlowRuntimeState(
+  declarations: NonNullable<PageDefinition["values"]> = {},
+  initialFormTypes: Readonly<Record<string, Readonly<Record<string, string>>>> = {},
+) {
+  let formTypes = initialFormTypes;
   type Job = { controller: AbortController; flush: () => void };
   const entries = new Map<string, { jobs: Set<Job>; tail?: Promise<void> }>();
   const scopes = createExclusiveScopes();
@@ -75,8 +83,16 @@ export function createFlowRuntimeState() {
   const cycles = new Map<string, Readonly<{ cycle: FlowEventCycle }>>();
   const listeners = new Map<string, Set<() => void>>();
   const retries = new Map<string, string>();
-  const forms = new Map<string, (fieldKey: string) => TypedFieldValue | undefined>();
+  const forms = new Map<
+    string,
+    Readonly<{
+      read: (fieldKey: string) => TypedFieldValue | undefined;
+      write: (fieldKey: string, value: unknown, cycle: FlowEventCycle) => boolean;
+    }>
+  >();
   const notify = (controlId: string) => listeners.get(controlId)?.forEach((listener) => listener());
+  const pageValues = createPageValueSlots(declarations, (key) => notify(`page:${key}`));
+  const messages = createPageMessages((key) => notify(`message:${key}`));
   const changeRunning = (controlId: string, amount: number) => {
     const before = running.get(controlId) ?? 0;
     const after = before + amount;
@@ -105,21 +121,45 @@ export function createFlowRuntimeState() {
     },
     retryId: (key: string, proposed: string) => retries.get(key) ?? proposed,
     rememberResult: (key: string, runId: string, result: ServerDrivenResult) => {
-      if (result.kind === "unavailable" || (result.kind === "abandoned" && !result.unanswered))
+      if (result.kind === "unknown" || (result.kind === "abandoned" && !result.unanswered))
         retries.set(key, runId);
       else if (result.kind !== "abandoned") retries.delete(key);
     },
+    pageValues,
+    messages,
+    setFormTypes: (next: typeof formTypes) => {
+      formTypes = next;
+    },
+    formType: (formId: string, fieldKey: string) =>
+      Object.entries(formTypes).find(([id]) => id.toLowerCase() === formId.toLowerCase())?.[1][
+        fieldKey
+      ],
+    formChanged: (formId: string, fieldKey: string) =>
+      notify(`form:${formId.toLowerCase()}:${fieldKey}`),
     isRunning: (controlId: string) => (running.get(controlId) ?? 0) > 0,
-    registerForm: (formId: string, read: (fieldKey: string) => TypedFieldValue | undefined) => {
+    registerForm: (
+      formId: string,
+      read: (fieldKey: string) => TypedFieldValue | undefined,
+      write: (fieldKey: string, value: unknown, cycle: FlowEventCycle) => boolean,
+    ) => {
       const key = formId.toLowerCase();
       if (forms.has(key)) throw new Error(`Form '${formId}' is registered more than once`);
-      forms.set(key, read);
+      const form = { read, write };
+      forms.set(key, form);
+      for (const fieldKey of Object.keys(formTypes[formId] ?? {}))
+        notify(`form:${key}:${fieldKey}`);
       return () => {
-        if (forms.get(key) === read) forms.delete(key);
+        if (forms.get(key) === form) {
+          forms.delete(key);
+          for (const fieldKey of Object.keys(formTypes[formId] ?? {}))
+            notify(`form:${key}:${fieldKey}`);
+        }
       };
     },
     readFormValue: (formId: string, fieldKey: string) =>
-      forms.get(formId.toLowerCase())?.(fieldKey),
+      forms.get(formId.toLowerCase())?.read(fieldKey),
+    writeFormValue: (formId: string, fieldKey: string, value: unknown, cycle: FlowEventCycle) =>
+      forms.get(formId.toLowerCase())?.write(fieldKey, value, cycle) ?? false,
     cycleFor: (gestureId: string) => cycles.get(gestureId)?.cycle,
     trackCycle: (gestureId: string, cycle: FlowEventCycle) => {
       const held = { cycle };
@@ -258,9 +298,7 @@ export function createFlowRuntimeState() {
         else controller.signal.addEventListener("abort", stopWaiting, { once: true });
       });
       const result = Promise.race([scheduled, stopped])
-        .then((outcome) =>
-          timedOut ? { kind: "abandoned" as const, unanswered: false, timedOut: true } : outcome,
-        )
+        .then((outcome) => (timedOut ? ({ kind: "unknown" } as const) : outcome))
         .finally(() => {
           signal?.removeEventListener("abort", abort);
           if (stopWaiting !== undefined)
@@ -299,6 +337,8 @@ export type FlowRuntimeState = ReturnType<typeof createFlowRuntimeState>;
 
 /** The safe identity of a binding used by a surface that does not receive its input map. */
 export type PlacementFlowBinding = Readonly<{
+  /** Derived action bindings are started only by their message, not by the control's event. */
+  messageAction?: Readonly<{ authoredBindingId: string; sourceFlowId: string; taskId: string }>;
   controlId: ComponentFlowBinding["controlId"];
   controlName: string;
   flowName: string;
@@ -366,48 +406,62 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
       console.error(`[flow] binding ${binding.bindingId} has no projected settings`);
       return { kind: "refused" };
     }
-    let retry: { key: string; runId: string } | undefined;
-    let releaseRun = () => {};
-    return options.state
-      .run(binding.bindingId, settings, signal, async (runSignal) => {
-        const inputs =
-          typeof callerInputs === "function" ? await callerInputs(runSignal) : (callerInputs ?? {});
-        if (runSignal.aborted) return { kind: "abandoned", unanswered: true };
-        if (inputs === undefined) return { kind: "skipped" };
-        const key = options.state.retryKey(binding.bindingId, subject, inputs);
-        const runId = options.state.retryId(key, clickId);
-        retry = { key, runId };
-        const end = options.begin?.(binding.bindingId, runId);
+    let retry:
+      { key: string; runId: string; inputs: Readonly<Record<string, unknown>> } | undefined;
+    let end: (() => void) | undefined;
+    const execute = (nextSignal?: AbortSignal, resume?: () => Promise<ServerDrivenResult>) =>
+      options.state.run(binding.bindingId, settings, nextSignal, async (runSignal) => {
+        if (retry === undefined) {
+          const inputs =
+            typeof callerInputs === "function"
+              ? await callerInputs(runSignal)
+              : (callerInputs ?? {});
+          if (runSignal.aborted) return { kind: "abandoned", unanswered: true };
+          if (inputs === undefined) return { kind: "skipped" };
+          const key = options.state.retryKey(binding.bindingId, subject, inputs);
+          retry = { key, runId: options.state.retryId(key, clickId), inputs };
+          end = options.begin?.(binding.bindingId, retry.runId);
+        }
+        const attempt = retry;
         const releaseCycle = options.state.trackCycle(
-          runId,
+          attempt.runId,
           cycle ?? startFlowEventCycle(binding.flowId, settings.controlId),
         );
-        releaseRun = () => {
-          releaseCycle();
-          end?.();
-          releaseRun = () => {};
-        };
         try {
+          if (resume !== undefined) return await resume();
           const { runFlowBinding } = await import("./flow-runtime-driver");
           return await runFlowBinding(
             options,
             binding,
-            inputs,
-            runId,
+            attempt.inputs,
+            attempt.runId,
             runSignal,
             subject,
             sourceTablePlacementId,
             settings,
           );
         } finally {
-          releaseRun();
+          releaseCycle();
         }
-      })
-      .then((result) => {
-        if (retry !== undefined) options.state.rememberResult(retry.key, retry.runId, result);
+      });
+    const keepRetry = (result: ServerDrivenResult): ServerDrivenResult => {
+      if (retry !== undefined) options.state.rememberResult(retry.key, retry.runId, result);
+      if (result.kind !== "unknown") {
+        end?.();
         return result;
-      })
-      .finally(() => releaseRun());
+      }
+      return {
+        ...result,
+        controlId: settings.controlId,
+        retry: async () => keepRetry(await execute(undefined, result.retry)),
+      };
+    };
+    try {
+      return keepRetry(await execute(signal));
+    } catch (error) {
+      end?.();
+      throw error;
+    }
   };
   return Object.freeze({
     prefetch: async () => {

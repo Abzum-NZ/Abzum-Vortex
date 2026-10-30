@@ -22,6 +22,7 @@ const presentation: PageStepImplementation = async (intent, host, signal) => {
 /** Registered page steps have an intent implementation; the interpreter handles control steps. */
 const pageStepImplementations = {
   "interface.show_message": presentation,
+  "interface.clear_message": presentation,
   "interface.show_form": async (intent, host, signal) => {
     const form = readFormIntent(intent);
     return form === undefined ? undefined : host.showForm(form, signal);
@@ -36,6 +37,7 @@ const pageStepImplementations = {
   "interface.refresh": presentation,
   "interface.set_panel": presentation,
   "interface.set_filter": presentation,
+  "interface.set_value": presentation,
 } satisfies Record<PageIntentStepType, PageStepImplementation>;
 
 /** The same page implementations handle both local steps and server-returned intents. */

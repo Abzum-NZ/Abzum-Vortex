@@ -8,6 +8,7 @@ import { Field, FieldLabel } from "../components/field";
 import { Input } from "../components/input";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/popover";
 import { FormattedDate } from "../display/date-format-context";
+import { flowSetFieldChange } from "../flow-runtime/flow-cycle";
 import {
   readControlSettings,
   resolveControlContext,
@@ -23,7 +24,7 @@ import {
   useSeededState,
   fieldFocusLost,
 } from "./field-parts";
-import { useRequiredFormField } from "./form-context";
+import { useFormFieldPublisher, useRequiredFormField } from "./form-context";
 import { isIsoCalendarDate, type DateInputPayload } from "./projected-data";
 
 export type DateInputProps = ControlRenderProps<DateInputPayload>;
@@ -47,8 +48,9 @@ export function DateInput(props: DateInputProps): ReactElement {
     "field_focus_lost",
   ]);
   const settings = readControlSettings(props, context.location);
-  const ids = useFieldIds();
+  const ids = useFieldIds(props.placementId);
   const fieldKey = settings.fieldKey();
+  const publish = useFormFieldPublisher(fieldKey);
   const label = context.accessibleName ?? props.metadata.name;
   const help = settings.text("help_text");
   const required = settings.boolean("required");
@@ -62,23 +64,37 @@ export function DateInput(props: DateInputProps): ReactElement {
   const [raw, setRaw] = useSeededState(context.values?.value ?? "");
   const toTyped = (text: string): string | null => (isIsoCalendarDate(text) ? text : null);
   const typed = toTyped(raw);
-  const validationError = useRequiredFormField(fieldKey, props.placementId, typed, {
-    label,
-    missing: required && !disabled && !readOnly && typed === null,
-  });
+  const validationError = useRequiredFormField(
+    fieldKey,
+    props.placementId,
+    typed,
+    { label, missing: required && !disabled && !readOnly && typed === null },
+    (value, cycle) => {
+      if (disabled || readOnly || draftFeedback?.hidden === true) return undefined;
+      if (value !== null && (typeof value !== "string" || !isIsoCalendarDate(value)))
+        return undefined;
+      return {
+        value,
+        apply: () => setRaw(value ?? ""),
+        emit: () => context.events?.field_changed?.(flowSetFieldChange(cycle, fieldKey, value)),
+      };
+    },
+  );
   const error = projectedError ?? validationError;
   const [open, setOpen] = useState(false);
 
   const commit = (next: string): void => {
     if (disabled || readOnly) return;
     setRaw(next);
+    const value = toTyped(next);
+    publish(value);
     context.events?.field_changed?.({
       event: "field_changed",
       origin: "user",
       depth: 0,
       immediate: false,
       fieldKey,
-      value: toTyped(next),
+      value,
     });
   };
 

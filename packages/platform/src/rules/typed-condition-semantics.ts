@@ -1,7 +1,4 @@
 import {
-  conditionFieldType,
-  typedValueMatchesType,
-  fieldValueMatches,
   semanticTypeForLiteral as naturalLiteralType,
   conditionSharedType,
   collectionElementType as sharedCollectionElementType,
@@ -10,14 +7,10 @@ import {
   type OperandInfo,
 } from "./condition-types";
 import type { JsonValue } from "../catalogue/common";
-import { organizationAccountIdSchema } from "../catalogue/identifiers";
-import type { ModuleField } from "../definition/module-contracts";
+import { isStableId } from "../catalogue/stable-id";
 import { parseExactDecimal, type ExactDecimal } from "../records/exact-decimal";
-import {
-  exactDecimalTextSchema,
-  moneyValueSchema,
-  recordLinkValueSchema,
-} from "../records/module-field-values";
+import { isCanonicalExactDecimal } from "../records/value-predicates";
+import { isMoneyValue, isRecordLinkValue } from "../records/module-field-value-predicates";
 import type { FlowFormula } from "../workflows/flow-values";
 import {
   TypedConditionEvaluationError,
@@ -32,24 +25,15 @@ import type {
 type SemanticType = ConditionValueType;
 
 export type ResolvedTypedConditionOperand = CoreResolvedTypedConditionOperand<SemanticType> &
-  Readonly<{ missing?: boolean }>;
+  Readonly<{ missing?: boolean; dialect?: "flow" }>;
 
 const refuse = (reason: TypedConditionEvaluationErrorReason): never => {
   throw new TypedConditionEvaluationError(reason);
 };
 
-export const semanticTypeForField = (field: ModuleField): SemanticType =>
-  conditionFieldType(field) ?? refuse("input_refused");
-export const valueMatchesSemanticType = (value: JsonValue, type: SemanticType): boolean =>
-  value === null || typedValueMatchesType(value, type);
-
-export const valueMatchesField = (value: JsonValue, field: ModuleField): boolean =>
-  conditionFieldType(field) !== undefined &&
-  (value === null || fieldValueMatches(value, field, "canonical"));
-
 const exactFromValue = (value: JsonValue): ExactDecimal | undefined => {
   if (typeof value === "string") {
-    if (!exactDecimalTextSchema.safeParse(value).success) return undefined;
+    if (!isCanonicalExactDecimal(value)) return undefined;
     return parseExactDecimal(value);
   }
   if (typeof value !== "number" || !Number.isSafeInteger(value)) return undefined;
@@ -62,6 +46,7 @@ const operandInfo = (operand: ResolvedTypedConditionOperand): OperandInfo => ({
     operand.type ??
     (operand.literal === undefined ? undefined : naturalLiteralType(operand.literal)),
   ...(operand.literal === undefined ? {} : { literal: operand.literal }),
+  ...(operand.dialect === undefined ? {} : { dialect: operand.dialect }),
 });
 const sharedType = (
   left: ResolvedTypedConditionOperand,
@@ -73,24 +58,21 @@ const collectionElementType = (
 ): SemanticType | undefined => sharedCollectionElementType(operandInfo(operand), expectedType);
 
 const recordReferenceIdentity = (value: JsonValue): string | undefined => {
-  const parsed = recordLinkValueSchema.safeParse(value);
-  return parsed.success
-    ? `${parsed.data.recordTypeId.toLowerCase()}/${parsed.data.recordId.toLowerCase()}`
+  return isRecordLinkValue(value)
+    ? `${value.recordTypeId.toLowerCase()}/${value.recordId.toLowerCase()}`
     : undefined;
 };
 
 const organizationAccountIdentity = (value: JsonValue): string | undefined => {
-  const direct = organizationAccountIdSchema.safeParse(value);
-  return direct.success ? direct.data.toLowerCase() : undefined;
+  return isStableId(value) ? value.toLowerCase() : undefined;
 };
 
 const moneyParts = (
   value: JsonValue,
 ): Readonly<{ amount: ExactDecimal; currency: string }> | undefined => {
-  const parsed = moneyValueSchema.safeParse(value);
-  if (!parsed.success) return undefined;
-  const amount = exactFromValue(parsed.data.amount);
-  return amount === undefined ? undefined : { amount, currency: parsed.data.currency };
+  if (!isMoneyValue(value)) return undefined;
+  const amount = exactFromValue(value.amount);
+  return amount === undefined ? undefined : { amount, currency: value.currency };
 };
 
 export const evaluateResolvedTypedCondition = <TSourceOperand>(
@@ -242,6 +224,8 @@ export const evaluateResolvedTypedCondition = <TSourceOperand>(
       comparisonType === "money" &&
       left.value !== null &&
       right.value !== null &&
+      moneyParts(left.value) !== undefined &&
+      moneyParts(right.value) !== undefined &&
       moneyParts(left.value)!.currency !== moneyParts(right.value)!.currency
     )
       return { op: "literal", type: "yes_no", value: node.operator === "not_equals" };

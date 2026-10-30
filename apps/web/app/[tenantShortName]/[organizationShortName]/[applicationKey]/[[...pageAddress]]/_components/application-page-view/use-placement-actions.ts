@@ -13,7 +13,7 @@ import type {
 } from "../../../../../../_lib/application-page";
 import type {
   DispatchOutcome,
-  Notice,
+  PageMessageDraft,
   RefreshedPlacementData,
   TableContinuationTarget,
   ControlReport,
@@ -41,7 +41,7 @@ export function usePlacementActions({
   applyDispatch: (
     dispatch: Promise<ServerDrivenResult | undefined>,
     formPlacementId?: string,
-    afterAccepted?: () => Promise<Notice | undefined>,
+    afterAccepted?: () => Promise<PageMessageDraft | undefined>,
     sourceBindingId?: string,
     reportOnControl?: ControlReport,
   ) => Promise<DispatchOutcome>;
@@ -81,7 +81,7 @@ export function usePlacementActions({
       selectedRecordId?: string,
       /** The one record this gesture is about, when it is not the record the page shows. */
       gestureSubject?: Readonly<{ recordId: string; revision: number }>,
-      afterAccepted?: () => Promise<Notice | undefined>,
+      afterAccepted?: () => Promise<PageMessageDraft | undefined>,
       /** One identity for this user gesture, so a repeated request is the same run. */
       clickId?: string,
       /** The gesture is shown on its own control, which tells the person its outcome. */

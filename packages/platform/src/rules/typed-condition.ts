@@ -13,11 +13,14 @@ import {
 } from "./typed-condition-error";
 import {
   evaluateResolvedTypedCondition,
-  semanticTypeForField,
-  valueMatchesField,
-  valueMatchesSemanticType,
   type ResolvedTypedConditionOperand,
 } from "./typed-condition-semantics";
+import {
+  conditionFieldType,
+  typedValueMatchesType,
+  type ConditionValueType,
+} from "./condition-types";
+import { fieldValueMatches } from "./condition-field-types";
 
 export type TypedConditionParameterDeclaration = Readonly<{
   key: string;
@@ -72,6 +75,14 @@ const supportedOperators = new Set([
 const refuse = (reason: TypedConditionEvaluationErrorReason): never => {
   throw new TypedConditionEvaluationError(reason);
 };
+
+const semanticTypeForField = (field: ModuleField): ConditionValueType =>
+  conditionFieldType(field) ?? refuse("input_refused");
+const valueMatchesSemanticType = (value: JsonValue, type: ConditionValueType): boolean =>
+  value === null || typedValueMatchesType(value, type);
+const valueMatchesField = (value: JsonValue, field: ModuleField): boolean =>
+  conditionFieldType(field) !== undefined &&
+  (value === null || fieldValueMatches(value, field, "canonical"));
 
 const hasOwn = (value: Readonly<Record<string, unknown>>, key: string) =>
   Object.prototype.hasOwnProperty.call(value, key);

@@ -39,6 +39,7 @@ import {
 } from "../workflows/form-continuation-contracts";
 import type { ApplicationContent } from "./application-contracts";
 import type { ComponentFlowBinding, SafeFlowResultDescriptor } from "./application-flow-bindings";
+import { bindingsWithMessageActions } from "./message-action-bindings";
 import type { ModuleDefinitionConsumerReadResult } from "./definition-consumer-read";
 import {
   FORM_CONTAINER_BLOCK_RELEASE,
@@ -845,10 +846,11 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
               ? "FLOW_INVOKE_INSTALLATION_NOT_FOUND"
               : "FLOW_INVOKE_INSTALLATION_ORGANIZATION_MISMATCH",
           );
+        const bindings = bindingsWithMessageActions(installation.bindings, [
+          ...installation.flows.values(),
+        ]);
         if (request.kind === "run_start") {
-          const matches = installation.bindings.filter((entry) =>
-            sameId(entry.bindingId, request.bindingId),
-          );
+          const matches = bindings.filter((entry) => sameId(entry.bindingId, request.bindingId));
           if (matches.length !== 1 || !sameId(matches[0]!.flow.flowId, request.flowId))
             return refuse("FLOW_INVOKE_BINDING_FLOW_MISMATCH");
           return dependencies.openRun === undefined
@@ -884,7 +886,7 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
         if (request.kind === "continuation") {
           // A continuation resumes only a flow the active installation still binds: a run started
           // from a binding that a newer installation withdrew is not resumed.
-          if (!installation.bindings.some((entry) => sameId(entry.flow.flowId, request.flowId)))
+          if (!bindings.some((entry) => sameId(entry.flow.flowId, request.flowId)))
             return refuse("FLOW_INVOKE_CONTINUATION_FLOW_NOT_BOUND");
           const target = request.target;
           // The exact paused target always goes to the form continuation interface, the one place
@@ -905,7 +907,7 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           });
         }
 
-        const matchingBindings = installation.bindings.filter((entry) =>
+        const matchingBindings = bindings.filter((entry) =>
           sameId(entry.bindingId, request.bindingId),
         );
         if (

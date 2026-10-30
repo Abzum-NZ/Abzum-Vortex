@@ -19,6 +19,7 @@ export * from "./named-action-availability-schema";
 export * from "./records-table-feature-projection";
 export type { RecordsTableRowFormat } from "./records-table-features";
 export { projectInlineEditedCell } from "./cell-projection";
+export { formatPageValue, type PageFormatOptions, type PageFormatter } from "./value-format";
 export * from "./display-payload-parts";
 export * from "./display-payload-text";
 export * from "./display-payload-summary";

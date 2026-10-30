@@ -4,7 +4,7 @@ import type { useRouter } from "next/navigation";
 import type { ControlSemanticEvent, ChoiceInputPayload } from "@vortex/ui";
 import type { ReferenceChoiceSelectionEvidenceMap } from "@vortex/platform/schema";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
-import type { Notice } from "./types";
+import type { PageMessageDraft } from "./types";
 import { choiceScopeKey } from "./event-values";
 import { unavailableNotice } from "./notices";
 
@@ -22,7 +22,7 @@ export function useReferenceChoices({
   currentData,
   application,
   router,
-  setNotice,
+  showPageMessage,
   requestChoicePageRef,
 }: Readonly<{
   setChoicePagesOwner: Dispatch<SetStateAction<ApplicationPageModel>>;
@@ -35,7 +35,7 @@ export function useReferenceChoices({
   currentData: ApplicationPageModel["data"];
   application: ApplicationPageModel["invocation"];
   router: ReturnType<typeof useRouter>;
-  setNotice: Dispatch<SetStateAction<Notice | undefined>>;
+  showPageMessage: (message: PageMessageDraft | undefined) => void;
   requestChoicePageRef: RefObject<
     (
       placementId: string,
@@ -143,7 +143,7 @@ export function useReferenceChoices({
           return;
         }
         if (!response.ok || !isRecord(body) || body.kind !== "completed") {
-          setNotice(unavailableNotice);
+          showPageMessage(unavailableNotice);
           router.refresh();
           return;
         }
@@ -194,7 +194,7 @@ export function useReferenceChoices({
         });
       } catch (error) {
         console.error("[page] reference choices read failed", error);
-        if (choiceRequestIdsRef.current[stateKey] === requestId) setNotice(unavailableNotice);
+        if (choiceRequestIdsRef.current[stateKey] === requestId) showPageMessage(unavailableNotice);
       }
     },
     [application, choicePayloadFor, model.referenceChoiceInputs, parseChoicePage, router],

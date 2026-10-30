@@ -93,15 +93,6 @@ function compileApplicationPages(
     const compiledComposition = composition.pages[index];
     if (compiledComposition === undefined)
       fail("vortex.definition.invalid_compilation_output", "invalid_value");
-    // Not yet runnable: page values arrive with the page runner's value store.
-    if (page.values !== undefined && Object.keys(asObject(page.values)).length > 0)
-      throw new DefinitionCompilationError(
-        "vortex.definition.unsupported_workflow_node",
-        "unsupported_choice",
-        resolution.location("page", String(page.id)),
-        undefined,
-        `Page ${String(page.key)}: page values cannot run yet`,
-      );
     const base = {
       pageId: pageId(String(page.id)),
       ...(page.values === undefined ? {} : { values: page.values }),
@@ -684,6 +675,18 @@ function compileApplicationFlowBindings(
         return type;
       }
       if (reference.source === "execution_now") return "date_time";
+      if (reference.source === "page") {
+        const types = environments.map((environment) => environment.values[reference.name]);
+        if (types.length === 0 || types.some((candidate) => candidate === undefined)) {
+          problem ??= `Page value ${reference.name} is not available on every bound page`;
+          return undefined;
+        }
+        if (types.some((candidate) => candidate !== types[0])) {
+          problem ??= `Page value ${reference.name} has inconsistent types`;
+          return undefined;
+        }
+        return types[0];
+      }
       if (reference.source === "form") {
         const types = environments.map(
           (environment) => environment.forms[reference.form]?.[reference.field],
@@ -721,12 +724,13 @@ function compileApplicationFlowBindings(
     for (const [name, value] of Object.entries(canonicalInputs)) {
       if (value.kind === "caller") continue;
       const references = flowValueReferences(value);
-      if (references.some((reference) => reference.source === "page"))
-        refuse(`Input ${name} reads a page value, which cannot run yet`);
       // Server-resolved binding inputs are checked by their own protected runtime path.
       if (
         references.some(
-          (reference) => reference.source !== "form" && reference.source !== "execution_now",
+          (reference) =>
+            reference.source !== "form" &&
+            reference.source !== "page" &&
+            reference.source !== "execution_now",
         )
       )
         continue;
@@ -835,6 +839,7 @@ const applicationCompositionResolution = (
           authored,
           (reference) => qualifiedField(resolution, reference),
           valueIndex.context(),
+          (alias) => resolution.id(definitionKey, "block_placement", alias, "content"),
         ),
       ),
     recordType: (reference) => resolution.recordType(reference),

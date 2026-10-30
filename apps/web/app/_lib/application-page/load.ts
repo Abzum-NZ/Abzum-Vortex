@@ -16,6 +16,7 @@ import {
   fieldControl,
   formFieldOf,
   flowPlansOf,
+  installedFlowFormTypes,
 } from "@vortex/platform/server";
 import { runtimeContextSelection, runtimePreviewOf } from "@vortex/platform/server";
 import {
@@ -863,6 +864,21 @@ const loadApplicationPageJoined = async (
     throw new Error(
       `Compiled page '${pageDefinition.key}' references missing shell '${applicationShellId}'`,
     );
+  const installedTypes = installedFlowFormTypes(context.releaseSet);
+  const formTypes: Record<string, Record<string, string>> = {};
+  for (const placement of collectPlacements(page)) {
+    const formId = placement.formId;
+    const name = placement.settings.name;
+    if (
+      formId === undefined ||
+      !isRecord(name) ||
+      name.kind !== "text" ||
+      typeof name.value !== "string"
+    )
+      continue;
+    const type = installedTypes[formId]?.[name.value];
+    if (type !== undefined) (formTypes[formId] ??= {})[name.value] = type;
+  }
   const model: PlacementReadModel = {
     page,
     pageId: pageDefinition.pageId,
@@ -882,6 +898,7 @@ const loadApplicationPageJoined = async (
       }),
     ),
     bindings,
+    formTypes,
     refreshPlacementsByBinding,
     refreshWhileByPlacement,
     pageParameters: {

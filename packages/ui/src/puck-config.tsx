@@ -32,6 +32,11 @@ import {
 } from "react";
 import type { FlowRuntimeState } from "./flow-runtime/flow-runtime";
 import { FlowRuntimeStateContext } from "./flow-runtime/flow-runtime-state-context";
+import { InlineMessage } from "./flow-runtime/inline-message";
+import {
+  PlacementReactionsContext,
+  useLivePlacementReactions,
+} from "./flow-runtime/placement-reactions";
 import type { ComponentConfig, Config, Field, PuckContext, SlotComponent } from "@puckeditor/core";
 import {
   plainSettingValue,
@@ -175,6 +180,11 @@ export type VortexPlacementMeta = Readonly<{
   slotOrders?: Readonly<Record<string, BreakpointOrder>>;
   availability?: "unavailable";
   unavailableReason?: "operation_unavailable";
+  visibilityCondition?: CompiledItemVortex["visibilityCondition"];
+  requiredCondition?: CompiledItemVortex["requiredCondition"];
+  readOnlyCondition?: CompiledItemVortex["readOnlyCondition"];
+  enabledCondition?: CompiledItemVortex["enabledCondition"];
+  reactions?: Readonly<{ required?: boolean; readOnly?: boolean; enabled?: boolean }>;
 }>;
 
 type PlacementSettings = Readonly<Record<string, BlockPropertyValueContract>>;
@@ -384,6 +394,7 @@ function PlacementBlock(props: {
   const { id: placementId, vortex, puck, wrapper } = componentProps;
   const metadataIn = (puck.metadata ?? {}) as VortexPuckMetadata;
   const runtimeState = metadataIn.runtimeState;
+  const reactions = useLivePlacementReactions(runtimeState, vortex);
   const subscribe = useCallback(
     (listener: () => void) => runtimeState?.subscribe(placementId, listener) ?? (() => {}),
     [placementId, runtimeState],
@@ -478,6 +489,7 @@ function PlacementBlock(props: {
   const wrapperStyle: CSSProperties = {
     ...wrapper?.style,
     ...(responsive ? {} : computePlacementStyle(layout)),
+    ...(reactions.visible === false ? { display: "none" } : {}),
   };
   const ownCss =
     responsive && !pageEmitsCss
@@ -495,6 +507,7 @@ function PlacementBlock(props: {
       data-vortex-block-id={release.blockId}
       data-vortex-block-key={release.key}
       aria-busy={running || undefined}
+      hidden={reactions.visible === false}
       {...(responsive && !pageEmitsCss ? { "data-vortex-wrapper-scope": placementId } : {})}
       {...(gridChild ? { "data-vortex-grid-child": "" } : {})}
       {...(responsive
@@ -509,42 +522,45 @@ function PlacementBlock(props: {
       {ownCss === undefined ? null : <style>{ownCss}</style>}
       {visible ? (
         <FlowRuntimeStateContext.Provider value={metadataIn.runtimeState}>
-          <Implementation
-            {...parsedInputs}
-            placementId={placementId}
-            settings={settings}
-            slots={slots}
-            breakpoint={activeBreakpoint}
-            responsiveLayout={responsive}
-            metadata={release}
-            fieldInputControlReleases={fieldInputControlReleases}
-            themeTokens={themeTokens}
-            {...availability}
-            {...(metadataIn.projectedNavigation === undefined
-              ? {}
-              : { projectedNavigation: metadataIn.projectedNavigation })}
-            {...(metadataIn.resolvePageHref === undefined
-              ? {}
-              : { resolvePageHref: metadataIn.resolvePageHref })}
-            {...(metadataIn.onNavigatePage === undefined
-              ? {}
-              : { onNavigatePage: metadataIn.onNavigatePage })}
-            {...(metadataIn.onPrefetchPage === undefined
-              ? {}
-              : { onPrefetchPage: metadataIn.onPrefetchPage })}
-            {...(metadataIn.currentPageId === undefined
-              ? {}
-              : { currentPageId: metadataIn.currentPageId })}
-            {...(metadataIn.componentBundleOrigin === undefined
-              ? {}
-              : { componentBundleOrigin: metadataIn.componentBundleOrigin })}
-            {...(metadataIn.applicationSearch === undefined
-              ? {}
-              : { applicationSearch: metadataIn.applicationSearch })}
-            {...(metadataIn.applicationSearchPageSubject === undefined
-              ? {}
-              : { applicationSearchPageSubject: metadataIn.applicationSearchPageSubject })}
-          />
+          <PlacementReactionsContext.Provider value={reactions}>
+            <Implementation
+              {...parsedInputs}
+              placementId={placementId}
+              settings={settings}
+              slots={slots}
+              breakpoint={activeBreakpoint}
+              responsiveLayout={responsive}
+              metadata={release}
+              fieldInputControlReleases={fieldInputControlReleases}
+              themeTokens={themeTokens}
+              {...availability}
+              {...(metadataIn.projectedNavigation === undefined
+                ? {}
+                : { projectedNavigation: metadataIn.projectedNavigation })}
+              {...(metadataIn.resolvePageHref === undefined
+                ? {}
+                : { resolvePageHref: metadataIn.resolvePageHref })}
+              {...(metadataIn.onNavigatePage === undefined
+                ? {}
+                : { onNavigatePage: metadataIn.onNavigatePage })}
+              {...(metadataIn.onPrefetchPage === undefined
+                ? {}
+                : { onPrefetchPage: metadataIn.onPrefetchPage })}
+              {...(metadataIn.currentPageId === undefined
+                ? {}
+                : { currentPageId: metadataIn.currentPageId })}
+              {...(metadataIn.componentBundleOrigin === undefined
+                ? {}
+                : { componentBundleOrigin: metadataIn.componentBundleOrigin })}
+              {...(metadataIn.applicationSearch === undefined
+                ? {}
+                : { applicationSearch: metadataIn.applicationSearch })}
+              {...(metadataIn.applicationSearchPageSubject === undefined
+                ? {}
+                : { applicationSearchPageSubject: metadataIn.applicationSearchPageSubject })}
+            />
+            <InlineMessage placementId={`retry:${placementId}`} />
+          </PlacementReactionsContext.Provider>
         </FlowRuntimeStateContext.Provider>
       ) : null}
     </div>

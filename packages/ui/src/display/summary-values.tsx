@@ -7,6 +7,7 @@ import { resolveDisplayContext, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
 import { MetricCard } from "./metric-card";
 import type { SummaryPayload } from "./projected-data";
+import { displayValueSource, ValueSourceView } from "./value-source";
 
 /**
  * Shared browser-safe display component for labelled summary values, rendered as metric cards
@@ -35,10 +36,28 @@ export function SummaryValuesDisplay(props: DisplayRenderProps<SummaryPayload>):
       "Summary card minimum width must be set to a positive number",
       location,
     );
+  const sourceList = props.settings.value_sources;
+  if (sourceList?.kind !== "list")
+    throw new DefinitionRenderError(
+      "INVALID_COMPOSITION",
+      "Summary value sources are invalid",
+      location,
+    );
+  const pageOnly =
+    sourceList.items.length > 0 &&
+    sourceList.items.every(
+      (item) =>
+        item.kind === "group" &&
+        displayValueSource(item.properties.value_source).source === "page_value",
+    );
+  const effectiveProps: DisplayRenderProps<SummaryPayload> =
+    props.data === undefined && pageOnly
+      ? { ...props, data: { status: "ready", values: { kind: "summary_values", values: [] } } }
+      : props;
   const { title, accessibleName, values, state, emptyMessage, events } =
     resolveDisplayContext<SummaryPayload>(
-      props,
-      (summary) => summary.values.length === 0,
+      effectiveProps,
+      (summary) => !pageOnly && summary.values.length === 0,
       "No values to show",
     );
 
@@ -64,17 +83,53 @@ export function SummaryValuesDisplay(props: DisplayRenderProps<SummaryPayload>):
               gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${minimumWidth.value}px), 1fr))`,
             }}
           >
-            {values.values.map((item) => (
-              <MetricCard key={item.key} label={item.label} data-vortex-summary-key={item.key}>
-                {item.value.kind === "unavailable" ? (
-                  <span role="status" data-vortex-summary-value-state="unavailable">
-                    Unavailable
-                  </span>
-                ) : (
-                  <DisplayCellView value={item.value} />
-                )}
-              </MetricCard>
-            ))}
+            {sourceList.items.length === 0
+              ? values.values.map((item) => (
+                  <MetricCard key={item.key} label={item.label} data-vortex-summary-key={item.key}>
+                    {item.value.kind === "unavailable" ? (
+                      <span role="status" data-vortex-summary-value-state="unavailable">
+                        Unavailable
+                      </span>
+                    ) : (
+                      <DisplayCellView value={item.value} />
+                    )}
+                  </MetricCard>
+                ))
+              : sourceList.items.map((item) => {
+                  if (item.kind !== "group")
+                    throw new DefinitionRenderError(
+                      "INVALID_COMPOSITION",
+                      "Summary value source is invalid",
+                      location,
+                    );
+                  const key = item.properties.key;
+                  const label = item.properties.label;
+                  if (key?.kind !== "text" || label?.kind !== "text")
+                    throw new DefinitionRenderError(
+                      "INVALID_COMPOSITION",
+                      "Summary value name is invalid",
+                      location,
+                    );
+                  const source = displayValueSource(item.properties.value_source);
+                  const projectionKey = source.properties.projection_key;
+                  const projection =
+                    projectionKey?.kind === "text"
+                      ? values.values.find((candidate) => candidate.key === projectionKey.value)
+                          ?.value
+                      : undefined;
+                  return (
+                    <MetricCard
+                      key={key.value}
+                      label={label.value}
+                      data-vortex-summary-key={key.value}
+                    >
+                      <ValueSourceView
+                        source={source}
+                        {...(projection === undefined ? {} : { projection })}
+                      />
+                    </MetricCard>
+                  );
+                })}
           </div>
         </section>
       )}

@@ -3,7 +3,7 @@ export { flowPathGuardMatches } from "./flow-path-guard";
 import { flowSegmentValues } from "./flow-segment-values";
 import type { FlowPlan, FlowServerSegment } from "../workflows/flow-plan";
 import type { parseFlowSegmentSeed } from "./flow-segment-seed";
-import { pageStepIntents } from "./flow-page-steps";
+import { pageStepIntents, pageValueAcceptsWrite, pageWritesIntent } from "./flow-page-steps";
 export { pageStepIntents } from "./flow-page-steps";
 import {
   at,
@@ -257,6 +257,8 @@ const scopeOf = (
         return activation.prefix === "" ? state.previousRecord?.[reference.field] : undefined;
       case "form":
         return resolveForm?.(reference) ?? state.forms?.[reference.form]?.[reference.field];
+      case "page":
+        return state.pageValues?.[reference.name];
       default:
         return undefined;
     }
@@ -720,6 +722,16 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
   }
 
   if (definition.effect === "interface") {
+    if (registered.type === "interface.set_value" && properties.value !== undefined) {
+      const name = properties.value.value;
+      const value = properties.to;
+      if (typeof name !== "string" || !pageValueAcceptsWrite(state.pageValues?.[name], value))
+        return failed("value_unresolved", "failed", taskId);
+      machine.state.pageValues = { ...state.pageValues, [name]: value };
+      machine.state.pageWrites = { ...state.pageWrites, [name]: value };
+      replaceTop(machine, next);
+      return { kind: "continue" };
+    }
     const kind = Object.hasOwn(pageStepIntents, registered.type)
       ? pageStepIntents[registered.type as PageIntentStepType]
       : undefined;
@@ -730,8 +742,7 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
       machine.state.pendingIntents = [...machine.state.pendingIntents, intent];
       return { kind: "continue" };
     }
-    const intents = [...machine.state.pendingIntents, intent];
-    machine.state.pendingIntents = [];
+    const intents = [...takeIntents(machine), intent];
     const inputs = kind === "show_form" ? registered.properties.inputs : undefined;
     const answerTypes =
       inputs?.kind === "map"
@@ -869,8 +880,7 @@ const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep =>
         result = { status: "failed", failure: { ...error.failure, code: "output_unresolved" } };
       }
       if (machine.state.activations.length === 1) {
-        const intents = machine.state.pendingIntents;
-        machine.state.pendingIntents = [];
+        const intents = takeIntents(machine);
         delete machine.state.awaiting;
         return { kind: "finished", state: snapshot(machine), intents, result };
       }
@@ -1013,9 +1023,18 @@ const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep =>
     }
   }
 };
-const failedStep = (machine: Machine, failure: FlowFailure): FlowRunStep => {
-  const intents = machine.state.pendingIntents;
+function takeIntents(machine: Machine): FlowInterfaceIntent[] {
+  const intents = [...machine.state.pendingIntents];
+  const writes = machine.state.pageWrites;
+  if (writes !== undefined && Object.keys(writes).length > 0)
+    intents.push(pageWritesIntent(writes));
   machine.state.pendingIntents = [];
+  delete machine.state.pageWrites;
+  return intents;
+}
+
+const failedStep = (machine: Machine, failure: FlowFailure): FlowRunStep => {
+  const intents = takeIntents(machine);
   delete machine.state.awaiting;
   return {
     kind: "finished",
@@ -1175,7 +1194,10 @@ export const startPageFlowSegment = (
   if (previous === undefined)
     return startFlowRun(start, library, resolveMember, undefined, resolveForm);
   const machine: Machine = {
-    state: clone(previous),
+    state: {
+      ...clone(previous),
+      ...(start.pageValues === undefined ? {} : { pageValues: start.pageValues }),
+    },
     library,
     resolveMember,
     ...(resolveForm === undefined ? {} : { resolveForm }),

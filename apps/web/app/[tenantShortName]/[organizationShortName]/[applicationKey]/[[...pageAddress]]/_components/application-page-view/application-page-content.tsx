@@ -14,21 +14,23 @@ import {
   type createPlatformComponentRegistryForReleases,
   PagePuckRenderer,
   type FlowIntentHost,
+  type ServerDrivenResult,
   type ControlSemanticEvent,
   type ChoiceInputPayload,
   type DisplaySemanticEvent,
-  type FormFlowFeedback,
   type RenderedPage,
   type PlatformThemeTokens,
   type ApplicationWebMcpRuntime,
   isClientPageChange,
   pageHoldFor,
   primaryStreamedPlacement,
+  createFlowRuntimeState,
 } from "@vortex/ui";
 import {
   describeFailure,
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
   type ProjectedApplicationFrame,
+  type PageDefinition,
   isRecord,
   walkPageComposition,
   readCompiledItemSettings,
@@ -37,12 +39,11 @@ import Link from "next/link";
 import { Button } from "@vortex/ui/components/button";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { FirstRecordTypeEmptyState } from "../../../../../../_components/first-record-type-empty-state";
-import { toast } from "@vortex/ui/components/sonner";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import type { PageWebMcpTool } from "../../../../../../_lib/application-page";
 import type {
   GuidedFormActions,
-  Notice,
+  PageMessageDraft,
   SubmittedForm,
   RefreshedPlacementData,
   PageSelection,
@@ -123,6 +124,19 @@ export function ApplicationPageViewContent({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const runtimeStateRef = useRef<{
+    identity: string;
+    state: ReturnType<typeof createFlowRuntimeState>;
+  } | null>(null);
+  const pageIdentity = `${model.pageId}:${model.invocation.releaseKey}`;
+  if (runtimeStateRef.current?.identity !== pageIdentity)
+    runtimeStateRef.current = {
+      identity: pageIdentity,
+      state: createFlowRuntimeState((model.page as PageDefinition).values, model.formTypes),
+    };
+  const runtimeState = runtimeStateRef.current.state;
+  runtimeState.setFormTypes(model.formTypes);
+  useEffect(() => () => runtimeState.messages.dispose(), [runtimeState]);
   // The page address owns every table's query state; the served address only starts it.
   const { address, currentSearch } = usePageAddress({ model, served: searchParams.toString() });
   const [selection, setSelection] = useState<PageSelection>({});
@@ -136,18 +150,15 @@ export function ApplicationPageViewContent({
   const [refreshedPlacementData, setRefreshedPlacementData] = useState<
     RefreshedPlacementData | undefined
   >(undefined);
-  const [notice, setNotice] = useState<Notice | undefined>(undefined);
-  // A confirmation is a transient toast; a problem stays on the page as an alert until dismissed
-  // by the next action, so it is never missed.
-  useEffect(() => {
-    if (notice?.tone !== "info") return;
-    const toastId = toast.success(notice.text);
-    // A previous gesture's confirmation must not outlive the notice it describes.
-    return () => {
-      toast.dismiss(toastId);
-    };
-  }, [notice]);
-  const [formFeedback, setFormFeedback] = useState<Readonly<Record<string, FormFlowFeedback>>>({});
+  const showPageMessage = useCallback<(message: PageMessageDraft | undefined) => void>(
+    (message) => {
+      runtimeState.messages.clear("banner");
+      runtimeState.messages.clear("toast");
+      if (message !== undefined)
+        runtimeState.messages.show({ ...message, id: crypto.randomUUID() });
+    },
+    [runtimeState],
+  );
   const [webMcpShellState, setWebMcpShellState] = useState<ApplicationWebMcpRuntime>();
   const reportWebMcpShellState = useCallback(
     (runtime: ApplicationWebMcpRuntime | undefined) => setWebMcpShellState(runtime),
@@ -224,6 +235,8 @@ export function ApplicationPageViewContent({
     currentSearch,
     application,
   });
+  // Running gestures and kept retry identities belong to the page address they started on.
+  useEffect(() => () => runtimeState.dispose(), [runtimeState, addressKey]);
   if (controlDraftsRef !== undefined && controlDraftsRef.current.scope !== addressKey)
     controlDraftsRef.current = {
       ...emptyControlDrafts(),
@@ -285,8 +298,8 @@ export function ApplicationPageViewContent({
 
   useEffect(() => {
     setGuidedBusy(false);
-    setNotice(undefined);
-    setFormFeedback({});
+    showPageMessage(undefined);
+    runtimeState.messages.clearAll();
   }, [navigationKey]);
 
   const { choicePayloadFor, choiceEvidenceFor, requestChoicePage } = useReferenceChoices({
@@ -300,18 +313,17 @@ export function ApplicationPageViewContent({
     currentData,
     application,
     router,
-    setNotice,
+    showPageMessage,
     requestChoicePageRef,
   });
 
-  const { formBlock, flowRuntime, webMcpRuntime, runtimeState, intentHostElement } = useFlowRuntime(
-    {
+  const applyMessageActionRef = useRef<
+    (dispatch: Promise<ServerDrivenResult>, bindingId: string) => void
+  >(() => undefined);
+  const { formBlock, flowRuntime, webMcpRuntime, intentHostElement, messageBanner } =
+    useFlowRuntime({
       application,
-      flowScopeKey: JSON.stringify([
-        addressKey,
-        application.installationRevision,
-        application.releaseKey,
-      ]),
+      runtimeState,
       subject,
       continuingFormsRef,
       formCancelledRef,
@@ -327,7 +339,7 @@ export function ApplicationPageViewContent({
       controlDraftsRef,
       choicePayloadFor,
       fieldInputControlReleases,
-      setNotice,
+      showPageMessage,
       choiceEvidenceFor,
       requestChoicePageRef,
       currentData,
@@ -352,8 +364,8 @@ export function ApplicationPageViewContent({
         return prepareFlowRefresh(targets);
       },
       setPanelRef,
-    },
-  );
+      applyMessageActionRef,
+    });
 
   /** A page-level address change (a guided form step) renders the page again on the server. */
   const setQuery = useCallback(
@@ -369,8 +381,8 @@ export function ApplicationPageViewContent({
   const { applyDispatch } = useApplyDispatch({
     placementRequestsRef,
     navigationKey,
-    setNotice,
-    setFormFeedback,
+    showPageMessage,
+    runtimeState,
     router,
     model,
     platformComponentRegistry,
@@ -378,12 +390,15 @@ export function ApplicationPageViewContent({
     refreshPlacements,
     refreshTargetsForBinding,
   });
+  applyMessageActionRef.current = (dispatch, bindingId) => {
+    void applyDispatch(dispatch, undefined, undefined, bindingId);
+  };
 
   const invokeWebMcpTool = useCallback(
     async (tool: PageWebMcpTool, input: unknown, signal?: AbortSignal): Promise<unknown> => {
       if (signal?.aborted) return { outcome: "cancelled" };
       if (!isRecord(input)) return { outcome: "refused" };
-      setNotice(undefined);
+      showPageMessage(undefined);
       try {
         const result = await webMcpRuntime.dispatchReference(
           tool.binding,
@@ -433,7 +448,7 @@ export function ApplicationPageViewContent({
     busy: guidedBusy,
     guidedFormCompleted,
     setBusy: setGuidedBusy,
-    setNotice,
+    showPageMessage,
     guidedFormActions,
     searchParams,
     router,
@@ -539,11 +554,16 @@ export function ApplicationPageViewContent({
       controlDraftsRef?.current.restoreBaselines?.(unsavedWorkRegistry);
   }, [navigationKey, model, controlDraftsRef, unsavedWorkRegistry]);
 
-  const fieldFlowEvents = useFieldFlowEvents(navigationKey, runtimeState, runBinding, setNotice);
+  const fieldFlowEvents = useFieldFlowEvents(
+    navigationKey,
+    runtimeState,
+    runBinding,
+    showPageMessage,
+  );
   const { runtimeInputs } = useRuntimeInputs({
     currentData: tableData,
     model,
-    formFeedback,
+    runtimeState,
     guidedActiveFormIds,
     guidedActivePlacementIds,
     guidedFormCompleted,
@@ -570,11 +590,10 @@ export function ApplicationPageViewContent({
     subject,
     requestedStepId,
     guidedSummaryStepId,
-    setNotice,
+    showPageMessage,
     prepareGuidedSummary,
     advanceGuidedStep,
     currentEditFormBaselines,
-    setFormFeedback,
     choiceEvidenceFor,
     submittedFormsRef,
     formCancelledRef,
@@ -678,50 +697,24 @@ export function ApplicationPageViewContent({
           readSettings={readCompiledItemSettings}
           contentRegion
           feedback={
-            pageFeedback === undefined &&
-            (notice === undefined || notice.tone === "info") &&
-            model.bodyContentAvailable !== false ? undefined : (
-              <>
-                {pageFeedback}
-                {model.bodyContentAvailable !== false ? null : model.firstRecordTypeHref !==
-                  undefined ? (
-                  <FirstRecordTypeEmptyState
-                    action={
-                      <Button
-                        nativeButton={false}
-                        render={<Link href={model.firstRecordTypeHref} />}
-                      >
-                        Open the Data tab in Studio
-                      </Button>
-                    }
-                  />
-                ) : (
-                  <Alert role="status" aria-live="polite">
-                    <AlertDescription>No page content is available.</AlertDescription>
-                  </Alert>
-                )}
-                {notice === undefined || notice.tone === "info" ? null : (
-                  <Alert
-                    variant={notice.tone === "problem" ? "destructive" : "default"}
-                    role={notice.tone === "problem" ? "alert" : "status"}
-                    aria-live="polite"
-                    data-vortex-notice={notice.tone}
-                  >
-                    <AlertDescription>
-                      {notice.text}
-                      {notice.link === undefined ? null : (
-                        <>
-                          {" "}
-                          <a className="underline" href={notice.link.href}>
-                            {notice.link.label}
-                          </a>
-                        </>
-                      )}
-                    </AlertDescription>
-                  </Alert>
-                )}
-              </>
-            )
+            <>
+              {messageBanner}
+              {pageFeedback}
+              {model.bodyContentAvailable !== false ? null : model.firstRecordTypeHref !==
+                undefined ? (
+                <FirstRecordTypeEmptyState
+                  action={
+                    <Button nativeButton={false} render={<Link href={model.firstRecordTypeHref} />}>
+                      Open the Data tab in Studio
+                    </Button>
+                  }
+                />
+              ) : (
+                <Alert role="status" aria-live="polite">
+                  <AlertDescription>No page content is available.</AlertDescription>
+                </Alert>
+              )}
+            </>
           }
           composition={currentContent as unknown as RenderedPage}
           registry={platformComponentRegistry}

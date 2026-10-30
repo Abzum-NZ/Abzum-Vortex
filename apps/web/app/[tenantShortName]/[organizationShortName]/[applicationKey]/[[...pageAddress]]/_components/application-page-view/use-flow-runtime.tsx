@@ -1,18 +1,9 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  type Dispatch,
-  type SetStateAction,
-  type RefObject,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, type RefObject } from "react";
 import type { useRouter } from "next/navigation";
 import type { useUnsavedWorkGuard, useUnsavedWorkRegistry } from "@vortex/ui";
 import {
   createFlowInvokeClient,
   createFlowRuntime,
-  createFlowRuntimeState,
   createFormBlockRuntime,
   getAccessibleName,
   type FieldInputControlReleaseMap,
@@ -25,7 +16,10 @@ import {
   type FlowFormAnswer,
   type FlowFormIntent,
   type FlowIntentHost,
+  type FlowMessageIntent,
+  type FlowRuntimeState,
   type FlowInvokeClient,
+  type ServerDrivenResult,
   type LinkNavigationEnvironment,
   type PlatformThemeTokens,
 } from "@vortex/ui";
@@ -41,14 +35,14 @@ import { Button } from "@vortex/ui/components/button";
 import { DialogFooter } from "@vortex/ui/components/dialog";
 import { useApplicationFrame } from "../../../_components/application-frame-state";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
-import type { SubmittedForm, Notice } from "./types";
+import type { SubmittedForm, PageMessageDraft } from "./types";
 import type { ControlDrafts } from "../../../_components/application-frame-state";
 import { formSurfaceComposition, runtimeInputWithFormDefault } from "./form-surface";
 import { unavailableNotice } from "./notices";
 
 export function useFlowRuntime({
   application,
-  flowScopeKey,
+  runtimeState,
   subject,
   continuingFormsRef,
   formCancelledRef,
@@ -64,7 +58,7 @@ export function useFlowRuntime({
   controlDraftsRef,
   choicePayloadFor,
   fieldInputControlReleases,
-  setNotice,
+  showPageMessage,
   choiceEvidenceFor,
   requestChoicePageRef,
   currentData,
@@ -72,9 +66,10 @@ export function useFlowRuntime({
   platformThemeTokens,
   prepareRefresh,
   setPanelRef,
+  applyMessageActionRef,
 }: Readonly<{
   application: ApplicationPageModel["invocation"];
-  flowScopeKey: string;
+  runtimeState: FlowRuntimeState;
   subject: ApplicationPageModel["subject"];
   continuingFormsRef: RefObject<Map<string, SubmittedForm>>;
   formCancelledRef: RefObject<boolean>;
@@ -90,7 +85,7 @@ export function useFlowRuntime({
   controlDraftsRef: RefObject<ControlDrafts> | undefined;
   choicePayloadFor: (placementId: string, formId?: string) => ChoiceInputPayload | undefined;
   fieldInputControlReleases: FieldInputControlReleaseMap;
-  setNotice: Dispatch<SetStateAction<Notice | undefined>>;
+  showPageMessage: (message: PageMessageDraft | undefined) => void;
   choiceEvidenceFor: (
     formId: string,
     values: Readonly<Record<string, unknown>>,
@@ -111,6 +106,9 @@ export function useFlowRuntime({
   ) => Readonly<{ request: unknown; apply: (result: unknown) => void }> | undefined;
   /** Filled by the page's panel host once it has rendered. */
   setPanelRef: RefObject<FlowIntentHost["setPanel"]>;
+  applyMessageActionRef: RefObject<
+    (dispatch: Promise<ServerDrivenResult>, bindingId: string) => void
+  >;
 }>) {
   /**
    * The one browser flow client and host: a form submit starts the bound flow on the server
@@ -211,7 +209,7 @@ export function useFlowRuntime({
           return true;
         // The projected page list is a rendering hint; the destination still authorises its read.
         // A page it does not offer must not resolve to the application's home address.
-        setNotice(unavailableNotice);
+        showPageMessage(unavailableNotice);
         return false;
       },
       navigateInternal: (target) => {
@@ -229,7 +227,7 @@ export function useFlowRuntime({
       resolveInternalAddress: (target) =>
         target.kind === "page" ? resolvePageHref(target.pageId) : basePath,
     }),
-    [basePath, model.pages, resolvePageHref, router, setNotice, startPageChange, unsavedWork],
+    [basePath, model.pages, resolvePageHref, router, showPageMessage, startPageChange, unsavedWork],
   );
   const renderForm = useCallback(
     (
@@ -318,7 +316,7 @@ export function useFlowRuntime({
               values,
             });
             if (!answer.success || answer.data.kind !== "submit") {
-              setNotice(unavailableNotice);
+              showPageMessage(unavailableNotice);
               return;
             }
             controls.submit(answer.data.values, choiceEvidenceFor(form.formId, values, "dialog"));
@@ -378,13 +376,18 @@ export function useFlowRuntime({
     },
     [choiceEvidenceFor, choicePayloadFor, currentData, model, navigation, resolvePageHref, router],
   );
-  const { host, element: intentHostElement } = useFlowIntentHost({
+  const messageActionRef = useRef<(message: FlowMessageIntent) => void>(() => undefined);
+  const {
+    host,
+    element: intentHostElement,
+    banner: messageBanner,
+  } = useFlowIntentHost({
     renderForm,
     navigation: navigationEnvironment,
+    state: runtimeState,
+    onMessageAction: (message) => messageActionRef.current(message),
     setPanel: (panel, state) => setPanelRef.current?.(panel, state),
   });
-  const runtimeState = useMemo(() => createFlowRuntimeState(), [flowScopeKey]);
-  useEffect(() => () => runtimeState.dispose(), [runtimeState]);
   const bindingSettings = useMemo(() => {
     const bindings = new Map<
       string,
@@ -463,6 +466,35 @@ export function useFlowRuntime({
       subject,
     ],
   );
+  messageActionRef.current = (message) => {
+    const all = Object.values(model.bindings).flat();
+    const source = all.find((binding) => binding.bindingId === message.originBindingId);
+    const authoredId = source?.messageAction?.authoredBindingId ?? source?.bindingId;
+    const action = all.find(
+      (binding) =>
+        authoredId !== undefined &&
+        binding.messageAction !== undefined &&
+        binding.messageAction.authoredBindingId === authoredId &&
+        binding.messageAction.sourceFlowId === message.sourceFlowId &&
+        binding.messageAction.taskId === message.taskId &&
+        binding.flowId === message.actionFlow,
+    );
+    if (action === undefined) {
+      console.error("[flow] message action binding unavailable");
+      showPageMessage(unavailableNotice);
+      return;
+    }
+    applyMessageActionRef.current(
+      flowRuntime.dispatch(
+        action,
+        message.actionInputs,
+        crypto.randomUUID(),
+        message.subject,
+        message.sourceTablePlacementId,
+      ),
+      action.bindingId,
+    );
+  };
   const webMcpRuntime = useMemo(
     () =>
       createFlowRuntime({
@@ -496,5 +528,5 @@ export function useFlowRuntime({
   }, [currentData, flowRuntime, model.bindings]);
   const formBlock = useMemo(() => createFormBlockRuntime(flowRuntime), [flowRuntime]);
 
-  return { formBlock, flowRuntime, webMcpRuntime, runtimeState, intentHostElement };
+  return { formBlock, flowRuntime, webMcpRuntime, intentHostElement, messageBanner };
 }

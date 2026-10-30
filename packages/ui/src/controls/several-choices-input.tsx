@@ -4,6 +4,7 @@ import { useRef, type ReactElement } from "react";
 import { Checkbox } from "../components/checkbox";
 import { Field, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "../components/field";
 import { DefinitionRenderError } from "../definition-error";
+import { flowSetFieldChange } from "../flow-runtime/flow-cycle";
 import type { SeveralChoicesInputPayload } from "./projected-data";
 import {
   readControlSettings,
@@ -20,7 +21,12 @@ import {
   useSeededState,
   fieldFocusLost,
 } from "./field-parts";
-import { equalFormValue, useFormField, useFormFieldError } from "./form-context";
+import {
+  equalFormValue,
+  useFormField,
+  useFormFieldError,
+  useFormFieldPublisher,
+} from "./form-context";
 
 type SeveralChoicesInputProps = ControlRenderProps<SeveralChoicesInputPayload>;
 
@@ -33,8 +39,9 @@ export function SeveralChoicesInput(props: SeveralChoicesInputProps): ReactEleme
     "field_focus_lost",
   ]);
   const settings = readControlSettings(props, context.location);
-  const ids = useFieldIds();
+  const ids = useFieldIds(props.placementId);
   const fieldKey = settings.fieldKey();
+  const publish = useFormFieldPublisher(fieldKey);
   const label = context.accessibleName ?? props.metadata.name;
   const help = settings.text("help_text");
   const required = settings.boolean("required");
@@ -70,6 +77,23 @@ export function SeveralChoicesInput(props: SeveralChoicesInputProps): ReactEleme
     props.placementId,
     allowedSelected,
     required && allowedSelected.length === 0 ? () => `${label} is required.` : undefined,
+    (value, cycle) => {
+      if (disabled || draftFeedback?.hidden === true || !Array.isArray(value)) return undefined;
+      if (
+        value.some(
+          (item) => typeof item !== "string" || !options.some((option) => option.key === item),
+        ) ||
+        new Set(value).size !== value.length ||
+        (maximumSelections !== undefined && value.length > maximumSelections)
+      )
+        return undefined;
+      const selected = value as string[];
+      return {
+        value: selected,
+        apply: () => setSelected(selected),
+        emit: () => context.events?.field_changed?.(flowSetFieldChange(cycle, fieldKey, selected)),
+      };
+    },
   );
   const validationError = useFormFieldError(fieldKey);
   const fieldError = error ?? validationError;
@@ -82,6 +106,7 @@ export function SeveralChoicesInput(props: SeveralChoicesInputProps): ReactEleme
     else if (!checked) nextSet.delete(key);
     const value = [...nextSet];
     setSelected(value);
+    publish(value);
     context.events?.field_changed?.({
       event: "field_changed",
       origin: "user",

@@ -12,6 +12,7 @@ import { Field, FieldLabel } from "../components/field";
 import { Input } from "../components/input";
 import { NativeSelect, NativeSelectOption } from "../components/native-select";
 import { DefinitionRenderError } from "../definition-error";
+import { flowSetFieldChange } from "../flow-runtime/flow-cycle";
 import { Icon } from "../icons/icon";
 import {
   readControlSettings,
@@ -28,7 +29,7 @@ import {
   useSeededState,
   fieldFocusLost,
 } from "./field-parts";
-import { useFormField, useFormFieldError } from "./form-context";
+import { useFormField, useFormFieldError, useFormFieldPublisher } from "./form-context";
 import type { TableInputPayload, TypedTableValue } from "./projected-data";
 
 const EMPTY_ROWS: TypedTableValue = [];
@@ -101,8 +102,9 @@ export function TableInput(props: ControlRenderProps<TableInputPayload>): ReactE
     new Set(columns.map((column) => column.key)).size !== columns.length
   )
     fail("A table input requires columns and row limits");
-  const ids = useFieldIds();
+  const ids = useFieldIds(props.placementId);
   const fieldKey = settings.fieldKey();
+  const publish = useFormFieldPublisher(fieldKey);
   const label = context.accessibleName ?? props.metadata.name;
   const required = settings.boolean("required");
   const readOnly = settings.boolean("read_only");
@@ -114,43 +116,47 @@ export function TableInput(props: ControlRenderProps<TableInputPayload>): ReactE
   // A stable serialized seed prevents a rebuilt equal row array from discarding local edits.
   const [raw, setRaw] = useSeededState(JSON.stringify(context.values?.value ?? EMPTY_ROWS));
   const rows = JSON.parse(raw) as TypedTableValue;
-  let invalid: string | undefined;
-  const typed: TypedTableValue = rows.map((row, index) => {
-    const result: Row = {};
-    for (const column of columns) {
-      const value = row[column.key];
-      const missing = value === undefined || value === "";
-      if (missing) {
-        if (column.required)
-          invalid ??= `Row ${index + 1}: ${tableColumnLabel(column.key)} is required.`;
-        continue;
+  const inspect = (entries: TypedTableValue) => {
+    let invalid: string | undefined;
+    const typed: TypedTableValue = entries.map((row, index) => {
+      const result: Row = {};
+      for (const column of columns) {
+        const value = row[column.key];
+        const missing = value === undefined || value === "";
+        if (missing) {
+          if (column.required)
+            invalid ??= `Row ${index + 1}: ${tableColumnLabel(column.key)} is required.`;
+          continue;
+        }
+        let candidate: unknown = value;
+        if (column.type === "whole_number")
+          candidate =
+            typeof value === "number"
+              ? value
+              : /^-?\d+$/.test(String(value))
+                ? Number(value)
+                : undefined;
+        if (column.type === "decimal_number") candidate = normalizeExactDecimal(String(value));
+        if (column.type === "money" && typeof value === "object" && value !== null)
+          candidate = {
+            amount: normalizeExactDecimal(value.amount),
+            currency: column.currency ?? value.currency,
+          };
+        const parsed = sourceModuleFieldValueSchemas[column.type].safeParse(candidate);
+        if (
+          !parsed.success ||
+          (column.type === "choice" && !column.options.some((option) => option.key === candidate))
+        ) {
+          invalid ??= `Row ${index + 1}: enter a valid ${tableColumnLabel(column.key)}.`;
+          continue;
+        }
+        result[column.key] = parsed.data;
       }
-      let candidate: unknown = value;
-      if (column.type === "whole_number")
-        candidate =
-          typeof value === "number"
-            ? value
-            : /^-?\d+$/.test(String(value))
-              ? Number(value)
-              : undefined;
-      if (column.type === "decimal_number") candidate = normalizeExactDecimal(String(value));
-      if (column.type === "money" && typeof value === "object" && value !== null)
-        candidate = {
-          amount: normalizeExactDecimal(value.amount),
-          currency: column.currency ?? value.currency,
-        };
-      const parsed = sourceModuleFieldValueSchemas[column.type].safeParse(candidate);
-      if (
-        !parsed.success ||
-        (column.type === "choice" && !column.options.some((option) => option.key === candidate))
-      ) {
-        invalid ??= `Row ${index + 1}: enter a valid ${tableColumnLabel(column.key)}.`;
-        continue;
-      }
-      result[column.key] = parsed.data;
-    }
-    return result;
-  });
+      return result;
+    });
+    return { typed, invalid };
+  };
+  const { typed, invalid } = inspect(rows);
   const minimumRows = Math.max(minimum!, required ? 1 : 0);
   const localError =
     (required || rows.length > 0) && rows.length < minimumRows
@@ -163,6 +169,24 @@ export function TableInput(props: ControlRenderProps<TableInputPayload>): ReactE
     props.placementId,
     !required && typed.length === 0 ? null : typed,
     locked || localError === undefined ? undefined : () => localError,
+    (value, cycle) => {
+      if (locked || draftFeedback?.hidden === true) return undefined;
+      const parsed = sourceModuleFieldValueSchemas.table.safeParse(value === null ? [] : value);
+      if (!parsed.success) return undefined;
+      const inspected = inspect(parsed.data);
+      if (
+        inspected.invalid !== undefined ||
+        parsed.data.length > maximum! ||
+        ((required || parsed.data.length > 0) && parsed.data.length < minimumRows)
+      )
+        return undefined;
+      const next = !required && inspected.typed.length === 0 ? null : inspected.typed;
+      return {
+        value: next,
+        apply: () => setRaw(JSON.stringify(parsed.data)),
+        emit: () => context.events?.field_changed?.(flowSetFieldChange(cycle, fieldKey, next)),
+      };
+    },
   );
   const validationError = useFormFieldError(fieldKey);
   const error = context.values?.error ?? validationError;
@@ -171,15 +195,18 @@ export function TableInput(props: ControlRenderProps<TableInputPayload>): ReactE
     if (locked) return;
     setRaw(JSON.stringify(next));
     // Incomplete rows remain in local state. The form refuses them on submit.
-    if (sourceModuleFieldValueSchemas.table.safeParse(next).success)
+    if (sourceModuleFieldValueSchemas.table.safeParse(next).success) {
+      const value = !required && next.length === 0 ? null : next;
+      publish(value);
       context.events?.field_changed?.({
         event: "field_changed",
         origin: "user",
         depth: 0,
         immediate: false,
         fieldKey,
-        value: !required && next.length === 0 ? null : next,
+        value,
       });
+    }
   };
   const cell = (index: number, column: Column, value: Row[string] | undefined): void => {
     change(

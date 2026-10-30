@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   continueFlowEventCycle,
   type ControlSemanticEvent,
@@ -7,7 +7,7 @@ import {
 import type { PlacementFlowBinding } from "../../../../../../_lib/application-page";
 import { bindingOfEvent } from "./event-values";
 import type { usePlacementActions } from "./use-placement-actions";
-import type { Notice } from "./types";
+import type { PageMessageDraft } from "./types";
 
 type RunBinding = ReturnType<typeof usePlacementActions>["runBinding"];
 /** Settles field changes independently and flushes the latest value when focus leaves. */
@@ -15,7 +15,7 @@ export function useFieldFlowEvents(
   navigationKey: string,
   state: FlowRuntimeState,
   runBinding: RunBinding,
-  setNotice: Dispatch<SetStateAction<Notice | undefined>>,
+  showPageMessage: (message: PageMessageDraft | undefined) => void,
 ) {
   const latest = useRef(
     new Map<string, Extract<ControlSemanticEvent, { event: "field_changed" }>>(),
@@ -47,8 +47,9 @@ export function useFieldFlowEvents(
               ? continueFlowEventCycle(event.cycle, changed.flowId, changed.controlId)
               : undefined;
           if (event.origin === "flow" && (nextCycle === undefined || "reason" in nextCycle)) {
-            setNotice({
-              tone: "problem",
+            showPageMessage({
+              target: "banner",
+              severity: "error",
               text:
                 nextCycle === undefined
                   ? "The field action stopped because its flow cycle was missing."
@@ -90,6 +91,6 @@ export function useFieldFlowEvents(
         },
       };
     },
-    [runBinding, setNotice, state],
+    [runBinding, showPageMessage, state],
   );
 }

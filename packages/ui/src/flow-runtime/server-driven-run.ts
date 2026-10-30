@@ -28,12 +28,13 @@ export type ServerDrivenResult =
   /** Unknown, expired, foreign, tampered or not permitted: the one neutral refusal. */
   | Readonly<{ kind: "refused"; reason?: string }>
   | Readonly<{ kind: "unavailable" }>
+  | Readonly<{ kind: "unknown"; controlId?: string; retry?: () => Promise<ServerDrivenResult> }>
   /**
    * The intent surface or caller went away before the run finished. `unanswered` is true when it
    * went away at a pause before any answer was sent, so this interaction sent nothing after the start;
    * otherwise an answer was sent or a result arrived and what the run committed is not known here.
    */
-  | Readonly<{ kind: "abandoned"; unanswered: boolean; timedOut?: boolean }>;
+  | Readonly<{ kind: "abandoned"; unanswered: boolean }>;
 
 const minimumContinuationLength = 16;
 const maximumContinuationLength = 128;
@@ -78,6 +79,7 @@ export async function driveServerFlow(
         case "reload":
         case "refused":
         case "unavailable":
+        case "unknown":
           return response;
         case "result": {
           if (
@@ -90,6 +92,7 @@ export async function driveServerFlow(
             await host.showMessage(
               {
                 title: "Saved, with a warning",
+                target: "dialog",
                 text: response.warnings.map((warning) => warning.message).join(" "),
                 severity: "warning",
               },
@@ -148,6 +151,29 @@ export async function driveServerFlow(
             return refuseInvalidServerFlowState(`${response.awaiting}_intent`);
           if (signal?.aborted) return abandoned();
           answerSent = true;
+          const carriedValues = response.carriedValues;
+          const retryResume = async (): Promise<ServerDrivenResult> => {
+            const retried = await client.resume(
+              flowId,
+              continuation,
+              answer,
+              evidence,
+              undefined,
+              sourceTablePlacementId,
+              carriedValues,
+              bindingId,
+            );
+            if (retried.kind === "unknown") return { kind: "unknown", retry: retryResume };
+            return driveServerFlow(
+              client,
+              flowId,
+              retried,
+              host,
+              undefined,
+              sourceTablePlacementId,
+              bindingId,
+            );
+          };
           response = await client.resume(
             flowId,
             continuation,
@@ -155,9 +181,10 @@ export async function driveServerFlow(
             evidence,
             signal,
             sourceTablePlacementId,
-            response.carriedValues,
+            carriedValues,
             bindingId,
           );
+          if (response.kind === "unknown") return { kind: "unknown", retry: retryResume };
           break;
         }
       }

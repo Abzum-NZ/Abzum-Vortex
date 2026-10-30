@@ -61,7 +61,8 @@ export type ServerFlowResponse =
       receipt?: FormContinuationReceipt;
     }>
   | Readonly<{ kind: "refused"; reason?: "this step was already answered" }>
-  | Readonly<{ kind: "unavailable" }>;
+  | Readonly<{ kind: "unavailable" }>
+  | Readonly<{ kind: "unknown" }>;
 
 export type FlowInvokeClient = Readonly<{
   openRun: (
@@ -124,10 +125,11 @@ export type FlowInvokeClientOptions = Readonly<{
 }>;
 
 const unavailable: ServerFlowResponse = Object.freeze({ kind: "unavailable" });
+const unknown: ServerFlowResponse = Object.freeze({ kind: "unknown" });
 const refused: ServerFlowResponse = Object.freeze({ kind: "refused" });
 const invalidServerResponse = (cause: unknown = new TypeError("FLOW_SERVER_RESPONSE_INVALID")) => {
   console.error(`[flow] server response invalid: ${describeFailure(cause)}`);
-  return unavailable;
+  return unknown;
 };
 
 const parseIntents = (candidate: unknown): readonly FlowIntent[] | undefined =>
@@ -151,7 +153,7 @@ const isCarriedValues = (candidate: unknown): candidate is string | undefined =>
   candidate === undefined ||
   (typeof candidate === "string" && candidate.length > 0 && candidate.length <= 65_536);
 
-/** Fails closed: anything that is not exactly one of the endpoint's answers is `unavailable`. */
+/** Fails closed: anything that is not exactly one of the endpoint's answers has an unknown outcome. */
 export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse => {
   if (!isRecord(candidate)) return invalidServerResponse();
   switch (candidate.kind) {
@@ -320,7 +322,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
     } catch (error) {
       if (signal?.aborted) return unavailable;
       console.error(`[flow] invoke request failed: ${describeFailure(error)}`);
-      return unavailable;
+      return unknown;
     }
   };
   return Object.freeze({

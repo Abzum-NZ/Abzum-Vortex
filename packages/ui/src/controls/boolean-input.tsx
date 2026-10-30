@@ -4,6 +4,7 @@ import type { ReactElement } from "react";
 import { Checkbox } from "../components/checkbox";
 import { Field, FieldLabel } from "../components/field";
 import { Switch } from "../components/switch";
+import { flowSetFieldChange } from "../flow-runtime/flow-cycle";
 import type { BooleanInputPayload } from "./projected-data";
 import {
   readControlSettings,
@@ -20,7 +21,7 @@ import {
   useSeededState,
   fieldFocusLost,
 } from "./field-parts";
-import { useFormField } from "./form-context";
+import { useFormField, useFormFieldPublisher } from "./form-context";
 
 export type BooleanInputProps = ControlRenderProps<BooleanInputPayload>;
 
@@ -34,8 +35,9 @@ export function BooleanInput(props: BooleanInputProps): ReactElement {
     "field_focus_lost",
   ]);
   const settings = readControlSettings(props, context.location);
-  const ids = useFieldIds();
+  const ids = useFieldIds(props.placementId);
   const fieldKey = settings.fieldKey();
+  const publish = useFormFieldPublisher(fieldKey);
   const label = context.accessibleName ?? props.metadata.name;
   const help = settings.text("help_text");
   const required = settings.boolean("required");
@@ -47,11 +49,19 @@ export function BooleanInput(props: BooleanInputProps): ReactElement {
   const note = inactiveNote(context);
 
   const [checked, setChecked] = useSeededState(context.values?.value ?? false);
-  useFormField(fieldKey, props.placementId, checked);
+  useFormField(fieldKey, props.placementId, checked, undefined, (value, cycle) => {
+    if (disabled || draftFeedback?.hidden === true || typeof value !== "boolean") return undefined;
+    return {
+      value,
+      apply: () => setChecked(value),
+      emit: () => context.events?.field_changed?.(flowSetFieldChange(cycle, fieldKey, value)),
+    };
+  });
 
   const change = (next: boolean): void => {
     if (disabled) return;
     setChecked(next);
+    publish(next);
     context.events?.field_changed?.({
       event: "field_changed",
       origin: "user",
