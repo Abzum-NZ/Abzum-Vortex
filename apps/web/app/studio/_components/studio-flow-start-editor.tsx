@@ -106,6 +106,7 @@ function TriggerEditor({
   trigger,
   recordTypes,
   events,
+  subscribers,
   disabled,
   onChange,
 }: Readonly<{
@@ -113,6 +114,7 @@ function TriggerEditor({
   trigger: StudioFlowTriggerDraft;
   recordTypes: readonly Readonly<{ key: string; label: string }>[];
   events: readonly Readonly<{ key: string; label: string; recordType: string }>[];
+  subscribers: readonly Readonly<{ key: string; label: string }>[];
   disabled: boolean;
   onChange: (trigger: StudioFlowTriggerDraft, setting?: string) => true | string;
 }>) {
@@ -139,6 +141,31 @@ function TriggerEditor({
       />
     </div>
   );
+  const runAfter =
+    trigger.kind === "before_save" || subscribers.length === 0 ? null : (
+      <div className="space-y-1.5">
+        <Label>Run after</Label>
+        {subscribers.map((subscriber) => (
+          <div key={subscriber.key} className="flex items-center gap-2">
+            <Checkbox
+              id={`${id}-after-${subscriber.key}`}
+              disabled={disabled}
+              checked={trigger.runAfter.includes(subscriber.key)}
+              onCheckedChange={(checked) =>
+                onChange({
+                  ...trigger,
+                  runAfter:
+                    checked === true
+                      ? [...trigger.runAfter, subscriber.key]
+                      : trigger.runAfter.filter((key) => key !== subscriber.key),
+                })
+              }
+            />
+            <Label htmlFor={`${id}-after-${subscriber.key}`}>{subscriber.label}</Label>
+          </div>
+        ))}
+      </div>
+    );
   if (trigger.kind === "declared_event")
     return (
       <div className="space-y-3">
@@ -153,6 +180,7 @@ function TriggerEditor({
             .map((event) => ({ value: event.key, label: event.label }))}
           onChange={(eventKey) => onChange({ ...trigger, eventKey })}
         />
+        {runAfter}
       </div>
     );
   if (trigger.kind === "event")
@@ -172,6 +200,7 @@ function TriggerEditor({
             onChange={(eventKind) => onChange({ ...trigger, eventKind })}
           />
         </div>
+        {runAfter}
       </div>
     );
   // Rules on delete and restore run once the record writer applies them, so Studio offers only
@@ -383,6 +412,7 @@ export function StudioFlowStartEditor({
               trigger={trigger}
               recordTypes={recordTypes}
               events={projection.events}
+              subscribers={projection.subscribers}
               disabled={disabled}
               onChange={(next, setting) =>
                 change(

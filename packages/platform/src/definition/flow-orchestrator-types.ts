@@ -417,7 +417,7 @@ export type FlowOrchestratorResponse = (
  * the account's current memberships and permissions decide and no step needing recent sign-in or
  * two-step verification can pass.
  */
-export type RunAuthority =
+type RunAuthority =
   | Readonly<{
       kind: "person";
       session: IdentitySession;
