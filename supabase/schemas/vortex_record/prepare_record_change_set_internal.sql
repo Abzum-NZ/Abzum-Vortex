@@ -30,17 +30,11 @@ declare
   update_targets jsonb := '[]'::jsonb;
   update_ordinals integer[] := array[]::integer[];
   update_loaded jsonb[] := array[]::jsonb[];
-  update_memo jsonb[] := array[]::jsonb[];
+  update_memo jsonb := '{}'::jsonb;
   loaded_set jsonb;
-  decision_inputs jsonb[] := array[]::jsonb[];
-  decision_owners integer[] := array[]::integer[];
-  decisions jsonb;
+  decision_entries jsonb;
   target_position integer;
-  decision_position integer;
   update_meta jsonb;
-  decision_pass integer;
-  decision_batch jsonb[];
-  batch_position integer;
 begin
   if p_command_id is null or p_command_id = '00000000-0000-0000-0000-000000000000'::uuid
     or not vortex_record.record_change_set_is_valid_internal(p_subjects) then
@@ -87,45 +81,67 @@ begin
       loaded_set := vortex_record.load_record_access_facts_internal('update', update_targets);
       for target_position in 1 .. pg_catalog.cardinality(update_ordinals) loop
         update_loaded[update_ordinals[target_position] + 1] := loaded_set -> (target_position - 1);
-        if loaded_set -> (target_position - 1) ->> 'outcome' = 'loaded'
-          and pg_catalog.jsonb_typeof(loaded_set -> (target_position - 1) -> 'declaration') = 'object' then
-          update_meta := meta_cache -> ((update_targets -> (target_position - 1) ->> 'recordTypeId') || ':update');
-          decision_inputs := pg_catalog.array_append(decision_inputs, pg_catalog.jsonb_build_object(
-            'declaration', update_meta -> 'declaration',
-            'recordId', (update_targets -> (target_position - 1) ->> 'recordId')::uuid,
-            'facts', (loaded_set -> (target_position - 1) -> 'facts')
-              || pg_catalog.jsonb_build_object( 'binding', update_meta -> 'declaration' -> 'recordBinding' )));
-          decision_owners := pg_catalog.array_append(decision_owners, update_ordinals[target_position]);
-          decision_inputs := pg_catalog.array_append(decision_inputs, pg_catalog.jsonb_build_object(
-            'declaration', loaded_set -> (target_position - 1) -> 'declaration',
-            'recordId', (update_targets -> (target_position - 1) ->> 'recordId')::uuid,
-            'facts', loaded_set -> (target_position - 1) -> 'facts'));
-          decision_owners := pg_catalog.array_append(decision_owners, update_ordinals[target_position]);
-        end if;
       end loop;
-      -- Each decision call takes at most 200 inputs: the two decisions a record needs are two
-      -- calls of one input per record.
-      for decision_pass in 1 .. 2 loop
-        decision_batch := array[]::jsonb[];
-        for decision_position in 1 .. pg_catalog.cardinality(decision_inputs) loop
-          if decision_position % 2 = decision_pass % 2 then
-            decision_batch := pg_catalog.array_append(decision_batch, decision_inputs[decision_position]);
-          end if;
-        end loop;
-        if pg_catalog.cardinality(decision_batch) = 0 then continue; end if;
-        decisions := vortex_access.evaluate_organization_record_access_internal(
-          (select pg_catalog.jsonb_agg(item.value order by item.ordinality)
-           from pg_catalog.unnest(decision_batch) with ordinality as item(value, ordinality)));
-        batch_position := 0;
-        for decision_position in 1 .. pg_catalog.cardinality(decision_inputs) loop
-          if decision_position % 2 = decision_pass % 2 then
-            update_memo[decision_owners[decision_position] + 1] := coalesce(update_memo[decision_owners[decision_position] + 1], '[]'::jsonb)
-              || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-                'input', decision_inputs[decision_position], 'decision', decisions -> batch_position));
-            batch_position := batch_position + 1;
-          end if;
-        end loop;
-      end loop;
+      -- Every update's decisions are made together, never one call per record: its current
+      -- authority twice (as the action declares it and as the record's own declaration says), and
+      -- for an update that changes no link its two proposed-state authorities too, which need only
+      -- the loaded facts and the final values. An update that changes a link builds its proposed
+      -- facts after its link targets are loaded, and is decided there.
+      select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object('owner', entry.owner, 'input', entry.input)
+        order by entry.owner, entry.kind)
+      into decision_entries
+      from (
+        with loaded as (
+          select owner.ordinal, item.value as loaded, p_subjects -> owner.ordinal as subject,
+            meta_cache -> ((p_subjects -> owner.ordinal ->> 'recordTypeId') || ':update') as meta
+          from pg_catalog.unnest(update_ordinals) with ordinality as owner(ordinal, position)
+          join pg_catalog.jsonb_array_elements(loaded_set) with ordinality as item(value, position)
+            on item.position = owner.position
+          where item.value ->> 'outcome' = 'loaded'
+            and pg_catalog.jsonb_typeof(item.value -> 'declaration') = 'object'
+        ), classified as (
+          select loaded.*, vortex_record.classify_record_change_values_internal(
+            (loaded.subject ->> 'recordTypeId')::uuid, loaded.subject -> 'finalValues', loaded.meta,
+            loaded.subject -> 'submittedValues', (loaded.meta #>> '{context,organizationId}')::uuid,
+            (loaded.meta #>> '{context,applicationRootId}')::uuid, 'record_changes', p_command_id
+          ) as classification
+          from loaded
+        ), proposed as (
+          select classified.*,
+            classified.classification ->> 'outcome' = 'classified'
+              and pg_catalog.jsonb_array_length(classified.classification -> 'relationshipChanges') = 0
+              and classified.subject -> 'finalValues' <> '{}'::jsonb as decidable
+          from classified
+        )
+        select proposed.ordinal as owner, 1 as kind,
+          pg_catalog.jsonb_build_object('declaration', proposed.meta -> 'declaration',
+            'recordId', (proposed.subject ->> 'recordId')::uuid,
+            'facts', (proposed.loaded -> 'facts')
+              || pg_catalog.jsonb_build_object('binding', proposed.meta -> 'declaration' -> 'recordBinding')) as input
+        from proposed
+        union all
+        select proposed.ordinal, 2,
+          pg_catalog.jsonb_build_object('declaration', proposed.loaded -> 'declaration',
+            'recordId', (proposed.subject ->> 'recordId')::uuid, 'facts', proposed.loaded -> 'facts')
+        from proposed
+        union all
+        select proposed.ordinal, 3,
+          pg_catalog.jsonb_build_object('declaration', proposed.loaded -> 'declaration',
+            'recordId', (proposed.subject ->> 'recordId')::uuid,
+            'facts', vortex_record.proposed_update_facts_internal(
+              proposed.loaded, (proposed.subject ->> 'recordId')::uuid, proposed.subject -> 'finalValues',
+              '[]'::jsonb, proposed.loaded -> 'facts' -> 'records', proposed.loaded -> 'facts' -> 'edges'))
+        from proposed where proposed.decidable
+        union all
+        select proposed.ordinal, 4,
+          pg_catalog.jsonb_build_object('declaration', proposed.loaded -> 'declaration',
+            'recordId', (proposed.subject ->> 'recordId')::uuid,
+            'facts', vortex_record.proposed_change_facts_internal(
+              proposed.loaded, (proposed.subject ->> 'recordId')::uuid,
+              proposed.classification -> 'valueFinalValues') -> 'facts')
+        from proposed where proposed.decidable
+      ) as entry;
+      update_memo := vortex_record.record_access_decision_memo_internal(decision_entries);
     end if;
   end if;
 
@@ -198,7 +214,7 @@ begin
         p_command_id, 'record_changes', (subject ->> 'recordTypeId')::uuid,
         (subject ->> 'recordId')::uuid, (subject ->> 'expectedConcurrencyNumber')::bigint,
         subject -> 'submittedValues', subject -> 'finalValues', (subject ->> 'activityId')::uuid,
-        named_action, meta, update_loaded[ordinal + 1], update_memo[ordinal + 1]
+        named_action, meta, update_loaded[ordinal + 1], update_memo -> (ordinal::text)
       );
       if prepared ->> 'outcome' = 'allowed' then
         storage_changes := storage_changes || pg_catalog.jsonb_build_array(prepared -> 'storageChange');

@@ -42,7 +42,6 @@ declare
   prepared_relationship jsonb;
   prepared_relationships jsonb;
   update_bounds jsonb;
-  proposed_field_values jsonb;
   proposed_records jsonb;
   proposed_edges jsonb;
   proposed_facts jsonb;
@@ -109,7 +108,7 @@ begin
       raise exception using errcode = '42501',
         message = 'Record save authority is unavailable';
     end if;
-    update_bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+    update_bounds := vortex_record.remembered_record_field_bounds_internal(p_memo, decision, 'resolved');
   else
     update_bounds := vortex_record.preview_record_field_bounds_internal(
       p_record_type_id, (meta ->> 'storageContractId')::uuid,
@@ -147,7 +146,6 @@ begin
   -- target's private facts are loaded only inside this operation and are
   -- never returned. The same current update declaration must still allow the
   -- source under the complete proposed values and graph.
-  proposed_field_values := (loaded -> 'fieldValues') || final_values;
   proposed_records := loaded -> 'facts' -> 'records';
   proposed_edges := loaded -> 'facts' -> 'edges';
 
@@ -236,69 +234,8 @@ begin
     meta -> 'recordType', organization_id_value, final_values
   );
 
-  -- Target closures may reach the source through a currently permitted
-  -- relationship route. Assemble all trusted closures first, then make the
-  -- source authoritative exactly once so an old source copy cannot compete
-  -- with the proposed values. Other repeated closure records are collapsed by
-  -- their permanent Record identity.
-  proposed_records := coalesce((
-    select pg_catalog.jsonb_agg(
-      case when unique_record.record_id = p_record_id
-        then unique_record.value || pg_catalog.jsonb_build_object(
-          'fieldValues', proposed_field_values
-        )
-        else unique_record.value end
-      order by unique_record.record_id
-    )
-    from (
-      select distinct on (
-        (record.value -> 'recordScope' ->> 'recordId')::uuid
-      )
-        (record.value -> 'recordScope' ->> 'recordId')::uuid as record_id,
-        record.value
-      from pg_catalog.jsonb_array_elements(proposed_records) as record(value)
-      order by (record.value -> 'recordScope' ->> 'recordId')::uuid,
-        record.value::text collate "C"
-    ) as unique_record
-  ), '[]'::jsonb);
-
-  -- Apply every changed fixed relationship after closure assembly. This one
-  -- replacement pass removes old source edges even when a target closure
-  -- contained them, then adds only the submitted non-null replacements.
-  proposed_edges := coalesce((
-    with retained_edges as (
-      select edge.value
-      from pg_catalog.jsonb_array_elements(proposed_edges) as edge(value)
-      where not exists (
-        select 1
-        from pg_catalog.jsonb_array_elements(relationship_changes) as changed(value)
-        where (changed.value ->> 'relationshipId')::uuid =
-            (edge.value ->> 'relationshipId')::uuid
-          and (edge.value ->> 'fromRecordId')::uuid = p_record_id
-      )
-    ), replacement_edges as (
-      select pg_catalog.jsonb_build_object(
-        'relationshipId', changed.value -> 'relationshipId',
-        'fromRecordId', p_record_id,
-        'toRecordId', (changed.value -> 'value' ->> 'recordId')::uuid
-      ) as value
-      from pg_catalog.jsonb_array_elements(relationship_changes) as changed(value)
-      where pg_catalog.jsonb_typeof(changed.value -> 'value') <> 'null'
-    ), unique_edges as (
-      select distinct candidate.value
-      from (
-        select retained.value from retained_edges as retained
-        union all
-        select replacement.value from replacement_edges as replacement
-      ) as candidate(value)
-    )
-    select pg_catalog.jsonb_agg(unique_edge.value order by unique_edge.value)
-    from unique_edges as unique_edge
-  ), '[]'::jsonb);
-
-  proposed_facts := (loaded -> 'facts') || pg_catalog.jsonb_build_object(
-    'records', proposed_records,
-    'edges', proposed_edges
+  proposed_facts := vortex_record.proposed_update_facts_internal(
+    loaded, p_record_id, final_values, relationship_changes, proposed_records, proposed_edges
   );
   if preview_installation is null then
     decision := vortex_record.decide_record_access_internal(p_memo, loaded -> 'declaration', p_record_id, proposed_facts);
