@@ -1011,7 +1011,7 @@ export const applicationDraftSchema = z
 export const publishedApplicationDefinitionSchema = z
   .object({
     publication: publishedApplicationReferenceSchema.extend({
-      validationContractVersion: z.literal("4.1.0"),
+      validationContractVersion: z.literal("4.2.0"),
     }),
     content: applicationContentSchema,
     dependencyManifest: z.array(publishedDefinitionReferenceSchema),

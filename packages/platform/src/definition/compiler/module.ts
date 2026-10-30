@@ -522,7 +522,7 @@ function compileModule(
       permissions,
       actions,
       events,
-      flows: [...flows],
+      flows,
       sharingConditions,
       extensionPoints: (body.extension_points as JsonObject[]).map((point) => ({
         extensionPointId: resolution.id(
@@ -611,7 +611,7 @@ export function compileParsedModuleRequest(
     const ownDefinition = resolution.definition(definitionKey, "module");
     const output = moduleCompilationOutputSchema.safeParse({
       kind: "module",
-      validationContractVersion: "4.1.0",
+      validationContractVersion: "4.2.0",
       canonical,
       artifact: {
         kind: "module",

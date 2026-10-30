@@ -65,7 +65,7 @@ import {
 } from "./record-type-pipelines";
 import { flowIdSchema } from "../catalogue/identifiers";
 
-export const moduleValidationContractVersion = "4.1.0" as const;
+export const moduleValidationContractVersion = "4.2.0" as const;
 
 /** The one current Module source/validation contract pair. */
 export const moduleContractVersionPairSchema = z

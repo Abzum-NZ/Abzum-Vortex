@@ -1,5 +1,286 @@
 set role vortex_owner;
 
+create or replace function vortex_definition.accepted_contract_version(
+  p_kind text
+)
+returns text[]
+language plpgsql
+immutable
+set search_path = ''
+as $function$
+begin
+  case p_kind
+    when 'application' then
+      return array['4.2.0'];
+    when 'module' then
+      return array['4.2.0'];
+    when 'record_type' then
+      return array['4.2.0'];
+    else
+      raise exception using errcode = '22023',
+        message = 'Accepted contract version kind is unknown';
+  end case;
+end
+$function$;
+
+revoke all on function vortex_definition.accepted_contract_version(text)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_definition.accepted_contract_version(text)
+  to vortex_owner, vortex_record_adapter;
+comment on function vortex_definition.accepted_contract_version(text) is
+  'The one accepted definition contract version per contract kind (a one-element array); the single SQL source of truth, compared with the TypeScript constants by the guard. application: vortex_definition.provision_module_installation_storage and vortex_definition.activate_application_installation (detach checks release identity only). module: vortex_record.provision_exact_module_storage. record_type: vortex_access.evaluate_organization_record_access_internal.';
+
+alter function vortex_definition.accepted_contract_version(p_kind text) owner to vortex_owner;
+
+grant execute on function vortex_definition.accepted_contract_version(p_kind text) to postgres;
+
+-- Contract 4.2.0: a named action runs one flow of its Module. Every stored draft moves each action's
+-- ordered tasks into an ordinary transaction flow the action references, once, in place.
+create function pg_temp.contract_42_canonical_json(p_value jsonb)
+returns text
+language plpgsql
+immutable
+set search_path = ''
+as $function$
+declare
+  result text;
+  member text;
+  first boolean := true;
+begin
+  case pg_catalog.jsonb_typeof(p_value)
+    when 'object' then
+      result := '{';
+      for member in
+        select item.key from pg_catalog.jsonb_object_keys(p_value) as item(key)
+        order by item.key collate "C"
+      loop
+        result := result || case when first then '' else ',' end
+          || pg_catalog.to_json(member)::text || ':'
+          || pg_temp.contract_42_canonical_json(p_value -> member);
+        first := false;
+      end loop;
+      return result || '}';
+    when 'array' then
+      return '[' || coalesce((
+        select pg_catalog.string_agg(pg_temp.contract_42_canonical_json(item.value), ',' order by item.ordinality)
+        from pg_catalog.jsonb_array_elements(p_value) with ordinality as item(value, ordinality)
+      ), '') || ']';
+    when 'string' then
+      return pg_catalog.to_json(p_value #>> '{}')::text;
+    else
+      return p_value::text;
+  end case;
+end
+$function$;
+
+create function pg_temp.contract_42_fingerprint(p_value jsonb)
+returns text
+language sql
+immutable
+set search_path = ''
+as $function$
+  select 'sha256:' || pg_catalog.encode(
+    pg_catalog.sha256(pg_catalog.convert_to(pg_temp.contract_42_canonical_json(p_value), 'UTF8')),
+    'hex'
+  )
+$function$;
+
+-- One authored action task as the flow task it was always compiled to.
+create function pg_temp.contract_42_task(p_task jsonb, p_record text, p_subject text)
+returns jsonb
+language plpgsql
+set search_path = ''
+as $function$
+declare
+  properties jsonb := p_task -> 'properties';
+  flow_properties jsonb;
+  changes jsonb := '[]'::jsonb;
+  change jsonb;
+begin
+  case p_task ->> 'type'
+    when 'record.set_fields' then
+      flow_properties := pg_catalog.jsonb_build_object(
+        'values', pg_catalog.jsonb_build_object('kind', 'map', 'entries', properties -> 'values'));
+    when 'record.create' then
+      flow_properties := pg_catalog.jsonb_build_object(
+        'record_type', pg_catalog.jsonb_build_object('kind', 'literal',
+          'literal', pg_catalog.jsonb_build_object('type', 'text', 'value', properties -> 'record_type')),
+        'values', pg_catalog.jsonb_build_object('kind', 'map', 'entries', properties -> 'values'));
+    when 'record.changes' then
+      for change in select item.value from pg_catalog.jsonb_array_elements(properties -> 'changes') as item(value) loop
+        changes := changes || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+          'kind', 'copy_relationships',
+          'relationshipIds', (
+            select pg_catalog.jsonb_agg(pg_catalog.to_jsonb(p_record || '.' || (relationship.value #>> '{}'))
+              order by relationship.ordinality)
+            from pg_catalog.jsonb_array_elements(change -> 'relationships')
+              with ordinality as relationship(value, ordinality)),
+          'subject', pg_catalog.jsonb_build_object('kind', 'reference',
+            'reference', pg_catalog.jsonb_build_object('source', 'input', 'name', p_subject)),
+          'target', pg_catalog.jsonb_build_object('kind', 'reference',
+            'reference', pg_catalog.jsonb_build_object('source', 'input', 'name', change -> 'target_input'))));
+      end loop;
+      flow_properties := pg_catalog.jsonb_build_object(
+        'changes', pg_catalog.jsonb_build_object('kind', 'literal',
+          'literal', pg_catalog.jsonb_build_object('type', 'json', 'value', changes)));
+    when 'record.delete' then
+      flow_properties := pg_catalog.jsonb_build_object(
+        'record_type', pg_catalog.jsonb_build_object('kind', 'literal',
+          'literal', pg_catalog.jsonb_build_object('type', 'text', 'value', p_record)),
+        'record', pg_catalog.jsonb_build_object('kind', 'reference',
+          'reference', pg_catalog.jsonb_build_object('source', 'input', 'name', p_subject)));
+    when 'event.announce' then
+      flow_properties := pg_catalog.jsonb_build_object(
+        'event', pg_catalog.jsonb_build_object('kind', 'literal',
+          'literal', pg_catalog.jsonb_build_object('type', 'text', 'value', properties -> 'event')));
+    else
+      raise exception 'contract 4.2.0 cannot convert action task type %', p_task ->> 'type';
+  end case;
+  return pg_catalog.jsonb_build_object(
+    'id', p_task -> 'id', 'type', p_task -> 'type', 'version', '1.0.0', 'properties', flow_properties);
+end
+$function$;
+
+-- One authored Module: each action's tasks become the tasks of a new transaction flow.
+create function pg_temp.contract_42_module(p_module jsonb)
+returns jsonb
+language plpgsql
+set search_path = ''
+as $function$
+declare
+  actions jsonb := '[]'::jsonb;
+  flows jsonb := coalesce(p_module -> 'flows', '[]'::jsonb);
+  taken text[];
+  flow_keys text[];
+  action jsonb;
+  action_input jsonb;
+  task jsonb;
+  flow_id text;
+  flow_key text;
+  base text;
+  suffix integer;
+  subject text;
+  flow_inputs jsonb;
+  flow_tasks jsonb;
+begin
+  if pg_catalog.jsonb_typeof(p_module -> 'actions') is distinct from 'array' then
+    return p_module;
+  end if;
+  select coalesce(pg_catalog.array_agg(distinct item.value #>> '{}'), array[]::text[]) into taken
+  from pg_catalog.jsonb_path_query(p_module, 'lax $.**.id') as item(value)
+  where pg_catalog.jsonb_typeof(item.value) = 'string';
+  select coalesce(pg_catalog.array_agg(item.value ->> 'key'), array[]::text[]) into flow_keys
+  from pg_catalog.jsonb_array_elements(flows) as item(value);
+  for action in select item.value from pg_catalog.jsonb_array_elements(p_module -> 'actions') as item(value) loop
+    if not action ? 'tasks' then
+      actions := actions || pg_catalog.jsonb_build_array(action);
+      continue;
+    end if;
+    -- A protected-operation action declared an empty task list.
+    if pg_catalog.jsonb_array_length(action -> 'tasks') = 0 then
+      actions := actions || pg_catalog.jsonb_build_array(action - 'tasks');
+      continue;
+    end if;
+    base := 'flow_' || pg_catalog.regexp_replace(action ->> 'id', '^act(ion)?_', '');
+    flow_id := base;
+    suffix := 1;
+    while flow_id = any (taken) loop
+      suffix := suffix + 1;
+      flow_id := base || '_' || suffix::text;
+    end loop;
+    taken := pg_catalog.array_append(taken, flow_id);
+    base := pg_catalog.regexp_replace(
+      pg_catalog.left(pg_catalog.regexp_replace(action ->> 'key', '^.*\.', ''), 32), '_+$', '');
+    flow_key := base;
+    suffix := 1;
+    while flow_key = any (flow_keys) loop
+      suffix := suffix + 1;
+      flow_key := base || '_' || suffix::text;
+    end loop;
+    flow_keys := pg_catalog.array_append(flow_keys, flow_key);
+    -- The subject is `record` unless the action declares an input of that name.
+    subject := 'record';
+    suffix := 1;
+    while exists (
+      select 1 from pg_catalog.jsonb_array_elements(action -> 'inputs') as item(value)
+      where item.value ->> 'key' = subject
+    ) loop
+      suffix := suffix + 1;
+      subject := case when suffix = 2 then 'subject_record' else 'subject_record_' || (suffix - 1)::text end;
+    end loop;
+    flow_inputs := pg_catalog.jsonb_build_object(subject, pg_catalog.jsonb_build_object(
+      'type', 'record_reference', 'required', true,
+      'recordTypeIds', pg_catalog.jsonb_build_array(action -> 'record_type'),
+      'description', 'The record the action runs on.'));
+    for action_input in select item.value from pg_catalog.jsonb_array_elements(action -> 'inputs') as item(value) loop
+      flow_inputs := flow_inputs || pg_catalog.jsonb_build_object(action_input ->> 'key',
+        pg_catalog.jsonb_build_object('type', action_input -> 'type', 'required', action_input -> 'required')
+        || case when action_input ->> 'type' = 'record_reference'
+          then pg_catalog.jsonb_build_object('recordTypeIds', action_input -> 'record_types') else '{}'::jsonb end);
+    end loop;
+    flow_tasks := '[]'::jsonb;
+    for task in select item.value from pg_catalog.jsonb_array_elements(action -> 'tasks') as item(value) loop
+      flow_tasks := flow_tasks || pg_catalog.jsonb_build_array(
+        pg_temp.contract_42_task(task, action ->> 'record_type', subject));
+    end loop;
+    flows := flows || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'id', flow_id, 'key', flow_key, 'labels', '{}'::jsonb, 'execution', 'transaction',
+      'runAs', pg_catalog.jsonb_build_object('kind', 'saver'), 'inputs', flow_inputs,
+      'recordInput', subject, 'variables', '{}'::jsonb, 'triggers', '[]'::jsonb,
+      'tasks', flow_tasks, 'outputs', '{}'::jsonb, 'errors', '[]'::jsonb, 'finally', '[]'::jsonb));
+    actions := actions || pg_catalog.jsonb_build_array((action - 'tasks') || pg_catalog.jsonb_build_object('flow', flow_id));
+  end loop;
+  return pg_catalog.jsonb_set(pg_catalog.jsonb_set(p_module, '{actions}', actions), '{flows}', flows);
+end
+$function$;
+
+do $convert$
+declare
+  draft record;
+  converted jsonb;
+  body jsonb;
+begin
+  for draft in select d.root_id, r.key, d.draft_source, d.source_fingerprint
+    from vortex_definition.drafts d join vortex_definition.roots r on r.root_id = d.root_id
+  loop
+    if pg_temp.contract_42_fingerprint(draft.draft_source) is distinct from draft.source_fingerprint then
+      raise exception 'Contract 4.2.0 cannot verify stored fingerprint of draft % (%)', draft.key, draft.root_id;
+    end if;
+  end loop;
+  for draft in select d.root_id, d.draft_source
+    from vortex_definition.drafts d
+    order by d.root_id
+  loop
+    body := draft.draft_source -> 'body';
+    if pg_catalog.jsonb_typeof(body -> 'modules') = 'array' then
+      body := pg_catalog.jsonb_set(body, '{modules}', (
+        select coalesce(pg_catalog.jsonb_agg(pg_temp.contract_42_module(item.value) order by item.ordinality), '[]'::jsonb)
+        from pg_catalog.jsonb_array_elements(body -> 'modules') with ordinality as item(value, ordinality)));
+    else
+      body := pg_temp.contract_42_module(body);
+    end if;
+    converted := pg_catalog.jsonb_set(
+      pg_catalog.jsonb_set(draft.draft_source, '{body}', body),
+      '{source_contract_version}', '"4.2.0"'::jsonb);
+    update vortex_definition.drafts d set
+      draft_source = converted,
+      source_contract_version = '4.2.0',
+      source_fingerprint = pg_temp.contract_42_fingerprint(converted),
+      draft_revision = d.draft_revision + 1,
+      updated_at = greatest(pg_catalog.statement_timestamp(), d.updated_at),
+      restored_from_release_revision = null,
+      restored_from_source_fingerprint = null,
+      restored_by = null, restored_at = null, restore_correlation_id = null
+    where d.root_id = draft.root_id;
+  end loop;
+end
+$convert$;
+
+drop function pg_temp.contract_42_module(jsonb);
+drop function pg_temp.contract_42_task(jsonb, text, text);
+drop function pg_temp.contract_42_fingerprint(jsonb);
+drop function pg_temp.contract_42_canonical_json(jsonb);
+
 create or replace function vortex_record.installed_record_type_action_contributions_internal(
   p_organization_id uuid,
   p_target_module_root_id uuid,
