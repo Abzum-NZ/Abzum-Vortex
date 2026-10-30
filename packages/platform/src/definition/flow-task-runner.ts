@@ -49,6 +49,7 @@ import {
   redactSensitiveOutputs,
   refusalOutcome,
   requestOutcome,
+  ruleRefusalResult,
   selectedRecordProjectionForTask,
   sensitiveValues,
 } from "./flow-orchestrator-support";
@@ -213,40 +214,21 @@ export const createFlowTaskRunner = (
     return rendered;
   };
 
-  /** The rule's authored refusal of a protected record path, when its safe error carries one. */
-  const ruleRefusalResult = (
-    error: Readonly<{
-      code: string;
-      reason?: Readonly<{ code: string; message: string }> | undefined;
-    }>,
-  ): Pick<TaskResult, "diagnostic"> => {
-    if (error.reason === undefined) return {};
-    const diagnostic = flowRefusalFeedbackSchema.safeParse({
-      code: "invalid_command",
-      ruleRefusal: error.reason,
-    });
-    if (diagnostic.success) return { diagnostic: diagnostic.data };
-    console.error(`[flows] rule refusal not carried: ${describeFailure(diagnostic.error)}`);
-    return {};
-  };
-
   /** A writer refusal ends the task with its own outcome and authored words. */
   const refusedTask = (
     failure:
       | (Readonly<{ outcome: string }> & { error?: Parameters<typeof ruleRefusalResult>[0] })
       | undefined,
-  ) => ({
-    result: {
-      outcome:
-        failure?.outcome === "refused" && failure.error !== undefined
-          ? refusalOutcome(failure.error.code)
-          : ("refused" as const),
-      ...(failure?.outcome === "refused" && failure.error !== undefined
-        ? ruleRefusalResult(failure.error)
-        : {}),
-    },
-    stored: {},
-  });
+  ) => {
+    const error = failure?.outcome === "refused" ? failure.error : undefined;
+    return {
+      result: {
+        outcome: error === undefined ? ("refused" as const) : refusalOutcome(error.code),
+        ...(error === undefined ? {} : ruleRefusalResult(error)),
+      },
+      stored: {},
+    };
+  };
 
   /** Carries only committed saves' authored messages; logs locate the rule without record values. */
   const appendWarnings = (
@@ -911,33 +893,6 @@ export const createFlowTaskRunner = (
 
     if (plan.kind === "backend") return runBackendTask(dependencies, run, plan, call.taskId);
 
-    if (plan.kind === "action" && plan.commands !== undefined) {
-      const executed = await runNamedAction(session, selection, plan.commands);
-      if (executed.kind === "completed") {
-        for (const value of executed.results)
-          if (value.outcome === "completed")
-            changedRevisions.set(
-              targetKey(plan.command.recordTypeId, value.recordId),
-              value.concurrencyNumber,
-            );
-        const outputs = { count: executed.results.length };
-        return {
-          result: { outcome: "committed", outputs },
-          stored: outputs,
-          warnings: executed.warnings,
-        };
-      }
-      if (executed.kind !== "refused") return { result: { outcome: "failed" }, stored: {} };
-      run.refusalLoggedTaskIds.push(call.taskId);
-      const failure = executed.result;
-      return {
-        result: {
-          outcome: failure?.outcome === "refused" ? refusalOutcome(failure.error.code) : "refused",
-          ...(failure?.outcome === "refused" ? ruleRefusalResult(failure.error) : {}),
-        },
-        stored: {},
-      };
-    }
     if (plan.kind === "action" && plan.commands !== undefined) {
       const executed = await runNamedAction(session, selection, plan.commands);
       if (executed.kind === "completed") {
