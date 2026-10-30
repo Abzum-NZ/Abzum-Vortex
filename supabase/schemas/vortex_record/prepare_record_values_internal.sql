@@ -5,7 +5,10 @@ create or replace function vortex_record.prepare_record_values_internal(
   p_expected_concurrency_number bigint,
   p_submitted_values jsonb,
   p_selected_group_id uuid,
-  p_activity_id uuid
+  p_activity_id uuid,
+  p_type_context jsonb default null,
+  p_loaded jsonb default null,
+  p_memo jsonb default null
 )
 returns jsonb
 language plpgsql
@@ -56,9 +59,9 @@ begin
     and preview_installation ->> 'outcome' = 'refused' then
     return pg_catalog.jsonb_build_object('outcome', 'refused');
   end if;
-  meta := vortex_record.resolve_record_action_context_internal(
+  meta := coalesce(p_type_context -> 'meta', vortex_record.resolve_record_action_context_internal(
     p_record_type_id, p_operation
-  );
+  ));
   if pg_catalog.jsonb_typeof(meta -> 'recordType') is distinct from 'object'
     or (preview_installation is not null and meta ? 'recordType'
       and meta -> 'recordType' ? 'systemProjection') then
@@ -143,11 +146,11 @@ begin
     return pg_catalog.jsonb_build_object(
       'outcome', 'prepared',
       'recordType', meta -> 'recordType',
-      'beforeSaveFlows', vortex_record.before_save_flows_for_record_type_internal(
+      'beforeSaveFlows', coalesce(p_type_context -> 'beforeSaveFlows', vortex_record.before_save_flows_for_record_type_internal(
         (meta ->> 'moduleRootId')::uuid,
         (meta ->> 'moduleReleaseRevision')::bigint,
         p_record_type_id
-      ),
+      )),
       'correlationId', correlation_id_value,
       'readableFieldIds', bounds -> 'readableFieldIds',
       'existingValues', loaded -> 'fieldValues'
@@ -155,13 +158,13 @@ begin
   end if;
 
   if p_operation = 'update' then
-    loaded := (vortex_record.load_record_access_facts_internal(
+    loaded := coalesce(p_loaded, (vortex_record.load_record_access_facts_internal(
       'update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
         'recordTypeId', p_record_type_id,
         'recordId', p_record_id,
         'expectedConcurrencyNumber', p_expected_concurrency_number
       ))
-    ) -> 0);
+    ) -> 0));
     if loaded ->> 'outcome' = 'conflict' then
       return pg_catalog.jsonb_build_object(
         'outcome', 'conflict',
@@ -182,13 +185,9 @@ begin
       end if;
       bounds := preview_bounds;
     else
-      decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
-        pg_catalog.jsonb_build_object(
-          'declaration', loaded -> 'declaration',
-          'recordId', p_record_id,
-          'facts', loaded -> 'facts'
-        )
-      )) -> 0);
+      decision := vortex_record.decide_record_access_internal(
+        p_memo, loaded -> 'declaration', p_record_id, loaded -> 'facts'
+      );
       if decision ->> 'outcome' <> 'allowed' then
         perform vortex_record.append_record_activity_internal(p_activity_id, 'update_record', array[organization_id_value]::uuid[], array[]::uuid[], 'refused');
         return pg_catalog.jsonb_build_object(
@@ -196,7 +195,7 @@ begin
           'correlationId', correlation_id_value
         );
       end if;
-      bounds := vortex_record.decide_record_field_bounds_internal(decision);
+      bounds := vortex_record.remembered_record_field_bounds_internal(p_memo, decision, 'decided');
     end if;
   end if;
 
@@ -204,11 +203,11 @@ begin
     'outcome', 'prepared',
     'recordType', meta -> 'recordType',
     -- The owning Module release's BeforeSave flows for this record type, run by Record.
-    'beforeSaveFlows', vortex_record.before_save_flows_for_record_type_internal(
+    'beforeSaveFlows', coalesce(p_type_context -> 'beforeSaveFlows', vortex_record.before_save_flows_for_record_type_internal(
       (meta ->> 'moduleRootId')::uuid,
       (meta ->> 'moduleReleaseRevision')::bigint,
       p_record_type_id
-    ),
+    )),
     'correlationId', meta -> 'context' -> 'correlationId',
     'readableFieldIds', case when p_operation = 'update'
       then bounds -> 'readableFieldIds' else '[]'::jsonb end,
@@ -226,9 +225,9 @@ exception
 end
 $function$;
 
-alter function vortex_record.prepare_record_values_internal(text,uuid,uuid,bigint,jsonb,uuid,uuid)
+alter function vortex_record.prepare_record_values_internal(text,uuid,uuid,bigint,jsonb,uuid,uuid,jsonb,jsonb,jsonb)
   owner to vortex_record_adapter;
-revoke all on function vortex_record.prepare_record_values_internal(text,uuid,uuid,bigint,jsonb,uuid,uuid)
+revoke all on function vortex_record.prepare_record_values_internal(text,uuid,uuid,bigint,jsonb,uuid,uuid,jsonb,jsonb,jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-comment on function vortex_record.prepare_record_values_internal(text,uuid,uuid,bigint,jsonb,uuid,uuid) is
+comment on function vortex_record.prepare_record_values_internal(text,uuid,uuid,bigint,jsonb,uuid,uuid,jsonb,jsonb,jsonb) is
   'Private operation-scoped value and BeforeSave preparation under current authority; receipt handling belongs to the enclosing record command.';
