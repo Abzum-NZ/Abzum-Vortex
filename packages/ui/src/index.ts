@@ -356,6 +356,7 @@ export {
   createFlowInvokeClient,
   createFlowRuntime,
   createFlowRuntimeState,
+  scopeFlowRuntimeForms,
   createFormBlockRuntime,
   flowSetFieldChange,
   isFlowIntent,

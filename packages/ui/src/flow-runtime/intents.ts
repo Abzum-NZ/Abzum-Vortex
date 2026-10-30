@@ -21,7 +21,8 @@ export type FlowIntent = Readonly<{
     | "refresh"
     | "set_panel"
     | "set_filter"
-    | "set_value";
+    | "set_value"
+    | "validate_form";
   taskId: string;
   properties: Readonly<Record<string, JsonValue>>;
 }>;
@@ -38,6 +39,7 @@ export const FLOW_INTENT_KINDS: readonly FlowIntentKind[] = Object.freeze([
   "set_panel",
   "set_filter",
   "set_value",
+  "validate_form",
 ]);
 
 /**
@@ -234,6 +236,8 @@ export type FlowIntentHost = Readonly<{
   ) => void | Promise<void>;
   setPageValues?: (values: Readonly<Record<string, JsonValue>>) => void;
   setFormValue?: (form: string, field: string, value: JsonValue) => boolean;
+  /** Shows the form's field problems and answers whether it is valid. */
+  validateForm?: (form: string) => boolean;
 }>;
 
 /** Carries out one non-blocking intent (never a form or confirmation). */
@@ -299,6 +303,14 @@ export async function performPresentationIntent(
       )
         throw new Error("FLOW_PAGE_VALUES_UNAVAILABLE");
       host.setPageValues(values);
+      return;
+    }
+    case "validate_form": {
+      const form = text(intent.properties.form);
+      if (form === undefined || host.validateForm === undefined)
+        throw new Error("FLOW_VALIDATE_FORM_UNAVAILABLE");
+      // An invalid form stops the flow: its problems are shown on the form, so the run ends unanswered.
+      if (!host.validateForm(form)) throw surfaceCancellationError();
       return;
     }
     default:

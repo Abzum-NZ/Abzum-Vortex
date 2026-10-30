@@ -17,6 +17,7 @@ export const pageStepIntents = {
   "interface.set_panel": "set_panel",
   "interface.set_filter": "set_filter",
   "interface.set_value": "set_value",
+  "interface.validate_form": "validate_form",
 } as const satisfies Record<PageIntentStepType, FlowInterfaceIntent["kind"]>;
 
 /** Whether `value` may be written to a page value held as `declared` (same type, valid shape). */

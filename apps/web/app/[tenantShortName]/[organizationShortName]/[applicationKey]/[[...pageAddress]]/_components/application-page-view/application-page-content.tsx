@@ -280,6 +280,10 @@ export function ApplicationPageViewContent({
     showPageMessage(undefined);
     runtimeState.messages.clearAll();
   }, [navigationKey]);
+  // The toasts a flow showed just before opening this address are shown here, after the clearing.
+  useEffect(() => {
+    runtimeState.messages.adoptCarried();
+  }, [runtimeState, navigationKey]);
 
   const applyMessageActionRef = useRef<
     (dispatch: Promise<ServerDrivenResult>, bindingId: string) => void

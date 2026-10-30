@@ -1,5 +1,6 @@
 import {
   DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
+  defaultOpenFlowSource,
   type ApplicationSourceDocument,
 } from "@vortex/platform/schema";
 import authoredSource from "./application.json";
@@ -15,4 +16,15 @@ export const appStoreApplication: ApplicationSourceDocument = loadApplicationSou
   authoredSource,
   DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
   appStoreModules,
+  [
+    {
+      ...defaultOpenFlowSource({
+        id: "flow_open_store_application",
+        key: "open_store_application",
+        page: "app_store_application",
+        recordType: "vortex.app_store:store_application",
+      }),
+      labels: { name: "Open application details" },
+    },
+  ],
 );
