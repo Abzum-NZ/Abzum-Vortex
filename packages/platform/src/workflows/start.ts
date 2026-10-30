@@ -724,7 +724,7 @@ const startFlowInternal = async <Value>(
             evidence = evidenceStateSchema.parse(locked[0]?.result);
             if (evidence.state === "unavailable") return "refused" as const;
           }
-          let recorded = false;
+          let recorded: boolean;
           if (pending.changes) {
             await transaction.query`select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(${`${request.selection.organizationId}:flow_segment:${pending.commandId}`}, 818))`;
             const rows = await transaction.query`select vortex_record.flow_segment_receipt(${pending.commandId}::uuid, true) as result`;

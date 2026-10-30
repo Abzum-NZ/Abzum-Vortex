@@ -276,7 +276,7 @@ const applyFirstInstallRoles = async (
   complete?: ReceiptStep,
 ): Promise<boolean> => {
   const { session, selector, releaseSet } = candidate;
-  let verifyAssigned: ((assigned: unknown) => void) | undefined;
+  const proof: { verify?: (assigned: unknown) => void } = {};
   // The member assignment is the last step of an install that takes the role: the receipt
   // completes in its transaction, after the assignment is proved to be the reviewed one.
   const accessAdministration = accessForInstallationTarget(
@@ -292,7 +292,7 @@ const applyFirstInstallRoles = async (
           write: "assign_role",
           step: async (transaction, _scope, written) => {
             const value: unknown = written.value;
-            verifyAssigned?.(isRecord(value) ? value.assignment : undefined);
+            proof.verify?.(isRecord(value) ? value.assignment : undefined);
             await complete(transaction);
           },
         }
@@ -392,7 +392,7 @@ const applyFirstInstallRoles = async (
     )
       installationProblem("first_install_member_role_assignment_mismatch", "failed");
   };
-  verifyAssigned = verifyAssignment;
+  proof.verify = verifyAssignment;
   const assignResult = await accessAdministration.assignRoleAssignment(
     session,
     selection,
