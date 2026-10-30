@@ -44,9 +44,6 @@ export type TransactionFlowOutcome =
   /** The run could not be started or finished: an unresolved value, an unavailable flow or step. */
   | Readonly<{ kind: "invalid"; reason: string }>;
 
-/** Runs the flow once, on behalf of a host that owns the transaction. */
-export type TransactionFlowRunner = (seed: TransactionFlowSeed) => TransactionFlowOutcome;
-
 /** The step types an action flow may hold; anything else ends the run as invalid. */
 const transactionFlowStepTypes: ReadonlySet<string> = new Set([
   "record.set_fields",

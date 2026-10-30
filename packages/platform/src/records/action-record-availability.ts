@@ -3,7 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import type { ExecuteNamedActionCommand } from "./named-actions";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
-import { actionPreconditionHolds } from "./named-action-composition";
+import { actionPreconditionHolds } from "./named-action-inputs";
 import {
   one,
   parsePreparation,

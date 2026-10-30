@@ -14,20 +14,19 @@ declare
   loaded jsonb;
   decision jsonb;
   bounds jsonb;
-  copy_plan jsonb;
-  creation_plan jsonb;
+  policy jsonb;
   subject jsonb;
   subject_index integer;
-  expected_fields jsonb;
   supplied_fields jsonb;
   root_fields jsonb;
   root_delete boolean;
   root_seen boolean := false;
-  creation_tasks jsonb;
-  creation_index integer := 0;
-  creation_task jsonb;
-  creations jsonb := '[]'::jsonb;
-  copy_values jsonb;
+  copy_field_ids jsonb;
+  create_entry jsonb;
+  create_ordinal integer;
+  used_creates integer[] := array[]::integer[];
+  target_meta jsonb;
+  create_targets jsonb := '[]'::jsonb;
   copied_targets uuid[] := array[]::uuid[];
   roles jsonb := '{}'::jsonb;
 begin
@@ -83,90 +82,109 @@ begin
   ) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'action_inputs_invalid');
   end if;
-  if pg_catalog.jsonb_typeof(action_context #> '{action,writePolicy}') is distinct from 'object' then
+  policy := action_context #> '{action,writePolicy}';
+  if pg_catalog.jsonb_typeof(policy) is distinct from 'object' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'action_effects_invalid');
   end if;
-  -- What the action may write is the write policy derived from its published flow.
-  select coalesce(pg_catalog.jsonb_agg(distinct field.key order by field.key), '[]'::jsonb)
-  into root_fields
-  from pg_catalog.jsonb_array_elements_text(action_context #> '{action,writePolicy,subjectFieldIds}') as field(key);
-  root_delete := (action_context #>> '{action,writePolicy,deletesSubject}')::boolean;
+  -- What the action may write is the write policy derived from its published flow. The flow's
+  -- record steps are planned by the flow runner; this only proves each intent is within the policy.
+  root_fields := policy -> 'subjectFieldIds';
+  root_delete := (policy ->> 'deletesSubject')::boolean;
   if root_delete and pg_catalog.jsonb_array_length(root_fields) > 0 then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'action_effects_invalid');
   end if;
-  select coalesce(pg_catalog.jsonb_agg(task.value || pg_catalog.jsonb_build_object('ordinal', task.ordinality - 1)
-    order by task.ordinality), '[]'::jsonb) into creation_tasks
-  from pg_catalog.jsonb_array_elements(action_context #> '{action,writePolicy,creates}') with ordinality as task(value, ordinality);
-  copy_plan := vortex_record.prepare_named_action_relationship_copies_internal(
-    action_reference ->> 'ownerKind', (action_reference ->> 'ownerId')::uuid,
-    (action_reference ->> 'releaseRevision')::bigint, (action_reference ->> 'actionId')::uuid,
-    (p_named_action ->> 'recordTypeId')::uuid, (p_named_action ->> 'recordId')::uuid,
-    p_named_action -> 'inputs', action_context
-  );
-  if copy_plan ->> 'outcome' = 'refused' then return copy_plan; end if;
+  select coalesce(pg_catalog.jsonb_agg(distinct pg_catalog.lower(relationship.value ->> 'fromFieldId')), '[]'::jsonb)
+  into copy_field_ids
+  from pg_catalog.jsonb_array_elements(policy -> 'relationshipCopies') as copied(value)
+  cross join pg_catalog.jsonb_array_elements(copied.value -> 'relationshipIds') as copied_id(value)
+  join pg_catalog.jsonb_array_elements(action_context -> 'recordType' -> 'relationships') as relationship(value)
+    on pg_catalog.lower(relationship.value ->> 'relationshipId') = pg_catalog.lower(copied_id.value #>> '{}');
 
-  -- The four-intent shape stays unchanged. The exact installed action bounds which
-  -- subject, creation and copy each intent represents; derived parents come from the graph.
   for subject, subject_index in
     select item.value, (item.ordinality - 1)::integer
     from pg_catalog.jsonb_array_elements(p_subjects) with ordinality as item(value, ordinality)
   loop
-    select coalesce(pg_catalog.jsonb_agg(field.key order by field.key), '[]'::jsonb)
+    select coalesce(pg_catalog.jsonb_agg(pg_catalog.lower(field.key)), '[]'::jsonb)
     into supplied_fields from pg_catalog.jsonb_object_keys(subject -> 'submittedValues') as field(key);
     if subject ->> 'operation' = 'create' then
-      creation_task := creation_tasks -> creation_index;
-      if creation_task is null or subject -> 'recordTypeId' is distinct from creation_task -> 'recordTypeId'
-        or subject -> 'selectedGroupId' is distinct from 'null'::jsonb then
+      -- A creation is one the policy allows: its record type, and no field the flow does not set.
+      create_entry := null;
+      select entry.value, (entry.ordinality - 1)::integer into create_entry, create_ordinal
+      from pg_catalog.jsonb_array_elements(policy -> 'creates') with ordinality as entry(value, ordinality)
+      where pg_catalog.lower(entry.value ->> 'recordTypeId') = pg_catalog.lower(subject ->> 'recordTypeId')
+        and not ((entry.ordinality - 1)::integer = any(used_creates))
+        and not exists (
+          select 1 from pg_catalog.jsonb_array_elements_text(supplied_fields) as supplied(key)
+          where not exists (
+            select 1 from pg_catalog.jsonb_array_elements_text(entry.value -> 'fieldIds') as allowed(key)
+            where pg_catalog.lower(allowed.key) = supplied.key
+          )
+        )
+      order by entry.ordinality
+      limit 1;
+      if create_entry is null then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'creation_plan_mismatch');
       end if;
-      select coalesce(pg_catalog.jsonb_agg(field.key order by field.key), '[]'::jsonb)
-      into expected_fields from pg_catalog.jsonb_array_elements_text(creation_task -> 'fieldIds') as field(key);
-      if supplied_fields is distinct from expected_fields then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'creation_plan_mismatch');
+      used_creates := pg_catalog.array_append(used_creates, create_ordinal);
+      -- The record type is resolved for the create the way the common writer resolves it; the
+      -- owner Group and every field are decided by the common writer like a Save step.
+      target_meta := vortex_record.resolve_record_action_context_internal(
+        (subject ->> 'recordTypeId')::uuid, 'create'
+      );
+      if pg_catalog.jsonb_typeof(target_meta -> 'recordType') is distinct from 'object' then
+        return pg_catalog.jsonb_build_object(
+          'outcome', 'unsupported', 'reasonCode', 'create_target_unresolved'
+        );
       end if;
-      creations := creations || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-        'ordinal', creation_task -> 'ordinal', 'recordTypeId', subject -> 'recordTypeId',
-        'values', subject -> 'submittedValues', 'finalValues', subject -> 'finalValues'
+      create_targets := create_targets || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'ordinal', pg_catalog.jsonb_array_length(create_targets),
+        'recordTypeId', subject -> 'recordTypeId',
+        'recordType', target_meta -> 'recordType',
+        'beforeSaveFlows', vortex_record.before_save_flows_for_record_type_internal(
+          (target_meta ->> 'moduleRootId')::uuid,
+          (target_meta ->> 'moduleReleaseRevision')::bigint,
+          (subject ->> 'recordTypeId')::uuid
+        )
       ));
       roles := roles || pg_catalog.jsonb_build_object(subject_index::text, 'creation');
-      creation_index := creation_index + 1;
     elsif subject -> 'recordTypeId' = p_named_action -> 'recordTypeId'
       and subject -> 'recordId' = p_named_action -> 'recordId' then
       if root_seen or subject -> 'expectedConcurrencyNumber' is distinct from p_named_action -> 'expectedConcurrencyNumber'
         or (root_delete and subject ->> 'operation' <> 'delete')
         or (not root_delete and (subject ->> 'operation' <> 'update' or pg_catalog.jsonb_array_length(root_fields) = 0))
-        or supplied_fields is distinct from root_fields then
+        or exists (
+          select 1 from pg_catalog.jsonb_array_elements_text(supplied_fields) as supplied(key)
+          where not exists (
+            select 1 from pg_catalog.jsonb_array_elements_text(root_fields) as allowed(key)
+            where pg_catalog.lower(allowed.key) = supplied.key
+          )
+        ) then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'action_subject_mismatch');
       end if;
       root_seen := true;
       roles := roles || pg_catalog.jsonb_build_object(subject_index::text, 'subject');
     else
-      select pg_catalog.jsonb_object_agg(copy.value ->> 'fromFieldId', copy.value -> 'value')
-      into copy_values from pg_catalog.jsonb_array_elements(coalesce(copy_plan -> 'copies', '[]'::jsonb)) as copy(value)
-      where copy.value -> 'targetRecordId' = subject -> 'recordId';
-      if subject ->> 'operation' <> 'update' or subject -> 'recordTypeId' is distinct from p_named_action -> 'recordTypeId'
-        or copy_values is null or subject -> 'submittedValues' is distinct from copy_values
-        or (subject ->> 'recordId')::uuid = any(copied_targets) then
+      -- A relationship copy updates another record of the subject's type, only on the link
+      -- fields of the relationships the policy lists; the planner derived the values.
+      if subject ->> 'operation' <> 'update'
+        or subject -> 'recordTypeId' is distinct from p_named_action -> 'recordTypeId'
+        or pg_catalog.jsonb_array_length(supplied_fields) = 0
+        or (subject ->> 'recordId')::uuid = any(copied_targets)
+        or exists (
+          select 1 from pg_catalog.jsonb_array_elements_text(supplied_fields) as supplied(key)
+          where not exists (
+            select 1 from pg_catalog.jsonb_array_elements_text(copy_field_ids) as allowed(key)
+            where allowed.key = supplied.key
+          )
+        ) then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'relationship_copy_plan_mismatch');
       end if;
       copied_targets := pg_catalog.array_append(copied_targets, (subject ->> 'recordId')::uuid);
       roles := roles || pg_catalog.jsonb_build_object(subject_index::text, 'copy');
     end if;
   end loop;
-  if root_seen is distinct from (root_delete or pg_catalog.jsonb_array_length(root_fields) > 0)
-    or creation_index <> pg_catalog.jsonb_array_length(creation_tasks)
-    or exists (select 1 from pg_catalog.jsonb_array_elements(coalesce(copy_plan -> 'copies', '[]'::jsonb)) as copy(value)
-      where not ((copy.value ->> 'targetRecordId')::uuid = any(copied_targets))) then
-    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'action_effects_missing');
-  end if;
-  creation_plan := vortex_record.named_action_creation_plan_internal(
-    action_reference ->> 'ownerKind', (action_reference ->> 'ownerId')::uuid,
-    (action_reference ->> 'releaseRevision')::bigint, (action_reference ->> 'actionId')::uuid,
-    (p_named_action ->> 'recordTypeId')::uuid, creations, action_context
-  );
-  if creation_plan ->> 'outcome' is distinct from 'planned' then return creation_plan; end if;
   return pg_catalog.jsonb_build_object('outcome', 'prepared', 'actionContext', action_context,
-    'loaded', loaded, 'bounds', bounds, 'intentRoles', roles, 'createTargets', creation_plan -> 'createTargets');
+    'loaded', loaded, 'bounds', bounds, 'intentRoles', roles, 'createTargets', create_targets);
 end
 $function$;
 
@@ -174,4 +192,4 @@ alter function vortex_record.prepare_named_record_change_intents_internal(jsonb,
 revoke all on function vortex_record.prepare_named_record_change_intents_internal(jsonb,jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_record.prepare_named_record_change_intents_internal(jsonb,jsonb) is
-  'Private named-command authority and intent scope: verifies the exact installed action, current subject permission and revision, declared creates, exact relationship copies and optional subject delete before the common record writer prepares its graph.';
+  'Private named-command authority and intent scope: verifies the exact installed action, current subject permission and revision, and that every intent is within the write policy derived from the action''s flow (subject fields or delete, creates, relationship copy fields) before the common record writer prepares its graph. It plans nothing.';

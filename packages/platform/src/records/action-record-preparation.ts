@@ -8,12 +8,12 @@ import {
 } from "../definition/module-contracts";
 import { executeNamedActionResultSchema, type ExecuteNamedActionResult } from "./named-actions";
 import { revision } from "./save-record";
-import type { NamedActionCreateTarget, PreparedNamedAction } from "./named-action-composition";
+import type { PreparedNamedAction } from "./named-action-inputs";
 import type { DatabaseRow } from "../db/request-transaction";
 
 export type ResultRow = DatabaseRow & { readonly value: unknown };
 
-export type PreparedAction = PreparedNamedAction &
+type PreparedAction = PreparedNamedAction &
   Readonly<{
     outcome: "prepared" | "previewed";
     readableFieldIds: ReadonlySet<string>;
@@ -23,12 +23,6 @@ export type PreparedAction = PreparedNamedAction &
     singleRequiredPermissionId?: string;
     /** The exact release's compiled before-save rules for the subject, unparsed. */
     beforeSaveFlows?: unknown;
-    copyTargets: readonly Readonly<{
-      recordId: string;
-      concurrencyNumber: number;
-      existingValues: Readonly<Record<string, unknown>>;
-      submittedValues: Readonly<Record<string, unknown>>;
-    }>[];
   }>;
 
 export type ActionPreparation =
@@ -58,85 +52,6 @@ export const completedResult = (candidate: Record<string, unknown>) => {
     backgroundDelivery: candidate.backgroundDelivery,
   });
   return result.success ? result.data : undefined;
-};
-
-const parseCreateTargets = (candidate: unknown): readonly NamedActionCreateTarget[] | undefined => {
-  if (!Array.isArray(candidate)) return undefined;
-  const targets: NamedActionCreateTarget[] = [];
-  for (const entry of candidate) {
-    if (typeof entry !== "object" || entry === null) return undefined;
-    const value = entry as Record<string, unknown>;
-    const recordType = recordTypeDefinitionSchema.safeParse(value.recordType);
-    if (
-      !recordType.success ||
-      recordType.data.systemProjection !== undefined ||
-      typeof value.ordinal !== "number" ||
-      !Number.isSafeInteger(value.ordinal) ||
-      value.ordinal < 0 ||
-      typeof value.recordTypeId !== "string" ||
-      value.recordTypeId.toLowerCase() !== recordType.data.recordTypeId.toLowerCase()
-    )
-      return undefined;
-    targets.push({
-      ordinal: value.ordinal,
-      recordTypeId: recordType.data.recordTypeId,
-      recordType: recordType.data,
-      beforeSaveFlows: value.beforeSaveFlows,
-    });
-  }
-  return targets.every(
-    (target, index) => index === 0 || target.ordinal > targets[index - 1]!.ordinal,
-  )
-    ? targets
-    : undefined;
-};
-
-const parseCopyTargets = (candidate: unknown, recordType: PreparedNamedAction["recordType"]) => {
-  if (!Array.isArray(candidate)) return undefined;
-  const targets: Array<{
-    recordId: string;
-    concurrencyNumber: number;
-    existingValues: Record<string, unknown>;
-    submittedValues: Record<string, unknown>;
-  }> = [];
-  const fieldIds = new Set(recordType.fields.map((field) => field.fieldId.toLowerCase()));
-  for (const entry of candidate) {
-    if (typeof entry !== "object" || entry === null) return undefined;
-    const value = entry as Record<string, unknown>;
-    if (
-      typeof value.recordId !== "string" ||
-      typeof value.existingValues !== "object" ||
-      value.existingValues === null ||
-      Array.isArray(value.existingValues) ||
-      typeof value.submittedValues !== "object" ||
-      value.submittedValues === null ||
-      Array.isArray(value.submittedValues)
-    )
-      return undefined;
-    const recordId = value.recordId;
-    const concurrencyNumber = revision(value.concurrencyNumber);
-    if (concurrencyNumber === undefined) return undefined;
-    const existingValues = { ...(value.existingValues as Record<string, unknown>) };
-    const submittedValues = value.submittedValues as Record<string, unknown>;
-    if (
-      Object.keys(submittedValues).length === 0 ||
-      Object.keys(submittedValues).some((fieldId) => !fieldIds.has(fieldId.toLowerCase())) ||
-      targets.some((target) => target.recordId.toLowerCase() === recordId.toLowerCase())
-    )
-      return undefined;
-    for (const field of recordType.fields) {
-      if (
-        !field.required &&
-        field.type !== "reference_number" &&
-        field.type !== "calculation" &&
-        field.type !== "total" &&
-        existingValues[field.fieldId] === null
-      )
-        delete existingValues[field.fieldId];
-    }
-    targets.push({ recordId, concurrencyNumber, existingValues, submittedValues });
-  }
-  return targets;
 };
 
 export const parsePreparation = (candidate: unknown): ActionPreparation => {
@@ -171,20 +86,14 @@ export const parsePreparation = (candidate: unknown): ActionPreparation => {
     return { outcome: "refused", ...(correlationId ? { correlationId } : {}) };
   const action = actionDefinitionSchema.safeParse(value.action);
   const recordType = recordTypeDefinitionSchema.safeParse(value.recordType);
-  const createTargets = parseCreateTargets(value.createTargets);
-  const copyTargets = recordType.success
-    ? parseCopyTargets(value.copyTargets, recordType.data)
-    : undefined;
   // An action that targets a registered protected operation, and every action of a system
-  // projection record type, runs through that operation's owning service, never through ordered
-  // record tasks.
+  // projection record type, runs through that operation's owning service, never through an
+  // action flow.
   if (
     !action.success ||
     action.data.protectedOperation !== undefined ||
     !recordType.success ||
     recordType.data.systemProjection !== undefined ||
-    createTargets === undefined ||
-    copyTargets === undefined ||
     value.validationContractVersion !== moduleValidationContractVersion ||
     typeof value.recordId !== "string" ||
     typeof value.existingValues !== "object" ||
@@ -218,8 +127,6 @@ export const parsePreparation = (candidate: unknown): ActionPreparation => {
     recordId: value.recordId,
     existingValues,
     actorOrganizationAccountId: value.actorOrganizationAccountId,
-    createTargets,
-    copyTargets,
     readableFieldIds: new Set(
       value.readableFieldIds.filter((item): item is string => typeof item === "string"),
     ),

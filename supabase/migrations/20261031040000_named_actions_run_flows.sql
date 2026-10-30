@@ -176,542 +176,222 @@ comment on function vortex_record.installed_record_type_action_contributions_int
 
 set role vortex_record_adapter;
 
-create or replace function vortex_record.named_action_creation_plan_internal(
-  p_action_owner_kind text,
-  p_action_owner_id uuid,
-  p_action_release_revision bigint,
-  p_action_id uuid,
+create or replace function vortex_record.prepare_record_create_internal(
   p_record_type_id uuid,
-  p_creations jsonb,
-  p_action_context jsonb
+  p_final_values jsonb,
+  p_submitted_field_ids uuid[],
+  p_selected_group_id uuid default null
 )
 returns jsonb
 language plpgsql
 volatile
-security invoker
+security definer
 set search_path = ''
 as $function$
 declare
-  action_context jsonb;
-  task_value jsonb;
-  task_ordinal integer;
-  target_type_id uuid;
-  target_meta jsonb;
-  target_type jsonb;
-  ownership_mode text;
-  owner_group_count integer;
-  ownership_relationship jsonb;
-  ownership_field jsonb;
-  ownership_field_id text;
-  field_key text;
-  field_value jsonb;
-  relationship_value jsonb;
-  create_targets jsonb := '[]'::jsonb;
-  supplied jsonb;
-  expected_plan jsonb := '[]'::jsonb;
-  supplied_plan jsonb := '[]'::jsonb;
-begin
-  -- The caller resolved this exact installed action once for its whole step.
-  action_context := p_action_context;
-
-  -- A create-bearing command may also change the subject's own links.
-  -- The inversion this used to guard against (the subject's relationship edge
-  -- identities L6 before a created record's reference-number counter L4 and
-  -- data version) is closed by the terminal writer, which reserves every
-  -- creation's counters and every affected data version before the subject
-  -- writer runs.
-
-  -- The creations the action may make are the write policy derived from its flow, in flow order.
-  for task_value, task_ordinal in
-    select pg_catalog.jsonb_build_object(
-        'recordTypeId', item.value -> 'recordTypeId',
-        'values', coalesce((
-          select pg_catalog.jsonb_object_agg(field.value, 'null'::jsonb)
-          from pg_catalog.jsonb_array_elements_text(item.value -> 'fieldIds') as field(value)
-        ), '{}'::jsonb)
-      ), (item.ordinality - 1)::integer
-    from pg_catalog.jsonb_array_elements(
-      coalesce(action_context #> '{action,writePolicy,creates}', '[]'::jsonb)
-    ) with ordinality as item(value, ordinality)
-    order by item.ordinality
-  loop
-    if not pg_catalog.pg_input_is_valid(task_value ->> 'recordTypeId', 'uuid') then
-      return pg_catalog.jsonb_build_object(
-        'outcome', 'unsupported', 'reasonCode', 'create_target_unresolved'
-      );
-    end if;
-    target_type_id := (task_value ->> 'recordTypeId')::uuid;
-    target_meta := vortex_record.resolve_record_action_context_internal(
-      target_type_id, 'create'
-    );
-    target_type := target_meta -> 'recordType';
-    if pg_catalog.jsonb_typeof(target_type) <> 'object' then
-      return pg_catalog.jsonb_build_object(
-        'outcome', 'unsupported', 'reasonCode', 'create_target_unresolved'
-      );
-    end if;
-    ownership_mode := target_type ->> 'ownershipMode';
-
-    -- A named action has no owner Group selection. A single live Group
-    -- membership identifies its owner without trusting a caller-supplied ID.
-    -- The insert phase checks the same membership again under a lock.
-    if ownership_mode = 'group' then
-      select pg_catalog.count(*) into owner_group_count
-      from vortex_access.list_current_record_owner_groups();
-      if owner_group_count <> 1 then
-        return pg_catalog.jsonb_build_object(
-          'outcome', 'unsupported', 'reasonCode', case when owner_group_count = 0
-            then 'create_target_owner_unavailable'
-            else 'create_target_owner_ambiguous' end
-        );
-      end if;
-    end if;
-    -- Refusal 2: an `inherited` target derives its owner from one declared
-    -- relationship. Authored values name its source field, not its identity.
-    if ownership_mode = 'inherited' then
-      if pg_catalog.pg_input_is_valid(
-          target_type ->> 'ownershipRelationshipId', 'uuid'
-        ) is distinct from true
-        or pg_catalog.jsonb_typeof(target_type -> 'relationships') is distinct from 'array'
-        or pg_catalog.jsonb_typeof(target_type -> 'fields') is distinct from 'array' then
-        return pg_catalog.jsonb_build_object(
-          'outcome', 'unsupported', 'reasonCode', 'create_target_owner_relationship_missing'
-        );
-      end if;
-
-      select item.value into strict ownership_relationship
-      from pg_catalog.jsonb_array_elements(target_type -> 'relationships') item(value)
-      where pg_catalog.lower(item.value ->> 'relationshipId') = pg_catalog.lower(
-        target_type ->> 'ownershipRelationshipId'
-      );
-      if pg_catalog.pg_input_is_valid(
-          ownership_relationship ->> 'fromRecordTypeId', 'uuid'
-        ) is distinct from true
-        or pg_catalog.lower(ownership_relationship ->> 'fromRecordTypeId')
-          is distinct from target_type_id::text
-        or pg_catalog.pg_input_is_valid(
-          ownership_relationship ->> 'fromFieldId', 'uuid'
-        ) is distinct from true then
-        return pg_catalog.jsonb_build_object(
-          'outcome', 'unsupported', 'reasonCode', 'create_target_owner_relationship_missing'
-        );
-      end if;
-
-      ownership_field_id := pg_catalog.lower(ownership_relationship ->> 'fromFieldId');
-      select item.value into strict ownership_field
-      from pg_catalog.jsonb_array_elements(target_type -> 'fields') item(value)
-      where pg_catalog.lower(item.value ->> 'fieldId') = ownership_field_id;
-      if (ownership_field ->> 'type' in ('link', 'link_to_one_of_several'))
-          is distinct from true
-        or (ownership_relationship ->> 'cardinality' in ('one_to_one', 'many_to_one'))
-          is distinct from true
-        or not (ownership_relationship ? case ownership_field ->> 'type'
-          when 'link' then 'toRecordType' else 'toRecordTypes' end)
-        or (select pg_catalog.count(*)
-          from pg_catalog.jsonb_array_elements(target_type -> 'relationships') item(value)
-          where pg_catalog.lower(item.value ->> 'fromFieldId') = ownership_field_id) <> 1 then
-        return pg_catalog.jsonb_build_object(
-          'outcome', 'unsupported', 'reasonCode', 'create_target_relationship_unsupported'
-        );
-      end if;
-      if not (task_value -> 'values') ? ownership_field_id then
-        return pg_catalog.jsonb_build_object(
-          'outcome', 'unsupported', 'reasonCode', 'create_target_owner_relationship_missing'
-        );
-      end if;
-    end if;
-
-    for field_key in
-      select pg_catalog.lower(item.value)
-      from pg_catalog.jsonb_object_keys(task_value -> 'values') item(value)
-    loop
-      select item.value into field_value
-      from pg_catalog.jsonb_array_elements(target_type -> 'fields') item(value)
-      where pg_catalog.lower(item.value ->> 'fieldId') = field_key;
-      if field_value is null then
-        return pg_catalog.jsonb_build_object(
-          'outcome', 'unsupported', 'reasonCode', 'create_target_field_unknown'
-        );
-      end if;
-      if field_value ->> 'type' = 'reference_number' then
-        return pg_catalog.jsonb_build_object(
-          'outcome', 'unsupported', 'reasonCode', 'create_target_generated_field'
-        );
-      end if;
-      -- Refusal 3: only to-one link semantics are implemented. A link names its
-      -- single declared target and a link to one of several record types its
-      -- declared list; the edge writer proves the concrete target a member.
-      if field_value ->> 'type' in ('link', 'link_to_one_of_several') then
-        select item.value into relationship_value
-        from pg_catalog.jsonb_array_elements(target_type -> 'relationships') item(value)
-        where pg_catalog.lower(item.value ->> 'fromFieldId') = field_key;
-        if relationship_value is null
-          or not (relationship_value ? case field_value ->> 'type'
-            when 'link' then 'toRecordType' else 'toRecordTypes' end)
-          or relationship_value ->> 'cardinality' not in ('one_to_one', 'many_to_one') then
-          return pg_catalog.jsonb_build_object(
-            'outcome', 'unsupported', 'reasonCode', 'create_target_relationship_unsupported'
-          );
-        end if;
-      end if;
-    end loop;
-
-    create_targets := create_targets || pg_catalog.jsonb_build_array(
-      pg_catalog.jsonb_build_object(
-        'ordinal', task_ordinal,
-        'recordTypeId', target_type_id,
-        'storageContractId', (target_meta ->> 'storageContractId')::uuid,
-        'storageScope', target_meta ->> 'storageScope',
-        'ownershipMode', ownership_mode,
-        'recordType', target_type,
-        'beforeSaveFlows', vortex_record.before_save_flows_for_record_type_internal(
-          (target_meta ->> 'moduleRootId')::uuid,
-          (target_meta ->> 'moduleReleaseRevision')::bigint,
-          target_type_id
-        )
-      )
-    );
-    expected_plan := expected_plan || pg_catalog.jsonb_build_array(
-      pg_catalog.jsonb_build_object(
-        'ordinal', task_ordinal,
-        'recordTypeId', pg_catalog.lower(target_type_id::text),
-        'valueFieldIds', coalesce((
-          select pg_catalog.jsonb_agg(pg_catalog.lower(item.value) order by pg_catalog.lower(item.value) collate "C")
-          from pg_catalog.jsonb_object_keys(task_value -> 'values') item(value)
-        ), '[]'::jsonb)
-      )
-    );
-  end loop;
-
-  if p_creations is not null then
-    if pg_catalog.jsonb_typeof(p_creations) <> 'array' then
-      return pg_catalog.jsonb_build_object(
-        'outcome', 'refused', 'reasonCode', 'command_invalid'
-      );
-    end if;
-    for supplied in
-      select item.value
-      from pg_catalog.jsonb_array_elements(p_creations) with ordinality item(value, ordinality)
-      order by item.ordinality
-    loop
-      if pg_catalog.jsonb_typeof(supplied) <> 'object'
-        or not (supplied ?& array['ordinal', 'recordTypeId', 'values', 'finalValues'])
-        or pg_catalog.jsonb_typeof(supplied -> 'values') <> 'object'
-        or pg_catalog.jsonb_typeof(supplied -> 'finalValues') <> 'object'
-        or not pg_catalog.pg_input_is_valid(supplied ->> 'recordTypeId', 'uuid') then
-        return pg_catalog.jsonb_build_object(
-          'outcome', 'refused', 'reasonCode', 'command_invalid'
-        );
-      end if;
-      supplied_plan := supplied_plan || pg_catalog.jsonb_build_array(
-        pg_catalog.jsonb_build_object(
-          'ordinal', (supplied ->> 'ordinal')::integer,
-          'recordTypeId', pg_catalog.lower((supplied ->> 'recordTypeId')::uuid::text),
-          'valueFieldIds', coalesce((
-            select pg_catalog.jsonb_agg(pg_catalog.lower(item.value) order by pg_catalog.lower(item.value) collate "C")
-            from pg_catalog.jsonb_object_keys(supplied -> 'values') item(value)
-          ), '[]'::jsonb)
-        )
-      );
-    end loop;
-    if supplied_plan is distinct from expected_plan then
-      return pg_catalog.jsonb_build_object(
-        'outcome', 'refused', 'reasonCode', 'creation_plan_mismatch'
-      );
-    end if;
-  end if;
-
-  return pg_catalog.jsonb_build_object(
-    'outcome', 'planned', 'createTargets', create_targets
-  );
-exception
-  when no_data_found or too_many_rows then
-    return pg_catalog.jsonb_build_object(
-      'outcome', 'unsupported', 'reasonCode', 'create_target_unresolved'
-    );
-end
-$function$;
-
-alter function vortex_record.named_action_creation_plan_internal(text,uuid,bigint,uuid,uuid,jsonb,jsonb) owner to vortex_record_adapter;
-
-revoke all on function vortex_record.named_action_creation_plan_internal(
-  text, uuid, bigint, uuid, uuid, jsonb, jsonb
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.named_action_creation_plan_internal(
-  text, uuid, bigint, uuid, uuid, jsonb, jsonb
-) to vortex_record_adapter;
-comment on function vortex_record.named_action_creation_plan_internal(
-  text, uuid, bigint, uuid, uuid, jsonb, jsonb
-) is
-  'Private named-action step over the installed action its caller resolved: resolves every record.create task against the exact active installation, refuses an unsupported creation shape, and returns the creation plan the command must supply back verbatim.';
-
-create or replace function vortex_record.prepare_named_action_relationship_copies_internal(
-  p_action_owner_kind text,
-  p_action_owner_id uuid,
-  p_action_release_revision bigint,
-  p_action_id uuid,
-  p_subject_record_type_id uuid,
-  p_subject_record_id uuid,
-  p_inputs jsonb,
-  p_action_context jsonb
-)
-returns jsonb
-language plpgsql
-volatile
-security invoker
-set search_path = ''
-as $function$
-declare
+  meta jsonb;
   context_value jsonb;
-  organization_id_value uuid;
-  action_context jsonb;
-  subject_meta jsonb;
-  loaded jsonb;
-  decision jsonb;
-  readable_field_ids jsonb;
-  catalogue jsonb;
-  change_value jsonb;
-  task_ordinal bigint;
-  input_candidate jsonb;
-  target_type_id uuid;
-  target_record_id uuid;
-  target_concurrency bigint;
-  relationship_text text;
+  record_type_value jsonb;
+  record_id_value uuid := pg_catalog.gen_random_uuid();
+  ownership_mode text;
+  owner_account_id uuid;
+  owner_group_id uuid;
+  selected_group_id uuid;
+  field_item jsonb;
+  field_id_value uuid;
+  column_value jsonb;
+  input_value jsonb;
+  final_values jsonb := coalesce(p_final_values, '{}'::jsonb);
+  physical_values jsonb := '{}'::jsonb;
+  edge_changes jsonb := '[]'::jsonb;
+  storage_change jsonb;
+  preview_installation jsonb;
   relationship_value jsonb;
-  edge_row record;
-  existing_row record;
-  edge_type_id uuid;
-  planned_keys text[] := array[]::text[];
-  copies jsonb := '[]'::jsonb;
-  lock_row record;
+  app_scope uuid;
+  refusal_reason text := 'record_create_refused';
 begin
-  if p_subject_record_type_id is null or p_subject_record_id is null
-    or pg_catalog.jsonb_typeof(p_inputs) is distinct from 'object' then
-    raise exception using errcode = '22023', message = 'Relationship copy is invalid';
-  end if;
-  -- The caller resolved this exact installed action once for its whole step.
-  action_context := p_action_context;
-  if pg_catalog.jsonb_array_length(
-    coalesce(action_context #> '{action,writePolicy,relationshipCopies}', '[]'::jsonb)
-  ) = 0 then
-    return null;
-  end if;
-  context_value := vortex_access.validated_human_request_context();
-  organization_id_value := (context_value ->> 'organizationId')::uuid;
-  subject_meta := vortex_record.resolve_record_action_context_internal(
-    p_subject_record_type_id, 'update'
-  );
-
-  -- What the actor can currently read of the subject under this named action.
-  -- The subject is authorised by the installed action, never by ordinary
-  -- update authority, exactly as its own writer decides it.
-  loaded := vortex_record.load_named_action_facts_internal(
-    p_action_owner_kind, p_action_owner_id, p_action_release_revision,
-    p_action_id, p_subject_record_type_id, p_subject_record_id, null
-  );
-  if loaded ->> 'outcome' is distinct from 'loaded' then
-    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'record_unavailable');
-  end if;
-  decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
-    pg_catalog.jsonb_build_object(
-      'declaration', loaded -> 'declaration',
-      'recordId', p_subject_record_id,
-      'facts', loaded -> 'facts'
-    )
-  )) -> 0);
-  if decision ->> 'outcome' is distinct from 'allowed' then
-    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'record_unavailable');
-  end if;
-  readable_field_ids := vortex_record.decide_record_field_bounds_internal(decision)
-    -> 'readableFieldIds';
-  if pg_catalog.jsonb_typeof(readable_field_ids) is distinct from 'array' then
-    raise exception using errcode = '55000', message = 'Relationship copy field bounds are unavailable';
+  if p_record_type_id is null
+    or p_record_type_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or pg_catalog.jsonb_typeof(p_final_values) <> 'object'
+    or p_submitted_field_ids is null
+    or pg_catalog.array_position(p_submitted_field_ids, null::uuid) is not null
+    or pg_catalog.cardinality(p_submitted_field_ids) <>
+      (select pg_catalog.count(distinct value) from pg_catalog.unnest(p_submitted_field_ids) as item(value)) then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
   end if;
 
-  -- Discover every target and copy first, then lock: a target row lock is the
-  -- first lock class, so it is taken as soon as the target is known.
-  for change_value, task_ordinal in
-    select change.value, change.ordinality
-    from pg_catalog.jsonb_array_elements(action_context #> '{action,writePolicy,relationshipCopies}')
-      with ordinality as change(value, ordinality)
-    order by change.ordinality
-  loop
-    -- The target is the declared `record_reference` input's record link, the
-    -- one value shape that input accepts.
-    input_candidate := p_inputs -> (change_value ->> 'targetInputKey');
-    if not exists (
-      select 1 from pg_catalog.jsonb_array_elements(action_context -> 'action' -> 'inputs') item(value)
-      where item.value ->> 'key' = change_value ->> 'targetInputKey'
-        and item.value ->> 'type' = 'record_reference'
-    ) or pg_catalog.jsonb_typeof(input_candidate) is distinct from 'object' then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
+  begin
+    meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'create');
+    preview_installation :=
+      vortex_record.read_current_preview_installation_internal();
+    if pg_catalog.jsonb_typeof(meta -> 'recordType') <> 'object'
+      or (preview_installation is null
+        and pg_catalog.jsonb_typeof(meta -> 'declaration') <> 'object')
+      or (preview_installation is not null
+        and (preview_installation ->> 'outcome' = 'refused'
+          or meta -> 'recordType' ? 'systemProjection')) then
+      refusal_reason := 'record_unavailable';
+      raise exception using errcode = 'P4020', message = refusal_reason;
     end if;
-    if not (input_candidate ?& array['recordTypeId', 'recordId'])
-      or input_candidate - array['recordTypeId', 'recordId']::text[] <> '{}'::jsonb
-      or not coalesce(pg_catalog.pg_input_is_valid(input_candidate ->> 'recordTypeId', 'uuid'), false)
-      or not coalesce(pg_catalog.pg_input_is_valid(input_candidate ->> 'recordId', 'uuid'), false) then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
-    end if;
-    target_type_id := (input_candidate ->> 'recordTypeId')::uuid;
-    target_record_id := (input_candidate ->> 'recordId')::uuid;
-    -- The copied relationships are the subject's own, so only another record of
-    -- the subject's record type can hold them.
-    if target_type_id <> p_subject_record_type_id
-      or target_record_id = p_subject_record_id then
-      return pg_catalog.jsonb_build_object(
-        'outcome', 'refused', 'reasonCode', 'relationship_copy_target_unavailable'
-      );
-    end if;
-
-    -- L1: the target row, exclusively, before any linked row or edge identity.
-    target_concurrency := null;
-    execute pg_catalog.format(
-      'select stored.concurrency_number from record_data.%I as stored
-       where stored.organisation_id = $1 and stored.record_id = $2
-         and stored.lifecycle_state = ''active'' for update',
-      subject_meta ->> 'table'
-    ) into target_concurrency using organization_id_value, target_record_id;
-    if target_concurrency is null then
-      return pg_catalog.jsonb_build_object(
-        'outcome', 'refused', 'reasonCode', 'relationship_copy_target_unavailable'
-      );
+    context_value := meta -> 'context';
+    record_type_value := meta -> 'recordType';
+    ownership_mode := record_type_value ->> 'ownershipMode';
+    app_scope := case when meta ->> 'storageScope' = 'application_contained'
+      then (context_value ->> 'applicationRootId')::uuid else null end;
+    if ownership_mode = 'organization_account' then
+      if p_selected_group_id is not null then
+        refusal_reason := 'owner_invalid';
+        raise exception using errcode = 'P4020', message = refusal_reason;
+      end if;
+      owner_account_id := (context_value ->> 'organizationAccountId')::uuid;
+    elsif ownership_mode = 'group' then
+      -- A create that selects no Group (a flow step has no one to ask) is owned by the one
+      -- Group the account currently belongs to; none or several refuse it.
+      selected_group_id := coalesce(p_selected_group_id, (
+        select case when pg_catalog.count(*) = 1
+          then (pg_catalog.array_agg(owner_group.group_id))[1] end
+        from vortex_access.list_current_record_owner_groups() as owner_group
+      ));
+      if not vortex_access.lock_current_record_owner_group_internal(selected_group_id) then
+        refusal_reason := 'owner_unavailable';
+        raise exception using errcode = 'P4020', message = refusal_reason;
+      end if;
+      owner_group_id := selected_group_id;
+    elsif p_selected_group_id is not null then
+      refusal_reason := 'owner_invalid';
+      raise exception using errcode = 'P4020', message = refusal_reason;
     end if;
 
-    for relationship_text in
-      select distinct pg_catalog.lower(item.value #>> '{}')
-      from pg_catalog.jsonb_array_elements(change_value -> 'relationshipIds') item(value)
-      order by 1
+    -- Every supplied value names one exact field.  Reference numbers are
+    -- generated here and cannot be supplied by a form or caller.
+    if exists (
+      select 1 from pg_catalog.jsonb_object_keys(final_values) as supplied(key)
+      where not (meta -> 'columns' ? pg_catalog.lower(supplied.key))
+    ) then
+      refusal_reason := 'unknown_field';
+      raise exception using errcode = 'P4020', message = refusal_reason;
+    end if;
+
+    for field_item in
+      select item.value from pg_catalog.jsonb_array_elements(record_type_value -> 'fields') as item(value)
+      order by item.value ->> 'fieldId'
     loop
-      select item.value into relationship_value
-      from pg_catalog.jsonb_array_elements(
-        action_context -> 'recordType' -> 'relationships'
-      ) item(value)
-      where pg_catalog.lower(item.value ->> 'relationshipId') = relationship_text
-        and pg_catalog.lower(item.value ->> 'fromRecordTypeId') =
-          pg_catalog.lower(p_subject_record_type_id::text);
-      if relationship_value is null
-        or relationship_value ->> 'cardinality' is distinct from 'many_to_one'
-        or not exists (
-          select 1 from pg_catalog.jsonb_array_elements_text(readable_field_ids) readable(value)
-          where pg_catalog.lower(readable.value) =
-            pg_catalog.lower(relationship_value ->> 'fromFieldId')
-        )
-        -- The plan copies the subject's edge as it stands before this command
-        -- writes the subject, so the action's flow may not also set that same link.
-        or exists (
-          select 1
-          from pg_catalog.jsonb_array_elements_text(
-            action_context #> '{action,writePolicy,subjectFieldIds}'
-          ) as key(field_key)
-          where pg_catalog.lower(key.field_key) =
-            pg_catalog.lower(relationship_value ->> 'fromFieldId')
+      field_id_value := (field_item ->> 'fieldId')::uuid;
+      column_value := meta -> 'columns' -> pg_catalog.lower(field_id_value::text);
+      if field_item ->> 'type' = 'reference_number' then
+        if final_values ? pg_catalog.lower(field_id_value::text)
+          or field_id_value = any (p_submitted_field_ids) then
+          refusal_reason := 'generated_field_not_submittable';
+          raise exception using errcode = 'P4020', message = refusal_reason;
+        end if;
+        input_value := pg_catalog.to_jsonb(case when preview_installation is null
+          then vortex_record.allocate_reference_number_internal(
+            (context_value ->> 'organizationId')::uuid,
+            (meta ->> 'storageContractId')::uuid,
+            field_id_value, app_scope, field_item -> 'settings'
+          )
+          else vortex_record.allocate_preview_reference_number_internal(
+            (preview_installation ->> 'previewInstallationId')::uuid,
+            (meta ->> 'storageContractId')::uuid,
+            field_id_value, field_item -> 'settings'
+          ) end);
+        final_values := final_values || pg_catalog.jsonb_build_object(
+          pg_catalog.lower(field_id_value::text), input_value
+        );
+      elsif final_values ? pg_catalog.lower(field_id_value::text) then
+        input_value := final_values -> pg_catalog.lower(field_id_value::text);
+        if (field_item ->> 'required')::boolean
+          and pg_catalog.jsonb_typeof(input_value) = 'null' then
+          refusal_reason := 'required_field_missing';
+          raise exception using errcode = 'P4020', message = refusal_reason;
+        end if;
+        if not vortex_record.canonical_record_value_matches(
+          input_value, field_item ->> 'type', column_value ->> 'databaseValueType'
         ) then
-        return pg_catalog.jsonb_build_object(
-          'outcome', 'refused', 'reasonCode', 'relationship_copy_unavailable'
-        );
-      end if;
-
-      catalogue := coalesce(catalogue, vortex_record.relationship_total_catalogue_internal());
-      if exists (
-        select 1
-        from pg_catalog.jsonb_array_elements(catalogue -> 'recordTypes') type_item(value)
-        cross join pg_catalog.jsonb_array_elements(type_item.value -> 'fields') field_item(value)
-        where field_item.value ->> 'type' = 'total'
-          and pg_catalog.lower(field_item.value #>> '{settings,relationshipId}') = relationship_text
-      ) then
-        return pg_catalog.jsonb_build_object(
-          'outcome', 'refused', 'reasonCode', 'unsupported_relationship_total_save'
-        );
-      end if;
-
-      -- Two changes may name the same target and relationship; it is copied once.
-      if (target_record_id::text || ':' || relationship_text) = any (planned_keys) then
+          refusal_reason := 'value_invalid';
+          raise exception using errcode = 'P4020', message = refusal_reason;
+        end if;
+      else
+        if (field_item ->> 'required')::boolean then
+          refusal_reason := 'required_field_missing';
+          raise exception using errcode = 'P4020', message = refusal_reason;
+        end if;
         continue;
       end if;
-      planned_keys := pg_catalog.array_append(
-        planned_keys, target_record_id::text || ':' || relationship_text
+
+      physical_values := physical_values || pg_catalog.jsonb_build_object(
+        column_value ->> 'token', input_value
       );
-
-      select edge.to_storage_contract_id, edge.to_record_id into edge_row
-      from vortex_record.relationship_edges as edge
-      where edge.relationship_id = (relationship_value ->> 'relationshipId')::uuid
-        and edge.from_organisation_id = organization_id_value
-        and edge.from_storage_contract_id = (subject_meta ->> 'storageContractId')::uuid
-        and edge.from_record_id = p_subject_record_id;
-      -- A relationship the subject has not set has nothing to copy.
-      if not found then continue; end if;
-      select catalogue_row.record_type_id into edge_type_id
-      from vortex_record.storage_catalogue as catalogue_row
-      where catalogue_row.storage_contract_id = edge_row.to_storage_contract_id;
-      if edge_type_id is null
-        or not vortex_record.relationship_declares_target_internal(
-          relationship_value, edge_type_id
-        ) then
-        return pg_catalog.jsonb_build_object(
-          'outcome', 'refused', 'reasonCode', 'relationship_copy_unavailable'
-        );
-      end if;
-
-      select edge.to_storage_contract_id, edge.to_record_id into existing_row
-      from vortex_record.relationship_edges as edge
-      where edge.relationship_id = (relationship_value ->> 'relationshipId')::uuid
-        and edge.from_organisation_id = organization_id_value
-        and edge.from_storage_contract_id = (subject_meta ->> 'storageContractId')::uuid
-        and edge.from_record_id = target_record_id;
-      if found then
-        -- Never delete or re-point an existing edge: the same edge is already
-        -- the desired state, any other refuses the whole command.
-        if existing_row.to_storage_contract_id = edge_row.to_storage_contract_id
-          and existing_row.to_record_id = edge_row.to_record_id then
-          continue;
-        end if;
-        return pg_catalog.jsonb_build_object(
-          'outcome', 'refused', 'reasonCode', 'relationship_copy_would_replace'
-        );
-      end if;
-
-      copies := copies || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-        'targetRecordTypeId', target_type_id,
-        'targetRecordId', target_record_id,
-        'relationshipId', (relationship_value ->> 'relationshipId')::uuid,
-        'fromFieldId', (relationship_value ->> 'fromFieldId')::uuid,
-        'value', pg_catalog.jsonb_build_object(
-          'recordTypeId', edge_type_id, 'recordId', edge_row.to_record_id
-        )
-      ));
     end loop;
-  end loop;
 
-  -- Every linked row's share lock, in one canonical order, still ahead of
-  -- every counter, data version and edge identity.
-  for lock_row in
-    select distinct
-      (copy.value #>> '{value,recordTypeId}')::uuid as record_type_id,
-      (copy.value #>> '{value,recordId}')::uuid as record_id
-    from pg_catalog.jsonb_array_elements(copies) copy(value)
-    order by 1, 2
-  loop
-    perform vortex_record.lock_relationship_target_row_internal(
-      lock_row.record_type_id, lock_row.record_id, organization_id_value
+    storage_change := pg_catalog.jsonb_build_object(
+        'storageContractId', meta -> 'storageContractId', 'recordId', record_id_value,
+        'expectedConcurrencyNumber', null,
+        'values', physical_values || pg_catalog.jsonb_build_object(
+          'module_root_id', meta -> 'moduleRootId', 'record_type_id', p_record_type_id,
+          'storage_contract_id', meta -> 'storageContractId', 'application_root_id', app_scope,
+          'definition_revision', meta -> 'moduleReleaseRevision',
+          'owner_organisation_account_id', owner_account_id, 'owner_group_id', owner_group_id,
+          'lifecycle_state', 'active', 'created_at', pg_catalog.statement_timestamp(),
+          'created_by', context_value -> 'organizationAccountId'
+        )
     );
-  end loop;
 
-  return pg_catalog.jsonb_build_object('outcome', 'planned', 'copies', copies);
+    -- The canonical link-target share-lock prelude is written once in
+    -- lock_record_change_targets_internal. Every created link's target row is
+    -- locked here before any edge identity, so a multi-link create uses the
+    -- same lock order as the update writer. A malformed or undeclared link
+    -- is left to the writer's own validation.
+    perform vortex_record.lock_record_change_targets_internal(
+      record_type_value, (context_value ->> 'organizationId')::uuid, final_values
+    );
+    for relationship_value in
+      select item.value from pg_catalog.jsonb_array_elements(record_type_value -> 'relationships') as item(value)
+      order by (item.value ->> 'relationshipId')::uuid
+    loop
+      field_id_value := (relationship_value ->> 'fromFieldId')::uuid;
+      if final_values ? pg_catalog.lower(field_id_value::text) then
+        edge_changes := edge_changes || pg_catalog.jsonb_build_array(
+          vortex_record.prepare_relationship_value_internal(
+            p_record_type_id, record_id_value,
+            (relationship_value ->> 'relationshipId')::uuid,
+            final_values -> pg_catalog.lower(field_id_value::text), false
+          )
+        );
+      elsif ownership_mode = 'inherited'
+        and (record_type_value ->> 'ownershipRelationshipId')::uuid =
+          (relationship_value ->> 'relationshipId')::uuid then
+        refusal_reason := 'required_owner_relationship_missing';
+        raise exception using errcode = 'P4020', message = refusal_reason;
+      end if;
+    end loop;
+
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'prepared', 'recordTypeId', p_record_type_id,
+      'recordId', record_id_value, 'values', final_values,
+      'submittedFieldIds', pg_catalog.to_jsonb(p_submitted_field_ids),
+      'storageChange', storage_change, 'edgeChanges', edge_changes
+    );
+  exception
+    when sqlstate 'P4020' then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', refusal_reason
+      );
+    when no_data_found or too_many_rows or object_not_in_prerequisite_state then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'record_unavailable'
+      );
+  end;
 end
 $function$;
 
-alter function vortex_record.prepare_named_action_relationship_copies_internal(text,uuid,bigint,uuid,uuid,uuid,jsonb,jsonb) owner to vortex_record_adapter;
+alter function vortex_record.prepare_record_create_internal(uuid,jsonb,uuid[],uuid) owner to vortex_record_adapter;
 
-revoke all on function vortex_record.prepare_named_action_relationship_copies_internal(
-  text, uuid, bigint, uuid, uuid, uuid, jsonb, jsonb
-) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.prepare_named_action_relationship_copies_internal(
-  text, uuid, bigint, uuid, uuid, uuid, jsonb, jsonb
-) to vortex_record_adapter;
-comment on function vortex_record.prepare_named_action_relationship_copies_internal(
-  text, uuid, bigint, uuid, uuid, uuid, jsonb, jsonb
-) is
-  'Private named-action step: re-derives every record.changes task from the installed action its caller resolved and the supplied inputs, locks every target row and then every linked row in canonical order before any counter, data version or edge identity, and plans only the selected, declared, readable many-to-one subject edges the target does not already hold. Returns null when the action has no such task, a refused outcome for a request it cannot honour, and raises only on a broken invariant.';
+revoke all on function vortex_record.prepare_record_create_internal(uuid, jsonb, uuid[], uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+comment on function vortex_record.prepare_record_create_internal(uuid, jsonb, uuid[], uuid) is
+  'Private create preparation: derives trusted scope, ownership and generated references, validates typed fields and relationship targets, and returns storage and edge mutations without inserting the record.';
 
 create or replace function vortex_record.prepare_named_action_subject_internal(
   p_preview boolean,
@@ -735,16 +415,9 @@ as $function$
 declare
   context_value jsonb;
   action_context jsonb;
-  creation_plan jsonb;
   loaded jsonb;
   decision jsonb;
   bounds jsonb;
-  copy_plan jsonb;
-  copy_targets jsonb := '[]'::jsonb;
-  copy_target record;
-  target_meta jsonb;
-  target_loaded jsonb;
-  target_decision jsonb;
   record_type_meta jsonb;
   reused_read_facts boolean := false;
 begin
@@ -766,16 +439,6 @@ begin
   if pg_catalog.jsonb_typeof(action_context -> 'action' -> 'writePolicy') is distinct from 'object' then
     return pg_catalog.jsonb_build_object(
       'outcome', 'unsupported', 'correlationId', context_value -> 'correlationId'
-    );
-  end if;
-  creation_plan := vortex_record.named_action_creation_plan_internal(
-    p_action_owner_kind, p_action_owner_id, p_action_release_revision,
-    p_action_id, p_record_type_id, null, action_context
-  );
-  if creation_plan ->> 'outcome' <> 'planned' then
-    return pg_catalog.jsonb_build_object(
-      'outcome', 'unsupported', 'reasonCode', creation_plan -> 'reasonCode',
-      'correlationId', context_value -> 'correlationId'
     );
   end if;
   -- A preview of a record its caller has just read in this invocation reuses
@@ -849,81 +512,6 @@ begin
     );
   end if;
   bounds := vortex_record.decide_record_field_bounds_internal(decision);
-  -- Use the same locked copy plan the writer re-derives. Only rows with an
-  -- actual new edge are evaluated; a no-op copy does not save its target.
-  copy_plan := vortex_record.prepare_named_action_relationship_copies_internal(
-    p_action_owner_kind, p_action_owner_id, p_action_release_revision,
-    p_action_id, p_record_type_id, p_record_id, p_inputs, action_context
-  );
-  if copy_plan ->> 'outcome' = 'refused' then
-    return pg_catalog.jsonb_build_object(
-      'outcome', 'refused', 'reasonCode', copy_plan -> 'reasonCode',
-      'correlationId', context_value -> 'correlationId'
-    );
-  end if;
-  for copy_target in
-    select (item.value ->> 'targetRecordId')::uuid as record_id,
-      pg_catalog.jsonb_object_agg(
-        item.value ->> 'fromFieldId', item.value -> 'value'
-      ) as submitted_values
-    from pg_catalog.jsonb_array_elements(
-      coalesce(copy_plan -> 'copies', '[]'::jsonb)
-    ) item(value)
-    group by 1
-    order by 1
-  loop
-    target_meta := vortex_record.resolve_record_action_context_internal(
-      p_record_type_id, 'update'
-    );
-    target_loaded := (vortex_record.load_record_access_facts_internal(
-      'update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-        'recordTypeId', p_record_type_id,
-        'recordId', copy_target.record_id
-      ))
-    ) -> 0);
-    if target_loaded ->> 'outcome' is distinct from 'loaded' then
-      return pg_catalog.jsonb_build_object(
-        'outcome', 'refused', 'reasonCode', 'relationship_copy_target_unavailable',
-        'correlationId', context_value -> 'correlationId'
-      );
-    end if;
-    target_decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
-      pg_catalog.jsonb_build_object(
-        'declaration', target_meta -> 'declaration',
-        'recordId', copy_target.record_id,
-        'facts', (target_loaded -> 'facts') || pg_catalog.jsonb_build_object( 'binding', target_meta -> 'declaration' -> 'recordBinding' )
-      )
-    )) -> 0);
-    if target_decision ->> 'outcome' is distinct from 'allowed' then
-      return pg_catalog.jsonb_build_object(
-        'outcome', 'permission_refused',
-        'correlationId', context_value -> 'correlationId'
-      );
-    end if;
-    if exists (
-      select 1 from pg_catalog.jsonb_object_keys(copy_target.submitted_values) field_id
-      where not exists (
-        select 1 from pg_catalog.jsonb_array_elements_text(
-          vortex_record.decide_record_field_bounds_internal(target_decision)
-            -> 'changeableFieldIds'
-        ) allowed(value)
-        where pg_catalog.lower(allowed.value) = pg_catalog.lower(field_id)
-      )
-    ) then
-      return pg_catalog.jsonb_build_object(
-        'outcome', 'permission_refused',
-        'correlationId', context_value -> 'correlationId'
-      );
-    end if;
-    copy_targets := copy_targets || pg_catalog.jsonb_build_array(
-      pg_catalog.jsonb_build_object(
-        'recordId', copy_target.record_id,
-        'concurrencyNumber', target_loaded -> 'concurrencyNumber',
-        'existingValues', target_loaded -> 'fieldValues',
-        'submittedValues', copy_target.submitted_values
-      )
-    );
-  end loop;
   return pg_catalog.jsonb_build_object(
     'outcome', case when p_preview then 'previewed' else 'prepared' end,
     'action', action_context -> 'action',
@@ -935,18 +523,6 @@ begin
       (action_context ->> 'moduleReleaseRevision')::bigint,
       p_record_type_id
     ),
-    'createTargets', coalesce((
-      select pg_catalog.jsonb_agg(
-        pg_catalog.jsonb_build_object(
-          'ordinal', item.value -> 'ordinal',
-          'recordTypeId', item.value -> 'recordTypeId',
-          'recordType', item.value -> 'recordType',
-          'beforeSaveFlows', item.value -> 'beforeSaveFlows'
-        ) order by (item.value ->> 'ordinal')::integer
-      )
-      from pg_catalog.jsonb_array_elements(creation_plan -> 'createTargets') item(value)
-    ), '[]'::jsonb),
-    'copyTargets', copy_targets,
     'recordId', p_record_id,
     'existingValues', loaded -> 'fieldValues',
     -- A singleton required permission was decided by the named-action access
@@ -970,7 +546,7 @@ alter function vortex_record.prepare_named_action_subject_internal(boolean,text,
 revoke all on function vortex_record.prepare_named_action_subject_internal(boolean,text,uuid,bigint,uuid,uuid,uuid,bigint,jsonb,jsonb,jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_record.prepare_named_action_subject_internal(boolean,text,uuid,bigint,uuid,uuid,uuid,bigint,jsonb,jsonb,jsonb) is
-  'Private named-action subject preparation shared by preview and command execution: resolves current action authority, locked facts, creation metadata and relationship copies without reading or writing a command receipt or Activity.';
+  'Private named-action subject preparation shared by preview and command execution: resolves current action authority and locked facts without reading or writing a command receipt or Activity.';
 
 create or replace function vortex_record.prepare_named_record_change_intents_internal(
   p_named_action jsonb,
@@ -988,20 +564,19 @@ declare
   loaded jsonb;
   decision jsonb;
   bounds jsonb;
-  copy_plan jsonb;
-  creation_plan jsonb;
+  policy jsonb;
   subject jsonb;
   subject_index integer;
-  expected_fields jsonb;
   supplied_fields jsonb;
   root_fields jsonb;
   root_delete boolean;
   root_seen boolean := false;
-  creation_tasks jsonb;
-  creation_index integer := 0;
-  creation_task jsonb;
-  creations jsonb := '[]'::jsonb;
-  copy_values jsonb;
+  copy_field_ids jsonb;
+  create_entry jsonb;
+  create_ordinal integer;
+  used_creates integer[] := array[]::integer[];
+  target_meta jsonb;
+  create_targets jsonb := '[]'::jsonb;
   copied_targets uuid[] := array[]::uuid[];
   roles jsonb := '{}'::jsonb;
 begin
@@ -1057,90 +632,109 @@ begin
   ) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'action_inputs_invalid');
   end if;
-  if pg_catalog.jsonb_typeof(action_context #> '{action,writePolicy}') is distinct from 'object' then
+  policy := action_context #> '{action,writePolicy}';
+  if pg_catalog.jsonb_typeof(policy) is distinct from 'object' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'action_effects_invalid');
   end if;
-  -- What the action may write is the write policy derived from its published flow.
-  select coalesce(pg_catalog.jsonb_agg(distinct field.key order by field.key), '[]'::jsonb)
-  into root_fields
-  from pg_catalog.jsonb_array_elements_text(action_context #> '{action,writePolicy,subjectFieldIds}') as field(key);
-  root_delete := (action_context #>> '{action,writePolicy,deletesSubject}')::boolean;
+  -- What the action may write is the write policy derived from its published flow. The flow's
+  -- record steps are planned by the flow runner; this only proves each intent is within the policy.
+  root_fields := policy -> 'subjectFieldIds';
+  root_delete := (policy ->> 'deletesSubject')::boolean;
   if root_delete and pg_catalog.jsonb_array_length(root_fields) > 0 then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'action_effects_invalid');
   end if;
-  select coalesce(pg_catalog.jsonb_agg(task.value || pg_catalog.jsonb_build_object('ordinal', task.ordinality - 1)
-    order by task.ordinality), '[]'::jsonb) into creation_tasks
-  from pg_catalog.jsonb_array_elements(action_context #> '{action,writePolicy,creates}') with ordinality as task(value, ordinality);
-  copy_plan := vortex_record.prepare_named_action_relationship_copies_internal(
-    action_reference ->> 'ownerKind', (action_reference ->> 'ownerId')::uuid,
-    (action_reference ->> 'releaseRevision')::bigint, (action_reference ->> 'actionId')::uuid,
-    (p_named_action ->> 'recordTypeId')::uuid, (p_named_action ->> 'recordId')::uuid,
-    p_named_action -> 'inputs', action_context
-  );
-  if copy_plan ->> 'outcome' = 'refused' then return copy_plan; end if;
+  select coalesce(pg_catalog.jsonb_agg(distinct pg_catalog.lower(relationship.value ->> 'fromFieldId')), '[]'::jsonb)
+  into copy_field_ids
+  from pg_catalog.jsonb_array_elements(policy -> 'relationshipCopies') as copied(value)
+  cross join pg_catalog.jsonb_array_elements(copied.value -> 'relationshipIds') as copied_id(value)
+  join pg_catalog.jsonb_array_elements(action_context -> 'recordType' -> 'relationships') as relationship(value)
+    on pg_catalog.lower(relationship.value ->> 'relationshipId') = pg_catalog.lower(copied_id.value #>> '{}');
 
-  -- The four-intent shape stays unchanged. The exact installed action bounds which
-  -- subject, creation and copy each intent represents; derived parents come from the graph.
   for subject, subject_index in
     select item.value, (item.ordinality - 1)::integer
     from pg_catalog.jsonb_array_elements(p_subjects) with ordinality as item(value, ordinality)
   loop
-    select coalesce(pg_catalog.jsonb_agg(field.key order by field.key), '[]'::jsonb)
+    select coalesce(pg_catalog.jsonb_agg(pg_catalog.lower(field.key)), '[]'::jsonb)
     into supplied_fields from pg_catalog.jsonb_object_keys(subject -> 'submittedValues') as field(key);
     if subject ->> 'operation' = 'create' then
-      creation_task := creation_tasks -> creation_index;
-      if creation_task is null or subject -> 'recordTypeId' is distinct from creation_task -> 'recordTypeId'
-        or subject -> 'selectedGroupId' is distinct from 'null'::jsonb then
+      -- A creation is one the policy allows: its record type, and no field the flow does not set.
+      create_entry := null;
+      select entry.value, (entry.ordinality - 1)::integer into create_entry, create_ordinal
+      from pg_catalog.jsonb_array_elements(policy -> 'creates') with ordinality as entry(value, ordinality)
+      where pg_catalog.lower(entry.value ->> 'recordTypeId') = pg_catalog.lower(subject ->> 'recordTypeId')
+        and not ((entry.ordinality - 1)::integer = any(used_creates))
+        and not exists (
+          select 1 from pg_catalog.jsonb_array_elements_text(supplied_fields) as supplied(key)
+          where not exists (
+            select 1 from pg_catalog.jsonb_array_elements_text(entry.value -> 'fieldIds') as allowed(key)
+            where pg_catalog.lower(allowed.key) = supplied.key
+          )
+        )
+      order by entry.ordinality
+      limit 1;
+      if create_entry is null then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'creation_plan_mismatch');
       end if;
-      select coalesce(pg_catalog.jsonb_agg(field.key order by field.key), '[]'::jsonb)
-      into expected_fields from pg_catalog.jsonb_array_elements_text(creation_task -> 'fieldIds') as field(key);
-      if supplied_fields is distinct from expected_fields then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'creation_plan_mismatch');
+      used_creates := pg_catalog.array_append(used_creates, create_ordinal);
+      -- The record type is resolved for the create the way the common writer resolves it; the
+      -- owner Group and every field are decided by the common writer like a Save step.
+      target_meta := vortex_record.resolve_record_action_context_internal(
+        (subject ->> 'recordTypeId')::uuid, 'create'
+      );
+      if pg_catalog.jsonb_typeof(target_meta -> 'recordType') is distinct from 'object' then
+        return pg_catalog.jsonb_build_object(
+          'outcome', 'unsupported', 'reasonCode', 'create_target_unresolved'
+        );
       end if;
-      creations := creations || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-        'ordinal', creation_task -> 'ordinal', 'recordTypeId', subject -> 'recordTypeId',
-        'values', subject -> 'submittedValues', 'finalValues', subject -> 'finalValues'
+      create_targets := create_targets || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'ordinal', pg_catalog.jsonb_array_length(create_targets),
+        'recordTypeId', subject -> 'recordTypeId',
+        'recordType', target_meta -> 'recordType',
+        'beforeSaveFlows', vortex_record.before_save_flows_for_record_type_internal(
+          (target_meta ->> 'moduleRootId')::uuid,
+          (target_meta ->> 'moduleReleaseRevision')::bigint,
+          (subject ->> 'recordTypeId')::uuid
+        )
       ));
       roles := roles || pg_catalog.jsonb_build_object(subject_index::text, 'creation');
-      creation_index := creation_index + 1;
     elsif subject -> 'recordTypeId' = p_named_action -> 'recordTypeId'
       and subject -> 'recordId' = p_named_action -> 'recordId' then
       if root_seen or subject -> 'expectedConcurrencyNumber' is distinct from p_named_action -> 'expectedConcurrencyNumber'
         or (root_delete and subject ->> 'operation' <> 'delete')
         or (not root_delete and (subject ->> 'operation' <> 'update' or pg_catalog.jsonb_array_length(root_fields) = 0))
-        or supplied_fields is distinct from root_fields then
+        or exists (
+          select 1 from pg_catalog.jsonb_array_elements_text(supplied_fields) as supplied(key)
+          where not exists (
+            select 1 from pg_catalog.jsonb_array_elements_text(root_fields) as allowed(key)
+            where pg_catalog.lower(allowed.key) = supplied.key
+          )
+        ) then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'action_subject_mismatch');
       end if;
       root_seen := true;
       roles := roles || pg_catalog.jsonb_build_object(subject_index::text, 'subject');
     else
-      select pg_catalog.jsonb_object_agg(copy.value ->> 'fromFieldId', copy.value -> 'value')
-      into copy_values from pg_catalog.jsonb_array_elements(coalesce(copy_plan -> 'copies', '[]'::jsonb)) as copy(value)
-      where copy.value -> 'targetRecordId' = subject -> 'recordId';
-      if subject ->> 'operation' <> 'update' or subject -> 'recordTypeId' is distinct from p_named_action -> 'recordTypeId'
-        or copy_values is null or subject -> 'submittedValues' is distinct from copy_values
-        or (subject ->> 'recordId')::uuid = any(copied_targets) then
+      -- A relationship copy updates another record of the subject's type, only on the link
+      -- fields of the relationships the policy lists; the planner derived the values.
+      if subject ->> 'operation' <> 'update'
+        or subject -> 'recordTypeId' is distinct from p_named_action -> 'recordTypeId'
+        or pg_catalog.jsonb_array_length(supplied_fields) = 0
+        or (subject ->> 'recordId')::uuid = any(copied_targets)
+        or exists (
+          select 1 from pg_catalog.jsonb_array_elements_text(supplied_fields) as supplied(key)
+          where not exists (
+            select 1 from pg_catalog.jsonb_array_elements_text(copy_field_ids) as allowed(key)
+            where allowed.key = supplied.key
+          )
+        ) then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'relationship_copy_plan_mismatch');
       end if;
       copied_targets := pg_catalog.array_append(copied_targets, (subject ->> 'recordId')::uuid);
       roles := roles || pg_catalog.jsonb_build_object(subject_index::text, 'copy');
     end if;
   end loop;
-  if root_seen is distinct from (root_delete or pg_catalog.jsonb_array_length(root_fields) > 0)
-    or creation_index <> pg_catalog.jsonb_array_length(creation_tasks)
-    or exists (select 1 from pg_catalog.jsonb_array_elements(coalesce(copy_plan -> 'copies', '[]'::jsonb)) as copy(value)
-      where not ((copy.value ->> 'targetRecordId')::uuid = any(copied_targets))) then
-    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'action_effects_missing');
-  end if;
-  creation_plan := vortex_record.named_action_creation_plan_internal(
-    action_reference ->> 'ownerKind', (action_reference ->> 'ownerId')::uuid,
-    (action_reference ->> 'releaseRevision')::bigint, (action_reference ->> 'actionId')::uuid,
-    (p_named_action ->> 'recordTypeId')::uuid, creations, action_context
-  );
-  if creation_plan ->> 'outcome' is distinct from 'planned' then return creation_plan; end if;
   return pg_catalog.jsonb_build_object('outcome', 'prepared', 'actionContext', action_context,
-    'loaded', loaded, 'bounds', bounds, 'intentRoles', roles, 'createTargets', creation_plan -> 'createTargets');
+    'loaded', loaded, 'bounds', bounds, 'intentRoles', roles, 'createTargets', create_targets);
 end
 $function$;
 
@@ -1148,7 +742,7 @@ alter function vortex_record.prepare_named_record_change_intents_internal(jsonb,
 revoke all on function vortex_record.prepare_named_record_change_intents_internal(jsonb,jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_record.prepare_named_record_change_intents_internal(jsonb,jsonb) is
-  'Private named-command authority and intent scope: verifies the exact installed action, current subject permission and revision, declared creates, exact relationship copies and optional subject delete before the common record writer prepares its graph.';
+  'Private named-command authority and intent scope: verifies the exact installed action, current subject permission and revision, and that every intent is within the write policy derived from the action''s flow (subject fields or delete, creates, relationship copy fields) before the common record writer prepares its graph. It plans nothing.';
 
 create or replace function vortex_record.resolve_contributed_named_action_context_internal(
   p_base_context jsonb,
@@ -1543,5 +1137,8 @@ comment on function vortex_record.resolve_named_action_context_internal(
   text, uuid, bigint, uuid, uuid
 ) is
   'Private exact active installed action, permission-alternative and declared-Event resolver for protected named actions.';
+
+drop function vortex_record.named_action_creation_plan_internal(text, uuid, bigint, uuid, uuid, jsonb, jsonb);
+drop function vortex_record.prepare_named_action_relationship_copies_internal(text, uuid, bigint, uuid, uuid, uuid, jsonb, jsonb);
 
 reset role;

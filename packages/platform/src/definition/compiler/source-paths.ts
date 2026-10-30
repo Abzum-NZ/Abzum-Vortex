@@ -75,7 +75,6 @@ const directSourceKeyMap: Readonly<Record<string, string>> = Object.freeze({
   message: "messageKey",
   component: "componentId",
   workflow: "workflowId",
-  target_input: "targetInputKey",
   page: "pageId",
   query: "queryId",
   block: "blockId",

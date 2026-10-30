@@ -56,15 +56,12 @@ export function actionWritePolicy(
       }
       case "record.changes": {
         const literal = asObject(asObject(properties.changes).literal);
-        for (const change of literal.value as JsonObject[]) {
-          const target = asObject(asObject(change.target).reference);
+        for (const change of literal.value as JsonObject[])
           relationshipCopies.push({
             relationshipIds: (change.relationshipIds as string[]).map((alias) =>
               resolution.relationship(subject, alias),
             ),
-            targetInputKey: String(target.name),
           });
-        }
         break;
       }
       case "record.delete":

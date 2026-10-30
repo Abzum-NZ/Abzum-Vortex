@@ -41,7 +41,7 @@ import { formContinuationAnswerSchema } from "../workflows/form-continuation-ans
 import type { RecordSaveServiceResult } from "../records/save-record";
 import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
 import type { QueryContinuationKey } from "../queries/continuation-token";
-import type { TransactionFlowRunner } from "../rules/transaction-flow-run";
+import type { NamedActionFlowRunner } from "./flow-action-run";
 import type { BeforeSaveRuleWarning } from "../rules/before-save-flow-run";
 import type {
   FlowFailureCode,
@@ -191,7 +191,7 @@ type NamedActionRecordPort = Readonly<{
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
     command: unknown,
-    run: TransactionFlowRunner,
+    run: NamedActionFlowRunner,
   ): Promise<
     HumanOrganizationRequestResult<ExecuteNamedActionResult> &
       Readonly<{ warnings?: readonly BeforeSaveRuleWarning[] }>

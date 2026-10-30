@@ -1265,12 +1265,7 @@ export const actionWritePolicySchema = z
       z.object({ recordTypeId: recordTypeIdSchema, fieldIds: z.array(fieldIdSchema) }).strict(),
     ),
     relationshipCopies: z.array(
-      z
-        .object({
-          relationshipIds: z.array(containedComponentIdSchema).min(1),
-          targetInputKey: builderKeySchema,
-        })
-        .strict(),
+      z.object({ relationshipIds: z.array(containedComponentIdSchema).min(1) }).strict(),
     ),
     eventKeys: z.array(namespacedKeySchema),
   })

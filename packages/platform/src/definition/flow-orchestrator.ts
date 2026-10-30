@@ -10,7 +10,7 @@ import { resolveFlowValue } from "../rules/flow-value-runtime";
 import { parseFlowSegmentSeed } from "../rules/flow-segment-seed";
 import type { FlowRuntimeValues } from "../rules/flow-interpreter";
 import { flowWarningNoticeSchema } from "../workflows/form-continuation-contracts";
-import { runTransactionFlow } from "../rules/transaction-flow-run";
+import { namedActionFlowRunner } from "./flow-action-run";
 import {
   continueFlowRun,
   resumeFlowRun,
@@ -458,9 +458,13 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     if (flowId === undefined) return { kind: "unavailable" };
     const prepared = await prepare(session, selection, flowId, "action", ports);
     if (prepared === undefined) return { kind: "unavailable" };
+    if (prepared.release.recordTypes === undefined) return { kind: "unavailable" };
     const runId = newRunId();
-    return ports.actionRecords.execute(session, selection, command, (seed) =>
-      runTransactionFlow(prepared.library, flowId, runId, seed),
+    return ports.actionRecords.execute(
+      session,
+      selection,
+      command,
+      namedActionFlowRunner(prepared.library, prepared.release.recordTypes, flowId, runId),
     );
   };
 

@@ -29,7 +29,8 @@ import {
   createNamedActionRecordPort,
   namedActionBatchMaximum,
 } from "../../records/action-record-port";
-import { runTransactionFlow, type TransactionFlowRunner } from "../../rules/transaction-flow-run";
+import { namedActionFlowRunner } from "../../definition/flow-action-run";
+import { installedFlowRelease } from "../../definition/flow-installed-release";
 import { flowPlansOf } from "../../workflows/flow-plan";
 import {
   fieldChoiceLabelsOf,
@@ -319,8 +320,12 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
         return report({ kind: "refused", reason: "not_available" });
       }
       const runId = randomUUID();
-      const runner: TransactionFlowRunner = (seed) =>
-        runTransactionFlow(library, flowId, runId, seed);
+      const recordTypes = installedFlowRelease(placement.installed).recordTypes;
+      if (recordTypes === undefined) {
+        refuse("action_flow_unavailable");
+        return report({ kind: "refused", reason: "not_available" });
+      }
+      const runner = namedActionFlowRunner(library, recordTypes, flowId, runId);
 
       // The records the run covers, with the revision each is bound at.
       let targets: readonly Readonly<{ recordId: string; revision?: number }>[];
