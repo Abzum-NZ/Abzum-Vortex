@@ -782,6 +782,22 @@ export const placementOptionsFlow = (
   return undefined;
 };
 
+/**
+ * The keys of the form fields a placement's options are worked out from (its options flow's or
+ * declared query's inputs), or undefined when its options read nothing from the form.
+ */
+export const placementOptionInputKeys = (
+  context: InstalledRuntimeContext,
+  placement: Readonly<{ settings: Readonly<Record<string, unknown>> }>,
+): readonly string[] | undefined => {
+  const flow = placementOptionsFlow(context, placement);
+  if (flow !== undefined) return Object.values(flow.inputKeys);
+  const bound = isRecord(placement.settings.field) ? placement.settings.field.fieldId : undefined;
+  const query =
+    typeof bound === "string" ? installedLinkField(context, bound)?.sourceQuery : undefined;
+  return query === undefined ? undefined : Object.values(query.inputKeys);
+};
+
 /** The options of a field whose options a flow works out, searched and paged for one picker. */
 const loadFlowOptionsPage = async (
   session: IdentitySession,

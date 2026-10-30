@@ -584,20 +584,21 @@ export function useRuntimeInputs({
           if (event.event !== "options_requested") return;
           const owner = formOwners[placementId];
           const store = controlDraftsRef?.current;
-          // A field whose options a flow works out sends the form's draft: the flow reads it.
+          // A field whose options are worked out from other fields sends just those fields' draft.
+          const inputKeys = model.optionInputKeys[placementId];
           const draft =
-            owner === undefined ||
-            store === undefined ||
-            !model.optionsFlowPlacementIds.includes(placementId)
+            owner === undefined || store === undefined || inputKeys === undefined
               ? undefined
-              : {
-                  ...store.baselines[owner],
-                  ...Object.fromEntries(
-                    Object.values(store.drafts)
-                      .filter((entry) => entry.owner === owner)
-                      .map((entry) => [entry.fieldKey, entry.value]),
-                  ),
-                };
+              : Object.fromEntries(
+                  inputKeys.map((key) => [
+                    key,
+                    Object.values(store.drafts).find(
+                      (entry) => entry.owner === owner && entry.fieldKey === key,
+                    )?.value ??
+                      store.baselines[owner]?.[key] ??
+                      null,
+                  ]),
+                );
           return import("./field-options")
             .then(({ requestFieldOptions }) =>
               requestFieldOptions(

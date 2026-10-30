@@ -70,7 +70,7 @@ import { readFieldAccess } from "./field-access-read";
 import { projectGroupCreateForms } from "./group-create-forms";
 import { projectGuidedForm } from "./guided-form-projection";
 import { startStreamedPlacementReads } from "./streamed-placements";
-import { placementOptionsFlow, projectInitialLinkInputs } from "./link-input";
+import { placementOptionInputKeys, projectInitialLinkInputs } from "./link-input";
 import {
   projectPlacementBindings,
   readFlowOrganizationTimeZone,
@@ -785,7 +785,7 @@ const loadApplicationPageJoined = async (
   const linkInputs = placements.filter(isLinkInputPlacement);
   const optionPlacements = placements.filter(
     (placement) =>
-      isLinkInputPlacement(placement) || placementOptionsFlow(context, placement) !== undefined,
+      isLinkInputPlacement(placement) || placementOptionInputKeys(context, placement) !== undefined,
   );
   // A new record's link field may start with the record its page address names.
   if (pageDefinition.type !== "guided_form") {
@@ -932,9 +932,12 @@ const loadApplicationPageJoined = async (
     },
     editFormBaselines,
     optionPlacementIds: optionPlacements.map((entry) => entry.placementId),
-    optionsFlowPlacementIds: optionPlacements
-      .filter((entry) => placementOptionsFlow(context, entry) !== undefined)
-      .map((entry) => entry.placementId),
+    optionInputKeys: Object.fromEntries(
+      optionPlacements.flatMap((entry) => {
+        const keys = placementOptionInputKeys(context, entry);
+        return keys === undefined ? [] : [[entry.placementId, keys] as const];
+      }),
+    ),
     ...(guidedForm === undefined ? {} : { guidedForm }),
     pages: application.content.pages
       .filter((candidate) => permittedKeys.has(candidate.key))
