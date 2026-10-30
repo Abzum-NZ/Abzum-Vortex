@@ -3,10 +3,12 @@ import {
   sourceItemTree,
   sourcePageItems,
   type ApplicationSourceDocument,
+  type ImmutablePlatformBlockCatalogue,
   type RecordsTableBoardMode,
   type SourceItem,
 } from "@vortex/platform/schema";
 import { applyStudioFlowCreate } from "./application-flow-create";
+import { projectStudioFlowDraftChoices } from "./application-flow-step-form";
 import { companions, placed } from "./application-record-pages";
 import { takenIds } from "./application-record-page-kinds";
 
@@ -42,6 +44,10 @@ export const ensureStudioBoardQuickAdd = (
   source: ApplicationSourceDocument,
   controlAlias: string,
   board: RecordsTableBoardMode,
+  draft: Readonly<{
+    rootId: Parameters<typeof projectStudioFlowDraftChoices>[0]["rootId"];
+    catalogue: ImmutablePlatformBlockCatalogue;
+  }>,
 ): QuickAddResult => {
   if (board.quickAdd !== true || board.columnField === undefined)
     return { kind: "applied", source };
@@ -98,7 +104,7 @@ export const ensureStudioBoardQuickAdd = (
   if (holder === undefined)
     return { kind: "refused", reason: "The board is no longer on the page." };
 
-  // The dialog form: the create form's field inputs, hidden on the page, each named by its field.
+  // The dialog form: the create form's field inputs, hidden on the page.
   const taken = takenIds(candidate);
   const formAlias = freshId(`${controlAlias}_quick_add_form`, taken);
   const copy = structuredClone(createForm) as SourceItem;
@@ -117,12 +123,16 @@ export const ensureStudioBoardQuickAdd = (
   for (const item of sourceItemTree([copy])) {
     if (item === copy) continue;
     item.props.id = freshId(`${formAlias}_${String(item.props.id)}`, taken);
-    const field = String(item.props["field"]);
-    item.props["name"] = field.slice(field.lastIndexOf(".") + 1);
     // The dialog is not a page: its inputs never publish an address value.
     delete item.props["publishes_parameter"];
   }
   holder.siblings.splice(holder.siblings.indexOf(holder.item) + 1, 0, copy);
+  // Each answer of the dialog form with its initial value: the show form step declares them all.
+  const answers = projectStudioFlowDraftChoices({ ...draft, source: candidate }).forms.find(
+    (entry) => entry.alias === formAlias,
+  );
+  if (answers === undefined)
+    return { kind: "refused", reason: "The dialog form could not be read back from the draft." };
 
   const flow = defaultNewDialogFlowSource({
     id: "quick_add",
@@ -131,6 +141,12 @@ export const ensureStudioBoardQuickAdd = (
     ownershipMode: (record?.ownership_mode ?? "none") as
       "none" | "organization_account" | "inherited",
     form: formAlias,
+    fields: Object.fromEntries(
+      answers.fields.map((entry) => [
+        entry.name,
+        entry.initialValue ?? { kind: "literal", literal: { type: "text", value: "" } },
+      ]),
+    ),
     prefill: { input: stageInputName, field: stageFieldKey },
   });
   const made = applyStudioFlowCreate(

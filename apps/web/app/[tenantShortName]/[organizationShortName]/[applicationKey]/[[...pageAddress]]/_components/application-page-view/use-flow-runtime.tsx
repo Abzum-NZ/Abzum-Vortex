@@ -500,6 +500,13 @@ export function useFlowRuntime({
       subject,
     ],
   );
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   messageActionRef.current = (message) => {
     const all = Object.values(model.bindings).flat();
     const source = all.find((binding) => binding.bindingId === message.originBindingId);
@@ -518,16 +525,19 @@ export function useFlowRuntime({
       showPageMessage(unavailableNotice);
       return;
     }
-    applyMessageActionRef.current(
-      flowRuntime.dispatch(
-        action,
-        message.actionInputs,
-        crypto.randomUUID(),
-        message.subject,
-        message.sourceTablePlacementId,
-      ),
-      action.bindingId,
+    const dispatched = flowRuntime.dispatch(
+      action,
+      message.actionInputs,
+      crypto.randomUUID(),
+      message.subject,
+      message.sourceTablePlacementId,
     );
+    applyMessageActionRef.current(dispatched, action.bindingId);
+    // An action carried to the next page (Undo after a delete that opened the list) finishes after
+    // this page has gone: the page now showing re-reads what the action changed.
+    void dispatched.then(() => {
+      if (!mountedRef.current) router.refresh();
+    });
   };
   const webMcpRuntime = useMemo(
     () =>

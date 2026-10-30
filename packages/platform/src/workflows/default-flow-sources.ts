@@ -342,6 +342,11 @@ export type DefaultNewDialogFlowInput = DefaultFlowIdentity &
     ownershipMode: DefaultSaveFlowInput["ownershipMode"];
     /** The dialog form to show, by form placement alias. */
     form: string;
+    /**
+     * Every field the dialog form answers, by name, with its initial value: a show form step
+     * declares each answer, so the person's answers are checked against these types.
+     */
+    fields: Readonly<Record<string, unknown>>;
     /** The field of the dialog form a caller input pre-fills (a board column's stage). */
     prefill?: Readonly<{ input: string; field: string }>;
   }>;
@@ -367,14 +372,15 @@ export const defaultNewDialogFlowSource = (input: DefaultNewDialogFlowInput): So
         version: taskVersion,
         properties: {
           form: textLiteral(input.form),
-          ...(input.prefill === undefined
-            ? {}
-            : {
-                inputs: {
-                  kind: "map",
-                  entries: { [input.prefill.field]: `{{ inputs.${input.prefill.input} }}` },
-                },
-              }),
+          inputs: {
+            kind: "map",
+            entries: {
+              ...input.fields,
+              ...(input.prefill === undefined
+                ? {}
+                : { [input.prefill.field]: inputReference(input.prefill.input) }),
+            },
+          },
         },
       } as unknown as Task,
       {
