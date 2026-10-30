@@ -1,30 +1,8 @@
 import "server-only";
-import { databaseCode, isRecord } from "../catalogue/runtime-primitives";
-
-import { correlationIdSchema } from "../catalogue/common";
-import { recordIdSchema } from "../catalogue/identifiers";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
-import {
-  calculateLockedRelationshipTotalSave,
-  type LockedRelationshipTotalPreparation,
-  type RecordCalculationChange,
-} from "./relationship-total-save";
-import {
-  parseRelationshipTotalPreparation,
-  readOrganizationRuntimeSettings,
-  revision,
-} from "./save-record";
-import { operationClock } from "./field-candidate";
+import { databaseCode } from "../catalogue/runtime-primitives";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import type { BeforeSaveRuleWarning } from "../rules/before-save-flow-run";
-import {
-  beforeSaveRuleRefusedIssueCode,
-  beforeSaveRuleUnavailableIssueCode,
-  beginBeforeSaveRuleExecution,
-  beforeSaveFlowSetOf,
-  type BeforeSaveRuleExecution,
-} from "./before-save-rules";
-
-type Row = DatabaseRow & { readonly result: unknown };
+import { applyRecordChanges } from "./apply-record-changes";
 
 type ProtectedRecordLifecycleCommand = Readonly<{
   commandId: string;
@@ -84,106 +62,6 @@ export type RecordRestoreResult =
   | RecordLifecycleConflict
   | RecordLifecycleRefusal;
 
-type CompletedLifecycle = Extract<
-  RecordDeleteResult | RecordRestoreResult,
-  { outcome: "deleted" | "restored" }
->;
-
-type DatabaseOutcome =
-  | Readonly<{ outcome: "completed"; value: CompletedLifecycle }>
-  | Readonly<{
-      outcome: "prepared";
-      preparation: LockedRelationshipTotalPreparation;
-      lifecyclePreparation: LockedRelationshipTotalPreparation;
-    }>
-  | Readonly<{ outcome: "restart" }>
-  | Readonly<{ outcome: "conflict"; correlationId: string; currentConcurrencyNumber?: number }>
-  | Readonly<{ outcome: "refused"; correlationId: string; reason: RecordLifecycleRefusalReason }>
-  | Readonly<{ outcome: "invalid" }>;
-
-const refusalReasons: ReadonlySet<string> = new Set<RecordLifecycleRefusalReason>([
-  "command_invalid",
-  "command_identity_conflict",
-  "record_unavailable",
-  "restore_closure_changed",
-  "relationship_refused",
-  "calculation_refused",
-  "unsupported_relationship_totals",
-]);
-
-const parseDatabaseOutcome = (candidate: unknown): DatabaseOutcome => {
-  if (!isRecord(candidate)) return { outcome: "invalid" };
-  const correlation = correlationIdSchema.safeParse(candidate.correlationId);
-  const correlationId = correlation.success ? (correlation.data as string) : undefined;
-  if (candidate.outcome === "deleted" || candidate.outcome === "restored") {
-    const recordId = recordIdSchema.safeParse(candidate.recordId);
-    const concurrencyNumber = revision(candidate.concurrencyNumber);
-    if (
-      !recordId.success ||
-      concurrencyNumber === undefined ||
-      correlationId === undefined ||
-      typeof candidate.replayed !== "boolean" ||
-      (candidate.outcome === "restored" &&
-        (typeof candidate.unrestoredLinkCount !== "number" ||
-          !Number.isSafeInteger(candidate.unrestoredLinkCount) ||
-          candidate.unrestoredLinkCount < 0))
-    )
-      return { outcome: "invalid" };
-    return {
-      outcome: "completed",
-      value: {
-        ...(candidate.outcome === "deleted"
-          ? { outcome: "deleted" as const }
-          : {
-              outcome: "restored" as const,
-              unrestoredLinkCount: candidate.unrestoredLinkCount as number,
-            }),
-        recordId: recordId.data as string,
-        concurrencyNumber,
-        correlationId,
-        replayed: candidate.replayed,
-      },
-    };
-  }
-  if (candidate.outcome === "prepared") {
-    const preparation = parseRelationshipTotalPreparation(candidate);
-    const lifecyclePreparation = parseRelationshipTotalPreparation({
-      ...candidate,
-      records: candidate.lifecycleRecords,
-    });
-    return preparation.outcome === "prepared" && lifecyclePreparation.outcome === "prepared"
-      ? { outcome: "prepared", preparation, lifecyclePreparation }
-      : { outcome: "invalid" };
-  }
-  if (candidate.outcome === "restart") return { outcome: "restart" };
-  if (correlationId === undefined) return { outcome: "invalid" };
-  if (candidate.outcome === "conflict") {
-    const current =
-      candidate.concurrencyNumber === undefined ? undefined : revision(candidate.concurrencyNumber);
-    return {
-      outcome: "conflict",
-      correlationId,
-      ...(current === undefined ? {} : { currentConcurrencyNumber: current }),
-    };
-  }
-  if (candidate.outcome !== "refused") return { outcome: "invalid" };
-  return {
-    outcome: "refused",
-    correlationId,
-    // An unrecognised database refusal never widens into a new public reason.
-    reason:
-      typeof candidate.reasonCode === "string" && refusalReasons.has(candidate.reasonCode)
-        ? (candidate.reasonCode as RecordLifecycleRefusalReason)
-        : "record_unavailable",
-  };
-};
-
-const one = <Value>(rows: readonly Value[]): Value => {
-  if (rows.length !== 1 || rows[0] === undefined)
-    throw new Error("RECORD_LIFECYCLE_RESULT_INVALID");
-  return rows[0];
-};
-
 export type Settled<Result> =
   Readonly<{ kind: "restart" }> | Readonly<{ kind: "result"; value: Result }>;
 
@@ -208,205 +86,52 @@ export const settleRecordLifecycleError = (error: unknown): Settled<unknown> | u
   return ["40001", "40P01"].includes(databaseCode(error) ?? "") ? { kind: "restart" } : undefined;
 };
 
-/** Rolls back a non-final preflight outcome as its bounded public result. */
-const rollBack = (
-  outcome: Exclude<DatabaseOutcome, { outcome: "completed" | "prepared" }>,
-  recordId: string,
-): never => {
-  switch (outcome.outcome) {
-    case "restart":
-      throw new RecordLifecycleRollback({ kind: "restart" });
-    case "conflict":
-      throw new RecordLifecycleRollback({
-        kind: "result",
-        value: {
-          outcome: "conflict",
-          recordId,
-          correlationId: outcome.correlationId,
-          ...(outcome.currentConcurrencyNumber === undefined
-            ? {}
-            : { currentConcurrencyNumber: outcome.currentConcurrencyNumber }),
-        } satisfies RecordLifecycleConflict,
-      });
-    case "refused":
-      throw new RecordLifecycleRollback({
-        kind: "result",
-        value: {
-          outcome: "refused",
-          recordId,
-          correlationId: outcome.correlationId,
-          reason: outcome.reason,
-        } satisfies RecordLifecycleRefusal,
-      });
-    default:
-      throw new Error("RECORD_LIFECYCLE_RESULT_INVALID");
-  }
-};
-
-const refuseCalculation = (
-  recordId: string,
-  correlationId: string,
-  preparation: LockedRelationshipTotalPreparation,
-  issues: readonly Readonly<{
-    code: string;
-    recordKey: string;
-    ruleKey?: string;
-    requirement?: Readonly<{ code: string; message: string }>;
-  }>[] = [],
-): never => {
-  console.error(
-    `[record] lifecycle totals refused: ${issues.map((issue) => `${issue.recordKey}:${issue.code}${issue.requirement ? `:${issue.requirement.code}` : ""}`).join(",") || "operation_clock_unavailable"}`,
-  );
-  const ruleIssue = issues.find(
-    (issue) => issue.code === beforeSaveRuleRefusedIssueCode || issue.requirement !== undefined,
-  );
-  const parent = preparation.records.find((record) => record.recordKey === ruleIssue?.recordKey);
-  if (ruleIssue !== undefined && parent?.recordId === undefined)
-    throw new Error("RELATIONSHIP_TOTAL_PARENT_MISSING");
-  if (ruleIssue !== undefined)
-    console.error(
-      `[record] lifecycle parent rule refused: rule=${ruleIssue.ruleKey ?? (ruleIssue.requirement !== undefined && "ruleKey" in ruleIssue.requirement ? ruleIssue.requirement.ruleKey : "unknown")} parent=${parent?.recordId ?? "unknown"} reason=${ruleIssue.requirement?.code ?? ruleIssue.code}`,
-    );
-  const ruleReason =
-    ruleIssue === undefined
-      ? undefined
-      : parent?.canRead && ruleIssue.requirement !== undefined
-        ? { code: ruleIssue.requirement.code, message: ruleIssue.requirement.message }
-        : {
-            code: "related_record_rule_conflict",
-            message: "This change conflicts with a rule on a related record",
-          };
-  throw new RecordLifecycleRollback({
-    kind: "result",
-    value: {
-      outcome: "refused",
-      recordId,
-      correlationId,
-      reason: "calculation_refused",
-      ...(ruleReason === undefined ? {} : { ruleReason }),
-    } satisfies RecordLifecycleRefusal,
-  });
-};
-
-/**
- * The protected lifecycle change inside the caller's request transaction:
- * the record writer prepares the proposed closure, the runtime evaluates
- * rules and totals, and the same writer applies its final values. Every
- * non-final outcome throws `RecordLifecycleRollback` so the whole transaction
- * is discarded, including the pending receipt and lifecycle journal.
- * Named actions use the same lifecycle operation.
- */
+/** Lifecycle callers compile into the same command and calculation graph as saves. */
 const performRecordLifecycle = async (
   transaction: RequestDatabaseTransaction,
   issuedAt: string,
   command: ProtectedRecordLifecycleCommand,
   operation: "delete" | "restore",
 ): Promise<RecordDeleteResult | RecordRestoreResult> => {
-  const { activityId, occurrenceId } = command;
-  const prepared = parseDatabaseOutcome(
-    one(
-      await transaction.query<Row>`
-        select vortex_record.apply_lifecycle_record_changes(
-          ${command.commandId}::uuid,
-          ${operation}::text,
-          ${command.recordTypeId}::uuid,
-          ${command.recordId}::uuid,
-          ${command.expectedConcurrencyNumber}::bigint,
-          null::jsonb,
-          ${activityId}::uuid,
-          ${occurrenceId}::uuid
-        ) as result
-      `,
-    ).result,
-  );
-  if (prepared.outcome === "completed") {
-    if (!prepared.value.replayed) throw new Error("RECORD_LIFECYCLE_RESULT_INVALID");
-    return prepared.value;
+  const result = await applyRecordChanges(transaction, issuedAt, command.commandId, [
+    {
+      operation,
+      recordTypeId: command.recordTypeId,
+      recordId: command.recordId,
+      expectedConcurrencyNumber: command.expectedConcurrencyNumber,
+    },
+  ]);
+  if (result.kind === "restart") throw new RecordLifecycleRollback({ kind: "restart" });
+  if (result.kind === "refused") {
+    const failure = result.result;
+    if (failure === undefined) throw new Error("RECORD_LIFECYCLE_RESULT_INVALID");
+    const correlationId =
+      failure.outcome === "refused" ? failure.error.correlationId : failure.correlationId;
+    const ruleReason =
+      failure.outcome === "refused" && "reason" in failure.error ? failure.error.reason : undefined;
+    const value: RecordDeleteResult =
+      failure.outcome === "refused" && failure.error.code === "conflict"
+        ? { outcome: "conflict", recordId: command.recordId, correlationId }
+        : {
+            outcome: "refused",
+            recordId: command.recordId,
+            correlationId,
+            reason:
+              result.reasonCode === "calculation_refused"
+                ? "calculation_refused"
+                : "record_unavailable",
+            ...(ruleReason === undefined ? {} : { ruleReason }),
+          };
+    throw new RecordLifecycleRollback({ kind: "result", value });
   }
-  if (prepared.outcome !== "prepared") return rollBack(prepared, command.recordId);
-
-  const { preparation, lifecyclePreparation } = prepared;
-  const root = preparation.records.find((record) => record.recordKey === "root");
-  if (root === undefined) throw new Error("RECORD_LIFECYCLE_ROOT_MISSING");
-  const settings = await readOrganizationRuntimeSettings(transaction);
-  if (!lifecyclePreparation.records.some((record) => record.recordKey === "root"))
-    throw new Error("RECORD_LIFECYCLE_RULE_ROOT_MISSING");
-  // The total closure has proposed values; lifecycle rules must inspect the
-  // original stored values. Include deleted descendants even when no total
-  // depends on them, so each gets its lifecycle rule exactly once.
-  const records = new Map(lifecyclePreparation.records.map((record) => [record.recordKey, record]));
-  for (const record of preparation.records) records.set(record.recordKey, record);
-  const combined = { ...preparation, records: [...records.values()] };
-  const changes = new Map<string, RecordCalculationChange>(
-    lifecyclePreparation.records.map((record) => [
-      record.recordKey,
-      { operation, storedValues: record.existingValues },
-    ]),
-  );
-  const rules = new Map<string, BeforeSaveRuleExecution>();
-  for (const record of combined.records) {
-    const ruleSet = beforeSaveFlowSetOf(record.beforeSaveFlows, record.recordType.recordTypeId);
-    if (ruleSet === undefined)
-      return refuseCalculation(command.recordId, preparation.correlationId, combined, [
-        { code: beforeSaveRuleUnavailableIssueCode, recordKey: record.recordKey },
-      ]);
-    rules.set(record.recordKey, beginBeforeSaveRuleExecution(ruleSet));
-  }
-  const clock = operationClock(
-    combined.records
-      .filter((record) => changes.get(record.recordKey)?.operation !== "delete")
-      .map((record) => record.recordType),
-    issuedAt,
-    settings?.timeZone,
-  );
-  if (clock === undefined)
-    return refuseCalculation(command.recordId, preparation.correlationId, combined);
-  const calculated = calculateLockedRelationshipTotalSave({
-    changes,
-    preparation: combined,
-    clock,
-    rules,
-    ...(settings?.currency === undefined ? {} : { organizationCurrency: settings.currency }),
-  });
-  if (!calculated.success)
-    return refuseCalculation(
-      command.recordId,
-      preparation.correlationId,
-      combined,
-      calculated.issues,
-    );
-  const parentMutations = calculated.parentMutations;
-  const warnings: BeforeSaveRuleWarning[] = combined.records.flatMap((record) => {
-    const recordWarnings = rules.get(record.recordKey)!.warnings;
-    return record.canRead
-      ? recordWarnings
-      : recordWarnings.map((warning) => ({
-          ...warning,
-          messageIsLiteral: true,
-          code: "related_record_rule_warning",
-          message: "This change raised a warning on a related record",
-        }));
-  });
-
-  const finalized = parseDatabaseOutcome(
-    one(
-      await transaction.query<Row>`
-        select vortex_record.apply_lifecycle_record_changes(
-          ${command.commandId}::uuid,
-          ${operation}::text,
-          ${command.recordTypeId}::uuid,
-          ${command.recordId}::uuid,
-          ${command.expectedConcurrencyNumber}::bigint,
-          ${JSON.stringify(parentMutations)}::text::jsonb,
-          ${activityId}::uuid,
-          ${occurrenceId}::uuid
-        ) as result
-      `,
-    ).result,
-  );
-  if (finalized.outcome !== "completed" || finalized.value.replayed)
+  const changed = result.results[0];
+  if (
+    result.results.length !== 1 ||
+    changed === undefined ||
+    changed.outcome !== (operation === "delete" ? "deleted" : "restored")
+  )
     throw new Error("RECORD_LIFECYCLE_RESULT_INVALID");
-  return { ...finalized.value, ...(warnings.length === 0 ? {} : { warnings }) };
+  return { ...changed, ...(result.warnings.length === 0 ? {} : { warnings: result.warnings }) };
 };
 
 export const performProtectedRecordDelete = async (

@@ -67,6 +67,8 @@ export type RecordCalculationChange =
   | Readonly<{
       operation: "create" | "update";
       submittedValues: Readonly<Record<string, JsonValue | null>>;
+      /** A closure change persists its generated values with the lifecycle set. */
+      generatedParent?: boolean;
     }>
   | Readonly<{
       operation: "delete" | "restore";
@@ -559,7 +561,12 @@ export const calculateLockedRelationshipTotalSave = (
   const parentMutations: RelationshipTotalParentMutation[] = [];
   for (const record of records.values()) {
     const change = input.changes.get(record.recordKey);
-    if (change !== undefined && change.operation !== "restore") continue;
+    if (
+      change !== undefined &&
+      change.operation !== "restore" &&
+      !("generatedParent" in change && change.generatedParent)
+    )
+      continue;
     if (
       record.recordId === undefined ||
       record.concurrencyNumber === undefined ||

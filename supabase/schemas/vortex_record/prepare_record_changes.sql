@@ -14,6 +14,8 @@ declare
   preparation jsonb;
   effective_command_id uuid;
   preview_installation jsonb;
+  loaded jsonb;
+  decision jsonb;
 begin
   if p_command_id is null or not vortex_platform.is_non_nil_uuid(p_command_id::text)
     or not vortex_record.record_change_set_is_valid_internal(p_subjects) then
@@ -37,6 +39,47 @@ begin
     for stored_result in
       select item.value from pg_catalog.jsonb_array_elements(receipt #> '{result,results}') as item(value)
     loop
+      if stored_result ->> 'operation' in ('delete', 'restore') then
+        loaded := vortex_record.load_record_access_facts_internal(
+          (stored_result ->> 'recordTypeId')::uuid, stored_result ->> 'operation',
+          (stored_result ->> 'recordId')::uuid, null, null
+        );
+        if loaded ->> 'outcome' = 'loaded' and pg_catalog.jsonb_typeof(loaded -> 'declaration') = 'object' then
+          -- Recheck the original delete authority against today's retained
+          -- ownership and scopes. Only rows journaled by this exact command
+          -- may stand in their pre-delete lifecycle state for that decision.
+          if stored_result ->> 'operation' = 'delete' then
+            loaded := pg_catalog.jsonb_set(loaded, '{facts,records}', (
+              select pg_catalog.jsonb_agg(case when item.value ->> 'lifecycleState' = 'soft_deleted'
+                and exists (select 1 from vortex_record.record_lifecycle_command_effects as effect
+                  where effect.command_id = effective_command_id and effect.effect_kind = 'soft_deleted'
+                    and effect.organization_id = (context_value ->> 'organizationId')::uuid
+                    and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
+                    and effect.record_id = (item.value #>> '{recordScope,recordId}')::uuid
+                    and effect.storage_contract_id = (item.value #>> '{recordScope,storageContractId}')::uuid)
+                then item.value || pg_catalog.jsonb_build_object('lifecycleState', 'active') else item.value end
+                order by item.ordinality)
+              from pg_catalog.jsonb_array_elements(loaded #> '{facts,records}') with ordinality as item(value, ordinality)
+            ));
+          end if;
+          decision := vortex_access.evaluate_organization_record_access_internal(
+            loaded -> 'declaration', (stored_result ->> 'recordId')::uuid, loaded -> 'facts'
+          );
+        else
+          decision := null;
+        end if;
+        if decision ->> 'outcome' is distinct from 'allowed' then
+          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'record_unavailable',
+            'correlationId', context_value -> 'correlationId');
+        end if;
+        results := results || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+          'outcome', case stored_result ->> 'operation' when 'delete' then 'deleted' else 'restored' end,
+          'recordId', stored_result -> 'recordId', 'concurrencyNumber', stored_result -> 'concurrencyNumber',
+          'unrestoredLinkCount', stored_result -> 'unrestoredLinkCount',
+          'correlationId', context_value -> 'correlationId', 'replayed', true
+        ));
+        continue;
+      end if;
       projection := (vortex_record.read_record(
         (stored_result ->> 'recordTypeId')::uuid, (stored_result ->> 'recordId')::uuid
       )) -> 'record';

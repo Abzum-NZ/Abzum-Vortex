@@ -21,7 +21,7 @@ import {
 } from "./before-save-rules";
 import { decideChoiceOptionPermission } from "./choice-option-permission";
 import type { calculateAndFinalize } from "./field-candidate";
-import type { RecordFieldValuePendingCheck } from "./field-values";
+import { storedRecordCandidateValues, type RecordFieldValuePendingCheck } from "./field-values";
 import { firstFieldDependencyRefusal } from "./link-dependencies";
 import {
   saveRecordResultSchema,
@@ -143,19 +143,10 @@ export const parsePreparation = (candidate: unknown): PreparationOutcome => {
     throw contractError("RECORD_SAVE_PREPARATION_INVALID", "invalid readableFieldIds");
   // An unset optional value is absent from the field candidate, whether it is an ordinary SQL
   // column or a value a system projection (organisation settings) has not stored yet.
-  const existingValues: Record<string, unknown> = {
-    ...(value.existingValues as Readonly<Record<string, unknown>>),
-  };
-  for (const field of recordType.data.fields) {
-    if (
-      !field.required &&
-      field.type !== "reference_number" &&
-      field.type !== "calculation" &&
-      field.type !== "total" &&
-      existingValues[field.fieldId] === null
-    )
-      delete existingValues[field.fieldId];
-  }
+  const existingValues = storedRecordCandidateValues(
+    recordType.data,
+    value.existingValues as Readonly<Record<string, unknown>>,
+  );
   return {
     outcome: "prepared",
     recordType: recordType.data,
@@ -364,7 +355,10 @@ export const parseRelationshipTotalPreparation = (
       recordType: recordType.data,
       canRead: record.canRead as boolean,
       ...(concurrencyNumber === undefined ? {} : { concurrencyNumber }),
-      existingValues: record.existingValues as Readonly<Record<string, unknown>>,
+      existingValues: storedRecordCandidateValues(
+        recordType.data,
+        record.existingValues as Readonly<Record<string, unknown>>,
+      ),
       ...(record.beforeSaveFlows === undefined ? {} : { beforeSaveFlows: record.beforeSaveFlows }),
       relationshipSources,
     });

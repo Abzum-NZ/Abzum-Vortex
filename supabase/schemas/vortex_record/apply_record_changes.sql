@@ -34,6 +34,8 @@ declare
   notice_sequence bigint;
   effective_command_id uuid;
   preview_installation jsonb;
+  storage_set jsonb;
+  previous_lifecycle_command text;
 begin
   if pg_catalog.jsonb_typeof(p_parent_mutations) is distinct from 'array' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
@@ -57,8 +59,11 @@ begin
   ) order by item.value ->> 'recordTypeId', item.value ->> 'recordId'), '[]'::jsonb)
   into expected_parents
   from pg_catalog.jsonb_array_elements(calculation -> 'records') as item(value)
-  where not exists (select 1 from pg_catalog.jsonb_array_elements(calculation -> 'subjects') as root(value)
-    where root.value -> 'recordKey' = item.value -> 'recordKey');
+  where not exists (select 1 from pg_catalog.jsonb_array_elements(p_subjects) with ordinality as root(value, ordinality)
+    where 'intent:' || (root.ordinality - 1)::text = item.value ->> 'recordKey'
+      and root.value ->> 'operation' in ('create', 'update'))
+    and not exists (select 1 from pg_catalog.jsonb_array_elements(calculation -> 'lifecycleChanges') as changed(value)
+      where changed.value -> 'recordKey' = item.value -> 'recordKey' and changed.value ->> 'operation' = 'delete');
   select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
     'recordTypeId', item.value -> 'recordTypeId', 'recordId', item.value -> 'recordId',
     'expectedConcurrencyNumber', item.value -> 'expectedConcurrencyNumber',
@@ -87,6 +92,21 @@ begin
   end if;
   catalogue := case when pg_catalog.jsonb_array_length(p_parent_mutations) > 0
     then vortex_record.relationship_total_catalogue_internal() else '{}'::jsonb end;
+  if pg_catalog.jsonb_array_length(prepared -> 'effects') > 0 then
+    -- Proposed snapshots are needed for restored rows, still deleted on disk.
+    storage_set := vortex_record.prepare_record_storage_set_internal((
+      select pg_catalog.jsonb_agg(item.value)
+      from pg_catalog.jsonb_array_elements(prepared -> 'storageChanges') as item(value)
+      where exists (select 1 from pg_catalog.jsonb_array_elements(prepared -> 'effects') as effect(value)
+        where effect.value -> 'storageContractId' = item.value -> 'storageContractId'
+          and effect.value -> 'recordId' = item.value -> 'recordId')
+    ));
+    catalogue := catalogue || pg_catalog.jsonb_build_object('proposedRecords', storage_set -> 'proposedRecords');
+    previous_lifecycle_command := pg_catalog.current_setting('vortex_record.lifecycle_command_id', true);
+    perform pg_catalog.set_config('vortex_record.lifecycle_command_id', effective_command_id::text, true);
+    perform vortex_record.append_record_lifecycle_effect_internal(prepared -> 'effects');
+    perform pg_catalog.set_config('vortex_record.lifecycle_command_id', coalesce(previous_lifecycle_command, ''), true);
+  end if;
   for parent_value in select item.value from pg_catalog.jsonb_array_elements(p_parent_mutations) as item(value)
   loop
     select item.value into strict parent_record
@@ -107,11 +127,26 @@ begin
     end if;
   end loop;
   persisted := vortex_record.apply_prepared_record_set_internal(prepared);
+  if pg_catalog.jsonb_array_length(prepared -> 'effects') > 0 then
+    perform vortex_record.complete_record_lifecycle_set_internal(effective_command_id, prepared, persisted -> 'written');
+  end if;
   for plan in select item.value from pg_catalog.jsonb_array_elements(prepared -> 'plans') as item(value)
     order by (item.value ->> 'index')::integer
   loop
     subject := plan -> 'subject';
     saved := persisted -> 'results' -> (plan ->> 'index')::integer;
+    if subject ->> 'operation' in ('delete', 'restore') then
+      receipt_results := receipt_results || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'operation', subject -> 'operation', 'recordTypeId', subject -> 'recordTypeId',
+        'recordId', saved -> 'recordId', 'concurrencyNumber', saved -> 'concurrencyNumber',
+        'unrestoredLinkCount', coalesce(plan #> '{prepared,unrestoredLinkCount}', '0'::jsonb)
+      ));
+      result_values := result_values || pg_catalog.jsonb_build_array(saved || pg_catalog.jsonb_build_object(
+        'correlationId', context_value -> 'correlationId', 'replayed', false,
+        'unrestoredLinkCount', coalesce(plan #> '{prepared,unrestoredLinkCount}', '0'::jsonb)
+      ));
+      continue;
+    end if;
     perform vortex_platform.attach_record_files_internal(
       (subject ->> 'recordTypeId')::uuid, (saved ->> 'recordId')::uuid,
       plan #> '{meta,recordType}', subject -> 'finalValues'
@@ -166,7 +201,7 @@ begin
       raise exception using errcode = '42501', message = 'Changed record projection is unavailable';
     end if;
     receipt_results := receipt_results || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-      'recordTypeId', subject -> 'recordTypeId', 'recordId', saved -> 'recordId',
+      'operation', subject -> 'operation', 'recordTypeId', subject -> 'recordTypeId', 'recordId', saved -> 'recordId',
       'concurrencyNumber', saved -> 'concurrencyNumber'
     ));
     result_values := result_values || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
@@ -178,6 +213,9 @@ begin
     ));
   end loop;
   for parent_plan in select item.value from pg_catalog.jsonb_array_elements(parent_plans) as item(value)
+    where not exists (select 1 from pg_catalog.jsonb_array_elements(calculation -> 'lifecycleProposals') as changed(value)
+      where changed.value -> 'recordTypeId' = item.value -> 'recordTypeId'
+        and changed.value -> 'recordId' = item.value -> 'recordId')
   loop
     perform vortex_record.complete_relationship_total_parent_internal(parent_plan);
   end loop;

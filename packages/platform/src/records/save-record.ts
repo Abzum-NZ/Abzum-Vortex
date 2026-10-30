@@ -85,7 +85,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
       console.error(`[record] save refused: ${settled.reasonCode ?? "record_unavailable"}`);
       return { kind: "unavailable" };
     }
-    if (settled.results.length !== 1)
+    if (settled.results.length !== 1 || settled.results[0]?.outcome !== "saved")
       throw contractError("RECORD_SAVE_RESULT_COUNT_INVALID", undefined);
     return {
       kind: "available",

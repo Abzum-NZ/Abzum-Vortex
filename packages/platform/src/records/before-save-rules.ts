@@ -18,6 +18,7 @@ import {
 } from "../rules/before-save-flow-run";
 import {
   prepareInitialRecordFieldCandidate,
+  storedRecordCandidateValues,
   type InitialRecordFieldCandidate,
 } from "./field-values";
 
@@ -229,7 +230,7 @@ export const applyBeforeSaveLifecycleRules = (input: {
     operation: "update",
     recordType: input.recordType,
     submittedValues: {},
-    existingValues: input.existingValues,
+    existingValues: storedRecordCandidateValues(input.recordType, input.existingValues),
     ...(input.organizationCurrency === undefined
       ? {}
       : { organizationCurrency: input.organizationCurrency }),

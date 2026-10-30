@@ -27,6 +27,25 @@ import {
 type ValueMap = Readonly<Record<string, unknown>>;
 type ValuePath = readonly (string | number)[];
 
+/** SQL null means an unset optional field, not a value in a record candidate. */
+export const storedRecordCandidateValues = (
+  recordType: RecordTypeDefinition,
+  values: ValueMap,
+): Record<string, unknown> => {
+  const candidate = { ...values };
+  for (const field of recordType.fields) {
+    if (
+      !field.required &&
+      field.type !== "reference_number" &&
+      field.type !== "calculation" &&
+      field.type !== "total" &&
+      candidate[field.fieldId] === null
+    )
+      delete candidate[field.fieldId];
+  }
+  return candidate;
+};
+
 export type RecordFieldValuePreparationIssueCode =
   | "invalid_input"
   | "invalid_existing_value"

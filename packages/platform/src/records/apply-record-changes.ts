@@ -62,10 +62,20 @@ export type RecordChangeIntent =
     }>;
 
 type Saved = Extract<SaveRecordResult, { outcome: "saved" }>;
+type CompletedRecordLifecycle = Readonly<{
+  outcome: "deleted" | "restored";
+  recordId: string;
+  concurrencyNumber: number;
+  correlationId: string;
+  replayed: boolean;
+  unrestoredLinkCount: number;
+}>;
+type ChangeCommand =
+  SaveRecordCommand | Extract<RecordChangeIntent, { operation: "delete" | "restore" }>;
 export type RecordChangesResult =
   | Readonly<{
       kind: "completed";
-      results: readonly Saved[];
+      results: readonly (Saved | CompletedRecordLifecycle)[];
       previous: readonly Readonly<Record<string, unknown>>[];
       warnings: readonly BeforeSaveRuleWarning[];
       recordCount?: number;
@@ -73,11 +83,34 @@ export type RecordChangesResult =
   | Readonly<{ kind: "restart" }>
   | Readonly<{ kind: "refused"; index: number; result?: SaveRecordResult; reasonCode?: string }>;
 
-const completed = (value: Record<string, unknown>): readonly Saved[] => {
+const completed = (
+  value: Record<string, unknown>,
+): readonly (Saved | CompletedRecordLifecycle)[] => {
   if (!Array.isArray(value.results) || value.results.length === 0)
     throw contractError("RECORD_CHANGES_RESULT_INVALID", undefined);
   return value.results.map((entry) => {
     if (!isRecord(entry)) throw contractError("RECORD_CHANGES_RESULT_INVALID", undefined);
+    if (entry.outcome === "deleted" || entry.outcome === "restored") {
+      const concurrencyNumber = revision(entry.concurrencyNumber);
+      if (
+        !platformIdSchema.safeParse(entry.recordId).success ||
+        !platformIdSchema.safeParse(entry.correlationId).success ||
+        concurrencyNumber === undefined ||
+        typeof entry.replayed !== "boolean" ||
+        typeof entry.unrestoredLinkCount !== "number" ||
+        !Number.isSafeInteger(entry.unrestoredLinkCount) ||
+        entry.unrestoredLinkCount < 0
+      )
+        throw contractError("RECORD_CHANGES_LIFECYCLE_RESULT_INVALID", undefined);
+      return {
+        outcome: entry.outcome,
+        recordId: entry.recordId as string,
+        concurrencyNumber,
+        correlationId: entry.correlationId as string,
+        replayed: entry.replayed,
+        unrestoredLinkCount: entry.unrestoredLinkCount,
+      };
+    }
     const result = saveRecordResultSchema.parse({
       contractVersion: "2.0.0",
       outcome: entry.outcome,
@@ -121,10 +154,18 @@ export const applyRecordChanges = async (
 ): Promise<RecordChangesResult> => {
   if (!platformIdSchema.safeParse(commandId).success || intents.length < 1 || intents.length > 200)
     return { kind: "refused", index: 0, reasonCode: "command_invalid" };
-  const commands: SaveRecordCommand[] = [];
+  const commands: ChangeCommand[] = [];
   for (const [index, intent] of intents.entries()) {
-    if (intent.operation !== "create" && intent.operation !== "update")
-      return { kind: "refused", index, reasonCode: "operation_unavailable" };
+    if (!("values" in intent)) {
+      if (
+        !platformIdSchema.safeParse(intent.recordTypeId).success ||
+        !platformIdSchema.safeParse(intent.recordId).success ||
+        revision(intent.expectedConcurrencyNumber) === undefined
+      )
+        return { kind: "refused", index, reasonCode: "command_invalid" };
+      commands.push(intent);
+      continue;
+    }
     const command = saveRecordCommandSchema.safeParse({
       contractVersion: "2.0.0",
       commandId,
@@ -151,11 +192,11 @@ export const applyRecordChanges = async (
   const subjects = commands.map((command) => ({
     operation: command.operation,
     recordTypeId: command.recordTypeId,
-    recordId: command.operation === "update" ? command.recordId : null,
+    recordId: command.operation !== "create" ? command.recordId : null,
     expectedConcurrencyNumber:
-      command.operation === "update" ? command.expectedConcurrencyNumber : null,
+      command.operation !== "create" ? command.expectedConcurrencyNumber : null,
     selectedGroupId: command.operation === "create" ? (command.selectedOwnerGroupId ?? null) : null,
-    submittedValues: command.submittedValues,
+    submittedValues: "submittedValues" in command ? command.submittedValues : {},
     finalValues: {} as Readonly<Record<string, unknown>>,
     activityId: randomUUID(),
     occurrenceId: randomUUID(),
@@ -203,7 +244,13 @@ export const applyRecordChanges = async (
     ...parsedGraph,
     records: parsedGraph.records.map((record) => ({
       ...record,
-      existingValues: preparations.get(record.recordKey)?.existingValues ?? record.existingValues,
+      existingValues:
+        preparedRow.lifecycleChanges instanceof Array &&
+        preparedRow.lifecycleChanges.some(
+          (change) => isRecord(change) && change.recordKey === record.recordKey,
+        )
+          ? record.existingValues
+          : (preparations.get(record.recordKey)?.existingValues ?? record.existingValues),
     })),
   };
   const rules = new Map<string, BeforeSaveRuleExecution>();
@@ -221,8 +268,35 @@ export const applyRecordChanges = async (
   if (clock === undefined)
     return refusal({ ...preparedRow, reasonCode: "operation_clock_unavailable" });
   const changes = new Map<string, RecordCalculationChange>(
-    commands.map((command, index) => [`intent:${index}`, command]),
+    commands.flatMap((command, index) =>
+      "submittedValues" in command ? [[`intent:${index}`, command] as const] : [],
+    ),
   );
+  if (!Array.isArray(preparedRow.lifecycleChanges))
+    throw contractError("RECORD_CHANGES_LIFECYCLE_PREPARATION_INVALID", undefined);
+  for (const change of preparedRow.lifecycleChanges) {
+    if (
+      !isRecord(change) ||
+      typeof change.recordKey !== "string" ||
+      !isRecord(change.storedValues) ||
+      !isRecord(change.submittedValues) ||
+      !["update", "delete", "restore"].includes(String(change.operation))
+    )
+      throw contractError("RECORD_CHANGES_LIFECYCLE_PREPARATION_INVALID", undefined);
+    changes.set(
+      change.recordKey,
+      change.operation === "update"
+        ? {
+            operation: "update",
+            submittedValues: change.submittedValues as Record<string, JsonValue>,
+            generatedParent: true,
+          }
+        : {
+            operation: change.operation as "delete" | "restore",
+            storedValues: change.storedValues,
+          },
+    );
+  }
   const calculated = calculateLockedRelationshipTotalSave({
     preparation: graph,
     changes,
@@ -236,6 +310,7 @@ export const applyRecordChanges = async (
   const requests = new Map<string, Readonly<Record<string, unknown>>>();
   if (calculated.success)
     for (const [index, command] of commands.entries()) {
+      if (!("submittedValues" in command)) continue;
       const key = `intent:${index}`;
       const values = calculated.records.get(key);
       const prepared = preparations.get(key)!;
@@ -300,6 +375,36 @@ export const applyRecordChanges = async (
   for (const [index, command] of commands.entries()) {
     const key = `intent:${index}`;
     const prepared = preparations.get(key)!;
+    if (!("submittedValues" in command)) {
+      if (!calculated.success) {
+        console.error(
+          `[record] lifecycle calculation refused: ${calculated.issues
+            .map((issue) => `${issue.recordKey}:${issue.code}`)
+            .join(",")}`,
+        );
+        const issue = calculated.issues.find((value) => value.requirement !== undefined);
+        const affected = graph.records.find((record) => record.recordKey === issue?.recordKey);
+        return {
+          kind: "refused",
+          index,
+          reasonCode: "calculation_refused",
+          result: safeRefusal(
+            prepared.correlationId,
+            "operation_refused",
+            issue === undefined
+              ? undefined
+              : affected?.canRead
+                ? issue.requirement
+                : {
+                    code: "related_record_rule_conflict",
+                    message: "This change conflicts with a rule on a related record",
+                  },
+          ),
+        };
+      }
+      previous.push({});
+      continue;
+    }
     const localValues = calculated.success
       ? { ...calculated, records: new Map([["root", calculated.records.get(key)!]]) }
       : {
@@ -385,6 +490,7 @@ export const applyRecordChanges = async (
     );
   } catch (error) {
     for (const [index, command] of commands.entries()) {
+      if (!("submittedValues" in command)) continue;
       const correction = constraintCorrection(error, preparations.get(`intent:${index}`), command);
       if (correction !== undefined) return { kind: "refused", index, result: correction };
     }
