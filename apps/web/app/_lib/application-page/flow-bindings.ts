@@ -23,6 +23,7 @@ import {
   type OrganizationSelectionCandidate,
   flowTaskChildLists,
   type PageDefinition,
+  pageSemanticEventKinds,
   sameId,
   isRecord,
 } from "@vortex/platform/schema";
@@ -353,7 +354,8 @@ export const projectPlacementBindings = (
     bindings[placementId] = held.map(({ binding, messageAction }) => {
       // An action selects the page subject, so a foreign placement cannot lend it a record type.
       const selectedRecordTypeId =
-        binding.event === "action"
+        binding.event === "action" ||
+        pageSemanticEventKinds.some((event) => event === binding.event)
           ? (pageDefinition.type === "detail" || pageDefinition.type === "form") &&
             pageSubjectRecordTypeId !== undefined &&
             (placementRecordTypeId === undefined ||

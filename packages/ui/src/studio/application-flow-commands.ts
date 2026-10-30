@@ -8,7 +8,10 @@ import {
   flowExecutionRunLocations,
   parseFlowReference,
   sourceFlowTaskSchema,
+  validateFlow,
   validateFlowTaskPlacement,
+  applicationSourceDocumentSchema,
+  flowTaskChildLists,
   type ApplicationSourceDocument,
   type FlowTaskPropertyType,
   type FlowTaskTypeDefinition,
@@ -23,6 +26,8 @@ import {
   sameStudioFlowContext,
   samePath,
   studioWords,
+  studioFlowKeyFrom,
+  studioWithoutUnusedFlows,
   studioFlowDefinitionOf,
   studioFlowListAt,
   studioFlowOutline,
@@ -44,6 +49,7 @@ import {
   studioFlowCanCreateShownForm,
 } from "./application-flow-shown-form";
 import { studioFlowLabel } from "./semantic-selection";
+import { studioFlowCallerNames } from "./application-flow-start";
 
 /**
  * The flow commands: one checked edit of the stored flow definition each, taken by the draft
@@ -1099,4 +1105,194 @@ export const applyStudioFlowCommand = (
   } catch (cause) {
     return { kind: "invalid", cause, reason: "The draft could not be read to make this change." };
   }
+};
+
+// ─── Combining two flows on one event ────────────────────────────────────────────────────────
+
+export type StudioFlowCombineResult =
+  | Readonly<{
+      kind: "applied";
+      source: ApplicationSourceDocument;
+      /** The new flow the event runs, and the two flows it replaced (removed when nothing else uses them). */
+      flowKey: string;
+      replaced: readonly [string, string];
+    }>
+  | Readonly<{ kind: "refused"; reason: string }>;
+
+/** Step types after which a flow does not carry on: a second flow's steps would never run. */
+const endingStepTypes: ReadonlySet<string> = new Set(["stop", "interface.navigate", "rule.refuse"]);
+
+type FlowTaskList = readonly SourceFlowTask[];
+const childTaskLists = (task: SourceFlowTask): FlowTaskList[] =>
+  flowTaskChildLists(task as never).map((child) => child.tasks as unknown as FlowTaskList);
+
+const flowTaskIds = (tasks: FlowTaskList, ids: string[] = []): string[] => {
+  for (const task of tasks) {
+    ids.push(task.id);
+    for (const children of childTaskLists(task)) flowTaskIds(children, ids);
+  }
+  return ids;
+};
+
+const endsEarly = (tasks: FlowTaskList): boolean =>
+  tasks.some(
+    (task) =>
+      endingStepTypes.has(task.type) || childTaskLists(task).some((list) => endsEarly(list)),
+  );
+
+/** The value with every reference to a renamed step pointing at its new id. */
+const renameStepReferences = (value: unknown, renames: ReadonlyMap<string, string>): unknown => {
+  if (typeof value === "string")
+    return value.replace(/{{\s*outputs\.([a-z][a-z0-9_]*)\./g, (whole, task: string) => {
+      const next = renames.get(task);
+      return next === undefined ? whole : `{{ outputs.${next}.`;
+    });
+  if (Array.isArray(value)) return value.map((item) => renameStepReferences(item, renames));
+  if (value === null || typeof value !== "object") return value;
+  const entry = value as Record<string, unknown>;
+  return Object.fromEntries(
+    Object.entries(entry).map(([key, child]) => {
+      const renamed =
+        typeof child === "string" &&
+        renames.has(child) &&
+        (key === "id" || (key === "task" && entry.source === "task_output"));
+      return [key, renamed ? renames.get(child as string) : renameStepReferences(child, renames)];
+    }),
+  );
+};
+
+/**
+ * One event runs one flow, so two flows wanted on one event become one new flow: the first flow's
+ * steps, then the second's. The second flow's step ids are made unique and its references to its
+ * own steps follow. Inputs, variables and outputs are merged; two different declarations of one
+ * name are refused with a sentence. The event now runs the new flow; the two old flows stay in the
+ * draft for the caller to remove when nothing else uses them. It is one edit of the draft.
+ */
+export const applyStudioFlowCombine = (
+  source: ApplicationSourceDocument,
+  bindingId: string,
+  otherFlowKey: string,
+): StudioFlowCombineResult => {
+  const refuse = (reason: string): StudioFlowCombineResult => ({ kind: "refused", reason });
+  const candidate = structuredClone(source);
+  const body = candidate.body;
+  const binding = body.flow_bindings.find((entry) => entry.id === bindingId);
+  const first = body.flows.find((flow) => flow.id === binding?.flow || flow.key === binding?.flow);
+  const second = body.flows.find((flow) => flow.key === otherFlowKey);
+  if (binding === undefined || first === undefined || second === undefined)
+    return refuse("That event or flow is no longer in the draft. Reload the draft.");
+  if (first.id === second.id) return refuse("Choose a different flow to combine with.");
+  if (second.execution !== "interactive" || second.triggers.length > 0)
+    return refuse(
+      `${studioFlowLabel(second)} also starts from a record event, so it cannot be combined.`,
+    );
+  if (endsEarly(first.tasks))
+    return refuse(
+      `${studioFlowLabel(first)} can end before the second flow's steps run (it navigates, stops or refuses). Remove that step first.`,
+    );
+  if (JSON.stringify(first.runAs) !== JSON.stringify(second.runAs))
+    return refuse("The two flows run as different people, so they cannot be combined.");
+  const merge = <Value>(
+    what: string,
+    a: Readonly<Record<string, Value>>,
+    b: Readonly<Record<string, Value>>,
+  ): Record<string, Value> | string => {
+    const merged: Record<string, Value> = { ...a };
+    for (const [name, declared] of Object.entries(b)) {
+      if (name in merged && JSON.stringify(merged[name]) !== JSON.stringify(declared))
+        return `Both flows declare the ${what} "${name}" differently. Rename one of them first.`;
+      merged[name] = declared;
+    }
+    return merged;
+  };
+  const inputs = merge("input", first.inputs, second.inputs);
+  if (typeof inputs === "string") return refuse(inputs);
+  const variables = merge("variable", first.variables, second.variables);
+  if (typeof variables === "string") return refuse(variables);
+  const clashing = Object.keys(second.outputs).find((name) => name in first.outputs);
+  if (clashing !== undefined)
+    return refuse(`Both flows return "${clashing}". Rename one of them first.`);
+  if (
+    first.recordInput !== undefined &&
+    second.recordInput !== undefined &&
+    first.recordInput !== second.recordInput
+  )
+    return refuse("The two flows run for different record inputs, so they cannot be combined.");
+  const lists = (flow: SourceFlow): FlowTaskList[] => [flow.tasks, flow.errors, flow.finally];
+  const taken = new Set(lists(first).flatMap((list) => flowTaskIds(list)));
+  const renames = new Map<string, string>();
+  for (const id of lists(second).flatMap((list) => flowTaskIds(list))) {
+    if (!taken.has(id)) {
+      taken.add(id);
+      continue;
+    }
+    const next = studioFlowKeyFrom(`${id}_2`, taken);
+    if (next === undefined) return refuse("No free step name could be made. Rename a step first.");
+    taken.add(next);
+    renames.set(id, next);
+  }
+  const moved = <Value>(value: Value): Value => renameStepReferences(value, renames) as Value;
+  const wantedName = `${studioFlowLabel(first)} and ${studioFlowLabel(second)}`.slice(0, 94);
+  const names = new Set(
+    [...body.flows, ...body.modules.flatMap((module) => module.flows)].map((flow) =>
+      (flow.labels?.name ?? flow.key).toLowerCase(),
+    ),
+  );
+  let name = wantedName;
+  for (let n = 2; names.has(name.toLowerCase()); n += 1) name = `${wantedName} ${n}`;
+  const key = studioFlowKeyFrom(name, new Set(body.flows.flatMap((flow) => [flow.id, flow.key])));
+  if (key === undefined) return refuse("No free name could be made for the combined flow.");
+  const supplied = new Set(studioFlowCallerNames(binding.event).map((entry) => entry.name));
+  const bindingInputs: typeof binding.inputs = { ...binding.inputs };
+  for (const [inputName, declared] of Object.entries(second.inputs)) {
+    if (inputName in bindingInputs) continue;
+    if (supplied.has(inputName)) bindingInputs[inputName] = { kind: "caller", name: inputName };
+    else if (declared.required)
+      return refuse(
+        `${studioFlowLabel(second)} needs "${inputName}", which this event does not supply.`,
+      );
+  }
+  const recordInput = first.recordInput ?? second.recordInput;
+  const combined: SourceFlow = {
+    id: key,
+    key,
+    description: `${studioFlowLabel(first)}, then ${studioFlowLabel(second)}.`,
+    labels: { name },
+    execution: "interactive",
+    runAs: first.runAs,
+    inputs,
+    ...(recordInput === undefined ? {} : { recordInput }),
+    variables,
+    triggers: [],
+    tasks: [...first.tasks, ...moved(second.tasks)],
+    outputs: { ...first.outputs, ...moved(second.outputs) },
+    errors: [...first.errors, ...moved(second.errors)],
+    finally: [...first.finally, ...moved(second.finally)],
+  };
+  body.flows.push(combined);
+  binding.flow = key;
+  binding.inputs = bindingInputs;
+  const parsed = applicationSourceDocumentSchema.safeParse(candidate);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    return refuse(
+      issue === undefined
+        ? "The combined flow is not valid."
+        : `The combined flow is not valid: ${issue.message} (${issue.path.map(String).join(", ")}).`,
+    );
+  }
+  const problem = validateFlow(combined, {
+    targetFlow: (reference) =>
+      [
+        ...parsed.data.body.flows,
+        ...parsed.data.body.modules.flatMap((module) => module.flows),
+      ].find((entry) => entry.id === reference || entry.key === reference),
+  })[0];
+  if (problem !== undefined) return refuse(`The combined flow is not valid: ${problem.message}.`);
+  return {
+    kind: "applied",
+    source: studioWithoutUnusedFlows(parsed.data, [first.key, second.key]),
+    flowKey: key,
+    replaced: [first.key, second.key],
+  };
 };

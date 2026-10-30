@@ -17,7 +17,7 @@ import { Textarea } from "@vortex/ui/components/textarea";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
 import {
   studioFlowCreateSavesChange,
-  studioFlowEventLabels,
+  studioFlowEventTitle,
   type StudioFlowCreateChoices,
   type StudioFlowCreateCommand,
 } from "@vortex/ui/studio";
@@ -33,6 +33,7 @@ export function StudioNewFlowDialog({
   source,
   onCreate,
   initialControl,
+  initialEvent,
 }: Readonly<{
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -41,12 +42,14 @@ export function StudioNewFlowDialog({
   onCreate: (command: StudioFlowCreateCommand) => string | true;
   /** A control to create the flow for, when opened from its inspector. */
   initialControl?: string | undefined;
+  /** The event to create the flow for, when opened from the Behaviour panel. */
+  initialEvent?: string | undefined;
 }>) {
   const [name, setName] = useState("");
   const [control, setControl] = useState(initialControl ?? "");
   const [flowKey, setFlowKey] = useState("");
   const [mapping, setMapping] = useState<Readonly<Record<string, string>>>({});
-  const [eventKind, setEventKind] = useState("");
+  const [eventKind, setEventKind] = useState(initialEvent ?? "");
   const [rowActionLabel, setRowActionLabel] = useState("");
   const [problem, setProblem] = useState("");
   const [what, setWhat] = useState<"" | "operation" | "message">("");
@@ -227,7 +230,7 @@ export function StudioNewFlowDialog({
               >
                 {events.map((entry) => (
                   <NativeSelectOption key={entry.event} value={entry.event}>
-                    {studioFlowEventLabels[entry.event]}
+                    {studioFlowEventTitle(entry.event)}
                   </NativeSelectOption>
                 ))}
               </NativeSelect>

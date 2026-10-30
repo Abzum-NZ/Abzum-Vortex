@@ -2,6 +2,8 @@ import { recordsTableInlineEditEvent, recordsTableRowEditEvent } from "@vortex/p
 import {
   applicationRootIdSchema,
   applicationSourceDocumentSchema,
+  applicationUses,
+  builderKeySchema,
   flowMaximumTaskCount,
   flowMaximumTaskNestingDepth,
   flowTaskRegistry,
@@ -420,7 +422,46 @@ export const validatedStudioFlowEdit = (
   return { kind: "applied", source: candidate, taskId };
 };
 
-const eventWords: Readonly<Record<string, string>> = {
+/** A builder key from a name, unique among the taken ones. */
+export const studioFlowKeyFrom = (name: string, taken: ReadonlySet<string>): string | undefined => {
+  const base =
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^[^a-z]+|_+$/g, "")
+      .slice(0, 34)
+      .replace(/_+$/g, "") || "flow";
+  for (let n = 1; n < 1000; n += 1) {
+    const candidate = n === 1 ? base : `${base}_${n}`;
+    if (!taken.has(candidate) && builderKeySchema.safeParse(candidate).success) return candidate;
+  }
+  return undefined;
+};
+
+/**
+ * The source without the named application flows that nothing uses any more (by the draft's one
+ * reference index). A flow nobody runs would still be compiled and published, so a change that
+ * leaves one behind removes it in the same edit.
+ */
+export const studioWithoutUnusedFlows = (
+  source: ApplicationSourceDocument,
+  keys: readonly string[],
+): ApplicationSourceDocument => {
+  const unused = source.body.flows.filter(
+    (flow) =>
+      keys.includes(flow.key) &&
+      applicationUses(source, { kind: "flow", flowAlias: flow.id, moduleKey: null }).length === 0,
+  );
+  if (unused.length === 0) return source;
+  const gone = new Set(unused.map((flow) => flow.id));
+  return {
+    ...source,
+    body: { ...source.body, flows: source.body.flows.filter((flow) => !gone.has(flow.id)) },
+  };
+};
+
+/** What each component event reads as after the thing that raises it: "is used", "loads". */
+export const studioEventWords: Readonly<Record<string, string>> = {
   action: "is used",
   row_clicked: "row is clicked",
   row_action: "row action is used",
@@ -500,7 +541,7 @@ export const describeStudioFlowStarts = (
           .filter((binding) => binding.flow === flow.id || binding.flow === flow.key)
           .map(
             (binding) =>
-              `When ${controlLabel(binding.control)} ${eventWords[binding.event] ?? "is used"}`,
+              `When ${controlLabel(binding.control)} ${studioEventWords[binding.event] ?? "is used"}`,
           );
   return [...triggers, ...bindings];
 };

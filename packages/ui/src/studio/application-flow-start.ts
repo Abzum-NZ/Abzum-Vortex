@@ -119,6 +119,8 @@ const suppliedByEvent: Readonly<
     { name: "record", label: "The record the form edits" },
     { name: "selected_owner_group_id", label: "The owner group chosen on the form" },
   ],
+  load: [{ name: "record_id", label: "The record the page shows" }],
+  record_loaded: [{ name: "record_id", label: "The record the page shows" }],
   tab_changed: [{ name: "tab_key", label: "The tab that was opened" }],
   row_clicked: [{ name: "record_id", label: "The clicked record" }],
   row_action: [{ name: "record_id", label: "The record of the row" }],

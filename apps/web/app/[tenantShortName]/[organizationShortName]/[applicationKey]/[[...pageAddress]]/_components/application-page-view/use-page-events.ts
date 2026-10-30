@@ -23,7 +23,7 @@ export function usePageEvents(
     );
     for (const event of ["load", "record_loaded"] as const) {
       const binding = bindings.find((candidate) => candidate.event === event);
-      if (binding !== undefined) void run(current.pageId, binding, {});
+      if (binding !== undefined) void run(current.pageId, binding, {}, current.subject?.recordId);
     }
   }, [navigationKey]);
 }
