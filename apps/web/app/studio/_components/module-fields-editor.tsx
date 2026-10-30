@@ -488,6 +488,7 @@ export function ModuleFieldsEditor({
     actions: [],
     relationships,
     records: context.readRecords,
+    pageValues: [],
   };
   const offered = studioFieldPlacements(
     { ...context.composition, source },

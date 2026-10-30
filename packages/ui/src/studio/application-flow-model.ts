@@ -2,7 +2,6 @@ import { recordsTableInlineEditEvent, recordsTableRowEditEvent } from "@vortex/p
 import {
   applicationRootIdSchema,
   applicationSourceDocumentSchema,
-  applicationUses,
   builderKeySchema,
   flowMaximumTaskCount,
   flowMaximumTaskNestingDepth,
@@ -17,6 +16,7 @@ import {
   type SourceFlow,
   type SourceFlowTask,
 } from "@vortex/platform/schema";
+import { deleteStudioFlow } from "./application-flow-delete";
 import { studioFlowOfSelection, type StudioSemanticSelection } from "./semantic-selection";
 
 /**
@@ -446,19 +446,13 @@ export const studioFlowKeyFrom = (name: string, taken: ReadonlySet<string>): str
 export const studioWithoutUnusedFlows = (
   source: ApplicationSourceDocument,
   keys: readonly string[],
-): ApplicationSourceDocument => {
-  const unused = source.body.flows.filter(
-    (flow) =>
-      keys.includes(flow.key) &&
-      applicationUses(source, { kind: "flow", flowAlias: flow.id, moduleKey: null }).length === 0,
-  );
-  if (unused.length === 0) return source;
-  const gone = new Set(unused.map((flow) => flow.id));
-  return {
-    ...source,
-    body: { ...source.body, flows: source.body.flows.filter((flow) => !gone.has(flow.id)) },
-  };
-};
+): ApplicationSourceDocument =>
+  source.body.flows
+    .filter((flow) => keys.includes(flow.key))
+    .reduce((current, flow) => {
+      const result = deleteStudioFlow(current, flow.id, null);
+      return result.kind === "deleted" ? result.source : current;
+    }, source);
 
 /** What each component event reads as after the thing that raises it: "is used", "loads". */
 export const studioEventWords: Readonly<Record<string, string>> = {

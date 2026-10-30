@@ -604,6 +604,18 @@ export function useStudioCanvasTab({
     () => studioDraftChoices(source, view.borrowedChoices, readRecordChoices, applicationName),
     [source, view.borrowedChoices, readRecordChoices, applicationName],
   );
+  // The values the selected block's page declares, which a display can show.
+  const blockChoices = useMemo(
+    () => ({
+      ...draftChoices,
+      pageValues: Object.entries(canvasPage?.values ?? {}).map(([key, declaration]) => ({
+        key,
+        label: declaration.label,
+        ...(declaration.currency === undefined ? {} : { currency: declaration.currency }),
+      })),
+    }),
+    [draftChoices, canvasPage],
+  );
   // The records of the canvas's data blocks, read once per area for the compiled saved revision,
   // when the builder's preview runs that revision's data shape.
   const readCanvasRecords = useCallback(
@@ -900,7 +912,7 @@ export function useStudioCanvasTab({
           context={compositionContext}
           selection={selected}
           disabled={draft.locked}
-          choices={draftChoices}
+          choices={blockChoices}
           compiledFields={view.compiledFields}
           canvasArrangement={studioCanvasGridArrangement(gridStates.get(selected.placementAlias))}
           onCommand={commandComposition}
