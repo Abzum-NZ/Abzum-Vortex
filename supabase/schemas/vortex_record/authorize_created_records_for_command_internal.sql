@@ -332,9 +332,12 @@ begin
       end if;
     end loop;
 
-    loaded := vortex_record.load_record_access_facts_internal(
-      record_type_id_value, 'create', record_id_value, null, null::jsonb
-    );
+    loaded := (vortex_record.load_record_access_facts_internal(
+      'create', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordTypeId', record_type_id_value,
+        'recordId', record_id_value
+      ))
+    ) -> 0);
     if pg_catalog.jsonb_typeof(loaded) is distinct from 'object'
       or loaded ->> 'outcome' is distinct from 'loaded'
       or loaded ? 'previewInstallationId'
@@ -460,9 +463,13 @@ begin
     facts := (loaded -> 'facts') || pg_catalog.jsonb_build_object(
       'binding', meta -> 'declaration' -> 'recordBinding'
     );
-    decision := vortex_access.evaluate_organization_record_access_internal(
-      meta -> 'declaration', record_id_value, facts
-    );
+    decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'declaration', meta -> 'declaration',
+        'recordId', record_id_value,
+        'facts', facts
+      )
+    )) -> 0);
     if pg_catalog.jsonb_typeof(decision) is distinct from 'object'
       or decision ->> 'outcome' is distinct from 'allowed' then
       raise exception using errcode = '42501',

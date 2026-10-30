@@ -21,10 +21,14 @@ begin
       message = 'Record adapter selector is invalid';
   end if;
 
-  return vortex_record.load_record_access_facts_from_installation_internal(
-    p_record_type_id, 'transfer', p_record_id, p_expected_concurrency_number, p_installation,
-    null::jsonb
-  );
+  return (vortex_record.load_record_access_facts_from_installation_internal(
+    'transfer', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'recordTypeId', p_record_type_id,
+      'recordId', p_record_id,
+      'expectedConcurrencyNumber', p_expected_concurrency_number
+    )),
+    p_installation
+  ) -> 0);
 end
 $function$;
 

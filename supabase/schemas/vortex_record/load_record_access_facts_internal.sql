@@ -1,10 +1,6 @@
 create or replace function vortex_record.load_record_access_facts_internal(
-  p_record_type_id uuid,
   p_action_kind text,
-  p_record_id uuid,
-  p_expected_concurrency_number bigint,
-  p_projection_row jsonb,
-  p_requested_field_ids jsonb default null
+  p_targets jsonb
 )
 returns jsonb
 language plpgsql
@@ -13,18 +9,19 @@ security invoker
 set search_path = ''
 as $function$
 declare
-  nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000'::uuid;
   context_value jsonb;
   context_application_root_id uuid;
   installation jsonb;
   preview_installation jsonb;
 begin
-  if p_record_type_id is null or p_record_type_id = nil_uuid
-    or p_record_id is null or p_record_id = nil_uuid
-    or p_action_kind is null
+  -- Each target names a record type, a record, and optionally an expected
+  -- revision, a protected projection row and requested fields; the result holds
+  -- one facts outcome per target in the same order. The facts body checks each
+  -- target.
+  if p_action_kind is null
     or p_action_kind not in ('create', 'read', 'update', 'delete', 'restore')
-    or (p_expected_concurrency_number is not null
-      and p_expected_concurrency_number not between 1 and 9007199254740991) then
+    or pg_catalog.jsonb_typeof(p_targets) is distinct from 'array'
+    or pg_catalog.jsonb_array_length(p_targets) not between 1 and 200 then
     raise exception using errcode = '22023',
       message = 'Record adapter selector is invalid';
   end if;
@@ -48,15 +45,17 @@ begin
     vortex_record.read_current_preview_installation_internal();
   if preview_installation is not null
     and preview_installation ->> 'outcome' = 'refused' then
-    return pg_catalog.jsonb_build_object('outcome', 'refused');
+    return (
+      select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object('outcome', 'refused'))
+      from pg_catalog.jsonb_array_elements(p_targets)
+    );
   end if;
   installation := case when preview_installation is null
     then vortex_definition.read_current_active_installation()
     else preview_installation end;
 
   return vortex_record.load_record_access_facts_from_installation_internal(
-    p_record_type_id, p_action_kind, p_record_id, p_expected_concurrency_number,
-    installation, p_projection_row, p_requested_field_ids
+    p_action_kind, p_targets, installation
   );
 exception
   when no_data_found then
@@ -68,10 +67,10 @@ exception
 end
 $function$;
 
-alter function vortex_record.load_record_access_facts_internal(uuid,text,uuid,bigint,jsonb,jsonb) owner to vortex_record_adapter;
+alter function vortex_record.load_record_access_facts_internal(text,jsonb) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.load_record_access_facts_internal(
-  uuid, text, uuid, bigint, jsonb, jsonb
+  text, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
-grant execute on function vortex_record.load_record_access_facts_internal(uuid,text,uuid,bigint,jsonb,jsonb) to vortex_owner;
+grant execute on function vortex_record.load_record_access_facts_internal(text,jsonb) to vortex_owner;

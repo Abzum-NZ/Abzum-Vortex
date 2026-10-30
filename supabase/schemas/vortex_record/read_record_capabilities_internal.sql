@@ -173,9 +173,12 @@ begin
       end if;
     end if;
     if action_loaded is null then
-      action_loaded := vortex_record.load_record_access_facts_internal(
-        p_record_type_id, action_kind, p_record_id, null, null::jsonb
-      );
+      action_loaded := (vortex_record.load_record_access_facts_internal(
+        action_kind, pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+          'recordTypeId', p_record_type_id,
+          'recordId', p_record_id
+        ))
+      ) -> 0);
     end if;
     if action_loaded ->> 'outcome' = 'loaded'
       and pg_catalog.jsonb_typeof(action_loaded -> 'declaration') = 'object' then
