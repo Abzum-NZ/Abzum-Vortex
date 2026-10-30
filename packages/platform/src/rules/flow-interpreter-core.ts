@@ -24,6 +24,8 @@ import {
   withFrames,
 } from "./flow-interpreter-state";
 import { serverRuns } from "./flow-server-step-runners";
+import { formattedTaskValue } from "./flow-data-tasks";
+import { evaluateRecordChangeValues } from "./flow-record-change-values";
 import { findTask, validReadFieldsResume } from "./flow-read-fields-resume";
 export { flowRunStateVersion } from "./flow-interpreter-state";
 import { flowValueMatchesType } from "./flow-value-shapes";
@@ -566,7 +568,7 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
   const registered = task as Extract<FlowTask, { properties: unknown }>;
   const definition = flowTaskRegistry[registered.type as keyof typeof flowTaskRegistry];
   if (definition === undefined) return failed("task_unknown", "failed", taskId);
-  const properties = evaluateProperties(
+  const evaluatedProperties = evaluateProperties(
     registered.type === "data.calculate"
       ? Object.fromEntries(
           Object.entries(registered.properties).filter(([name]) => name !== "formula"),
@@ -579,9 +581,31 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
     machine.resolveMember,
     machine.resolveForm,
   );
+  // A record change list holds nested values the interpreter evaluates like any other value.
+  const properties =
+    registered.type === "record.changes"
+      ? evaluateRecordChangeValues(evaluatedProperties, (value) =>
+          evaluateValue(
+            value,
+            state,
+            activation,
+            flow,
+            taskId,
+            machine.resolveMember,
+            machine.resolveForm,
+          ),
+        )
+      : evaluatedProperties;
+  if (properties === undefined) return failed("value_unresolved", "failed", taskId);
 
   if (definition.effect === "pure") {
     if (!serverRuns(registered.type, "interpreter")) failed("task_not_available", "failed", taskId);
+    if (registered.type === "data.format") {
+      const value = formattedTaskValue(properties);
+      if (value === undefined) return failed("value_unresolved", "failed", taskId);
+      replaceTop(machine, storeTaskOutputs(next, taskId, { value }));
+      return { kind: "continue" };
+    }
     if (registered.type === "data.record_link") {
       const recordType = registered.properties.record_type;
       const record = registered.properties.record;
