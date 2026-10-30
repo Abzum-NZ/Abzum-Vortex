@@ -206,6 +206,40 @@ const createRuntimeTransactionRunner =
       return invokeRequestDatabaseCallback(() => operation(transaction));
     });
 
+const runResolvedRequestInTransaction = async <Scope, Result>(
+  transaction: RequestDatabaseTransaction,
+  resolve: RequestContextResolver<Scope>,
+  operation: ResolvedRequestOperation<Scope, Result>,
+  observer: ProtectedReadObserver | undefined,
+): Promise<Result> => {
+  const resolved = await invokeRequestDatabaseCallback(() => resolve(transaction));
+  const validated = validateContext(resolved.context);
+  const parsedChannel =
+    resolved.channel === undefined
+      ? undefined
+      : protectedOperationChannelSchema.safeParse(resolved.channel);
+  if (parsedChannel !== undefined && !parsedChannel.success)
+    throw databaseError("INVALID_REQUEST_CONTEXT_CHANNEL");
+  const serialized = JSON.stringify({
+    ...validated,
+    ...(parsedChannel === undefined ? {} : { channel: parsedChannel.data }),
+  });
+
+  // One statement initialises the request context and then switches to the request role:
+  // the select list runs in order, so the role changes only once the context is accepted
+  // (`set_config('role', ..., true)` is what `set local role` does).
+  await transaction.query`
+    select vortex_platform.initialize(${serialized}::text::jsonb),
+      pg_catalog.set_config('role', 'vortex_request', true)
+  `;
+
+  const run = () =>
+    invokeRequestDatabaseCallback(() =>
+      operation(wrapRequestTransaction(transaction, observer), resolved.scope),
+    );
+  return observer === undefined ? run() : withProtectedReadObserver(observer, run);
+};
+
 const createResolvedRequestTransactionRunner =
   (driver: DatabaseDriver) =>
   async <Scope, Result>(
@@ -216,32 +250,7 @@ const createResolvedRequestTransactionRunner =
     const observer = currentProtectedReadObserver();
     return driver.transaction(async (transaction) => {
       await setRequestTimeouts(transaction);
-      const resolved = await invokeRequestDatabaseCallback(() => resolve(transaction));
-      const validated = validateContext(resolved.context);
-      const parsedChannel =
-        resolved.channel === undefined
-          ? undefined
-          : protectedOperationChannelSchema.safeParse(resolved.channel);
-      if (parsedChannel !== undefined && !parsedChannel.success)
-        throw databaseError("INVALID_REQUEST_CONTEXT_CHANNEL");
-      const serialized = JSON.stringify({
-        ...validated,
-        ...(parsedChannel === undefined ? {} : { channel: parsedChannel.data }),
-      });
-
-      // One statement initialises the request context and then switches to the request role:
-      // the select list runs in order, so the role changes only once the context is accepted
-      // (`set_config('role', ..., true)` is what `set local role` does).
-      await transaction.query`
-        select vortex_platform.initialize(${serialized}::text::jsonb),
-          pg_catalog.set_config('role', 'vortex_request', true)
-      `;
-
-      const run = () =>
-        invokeRequestDatabaseCallback(() =>
-          operation(wrapRequestTransaction(transaction, observer), resolved.scope),
-        );
-      return observer === undefined ? run() : withProtectedReadObserver(observer, run);
+      return runResolvedRequestInTransaction(transaction, resolve, operation, observer);
     });
   };
 
@@ -817,11 +826,14 @@ const defaultResolvedRequestRunner = createResolvedRequestTransactionRunner({
 
 export const withRuntimeTransaction = async <Result>(
   operation: RuntimeOperation<Result>,
+  options?: Readonly<{ notifyRequestCommit?: () => boolean }>,
 ): Promise<Result> => {
   const owned = currentOwnedDriver();
-  return owned === undefined
+  const result = await (owned === undefined
     ? defaultRuntimeRunner(operation)
-    : createRuntimeTransactionRunner(owned)(operation);
+    : createRuntimeTransactionRunner(owned)(operation));
+  if (options?.notifyRequestCommit?.()) notifyRequestCommitted();
+  return result;
 };
 
 // Instrumentation and request bundles share the listener through the process global.
@@ -834,19 +846,31 @@ export const registerCommittedTransactionListener = (listener: () => void): void
   (globalThis as CommittedTransactionGlobal)[committedTransactionListenerKey] = listener;
 };
 
-export const withResolvedRequestTransaction = async <Scope, Result>(
-  resolve: RequestContextResolver<Scope>,
-  operation: ResolvedRequestOperation<Scope, Result>,
-): Promise<Result> => {
-  const owned = currentOwnedDriver();
-  const result = await (owned === undefined
-    ? defaultResolvedRequestRunner(resolve, operation)
-    : createResolvedRequestTransactionRunner(owned)(resolve, operation));
+const notifyRequestCommitted = (): void => {
   try {
     (globalThis as CommittedTransactionGlobal)[committedTransactionListenerKey]?.();
   } catch (error) {
     // The transaction has committed; scheduling failure must not report a failed write.
     console.error("[events] could not schedule committed transaction dispatch", error);
   }
+};
+
+export const withResolvedRequestTransaction = async <Scope, Result>(
+  resolve: RequestContextResolver<Scope>,
+  operation: ResolvedRequestOperation<Scope, Result>,
+  openTransaction?: RequestDatabaseTransaction,
+): Promise<Result> => {
+  if (openTransaction !== undefined)
+    return runResolvedRequestInTransaction(
+      openTransaction,
+      resolve,
+      operation,
+      currentProtectedReadObserver(),
+    );
+  const owned = currentOwnedDriver();
+  const result = await (owned === undefined
+    ? defaultResolvedRequestRunner(resolve, operation)
+    : createResolvedRequestTransactionRunner(owned)(resolve, operation));
+  notifyRequestCommitted();
   return result;
 };

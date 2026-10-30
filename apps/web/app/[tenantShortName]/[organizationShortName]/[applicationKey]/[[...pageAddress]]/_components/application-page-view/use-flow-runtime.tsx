@@ -432,6 +432,7 @@ export function useFlowRuntime({
         bindingSettings,
         begin: beginSubmission,
         browserBinding: browserBindings,
+        ...(subject === undefined ? {} : { subject }),
         ...(application.flowTimeZone === undefined ? {} : { timeZone: application.flowTimeZone }),
         committed: (bindingId) => committedRef.current(bindingId),
       }),
@@ -443,6 +444,7 @@ export function useFlowRuntime({
       flowClient,
       host,
       runtimeState,
+      subject,
     ],
   );
   const webMcpRuntime = useMemo(

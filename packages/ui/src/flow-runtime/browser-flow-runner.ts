@@ -1,4 +1,5 @@
 import {
+  adaptFormSubmitInputs,
   browserFlowMemberTypeResolver,
   evaluateFlowFormula,
   pageFlowScope,
@@ -285,6 +286,7 @@ export async function startBrowserFlow(
   input: Readonly<{
     plan: BrowserFlowPlan;
     bindings: Readonly<Record<string, FlowBindingInput>>;
+    event: FlowBindingReference["event"];
     caller: Readonly<Record<string, unknown>>;
     runId: string;
     timeZone: string;
@@ -309,7 +311,13 @@ export async function startBrowserFlow(
         : pageFlowFormValue(type, input.readFormValue(reference.form, reference.field));
     };
     const clock = pageFlowClock(input.timeZone);
-    const inputs = resolvePageFlowInputs(input.plan.inputs, input.bindings, input.caller, {
+    // A form submit carries its answers as one envelope; the binding sees the same mapping as at the endpoint.
+    const callerInputs =
+      input.event === "form_submit"
+        ? adaptFormSubmitInputs(input.bindings, input.caller, input.server?.subject)
+        : input.caller;
+    if (callerInputs === undefined) throw new Error("FLOW_PAGE_FORM_SUBMIT_INVALID");
+    const inputs = resolvePageFlowInputs(input.plan.inputs, input.bindings, callerInputs, {
       ...clock,
       reference: (reference) =>
         reference.source === "form"

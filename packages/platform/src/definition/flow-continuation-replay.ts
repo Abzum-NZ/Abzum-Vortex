@@ -38,7 +38,7 @@ const payloadSchema = z.object({ identity: identitySchema, reply: replySchema })
 
 type Identity = z.infer<typeof identitySchema>;
 type Suspended = Extract<FlowOrchestratorResponse, { kind: "suspended" }>;
-type ReplyWithoutExpiry = Omit<Suspended, "expiresAt">;
+type ReplyWithoutExpiry = Omit<Suspended, "expiresAt" | "committedNow">;
 
 /** Seal the child token and page intent for the parent continuation's private replay record. */
 export const sealContinuationReplay = (
@@ -74,5 +74,5 @@ export const openContinuationReplay = (
   const expiry = new Date(expiresAt);
   if (!Number.isFinite(expiry.valueOf()))
     throw new Error("FLOW_CONTINUATION_REPLAY_EXPIRY_INVALID");
-  return { ...payload.reply, expiresAt: expiry.toISOString() };
+  return { ...payload.reply, expiresAt: expiry.toISOString(), committedNow: false };
 };

@@ -15,6 +15,7 @@ import {
   type InstalledRuntimeContext,
   type PageSubjectReadResult,
   type RecordLinkResolver,
+  type BoundHumanOrganizationRequest,
 } from "@vortex/platform/server";
 import type {
   IdentitySession,
@@ -47,8 +48,9 @@ export const projectGuidedForm = async (
     subjectRow: PageSubjectReadResult | undefined;
     subject: Readonly<{ recordId: string }> | undefined;
     dateTimeZones: DateTimeZones;
-    resolveRecordLinks: RecordLinkResolver;
-    data: Record<string, PageDataState>;
+    resolveRecordLinks?: RecordLinkResolver;
+    data?: Record<string, PageDataState>;
+    boundRequest?: BoundHumanOrganizationRequest;
   }>,
 ): Promise<
   | Readonly<{ kind: "projected"; guidedForm: NonNullable<ApplicationPageModel["guidedForm"]> }>
@@ -66,6 +68,7 @@ export const projectGuidedForm = async (
     dateTimeZones,
     resolveRecordLinks,
     data,
+    boundRequest,
   } = input;
   const application = context.releaseSet.application;
   const subjectCandidate = first(parameters[pageSubjectParameter]);
@@ -96,7 +99,7 @@ export const projectGuidedForm = async (
     return { kind: "refused", result: { kind: "unavailable" } };
   const draftScope = guidedFormDraftScope(String(pageDefinition.pageId), flowId, subject?.recordId);
   const openedDraft = await openGuidedFormDraft(
-    guidedFormDependencies(),
+    guidedFormDependencies(boundRequest),
     session,
     selection,
     draftScope,
@@ -110,13 +113,16 @@ export const projectGuidedForm = async (
   const computedStepId = computeGuidedFormStepId(stepFields, openedDraft.draft.validation);
   if (computedStepId === undefined) return { kind: "refused", result: { kind: "unavailable" } };
   const activeStepId = earlierGuidedStepId(stepFields, computedStepId, first(parameters.step));
-  const stepData = {
-    ...guidedFormInputData(page, recordType, values, dateTimeZones),
-  } as Record<string, PageDataState>;
-  // A linked record shows by its title, read under the viewer's access.
-  if ((await titleLinkInputs(stepData, resolveRecordLinks)).size > 0)
-    return { kind: "refused", result: { kind: "unavailable" } };
-  Object.assign(data, stepData);
+  if (data !== undefined) {
+    if (resolveRecordLinks === undefined) throw new Error("GUIDED_FORM_LINK_RESOLVER_MISSING");
+    const stepData = {
+      ...guidedFormInputData(page, recordType, values, dateTimeZones),
+    } as Record<string, PageDataState>;
+    // A linked record shows by its title, read under the viewer's access.
+    if ((await titleLinkInputs(stepData, resolveRecordLinks)).size > 0)
+      return { kind: "refused", result: { kind: "unavailable" } };
+    Object.assign(data, stepData);
+  }
   return {
     kind: "projected",
     guidedForm: {

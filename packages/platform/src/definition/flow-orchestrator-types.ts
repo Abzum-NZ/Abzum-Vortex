@@ -208,6 +208,8 @@ export type FlowOrchestratorDependencies = Readonly<{
       boundPorts: FlowOrchestratorDependencies,
       replay: FlowSegmentReceipt | undefined,
     ) => Promise<SegmentExecution<Readonly<{ step: FlowRunStep; run: Run }>>>,
+    /** The step a detached segment start already took, when the segment is not entered from a boundary. */
+    entry?: FlowRunStep,
   ) => Promise<StartFlowResult<Readonly<{ step: FlowRunStep; run: Run }>>>;
   /** Admits a continuation that reaches another page intent or finishes without a segment. */
   admitContinuation: (
@@ -257,6 +259,8 @@ export type FlowOrchestratorDependencies = Readonly<{
   currentRecords?: FlowCurrentRecordPort;
   /** Acquires a current installed identity for a human; no display values or replayed read results. */
   recordPins?: Readonly<{
+    /** Only a source-bound retry may accept an identity for the originally stored selector. */
+    storedTargetResume?: boolean;
     acquireIdentity(
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
@@ -358,7 +362,7 @@ export type SafeIntent = Readonly<{
   properties: Readonly<Record<string, JsonValue>>;
 }>;
 
-export type FlowOrchestratorResponse =
+export type FlowOrchestratorResponse = (
   | Readonly<{
       kind: "finished";
       warnings: readonly FlowWarningNotice[];
@@ -399,7 +403,9 @@ export type FlowOrchestratorResponse =
   | Readonly<{ kind: "reload" }>
   | Readonly<{ kind: "rate_limited"; retryAfterSeconds: number }>
   | Readonly<{ kind: "already_answered" }>
-  | Readonly<{ kind: "refused" }>;
+  | Readonly<{ kind: "refused" }>
+) &
+  Readonly<{ committedNow: boolean }>;
 
 type RunAuthority = Readonly<{
   kind: "person";

@@ -53,6 +53,7 @@ interface OrganizationAccountStoreDependencies {
 export interface IdentityProjectionReader {
   readIdentityProjection(
     verifiedIdentity: VerifiedIdentity,
+    transaction?: RequestDatabaseTransaction,
   ): Promise<IdentityProjection | undefined>;
 }
 
@@ -138,20 +139,24 @@ export const createOrganizationAccountStore = (
 
     async readIdentityProjection(
       verifiedIdentity: VerifiedIdentity,
+      openTransaction?: RequestDatabaseTransaction,
     ): Promise<IdentityProjection | undefined> {
       const verified = verifiedIdentitySchema.safeParse(verifiedIdentity);
       if (!verified.success)
         throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
 
       try {
-        return await runtimeTransaction(async (transaction) => {
+        const read = async (transaction: RequestDatabaseTransaction) => {
           const rows = await transaction.query<IdentityProjectionRow>`
             select *
             from vortex_identity.read_identity_projection(${verified.data.identityId}::uuid)
           `;
           const row = requireZeroOrOne(rows);
           return row === undefined ? undefined : parseIdentityProjection(row);
-        });
+        };
+        return await (openTransaction === undefined
+          ? runtimeTransaction(read)
+          : read(openTransaction));
       } catch (error) {
         if (error instanceof OrganizationAccountError) throw error;
         throw mapStorageFailure(error);
