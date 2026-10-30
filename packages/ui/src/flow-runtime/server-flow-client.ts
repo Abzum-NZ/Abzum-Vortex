@@ -44,6 +44,7 @@ export type ServerFlowResponse =
       runId: string;
       descriptor: Readonly<{ outcome: string; commit: string; outputs: string; recovery: string }>;
       outputs: Readonly<Record<string, JsonValue>>;
+      stopped?: string;
       intents: readonly FlowIntent[];
       carriedValues?: string;
       failure?: Readonly<{ code: string; taskId?: string; diagnostic?: FlowRefusalFeedback }>;
@@ -205,6 +206,7 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         typeof descriptor.outputs !== "string" ||
         typeof descriptor.recovery !== "string" ||
         !isRecord(candidate.outputs) ||
+        (candidate.stopped !== undefined && typeof candidate.stopped !== "string") ||
         !isCarriedValues(candidate.carriedValues)
       )
         return invalidServerResponse();
@@ -246,6 +248,7 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
           recovery: descriptor.recovery,
         },
         outputs: candidate.outputs as Readonly<Record<string, JsonValue>>,
+        ...(candidate.stopped === undefined ? {} : { stopped: candidate.stopped as string }),
         intents,
         ...(candidate.carriedValues === undefined
           ? {}

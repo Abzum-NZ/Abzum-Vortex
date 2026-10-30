@@ -1,8 +1,13 @@
 import type { JsonValue } from "../catalogue/json-value";
-import type { BrowserFlowOutputValue, BrowserFlowPlan } from "../workflows/flow-plan";
+import type {
+  BrowserFlowOutputValue,
+  BrowserFlowPlan,
+  FlowPathCondition,
+} from "../workflows/flow-plan";
 import type { FlowDefinition } from "../workflows/flow-contracts";
 import {
   flowRunStateVersion,
+  flowPathGuardMatches,
   pageFlowScope,
   type FlowFormReferenceResolver,
   type FlowOutputMemberTypeResolver,
@@ -174,4 +179,20 @@ export const pageFlowFinalOutputs = (
   if (Object.keys(completion).some((name) => !expected.has(name)))
     throw new Error("FLOW_PAGE_FINAL_OUTPUT_UNDECLARED");
   return values;
+};
+
+/** Evaluates a compiled branch guard with the same scope and evaluator as the interpreter. */
+export const pageFlowGuardMatches = (
+  guard: readonly FlowPathCondition[],
+  state: FlowRunState,
+  program: FlowProgram,
+  resolveMember: FlowOutputMemberTypeResolver,
+  resolveForm?: FlowFormReferenceResolver,
+): boolean => {
+  const scope = pageFlowScope(state, program, resolveMember, resolveForm);
+  return flowPathGuardMatches(guard, scope, (value) => {
+    const result = resolveFlowValue(value, scope);
+    if (result === undefined) throw new Error("FLOW_PAGE_GUARD_UNRESOLVED");
+    return result;
+  });
 };

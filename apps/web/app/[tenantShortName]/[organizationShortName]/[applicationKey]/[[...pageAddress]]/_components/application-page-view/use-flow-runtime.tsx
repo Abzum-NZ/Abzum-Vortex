@@ -492,11 +492,10 @@ export function useFlowRuntime({
         host,
         state: runtimeState,
         bindingSettings,
-        browserBinding: browserBindings,
         ...(application.flowTimeZone === undefined ? {} : { timeZone: application.flowTimeZone }),
         committed: (bindingId) => committedRef.current(bindingId),
       }),
-    [application.flowTimeZone, bindingSettings, browserBindings, webMcpClient, host, runtimeState],
+    [application.flowTimeZone, bindingSettings, webMcpClient, host, runtimeState],
   );
   useEffect(() => {
     if (

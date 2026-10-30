@@ -1,6 +1,5 @@
 import {
   buildLinkTilesQueryBinding,
-  flowValueReferences,
   flowEntrySegments,
   readOrganizationRuntimeSettings,
   type HumanOrganizationRequestDependencies,
@@ -391,21 +390,8 @@ export const projectPlacementBindings = (
                 Object.hasOwn(plan.inputs, name),
               ),
             );
-      const safePageOnly =
-        plan !== undefined &&
-        plan.segments.every((segment) => segment.kind === "page" && segment.guard.length === 0) &&
-        Object.values(plan.outputs).every(
-          ({ value }) => value.kind !== "reference" || value.reference.source !== "final_output",
-        ) &&
-        Object.values(pageInputs).every(
-          (value) =>
-            value.kind === "caller" ||
-            flowValueReferences(value).every(
-              (reference) => reference.source === "form" || reference.source === "execution_now",
-            ),
-        );
       return {
-        ...(safePageOnly ? { browser: { plan, inputs: pageInputs } } : {}),
+        browser: { plan, inputs: pageInputs },
         savesFormValues: flow !== undefined && savesValues(flow.tasks),
         bindingId: binding.bindingId,
         controlId: binding.controlId,

@@ -194,6 +194,7 @@ export type FlowBindingEndpointResult =
       runId: string;
       descriptor: SafeFlowResultDescriptor;
       outputs: Readonly<Record<string, JsonValue>>;
+      stopped?: string;
       carriedValues?: string;
       /** Browser intents such as navigation or a message, for the surface to carry out. */
       intents: SafeIntents;
@@ -624,6 +625,7 @@ const finishedResult = (
     runId: response.runId,
     descriptor,
     outputs: descriptor.outputs === "available" ? response.outputs : {},
+    ...(response.stopped === undefined ? {} : { stopped: response.stopped }),
     ...(response.carriedValues === undefined ? {} : { carriedValues: response.carriedValues }),
     intents: response.intents,
     unavailable: response.unavailable,

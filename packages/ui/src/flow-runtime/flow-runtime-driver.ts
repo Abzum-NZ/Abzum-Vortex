@@ -27,14 +27,26 @@ export async function runFlowBinding(
       readFormValue: options.state.readFormValue,
       condition: settings.condition,
       signal: runSignal,
+      server: {
+        client: options.client,
+        binding,
+        ...(subject === undefined ? {} : { subject }),
+        ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
+        ...(options.committed === undefined
+          ? {}
+          : { committed: () => options.committed?.(binding.bindingId) }),
+      },
     });
     if (result.kind === "abandoned") return { kind: "abandoned", unanswered: true };
     if (result.kind === "skipped") return { kind: "skipped" };
+    if (result.kind === "server_result") return result.result;
     if (result.kind === "completed")
       return {
         kind: "finished",
         runId: clickId,
-        descriptor: safeFlowResultDescriptors.completed,
+        descriptor: result.committed
+          ? safeFlowResultDescriptors.committed
+          : safeFlowResultDescriptors.completed,
         outputs: result.outputs,
       };
     if (result.kind === "failed")
