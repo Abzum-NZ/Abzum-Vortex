@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { platformIdSchema, recordIdSchema, revisionSchema } from "../catalogue/identifiers";
+import { recordIdSchema, revisionSchema } from "../catalogue/identifiers";
 
 /**
  * What a person selected in a Records table, as every bulk command over a table takes it: bulk
@@ -77,20 +77,6 @@ export const recordsSelectionCountResultSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("unavailable") }).strict(),
 ]);
 export type RecordsSelectionCountResult = z.infer<typeof recordsSelectionCountResultSchema>;
-
-/**
- * One run of a declared bulk action over a selection. `commandId` is the person's one gesture:
- * submitting the same command again replays each record's completed change instead of repeating it.
- */
-export const recordsTableBulkActionRequestSchema = z
-  .object({
-    ...placementCommandBase,
-    action: z.string().min(1).max(200),
-    commandId: platformIdSchema,
-    selection: recordsSelectionSchema,
-  })
-  .strict();
-export type RecordsTableBulkActionRequest = z.infer<typeof recordsTableBulkActionRequestSchema>;
 
 /** Why a record of a bulk run was not changed, in the words the summary groups them by. */
 export const recordsTableBulkRefusalReasons = [
