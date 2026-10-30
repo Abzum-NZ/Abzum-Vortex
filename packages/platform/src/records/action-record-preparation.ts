@@ -25,6 +25,7 @@ export type PreparedAction = PreparedNamedAction &
     beforeSaveFlows?: unknown;
     copyTargets: readonly Readonly<{
       recordId: string;
+      concurrencyNumber: number;
       existingValues: Readonly<Record<string, unknown>>;
       submittedValues: Readonly<Record<string, unknown>>;
     }>[];
@@ -94,6 +95,7 @@ const parseCopyTargets = (candidate: unknown, recordType: PreparedNamedAction["r
   if (!Array.isArray(candidate)) return undefined;
   const targets: Array<{
     recordId: string;
+    concurrencyNumber: number;
     existingValues: Record<string, unknown>;
     submittedValues: Record<string, unknown>;
   }> = [];
@@ -112,6 +114,8 @@ const parseCopyTargets = (candidate: unknown, recordType: PreparedNamedAction["r
     )
       return undefined;
     const recordId = value.recordId;
+    const concurrencyNumber = revision(value.concurrencyNumber);
+    if (concurrencyNumber === undefined) return undefined;
     const existingValues = { ...(value.existingValues as Record<string, unknown>) };
     const submittedValues = value.submittedValues as Record<string, unknown>;
     if (
@@ -130,7 +134,7 @@ const parseCopyTargets = (candidate: unknown, recordType: PreparedNamedAction["r
       )
         delete existingValues[field.fieldId];
     }
-    targets.push({ recordId, existingValues, submittedValues });
+    targets.push({ recordId, concurrencyNumber, existingValues, submittedValues });
   }
   return targets;
 };

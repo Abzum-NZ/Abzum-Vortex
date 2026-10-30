@@ -1,5 +1,4 @@
-create or replace function vortex_record.prepare_named_action_set_announce_internal(
-  p_preview boolean,
+create or replace function vortex_record.preview_named_action_internal(
   p_command_id uuid,
   p_action_owner_kind text,
   p_action_owner_id uuid,
@@ -9,7 +8,6 @@ create or replace function vortex_record.prepare_named_action_set_announce_inter
   p_record_id uuid,
   p_expected_concurrency_number bigint,
   p_inputs jsonb,
-  p_activity_id uuid,
   p_read_loaded jsonb,
   p_action_context jsonb
 )
@@ -25,21 +23,22 @@ declare
   projection jsonb;
   prepared jsonb;
 begin
-  if p_preview is null or p_command_id is null
+  if p_command_id is null
     or p_command_id = '00000000-0000-0000-0000-000000000000'::uuid
     or p_action_owner_kind not in ('application', 'module')
     or p_action_owner_id is null or p_action_id is null
     or p_action_release_revision not between 1 and 9007199254740991
     or p_record_type_id is null or p_record_id is null
     or p_expected_concurrency_number not between 1 and 9007199254740990
-    or pg_catalog.jsonb_typeof(p_inputs) is distinct from 'object'
-    or p_activity_id is null
-    or p_activity_id = '00000000-0000-0000-0000-000000000000'::uuid then
+    or pg_catalog.jsonb_typeof(p_inputs) is distinct from 'object' then
     return pg_catalog.jsonb_build_object('outcome', 'refused');
   end if;
   context_value := vortex_access.validated_human_request_context();
+  if vortex_record.preview_scoped_command_id_internal(p_command_id) is null then
+    return pg_catalog.jsonb_build_object('outcome', 'refused');
+  end if;
   receipt_claim := vortex_record.claim_command_receipt_internal(
-    'named_action', p_command_id, true
+    'record_changes', vortex_record.preview_scoped_command_id_internal(p_command_id), true
   );
   if receipt_claim ->> 'status' is distinct from 'none' then
     if receipt_claim ->> 'status' = 'identity_conflict' then
@@ -53,22 +52,13 @@ begin
         'outcome', 'conflict', 'correlationId', context_value -> 'correlationId'
       );
     end if;
-    projection := vortex_record.project_named_action_record_internal(
-      p_action_owner_kind, p_action_owner_id, p_action_release_revision,
-      p_action_id, p_record_type_id, p_record_id
-    );
-    -- A deleting action's subject is soft-deleted, so it cannot be
-    -- projected; its replay is the delete's own stored outcome.
-    if projection ->> 'outcome' <> 'completed' then
-      projection := coalesce(
-        vortex_record.named_action_deleted_subject_replay_internal(
-          p_command_id, p_action_owner_kind, p_action_owner_id,
-          p_action_release_revision, p_action_id, p_record_type_id
-        ),
-        projection
-      );
-    end if;
-    if projection ->> 'outcome' <> 'completed' then
+    -- A completed command answers with its own replay of this subject.
+    select item.value into projection
+    from pg_catalog.jsonb_array_elements(coalesce(vortex_record.replay_record_changes_internal(
+      vortex_record.preview_scoped_command_id_internal(p_command_id), receipt_claim -> 'result'
+    ) -> 'namedResults', '[]'::jsonb)) as item(value)
+    where (item.value ->> 'recordId')::uuid = p_record_id;
+    if projection ->> 'outcome' is distinct from 'completed' then
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'record_unavailable',
         'correlationId', context_value -> 'correlationId'
@@ -78,17 +68,12 @@ begin
   end if;
 
   prepared := vortex_record.prepare_named_action_subject_internal(
-    p_preview, p_action_owner_kind, p_action_owner_id, p_action_release_revision,
+    true, p_action_owner_kind, p_action_owner_id, p_action_release_revision,
     p_action_id, p_record_type_id, p_record_id, p_expected_concurrency_number,
     p_inputs, p_read_loaded, p_action_context
   );
   if prepared ->> 'outcome' = 'subject_permission_refused' then
-    if p_preview then
-      return prepared || pg_catalog.jsonb_build_object('outcome', 'permission_refused');
-    end if;
-    perform vortex_record.append_record_activity_internal(p_activity_id, 'execute_named_action',
-      array[p_record_id]::uuid[], array[]::uuid[], 'refused');
-    return prepared || pg_catalog.jsonb_build_object('outcome', 'refused_recorded');
+    return prepared || pg_catalog.jsonb_build_object('outcome', 'permission_refused');
   end if;
   return prepared;
 exception
@@ -98,12 +83,12 @@ exception
 end
 $function$;
 
-alter function vortex_record.prepare_named_action_set_announce_internal(boolean,uuid,text,uuid,bigint,uuid,uuid,uuid,bigint,jsonb,uuid,jsonb,jsonb) owner to vortex_record_adapter;
+alter function vortex_record.preview_named_action_internal(uuid,text,uuid,bigint,uuid,uuid,uuid,bigint,jsonb,jsonb,jsonb) owner to vortex_record_adapter;
 
-revoke all on function vortex_record.prepare_named_action_set_announce_internal(
-  boolean, uuid, text, uuid, bigint, uuid, uuid, uuid, bigint, jsonb, uuid, jsonb, jsonb
+revoke all on function vortex_record.preview_named_action_internal(
+  uuid, text, uuid, bigint, uuid, uuid, uuid, bigint, jsonb, jsonb, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-comment on function vortex_record.prepare_named_action_set_announce_internal(
-  boolean, uuid, text, uuid, bigint, uuid, uuid, uuid, bigint, jsonb, uuid, jsonb, jsonb
+comment on function vortex_record.preview_named_action_internal(
+  uuid, text, uuid, bigint, uuid, uuid, uuid, bigint, jsonb, jsonb, jsonb
 ) is
-  'Private named-action preparation: replays or refuses by command receipt, then returns the facts, permission decision and bounds of the exact installed action, writing nothing; a preview may reuse the read facts its fixed adapter caller loaded for the same record in this invocation when they are exactly the facts the named loader would build.';
+  'Private named-action availability preview: a completed command answers with its own replay of the subject; otherwise the facts, permission decision and bounds of the exact installed action, writing nothing. It may reuse the read facts its fixed adapter caller loaded for the same record in this invocation when they are exactly the facts the named loader would build.';

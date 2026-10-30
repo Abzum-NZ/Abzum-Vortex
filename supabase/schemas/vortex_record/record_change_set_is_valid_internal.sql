@@ -7,7 +7,7 @@ set search_path = ''
 as $function$
 begin
   if pg_catalog.jsonb_typeof(p_subjects) is distinct from 'array'
-    or pg_catalog.jsonb_array_length(p_subjects) not between 1 and 200 then return false; end if;
+    or pg_catalog.jsonb_array_length(p_subjects) > 200 then return false; end if;
   if exists (
     select 1 from pg_catalog.jsonb_array_elements(p_subjects) as item(value)
     where pg_catalog.jsonb_typeof(item.value) is distinct from 'object'
@@ -63,4 +63,4 @@ alter function vortex_record.record_change_set_is_valid_internal(jsonb) owner to
 revoke all on function vortex_record.record_change_set_is_valid_internal(jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_record.record_change_set_is_valid_internal(jsonb) is
-  'Validates the one closed internal record-intent storage shape, bounded to 200 unique subjects, before calculation or persistence.';
+  'Validates the one closed internal record-intent storage shape, at most 200 unique subjects (empty only for a named command that writes no record), before calculation or persistence.';

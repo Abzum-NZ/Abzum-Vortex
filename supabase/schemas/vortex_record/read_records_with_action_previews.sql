@@ -52,7 +52,6 @@ begin
             or item.value ->> 'ownerKind' is null
             or item.value ->> 'ownerKind' not in ('application', 'module')
             or not coalesce(pg_catalog.pg_input_is_valid(item.value ->> 'commandId', 'uuid'), false)
-            or not coalesce(pg_catalog.pg_input_is_valid(item.value ->> 'activityId', 'uuid'), false)
             or not coalesce(pg_catalog.pg_input_is_valid(item.value ->> 'ownerId', 'uuid'), false)
             or not coalesce(pg_catalog.pg_input_is_valid(item.value ->> 'actionId', 'uuid'), false)
             or not coalesce(case when pg_catalog.pg_input_is_valid(item.value ->> 'releaseRevision', 'bigint')
@@ -190,12 +189,12 @@ begin
           'actionId', action_item -> 'actionId',
           -- An unresolvable context passes null, so the preview resolves it itself after its
           -- command-receipt replay check and refuses exactly as the single preview does.
-          'preview', vortex_record.prepare_named_action_set_announce_internal(
-            true, (action_item ->> 'commandId')::uuid, action_item ->> 'ownerKind',
+          'preview', vortex_record.preview_named_action_internal(
+            (action_item ->> 'commandId')::uuid, action_item ->> 'ownerKind',
             (action_item ->> 'ownerId')::uuid, (action_item ->> 'releaseRevision')::bigint,
             (action_item ->> 'actionId')::uuid, p_record_type_id, requested_id,
             (projection ->> 'concurrencyNumber')::bigint, '{}'::jsonb,
-            (action_item ->> 'activityId')::uuid, read_facts,
+            read_facts,
             nullif(action_contexts -> context_key, 'false'::jsonb)
           )
         ));
@@ -229,4 +228,4 @@ revoke all on function vortex_record.read_records_with_action_previews(uuid, jso
 grant execute on function vortex_record.read_records_with_action_previews(uuid, jsonb) to vortex_request;
 
 comment on function vortex_record.read_records_with_action_previews(uuid, jsonb) is
-  'Fixed record adapter for a grid page of records and the named actions bound to each: reads every target through the page read pass the list read uses (the first readable record decided exactly, the others together, any record the pass does not decide by the exact single-record path), and, only for a readable record, returns each action''s preview exactly as vortex_record.preview_named_action_set_announce returns it for the record''s current concurrency number and no inputs (previews, in the order given), under the caller''s current authority and writing nothing; a readable record is reported by its recordId and concurrencyNumber, an unreadable one as refused.';
+  'Fixed record adapter for a grid page of records and the named actions bound to each: reads every target through the page read pass the list read uses (the first readable record decided exactly, the others together, any record the pass does not decide by the exact single-record path), and, only for a readable record, returns each action''s preview exactly as vortex_record.preview_named_action_internal returns it for the record''s current concurrency number and no inputs (previews, in the order given), under the caller''s current authority and writing nothing; a readable record is reported by its recordId and concurrencyNumber, an unreadable one as refused.';

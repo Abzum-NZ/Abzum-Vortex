@@ -206,6 +206,7 @@ begin
     copy_targets := copy_targets || pg_catalog.jsonb_build_array(
       pg_catalog.jsonb_build_object(
         'recordId', copy_target.record_id,
+        'concurrencyNumber', target_loaded -> 'concurrencyNumber',
         'existingValues', target_loaded -> 'fieldValues',
         'submittedValues', copy_target.submitted_values
       )

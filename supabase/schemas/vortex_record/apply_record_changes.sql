@@ -1,7 +1,8 @@
 create or replace function vortex_record.apply_record_changes(
   p_command_id uuid,
   p_subjects jsonb,
-  p_parent_mutations jsonb
+  p_parent_mutations jsonb,
+  p_named jsonb
 )
 returns jsonb
 language plpgsql
@@ -36,11 +37,17 @@ declare
   preview_installation jsonb;
   storage_set jsonb;
   previous_lifecycle_command text;
+  named_roles jsonb;
+  named_subject jsonb;
+  named_results jsonb := '[]'::jsonb;
+  named_receipt jsonb := '[]'::jsonb;
+  persisted_results jsonb := '[]'::jsonb;
 begin
-  if pg_catalog.jsonb_typeof(p_parent_mutations) is distinct from 'array' then
+  if pg_catalog.jsonb_typeof(p_parent_mutations) is distinct from 'array'
+    or (p_named is not null and pg_catalog.jsonb_typeof(p_named) is distinct from 'object') then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
   end if;
-  calculation := vortex_record.prepare_record_changes(p_command_id, p_subjects);
+  calculation := vortex_record.prepare_record_changes(p_command_id, p_subjects, p_named);
   if calculation ->> 'outcome' is distinct from 'prepared' then return calculation; end if;
   context_value := vortex_access.validated_human_request_context();
   preview_installation := vortex_record.read_current_preview_installation_internal();
@@ -81,14 +88,32 @@ begin
   end if;
   receipt := vortex_record.claim_command_receipt_internal('record_changes', effective_command_id, false);
   if receipt ->> 'status' = 'completed' then
-    return vortex_record.prepare_record_changes(p_command_id, p_subjects);
+    return vortex_record.prepare_record_changes(p_command_id, p_subjects, p_named);
   elsif receipt ->> 'status' is distinct from 'claimed' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_identity_conflict');
   end if;
-  prepared := vortex_record.prepare_record_change_set_internal(effective_command_id, p_subjects);
+  named_roles := calculation -> 'namedRoles';
+  if pg_catalog.jsonb_typeof(named_roles) is distinct from 'object' then named_roles := null; end if;
+  if pg_catalog.jsonb_array_length(p_subjects) = 0 then
+    prepared := pg_catalog.jsonb_build_object('outcome', 'prepared', 'plans', '[]'::jsonb,
+      'storageChanges', '[]'::jsonb, 'edgeChanges', '[]'::jsonb, 'effects', '[]'::jsonb);
+  else
+    prepared := vortex_record.prepare_record_change_set_internal(effective_command_id, p_subjects, named_roles);
+  end if;
   if prepared ->> 'outcome' is distinct from 'prepared' then
     perform vortex_record.release_command_receipt_internal('record_changes', effective_command_id);
     return prepared;
+  end if;
+  -- A subject the action deletes announces against the values it held; the
+  -- delete itself is one of this command's lifecycle intents.
+  if named_roles is not null and preview_installation is null then
+    for named_subject in
+      select item.value from pg_catalog.jsonb_array_elements(named_roles -> 'subjects') as item(value)
+      where (item.value ->> 'deletes')::boolean
+    loop
+      perform vortex_record.complete_named_record_subject_internal(named_roles, named_subject,
+        named_subject -> 'existingValues');
+    end loop;
   end if;
   catalogue := case when pg_catalog.jsonb_array_length(p_parent_mutations) > 0
     then vortex_record.relationship_total_catalogue_internal() else '{}'::jsonb end;
@@ -126,7 +151,10 @@ begin
         (prepared -> 'storageChanges') || pg_catalog.jsonb_build_array(parent_plan -> 'storageChange'));
     end if;
   end loop;
-  persisted := vortex_record.apply_prepared_record_set_internal(prepared);
+  if pg_catalog.jsonb_array_length(prepared -> 'plans') > 0 then
+    persisted := vortex_record.apply_prepared_record_set_internal(prepared);
+    persisted_results := persisted -> 'results';
+  end if;
   if pg_catalog.jsonb_array_length(prepared -> 'effects') > 0 then
     perform vortex_record.complete_record_lifecycle_set_internal(effective_command_id, prepared, persisted -> 'written');
   end if;
@@ -134,7 +162,7 @@ begin
     order by (item.value ->> 'index')::integer
   loop
     subject := plan -> 'subject';
-    saved := persisted -> 'results' -> (plan ->> 'index')::integer;
+    saved := persisted_results -> (plan ->> 'index')::integer;
     if subject ->> 'operation' in ('delete', 'restore') then
       receipt_results := receipt_results || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
         'operation', subject -> 'operation', 'recordTypeId', subject -> 'recordTypeId',
@@ -157,7 +185,8 @@ begin
     if preview_installation is null then
       perform vortex_record.append_record_activity_internal(
         (subject ->> 'activityId')::uuid,
-        case when subject ->> 'operation' = 'create' then 'create_record' else 'update_record' end,
+        case when plan ? 'role' and plan -> 'role' <> 'null'::jsonb then 'execute_named_action'
+          when subject ->> 'operation' = 'create' then 'create_record' else 'update_record' end,
         array[(saved ->> 'recordId')::uuid], changed_fields, 'completed'
       );
       event_result := vortex_platform.append_record_occurrences(
@@ -219,17 +248,61 @@ begin
   loop
     perform vortex_record.complete_relationship_total_parent_internal(parent_plan);
   end loop;
+  -- Each named subject records the action once, announces its declared Events
+  -- against the values it was left with, and answers through the action's projection.
+  if named_roles is not null then
+    for named_subject in
+      select item.value from pg_catalog.jsonb_array_elements(named_roles -> 'subjects') as item(value)
+      order by (item.value ->> 'position')::integer
+    loop
+      if (named_subject ->> 'deletes')::boolean then
+        named_results := named_results || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+          'outcome', 'completed', 'recordId', named_subject -> 'recordId',
+          'concurrencyNumber', (named_subject ->> 'expectedConcurrencyNumber')::bigint + 1,
+          'values', '{}'::jsonb, 'correlationId', context_value -> 'correlationId',
+          'backgroundDelivery', 'pending', 'replayed', false
+        ));
+        named_receipt := named_receipt || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+          'recordId', named_subject -> 'recordId', 'deleted', true,
+          'concurrencyNumber', (named_subject ->> 'expectedConcurrencyNumber')::bigint + 1
+        ));
+        continue;
+      end if;
+      if preview_installation is null then
+        perform vortex_record.complete_named_record_subject_internal(named_roles, named_subject, null);
+      end if;
+      projection := vortex_record.project_named_action_record_internal(
+        named_subject #>> '{action,ownerKind}', (named_subject #>> '{action,ownerId}')::uuid,
+        (named_subject #>> '{action,releaseRevision}')::bigint, (named_subject #>> '{action,actionId}')::uuid,
+        (named_roles ->> 'recordTypeId')::uuid, (named_subject ->> 'recordId')::uuid
+      );
+      if projection ->> 'outcome' is distinct from 'completed' then
+        raise exception using errcode = '42501', message = 'Named action subject projection is unavailable';
+      end if;
+      named_results := named_results || pg_catalog.jsonb_build_array(projection || pg_catalog.jsonb_build_object(
+        'correlationId', context_value -> 'correlationId', 'replayed', false
+      ));
+      named_receipt := named_receipt || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordId', named_subject -> 'recordId', 'deleted', false
+      ));
+    end loop;
+  end if;
   perform vortex_record.complete_command_receipt_internal(
-    'record_changes', effective_command_id, pg_catalog.jsonb_build_object('results', receipt_results),
+    'record_changes', effective_command_id, pg_catalog.jsonb_build_object('results', receipt_results)
+      || case when named_roles is null then '{}'::jsonb else pg_catalog.jsonb_build_object('named',
+        pg_catalog.jsonb_build_object('action', p_named -> 'action', 'recordTypeId', named_roles -> 'recordTypeId',
+          'subjects', named_receipt)) end,
     'Record change receipt is stale'
   );
   return pg_catalog.jsonb_build_object('outcome', 'completed', 'results', result_values, 'replayed', false,
-    'recordCount', calculation -> 'recordCount');
+    'recordCount', calculation -> 'recordCount')
+    || case when named_roles is null then '{}'::jsonb
+      else pg_catalog.jsonb_build_object('namedResults', named_results) end;
 end
 $function$;
-alter function vortex_record.apply_record_changes(uuid,jsonb,jsonb) owner to vortex_record_adapter;
-revoke all on function vortex_record.apply_record_changes(uuid,jsonb,jsonb)
+alter function vortex_record.apply_record_changes(uuid,jsonb,jsonb,jsonb) owner to vortex_record_adapter;
+revoke all on function vortex_record.apply_record_changes(uuid,jsonb,jsonb,jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.apply_record_changes(uuid,jsonb,jsonb) to vortex_request;
-comment on function vortex_record.apply_record_changes(uuid,jsonb,jsonb) is
-  'Protected record-set persistence: revalidates the combined calculation graph and all current authority, claims one receipt, merges roots and generated parents once per storage table, appends effects and completes the whole result atomically.';
+grant execute on function vortex_record.apply_record_changes(uuid,jsonb,jsonb,jsonb) to vortex_request;
+comment on function vortex_record.apply_record_changes(uuid,jsonb,jsonb,jsonb) is
+  'Protected record-set persistence, the one public record writer (ordinary, or one named action over up to 200 subjects): revalidates the combined calculation graph and all current authority, claims one receipt, merges roots and generated parents once per storage table, appends effects and completes the whole result atomically.';

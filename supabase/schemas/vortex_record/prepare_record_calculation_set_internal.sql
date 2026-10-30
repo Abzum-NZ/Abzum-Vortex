@@ -1,4 +1,7 @@
-create or replace function vortex_record.prepare_record_calculation_set_internal(p_subjects jsonb)
+create or replace function vortex_record.prepare_record_calculation_set_internal(
+  p_subjects jsonb,
+  p_named_roles jsonb
+)
 returns jsonb
 language plpgsql
 volatile
@@ -26,6 +29,7 @@ declare
   projection_records jsonb := '[]'::jsonb;
   preview_installation jsonb;
   lifecycle jsonb;
+  named_prepared jsonb;
 begin
   if not vortex_record.record_change_set_is_valid_internal(p_subjects) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
@@ -53,15 +57,16 @@ begin
     if subject ->> 'operation' not in ('create', 'update') then
       continue;
     end if;
+    named_prepared := vortex_record.named_record_change_values_internal(p_named_roles, subject_index);
     meta := vortex_record.resolve_record_action_context_internal(
       (subject ->> 'recordTypeId')::uuid, subject ->> 'operation'
     );
     if preview_installation is not null or meta -> 'recordType' ? 'systemProjection' then
-      prepared := vortex_record.prepare_record_values_internal(
+      prepared := coalesce(named_prepared, vortex_record.prepare_record_values_internal(
         subject ->> 'operation', (subject ->> 'recordTypeId')::uuid, (subject ->> 'recordId')::uuid,
         (subject ->> 'expectedConcurrencyNumber')::bigint, subject -> 'submittedValues',
         (subject ->> 'selectedGroupId')::uuid, (subject ->> 'activityId')::uuid
-      );
+      ));
       if prepared ->> 'outcome' is distinct from 'prepared' then
         return prepared || pg_catalog.jsonb_build_object('index', subject_index);
       end if;
@@ -75,7 +80,10 @@ begin
       );
       continue;
     end if;
-    if subject ->> 'operation' = 'update' then
+    if named_prepared is not null then
+      -- The action's own authority and revision were verified with the named scope.
+      null;
+    elsif subject ->> 'operation' = 'update' then
       loaded := vortex_record.load_record_access_facts_internal(
         (subject ->> 'recordTypeId')::uuid, 'update', (subject ->> 'recordId')::uuid, null, null
       );
@@ -147,10 +155,13 @@ begin
     from pg_catalog.jsonb_array_elements(p_subjects) with ordinality as item(value, ordinality)
   loop
     if subject ->> 'operation' not in ('create', 'update') then continue; end if;
-    prepared := vortex_record.prepare_record_values_internal(
-      subject ->> 'operation', (subject ->> 'recordTypeId')::uuid, (subject ->> 'recordId')::uuid,
-      (subject ->> 'expectedConcurrencyNumber')::bigint, subject -> 'submittedValues',
-      (subject ->> 'selectedGroupId')::uuid, (subject ->> 'activityId')::uuid
+    prepared := coalesce(
+      vortex_record.named_record_change_values_internal(p_named_roles, subject_index),
+      vortex_record.prepare_record_values_internal(
+        subject ->> 'operation', (subject ->> 'recordTypeId')::uuid, (subject ->> 'recordId')::uuid,
+        (subject ->> 'expectedConcurrencyNumber')::bigint, subject -> 'submittedValues',
+        (subject ->> 'selectedGroupId')::uuid, (subject ->> 'activityId')::uuid
+      )
     );
     if prepared ->> 'outcome' is distinct from 'prepared' then
       return prepared || pg_catalog.jsonb_build_object('index', subject_index);
@@ -194,8 +205,8 @@ begin
   );
 end
 $function$;
-alter function vortex_record.prepare_record_calculation_set_internal(jsonb) owner to vortex_record_adapter;
-revoke all on function vortex_record.prepare_record_calculation_set_internal(jsonb)
+alter function vortex_record.prepare_record_calculation_set_internal(jsonb,jsonb) owner to vortex_record_adapter;
+revoke all on function vortex_record.prepare_record_calculation_set_internal(jsonb,jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-comment on function vortex_record.prepare_record_calculation_set_internal(jsonb) is
-  'Private record-set calculation preflight: authorizes roots and lifecycle closures, locks their complete dependency union, repeats current authority and revisions, and returns one rule and total graph for all four intents.';
+comment on function vortex_record.prepare_record_calculation_set_internal(jsonb,jsonb) is
+  'Private record-set calculation preflight: authorizes roots (a named command''s subject and declared creates by its action) and lifecycle closures, locks their complete dependency union, repeats current authority and revisions, and returns one rule and total graph for all four intents.';

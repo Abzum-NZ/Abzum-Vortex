@@ -61,6 +61,29 @@ export type RecordChangeIntent =
       expectedConcurrencyNumber: number;
     }>;
 
+/**
+ * One named action over up to 200 subjects of one record type. Each subject lists the intents
+ * its action composed (subject write or delete, declared creates, relationship copies); the
+ * writer verifies every intent is one of them under the action's current authority.
+ */
+export type NamedRecordCommand = Readonly<{
+  action: Readonly<{
+    ownerKind: "application" | "module";
+    ownerId: string;
+    releaseRevision: number;
+    actionId: string;
+  }>;
+  recordTypeId: string;
+  subjects: readonly Readonly<{
+    recordId: string;
+    expectedConcurrencyNumber: number;
+    inputs: Readonly<Record<string, JsonValue>>;
+    intentIndexes: readonly number[];
+    activityId: string;
+    declaredOccurrenceIds: readonly string[];
+  }>[];
+}>;
+
 type Saved = Extract<SaveRecordResult, { outcome: "saved" }>;
 type CompletedRecordLifecycle = Readonly<{
   outcome: "deleted" | "restored";
@@ -79,14 +102,26 @@ export type RecordChangesResult =
       previous: readonly Readonly<Record<string, unknown>>[];
       warnings: readonly BeforeSaveRuleWarning[];
       recordCount?: number;
+      /** Each named subject's result in the order given, through its action's projection. */
+      namedResults?: readonly Readonly<Record<string, unknown>>[];
     }>
   | Readonly<{ kind: "restart" }>
-  | Readonly<{ kind: "refused"; index: number; result?: SaveRecordResult; reasonCode?: string }>;
+  | Readonly<{
+      kind: "refused";
+      index: number;
+      result?: SaveRecordResult;
+      reasonCode?: string;
+      /** The named subject the refusal names, when the writer refused it as a whole. */
+      namedIndex?: number;
+    }>;
 
 const completed = (
   value: Record<string, unknown>,
 ): readonly (Saved | CompletedRecordLifecycle)[] => {
-  if (!Array.isArray(value.results) || value.results.length === 0)
+  if (
+    !Array.isArray(value.results) ||
+    (value.results.length === 0 && !Array.isArray(value.namedResults))
+  )
     throw contractError("RECORD_CHANGES_RESULT_INVALID", undefined);
   return value.results.map((entry) => {
     if (!isRecord(entry)) throw contractError("RECORD_CHANGES_RESULT_INVALID", undefined);
@@ -125,9 +160,17 @@ const completed = (
   });
 };
 
+const namedResults = (value: Record<string, unknown>) => {
+  if (value.namedResults === undefined) return {};
+  if (!Array.isArray(value.namedResults) || !value.namedResults.every(isRecord))
+    throw contractError("RECORD_CHANGES_NAMED_RESULT_INVALID", undefined);
+  return { namedResults: value.namedResults as readonly Readonly<Record<string, unknown>>[] };
+};
+
 const refusal = (value: Record<string, unknown>): RecordChangesResult => ({
   kind: "refused",
   index: typeof value.index === "number" ? value.index : 0,
+  ...(typeof value.namedIndex === "number" ? { namedIndex: value.namedIndex } : {}),
   ...(typeof value.reasonCode === "string" ? { reasonCode: value.reasonCode } : {}),
   ...(typeof value.correlationId === "string"
     ? {
@@ -151,9 +194,15 @@ export const applyRecordChanges = async (
   issuedAt: string,
   commandId: string,
   intents: readonly RecordChangeIntent[],
+  named?: NamedRecordCommand,
 ): Promise<RecordChangesResult> => {
-  if (!platformIdSchema.safeParse(commandId).success || intents.length < 1 || intents.length > 200)
+  if (
+    !platformIdSchema.safeParse(commandId).success ||
+    intents.length < (named === undefined ? 1 : 0) ||
+    intents.length > 200
+  )
     return { kind: "refused", index: 0, reasonCode: "command_invalid" };
+  const namedArgument = named === undefined ? null : JSON.stringify(named);
   const commands: ChangeCommand[] = [];
   for (const [index, intent] of intents.entries()) {
     if (!("values" in intent)) {
@@ -203,13 +252,20 @@ export const applyRecordChanges = async (
   }));
   const preparedRow = one(
     await transaction.query<{ preparation: unknown }>`
-    select vortex_record.prepare_record_changes(${commandId}::uuid, ${JSON.stringify(subjects)}::text::jsonb) as preparation
+    select vortex_record.prepare_record_changes(${commandId}::uuid, ${JSON.stringify(subjects)}::text::jsonb,
+      ${namedArgument}::text::jsonb) as preparation
   `,
   ).preparation;
   if (!isRecord(preparedRow)) throw contractError("RECORD_CHANGES_PREPARATION_INVALID", undefined);
   if (preparedRow.outcome === "completed") {
     const results = completed(preparedRow);
-    return { kind: "completed", results, previous: results.map(() => ({})), warnings: [] };
+    return {
+      kind: "completed",
+      results,
+      previous: results.map(() => ({})),
+      warnings: [],
+      ...namedResults(preparedRow),
+    };
   }
   if (preparedRow.outcome === "restart") return { kind: "restart" };
   if (preparedRow.outcome !== "prepared") {
@@ -220,6 +276,8 @@ export const applyRecordChanges = async (
   }
   if (typeof preparedRow.preview !== "boolean")
     throw contractError("RECORD_CHANGES_PREVIEW_SCOPE_INVALID", undefined);
+  // A named action that only announces writes no record: nothing to calculate.
+  if (commands.length === 0) return persist(transaction, commandId, [], [], namedArgument, []);
   const preview = preparedRow.preview;
   const parsedGraph = parseRelationshipTotalPreparation(
     preparedRow,
@@ -477,34 +535,20 @@ export const applyRecordChanges = async (
   }
   if (!calculated.success)
     throw contractError("RECORD_CHANGES_INVALID_CALCULATION_ACCEPTED", undefined);
-  let stored: unknown;
-  try {
-    stored = await requireRequestSavepoint(transaction).withSavepoint(
-      async (child) =>
-        one(
-          await child.query<{ result: unknown }>`
-    select vortex_record.apply_record_changes(${commandId}::uuid, ${JSON.stringify(subjects)}::text::jsonb,
-      ${JSON.stringify(calculated.parentMutations)}::text::jsonb) as result
-  `,
-        ).result,
-    );
-  } catch (error) {
-    for (const [index, command] of commands.entries()) {
-      if (!("submittedValues" in command)) continue;
-      const correction = constraintCorrection(error, preparations.get(`intent:${index}`), command);
-      if (correction !== undefined) return { kind: "refused", index, result: correction };
-    }
-    throw error;
-  }
-  if (!isRecord(stored)) throw contractError("RECORD_CHANGES_RESULT_INVALID", undefined);
-  if (stored.outcome === "restart") return { kind: "restart" };
-  if (stored.outcome !== "completed") {
-    console.error(`[record] change persistence refused: ${stored.reasonCode ?? stored.outcome}`);
-    return refusal(stored);
-  }
-  const results = completed(stored);
-  if (results.length !== subjects.length)
-    throw contractError("RECORD_CHANGES_RESULT_COUNT_INVALID", undefined);
+  const stored = await persist(
+    transaction,
+    commandId,
+    subjects,
+    calculated.parentMutations,
+    namedArgument,
+    commands.map((command, index) =>
+      "submittedValues" in command
+        ? { command, prepared: preparations.get(`intent:${index}`) }
+        : undefined,
+    ),
+  );
+  if (stored.kind !== "completed") return stored;
+  const results = stored.results;
   const warnings = graph.records.flatMap((record) => {
     const recordId =
       record.recordId ??
@@ -524,10 +568,58 @@ export const applyRecordChanges = async (
     );
   });
   return {
+    ...stored,
+    previous: stored.previous.length === 0 ? previous : stored.previous,
+    warnings,
+  };
+};
+
+/** The one writer call: stores the whole set, or refuses it with the intent it names. */
+const persist = async (
+  transaction: RequestDatabaseTransaction,
+  commandId: string,
+  subjects: readonly Readonly<Record<string, unknown>>[],
+  parentMutations: readonly unknown[],
+  namedArgument: string | null,
+  corrections: readonly (
+    Readonly<{ command: SaveRecordCommand; prepared: PreparedSave | undefined }> | undefined
+  )[],
+): Promise<RecordChangesResult> => {
+  let stored: unknown;
+  try {
+    stored = await requireRequestSavepoint(transaction).withSavepoint(
+      async (child) =>
+        one(
+          await child.query<{ result: unknown }>`
+    select vortex_record.apply_record_changes(${commandId}::uuid, ${JSON.stringify(subjects)}::text::jsonb,
+      ${JSON.stringify(parentMutations)}::text::jsonb, ${namedArgument}::text::jsonb) as result
+  `,
+        ).result,
+    );
+  } catch (error) {
+    for (const [index, entry] of corrections.entries()) {
+      if (entry === undefined) continue;
+      const correction = constraintCorrection(error, entry.prepared, entry.command);
+      if (correction !== undefined) return { kind: "refused", index, result: correction };
+    }
+    throw error;
+  }
+  if (!isRecord(stored)) throw contractError("RECORD_CHANGES_RESULT_INVALID", undefined);
+  if (stored.outcome === "restart") return { kind: "restart" };
+  if (stored.outcome !== "completed") {
+    console.error(`[record] change persistence refused: ${stored.reasonCode ?? stored.outcome}`);
+    return refusal(stored);
+  }
+  const results = completed(stored);
+  if (results.length !== subjects.length)
+    throw contractError("RECORD_CHANGES_RESULT_COUNT_INVALID", undefined);
+  return {
     kind: "completed",
     results,
-    previous: stored.replayed === true ? results.map(() => ({})) : previous,
-    warnings,
+    // A replay restores nothing for undo: the caller's own changes are already stored.
+    previous: stored.replayed === true ? results.map(() => ({})) : [],
+    warnings: [],
     ...(typeof stored.recordCount === "number" ? { recordCount: stored.recordCount } : {}),
+    ...namedResults(stored),
   };
 };

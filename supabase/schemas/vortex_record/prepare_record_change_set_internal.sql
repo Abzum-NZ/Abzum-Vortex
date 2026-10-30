@@ -1,6 +1,7 @@
 create or replace function vortex_record.prepare_record_change_set_internal(
   p_command_id uuid,
-  p_subjects jsonb
+  p_subjects jsonb,
+  p_named_roles jsonb
 )
 returns jsonb
 language plpgsql
@@ -21,6 +22,8 @@ declare
   restore_subject jsonb;
   submitted_fields uuid[];
   normalized_edges jsonb;
+  named_role jsonb;
+  named_action jsonb;
 begin
   if p_command_id is null or p_command_id = '00000000-0000-0000-0000-000000000000'::uuid
     or not vortex_record.record_change_set_is_valid_internal(p_subjects) then
@@ -40,11 +43,19 @@ begin
     order by (item.value ->> 'recordTypeId')::uuid,
       (item.value ->> 'recordId')::uuid nulls last, item.ordinality
   loop
-    meta := vortex_record.resolve_record_action_context_internal(
-      (subject ->> 'recordTypeId')::uuid, subject ->> 'operation'
-    );
+    named_role := p_named_roles #> array['roles', ordinal::text];
+    named_action := case when named_role ->> 'role' = 'subject'
+      then p_named_roles #> array['subjects', named_role ->> 'named', 'action'] end;
+    -- A named subject write is prepared under its action; a declared create needs
+    -- no standard create, since the installed action declares it.
+    meta := case when named_action is not null and subject ->> 'operation' = 'update'
+      then p_named_roles -> 'actionContext'
+      else vortex_record.resolve_record_action_context_internal(
+        (subject ->> 'recordTypeId')::uuid, subject ->> 'operation'
+      ) end;
     if pg_catalog.jsonb_typeof(meta -> 'recordType') is distinct from 'object'
       or (subject ->> 'operation' in ('create', 'update')
+        and coalesce(named_role ->> 'role', 'copy') = 'copy'
         and not coalesce((meta #> '{recordType,standardActions}') ? (subject ->> 'operation'), false)) then
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'index', ordinal, 'reasonCode', 'record_unavailable'
@@ -86,7 +97,7 @@ begin
         p_command_id, 'record_changes', (subject ->> 'recordTypeId')::uuid,
         (subject ->> 'recordId')::uuid, (subject ->> 'expectedConcurrencyNumber')::bigint,
         subject -> 'submittedValues', subject -> 'finalValues', (subject ->> 'activityId')::uuid,
-        null, meta
+        named_action, meta
       );
       if prepared ->> 'outcome' = 'allowed' then
         storage_changes := storage_changes || pg_catalog.jsonb_build_array(prepared -> 'storageChange');
@@ -129,7 +140,8 @@ begin
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'index', ordinal, 'subject', prepared);
     end if;
     plans := plans || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-      'index', ordinal, 'subject', subject, 'meta', meta, 'prepared', prepared
+      'index', ordinal, 'subject', subject, 'meta', meta, 'prepared', prepared,
+      'action', named_action, 'role', named_role -> 'role'
     ));
   end loop;
 
@@ -166,8 +178,8 @@ begin
   );
 end
 $function$;
-alter function vortex_record.prepare_record_change_set_internal(uuid,jsonb) owner to vortex_record_adapter;
-revoke all on function vortex_record.prepare_record_change_set_internal(uuid,jsonb)
+alter function vortex_record.prepare_record_change_set_internal(uuid,jsonb,jsonb) owner to vortex_record_adapter;
+revoke all on function vortex_record.prepare_record_change_set_internal(uuid,jsonb,jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-comment on function vortex_record.prepare_record_change_set_internal(uuid,jsonb) is
-  'Private closed preparation of up to 200 record intents under one claimed set receipt; reuses create, update and lifecycle authority checks, gathers closure effects, and combines compatible deltas for one physical write per storage table.';
+comment on function vortex_record.prepare_record_change_set_internal(uuid,jsonb,jsonb) is
+  'Private closed preparation of up to 200 record intents under one claimed set receipt; reuses create, update (ordinary or under a named action) and lifecycle authority checks, gathers closure effects, and combines compatible deltas for one physical write per storage table.';

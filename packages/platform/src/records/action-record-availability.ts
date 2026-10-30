@@ -97,7 +97,6 @@ export const readSubjectWithNamedActionAvailability = async (
 ): Promise<SubjectWithNamedActionAvailability> => {
   const requests = actions.map((action) => ({
     commandId: randomUUID(),
-    activityId: randomUUID(),
     ownerKind: action.ownerKind,
     ownerId: action.ownerId,
     releaseRevision: action.releaseRevision,

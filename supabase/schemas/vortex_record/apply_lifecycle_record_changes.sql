@@ -31,9 +31,8 @@ begin
   end if;
 
   result_value := vortex_record.apply_record_mutations_internal(
-    p_command_id, p_operation, p_record_type_id, p_record_id,
-    p_expected_concurrency_number, '{}'::jsonb, null,
-    p_mutations, p_activity_id, p_occurrence_id
+    p_command_id, p_record_type_id, p_record_id,
+    p_expected_concurrency_number, p_mutations, p_activity_id, p_occurrence_id
   );
   if result_value ->> 'outcome' = 'saved' then
     return result_value - array['values', 'backgroundDelivery']::text[]
