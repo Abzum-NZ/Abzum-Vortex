@@ -35,8 +35,12 @@ begin
     if eligible ->> 'outcome' is distinct from 'eligible' then
       return pg_catalog.jsonb_build_object('outcome', 'refused');
     end if;
+    -- The decision carries the record binding and action the create path's own decision
+    -- carries, so contributed fields are bounded by the same rule.
     bounds := vortex_access.resolve_record_field_bounds_internal(pg_catalog.jsonb_build_object(
       'outcome', 'allowed', 'organizationId', context_value -> 'organizationId',
+      'recordBinding', meta -> 'declaration' -> 'recordBinding',
+      'action', pg_catalog.jsonb_build_object('actionKind', 'create'),
       'matchedContributions', eligible -> 'eligiblePermissions'
     ));
   else
