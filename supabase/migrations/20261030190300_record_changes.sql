@@ -1795,6 +1795,9 @@ declare
   named_results jsonb := '[]'::jsonb;
   named_receipt jsonb := '[]'::jsonb;
   persisted_results jsonb := '[]'::jsonb;
+  projections jsonb := '{}'::jsonb;
+  batch_projection jsonb;
+  batch_type record;
 begin
   if pg_catalog.jsonb_typeof(p_parent_mutations) is distinct from 'array'
     or (p_named is not null and pg_catalog.jsonb_typeof(p_named) is distinct from 'object') then
@@ -1917,6 +1920,25 @@ begin
   if pg_catalog.jsonb_array_length(prepared -> 'effects') > 0 then
     perform vortex_record.complete_record_lifecycle_set_internal(effective_command_id, prepared, persisted -> 'written');
   end if;
+  -- The result answers with each saved record's projection, read once per record type for the
+  -- whole set with one access decision pass; capabilities are not read here.
+  for batch_type in
+    select (item.value #>> '{subject,recordTypeId}')::uuid as record_type_id,
+      (pg_catalog.array_agg(item.value #>> '{meta,storageContractId}'))[1]::uuid as storage_contract_id,
+      (pg_catalog.array_agg(item.value #> '{meta,recordType}'))[1] as record_type_item,
+      pg_catalog.array_agg((persisted_results -> (item.value ->> 'index')::integer ->> 'recordId')::uuid
+        order by (item.value ->> 'index')::integer) as record_ids
+    from pg_catalog.jsonb_array_elements(prepared -> 'plans') as item(value)
+    where item.value #>> '{subject,operation}' in ('create', 'update')
+    group by (item.value #>> '{subject,recordTypeId}')::uuid
+  loop
+    select pg_catalog.jsonb_object_agg(read.record_id::text, read.result) into batch_projection
+    from vortex_record.read_record_batch_internal(
+      batch_type.record_type_id, batch_type.record_ids, preview_installation is not null,
+      batch_type.storage_contract_id, batch_type.record_type_item
+    ) as read;
+    projections := projections || coalesce(batch_projection, '{}'::jsonb);
+  end loop;
   for plan in select item.value from pg_catalog.jsonb_array_elements(prepared -> 'plans') as item(value)
     order by (item.value ->> 'index')::integer
   loop
@@ -1982,9 +2004,7 @@ begin
         end;
       end if;
     end if;
-    projection := (vortex_record.read_record(
-      (subject ->> 'recordTypeId')::uuid, (saved ->> 'recordId')::uuid
-    )) -> 'record';
+    projection := projections -> (saved ->> 'recordId');
     if projection ->> 'outcome' is distinct from 'allowed' then
       raise exception using errcode = '42501', message = 'Changed record projection is unavailable';
     end if;
@@ -2732,7 +2752,7 @@ revoke all on function vortex_record.prepare_record_create_internal(uuid, jsonb,
 comment on function vortex_record.prepare_record_create_internal(uuid, jsonb, uuid[], uuid) is
   'Private create preparation: derives trusted scope, ownership and generated references, validates typed fields and relationship targets, and returns storage and edge mutations without inserting the record.';
 
-create or replace function vortex_record.complete_record_create_internal(p_prepared jsonb)
+create or replace function vortex_record.complete_record_creates_internal(p_prepared jsonb)
 returns jsonb
 language plpgsql
 volatile
@@ -2740,14 +2760,18 @@ security invoker
 set search_path = ''
 as $function$
 declare
-  p_record_type_id uuid := (p_prepared ->> 'recordTypeId')::uuid;
-  record_id_value uuid := (p_prepared ->> 'recordId')::uuid;
-  p_submitted_field_ids uuid[];
+  prepared_value jsonb;
+  prepared_position integer;
+  type_id uuid;
+  record_id_value uuid;
+  metas jsonb := '{}'::jsonb;
   meta jsonb;
   context_value jsonb;
-  loaded jsonb;
-  facts jsonb;
+  targets jsonb;
+  loaded_set jsonb;
+  decision_set jsonb;
   decision jsonb;
+  facts jsonb;
   bounds jsonb;
   preview_installation jsonb;
   preview_bounds jsonb;
@@ -2755,77 +2779,110 @@ declare
   submitted_id uuid;
   refusal_reason text;
   notice_sequence bigint;
+  results jsonb := '[]'::jsonb;
 begin
-  meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'create');
-  context_value := meta -> 'context';
   preview_installation := vortex_record.read_current_preview_installation_internal();
-  select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[])
-  into p_submitted_field_ids
-  from pg_catalog.jsonb_array_elements_text(p_prepared -> 'submittedFieldIds') item(value);
-  loaded := (vortex_record.load_record_access_facts_internal('create', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', p_record_type_id, 'recordId', record_id_value))) -> 0);
-  if loaded ->> 'outcome' <> 'loaded' then
+  -- One context per record type, one facts load and one decision for every created record.
+  for type_id in
+    select distinct (item.value ->> 'recordTypeId')::uuid
+    from pg_catalog.jsonb_array_elements(p_prepared) as item(value)
+  loop
+    metas := metas || pg_catalog.jsonb_build_object(
+      type_id::text, vortex_record.resolve_record_action_context_internal(type_id, 'create')
+    );
+  end loop;
+  select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+    'recordTypeId', item.value -> 'recordTypeId', 'recordId', item.value -> 'recordId'
+  ) order by item.ordinality)
+  into targets
+  from pg_catalog.jsonb_array_elements(p_prepared) with ordinality as item(value, ordinality);
+  if targets is null then return results; end if;
+  loaded_set := vortex_record.load_record_access_facts_internal('create', targets);
+  if exists (
+    select 1 from pg_catalog.jsonb_array_elements(loaded_set) as item(value)
+    where item.value ->> 'outcome' <> 'loaded'
+  ) then
     refusal_reason := 'record_unavailable';
     raise exception using errcode = 'P4020', message = refusal_reason;
   end if;
-  facts := (loaded -> 'facts') || pg_catalog.jsonb_build_object(
-    'binding', meta -> 'declaration' -> 'recordBinding'
-  );
   if preview_installation is null then
-    decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', meta -> 'declaration', 'recordId', record_id_value, 'facts', facts))) -> 0);
-    if decision ->> 'outcome' <> 'allowed' then
-      refusal_reason := 'access_refused';
-      raise exception using errcode = 'P4020', message = refusal_reason;
-    end if;
-    bounds := vortex_access.resolve_record_field_bounds_internal(decision);
-  else
-    preview_bounds := vortex_record.preview_record_field_bounds_internal(
-      p_record_type_id, (meta ->> 'storageContractId')::uuid,
-      meta -> 'recordType'
-    );
-    if preview_bounds is null then
-      refusal_reason := 'record_unavailable';
-      raise exception using errcode = 'P4020', message = refusal_reason;
-    end if;
-    bounds := preview_bounds;
+    select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'declaration', metas -> (targets -> (loaded.ordinality - 1)::integer ->> 'recordTypeId') -> 'declaration',
+      'recordId', targets -> (loaded.ordinality - 1)::integer -> 'recordId',
+      'facts', (loaded.value -> 'facts') || pg_catalog.jsonb_build_object(
+        'binding', metas -> (targets -> (loaded.ordinality - 1)::integer ->> 'recordTypeId') -> 'declaration' -> 'recordBinding'
+      )
+    ) order by loaded.ordinality)
+    into decision_set
+    from pg_catalog.jsonb_array_elements(loaded_set) with ordinality as loaded(value, ordinality);
+    decision_set := vortex_access.evaluate_organization_record_access_internal(decision_set);
   end if;
-  select coalesce(pg_catalog.array_agg(item.value #>> '{}'), array[]::text[])
-  into changeable
-  from pg_catalog.jsonb_array_elements(bounds -> 'changeableFieldIds') as item(value);
-  foreach submitted_id in array p_submitted_field_ids loop
-    if not (meta -> 'columns' ? pg_catalog.lower(submitted_id::text)) then
-      refusal_reason := 'unknown_field';
-      raise exception using errcode = 'P4020', message = refusal_reason;
-    end if;
-    if not (pg_catalog.lower(submitted_id::text) = any (changeable)) then
-      refusal_reason := 'field_not_changeable';
-      raise exception using errcode = 'P4020', message = refusal_reason;
-    end if;
-  end loop;
-
-  if preview_installation is null and meta ->> 'storageScope' = 'application_contained' then
-    begin
-      notice_sequence := pg_catalog.nextval('vortex_record.record_invalidation_sequence'::pg_catalog.regclass);
-      perform vortex_platform.publish_change_notice(
-        (context_value ->> 'organizationId')::uuid,
-        (context_value ->> 'applicationRootId')::uuid, p_record_type_id,
-        record_id_value, 1, 'created', notice_sequence, notice_sequence,
-        (context_value ->> 'correlationId')::uuid
+  prepared_position := 0;
+  for prepared_value in select item.value from pg_catalog.jsonb_array_elements(p_prepared) as item(value)
+  loop
+    type_id := (prepared_value ->> 'recordTypeId')::uuid;
+    record_id_value := (prepared_value ->> 'recordId')::uuid;
+    meta := metas -> type_id::text;
+    context_value := meta -> 'context';
+    if preview_installation is null then
+      decision := decision_set -> prepared_position;
+      if decision ->> 'outcome' <> 'allowed' then
+        refusal_reason := 'access_refused';
+        raise exception using errcode = 'P4020', message = refusal_reason;
+      end if;
+      bounds := vortex_access.resolve_record_field_bounds_internal(decision);
+    else
+      preview_bounds := vortex_record.preview_record_field_bounds_internal(
+        type_id, (meta ->> 'storageContractId')::uuid, meta -> 'recordType'
       );
-    exception when others then
-      raise warning 'Record create notice failed: [%] %', sqlstate, sqlerrm;
-    end;
-  end if;
-  return pg_catalog.jsonb_build_object(
-    'outcome', 'completed', 'recordId', record_id_value,
-    'concurrencyNumber', 1, 'values', p_prepared -> 'values'
-  );
+      if preview_bounds is null then
+        refusal_reason := 'record_unavailable';
+        raise exception using errcode = 'P4020', message = refusal_reason;
+      end if;
+      bounds := preview_bounds;
+    end if;
+    select coalesce(pg_catalog.array_agg(item.value #>> '{}'), array[]::text[])
+    into changeable
+    from pg_catalog.jsonb_array_elements(bounds -> 'changeableFieldIds') as item(value);
+    for submitted_id in
+      select item.value::uuid from pg_catalog.jsonb_array_elements_text(prepared_value -> 'submittedFieldIds') as item(value)
+    loop
+      if not (meta -> 'columns' ? pg_catalog.lower(submitted_id::text)) then
+        refusal_reason := 'unknown_field';
+        raise exception using errcode = 'P4020', message = refusal_reason;
+      end if;
+      if not (pg_catalog.lower(submitted_id::text) = any (changeable)) then
+        refusal_reason := 'field_not_changeable';
+        raise exception using errcode = 'P4020', message = refusal_reason;
+      end if;
+    end loop;
+    if preview_installation is null and meta ->> 'storageScope' = 'application_contained' then
+      begin
+        notice_sequence := pg_catalog.nextval('vortex_record.record_invalidation_sequence'::pg_catalog.regclass);
+        perform vortex_platform.publish_change_notice(
+          (context_value ->> 'organizationId')::uuid,
+          (context_value ->> 'applicationRootId')::uuid, type_id,
+          record_id_value, 1, 'created', notice_sequence, notice_sequence,
+          (context_value ->> 'correlationId')::uuid
+        );
+      exception when others then
+        raise warning 'Record create notice failed: [%] %', sqlstate, sqlerrm;
+      end;
+    end if;
+    results := results || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'outcome', 'completed', 'recordId', record_id_value,
+      'concurrencyNumber', 1, 'values', prepared_value -> 'values'
+    ));
+    prepared_position := prepared_position + 1;
+  end loop;
+  return results;
 end
 $function$;
-alter function vortex_record.complete_record_create_internal(jsonb) owner to vortex_record_adapter;
-revoke all on function vortex_record.complete_record_create_internal(jsonb)
+alter function vortex_record.complete_record_creates_internal(jsonb) owner to vortex_record_adapter;
+revoke all on function vortex_record.complete_record_creates_internal(jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-comment on function vortex_record.complete_record_create_internal(jsonb) is
-  'Private create finalisation: evaluates create authority and submitted field bounds over the persisted proposed graph, raises a refusal to roll back the set, and publishes its advisory invalidation.';
+comment on function vortex_record.complete_record_creates_internal(jsonb) is
+  'Private create finalisation for every created record of one command: evaluates create authority with one facts load and one decision for the set, checks submitted field bounds over the persisted proposed graph, raises a refusal to roll back the set, and publishes each advisory invalidation.';
 
 
 
@@ -5058,9 +5115,11 @@ declare
   subject jsonb;
   ordinal integer;
   meta jsonb;
+  meta_cache jsonb := '{}'::jsonb;
+  cache_key text;
   prepared jsonb;
   receipt vortex_record.command_receipts%rowtype;
-  plans jsonb := '[]'::jsonb;
+  plans jsonb[] := array[]::jsonb[];
   storage_changes jsonb := '[]'::jsonb;
   edge_changes jsonb := '[]'::jsonb;
   effects jsonb := '[]'::jsonb;
@@ -5093,11 +5152,18 @@ begin
       then p_named_roles #> array['subjects', named_role ->> 'named', 'action'] end;
     -- A named subject write is prepared under its action; a declared create needs
     -- no standard create, since the installed action declares it.
-    meta := case when named_action is not null and subject ->> 'operation' = 'update'
-      then p_named_roles -> 'actionContext'
-      else vortex_record.resolve_record_action_context_internal(
-        (subject ->> 'recordTypeId')::uuid, subject ->> 'operation'
-      ) end;
+    if named_action is not null and subject ->> 'operation' = 'update' then
+      meta := p_named_roles -> 'actionContext';
+    else
+      cache_key := (subject ->> 'recordTypeId') || ':' || (subject ->> 'operation');
+      if not meta_cache ? cache_key then
+        meta_cache := meta_cache || pg_catalog.jsonb_build_object(cache_key,
+          vortex_record.resolve_record_action_context_internal(
+            (subject ->> 'recordTypeId')::uuid, subject ->> 'operation'
+          ));
+      end if;
+      meta := meta_cache -> cache_key;
+    end if;
     if pg_catalog.jsonb_typeof(meta -> 'recordType') is distinct from 'object'
       or (subject ->> 'operation' in ('create', 'update')
         and coalesce(named_role ->> 'role', 'copy') = 'copy'
@@ -5184,7 +5250,7 @@ begin
     if not coalesce(prepared ->> 'outcome' in ('allowed', 'prepared'), false) then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'index', ordinal, 'subject', prepared);
     end if;
-    plans := plans || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+    plans := pg_catalog.array_append(plans, pg_catalog.jsonb_build_object(
       'index', ordinal, 'subject', subject, 'meta', meta, 'prepared', prepared,
       'action', named_action, 'role', named_role -> 'role'
     ));
@@ -5217,7 +5283,7 @@ begin
   ) as candidate;
   return pg_catalog.jsonb_build_object(
     'outcome', 'prepared', 'plans', (select pg_catalog.jsonb_agg(item.value order by (item.value ->> 'index')::integer)
-      from pg_catalog.jsonb_array_elements(plans) as item(value)),
+      from pg_catalog.unnest(plans) as item(value)),
     'storageChanges', vortex_record.combine_record_storage_changes_internal(storage_changes),
     'edgeChanges', normalized_edges, 'effects', effects
   );
@@ -5493,6 +5559,16 @@ declare
   relationship_value jsonb;
   results jsonb := '[]'::jsonb;
   result_value jsonb;
+  create_results jsonb := '[]'::jsonb;
+  create_indexes integer[] := array[]::integer[];
+  update_targets jsonb := '[]'::jsonb;
+  update_indexes integer[] := array[]::integer[];
+  update_loaded jsonb := '{}'::jsonb;
+  update_decisions jsonb := '{}'::jsonb;
+  loaded_set jsonb;
+  decision_set jsonb;
+  set_position integer;
+  target_position integer;
 begin
   if p_preparation ->> 'outcome' is distinct from 'prepared'
     or pg_catalog.jsonb_typeof(p_preparation -> 'plans') is distinct from 'array'
@@ -5546,6 +5622,61 @@ begin
   -- Every decision below sees the complete storage and relationship graph. A
   -- refusal raises, so callers cannot commit a partially authorized set.
   perform vortex_record.validate_record_restore_set_internal(restored_subjects);
+  -- Created records finish together, and the access of every plainly changed record is decided
+  -- with one facts load and one decision for the whole set.
+  select coalesce(pg_catalog.array_agg((item.value ->> 'index')::integer order by (item.value ->> 'index')::integer), array[]::integer[])
+  into create_indexes
+  from pg_catalog.jsonb_array_elements(p_preparation -> 'plans') as item(value)
+  where item.value #>> '{subject,operation}' = 'create' and not (item.value #> '{meta,recordType}' ? 'systemProjection');
+  if pg_catalog.cardinality(create_indexes) > 0 then
+    create_results := vortex_record.complete_record_creates_internal((
+      select pg_catalog.jsonb_agg(item.value -> 'prepared' order by (item.value ->> 'index')::integer)
+      from pg_catalog.jsonb_array_elements(p_preparation -> 'plans') as item(value)
+      where item.value #>> '{subject,operation}' = 'create' and not (item.value #> '{meta,recordType}' ? 'systemProjection')
+    ));
+  end if;
+  select coalesce(pg_catalog.array_agg((item.value ->> 'index')::integer order by (item.value ->> 'index')::integer), array[]::integer[]),
+    coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'recordTypeId', item.value #> '{subject,recordTypeId}', 'recordId', item.value #> '{subject,recordId}'
+    ) order by (item.value ->> 'index')::integer), '[]'::jsonb)
+  into update_indexes, update_targets
+  from pg_catalog.jsonb_array_elements(p_preparation -> 'plans') as item(value)
+  where item.value #>> '{subject,operation}' = 'update' and not (item.value #> '{meta,recordType}' ? 'systemProjection')
+    and (item.value -> 'action' is null or item.value -> 'action' = 'null'::jsonb);
+  if pg_catalog.cardinality(update_indexes) > 0 then
+    loaded_set := vortex_record.load_record_access_facts_internal('update', update_targets);
+    if preview_installation is null then
+      select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'declaration', plan_item.value #> '{meta,declaration}',
+          'recordId', update_targets -> (loaded.ordinality - 1)::integer -> 'recordId',
+          'facts', (loaded.value -> 'facts') || pg_catalog.jsonb_build_object('binding', plan_item.value #> '{meta,declaration,recordBinding}')
+        ) order by loaded.ordinality)
+      into decision_set
+      from pg_catalog.jsonb_array_elements(loaded_set) with ordinality as loaded(value, ordinality)
+      join (
+        select item.value, row_number() over (order by (item.value ->> 'index')::integer) as plan_position
+        from pg_catalog.jsonb_array_elements(p_preparation -> 'plans') as item(value)
+        where item.value #>> '{subject,operation}' = 'update' and not (item.value #> '{meta,recordType}' ? 'systemProjection')
+          and (item.value -> 'action' is null or item.value -> 'action' = 'null'::jsonb)
+      ) as plan_item on plan_item.plan_position = loaded.ordinality
+      where loaded.value ->> 'outcome' = 'loaded';
+      if decision_set is not null then
+        decision_set := vortex_access.evaluate_organization_record_access_internal(decision_set);
+      end if;
+    end if;
+    set_position := 0;
+    for target_position in 1 .. pg_catalog.jsonb_array_length(loaded_set) loop
+      update_loaded := update_loaded || pg_catalog.jsonb_build_object(
+        update_indexes[target_position]::text, loaded_set -> (target_position - 1)
+      );
+      if loaded_set -> (target_position - 1) ->> 'outcome' = 'loaded' and preview_installation is null then
+        update_decisions := update_decisions || pg_catalog.jsonb_build_object(
+          update_indexes[target_position]::text, decision_set -> set_position
+        );
+        set_position := set_position + 1;
+      end if;
+    end loop;
+  end if;
   for plan in select item.value from pg_catalog.jsonb_array_elements(p_preparation -> 'plans') as item(value)
     order by (item.value ->> 'index')::integer
   loop
@@ -5591,7 +5722,7 @@ begin
       end loop;
     end if;
     if subject ->> 'operation' = 'create' then
-      result_value := vortex_record.complete_record_create_internal(prepared);
+      result_value := create_results -> (pg_catalog.array_position(create_indexes, (plan ->> 'index')::integer) - 1);
     elsif subject ->> 'operation' = 'update' then
       if plan -> 'action' is not null and plan -> 'action' <> 'null'::jsonb then
         loaded := vortex_record.load_named_action_facts_internal(
@@ -5600,13 +5731,15 @@ begin
           (subject ->> 'recordTypeId')::uuid, (subject ->> 'recordId')::uuid, null
         );
       else
-        loaded := (vortex_record.load_record_access_facts_internal('update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', (subject ->> 'recordTypeId')::uuid, 'recordId', (subject ->> 'recordId')::uuid))) -> 0);
+        loaded := update_loaded -> (plan ->> 'index');
       end if;
       if loaded ->> 'outcome' is distinct from 'loaded' then
         raise exception using errcode = '42501', message = 'Changed record is unavailable';
       end if;
       if preview_installation is null then
-        decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', meta -> 'declaration', 'recordId', (subject ->> 'recordId')::uuid, 'facts', (loaded -> 'facts') || pg_catalog.jsonb_build_object('binding', meta #> '{declaration,recordBinding}')))) -> 0);
+        decision := case when plan -> 'action' is not null and plan -> 'action' <> 'null'::jsonb
+          then (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', meta -> 'declaration', 'recordId', (subject ->> 'recordId')::uuid, 'facts', (loaded -> 'facts') || pg_catalog.jsonb_build_object('binding', meta #> '{declaration,recordBinding}')))) -> 0)
+          else update_decisions -> (plan ->> 'index') end;
         if decision ->> 'outcome' is distinct from 'allowed' then
           raise exception using errcode = '42501', message = 'Changed record is unavailable';
         end if;
@@ -5661,7 +5794,7 @@ declare
   organization_id_value uuid := (context_value ->> 'organizationId')::uuid;
   application_id_value uuid := (context_value ->> 'applicationRootId')::uuid;
   prepared_record jsonb;
-  prepared_records jsonb := '[]'::jsonb;
+  prepared_records jsonb[] := array[]::jsonb[];
   parent_read jsonb;
   module_id uuid;
   release_revision bigint;
@@ -5796,9 +5929,11 @@ begin
         )
       );
     end loop;
-    prepared_records := prepared_records || pg_catalog.jsonb_build_array(prepared_record);
+    prepared_records := pg_catalog.array_append(prepared_records, prepared_record);
   end loop;
-  return pg_catalog.jsonb_build_object('outcome', 'prepared', 'records', prepared_records);
+  return pg_catalog.jsonb_build_object('outcome', 'prepared', 'records', coalesce(
+    (select pg_catalog.jsonb_agg(item.value order by item.ordinality)
+     from pg_catalog.unnest(prepared_records) with ordinality as item(value, ordinality)), '[]'::jsonb));
 end
 $function$;
 alter function vortex_record.prepare_record_calculation_graph_internal(jsonb,jsonb,jsonb,text[]) owner to vortex_record_adapter;
@@ -5829,7 +5964,10 @@ declare
   record_value jsonb;
   signature_value jsonb;
   identity_keys jsonb := '{}'::jsonb;
-  record_map jsonb := '{}'::jsonb;
+  record_keys text[] := array[]::text[];
+  record_values jsonb[] := array[]::jsonb[];
+  record_positions jsonb := '{}'::jsonb;
+  record_entry jsonb;
   signatures jsonb := '[]'::jsonb;
   root_key text;
   record_key text;
@@ -5884,8 +6022,15 @@ begin
     loop
       record_key := case when record_value ->> 'recordKey' = 'root' then root_key
         else coalesce(identity_keys ->> (record_value ->> 'recordKey'), record_value ->> 'recordKey') end;
-      record_map := record_map || pg_catalog.jsonb_build_object(record_key,
-        record_value || pg_catalog.jsonb_build_object('recordKey', record_key));
+      record_entry := record_value || pg_catalog.jsonb_build_object('recordKey', record_key);
+      if record_positions ? record_key then
+        record_values[(record_positions ->> record_key)::integer] := record_entry;
+      else
+        record_keys := pg_catalog.array_append(record_keys, record_key);
+        record_values := pg_catalog.array_append(record_values, record_entry);
+        record_positions := record_positions || pg_catalog.jsonb_build_object(
+          record_key, pg_catalog.cardinality(record_keys));
+      end if;
       -- A lifecycle root can seed several changed descendants. Its bound is
       -- over their combined transitive closure, not separately per descendant.
       for group_key in select item.value from pg_catalog.jsonb_array_elements_text(
@@ -5903,7 +6048,7 @@ begin
         group_records := group_records || pg_catalog.jsonb_build_object(group_key, group_record_map);
       end loop;
     end loop;
-    if (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(record_map)) > 1000 then
+    if pg_catalog.cardinality(record_keys) > 1000 then
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'record_change_too_large',
         'message', 'This change affects too many related records. Save fewer rows.', 'closureLimit', 1000
@@ -5921,9 +6066,9 @@ begin
     end loop;
   end loop;
   return pg_catalog.jsonb_build_object(
-    'records', coalesce((select pg_catalog.jsonb_agg(item.value order by item.key)
-      from pg_catalog.jsonb_each(record_map) as item(key, value)), '[]'::jsonb),
-    'recordCount', (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(record_map)),
+    'records', coalesce((select pg_catalog.jsonb_agg(record_values[item.position] order by record_keys[item.position])
+      from pg_catalog.generate_subscripts(record_keys, 1) as item(position)), '[]'::jsonb),
+    'recordCount', pg_catalog.cardinality(record_keys),
     'signatures', coalesce((select pg_catalog.jsonb_agg(distinct item.value order by item.value)
       from pg_catalog.jsonb_array_elements(signatures) as item(value)), '[]'::jsonb)
   );
@@ -6212,6 +6357,7 @@ declare
   decision jsonb;
   prepared jsonb;
   subjects jsonb := '[]'::jsonb;
+  prepared_subjects jsonb[] := array[]::jsonb[];
   proposals jsonb;
   graph jsonb;
   meta jsonb;
@@ -6219,6 +6365,16 @@ declare
   preview_installation jsonb;
   lifecycle jsonb;
   named_prepared jsonb;
+  meta_cache jsonb := '{}'::jsonb;
+  cache_key text;
+  update_targets jsonb := '[]'::jsonb;
+  update_indexes integer[] := array[]::integer[];
+  update_loaded jsonb := '{}'::jsonb;
+  update_decisions jsonb := '{}'::jsonb;
+  loaded_set jsonb;
+  decision_set jsonb;
+  set_position integer;
+  target_position integer;
 begin
   if not vortex_record.record_change_set_is_valid_internal(p_subjects) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
@@ -6237,6 +6393,59 @@ begin
   subjects := lifecycle -> 'subjects';
   select coalesce(pg_catalog.array_agg(item.value ->> 'recordKey'), array[]::text[]) into root_keys
   from pg_catalog.jsonb_array_elements(subjects) as item(value);
+  -- Resolve each record type's context once, and decide the access of every plain update
+  -- source with one facts load and one decision for the whole set.
+  for subject, subject_index in
+    select item.value, (item.ordinality - 1)::integer
+    from pg_catalog.jsonb_array_elements(p_subjects) with ordinality as item(value, ordinality)
+  loop
+    if subject ->> 'operation' not in ('create', 'update') then
+      continue;
+    end if;
+    cache_key := (subject ->> 'recordTypeId') || ':' || (subject ->> 'operation');
+    if not meta_cache ? cache_key then
+      meta_cache := meta_cache || pg_catalog.jsonb_build_object(cache_key,
+        vortex_record.resolve_record_action_context_internal(
+          (subject ->> 'recordTypeId')::uuid, subject ->> 'operation'
+        ));
+    end if;
+    if subject ->> 'operation' = 'update' and preview_installation is null
+      and not (meta_cache -> cache_key -> 'recordType' ? 'systemProjection')
+      and vortex_record.named_record_change_values_internal(p_named_roles, subject_index) is null then
+      update_targets := update_targets || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordTypeId', subject -> 'recordTypeId', 'recordId', subject -> 'recordId'
+      ));
+      update_indexes := pg_catalog.array_append(update_indexes, subject_index);
+    end if;
+  end loop;
+  if pg_catalog.jsonb_array_length(update_targets) > 0 then
+    loaded_set := vortex_record.load_record_access_facts_internal('update', update_targets);
+    select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+        'declaration', loaded.value -> 'declaration',
+        'recordId', update_targets -> (loaded.ordinality - 1)::integer -> 'recordId',
+        'facts', loaded.value -> 'facts'
+      ) order by loaded.ordinality)
+    into decision_set
+    from pg_catalog.jsonb_array_elements(loaded_set) with ordinality as loaded(value, ordinality)
+    where loaded.value ->> 'outcome' = 'loaded'
+      and pg_catalog.jsonb_typeof(loaded.value -> 'declaration') = 'object';
+    if decision_set is not null then
+      decision_set := vortex_access.evaluate_organization_record_access_internal(decision_set);
+    end if;
+    set_position := 0;
+    for target_position in 1 .. pg_catalog.jsonb_array_length(loaded_set) loop
+      update_loaded := update_loaded || pg_catalog.jsonb_build_object(
+        update_indexes[target_position]::text, loaded_set -> (target_position - 1)
+      );
+      if loaded_set -> (target_position - 1) ->> 'outcome' = 'loaded'
+        and pg_catalog.jsonb_typeof(loaded_set -> (target_position - 1) -> 'declaration') = 'object' then
+        update_decisions := update_decisions || pg_catalog.jsonb_build_object(
+          update_indexes[target_position]::text, decision_set -> set_position
+        );
+        set_position := set_position + 1;
+      end if;
+    end loop;
+  end if;
   -- Authorize every explicit source before reading or locking its dependencies.
   -- A null expected revision is the existing loader's non-locking read mode.
   for subject, subject_index in
@@ -6247,9 +6456,7 @@ begin
       continue;
     end if;
     named_prepared := vortex_record.named_record_change_values_internal(p_named_roles, subject_index);
-    meta := vortex_record.resolve_record_action_context_internal(
-      (subject ->> 'recordTypeId')::uuid, subject ->> 'operation'
-    );
+    meta := meta_cache -> ((subject ->> 'recordTypeId') || ':' || (subject ->> 'operation'));
     if preview_installation is not null or meta -> 'recordType' ? 'systemProjection' then
       prepared := coalesce(named_prepared, vortex_record.prepare_record_values_internal(
         subject ->> 'operation', (subject ->> 'recordTypeId')::uuid, (subject ->> 'recordId')::uuid,
@@ -6273,14 +6480,14 @@ begin
       -- The action's own authority and revision were verified with the named scope.
       null;
     elsif subject ->> 'operation' = 'update' then
-      loaded := (vortex_record.load_record_access_facts_internal('update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', (subject ->> 'recordTypeId')::uuid, 'recordId', (subject ->> 'recordId')::uuid))) -> 0);
+      loaded := update_loaded -> subject_index::text;
       if loaded ->> 'outcome' is distinct from 'loaded'
         or pg_catalog.jsonb_typeof(loaded -> 'declaration') is distinct from 'object' then
         return pg_catalog.jsonb_build_object(
           'outcome', 'refused', 'index', subject_index, 'reasonCode', 'record_unavailable'
         );
       end if;
-      decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('declaration', loaded -> 'declaration', 'recordId', (subject ->> 'recordId')::uuid, 'facts', loaded -> 'facts'))) -> 0);
+      decision := update_decisions -> subject_index::text;
       if decision ->> 'outcome' is distinct from 'allowed' then
         return pg_catalog.jsonb_build_object(
           'outcome', 'refused', 'index', subject_index, 'reasonCode', 'record_unavailable'
@@ -6291,13 +6498,9 @@ begin
         return pg_catalog.jsonb_build_object('outcome', 'conflict', 'index', subject_index);
       end if;
     else
-      prepared := vortex_record.prepare_record_values_internal(
-        'create', (subject ->> 'recordTypeId')::uuid, null, null, subject -> 'submittedValues',
-        (subject ->> 'selectedGroupId')::uuid, (subject ->> 'activityId')::uuid
-      );
-      if prepared ->> 'outcome' is distinct from 'prepared' then
-        return prepared || pg_catalog.jsonb_build_object('index', subject_index);
-      end if;
+      -- A plain create has no stored record to authorize here; its values are prepared once
+      -- below, after the closure is locked.
+      null;
     end if;
     root_key := 'intent:' || subject_index::text;
     roots := roots || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
@@ -6351,7 +6554,7 @@ begin
     if prepared ->> 'outcome' is distinct from 'prepared' then
       return prepared || pg_catalog.jsonb_build_object('index', subject_index);
     end if;
-    subjects := subjects || pg_catalog.jsonb_build_array(prepared || pg_catalog.jsonb_build_object(
+    prepared_subjects := pg_catalog.array_append(prepared_subjects, prepared || pg_catalog.jsonb_build_object(
       'recordKey', 'intent:' || subject_index::text, 'index', subject_index
     ));
   end loop;
@@ -6381,7 +6584,8 @@ begin
   return graph || pg_catalog.jsonb_build_object(
     'records', (graph -> 'records') || projection_records,
     'subjects', (select pg_catalog.jsonb_agg(item.value order by (item.value ->> 'index')::integer)
-      from pg_catalog.jsonb_array_elements(subjects) as item(value)),
+      from (select existing.value from pg_catalog.jsonb_array_elements(subjects) as existing(value)
+        union all select added.value from pg_catalog.unnest(prepared_subjects) as added(value)) as item(value)),
     'lifecycleChanges', lifecycle -> 'changes', 'lifecycleProposals', lifecycle -> 'proposals',
     'correlationId', context_value -> 'correlationId',
     'preview', preview_installation is not null,

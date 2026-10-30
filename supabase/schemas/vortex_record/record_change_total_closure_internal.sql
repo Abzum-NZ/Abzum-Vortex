@@ -14,7 +14,10 @@ declare
   record_value jsonb;
   signature_value jsonb;
   identity_keys jsonb := '{}'::jsonb;
-  record_map jsonb := '{}'::jsonb;
+  record_keys text[] := array[]::text[];
+  record_values jsonb[] := array[]::jsonb[];
+  record_positions jsonb := '{}'::jsonb;
+  record_entry jsonb;
   signatures jsonb := '[]'::jsonb;
   root_key text;
   record_key text;
@@ -69,8 +72,15 @@ begin
     loop
       record_key := case when record_value ->> 'recordKey' = 'root' then root_key
         else coalesce(identity_keys ->> (record_value ->> 'recordKey'), record_value ->> 'recordKey') end;
-      record_map := record_map || pg_catalog.jsonb_build_object(record_key,
-        record_value || pg_catalog.jsonb_build_object('recordKey', record_key));
+      record_entry := record_value || pg_catalog.jsonb_build_object('recordKey', record_key);
+      if record_positions ? record_key then
+        record_values[(record_positions ->> record_key)::integer] := record_entry;
+      else
+        record_keys := pg_catalog.array_append(record_keys, record_key);
+        record_values := pg_catalog.array_append(record_values, record_entry);
+        record_positions := record_positions || pg_catalog.jsonb_build_object(
+          record_key, pg_catalog.cardinality(record_keys));
+      end if;
       -- A lifecycle root can seed several changed descendants. Its bound is
       -- over their combined transitive closure, not separately per descendant.
       for group_key in select item.value from pg_catalog.jsonb_array_elements_text(
@@ -88,7 +98,7 @@ begin
         group_records := group_records || pg_catalog.jsonb_build_object(group_key, group_record_map);
       end loop;
     end loop;
-    if (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(record_map)) > 1000 then
+    if pg_catalog.cardinality(record_keys) > 1000 then
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'record_change_too_large',
         'message', 'This change affects too many related records. Save fewer rows.', 'closureLimit', 1000
@@ -106,9 +116,9 @@ begin
     end loop;
   end loop;
   return pg_catalog.jsonb_build_object(
-    'records', coalesce((select pg_catalog.jsonb_agg(item.value order by item.key)
-      from pg_catalog.jsonb_each(record_map) as item(key, value)), '[]'::jsonb),
-    'recordCount', (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(record_map)),
+    'records', coalesce((select pg_catalog.jsonb_agg(record_values[item.position] order by record_keys[item.position])
+      from pg_catalog.generate_subscripts(record_keys, 1) as item(position)), '[]'::jsonb),
+    'recordCount', pg_catalog.cardinality(record_keys),
     'signatures', coalesce((select pg_catalog.jsonb_agg(distinct item.value order by item.value)
       from pg_catalog.jsonb_array_elements(signatures) as item(value)), '[]'::jsonb)
   );

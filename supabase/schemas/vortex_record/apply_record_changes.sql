@@ -42,6 +42,9 @@ declare
   named_results jsonb := '[]'::jsonb;
   named_receipt jsonb := '[]'::jsonb;
   persisted_results jsonb := '[]'::jsonb;
+  projections jsonb := '{}'::jsonb;
+  batch_projection jsonb;
+  batch_type record;
 begin
   if pg_catalog.jsonb_typeof(p_parent_mutations) is distinct from 'array'
     or (p_named is not null and pg_catalog.jsonb_typeof(p_named) is distinct from 'object') then
@@ -164,6 +167,25 @@ begin
   if pg_catalog.jsonb_array_length(prepared -> 'effects') > 0 then
     perform vortex_record.complete_record_lifecycle_set_internal(effective_command_id, prepared, persisted -> 'written');
   end if;
+  -- The result answers with each saved record's projection, read once per record type for the
+  -- whole set with one access decision pass; capabilities are not read here.
+  for batch_type in
+    select (item.value #>> '{subject,recordTypeId}')::uuid as record_type_id,
+      (pg_catalog.array_agg(item.value #>> '{meta,storageContractId}'))[1]::uuid as storage_contract_id,
+      (pg_catalog.array_agg(item.value #> '{meta,recordType}'))[1] as record_type_item,
+      pg_catalog.array_agg((persisted_results -> (item.value ->> 'index')::integer ->> 'recordId')::uuid
+        order by (item.value ->> 'index')::integer) as record_ids
+    from pg_catalog.jsonb_array_elements(prepared -> 'plans') as item(value)
+    where item.value #>> '{subject,operation}' in ('create', 'update')
+    group by (item.value #>> '{subject,recordTypeId}')::uuid
+  loop
+    select pg_catalog.jsonb_object_agg(read.record_id::text, read.result) into batch_projection
+    from vortex_record.read_record_batch_internal(
+      batch_type.record_type_id, batch_type.record_ids, preview_installation is not null,
+      batch_type.storage_contract_id, batch_type.record_type_item
+    ) as read;
+    projections := projections || coalesce(batch_projection, '{}'::jsonb);
+  end loop;
   for plan in select item.value from pg_catalog.jsonb_array_elements(prepared -> 'plans') as item(value)
     order by (item.value ->> 'index')::integer
   loop
@@ -229,9 +251,7 @@ begin
         end;
       end if;
     end if;
-    projection := (vortex_record.read_record(
-      (subject ->> 'recordTypeId')::uuid, (saved ->> 'recordId')::uuid
-    )) -> 'record';
+    projection := projections -> (saved ->> 'recordId');
     if projection ->> 'outcome' is distinct from 'allowed' then
       raise exception using errcode = '42501', message = 'Changed record projection is unavailable';
     end if;

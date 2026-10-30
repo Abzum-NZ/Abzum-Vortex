@@ -15,7 +15,7 @@ declare
   organization_id_value uuid := (context_value ->> 'organizationId')::uuid;
   application_id_value uuid := (context_value ->> 'applicationRootId')::uuid;
   prepared_record jsonb;
-  prepared_records jsonb := '[]'::jsonb;
+  prepared_records jsonb[] := array[]::jsonb[];
   parent_read jsonb;
   module_id uuid;
   release_revision bigint;
@@ -150,9 +150,11 @@ begin
         )
       );
     end loop;
-    prepared_records := prepared_records || pg_catalog.jsonb_build_array(prepared_record);
+    prepared_records := pg_catalog.array_append(prepared_records, prepared_record);
   end loop;
-  return pg_catalog.jsonb_build_object('outcome', 'prepared', 'records', prepared_records);
+  return pg_catalog.jsonb_build_object('outcome', 'prepared', 'records', coalesce(
+    (select pg_catalog.jsonb_agg(item.value order by item.ordinality)
+     from pg_catalog.unnest(prepared_records) with ordinality as item(value, ordinality)), '[]'::jsonb));
 end
 $function$;
 alter function vortex_record.prepare_record_calculation_graph_internal(jsonb,jsonb,jsonb,text[]) owner to vortex_record_adapter;

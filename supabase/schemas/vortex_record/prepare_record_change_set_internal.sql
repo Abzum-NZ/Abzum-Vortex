@@ -13,9 +13,11 @@ declare
   subject jsonb;
   ordinal integer;
   meta jsonb;
+  meta_cache jsonb := '{}'::jsonb;
+  cache_key text;
   prepared jsonb;
   receipt vortex_record.command_receipts%rowtype;
-  plans jsonb := '[]'::jsonb;
+  plans jsonb[] := array[]::jsonb[];
   storage_changes jsonb := '[]'::jsonb;
   edge_changes jsonb := '[]'::jsonb;
   effects jsonb := '[]'::jsonb;
@@ -48,11 +50,18 @@ begin
       then p_named_roles #> array['subjects', named_role ->> 'named', 'action'] end;
     -- A named subject write is prepared under its action; a declared create needs
     -- no standard create, since the installed action declares it.
-    meta := case when named_action is not null and subject ->> 'operation' = 'update'
-      then p_named_roles -> 'actionContext'
-      else vortex_record.resolve_record_action_context_internal(
-        (subject ->> 'recordTypeId')::uuid, subject ->> 'operation'
-      ) end;
+    if named_action is not null and subject ->> 'operation' = 'update' then
+      meta := p_named_roles -> 'actionContext';
+    else
+      cache_key := (subject ->> 'recordTypeId') || ':' || (subject ->> 'operation');
+      if not meta_cache ? cache_key then
+        meta_cache := meta_cache || pg_catalog.jsonb_build_object(cache_key,
+          vortex_record.resolve_record_action_context_internal(
+            (subject ->> 'recordTypeId')::uuid, subject ->> 'operation'
+          ));
+      end if;
+      meta := meta_cache -> cache_key;
+    end if;
     if pg_catalog.jsonb_typeof(meta -> 'recordType') is distinct from 'object'
       or (subject ->> 'operation' in ('create', 'update')
         and coalesce(named_role ->> 'role', 'copy') = 'copy'
@@ -139,7 +148,7 @@ begin
     if not coalesce(prepared ->> 'outcome' in ('allowed', 'prepared'), false) then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'index', ordinal, 'subject', prepared);
     end if;
-    plans := plans || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+    plans := pg_catalog.array_append(plans, pg_catalog.jsonb_build_object(
       'index', ordinal, 'subject', subject, 'meta', meta, 'prepared', prepared,
       'action', named_action, 'role', named_role -> 'role'
     ));
@@ -172,7 +181,7 @@ begin
   ) as candidate;
   return pg_catalog.jsonb_build_object(
     'outcome', 'prepared', 'plans', (select pg_catalog.jsonb_agg(item.value order by (item.value ->> 'index')::integer)
-      from pg_catalog.jsonb_array_elements(plans) as item(value)),
+      from pg_catalog.unnest(plans) as item(value)),
     'storageChanges', vortex_record.combine_record_storage_changes_internal(storage_changes),
     'edgeChanges', normalized_edges, 'effects', effects
   );
