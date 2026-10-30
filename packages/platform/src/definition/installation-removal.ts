@@ -11,8 +11,10 @@ import {
 import { sameId } from "../catalogue/runtime-primitives";
 import { moduleInstallationBindingSchema } from "../files/storage";
 import { canonicalJson } from "./canonical-json";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   installationProblem,
+  type StoreReceiptCompletion,
   installationTargetFacts,
   readBuilderOperationDeadlines,
   readInstallationDatabaseTime,
@@ -53,6 +55,11 @@ export const readApplicationRemoval = async (
   organizationId: z.infer<typeof organizationIdSchema>,
   rootId: z.infer<typeof applicationRootIdSchema>,
   reviewed?: RemovalExpected,
+  /** Runs in the reading transaction when the reviewed removal is already complete. */
+  completeIfRemoved?: (
+    transaction: RequestDatabaseTransaction,
+    applicationName: string,
+  ) => Promise<void>,
 ) => {
   let failure: unknown;
   const result = await environment.requests.runChange(
@@ -140,6 +147,8 @@ export const readApplicationRemoval = async (
           )
         )
           installationProblem("removal_authority_lapsed", "refused");
+        if (removed && completeIfRemoved !== undefined)
+          await completeIfRemoved(transaction, releaseSet.application.content.name);
         return {
           releaseSet,
           removed,
@@ -184,6 +193,7 @@ export const removeApplication = async (
   organizationId: z.infer<typeof organizationIdSchema>,
   rootId: z.infer<typeof applicationRootIdSchema>,
   expectedCandidate: unknown,
+  receipt?: StoreReceiptCompletion,
 ) => {
   const parsed = removalExpectedSchema.safeParse(expectedCandidate);
   if (
@@ -199,6 +209,10 @@ export const removeApplication = async (
     organizationId,
     rootId,
     expected,
+    receipt === undefined
+      ? undefined
+      : (transaction, applicationName) =>
+          receipt(transaction, { application_name: applicationName }),
   );
   if (!sameRemoval(expected, current.expected)) installationProblem("removal_changed", "conflict");
   if (current.removed) return { application_name: current.releaseSet.application.content.name };
@@ -256,6 +270,11 @@ export const removeApplication = async (
                 )
               )
                 throw new DefinitionError("APPLICATION_INSTALLATION_REFUSED");
+              // The withdrawal is the removal's target: its receipt completes with it.
+              if (receipt !== undefined)
+                await receipt(transaction, {
+                  application_name: current.releaseSet.application.content.name,
+                });
               return value;
             } catch (error) {
               failure = error;

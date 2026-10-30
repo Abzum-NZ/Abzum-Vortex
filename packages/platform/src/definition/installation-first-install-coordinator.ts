@@ -37,6 +37,7 @@ import {
   requireInstallationAuthority,
   type InstallationHumanContext,
   type InstallationProblemShape,
+  type ReceiptStep,
 } from "./installation-authority";
 import {
   readInstallationBindings,
@@ -277,6 +278,7 @@ export const createFirstInstallCoordinator = (
   expected: FirstInstallExpectation,
   expectedReleaseSet: SystemApplicationBoundReleaseSetResult,
   mode: "prepare" | "activate",
+  afterActivation?: ReceiptStep,
 ) => {
   let step = 0;
   let preparedRegistration: PreparedFirstInstallRegistration | undefined;
@@ -451,6 +453,9 @@ export const createFirstInstallCoordinator = (
             )
           )
             problem("refused");
+          // The activation is the install's last step: its receipt completes with it.
+          if (mode === "activate" && afterActivation !== undefined)
+            await afterActivation(transaction);
           return value;
         } catch (error) {
           callbackFailure = error;

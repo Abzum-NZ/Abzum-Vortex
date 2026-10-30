@@ -55,6 +55,17 @@ const claimSchema = z.discriminatedUnion("status", [
   z.object({ status: z.literal("completed"), result: receiptSchema }),
 ]);
 
+const evidenceStateSchema = z.discriminatedUnion("state", [
+  z.object({ state: z.literal("unavailable") }).strict(),
+  z
+    .object({
+      state: z.enum(["started", "pending", "succeeded", "refused", "failed", "closed"]),
+      pendingCommandId: z.uuid().nullable(),
+      completionCommandId: z.uuid().nullable(),
+    })
+    .strict(),
+]);
+
 /** A gesture, segment and loop iteration identify one logical command for this actor. */
 const commandIdOf = (
   session: IdentitySession,
@@ -89,8 +100,16 @@ type WorkflowPending = Readonly<{
   kind: "workflow_pending";
   commandId: string;
   runId: string;
+  changes: boolean;
   replay?: FlowSegmentReceipt;
   prepared?: unknown;
+}>;
+/** The pending receipt an admitted multi-transaction segment holds; its workflow may complete it. */
+export type FlowReceiptClaim = Readonly<{
+  commandId: string;
+  runId: string;
+  segmentId: string;
+  organizationId: string;
 }>;
 export type FlowSegmentReceipt = Readonly<{
   effects: FlowSegmentReplay;
@@ -138,6 +157,23 @@ const recordSegmentEffects = async <Value>(
     ${JSON.stringify(receipt)}::text::jsonb
   )`;
 };
+
+/**
+ * Completes a claimed multi-transaction segment's receipt and records its effects. A workflow
+ * calls this inside the transaction that reaches its target, so the receipt and the target commit
+ * together and the admitting request then finds the receipt completed.
+ */
+export const completeClaimedSegment = (
+  transaction: SegmentContext["transaction"],
+  claim: FlowReceiptClaim,
+  effects: SegmentExecution<null>["effects"],
+): Promise<void> =>
+  recordSegmentEffects(transaction, claim.runId, claim.commandId, {
+    value: null,
+    outcome: "succeeded",
+    effects,
+    warnings: {},
+  });
 
 type StartFlowExecutionResult<Value> =
   | Readonly<{ kind: "completed"; value: Value; runId: string; committedNow?: boolean }>
@@ -196,7 +232,11 @@ type StartFlowDependencies<Value> = Readonly<{
     replay: boolean,
   ) => Promise<Readonly<{ kind: "ready"; value?: unknown }> | Readonly<{ kind: "refused" }>>;
   /** Multi-transaction workflows run only after the admitted pending receipt commits. */
-  executeWorkflow?: (replay: FlowSegmentReceipt | undefined, prepared: unknown) => Promise<SegmentExecution<Value>>;
+  executeWorkflow?: (
+    replay: FlowSegmentReceipt | undefined,
+    prepared: unknown,
+    claim: FlowReceiptClaim,
+  ) => Promise<SegmentExecution<Value>>;
 }>;
 
 /** Opens completion evidence only for a flow that can reach another server segment first. */
@@ -488,18 +528,7 @@ const startFlowInternal = async <Value>(
       }
       const locked =
         await transaction.query`select vortex_access.flow_run_evidence(${"lock"}::text, ${runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${null}::uuid) as result`;
-      const evidence = z
-        .discriminatedUnion("state", [
-          z.object({ state: z.literal("unavailable") }).strict(),
-          z
-            .object({
-              state: z.enum(["started", "pending", "succeeded", "refused", "failed", "closed"]),
-              pendingCommandId: z.uuid().nullable(),
-              completionCommandId: z.uuid().nullable(),
-            })
-            .strict(),
-        ])
-        .parse(locked[0]?.result);
+      const evidence = evidenceStateSchema.parse(locked[0]?.result);
       if (evidence.state === "unavailable") return { kind: "refused" };
       evidenceState = evidence.state;
       if (segment.tasks.length === 0) {
@@ -572,7 +601,7 @@ const startFlowInternal = async <Value>(
       const refused = new Error("FLOW_WORKFLOW_PREPARATION_REFUSED");
       try {
         const prepared = await requireRequestSavepoint(transaction).withSavepoint(async (child) => {
-          if (!workflowPending && replay === undefined) {
+          if (segment.changes && !workflowPending && replay === undefined) {
             const rows =
               await child.query`select vortex_record.flow_segment_receipt(${commandId}::uuid, false) as result`;
             if (claimSchema.parse(rows[0]?.result).status !== "claimed")
@@ -594,6 +623,7 @@ const startFlowInternal = async <Value>(
           kind: "workflow_pending",
           commandId,
           runId,
+          changes: segment.changes,
           prepared,
           ...(replay === undefined ? {} : { replay }),
         };
@@ -677,27 +707,44 @@ const startFlowInternal = async <Value>(
       if (result.kind !== "available") return { kind: "refused" };
       if (result.value.kind !== "workflow_pending") return result.value;
       const pending = result.value;
-      const executed = await dependencies.executeWorkflow!(pending.replay, pending.prepared);
-      if (executed.outcome === "succeeded" && pending.replay === undefined) {
+      const executed = await dependencies.executeWorkflow!(pending.replay, pending.prepared, {
+        commandId: pending.commandId,
+        runId: pending.runId,
+        segmentId: segment!.id,
+        organizationId: request.selection.organizationId,
+      });
+      if (executed.outcome === "succeeded") {
+        // A workflow may complete the receipt in the transaction that reaches its target; then only
+        // the run evidence is left to advance, and a read-only workflow holds no receipt at all.
         const completion = await requests.run(request.session, request.selection, async (transaction) => {
+          let evidence: z.infer<typeof evidenceStateSchema> | undefined;
           if (hasCompletion) {
             const locked =
               await transaction.query`select vortex_access.flow_run_evidence(${"lock"}::text, ${pending.runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${null}::uuid) as result`;
-            const state = z.object({ state: z.string() }).parse(locked[0]?.result);
-            if (state.state === "unavailable") return "refused" as const;
+            evidence = evidenceStateSchema.parse(locked[0]?.result);
+            if (evidence.state === "unavailable") return "refused" as const;
           }
-          await transaction.query`select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(${`${request.selection.organizationId}:flow_segment:${pending.commandId}`}, 818))`;
-          const rows = await transaction.query`select vortex_record.flow_segment_receipt(${pending.commandId}::uuid, true) as result`;
-          const claim = claimSchema.parse(rows[0]?.result);
-          if (claim.status === "completed") return "replayed" as const;
-          if (claim.status !== "pending") return "refused" as const;
-          await recordSegmentEffects(transaction, pending.runId, pending.commandId, executed);
-          if (hasCompletion) {
+          let recorded = false;
+          if (pending.changes) {
+            await transaction.query`select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(${`${request.selection.organizationId}:flow_segment:${pending.commandId}`}, 818))`;
+            const rows = await transaction.query`select vortex_record.flow_segment_receipt(${pending.commandId}::uuid, true) as result`;
+            const claim = claimSchema.parse(rows[0]?.result);
+            if (claim.status === "pending" && pending.replay === undefined) {
+              await recordSegmentEffects(transaction, pending.runId, pending.commandId, executed);
+              recorded = true;
+            } else if (claim.status !== "completed") return "refused" as const;
+            else recorded = pending.replay === undefined;
+          } else recorded = true;
+          if (
+            hasCompletion &&
+            evidence?.state === "pending" &&
+            evidence.pendingCommandId === pending.commandId
+          ) {
             const updated =
               await transaction.query`select vortex_access.flow_run_evidence(${"succeeded"}::text, ${pending.runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${pending.commandId}::uuid) as result`;
             z.object({ state: z.literal("succeeded") }).strict().parse(updated[0]?.result);
           }
-          return "recorded" as const;
+          return recorded ? ("recorded" as const) : ("replayed" as const);
         });
         if (completion.kind !== "available" || completion.value === "refused")
           return { kind: "refused" };
@@ -710,19 +757,21 @@ const startFlowInternal = async <Value>(
             Object.values(executed.effects).some((effect) => effect.outcome === "committed"),
         };
       }
-      if (executed.outcome !== "succeeded" && pending.replay === undefined && hasCompletion) {
+      if (pending.replay === undefined && hasCompletion) {
         const outcome = executed.outcome;
         const recorded = await requests.run(request.session, request.selection, async (transaction) => {
           const locked =
             await transaction.query`select vortex_access.flow_run_evidence(${"lock"}::text, ${pending.runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${null}::uuid) as result`;
           const state = z.object({ state: z.string() }).parse(locked[0]?.result);
           if (state.state === "unavailable") return false;
-          await transaction.query`select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(${`${request.selection.organizationId}:flow_segment:${pending.commandId}`}, 818))`;
-          const receipts =
-            await transaction.query`select vortex_record.flow_segment_receipt(${pending.commandId}::uuid, true) as result`;
-          const claim = claimSchema.parse(receipts[0]?.result);
-          if (claim.status === "completed") return true;
-          if (claim.status !== "pending") return false;
+          if (pending.changes) {
+            await transaction.query`select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(${`${request.selection.organizationId}:flow_segment:${pending.commandId}`}, 818))`;
+            const receipts =
+              await transaction.query`select vortex_record.flow_segment_receipt(${pending.commandId}::uuid, true) as result`;
+            const claim = claimSchema.parse(receipts[0]?.result);
+            if (claim.status === "completed") return true;
+            if (claim.status !== "pending") return false;
+          }
           const rows =
             await transaction.query`select vortex_access.flow_run_evidence(${outcome}::text, ${pending.runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${pending.commandId}::uuid) as result`;
           z.object({ state: z.literal(outcome) }).strict().parse(rows[0]?.result);
