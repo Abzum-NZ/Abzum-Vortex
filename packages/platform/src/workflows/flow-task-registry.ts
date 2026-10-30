@@ -515,6 +515,7 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     effectDeclaredBy: "operation_descriptor",
     properties: {
       operation: required("protected_operation_key"),
+      record: optional("record_reference"),
       inputs: optional("input_map"),
       refusal_feedback: optional("input_map"),
     },

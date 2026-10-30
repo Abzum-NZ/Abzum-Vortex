@@ -2431,6 +2431,39 @@
         "triggers": [],
         "tasks": [
           {
+            "id": "create",
+            "type": "record.create",
+            "version": "1.0.0",
+            "properties": {
+              "record_type": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.organisation_administration:organisation_notice"
+                }
+              },
+              "values": {
+                "kind": "map",
+                "entries": {
+                  "title": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "title"
+                    }
+                  },
+                  "body": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "body"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
             "id": "call",
             "type": "operation.call",
             "version": "1.0.0",
@@ -2440,6 +2473,14 @@
                 "literal": {
                   "type": "text",
                   "value": "vortex.organisation_administration.organisation_notice.record_notice"
+                }
+              },
+              "record": {
+                "kind": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "create",
+                  "key": "record"
                 }
               }
             }
@@ -2473,6 +2514,39 @@
         "triggers": [],
         "tasks": [
           {
+            "id": "create",
+            "type": "record.create",
+            "version": "1.0.0",
+            "properties": {
+              "record_type": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.organisation_administration:privacy_request_case"
+                }
+              },
+              "values": {
+                "kind": "map",
+                "entries": {
+                  "subject": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "subject"
+                    }
+                  },
+                  "details": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "details"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
             "id": "call",
             "type": "operation.call",
             "version": "1.0.0",
@@ -2482,6 +2556,14 @@
                 "literal": {
                   "type": "text",
                   "value": "vortex.organisation_administration.privacy_request_case.record_privacy_request"
+                }
+              },
+              "record": {
+                "kind": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "create",
+                  "key": "record"
                 }
               }
             }

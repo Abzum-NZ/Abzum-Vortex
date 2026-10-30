@@ -533,8 +533,12 @@ export async function invokeInstalledFlow(
                   : { kind: "unavailable" },
             },
       subjects: {
-        read: async (session, selection, subject) =>
-          (await subjectReader.read(session, selection, subject)).kind,
+        read: async (session, selection, subject) => {
+          const result = await subjectReader.read(session, selection, subject);
+          if (result.kind === "read" && result.row.revision === undefined)
+            throw new Error("FLOW_RECORD_REVISION_MISSING");
+          return result.kind === "read" ? { kind: "read", revision: result.row.revision! } : result;
+        },
       },
       selectedRecordReads: selectedRecordReadsFor(installation, requests),
       queryRecords: createFlowQueryReader(

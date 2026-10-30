@@ -127,7 +127,10 @@ type FlowSubjectReadPort = Readonly<{
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
     subject: Readonly<{ recordTypeId: string; recordId: string }>,
-  ): Promise<"read" | "refused" | "temporarily_unavailable">;
+  ): Promise<
+    | Readonly<{ kind: "read"; revision: number }>
+    | Readonly<{ kind: "refused" | "temporarily_unavailable" }>
+  >;
 }>;
 
 /** The current protected read result; unavailable is intentionally indistinguishable. */
