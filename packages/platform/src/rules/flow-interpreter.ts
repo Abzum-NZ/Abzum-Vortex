@@ -39,11 +39,9 @@ import {
   refusalKeepsPlatformGuidance,
   type FlowRefusalFeedback,
 } from "../workflows/flow-refusal-feedback";
+import { flowTaskRegistry, type PageStepType } from "../workflows/flow-task-registry";
 import {
-  flowTaskRegistry,
-  type PageStepType,
-} from "../workflows/flow-task-registry";
-import {
+  flowListItemType,
   flowMaximumTaskOutputPathDepth,
   flowRoundingModeSchema,
   type FlowReference,
@@ -126,8 +124,13 @@ export type Frame = Readonly<{
   path: readonly PathSegment[];
   /** The next task to run in that list. */
   index: number;
-  /** Present on a For each body: how many times it runs and which run this is. */
-  loop?: Readonly<{ count: number; iteration: number }>;
+  /** Present on a For each body: how many times it runs, which run this is and its items. */
+  loop?: Readonly<{
+    count: number;
+    iteration: number;
+    items: readonly JsonValue[];
+    itemType: string;
+  }>;
 }>;
 
 type Phase = "tasks" | "errors" | "finally";
@@ -401,6 +404,26 @@ const scopeOf = (
           ? typed(type, selected as JsonValue)
           : undefined;
       }
+      case "loop_item": {
+        const loop = [...activation.frames].reverse().find((frame) => frame.loop !== undefined)?.loop;
+        const item = loop?.items[loop.iteration];
+        if (loop === undefined || item === undefined) return undefined;
+        if (reference.path === undefined)
+          return item === null ? declaredNull(loop.itemType) : typed(loop.itemType, item);
+        if (loop.itemType !== "json") return undefined;
+        let selected: unknown = item;
+        for (const name of reference.path) {
+          if (
+            selected === null ||
+            typeof selected !== "object" ||
+            Array.isArray(selected) ||
+            !Object.hasOwn(selected, name)
+          )
+            return undefined;
+          selected = (selected as Record<string, unknown>)[name];
+        }
+        return typed("json", selected as JsonValue);
+      }
       case "execution_actor":
         return state.actor === undefined
           ? undefined
@@ -644,7 +667,12 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
           : pushFrame(next, {
               path: [...taskPath, "tasks"],
               index: 0,
-              loop: { count: items.value.length, iteration: 0 },
+              loop: {
+                count: items.value.length,
+                iteration: 0,
+                items: items.value as readonly JsonValue[],
+                itemType: flowListItemType(items.type),
+              },
             }),
       );
       return { kind: "continue" };

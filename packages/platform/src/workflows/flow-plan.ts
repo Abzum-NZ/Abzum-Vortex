@@ -283,7 +283,10 @@ const referencesIn = (value: unknown, found: FlowReference[] = []): FlowReferenc
 const outputTypes = (steps: readonly FlowTask[]): Record<string, string> =>
   Object.fromEntries(
     steps.flatMap((step) =>
-      (registered(step)?.outputs ?? []).map((output) => [`outputs.${step.id}.${output.key}`, output.type]),
+      (registered(step)?.outputs ?? []).map((output) => [
+        `outputs.${step.id}.${output.key}`,
+        output.type,
+      ]),
     ),
   );
 
@@ -311,9 +314,13 @@ const inputTypes = (
         types[`outputs.${key}`] =
           reference.key === "outcome"
             ? "text"
-            : ((producer === undefined ? undefined : outputTypes([producer])[`outputs.${key}`]) ?? "json");
+            : ((producer === undefined ? undefined : outputTypes([producer])[`outputs.${key}`]) ??
+              "json");
         break;
       }
+      // A For each runs inside one segment, so its item never crosses a segment boundary.
+      case "loop_item":
+        break;
       case "trigger_record":
         types[`trigger.record.${reference.field}`] = "record_field";
         break;
@@ -509,8 +516,8 @@ const cut = (
 const isCrossApplicationPin = (step: FlowTask, applicationKey: string | undefined): boolean => {
   if (step.type !== "record.pin_identity") return false;
   if (applicationKey === undefined) return true;
-  const target = (step as Extract<FlowTask, { properties: Record<string, FlowValue> }>)
-    .properties.application_key;
+  const target = (step as Extract<FlowTask, { properties: Record<string, FlowValue> }>).properties
+    .application_key;
   return (
     target !== undefined && (target.kind !== "literal" || target.literal.value !== applicationKey)
   );
@@ -846,7 +853,10 @@ export const flowEntrySegments = (plan: FlowPlan): readonly FlowServerSegment[] 
     }
     if (task.type === "switch") {
       const branch = task as Extract<FlowTask, { type: "switch" }>;
-      const reached = combine([...branch.cases.map((entry) => list(entry.tasks)), list(branch.default ?? [])]);
+      const reached = combine([
+        ...branch.cases.map((entry) => list(entry.tasks)),
+        list(branch.default ?? []),
+      ]);
       return { ...reached, pageFailure: true };
     }
     if (task.type === "sequential")
@@ -860,8 +870,10 @@ export const flowEntrySegments = (plan: FlowPlan): readonly FlowServerSegment[] 
   const tasks = list(plan.definition.tasks);
   const errors = tasks.pageFailure ? list(plan.definition.errors) : undefined;
   const successBeforeFinally = tasks.falls || tasks.stops;
-  const failureBeforeFinally = errors !== undefined && (errors.falls || errors.stops || errors.pageFailure);
-  const final = successBeforeFinally || failureBeforeFinally ? list(plan.definition.finally) : undefined;
+  const failureBeforeFinally =
+    errors !== undefined && (errors.falls || errors.stops || errors.pageFailure);
+  const final =
+    successBeforeFinally || failureBeforeFinally ? list(plan.definition.finally) : undefined;
   if (successBeforeFinally && final !== undefined && (final.falls || final.stops)) {
     const completion = plan.segments.find(
       (part): part is FlowServerSegment => part.kind === "server" && part.tasks.length === 0,
@@ -902,7 +914,8 @@ export const rowActionFormTargets = (
     if (visited.has(id)) return;
     visited.add(id);
     const flow = library(id);
-    if (flow === undefined) throw new FlowPlanError(id, undefined, "row-action flow is unavailable");
+    if (flow === undefined)
+      throw new FlowPlanError(id, undefined, "row-action flow is unavailable");
     for (const task of allSteps([...flow.tasks, ...flow.errors, ...flow.finally])) {
       if (task.type === "run_flow") {
         visit(String((task as Extract<FlowTask, { type: "run_flow" }>).flowId));
@@ -940,13 +953,14 @@ type PlannedContent = Readonly<{ flows: readonly FlowDefinition[] }>;
 type PlannedReleaseSet = Readonly<{
   application: Readonly<{
     definitionKey: string;
-    content: PlannedContent & Readonly<{
-      flowBindings: readonly Readonly<{
-        event: string;
-        controlId: string;
-        flow: Readonly<{ flowId: string }>;
-      }>[];
-    }>;
+    content: PlannedContent &
+      Readonly<{
+        flowBindings: readonly Readonly<{
+          event: string;
+          controlId: string;
+          flow: Readonly<{ flowId: string }>;
+        }>[];
+      }>;
   }>;
   modules: readonly Readonly<{ content: PlannedContent }>[];
 }>;

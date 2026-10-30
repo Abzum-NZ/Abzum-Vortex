@@ -67,16 +67,37 @@ export const flowReferenceObjectSchema = z.discriminatedUnion("source", [
       path: z.array(builderKeySchema).min(1).max(flowMaximumTaskOutputPathDepth).optional(),
     })
     .strict(),
+  /** The current item of the innermost For each, or a field path into a JSON item. */
+  z
+    .object({
+      source: z.literal("loop_item"),
+      path: z.array(builderKeySchema).min(1).max(flowMaximumTaskOutputPathDepth).optional(),
+    })
+    .strict(),
   z.object({ source: z.literal("execution_actor") }).strict(),
   z.object({ source: z.literal("execution_now") }).strict(),
   /** A value the page declares; it lives only in the page and never crosses to the server. */
   z.object({ source: z.literal("page"), name: builderKeySchema }).strict(),
   /** A field of a named form on the page: the form's placement and the field's key. */
   z
-    .object({ source: z.literal("form"), form: z.string().min(1).max(240), field: builderKeySchema })
+    .object({
+      source: z.literal("form"),
+      form: z.string().min(1).max(240),
+      field: builderKeySchema,
+    })
     .strict(),
 ]);
 export type FlowReference = z.infer<typeof flowReferenceObjectSchema>;
+
+/** The type of one item of a For each list: a reference list's element, or JSON. */
+export const flowListItemType = (listType: string | undefined): string =>
+  listType === "record_reference_list"
+    ? "record_reference"
+    : listType === "relationship_reference_list"
+      ? "relationship_reference"
+      : listType === "several_choices"
+        ? "text"
+        : "json";
 
 const referenceName = "([a-z][a-z0-9]*(?:_[a-z0-9]+)*)";
 const referencePatterns = {
@@ -88,6 +109,7 @@ const referencePatterns = {
   taskOutput: new RegExp(
     `^\\{\\{\\s*outputs\\.${referenceName}\\.${referenceName}((?:\\.${referenceName})*)\\s*\\}\\}$`,
   ),
+  loopItem: new RegExp(`^\\{\\{\\s*loop\\.item((?:\\.${referenceName})*)\\s*\\}\\}$`),
   executionActor: /^\{\{\s*execution\.actor\s*\}\}$/,
   executionNow: /^\{\{\s*execution\.now\s*\}\}$/,
   page: new RegExp(`^\\{\\{\\s*page\\.${referenceName}\\s*\\}\\}$`),
@@ -120,6 +142,9 @@ export const parseFlowReference = (text: string): FlowReference | undefined => {
       key: match[2]!,
       ...(path === undefined ? {} : { path }),
     };
+  } else if ((match = referencePatterns.loopItem.exec(text))) {
+    const path = match[1] === "" ? undefined : match[1]!.slice(1).split(".");
+    reference = { source: "loop_item", ...(path === undefined ? {} : { path }) };
   } else if (referencePatterns.executionActor.test(text)) reference = { source: "execution_actor" };
   else if (referencePatterns.executionNow.test(text)) reference = { source: "execution_now" };
   else if ((match = referencePatterns.page.exec(text)))
@@ -137,7 +162,7 @@ const referenceTextSchema = z.string().transform((text, context) => {
     context.addIssue({
       code: "custom",
       message:
-        "Use a closed reference such as {{ inputs.x }}, {{ vars.x }}, {{ trigger.record.f }}, {{ trigger.previous.f }}, {{ outputs.task.key }}, {{ outputs.form.values.label }}, {{ execution.actor }}, {{ execution.now }}, {{ page.x }} or {{ forms.form.field }}; Module calculations may use {{ module.fields.<permanent fieldId> }}; text is never evaluated",
+        "Use a closed reference such as {{ inputs.x }}, {{ vars.x }}, {{ trigger.record.f }}, {{ trigger.previous.f }}, {{ outputs.task.key }}, {{ outputs.form.values.label }}, {{ loop.item }}, {{ execution.actor }}, {{ execution.now }}, {{ page.x }} or {{ forms.form.field }}; Module calculations may use {{ module.fields.<permanent fieldId> }}; text is never evaluated",
     });
     return z.NEVER;
   }
@@ -182,7 +207,6 @@ export const flowRoundingModeSchema = z.enum([
 export const flowDateUnitSchema = z.enum(["minutes", "hours", "days", "weeks", "months", "years"]);
 export type FlowRoundingMode = z.infer<typeof flowRoundingModeSchema>;
 export type FlowDateUnit = z.infer<typeof flowDateUnitSchema>;
-
 
 const precisionShape = {
   scale: z.number().int().min(0).max(18),
@@ -248,10 +272,22 @@ const flowFormulaTreeSchema: z.ZodType<FlowFormula> = z.lazy(() =>
       })
       .strict(),
     z.object({ op: z.literal("round"), arg: flowFormulaTreeSchema, ...precisionShape }).strict(),
-    z.object({ op: z.literal("min"), args: z.array(flowFormulaTreeSchema).min(1).max(20) }).strict(),
-    z.object({ op: z.literal("max"), args: z.array(flowFormulaTreeSchema).min(1).max(20) }).strict(),
-    z.object({ op: z.literal("coalesce"), args: z.array(flowFormulaTreeSchema).min(1).max(20) }).strict(),
-    z.object({ op: z.literal("percent"), args: z.tuple([flowFormulaTreeSchema, flowFormulaTreeSchema]), ...precisionShape }).strict(),
+    z
+      .object({ op: z.literal("min"), args: z.array(flowFormulaTreeSchema).min(1).max(20) })
+      .strict(),
+    z
+      .object({ op: z.literal("max"), args: z.array(flowFormulaTreeSchema).min(1).max(20) })
+      .strict(),
+    z
+      .object({ op: z.literal("coalesce"), args: z.array(flowFormulaTreeSchema).min(1).max(20) })
+      .strict(),
+    z
+      .object({
+        op: z.literal("percent"),
+        args: z.tuple([flowFormulaTreeSchema, flowFormulaTreeSchema]),
+        ...precisionShape,
+      })
+      .strict(),
     z
       .object({
         op: z.enum(["eq", "neq", "lt", "lte", "gt", "gte", "contains", "starts_with", "ends_with"]),
@@ -307,7 +343,6 @@ const flowFormulaTreeSchema: z.ZodType<FlowFormula> = z.lazy(() =>
   ]),
 );
 
-
 const inspectFormula = (
   formula: FlowFormula,
   depth = 1,
@@ -326,7 +361,6 @@ const inspectFormula = (
 /** True when the formula reads the current time through the `now` operator. */
 export const flowFormulaUsesNow = (formula: FlowFormula): boolean =>
   inspectFormula(formula).usesNow;
-
 
 /**
  * A formula bounded in depth and size. Whether `now` may appear depends on where the formula

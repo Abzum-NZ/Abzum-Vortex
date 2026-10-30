@@ -24,6 +24,7 @@ import {
   type FlowTaskTypeDefinition,
 } from "../workflows/flow-task-registry";
 import {
+  flowListItemType,
   flowMaximumTaskOutputPathDepth,
   flowFormulaHasUnroundedDivide,
   flowRoundingModeSchema,
@@ -329,7 +330,14 @@ export function validateFlow(
   const hasRecord = hasRecordTrigger || flow.recordInput !== undefined;
 
   // ── Typed references. ──
-  type Where = { nowAllowed: boolean; scope: ReadonlyMap<string, FlowTask>; triggerOnly: boolean };
+  type Where = {
+    nowAllowed: boolean;
+    scope: ReadonlyMap<string, FlowTask>;
+    triggerOnly: boolean;
+    /** The item type of the innermost enclosing For each, when there is one. */
+    loopItemType?: string;
+  };
+  const loopItemTypes = new Map<string, string>();
 
   const findFlow = (reference: string): FlowSource | undefined =>
     options.targetFlow?.(reference) as FlowSource | undefined;
@@ -428,6 +436,25 @@ export function validateFlow(
             `The trigger record has no field ${reference.field}`,
           );
         return options.triggerRecordFieldType?.(reference.field);
+      case "loop_item":
+        if (where.loopItemType === undefined) {
+          add(
+            path,
+            "vortex.definition.workflow_node_references",
+            "broken_reference",
+            "Only a step inside a For each can read {{ loop.item }}",
+          );
+          return undefined;
+        }
+        if (reference.path === undefined) return where.loopItemType;
+        if (where.loopItemType !== "json")
+          add(
+            path,
+            "vortex.definition.workflow_node_values",
+            "invalid_value",
+            "Only a For each over JSON items can read a field path of {{ loop.item }}",
+          );
+        return undefined;
       case "execution_actor":
         return "organization_account_reference";
       case "execution_now":
@@ -1071,8 +1098,13 @@ export function validateFlow(
       );
   };
 
-  const checkTask = (task: FlowTask, path: Path, scope: Scope) => {
-    const where: Where = { nowAllowed: timeAllowed, scope, triggerOnly: false };
+  const checkTask = (task: FlowTask, path: Path, scope: Scope, loopItemType?: string) => {
+    const where: Where = {
+      nowAllowed: timeAllowed,
+      scope,
+      triggerOnly: false,
+      ...(loopItemType === undefined ? {} : { loopItemType }),
+    };
     switch (task.type) {
       case "if": {
         const node = task as Extract<FlowTask, { type: "if" }>;
@@ -1114,6 +1146,7 @@ export function validateFlow(
       case "for_each": {
         const node = task as Extract<FlowTask, { type: "for_each" }>;
         const type = valueType(node.items, where, [...path, "items"]);
+        loopItemTypes.set(node.id, flowListItemType(type));
         if (node.items.kind === "map")
           add(
             [...path, "items"],
@@ -1160,15 +1193,16 @@ export function validateFlow(
    * the lists that enclose it. Tasks inside a branch, iteration or parallel branch are not visible
    * after it, because they have not necessarily run; a sequential group is transparent.
    */
-  const walk = (tasks: readonly FlowTask[], path: Path, scope: Scope) => {
+  const walk = (tasks: readonly FlowTask[], path: Path, scope: Scope, loopItemType?: string) => {
     tasks.forEach((task, index) => {
       const taskPath = [...path, index];
-      checkTask(task, taskPath, scope);
+      checkTask(task, taskPath, scope, loopItemType);
       for (const child of flowTaskChildLists(task)) {
         walk(
           child.tasks,
           [...taskPath, ...child.path],
           task.type === "sequential" ? scope : new Map(scope),
+          task.type === "for_each" ? loopItemTypes.get(task.id) : loopItemType,
         );
       }
       scope.set(task.id, task);
