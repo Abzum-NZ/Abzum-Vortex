@@ -8,6 +8,7 @@ import {
   pageFlowFinalOutputs,
   resolvePageFlowInputs,
   pageFlowFormValue,
+  flowNeedsRunStart,
   type FlowBindingInput,
   type BrowserFlowPlan,
   type FlowFailure,
@@ -119,8 +120,7 @@ export async function runBrowserFlow(
         throw new Error("FLOW_BINDING_CONDITION_INVALID");
       if (!value.value) return { kind: "skipped" };
     }
-    const hasCompletion = servers.some(isCompletion);
-    if (hasCompletion && servers.some((segment) => !isCompletion(segment))) {
+    if (flowNeedsRunStart(plan.segments)) {
       const opened = await server!.client.openRun(
         server!.binding,
         start.runId,

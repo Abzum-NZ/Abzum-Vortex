@@ -61,6 +61,7 @@ import {
   installedSelectedRecordReadContext,
 } from "./flow-selected-record-context";
 import { flowEntrySegmentsMatch, flowPlansOf } from "../workflows/flow-plan";
+import { flowNeedsRunStart } from "../workflows/flow-run-start";
 import { openFlowAdmissionRun } from "../workflows/start";
 import {
   admitFlowContinuation,
@@ -1185,7 +1186,11 @@ export async function invokeInstalledFlow(
       invocation.kind !== "continuation" ? async () => bindingInstallation : readInstalled,
     openRun: async (session, selection, binding, installation, request) => {
       const plan = installation.plans?.get(String(binding.flow.flowId));
-      if (plan === undefined || !flowEntrySegmentsMatch(plan, request.entrySegments))
+      if (
+        plan === undefined ||
+        !flowEntrySegmentsMatch(plan, request.entrySegments) ||
+        !flowNeedsRunStart(plan.segments)
+      )
         return { kind: "reload", installationRevision: installation.installationRevision };
       const release: FlowRelease = {
         releaseKey: installation.releaseKey,
