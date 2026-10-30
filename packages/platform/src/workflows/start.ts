@@ -767,6 +767,11 @@ const startFlowInternal = async <Value>(
           committedNow:
             completion.value === "recorded" &&
             Object.values(executed.effects).some((effect) => effect.outcome === "committed"),
+          ...(completion.value === "replayed" &&
+          pending.replay !== undefined &&
+          Object.keys(pending.replay.effects).length > 0
+            ? { replayedCommitted: true as const }
+            : {}),
         };
       }
       if (pending.replay === undefined && hasCompletion) {
