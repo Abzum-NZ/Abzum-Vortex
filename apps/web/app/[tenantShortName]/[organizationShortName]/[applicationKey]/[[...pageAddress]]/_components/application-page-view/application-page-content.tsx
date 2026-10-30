@@ -62,7 +62,7 @@ import { usePlacementActions } from "./use-placement-actions";
 import { useTablePageAddress } from "./use-table-page-address";
 import { usePageAddress } from "./page-address";
 import { useRuntimeInputs } from "./use-runtime-inputs";
-import { draftControls, restoreDrafts } from "./control-drafts";
+import { draftControls } from "./control-drafts";
 import { useGridLayout } from "./use-grid-layout";
 import { useRowDetail } from "./use-row-detail";
 import { usePivot } from "./use-pivot";
@@ -232,6 +232,7 @@ export function ApplicationPageViewContent({
       ...emptyControlDrafts(),
       scope: addressKey,
       generation: navigationKey,
+      model,
     };
 
   const guidedFormCompleted = completedGuidedNavigationKey === navigationKey;
@@ -513,9 +514,26 @@ export function ApplicationPageViewContent({
     () => draftControls(currentContent, platformComponentRegistry, fieldInputControlReleases),
     [currentContent, platformComponentRegistry, fieldInputControlReleases],
   );
-  if (controlDraftsRef !== undefined && controlDraftsRef.current.generation !== navigationKey) {
-    restoreDrafts(controlDraftsRef.current, controls, tableData);
-    controlDraftsRef.current.generation = navigationKey;
+  const drafts = controlDraftsRef?.current;
+  if (drafts !== undefined && (drafts.generation !== navigationKey || drafts.model !== model)) {
+    if (Object.keys(drafts.drafts).length === 0) {
+      drafts.restored = {};
+      drafts.generation = navigationKey;
+      drafts.model = model;
+      delete drafts.pending;
+    } else {
+      if (drafts.pending?.generation !== navigationKey || drafts.pending.model !== model) {
+        const promise = import("./restore-control-drafts").then(({ restoreDrafts }) => {
+          if (controlDraftsRef?.current !== drafts || drafts.pending?.promise !== promise) return;
+          restoreDrafts(drafts, controls, tableData);
+          drafts.generation = navigationKey;
+          drafts.model = model;
+          delete drafts.pending;
+        });
+        drafts.pending = { generation: navigationKey, model, promise };
+      }
+      use(drafts.pending.promise);
+    }
   }
   useEffect(() => {
     const drafts = controlDraftsRef?.current;
@@ -527,7 +545,7 @@ export function ApplicationPageViewContent({
         )
       )
         unsavedWorkRegistry?.markSaved(formId, baseline);
-  }, [navigationKey, controlDraftsRef, unsavedWorkRegistry]);
+  }, [navigationKey, model, controlDraftsRef, unsavedWorkRegistry]);
 
   const fieldFlowEvents = useFieldFlowEvents(navigationKey, runtimeState, runBinding, setNotice);
   const { runtimeInputs } = useRuntimeInputs({

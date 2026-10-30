@@ -148,8 +148,8 @@ export function useFlowRuntime({
           if (!isRecord(values)) continue;
           forward(placementId, values.value);
         }
-        for (const [placementId, value] of Object.entries(controlDraftsRef?.current.values ?? {}))
-          forward(placementId, value);
+        for (const [placementId, draft] of Object.entries(controlDraftsRef?.current.drafts ?? {}))
+          forward(placementId, draft.value);
         return { parameters, controls };
       },
       ...(subject === undefined ? {} : { subject }),

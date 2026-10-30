@@ -1,5 +1,5 @@
 import {
-  fieldInputPayloadSchema,
+  fieldInputControlKeys,
   isRecord,
   readCompiledItemSettings,
   walkPageComposition,
@@ -8,8 +8,6 @@ import type {
   createPlatformComponentRegistryForReleases,
   FieldInputControlReleaseMap,
 } from "@vortex/ui";
-
-import type { ControlDrafts } from "../../../_components/application-frame-state";
 
 /** Current visible controls and the value contract of each one. */
 export function draftControls(
@@ -45,19 +43,8 @@ export function draftControls(
       }
       const payloadKind = release.rendererKey.replace(/^platform\.renderer\./, "");
       if (
-        ![
-          "text_input",
-          "number_input",
-          "boolean_input",
-          "date_input",
-          "date_time_input",
-          "choice_input",
-          "several_choices_input",
-          "rich_text_input",
-          "table_input",
-          "link_input",
-          "attachment_input",
-        ].includes(payloadKind)
+        !payloadKind.endsWith("_input") ||
+        !(fieldInputControlKeys as readonly string[]).includes(payloadKind.slice(0, -6))
       )
         return true;
       const valueType = release.value_type;
@@ -72,41 +59,4 @@ export function draftControls(
     true,
   );
   return controls;
-}
-
-/** Restore only a still-visible control whose current parser accepts the remembered value. */
-export function restoreDrafts(
-  store: ControlDrafts,
-  controls: ReturnType<typeof draftControls>,
-  data: Readonly<Record<string, unknown>>,
-) {
-  store.restored = {};
-  for (const [id, draft] of Object.entries(store.drafts)) {
-    const control = controls[id];
-    const current = data[id];
-    if (
-      control === undefined ||
-      control.kind !== draft.kind ||
-      (isRecord(current) && current.status !== "ready")
-    ) {
-      delete store.drafts[id];
-      delete store.values[id];
-      continue;
-    }
-    const currentValues = isRecord(current) && isRecord(current.values) ? current.values : {};
-    const values = {
-      ...currentValues,
-      kind: control.payloadKind,
-      value: draft.value,
-      ...draft.display,
-    };
-    if (control.payloadKind === "link_input" && draft.value === null)
-      delete (values as Record<string, unknown>).title;
-    const parsed = fieldInputPayloadSchema.safeParse(values);
-    if (parsed.success) store.restored[id] = { status: "ready", values: parsed.data };
-    else {
-      delete store.drafts[id];
-      delete store.values[id];
-    }
-  }
 }

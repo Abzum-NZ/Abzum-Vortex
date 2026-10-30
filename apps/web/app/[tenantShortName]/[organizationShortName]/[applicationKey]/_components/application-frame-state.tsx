@@ -23,7 +23,8 @@ export type ControlDraft = {
 export type ControlDrafts = {
   scope: string;
   generation: string;
-  values: Record<string, unknown>;
+  model?: object;
+  pending?: { generation: string; model: object; promise: Promise<void> };
   drafts: Record<string, ControlDraft>;
   baselines: Record<string, Readonly<Record<string, unknown>>>;
   restored: Record<string, unknown>;
@@ -31,7 +32,6 @@ export type ControlDrafts = {
 export const emptyControlDrafts = (): ControlDrafts => ({
   scope: "",
   generation: "",
-  values: {},
   drafts: {},
   baselines: {},
   restored: {},

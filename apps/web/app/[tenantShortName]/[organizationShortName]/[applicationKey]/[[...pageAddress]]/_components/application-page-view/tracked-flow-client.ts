@@ -39,7 +39,6 @@ export function trackFlowInvokeClient(
           equalFormValue(draft.value, submission.values[draft.fieldKey])
         ) {
           delete store.drafts[id];
-          delete store.values[id];
         }
       if (Object.values(store.drafts).some((draft) => draft.owner === submission.formId))
         store.baselines[submission.formId] = submission.values;

@@ -702,7 +702,6 @@ export function useRuntimeInputs({
                 const baseline = unsavedWorkRegistry?.baselineOf(owner);
                 if (baseline !== undefined) store.baselines[owner] = baseline;
               }
-              store.values[placementId] = event.value;
               store.drafts[placementId] = {
                 kind: control.kind,
                 value: event.value,
@@ -857,7 +856,6 @@ export function useRuntimeInputs({
             for (const [id, draft] of Object.entries(store.drafts))
               if (draft.owner === placementId) {
                 delete store.drafts[id];
-                delete store.values[id];
                 delete store.restored[id];
               }
             delete store.baselines[placementId];
