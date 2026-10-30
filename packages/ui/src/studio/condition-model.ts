@@ -1,6 +1,7 @@
 import {
   fieldValueMatches,
   conditionFieldType as semanticTypeForField,
+  conditionValueType,
   semanticTypeForLiteral,
   operatorAcceptsOperands,
   collectionElementType,
@@ -25,6 +26,8 @@ type ComparisonCondition = Extract<ConditionNode, { kind: "comparison" }>;
 export type ConditionOperand = ComparisonCondition["left"];
 type FieldOperand = Extract<ConditionOperand, { source: "field" }>;
 type ParameterOperand = Extract<ConditionOperand, { source: "parameter" }>;
+type PageOperand = Extract<ConditionOperand, { source: "page" }>;
+type FormOperand = Extract<ConditionOperand, { source: "form" }>;
 type FieldOperandPermission = Extract<StudioConditionOperandPermission, { field: ModuleField }>;
 
 export const isComparisonCondition = (condition: ConditionNode): condition is ComparisonCondition =>
@@ -33,6 +36,13 @@ export const isComparisonCondition = (condition: ConditionNode): condition is Co
 const isFieldOperandPermission = (
   permission: StudioConditionOperandPermission,
 ): permission is FieldOperandPermission => "field" in permission;
+type ParameterOperandPermission = Extract<
+  StudioConditionOperandPermission,
+  { operand: ParameterOperand }
+>;
+const isParameterOperandPermission = (
+  permission: StudioConditionOperandPermission,
+): permission is ParameterOperandPermission => permission.operand.source === "parameter";
 
 /** The semantic types used by the current Rule  field and parameter contracts. */
 export type StudioConditionSemanticType = ConditionValueType;
@@ -62,7 +72,9 @@ export type StudioConditionOperandRole =
   | "record_field"
   | "run_value"
   | "trusted_account_context"
-  | "host_context";
+  | "host_context"
+  | "page_value"
+  | "form_field";
 
 /**
  * The host grants each available reference explicitly. Previous values, inputs, variables and
@@ -79,8 +91,16 @@ export type StudioConditionOperandPermission =
   | Readonly<{
       operand: ParameterOperand;
       label: string;
-      role: Exclude<StudioConditionOperandRole, "current_field">;
+      role: Exclude<StudioConditionOperandRole, "current_field" | "page_value" | "form_field">;
       /** A choice's options: a value compared with this operand is picked from them. */
+      options?: readonly Readonly<{ value: string; label: string }>[];
+    }>
+  /** A value the page declares, or the current answer of a form's field: typed by its declaration. */
+  | Readonly<{
+      operand: PageOperand | FormOperand;
+      label: string;
+      role: "page_value" | "form_field";
+      type: StudioConditionSemanticType;
       options?: readonly Readonly<{ value: string; label: string }>[];
     }>;
 
@@ -169,6 +189,8 @@ const roleLabels: Readonly<Record<StudioConditionOperandRole, string>> = {
   run_value: "The run",
   trusted_account_context: "Trusted account context",
   host_context: "Host context",
+  page_value: "Page values",
+  form_field: "Form answers",
 };
 
 export const pointerForPath = (path: ConditionPath): string =>
@@ -339,7 +361,7 @@ const contextIssues = (
       permission.label.trim().length === 0 ||
       !permission.operand ||
       typeof permission.operand !== "object" ||
-      (permission.operand.source !== "field" && permission.operand.source !== "parameter") ||
+      !["field", "parameter", "page", "form"].includes(permission.operand.source) ||
       typeof permission.role !== "string" ||
       !Object.prototype.hasOwnProperty.call(roleLabels, permission.role)
     ) {
@@ -372,6 +394,25 @@ const contextIssues = (
             "invalid_context",
             ["allowedOperands", index],
             "A current field must match its Module metadata",
+          ),
+        );
+    } else if (!isParameterOperandPermission(permission)) {
+      const operand = permission.operand;
+      const named =
+        operand.source === "page"
+          ? builderKeySchema.safeParse(operand.name).success
+          : builderKeySchema.safeParse(operand.field).success && operand.form.length > 0;
+      if (
+        !named ||
+        (permission.role !== "page_value" && permission.role !== "form_field") ||
+        (operand.source === "page") !== (permission.role === "page_value") ||
+        conditionValueType(permission.type) === undefined
+      )
+        issues.push(
+          makeIssue(
+            "invalid_context",
+            ["allowedOperands", index],
+            "A page or form operand must name its value and declare its type",
           ),
         );
     } else {
@@ -419,6 +460,8 @@ export const infoForOperand = (
     (candidate) => permissionKey(candidate) === referenceKey(operand),
   );
   if (!permission) return undefined;
+  if (!isFieldOperandPermission(permission) && !isParameterOperandPermission(permission))
+    return { source: "reference", semanticType: permission.type };
   if (!isFieldOperandPermission(permission)) {
     const declaredType = context.parameterDeclarations.find(
       (declaration) => declaration.key === permission.operand.key,

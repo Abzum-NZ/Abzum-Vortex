@@ -15,7 +15,9 @@ import {
   comparableConditionFieldType,
   builderKeySchema,
   sourceItemChildSlots,
+  sourcePageItems,
   sourcePageZones,
+  conditionValueType,
   type ApplicationSourceDocument,
   type ConditionNode,
   type ModuleField,
@@ -28,13 +30,46 @@ import {
 import {
   validateStudioCondition,
   type StudioConditionControlsContext,
+  type StudioConditionOperandPermission,
+  type StudioConditionSemanticType,
   type StudioConditionValidation,
   type StudioConditionValidationIssue,
 } from "./condition-model";
 import type { StudioCompositionContext } from "./application-composition-commands";
+import { projectStudioFlowDraftChoices } from "./application-flow-step-form";
 import type { StudioSemanticSelection } from "./semantic-selection";
 
 type SourceQualifiedCondition = NonNullable<SourceItemVortex["visibility_condition"]>;
+
+/** The four reactions a placement can declare: each is one condition over page, form and record values. */
+export type StudioReactionSlot =
+  "visibility_condition" | "required_condition" | "read_only_condition" | "enabled_condition";
+export const studioReactionSlots: readonly Readonly<{
+  slot: StudioReactionSlot;
+  title: string;
+  help: string;
+}>[] = [
+  {
+    slot: "visibility_condition",
+    title: "Show when",
+    help: "Show this item only when the condition holds. This only hides or shows the item; who may open the page is set separately.",
+  },
+  {
+    slot: "required_condition",
+    title: "Required when",
+    help: "Ask for an answer only when the condition holds.",
+  },
+  {
+    slot: "read_only_condition",
+    title: "Read-only when",
+    help: "Show the answer but do not let it be changed while the condition holds.",
+  },
+  {
+    slot: "enabled_condition",
+    title: "Enabled when",
+    help: "Let the item be used only while the condition holds.",
+  },
+];
 
 export type StudioApplicationConditionContext = Readonly<{
   organizationId: string;
@@ -191,25 +226,23 @@ export function parseStudioApplicationConditionContext(
   return value as unknown as StudioApplicationConditionContext;
 }
 
-export const sameStudioVisibilityValue = (left: unknown, right: unknown): boolean => {
+export const sameStudioReactionValue = (left: unknown, right: unknown): boolean => {
   if (Object.is(left, right)) return true;
   if (Array.isArray(left) && Array.isArray(right))
     return (
       left.length === right.length &&
-      left.every((entry, index) => sameStudioVisibilityValue(entry, right[index]))
+      left.every((entry, index) => sameStudioReactionValue(entry, right[index]))
     );
   if (!isRecord(left) || !isRecord(right)) return false;
   const keys = Object.keys(left);
   return (
     keys.length === Object.keys(right).length &&
-    keys.every(
-      (key) => Object.hasOwn(right, key) && sameStudioVisibilityValue(left[key], right[key]),
-    )
+    keys.every((key) => Object.hasOwn(right, key) && sameStudioReactionValue(left[key], right[key]))
   );
 };
 
 /** Canonical optional right operands have the same meaning when omitted or undefined. */
-export const sameStudioVisibilityCondition = (
+export const sameStudioReactionCondition = (
   left: ConditionNode | undefined,
   right: ConditionNode | undefined,
 ): boolean => {
@@ -217,11 +250,11 @@ export const sameStudioVisibilityCondition = (
   if (left.kind === "comparison" && right.kind === "comparison")
     return (
       left.operator === right.operator &&
-      sameStudioVisibilityValue(left.left, right.left) &&
-      sameStudioVisibilityValue(left.right, right.right)
+      sameStudioReactionValue(left.left, right.left) &&
+      sameStudioReactionValue(left.right, right.right)
     );
   if (left.kind === "not" && right.kind === "not")
-    return sameStudioVisibilityCondition(left.condition, right.condition);
+    return sameStudioReactionCondition(left.condition, right.condition);
   if (
     (left.kind === "all" || left.kind === "any") &&
     (right.kind === "all" || right.kind === "any")
@@ -230,14 +263,14 @@ export const sameStudioVisibilityCondition = (
       left.kind === right.kind &&
       left.conditions.length === right.conditions.length &&
       left.conditions.every((child, index) =>
-        sameStudioVisibilityCondition(child, right.conditions[index]),
+        sameStudioReactionCondition(child, right.conditions[index]),
       )
     );
   return false;
 };
 
 /** The selected item's Vortex metadata, where its visibility condition lives, and its source path. */
-export type StudioVisibilityTarget = Readonly<{
+export type StudioReactionTarget = Readonly<{
   pageAlias: string;
   recordReference: string;
   placementAlias: string;
@@ -245,11 +278,14 @@ export type StudioVisibilityTarget = Readonly<{
   placement: SourceItemVortex;
 }>;
 
-/** Only a unique, directly page-owned detail placement is editable. */
-export function resolveStudioVisibilityTarget(
+/**
+ * Only a unique, directly page-owned placement is editable. On a record page its conditions can
+ * compare the record's fields; on any page they compare the page's values and its forms' answers.
+ */
+export function resolveStudioReactionTarget(
   source: ApplicationSourceDocument,
   selection: StudioSemanticSelection | null,
-): StudioVisibilityTarget | undefined {
+): StudioReactionTarget | undefined {
   if (selection?.kind !== "placement" || !applicationSourceDocumentSchema.safeParse(source).success)
     return undefined;
   const placementAlias = selection.placementAlias;
@@ -309,8 +345,8 @@ export function resolveStudioVisibilityTarget(
       visitData(
         page.composition,
         path,
-        page.type === "detail" ? page.id : undefined,
-        page.type === "detail" ? page.record_type : undefined,
+        page.id,
+        page.type === "detail" ? page.record_type : "",
         true,
       );
   });
@@ -331,16 +367,74 @@ export function resolveStudioVisibilityTarget(
   };
 }
 
-export function studioVisibilityControlsContext(
+/** What a page value of this type is compared as. */
+const pageValueConditionType: Readonly<Record<string, StudioConditionSemanticType>> = {
+  decimal_number: "decimal_number",
+  money: "money",
+  text: "text",
+  yes_no: "yes_no",
+  json: "opaque_json",
+};
+
+/**
+ * The values besides the record's fields that a condition on this page can compare: the page's own
+ * values and the current answers of the forms placed on it.
+ */
+export function studioReactionOperands(
+  context: StudioCompositionContext,
+  pageAlias: string,
+): readonly StudioConditionOperandPermission[] {
+  const page = context.source.body.pages.find((entry) => entry.id === pageAlias);
+  if (page === undefined) return [];
+  const operands: StudioConditionOperandPermission[] = Object.entries(page.values ?? {}).flatMap(
+    ([name, declaration]): StudioConditionOperandPermission[] => {
+      const type = pageValueConditionType[declaration.type];
+      return type === undefined
+        ? []
+        : [
+            {
+              operand: { source: "page", name },
+              label: declaration.label,
+              role: "page_value",
+              type,
+            },
+          ];
+    },
+  );
+  const placed = new Set(sourcePageItems(page.composition).map((item) => item.props.id));
+  const forms = projectStudioFlowDraftChoices({
+    rootId: context.rootId as never,
+    source: context.source,
+    catalogue: context.catalogue,
+  }).forms.filter((form) => placed.has(form.alias));
+  for (const form of forms)
+    for (const field of form.fields) {
+      const type = conditionValueType(field.type);
+      if (type === undefined) continue;
+      operands.push({
+        operand: { source: "form", form: form.alias, field: field.name },
+        label: `${form.label}: ${field.label}`,
+        role: "form_field",
+        type,
+      });
+    }
+  return operands;
+}
+
+export function studioReactionControlsContext(
   metadata: StudioApplicationConditionContext,
+  extra: readonly StudioConditionOperandPermission[] = [],
 ): StudioConditionControlsContext {
   return {
-    allowedOperands: metadata.fields.map(({ field }) => ({
-      operand: { source: "field", fieldId: field.fieldId },
-      field,
-      label: field.label,
-      role: "current_field",
-    })),
+    allowedOperands: [
+      ...metadata.fields.map(({ field }): StudioConditionOperandPermission => ({
+        operand: { source: "field", fieldId: field.fieldId },
+        field,
+        label: field.label,
+        role: "current_field",
+      })),
+      ...extra,
+    ],
     declaredFieldIds: metadata.fields.map(({ field }) => field.fieldId),
     parameterDeclarations: [],
     allowLiteralValues: true,
@@ -348,11 +442,15 @@ export function studioVisibilityControlsContext(
 }
 
 /** Shared validation plus the existing exact scalar leaf contract, without value coercion. */
-export function validateStudioVisibilityCondition(
+export function validateStudioReactionCondition(
   condition: ConditionNode | undefined,
   metadata: StudioApplicationConditionContext,
+  extra: readonly StudioConditionOperandPermission[] = [],
 ): StudioConditionValidation {
-  const validation = validateStudioCondition(condition, studioVisibilityControlsContext(metadata));
+  const validation = validateStudioCondition(
+    condition,
+    studioReactionControlsContext(metadata, extra),
+  );
   if (!validation.isValid || condition === undefined) return validation;
   const issues = [...validation.issues];
   const visit = (node: ConditionNode, path: (string | number)[]) => {
@@ -399,11 +497,16 @@ export function validateStudioVisibilityCondition(
 type Operand = Extract<ConditionNode, { kind: "comparison" }>["left"];
 type SourceOperand =
   | { source: "field"; field: string }
+  | { source: "page"; name: string }
+  | { source: "form"; form: string; field: string }
   | { source: "value"; value: Extract<Operand, { source: "value" }>["value"] };
 const projectOperand = (
-  operand: { source: string; field?: string; value?: unknown },
+  operand: { source: string; field?: string; value?: unknown; name?: string; form?: string },
   metadata: StudioApplicationConditionContext,
 ): Operand => {
+  if (operand.source === "page") return { source: "page", name: operand.name! };
+  if (operand.source === "form")
+    return { source: "form", form: operand.form!, field: operand.field! };
   if (operand.source === "value")
     return {
       source: "value",
@@ -416,7 +519,7 @@ const projectOperand = (
   if (matches.length !== 1) throw new TypeError("Unsupported visibility field");
   return { source: "field", fieldId: matches[0]!.field.fieldId };
 };
-export function projectStudioVisibilityCondition(
+export function projectStudioReactionCondition(
   source: SourceQualifiedCondition | undefined,
   metadata: StudioApplicationConditionContext,
 ): ConditionNode | undefined {
@@ -426,15 +529,15 @@ export function projectStudioVisibilityCondition(
   if ("all" in source)
     return {
       kind: "all",
-      conditions: source.all.map((child) => projectStudioVisibilityCondition(child, metadata)!),
+      conditions: source.all.map((child) => projectStudioReactionCondition(child, metadata)!),
     };
   if ("any" in source)
     return {
       kind: "any",
-      conditions: source.any.map((child) => projectStudioVisibilityCondition(child, metadata)!),
+      conditions: source.any.map((child) => projectStudioReactionCondition(child, metadata)!),
     };
   if ("not" in source)
-    return { kind: "not", condition: projectStudioVisibilityCondition(source.not, metadata)! };
+    return { kind: "not", condition: projectStudioReactionCondition(source.not, metadata)! };
   const left =
     "left" in source
       ? projectOperand(source.left, metadata)
@@ -456,7 +559,7 @@ export function projectStudioVisibilityCondition(
 }
 
 /** Canonical editor paths are translated to the actual authored compact/explicit shape. */
-export function locateStudioVisibilityIssue(
+export function locateStudioReactionIssue(
   path: readonly (string | number)[],
   source: SourceQualifiedCondition | undefined,
 ): readonly (string | number)[] {
@@ -466,10 +569,10 @@ export function locateStudioVisibilityIssue(
     const key = "all" in source ? "all" : "any";
     const children = "all" in source ? source.all : source.any;
     if (part === "conditions" && typeof next === "number")
-      return [key, next, ...locateStudioVisibilityIssue(rest, children[next])];
+      return [key, next, ...locateStudioReactionIssue(rest, children[next])];
     return [key];
   }
-  if ("not" in source) return ["not", ...locateStudioVisibilityIssue(path.slice(1), source.not)];
+  if ("not" in source) return ["not", ...locateStudioReactionIssue(path.slice(1), source.not)];
   if (part === "kind") return [];
   if (part === "left" || part === "right") {
     if ("field" in source) return part === "left" ? ["field"] : ["value", ...path.slice(2)];
@@ -502,7 +605,7 @@ const inverseCondition = (
   const collect = (source: SourceQualifiedCondition) => {
     originals.push({
       source,
-      canonical: projectStudioVisibilityCondition(source, metadata)!,
+      canonical: projectStudioReactionCondition(source, metadata)!,
       provenance: subtree(source),
     });
     if ("all" in source) source.all.forEach(collect);
@@ -513,6 +616,8 @@ const inverseCondition = (
   const used = new Set<SourceQualifiedCondition>();
   const operand = (value: Operand): SourceOperand => {
     if (value.source === "value") return { source: "value", value: structuredClone(value.value) };
+    if (value.source === "page") return { source: "page", name: value.name };
+    if (value.source === "form") return { source: "form", form: value.form, field: value.field };
     if (value.source !== "field") throw new TypeError("Unsupported visibility operand");
     const matches = metadata.fields.filter(({ field }) => field.fieldId === value.fieldId);
     if (matches.length !== 1) throw new TypeError("Unsupported visibility field");
@@ -537,7 +642,7 @@ const inverseCondition = (
     path: string,
   ) => {
     const retained = originals.find(
-      (entry) => entry.source === preferred && sameStudioVisibilityCondition(entry.canonical, node),
+      (entry) => entry.source === preferred && sameStudioReactionCondition(entry.canonical, node),
     );
     if (retained !== undefined) {
       retained.provenance.forEach((source) => reservations.set(source, path));
@@ -566,7 +671,7 @@ const inverseCondition = (
       entry.provenance.every(
         (source) =>
           !used.has(source) && (!reservations.has(source) || reservations.get(source) === path),
-      ) && sameStudioVisibilityCondition(entry.canonical, node);
+      ) && sameStudioReactionCondition(entry.canonical, node);
     // Keep an untouched sibling's own authored form before considering an equivalent node elsewhere.
     const retained =
       originals.find((entry) => entry.source === preferred && matches(entry)) ??
@@ -607,38 +712,79 @@ const inverseCondition = (
 };
 
 /** Locate a local draft against the authored shape it would produce, without changing source. */
-export function locateStudioVisibilityDraftIssue(
+export function locateStudioReactionDraftIssue(
   path: readonly (string | number)[],
   condition: ConditionNode | undefined,
   original: SourceQualifiedCondition | undefined,
   metadata: StudioApplicationConditionContext,
 ): readonly (string | number)[] {
   try {
-    return locateStudioVisibilityIssue(
+    return locateStudioReactionIssue(
       path,
       condition === undefined ? undefined : inverseCondition(condition, original, metadata),
     );
   } catch {
-    return locateStudioVisibilityIssue(path, original);
+    return locateStudioReactionIssue(path, original);
   }
 }
 
-export type StudioVisibilityEditorModel =
+export type StudioReactionEditorModel =
   | Readonly<{
       kind: "available";
-      target: StudioVisibilityTarget;
+      target: StudioReactionTarget;
       condition: ConditionNode | undefined;
       controls: StudioConditionControlsContext;
+      /** The record fields this page's record offers; none on a page without a record. */
+      metadata: StudioApplicationConditionContext;
+      /** The page values and form answers the condition can compare besides the record's fields. */
+      extra: readonly StudioConditionOperandPermission[];
     }>
   | Readonly<{ kind: "unsupported" | "stale" }>;
-export function projectStudioVisibilityEditor(
+
+/** The conditions of a page that shows no record: no record fields, only page values and form answers. */
+const noRecordConditionContext = (
+  context: StudioCompositionContext,
+  pageAlias: string,
+): StudioApplicationConditionContext => ({
+  organizationId: context.organizationId,
+  rootId: context.rootId,
+  key: context.key,
+  draftRevision: 0,
+  sourceFingerprint: "",
+  publishedRevision: null,
+  createdAt: "",
+  updatedAt: "",
+  bindingsSignature: JSON.stringify(applicationModuleKeys(context.source)),
+  resolutionFingerprint: "",
+  pageAlias,
+  recordReference: "",
+  fieldRecordReference: "",
+  recordTypeId: "",
+  module: {
+    organizationId: context.organizationId,
+    key: "",
+    rootId: "",
+    releaseRevision: 0,
+    releaseVersion: "",
+    contentFingerprint: "",
+    resolutionFingerprint: "",
+  },
+  fields: [],
+});
+
+export function projectStudioReactionEditor(
   context: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
   candidateMetadata: unknown,
-): StudioVisibilityEditorModel {
-  const metadata = parseStudioApplicationConditionContext(candidateMetadata);
-  const target = resolveStudioVisibilityTarget(context.source, selection);
-  if (metadata === undefined || target === undefined) return { kind: "unsupported" };
+  slot: StudioReactionSlot,
+): StudioReactionEditorModel {
+  const target = resolveStudioReactionTarget(context.source, selection);
+  if (target === undefined) return { kind: "unsupported" };
+  const metadata =
+    target.recordReference === ""
+      ? noRecordConditionContext(context, target.pageAlias)
+      : parseStudioApplicationConditionContext(candidateMetadata);
+  if (metadata === undefined) return { kind: "unsupported" };
   if (
     context.organizationId !== metadata.organizationId ||
     context.rootId !== metadata.rootId ||
@@ -652,20 +798,18 @@ export function projectStudioVisibilityEditor(
   )
     return { kind: "stale" };
   try {
-    const controls = studioVisibilityControlsContext(metadata);
-    const condition = projectStudioVisibilityCondition(
-      target.placement.visibility_condition,
-      metadata,
-    );
-    if (!validateStudioVisibilityCondition(condition, metadata).isValid)
+    const extra = studioReactionOperands(context, target.pageAlias);
+    const controls = studioReactionControlsContext(metadata, extra);
+    const condition = projectStudioReactionCondition(target.placement[slot], metadata);
+    if (!validateStudioReactionCondition(condition, metadata, extra).isValid)
       return { kind: "unsupported" };
-    return { kind: "available", target, controls, condition };
+    return { kind: "available", target, controls, condition, metadata, extra };
   } catch {
     return { kind: "unsupported" };
   }
 }
 
-export type StudioVisibilityCommandResult =
+export type StudioReactionCommandResult =
   | Readonly<{ kind: "applied"; source: ApplicationSourceDocument }>
   | Readonly<{ kind: "noop"; source: Readonly<ApplicationSourceDocument> }>
   | Readonly<{ kind: "stale" | "unsupported" }>
@@ -675,13 +819,14 @@ export type StudioVisibilityCommandResult =
     }>;
 
 /** Mutate a detached original whole document, validating without replacing it with parsed output. */
-export function applyStudioVisibilityCondition(
+export function applyStudioReactionCondition(
   expected: StudioCompositionContext,
   current: StudioCompositionContext,
   selection: StudioSemanticSelection,
-  metadata: StudioApplicationConditionContext,
+  candidateMetadata: unknown,
   condition: ConditionNode | undefined,
-): StudioVisibilityCommandResult {
+  slot: StudioReactionSlot,
+): StudioReactionCommandResult {
   if (
     expected.organizationId !== current.organizationId ||
     expected.rootId !== current.rootId ||
@@ -691,28 +836,29 @@ export function applyStudioVisibilityCondition(
     expected.source !== current.source
   )
     return { kind: "stale" };
-  const model = projectStudioVisibilityEditor(current, selection, metadata);
+  const model = projectStudioReactionEditor(current, selection, candidateMetadata, slot);
   if (model.kind !== "available") return model;
-  const validation = validateStudioVisibilityCondition(condition, metadata);
+  const { metadata } = model;
+  const validation = validateStudioReactionCondition(condition, metadata, model.extra);
   let authored: SourceQualifiedCondition | undefined;
   try {
     authored =
       condition === undefined
         ? undefined
-        : inverseCondition(condition, model.target.placement.visibility_condition, metadata);
+        : inverseCondition(condition, model.target.placement[slot], metadata);
   } catch {
     return { kind: "unsupported" };
   }
-  const base = [...model.target.path, "visibility_condition"];
+  const base = [...model.target.path, slot];
   if (!validation.isValid)
     return {
       kind: "invalid",
       issues: validation.issues.map((issue: StudioConditionValidationIssue) => ({
-        path: [...base, ...locateStudioVisibilityIssue(issue.path, authored)],
+        path: [...base, ...locateStudioReactionIssue(issue.path, authored)],
         message: issue.message,
       })),
     };
-  if (sameStudioVisibilityCondition(model.condition, condition))
+  if (sameStudioReactionCondition(model.condition, condition))
     return { kind: "noop", source: current.source };
   if (authored !== undefined && !sourceQualifiedConditionSchema.safeParse(authored).success)
     return {
@@ -720,10 +866,10 @@ export function applyStudioVisibilityCondition(
       issues: [{ path: base, message: "The authored condition is invalid." }],
     };
   const candidate = structuredClone(current.source) as ApplicationSourceDocument;
-  const target = resolveStudioVisibilityTarget(candidate, selection);
+  const target = resolveStudioReactionTarget(candidate, selection);
   if (target === undefined) return { kind: "stale" };
-  if (authored === undefined) delete target.placement.visibility_condition;
-  else target.placement.visibility_condition = authored;
+  if (authored === undefined) delete target.placement[slot];
+  else target.placement[slot] = authored;
   const parsed = applicationSourceDocumentSchema.safeParse(candidate);
   if (!parsed.success)
     return {

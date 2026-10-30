@@ -8,21 +8,25 @@ import {
   StudioInspectorGroup,
   StudioConditionControls,
   parseStudioApplicationConditionContext,
-  projectStudioVisibilityEditor,
-  resolveStudioVisibilityTarget,
-  sameStudioVisibilityCondition,
-  validateStudioVisibilityCondition,
+  projectStudioReactionEditor,
+  resolveStudioReactionTarget,
+  sameStudioReactionCondition,
+  validateStudioReactionCondition,
   studioSemanticSelectionKey,
+  studioReactionSlots,
   type StudioApplicationConditionContext,
   type StudioCompositionContext,
   type StudioConditionValidation,
   type StudioSemanticSelection,
   type StudioStoredApplicationDraft,
-  type StudioVisibilityCommandResult,
+  type StudioReactionCommandResult,
+  type StudioReactionSlot,
 } from "@vortex/ui/studio";
 import { resolveStudioApplicationConditionContext } from "../actions";
 
 type Props = Readonly<{
+  /** Which reaction of the item this edits: when it shows, is required, is read-only or is enabled. */
+  slot: StudioReactionSlot;
   /** The current draft, which the rule is shown from and written to. */
   context: StudioCompositionContext;
   selection: StudioSemanticSelection;
@@ -32,54 +36,77 @@ type Props = Readonly<{
   onCommand: (
     expected: StudioCompositionContext,
     selection: StudioSemanticSelection,
-    metadata: StudioApplicationConditionContext,
+    metadata: StudioApplicationConditionContext | null,
     condition: ConditionNode | undefined,
-  ) => StudioVisibilityCommandResult;
+    slot: StudioReactionSlot,
+  ) => StudioReactionCommandResult;
 }>;
+type FieldsRead = ReturnType<typeof resolveStudioApplicationConditionContext>;
+const fieldReads = new Map<string, FieldsRead>();
+/** The four reactions of an item read the same fields: one request serves them all. */
+const readFieldsOnce = (key: string, read: () => FieldsRead): FieldsRead => {
+  const known = fieldReads.get(key);
+  if (known !== undefined) return known;
+  const started = read();
+  fieldReads.set(key, started);
+  if (fieldReads.size > 20) fieldReads.delete(fieldReads.keys().next().value!);
+  return started;
+};
 type Held = Readonly<{ value: ConditionNode | undefined; validation: StudioConditionValidation }>;
 
 /**
- * The selected item's visibility rule. The fields it can name are read once for the saved page
+ * One of the selected item's reactions (when it shows, is required, is read-only or is enabled):
+ * one condition over the record's fields, the page's values and its forms' answers. The record's
+ * fields it can name are read once for the saved page
  * (again when its modules change, or on Reload fields); a valid rule reaches the draft as it changes,
  * and a rule that is not valid yet stays here with its problems and never reaches the draft.
  */
-export function ApplicationVisibilityConditionEditor(props: Props) {
+export function ApplicationReactionConditionEditor(props: Props) {
   const [metadata, setMetadata] = useState<StudioApplicationConditionContext | null>(null);
   const [held, setHeld] = useState<Held | null>(null);
   const [status, setStatus] = useState("Reading the fields this page can use…");
   const [message, setMessage] = useState("");
   const [reload, setReload] = useState(0);
+  const slotInfo = studioReactionSlots.find((entry) => entry.slot === props.slot)!;
   const latest = useRef(props);
   latest.current = props;
   const selectionKey = studioSemanticSelectionKey(props.selection);
   // The fields can be read once the page and the same modules are in the saved draft.
-  const target = resolveStudioVisibilityTarget(props.context.source, props.selection);
-  const savedTarget = resolveStudioVisibilityTarget(props.saved.source, props.selection);
+  const target = resolveStudioReactionTarget(props.context.source, props.selection);
+  const savedTarget = resolveStudioReactionTarget(props.saved.source, props.selection);
   const modules = JSON.stringify(applicationModuleKeys(props.context.source));
+  // A page without a record offers page values and form answers only: nothing to read from the server.
+  const needsFields = target !== undefined && target.recordReference !== "";
   const readable =
     target !== undefined &&
-    savedTarget !== undefined &&
-    target.pageAlias === savedTarget.pageAlias &&
-    target.recordReference === savedTarget.recordReference &&
-    modules === JSON.stringify(applicationModuleKeys(props.saved.source));
+    (!needsFields ||
+      (savedTarget !== undefined &&
+        target.pageAlias === savedTarget.pageAlias &&
+        target.recordReference === savedTarget.recordReference &&
+        modules === JSON.stringify(applicationModuleKeys(props.saved.source))));
 
   useEffect(() => {
+    if (!needsFields) return;
     if (!readable) {
       setStatus(
-        "A visibility rule needs a saved detail page with the same modules as the saved draft. Waiting for your latest change to save…",
+        "A condition on a record page needs the same modules as the saved draft. Waiting for your latest change to save…",
       );
       return;
     }
     let current = true;
     const { context, saved, selection } = latest.current;
-    const page = resolveStudioVisibilityTarget(saved.source, selection);
+    const page = resolveStudioReactionTarget(saved.source, selection);
     if (page === undefined) return;
     setStatus(metadata === null ? "Reading the fields this page can use…" : "");
-    void resolveStudioApplicationConditionContext(context.organizationId, {
-      rootId: context.rootId,
-      draftRevision: saved.draftRevision,
-      pageAlias: page.pageAlias,
-    })
+    void readFieldsOnce(
+      `${context.organizationId}:${context.rootId}:${saved.draftRevision}:${page.pageAlias}:${reload}`,
+      () =>
+        resolveStudioApplicationConditionContext(context.organizationId, {
+          rootId: context.rootId,
+          draftRevision: saved.draftRevision,
+          pageAlias: page.pageAlias,
+        }),
+    )
       .then((result) => {
         if (!current) return;
         const parsed =
@@ -114,9 +141,9 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
   }, [selectionKey, readable, modules, reload]);
 
   const model =
-    metadata === null
+    target === undefined || (needsFields && metadata === null)
       ? null
-      : projectStudioVisibilityEditor(props.context, props.selection, metadata);
+      : projectStudioReactionEditor(props.context, props.selection, metadata, props.slot);
   // The draft changing under held input (Undo, Redo, another edit of this item) drops it.
   const shown = model?.kind === "available" ? JSON.stringify(model.condition ?? null) : "";
   useEffect(() => {
@@ -124,8 +151,8 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
   }, [shown, selectionKey]);
 
   const update = (value: ConditionNode | undefined, validation: StudioConditionValidation) => {
-    if (latest.current.disabled || metadata === null || model?.kind !== "available") return;
-    const scalarValidation = validateStudioVisibilityCondition(value, metadata);
+    if (latest.current.disabled || model?.kind !== "available") return;
+    const scalarValidation = validateStudioReactionCondition(value, model.metadata, model.extra);
     const combined = {
       ...validation,
       issues: [
@@ -145,7 +172,7 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
       setMessage("");
       return;
     }
-    if (sameStudioVisibilityCondition(value, model.condition)) {
+    if (sameStudioReactionCondition(value, model.condition)) {
       setHeld(null);
       return;
     }
@@ -154,10 +181,11 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
       latest.current.selection,
       metadata,
       value,
+      props.slot,
     );
     if (result.kind === "applied" || result.kind === "noop") {
       setHeld(null);
-      setMessage(result.kind === "applied" ? "Visibility rule changed." : "");
+      setMessage(result.kind === "applied" ? `${slotInfo.title} changed.` : "");
     } else {
       setHeld({ value, validation: combined });
       setMessage(
@@ -172,17 +200,17 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
   const value =
     held === null ? (model?.kind === "available" ? model.condition : undefined) : held.value;
   return (
-    <StudioInspectorGroup title="Visibility rule">
-      <StudioHelp hint="Show this item only when a field on this page has a chosen value. This only hides or shows the item; who may open the page is set separately." />
-      {status && (
+    <StudioInspectorGroup title={slotInfo.title}>
+      <StudioHelp hint={slotInfo.help} />
+      {needsFields && status && (
         <p role="status" className="text-sm text-muted-foreground">
           {status}
         </p>
       )}
       {model?.kind === "unsupported" && (
         <p role="status">
-          This visibility rule uses values this page cannot offer. Change it with Import from source
-          in the Releases tab.
+          This condition uses values this page cannot offer. Change it with Import from source in
+          the Releases tab.
         </p>
       )}
       {model?.kind === "stale" && (
@@ -193,25 +221,29 @@ export function ApplicationVisibilityConditionEditor(props: Props) {
           <StudioConditionControls
             {...(value === undefined ? {} : { value })}
             context={model.controls}
-            label="Visibility rule"
+            label={slotInfo.title}
             onChange={update}
           />
         </fieldset>
       )}
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="self-start"
-        disabled={props.disabled}
-        onClick={() => setReload((count) => count + 1)}
-      >
-        Reload fields
-      </Button>
+      {needsFields && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="self-start"
+          disabled={props.disabled}
+          onClick={() => setReload((count) => count + 1)}
+        >
+          Reload fields
+        </Button>
+      )}
       {held !== null && held.validation.issues.length > 0 && (
         <ul role="alert" className="text-sm text-destructive">
           {held.validation.issues.map((issue, index) => (
-            <li key={`${issue.pointer}:${index}`}>Visibility rule: {issue.message}</li>
+            <li key={`${issue.pointer}:${index}`}>
+              {slotInfo.title}: {issue.message}
+            </li>
           ))}
         </ul>
       )}

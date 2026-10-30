@@ -45,7 +45,7 @@ export * from "./application-behaviour";
 export * from "./application-page-values";
 export * from "./application-record-rules";
 export * from "./module-action-condition";
-export * from "./application-visibility-condition-commands";
+export * from "./application-reaction-condition-commands";
 export type { StudioCompileFailure, StudioPreviewNotRunnable } from "./compile-failure";
 export * from "./studio-setting-controls";
 export * from "./studio-grid-features";

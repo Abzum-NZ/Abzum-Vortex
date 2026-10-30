@@ -12,7 +12,7 @@ import {
 } from "@vortex/platform/schema";
 import {
   applyStudioCompositionCommand,
-  applyStudioVisibilityCondition,
+  applyStudioReactionCondition,
   describeStudioCompositionAddTargets,
   studioDraftChoices,
   resolveStudioSelectionInspectorContext,
@@ -55,6 +55,7 @@ import { readWhenPreviewReady } from "../_lib/studio-preview-gate";
 import {
   applyStudioItemLabels,
   applyStudioPageValue,
+  studioReactionSlots,
   type StudioPageValueCommand,
   type StudioPageValueResult,
   type StudioPlacementDescriber,
@@ -66,7 +67,7 @@ import type { StudioApplicationCanvasFrames } from "../../_lib/studio-applicatio
 import { studioMenuPosition, type StudioInspectorAction } from "@vortex/ui/studio";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
 import { StudioBlockGate } from "./studio-block-gate";
-import { ApplicationVisibilityConditionEditor } from "./application-visibility-condition-editor";
+import { ApplicationReactionConditionEditor } from "./application-reaction-condition-editor";
 import { StudioBlockSetupDialog, type StudioBlockSetupRequest } from "./studio-block-setup-dialog";
 import { StudioQuerySheet } from "./studio-query-sheet";
 import { StudioCanvasToolbar, type StudioCanvasZoom } from "./studio-canvas-toolbar";
@@ -704,9 +705,13 @@ export function useStudioCanvasTab({
       : outcome.result;
   };
 
-  const commandVisibility: Parameters<
-    typeof ApplicationVisibilityConditionEditor
-  >[0]["onCommand"] = (expected, expectedSelection, metadata, condition) => {
+  const commandReaction: Parameters<typeof ApplicationReactionConditionEditor>[0]["onCommand"] = (
+    expected,
+    expectedSelection,
+    metadata,
+    condition,
+    slot,
+  ) => {
     const currentSelection = draft.selection.getSelection();
     if (
       currentSelection?.kind !== "placement" ||
@@ -719,24 +724,25 @@ export function useStudioCanvasTab({
         | {
             kind: "edit";
             source: ApplicationSourceDocument;
-            result: ReturnType<typeof applyStudioVisibilityCondition>;
+            result: ReturnType<typeof applyStudioReactionCondition>;
           }
         | {
             kind: "keep";
-            result: ReturnType<typeof applyStudioVisibilityCondition>;
+            result: ReturnType<typeof applyStudioReactionCondition>;
           } => {
-        const result = applyStudioVisibilityCondition(
+        const result = applyStudioReactionCondition(
           expected,
           liveContext(),
           currentSelection,
           metadata,
           condition,
+          slot,
         );
         return result.kind === "applied"
           ? { kind: "edit", source: result.source, result }
           : { kind: "keep", result };
       },
-      { merge: `visibility:${currentSelection.placementAlias}` },
+      { merge: `${slot}:${currentSelection.placementAlias}` },
     );
     return outcome.kind === "done" ? outcome.result : { kind: "stale" };
   };
@@ -948,16 +954,19 @@ export function useStudioCanvasTab({
           onCommand={commandComposition}
         />
       )}
-      {selected?.kind === "placement" && inspector.status === "resolved" && (
-        <ApplicationVisibilityConditionEditor
-          key={`${draft.lifetime}:${selectionKey}`}
-          context={compositionContext}
-          selection={selected}
-          saved={draft.saved}
-          disabled={draft.locked}
-          onCommand={commandVisibility}
-        />
-      )}
+      {selected?.kind === "placement" &&
+        inspector.status === "resolved" &&
+        studioReactionSlots.map(({ slot }) => (
+          <ApplicationReactionConditionEditor
+            key={`${draft.lifetime}:${selectionKey}:${slot}`}
+            slot={slot}
+            context={compositionContext}
+            selection={selected}
+            saved={draft.saved}
+            disabled={draft.locked}
+            onCommand={commandReaction}
+          />
+        ))}
       {selected?.kind === "page" && inspector.status === "resolved" && (
         <StudioPageValuesPanel
           source={source}
