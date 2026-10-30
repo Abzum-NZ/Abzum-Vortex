@@ -8776,6 +8776,7 @@ begin
   before_closure := vortex_record.named_action_command_closure_internal(
     catalogue, p_record_type_id, p_record_id, p_submitted_values, p_creations
   );
+  if before_closure ->> 'outcome' = 'refused' then return before_closure; end if;
   link_targets := vortex_record.named_action_command_link_targets_internal(
     catalogue, p_record_type_id, p_submitted_values, p_creations
   );
@@ -8881,6 +8882,7 @@ begin
   after_closure := vortex_record.named_action_command_closure_internal(
     catalogue, p_record_type_id, p_record_id, p_submitted_values, p_creations
   );
+  if after_closure ->> 'outcome' = 'refused' then return after_closure; end if;
   if after_closure is null then
     return pg_catalog.jsonb_build_object('outcome', 'restart');
   end if;
@@ -8983,5 +8985,152 @@ comment on function vortex_record.prepare_named_action_command_totals(
   uuid, uuid, uuid, bigint, jsonb, jsonb, uuid, text, uuid, bigint, uuid
 ) is
   'Private named-action command preflight: one merged total closure over the subject and every creation, locked once in canonical concrete identity order. Writes nothing.';
+
+
+
+
+create or replace function vortex_record.record_change_total_closure_internal(
+  p_catalogue jsonb,
+  p_roots jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  root_value jsonb;
+  closure_value jsonb;
+  record_value jsonb;
+  signature_value jsonb;
+  identity_keys jsonb := '{}'::jsonb;
+  record_map jsonb := '{}'::jsonb;
+  signatures jsonb := '[]'::jsonb;
+  root_key text;
+  record_key text;
+  source_key text;
+  target_key text;
+begin
+  if pg_catalog.jsonb_typeof(p_roots) is distinct from 'array' then
+    raise exception using errcode = '22023', message = 'Record calculation roots are invalid';
+  end if;
+  -- Explicit roots keep their caller-assigned keys even when another root's
+  -- closure reaches them first. Concrete parents otherwise use their identity.
+  for root_value in select item.value from pg_catalog.jsonb_array_elements(p_roots) as item(value)
+  loop
+    root_key := root_value ->> 'recordKey';
+    if root_key is null or root_key = '' or root_value ->> 'operation' is null
+      or root_value ->> 'operation' not in ('create', 'update')
+      or pg_catalog.jsonb_typeof(root_value -> 'values') is distinct from 'object' then
+      raise exception using errcode = '22023', message = 'Record calculation root is invalid';
+    end if;
+    if root_value ->> 'operation' = 'update' then
+      record_key := (root_value ->> 'recordTypeId')::uuid::text || ':' ||
+        (root_value ->> 'recordId')::uuid::text;
+      if identity_keys ? record_key then
+        raise exception using errcode = '22023', message = 'Record calculation root is repeated';
+      end if;
+      identity_keys := identity_keys || pg_catalog.jsonb_build_object(record_key, root_key);
+    end if;
+  end loop;
+  if exists (
+    select 1 from pg_catalog.jsonb_array_elements(p_roots) as item(value)
+    group by item.value ->> 'recordKey' having pg_catalog.count(*) > 1
+  ) then
+    raise exception using errcode = '22023', message = 'Record calculation key is repeated';
+  end if;
+  for root_value in
+    select item.value from pg_catalog.jsonb_array_elements(p_roots) as item(value)
+    order by item.value ->> 'recordKey'
+  loop
+    root_key := root_value ->> 'recordKey';
+    -- Each traversal retains the existing 256-record per-root bound. Do not
+    -- skip a root already reached elsewhere: its proposed links can differ.
+    closure_value := vortex_record.discover_relationship_total_closure_internal(
+      p_catalogue, root_value ->> 'operation', (root_value ->> 'recordTypeId')::uuid,
+      (root_value ->> 'recordId')::uuid, root_value -> 'values'
+    );
+    if closure_value is null then return null; end if;
+    for record_value in
+      select item.value from pg_catalog.jsonb_array_elements(closure_value -> 'records') as item(value)
+    loop
+      record_key := case when record_value ->> 'recordKey' = 'root' then root_key
+        else coalesce(identity_keys ->> (record_value ->> 'recordKey'), record_value ->> 'recordKey') end;
+      record_map := record_map || pg_catalog.jsonb_build_object(record_key,
+        record_value || pg_catalog.jsonb_build_object('recordKey', record_key));
+    end loop;
+    if (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(record_map)) > 1000 then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'record_change_too_large',
+        'message', 'This change affects too many related records. Save fewer rows.', 'closureLimit', 1000
+      );
+    end if;
+    for signature_value in
+      select item.value from pg_catalog.jsonb_array_elements(closure_value -> 'signatures') as item(value)
+    loop
+      source_key := signature_value ->> 'from';
+      target_key := signature_value ->> 'to';
+      signatures := signatures || pg_catalog.jsonb_build_array(signature_value || pg_catalog.jsonb_build_object(
+        'from', case when source_key = 'root' then root_key else coalesce(identity_keys ->> source_key, source_key) end,
+        'to', case when target_key = 'root' then root_key else coalesce(identity_keys ->> target_key, target_key) end
+      ));
+    end loop;
+  end loop;
+  return pg_catalog.jsonb_build_object(
+    'records', coalesce((select pg_catalog.jsonb_agg(item.value order by item.key)
+      from pg_catalog.jsonb_each(record_map) as item(key, value)), '[]'::jsonb),
+    'recordCount', (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(record_map)),
+    'signatures', coalesce((select pg_catalog.jsonb_agg(distinct item.value order by item.value)
+      from pg_catalog.jsonb_array_elements(signatures) as item(value)), '[]'::jsonb)
+  );
+exception
+  when statement_too_complex then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'refused', 'reasonCode', 'record_change_too_large',
+      'message', 'This change affects too many related records. Save fewer rows.', 'closureLimit', 256
+    );
+end
+$function$;
+alter function vortex_record.record_change_total_closure_internal(jsonb,jsonb) owner to vortex_record_adapter;
+revoke all on function vortex_record.record_change_total_closure_internal(jsonb,jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+comment on function vortex_record.record_change_total_closure_internal(jsonb,jsonb) is
+  'Private dependency discovery for a complete record command, preserving explicit root keys, deduplicating shared parents, and refusing beyond 256 records per root or 1000 records in the union.';
+
+
+create or replace function vortex_record.named_action_command_closure_internal(
+  p_catalogue jsonb,
+  p_record_type_id uuid,
+  p_record_id uuid,
+  p_submitted_values jsonb,
+  p_creations jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  roots jsonb;
+begin
+  roots := pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+    'recordKey', 'root', 'operation', 'update', 'recordTypeId', p_record_type_id,
+    'recordId', p_record_id, 'values', p_submitted_values
+  )) || coalesce((
+    select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'recordKey', 'create:' || (item.value ->> 'ordinal'), 'operation', 'create',
+      'recordTypeId', item.value -> 'recordTypeId', 'recordId', null, 'values', item.value -> 'values'
+    ) order by item.ordinality)
+    from pg_catalog.jsonb_array_elements(coalesce(p_creations, '[]'::jsonb))
+      with ordinality as item(value, ordinality)
+  ), '[]'::jsonb);
+  return vortex_record.record_change_total_closure_internal(p_catalogue, roots);
+end
+$function$;
+alter function vortex_record.named_action_command_closure_internal(jsonb,uuid,uuid,jsonb,jsonb) owner to vortex_record_adapter;
+revoke all on function vortex_record.named_action_command_closure_internal(jsonb,uuid,uuid,jsonb,jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 reset role;

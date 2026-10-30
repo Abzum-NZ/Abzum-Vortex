@@ -100,6 +100,7 @@ begin
   before_closure := vortex_record.named_action_command_closure_internal(
     catalogue, p_record_type_id, p_record_id, p_submitted_values, p_creations
   );
+  if before_closure ->> 'outcome' = 'refused' then return before_closure; end if;
   link_targets := vortex_record.named_action_command_link_targets_internal(
     catalogue, p_record_type_id, p_submitted_values, p_creations
   );
@@ -205,6 +206,7 @@ begin
   after_closure := vortex_record.named_action_command_closure_internal(
     catalogue, p_record_type_id, p_record_id, p_submitted_values, p_creations
   );
+  if after_closure ->> 'outcome' = 'refused' then return after_closure; end if;
   if after_closure is null then
     return pg_catalog.jsonb_build_object('outcome', 'restart');
   end if;

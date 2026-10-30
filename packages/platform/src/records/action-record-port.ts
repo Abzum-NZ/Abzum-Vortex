@@ -102,7 +102,9 @@ const preparationReason = (reasonCode: string | undefined): RuleReason | undefin
       ? "You must belong to an active owner Group to create this record."
       : reasonCode === "create_target_owner_ambiguous"
         ? "The action requires one owner Group, but you belong to more than one."
-        : `The action could not prepare its record change (${reasonCode}).`;
+        : reasonCode === "record_change_too_large"
+          ? "This change affects too many related records. Save fewer rows."
+          : `The action could not prepare its record change (${reasonCode}).`;
   return { code: reasonCode, message };
 };
 
@@ -646,6 +648,7 @@ const planNamedAction = async (
       preview.correlationId,
       "operation_refused",
       `the relationship totals preparation refused the change (${totalPreparation.reasonCode ?? "no reason code"})`,
+      preparationReason(totalPreparation.reasonCode),
     );
 
   const prepared = await prepare(transaction, state.command, state.activityId, false);
