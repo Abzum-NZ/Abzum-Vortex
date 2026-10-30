@@ -1,11 +1,6 @@
 import { flowRuntimeValueOf } from "../../rules/flow-runtime-value";
 import { sourceFlowCollectionSchema } from "../../workflows/flow-source-contracts";
-import { reachablePageFlows } from "../../workflows/flow-reachability";
-import {
-  sourceItemTree,
-  sourcePageItems,
-  sourcePageShell,
-} from "../application-composition/source-composition";
+import { sourcePageItems } from "../application-composition/source-composition";
 import type {
   ModuleCompilationOutput,
   DefinitionCompilationOutput,
@@ -37,10 +32,7 @@ import {
   type JsonObject,
 } from "./shared";
 import { moduleDependencies } from "../module-dependencies";
-import {
-  CONTROL_BLOCK_RELEASES,
-  FORM_CONTAINER_BLOCK_RELEASE,
-} from "../application-composition-catalogue";
+import { FORM_CONTAINER_BLOCK_RELEASE } from "../application-composition-catalogue";
 
 /**
  * Compiles the flows a module or application owns to permanent identities, refusing an

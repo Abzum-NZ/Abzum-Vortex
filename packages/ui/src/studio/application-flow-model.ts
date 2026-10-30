@@ -499,7 +499,7 @@ export const studioWithoutUnusedFlows = (
  */
 export const studioEventSentence = (event: string, subject: "it" | "the page" = "it"): string => {
   const words = studioEventWords[event] ?? "is used";
-  return /^(is |loads)/.test(words) ? `When ${subject} ${words}` : `When the ${words}`;
+  return /^(is |loads$)/.test(words) ? `When ${subject} ${words}` : `When the ${words}`;
 };
 
 /** A binding as a sentence about the control that raises it: "When Save is used". */
