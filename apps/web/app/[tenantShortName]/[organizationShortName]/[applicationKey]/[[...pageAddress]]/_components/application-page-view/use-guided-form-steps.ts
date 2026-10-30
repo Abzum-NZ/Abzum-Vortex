@@ -111,7 +111,11 @@ export function useGuidedFormSteps({
         return;
       }
       // The answers the step saves are no longer unsaved work once the server has accepted them.
-      submittedFormsRef.current.set(binding.bindingId, { formId: placementId, values, draftSaved: true });
+      submittedFormsRef.current.set(binding.bindingId, {
+        formId: placementId,
+        values,
+        draftSaved: true,
+      });
       await runGuidedBinding(placementId, binding, {
         draft_id: guidedForm.draftId,
         revision: guidedForm.revision,
