@@ -208,23 +208,32 @@ export const createBackgroundFlowExecutor =
 
     const inputs: Record<string, unknown> = { ...claimed.inputs };
     let triggerValues: FlowRuntimeValues | undefined;
-    if (flow.recordInput !== undefined) {
-      const recordTypeId = flow.inputs[flow.recordInput]?.recordTypeIds?.[0];
-      const recordId = claimed.inputs.recordId;
-      if (claimed.origin === "event" && typeof recordId === "string") {
-        inputs[flow.recordInput] = recordId;
-        delete inputs.recordId;
-        delete inputs.occurrenceId;
-      }
-      const named = inputs[flow.recordInput];
-      if (recordTypeId === undefined || typeof named !== "string")
-        return refused("record_unavailable");
-      const read = await ports.currentRecords!.read(session, selection, {
-        recordTypeId,
-        recordId: named,
-      });
-      if (read.outcome !== "read") return refused("record_unavailable");
+    let subject: Readonly<{ recordId: string; revision: number }> | undefined;
+    // The record the run acts on: the occurrence's record for a subscriber, else the record input.
+    const eventTrigger = flow.triggers.find((trigger) => trigger.type === "Event");
+    const recordTypeId =
+      flow.recordInput === undefined
+        ? eventTrigger?.recordTypeId
+        : flow.inputs[flow.recordInput]?.recordTypeIds?.[0];
+    if (claimed.origin === "event") {
+      if (flow.recordInput !== undefined) inputs[flow.recordInput] = inputs.recordId;
+      delete inputs.occurrenceId;
+      if (flow.recordInput !== undefined) delete inputs.recordId;
+    }
+    const recordId =
+      claimed.origin === "event"
+        ? claimed.inputs.recordId
+        : flow.recordInput === undefined
+          ? undefined
+          : inputs[flow.recordInput];
+    if (recordTypeId !== undefined && recordId !== undefined) {
+      if (typeof recordId !== "string") return refused("record_unavailable");
+      const target = { recordTypeId, recordId };
+      const read = await ports.currentRecords!.read(session, selection, target);
+      const revision = await ports.subjects!.read(session, selection, target);
+      if (read.outcome !== "read" || revision.kind !== "read") return refused("record_unavailable");
       triggerValues = read.values;
+      subject = { recordId, revision: revision.revision };
     }
 
     const run: Run = {
@@ -255,6 +264,7 @@ export const createBackgroundFlowExecutor =
         actor: claimed.actorId,
         executionKinds: ["background"],
         ...(triggerValues === undefined ? {} : { triggerRecord: triggerValues }),
+        ...(subject === undefined ? {} : { subject }),
       },
       run.library,
     );

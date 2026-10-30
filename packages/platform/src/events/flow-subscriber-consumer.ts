@@ -57,7 +57,7 @@ export const orderSubscribers = (flows: readonly FlowDefinition[]): FlowDefiniti
  */
 export const createFlowSubscriberConsumer = (
   dependencies: Readonly<{
-    requests: HumanOrganizationRequestDependencies;
+    requests: () => HumanOrganizationRequestDependencies;
     adapter: () => BackendAdapter;
   }>,
 ): EventConsumerAdapter => ({
@@ -68,7 +68,7 @@ export const createFlowSubscriberConsumer = (
     if (!occurrence.success) return { outcome: "completed" };
     const { organizationId, installation, actorId, recordId, occurrenceId } = occurrence.data;
     const opened = await openBackendActorScope(
-      dependencies.requests,
+      dependencies.requests(),
       organizationId,
       installation.applicationRootId,
       actorId,

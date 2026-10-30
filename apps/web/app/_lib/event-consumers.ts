@@ -13,5 +13,5 @@ import { requestDependencies } from "./application-page/installed-context";
 export const eventConsumers = () => [
   createDerivedFieldBackfillConsumer(),
   createSearchEventConsumer(createSearchIndexDependencies()),
-  createFlowSubscriberConsumer({ requests: requestDependencies(), adapter: backendAdapter }),
+  createFlowSubscriberConsumer({ requests: requestDependencies, adapter: backendAdapter }),
 ];
