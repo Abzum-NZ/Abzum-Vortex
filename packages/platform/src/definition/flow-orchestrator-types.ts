@@ -344,6 +344,7 @@ export type FlowOrchestratorResponse = (
       /** Protected effects this run committed, across every resume: a later failure is then partial. */
       committedEffects: number;
       outputs: Readonly<Record<string, JsonValue>>;
+      carriedValues?: string;
       intents: readonly SafeIntent[];
       unavailable: readonly FlowUnavailableNotice[];
     }>
