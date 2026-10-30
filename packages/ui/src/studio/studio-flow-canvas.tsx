@@ -130,6 +130,8 @@ const taskIcons: Readonly<Record<string, LucideIcon>> = {
   "record.query": Search,
   "record.read_fields": ListFilter,
   "record.pin_identity": MapPin,
+  "form.save_draft": Save,
+  "form.discard_draft": Trash2,
   "operation.call": Plug,
   "backend.run": Timer,
   "event.announce": Megaphone,
