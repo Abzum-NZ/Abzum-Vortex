@@ -62,6 +62,7 @@ import type {
   Run,
 } from "./flow-orchestrator-types";
 import type { RecordChangeIntent } from "../records/apply-record-changes";
+import { planBackendTask, runBackendTask, type BackendTaskPlan } from "./flow-backend-task";
 import { planRecordLink } from "./flow-relationship-changes";
 import { planRelationshipCopies } from "./flow-relationship-copies";
 
@@ -102,6 +103,7 @@ export const createFlowTaskRunner = (
         /** The key of every field of the record type, by lower-case field id. */
         fieldKeys: ReadonlyMap<string, string>;
       }>
+    | BackendTaskPlan
     | Readonly<{
         kind: "action";
         command: ExecuteNamedActionCommand;
@@ -159,7 +161,8 @@ export const createFlowTaskRunner = (
         if (
           run.authority.kind !== "person" ||
           dependencies.currentRecords === undefined ||
-          plan.kind === "operation"
+          plan.kind === "operation" ||
+          plan.kind === "backend"
         )
           return undefined;
         const result = isRecord(outputs.result) ? outputs.result : undefined;
@@ -299,7 +302,7 @@ export const createFlowTaskRunner = (
   ): Promise<Readonly<{ recordId: string; revision: number }> | TaskResult> => {
     const recordId = recordIdSchema.safeParse(candidate);
     if (!recordId.success) return { outcome: "validation" };
-    if (run.authority.kind !== "person" || dependencies.subjects === undefined)
+    if (dependencies.subjects === undefined)
       return notAvailable(
         run,
         call,
@@ -653,6 +656,18 @@ export const createFlowTaskRunner = (
         : { outcome: "validation" };
     }
 
+    if (call.taskType === "backend.run") {
+      if (dependencies.backend === undefined)
+        return notAvailable(
+          run,
+          call,
+          "This workflow can't run on the back end here.",
+          "the back-end adapter",
+        );
+      const plan = planBackendTask(call, run, commandId);
+      return plan === undefined ? { outcome: "validation" } : { plan };
+    }
+
     if (call.taskType !== "operation.call")
       return notAvailable(
         run,
@@ -774,8 +789,6 @@ export const createFlowTaskRunner = (
     stored: Record<string, JsonValue>;
     warnings?: readonly BeforeSaveRuleWarning[] | undefined;
   }> => {
-    // Non-person execution contexts stay fail-closed until exact per-task grants are implemented.
-    if (run.authority.kind !== "person") return { result: { outcome: "failed" }, stored: {} };
     const { session, selection } = run.authority;
     if (plan.kind === "changes") {
       if (plan.intents.length === 0) {
@@ -883,6 +896,8 @@ export const createFlowTaskRunner = (
         stored: {},
       };
     }
+
+    if (plan.kind === "backend") return runBackendTask(dependencies, run, plan, call.taskId);
 
     if (plan.kind === "action") {
       const executed = await runNamedAction(session, selection, plan.command);
@@ -1086,7 +1101,10 @@ export const createFlowTaskRunner = (
       }
     }
 
-    const principal: FlowEffectPrincipal = { kind: "person", id: run.authority.session.identityId };
+    const principal: FlowEffectPrincipal =
+      run.authority.kind === "person"
+        ? { kind: "person", id: run.authority.session.identityId }
+        : { kind: "system", id: run.authority.actorId };
     const organizationId = run.authority.selection.organizationId;
     const planned = await planTask(run, state, call);
     if (!("plan" in planned)) return planned;

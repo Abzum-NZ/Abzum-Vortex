@@ -77,7 +77,11 @@ export const runFlowSegment = async (
   > = {};
   const warnings: Record<string, readonly BeforeSaveRuleWarning[]> = {};
   let step = first;
-  while (step.kind === "protected_task" || step.kind === "protected_set") {
+  // A Run on back end task is not part of the segment: it runs after the segment commits.
+  while (
+    (step.kind === "protected_task" && step.call.taskType !== "backend.run") ||
+    step.kind === "protected_set"
+  ) {
     const key =
       step.kind === "protected_set"
         ? JSON.stringify([step.taskPath, step.iteration])

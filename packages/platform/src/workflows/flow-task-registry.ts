@@ -269,6 +269,7 @@ export const validateFlowTaskPlacement = (
   // BeforeSave flow shares its run with the other rules and never places an action-flow task.
   const actionFlow = flow.execution === "transaction" && flow.triggers.length === 0;
   const beforeSave = flow.triggers.some((trigger) => trigger.type === "BeforeSave");
+  const subscriber = flow.triggers.some((trigger) => trigger.type === "Event");
   const lifecycleRule = flow.triggers.some(
     (trigger) =>
       trigger.type === "BeforeSave" &&
@@ -376,7 +377,12 @@ export const validateFlowTaskPlacement = (
                   code: "saved_record_target",
                   message: `In a save transaction, ${definition.title} changes only the record being saved, so it cannot name ${name}`,
                 });
-              else if (flow.execution !== "transaction" && !named)
+              // A subscriber acts on the record of the occurrence that started it unless it names one.
+              else if (
+                flow.execution !== "transaction" &&
+                !named &&
+                !(name === "record" && subscriber)
+              )
                 issues.push({
                   path: [...taskPath, "properties", name],
                   code: "missing_property",
