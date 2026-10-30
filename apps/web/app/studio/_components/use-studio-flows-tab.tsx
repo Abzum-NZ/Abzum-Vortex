@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useMemo, type ReactNode } from "react";
 import {
   describeFailure,
+  checkFlowFormula,
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
 } from "@vortex/platform/schema";
@@ -15,6 +16,7 @@ import {
   applyStudioFlowCreate,
   applyStudioFlowStart,
   describeStudioFlowStarts,
+  describeStudioFlowBehaviour,
   projectStudioFlowCreateChoices,
   projectStudioFlowDraftChoices,
   projectStudioFlowStart,
@@ -22,6 +24,11 @@ import {
   studioFlowConditionContext,
   studioFlowReferenceChoices,
   studioFlowFieldOptions,
+  studioFlowStepTypesAt,
+  studioFlowStepTypesUnder,
+  studioFixedLiteralType,
+  studioFlowValueOf,
+  studioFlowValueSourceOf,
   samePath,
   studioFlowOfSelection,
   studioFlowOutline,
@@ -34,12 +41,15 @@ import {
   type StudioFlowPath,
   type StudioFlowSelection,
   type StudioFlowStartDraft,
+  type StudioFlowStepPickerContext,
   type StudioSemanticSelection,
 } from "@vortex/ui/studio";
 import type { StudioDraft, StudioDraftStep } from "./use-studio-draft";
 import { deferredStudioPart } from "./studio-deferred-part";
 import { useStudioTabVisited } from "./studio-frame";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
+import { StudioFormulaEditor, formulaReferenceName } from "./studio-formula-editor";
+import { FixedInput, startLiteral, StudioFlowValueControl } from "./studio-flow-value-control";
 
 // The workflow canvas pulls in @xyflow/react; load it only when the Flows tab shows a flow.
 const StudioFlowCanvas = dynamic(
@@ -166,6 +176,13 @@ export function useStudioFlowsTab({
   const starts = useMemo(
     () =>
       flowSelection === null ? [] : describeStudioFlowStarts(source, flowSelection, controlLabel),
+    [source, flowSelection, controlLabel],
+  );
+  const behaviour = useMemo(
+    () =>
+      flowSelection === null
+        ? []
+        : describeStudioFlowBehaviour(source, flowSelection, controlLabel),
     [source, flowSelection, controlLabel],
   );
   const draftChoices = useMemo(
@@ -325,6 +342,96 @@ export function useStudioFlowsTab({
         : projectStudioFlowStepActions(context, flowSelection, null).stepTypes,
     [context, flowSelection],
   );
+  const pickerContext = (path: StudioFlowPath): StudioFlowStepPickerContext => {
+    if (outline === null || flowSelection === null) throw new Error("FLOW_PICKER_WITHOUT_FLOW");
+    const references = studioFlowReferenceChoices(
+      source,
+      outline.flow,
+      outline.siblings,
+      flowSelection.moduleKey,
+      path,
+      flowChoices.forms,
+    );
+    return {
+      condition: studioFlowConditionContext(references),
+      fields: studioFlowFieldOptions(source, outline.flow, flowSelection.moduleKey, {}) ?? [],
+      flows: outline.siblings.filter((flow) => flow.id !== outline.flow.id),
+      firstStepTypes: (control, types) => studioFlowStepTypesUnder(types, outline.flow, [control]),
+      renderExpression: ({ id, value, onChange }) => (
+        <StudioFormulaEditor
+          id={id}
+          value={value}
+          disabled={disabled}
+          references={references.map((entry) => ({
+            ...entry,
+            name: formulaReferenceName(entry.reference),
+          }))}
+          onChange={(formula, error) => {
+            if (formula === undefined || error !== undefined) {
+              onChange(undefined, undefined);
+              return;
+            }
+            const type = checkFlowFormula(formula, {
+              nowAllowed: true,
+              reference: (reference) =>
+                references.find(
+                  (entry) => JSON.stringify(entry.reference) === JSON.stringify(reference),
+                )?.type,
+              issue: () => {},
+            });
+            onChange(formula, type);
+          }}
+        />
+      ),
+      renderValue: ({ id, label, type, value, onChange }) => (
+        <StudioFlowValueControl
+          id={id}
+          label={label}
+          valueType={type}
+          references={references}
+          disabled={disabled}
+          value={value === null ? null : studioFlowValueSourceOf(value)}
+          onChange={(next) => onChange(next === null ? null : studioFlowValueOf(next))}
+        />
+      ),
+      renderLiteral: ({ id, label, type, value, onChange }) => {
+        const literalType = type === undefined ? undefined : studioFixedLiteralType(type);
+        if (literalType === undefined)
+          return (
+            <p className="text-sm text-muted-foreground">
+              {type === undefined
+                ? "Enter a valid value expression first."
+                : "This expression type has no fixed case value."}
+            </p>
+          );
+        return (
+          <FixedInput
+            key={literalType}
+            id={id}
+            label={label}
+            literal={value ?? startLiteral(literalType, [])}
+            options={[]}
+            long={false}
+            disabled={disabled}
+            onChange={onChange}
+          />
+        );
+      },
+    };
+  };
+  const typesAt = (path: StudioFlowPath) => {
+    if (outline === null || flowSelection === null) return [];
+    return studioFlowStepTypesAt(
+      stepTypes,
+      outline.flow,
+      outline.entries,
+      path,
+      draft.updatingCanvas || draft.view.failure !== null
+        ? null
+        : (draft.view.flowPlacements?.[flowSelection.moduleKey ?? ""]?.[outline.flow.key]?.tasks ??
+            null),
+    );
+  };
 
   const panel: ReactNode = !panelVisited ? null : (
     <StudioFlowsPanel
@@ -356,25 +463,20 @@ export function useStudioFlowsTab({
         <StudioFlowCanvas
           lists={outline.lists}
           starts={starts}
+          behaviour={behaviour}
+          placement={
+            draft.updatingCanvas || draft.view.failure !== null
+              ? null
+              : (draft.view.flowPlacements?.[flowSelection.moduleKey ?? ""]?.[outline.flow.key] ??
+                null)
+          }
           selectedPath={stepPath}
           onSelect={selectStep}
           appearance={appearance}
-          types={stepTypes}
+          typesAt={(insertion) => typesAt(insertion.listPath)}
           disabled={disabled}
           title={labels.get(selectionKey) ?? "Flow"}
-          choicesAt={(insertion) => ({
-            condition: studioFlowConditionContext(
-              studioFlowReferenceChoices(
-                source,
-                outline.flow,
-                outline.siblings,
-                flowSelection.moduleKey,
-                [...insertion.listPath, insertion.index],
-                flowChoices.forms,
-              ),
-            ),
-            fields: studioFlowFieldOptions(source, outline.flow, flowSelection.moduleKey, {}) ?? [],
-          })}
+          choicesAt={(insertion) => pickerContext([...insertion.listPath, insertion.index])}
           onAdd={(insertion, taskType, settings) => {
             const result = command(context, flowSelection, {
               kind: "insert_task",
@@ -406,6 +508,8 @@ export function useStudioFlowsTab({
         lists={outline.lists}
         stepPath={stepPath}
         choices={flowChoices}
+        pickerContext={pickerContext}
+        typesAt={typesAt}
         start={start}
         controlLabel={controlLabel}
         disabled={disabled}

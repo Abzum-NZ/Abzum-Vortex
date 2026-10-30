@@ -26,6 +26,7 @@ import type {
   StudioViewResources,
   StudioApplicationCanvasFrames,
   StudioApplicationCompiledPageSlots,
+  StudioFlowPlacements,
 } from "../../_lib/studio-application-draft";
 import type {
   StudioCompiledFields,
@@ -59,6 +60,7 @@ type StudioCompiledView = StudioViewResources &
     previewShape: string;
     slots: StudioApplicationCompiledPageSlots | null;
     frames: StudioApplicationCanvasFrames | null;
+    flowPlacements: StudioFlowPlacements | null;
     failure: StudioCompileFailure | null;
     /** Counts compiles taken, so views of the saved draft know to read again. */
     generation: number;
@@ -221,6 +223,7 @@ const viewOf = (
   previewShape,
   slots: loaded.pageCompiledSlots,
   frames: loaded.canvasFrames,
+  flowPlacements: loaded.flowPlacements,
   failure: loaded.compileFailure,
   generation,
   compiledFields: loaded.compiledFields,
@@ -372,6 +375,7 @@ export function useStudioDraft({
             identityReservations: initialView.identityReservations,
             pageCompiledSlots: initialView.slots,
             canvasFrames: initialView.frames,
+            flowPlacements: initialView.flowPlacements,
             compileFailure: initialView.failure,
           },
         ],
