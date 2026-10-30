@@ -24,6 +24,7 @@ import { issueFlowContinuation, peekFlowContinuation } from "./flow-continuation
 import { openContinuationReplay, sealContinuationReplay } from "./flow-continuation-replay";
 import { canonicalJson } from "./canonical-json";
 import { runFlowSegment, runFlowSegmentFromBoundary } from "./flow-segment-run";
+import { createFlowTaskRunner } from "./flow-task-runner";
 import { reportUnexpectedFailure } from "./definition-error";
 import {
   carriesSensitive,
@@ -323,6 +324,23 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       }
       if (elapsedMilliseconds(run) > serverMilliseconds)
         return withCommit(limitExceeded(run, step.state));
+      // The segment that ended before a Run on back end task has committed: the task runs now, in
+      // its own claim, so its child never sees or blocks on the caller's uncommitted changes.
+      if (step.kind === "protected_task" && step.call.taskType === "backend.run") {
+        const result = await createFlowTaskRunner(dependencies, (session, selection, command) =>
+          runNamedAction(session, selection, command),
+        ).run(run, step.state, step.call);
+        step = resumeFlowRun(
+          step.state,
+          { kind: "task_result", ...result },
+          run.library,
+          undefined,
+          undefined,
+          undefined,
+          boundaries,
+        );
+        continue;
+      }
       if (step.kind !== "boundary" || step.nextTaskId === undefined) return withCommit(refused);
       const plan = run.release.plans.get(run.flowId);
       const segmentId = plan?.taskSegmentIds.get(step.nextTaskId);
@@ -571,7 +589,23 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           first,
         );
         if (admitted.kind !== "completed") return admitted;
-        const { step, run: attempt } = admitted.value;
+        const { run: attempt } = admitted.value;
+        let step = admitted.value.step;
+        // The segment committed before its Run on back end task; the task runs now.
+        if (step.kind === "protected_task" && step.call.taskType === "backend.run") {
+          const result = await createFlowTaskRunner(
+            dependencies,
+            (nextSession, nextSelection, command) =>
+              runNamedAction(nextSession, nextSelection, command),
+          ).run(attempt, step.state, step.call);
+          step = resumeFlowRun(
+            step.state,
+            { kind: "task_result", ...result },
+            attempt.library,
+            undefined,
+            segment,
+          );
+        }
         if ((step.kind !== "boundary" && step.kind !== "finished") || step.result === undefined)
           return refused;
         const response = finished(attempt, {

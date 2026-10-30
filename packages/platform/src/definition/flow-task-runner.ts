@@ -305,7 +305,7 @@ export const createFlowTaskRunner = (
   ): Promise<Readonly<{ recordId: string; revision: number }> | TaskResult> => {
     const recordId = recordIdSchema.safeParse(candidate);
     if (!recordId.success) return { outcome: "validation" };
-    if (run.authority.kind !== "person" || dependencies.subjects === undefined)
+    if (dependencies.subjects === undefined)
       return notAvailable(
         run,
         call,
