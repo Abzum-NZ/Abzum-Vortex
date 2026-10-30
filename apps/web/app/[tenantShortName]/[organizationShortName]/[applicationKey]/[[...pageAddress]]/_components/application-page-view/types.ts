@@ -61,6 +61,8 @@ export type DispatchOutcome = Readonly<{
 export type SubmittedForm = Readonly<{
   formId: string;
   values: Readonly<Record<string, unknown>>;
+  /** A guided step: its answers are saved when the flow answers, though no record is committed. */
+  draftSaved?: true;
 }>;
 
 export type RefreshedPlacementData = Readonly<{

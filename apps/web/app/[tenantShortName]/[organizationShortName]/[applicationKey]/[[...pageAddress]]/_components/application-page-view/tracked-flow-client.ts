@@ -26,9 +26,10 @@ export function trackFlowInvokeClient(
     } else if (
       response.kind === "result" &&
       response.failure === undefined &&
-      response.descriptor.commit === "confirmed"
+      (response.descriptor.commit === "confirmed" || submission.draftSaved === true)
     ) {
-      // The server has confirmed the submitted values before its Navigate intent is presented.
+      // The server has confirmed the submitted values (a record, or a guided step's draft) before
+      // its Navigate intent is presented.
       unsavedWorkRegistry?.markSaved(submission.formId, submission.values);
       const store = controlDraftsRef?.current;
       if (store === undefined) return;

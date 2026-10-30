@@ -258,6 +258,7 @@ export function applicationControlBindingRule(
     if (!parsed.success || !isApplicationSource(parsed.data)) return [];
     const source = parsed.data as ApplicationSourceDocument;
     const body = object(source.body);
+    const summaryForms = summaryFormAliases(source.body);
     const boundEvents = new Map<string, Set<string>>();
     const failures = [
       ...applicationFlowBindingUniquenessRule(source),
@@ -275,10 +276,10 @@ export function applicationControlBindingRule(
       const bound = boundEvents.get(alias) ?? new Set<string>();
       const unbound =
         blockKey === formContainerBlockKey
-          ? (containsSubmitButton(placement) ||
-              pageType === "form" ||
-              pageType === "guided_form") &&
-            !bound.has("form_submit")
+          ? pageType === "guided_form"
+            ? // A step's Continue is its step change; only the summary form submits.
+              !bound.has(summaryForms.has(alias) ? "form_submit" : "guided_step_changed")
+            : (containsSubmitButton(placement) || pageType === "form") && !bound.has("form_submit")
           : blockKey === actionButtonBlockKey &&
             sourceButtonActionKind(placement) !== "submit" &&
             sourceButtonActionKind(placement) !== "reset" &&

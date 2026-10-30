@@ -81,7 +81,11 @@ export const createGuidedDraftPort = (
       if (computed === undefined) return { outcome: "unavailable" };
       return {
         outcome: "saved",
-        stepId: earlierGuidedStepId(loaded.steps, computed, input.requestedStep),
+        stepId: earlierGuidedStepId(
+          loaded.steps,
+          computed,
+          input.requestedStep === "" ? undefined : input.requestedStep,
+        ),
         revision: result.value.draft.revision,
         valid: update.valid,
       };

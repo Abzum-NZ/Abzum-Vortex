@@ -411,6 +411,7 @@ export function ApplicationPageViewContent({
     showPageMessage,
     applyDispatch,
     formBlock,
+    submittedFormsRef,
     setQuery,
     requestedStepId,
   });

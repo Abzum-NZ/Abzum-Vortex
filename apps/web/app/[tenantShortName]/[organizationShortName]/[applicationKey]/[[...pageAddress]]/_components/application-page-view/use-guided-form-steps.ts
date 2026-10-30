@@ -5,7 +5,7 @@ import type {
   ApplicationPageModel,
   PlacementFlowBinding,
 } from "../../../../../../_lib/application-page";
-import type { PageMessageDraft } from "./types";
+import type { PageMessageDraft, SubmittedForm } from "./types";
 import type { useApplyDispatch } from "./use-apply-dispatch";
 import { asComponentBinding } from "./event-values";
 import { placementIdsInLayout } from "./placement-helpers";
@@ -20,6 +20,7 @@ export function useGuidedFormSteps({
   showPageMessage,
   applyDispatch,
   formBlock,
+  submittedFormsRef,
   setQuery,
   requestedStepId,
 }: Readonly<{
@@ -31,6 +32,7 @@ export function useGuidedFormSteps({
   showPageMessage: (message: PageMessageDraft | undefined) => void;
   applyDispatch: ReturnType<typeof useApplyDispatch>["applyDispatch"];
   formBlock: ReturnType<typeof createFormBlockRuntime>;
+  submittedFormsRef: RefObject<Map<string, SubmittedForm>>;
   setQuery: (change: (parameters: URLSearchParams) => void) => void;
   requestedStepId: RefObject<string | undefined>;
 }>) {
@@ -108,15 +110,18 @@ export function useGuidedFormSteps({
         showPageMessage(unavailableNotice);
         return;
       }
+      // The answers the step saves are no longer unsaved work once the server has accepted them.
+      submittedFormsRef.current.set(binding.bindingId, { formId: placementId, values, draftSaved: true });
       await runGuidedBinding(placementId, binding, {
         draft_id: guidedForm.draftId,
         revision: guidedForm.revision,
         step: stepId,
-        ...(requested === undefined ? {} : { requested_step: requested }),
+        // A binding reads every input it declares, so no step asked for is the empty text.
+        requested_step: requested ?? "",
         values,
       });
     },
-    [model.bindings, model.guidedForm, runGuidedBinding, showPageMessage],
+    [model.bindings, model.guidedForm, runGuidedBinding, showPageMessage, submittedFormsRef],
   );
 
   const guidedCancel = useMemo(() => {
