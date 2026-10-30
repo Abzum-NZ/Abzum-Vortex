@@ -151,42 +151,14 @@ export {
 export { arrangeDataset, arrangeProtectedBoard } from "./arrangements";
 
 export {
-  organizationAccountReferenceChoiceCommandSchema,
-  recordReferenceChoiceCommandSchema,
-  referenceChoiceCommandSchema,
-  referenceChoiceOptionSchema,
-  referenceChoicePageSchema,
-  referenceChoiceRefusalReasonCodes,
-  referenceChoiceRefusalSchema,
-  referenceChoiceResultSchema,
-  referenceChoiceValueSchema,
-  type OrganizationAccountReferenceChoiceCommand,
-  type RecordReferenceChoiceCommand,
-  type ReferenceChoiceCommand,
-  type ReferenceChoiceOption,
-  type ReferenceChoicePage,
-  type ReferenceChoiceRefusal,
-  type ReferenceChoiceRefusalReasonCode,
-  type ReferenceChoiceResult,
-  type ReferenceChoiceValue,
-} from "./reference-choice-contracts";
-
-export {
   createRecordChoiceReader,
   recordChoicePageSizes,
   recordChoiceTargetSchema,
   recordTitleMaximumLength,
   titleText,
   type RecordChoice,
+  type RecordChoiceAdmission,
   type RecordChoiceCommand,
   type RecordChoiceRead,
   type RecordChoiceTarget,
 } from "./record-choices";
-
-export {
-  createReferenceChoiceService,
-  projectReferenceChoiceInputValues,
-  resolveReferenceChoiceSelection,
-  type ReferenceChoiceInputValues,
-  type ReferenceChoiceServiceDependencies,
-} from "./reference-choice-service";

@@ -77,6 +77,7 @@ const directSourceKeyMap: Readonly<Record<string, string>> = Object.freeze({
   workflow: "workflowId",
   page: "pageId",
   query: "queryId",
+  flow: "flowId",
   block: "blockId",
   connection: "connectionBindingId",
   node: "nodeId",

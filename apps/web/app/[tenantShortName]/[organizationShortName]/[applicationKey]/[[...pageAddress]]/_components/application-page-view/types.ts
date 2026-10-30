@@ -1,10 +1,6 @@
 import type { ControlSemanticEvent, FormBlockRuntime, PageMessageDraft } from "@vortex/ui";
 export type { PageMessageDraft } from "@vortex/ui";
-import type {
-  FlowFieldCorrection,
-  ReferenceChoiceSelectionEvidenceMap,
-  RecordsSelectionInput,
-} from "@vortex/platform/schema";
+import type { FlowFieldCorrection, RecordsSelectionInput } from "@vortex/platform/schema";
 import type { ApplicationPageModel, PageDataState } from "../../../../../../_lib/application-page";
 import type {
   GuidedFormAbandonRequest,
@@ -82,7 +78,6 @@ export type DispatchOutcome = Readonly<{
 export type SubmittedForm = Readonly<{
   formId: string;
   values: Readonly<Record<string, unknown>>;
-  choiceEvidence?: ReferenceChoiceSelectionEvidenceMap;
 }>;
 
 export type RefreshedPlacementData = Readonly<{

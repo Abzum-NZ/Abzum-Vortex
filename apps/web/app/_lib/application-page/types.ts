@@ -81,14 +81,10 @@ export type PlacementReadModel = Readonly<{
   }>;
   /** Displayed values of readable edit fields, used only to omit unchanged fields on submit. */
   editFormBaselines: Readonly<Record<string, Readonly<Record<string, JsonValue>>>>;
-  /** Dynamic reference-choice placements within the viewer's projected page. */
-  referenceChoiceInputs: readonly Readonly<{
-    placementId: string;
-    formId: string;
-    fieldKey: string;
-  }>[];
-  /** The link fields' record pickers within the viewer's projected page, by placement identity. */
-  linkInputPlacementIds: readonly string[];
+  /** The pickers that ask for their options within the viewer's projected page, by placement identity. */
+  optionPlacementIds: readonly string[];
+  /** For those whose options are worked out from the form's draft: the keys of the fields read. */
+  optionInputKeys: Readonly<Record<string, readonly string[]>>;
   guidedForm?: Readonly<{
     draftId: string;
     revision: number;

@@ -2,7 +2,9 @@ import {
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
   FORM_CONTAINER_BLOCK_RELEASE,
+  optionFilterKeys,
   placementSettings,
+  type OptionFilterKey,
 } from "@vortex/platform/server";
 import {
   type PageDefinition,
@@ -143,6 +145,19 @@ export const linkInputTargets = (
       ? [{ moduleRootId: item.recordType.moduleRootId, recordTypeId: item.recordType.recordTypeId }]
       : [],
   );
+};
+
+/** The option filter a link input declares, from the closed platform catalogue. */
+export const placementOptionFilter = (
+  settings: Readonly<Record<string, unknown>>,
+): OptionFilterKey | undefined => {
+  const filter = settings.option_filter;
+  return isRecord(filter) &&
+    filter.kind === "choice" &&
+    typeof filter.value === "string" &&
+    (optionFilterKeys as readonly string[]).includes(filter.value)
+    ? (filter.value as OptionFilterKey)
+    : undefined;
 };
 
 /** The record-reference inputs that the installed flow uses for selected-field reads. */

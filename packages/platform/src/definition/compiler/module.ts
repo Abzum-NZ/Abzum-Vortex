@@ -14,6 +14,7 @@ import { platformServiceProtectedOperationReference } from "./protected-operatio
 import { dependencyOrder, resolvedDependencies } from "./dependencies";
 import { fieldSettings, validatePersonLinkApplicationAccess } from "./field-settings";
 import { compileCheckedFlowSources } from "./flow-sources";
+import { validateFieldOptionsFlows } from "./options-flows";
 import {
   compilePermissionFieldPolicy,
   compilePermissionRecordScope,
@@ -569,6 +570,11 @@ export function compileParsedModuleRequest(
         dependencyOutputs,
         flowSet.flows,
       ),
+    );
+    validateFieldOptionsFlows(
+      canonical.content.recordTypes as unknown as JsonObject[],
+      canonical.content.flows,
+      definitionKey,
     );
     // Existing provenance owns the unchanged Module field model. The flow compiler supplies the
     // exact paths of the flows, so neither is described twice.

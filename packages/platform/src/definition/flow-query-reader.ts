@@ -9,7 +9,7 @@ import type { FlowOrchestratorDependencies } from "./flow-orchestrator-types";
 /** One bounded page of a declared query, read under the segment's current authority. */
 export const createFlowQueryReader = (
   dependencies: ProtectedQueryServiceDependencies,
-  installation: InstalledFlowBindings,
+  installation: Pick<InstalledFlowBindings, "organizationId" | "applicationRootId" | "modules">,
 ): NonNullable<FlowOrchestratorDependencies["queryRecords"]> => {
   const queries = createProtectedQueryService(dependencies);
   return {
