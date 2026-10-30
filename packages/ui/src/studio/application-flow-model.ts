@@ -1,8 +1,10 @@
 import { recordsTableInlineEditEvent, recordsTableRowEditEvent } from "@vortex/platform/schema";
 import {
   applicationRootIdSchema,
+  applicationFlowReferenceEnvironments,
   applicationSourceDocumentSchema,
   builderKeySchema,
+  flowRuntimeValueOf,
   flowMaximumTaskCount,
   flowMaximumTaskNestingDepth,
   flowTaskRegistry,
@@ -348,6 +350,45 @@ const issueSignature = (issue: FlowValidationIssue): string =>
   `${issue.taskId ?? ""}|${issue.ruleCode}|${issue.message}`;
 
 /** The one flow validator, on the parsed flow (defaults filled), with Run flow targets among its siblings. */
+/**
+ * What the one flow validator checks a flow in this draft against: the flows it can run and the
+ * pages it runs on (their values and forms), as publication reads them.
+ */
+export const studioFlowValidationOptions = (
+  source: ApplicationSourceDocument,
+  flow: SourceFlow,
+  siblings: readonly SourceFlow[],
+): Parameters<typeof validateFlow>[1] => {
+  const recordFields = new Map<string, Record<string, string>>();
+  for (const module of source.body.modules)
+    for (const record of module.record_types)
+      recordFields.set(
+        `${module.key}:${record.key}`,
+        Object.fromEntries(
+          record.fields.map((field) => [
+            field.key,
+            flowRuntimeValueOf(
+              field.type,
+              null,
+              (field.settings as { result_type?: string }).result_type,
+            ).type,
+          ]),
+        ),
+      );
+  return {
+    targetFlow: (reference) =>
+      [...siblings, ...source.body.flows].find(
+        (candidate) => candidate.id === reference || candidate.key === reference,
+      ),
+    referenceEnvironments: applicationFlowReferenceEnvironments(
+      source.body,
+      flow,
+      source.body.flows,
+      (reference) => recordFields.get(reference),
+    ),
+  };
+};
+
 const flowIssues = (
   parsed: ApplicationSourceDocument,
   selection: StudioFlowSelection,
@@ -355,10 +396,7 @@ const flowIssues = (
   const siblings = studioFlowCollection(parsed, selection.moduleKey);
   const flow = siblings?.find((candidate) => candidate.id === selection.flowAlias);
   if (siblings === undefined || flow === undefined) return undefined;
-  return validateFlow(flow, {
-    targetFlow: (reference) =>
-      siblings.find((candidate) => candidate.id === reference || candidate.key === reference),
-  });
+  return validateFlow(flow, studioFlowValidationOptions(parsed, flow, siblings));
 };
 
 /**
@@ -454,8 +492,22 @@ export const studioWithoutUnusedFlows = (
       return result.kind === "deleted" ? result.source : current;
     }, source);
 
+/**
+ * An event as a sentence: "When it is used", "When the page loads", "When the field changes". The
+ * words say what happens to the thing that raises the event: a verb ("is used", "loads") follows
+ * the subject; a noun ("field changes") stands on its own.
+ */
+export const studioEventSentence = (event: string, subject: "it" | "the page" = "it"): string => {
+  const words = studioEventWords[event] ?? "is used";
+  return /^(is |loads)/.test(words) ? `When ${subject} ${words}` : `When the ${words}`;
+};
+
+/** A binding as a sentence about the control that raises it: "When Save is used". */
+export const studioBindingSentence = (control: string, event: string): string =>
+  `When ${control} ${studioEventWords[event] ?? "is used"}`;
+
 /** What each component event reads as after the thing that raises it: "is used", "loads". */
-export const studioEventWords: Readonly<Record<string, string>> = {
+const studioEventWords: Readonly<Record<string, string>> = {
   action: "is used",
   row_clicked: "row is clicked",
   row_action: "row action is used",
@@ -533,9 +585,6 @@ export const describeStudioFlowStarts = (
       ? []
       : source.body.flow_bindings
           .filter((binding) => binding.flow === flow.id || binding.flow === flow.key)
-          .map(
-            (binding) =>
-              `When ${controlLabel(binding.control)} ${studioEventWords[binding.event] ?? "is used"}`,
-          );
+          .map((binding) => studioBindingSentence(controlLabel(binding.control), binding.event));
   return [...triggers, ...bindings];
 };

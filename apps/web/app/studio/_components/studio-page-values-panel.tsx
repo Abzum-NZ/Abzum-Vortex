@@ -129,7 +129,7 @@ export function StudioPageValuesPanel({
         </p>
       )}
       <form onSubmit={add} className="space-y-2">
-        <Label className="text-xs">
+        <Label className="flex flex-col items-start gap-1 text-xs">
           Label
           <Input
             required
@@ -139,7 +139,7 @@ export function StudioPageValuesPanel({
             onChange={(event) => setLabel(event.target.value)}
           />
         </Label>
-        <Label className="text-xs">
+        <Label className="flex flex-col items-start gap-1 text-xs">
           Name (lower case, no spaces)
           <Input
             required
@@ -149,7 +149,7 @@ export function StudioPageValuesPanel({
             onChange={(event) => setName(event.target.value)}
           />
         </Label>
-        <Label className="text-xs">
+        <Label className="flex flex-col items-start gap-1 text-xs">
           Type
           <NativeSelect
             value={type}
@@ -164,7 +164,7 @@ export function StudioPageValuesPanel({
           </NativeSelect>
         </Label>
         {type === "money" && (
-          <Label className="text-xs">
+          <Label className="flex flex-col items-start gap-1 text-xs">
             Currency
             <NativeSelect
               value={currency}

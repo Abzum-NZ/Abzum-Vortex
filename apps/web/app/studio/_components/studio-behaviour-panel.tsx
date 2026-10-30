@@ -215,7 +215,7 @@ function BehaviourEvent({
         <>
           {others.length > 0 && (
             <>
-              <Label className="text-xs">
+              <Label className="flex flex-col items-start gap-1 text-xs">
                 Run another flow
                 <NativeSelect
                   value=""
@@ -233,7 +233,7 @@ function BehaviourEvent({
                   ))}
                 </NativeSelect>
               </Label>
-              <Label className="text-xs">
+              <Label className="flex flex-col items-start gap-1 text-xs">
                 Combine with another flow
                 <NativeSelect
                   value=""
@@ -351,7 +351,7 @@ function BindingSettings({
             </>
           )}
         </div>
-        <Label className="text-xs">
+        <Label className="flex flex-col items-start gap-1 text-xs">
           Wait before starting (milliseconds, at most 250)
           <Input
             type="number"
@@ -367,7 +367,7 @@ function BindingSettings({
             }}
           />
         </Label>
-        <Label className="text-xs">
+        <Label className="flex flex-col items-start gap-1 text-xs">
           When it happens again while the flow runs
           <NativeSelect
             value={settings.concurrency}
@@ -384,7 +384,7 @@ function BindingSettings({
             ))}
           </NativeSelect>
         </Label>
-        <Label className="text-xs">
+        <Label className="flex flex-col items-start gap-1 text-xs">
           While it runs
           <NativeSelect
             value={settings.exclusive}
@@ -409,7 +409,7 @@ function BindingSettings({
             ))}
           </NativeSelect>
         </Label>
-        <Label className="text-xs">
+        <Label className="flex flex-col items-start gap-1 text-xs">
           Give up after (seconds{settings.exclusive === "none" ? ", optional" : ", required"})
           <Input
             type="number"

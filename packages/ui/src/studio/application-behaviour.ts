@@ -18,7 +18,7 @@ import {
   type StudioFlowCreateCommand,
 } from "./application-flow-create";
 import type { StudioBorrowedChoices } from "./contextual-palette";
-import { studioEventWords, studioWithoutUnusedFlows } from "./application-flow-model";
+import { studioEventSentence, studioWithoutUnusedFlows } from "./application-flow-model";
 import { studioFlowLabel } from "./semantic-selection";
 
 /**
@@ -55,7 +55,7 @@ export const studioBehaviourControl = (target: StudioBehaviourTarget): string =>
   target.kind === "placement" ? target.placementAlias : target.pageAlias;
 
 const eventLabel = (target: StudioBehaviourTarget, event: string): string =>
-  `When ${target.kind === "page" ? "the page" : "it"} ${studioEventWords[event] ?? "is used"}`;
+  studioEventSentence(event, target.kind === "page" ? "the page" : "it");
 
 const flowOf = (source: ApplicationSourceDocument, reference: string): SourceFlow | undefined =>
   source.body.flows.find((flow) => flow.id === reference || flow.key === reference);

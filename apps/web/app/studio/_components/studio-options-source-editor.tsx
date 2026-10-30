@@ -88,7 +88,7 @@ export function StudioOptionsSourceEditor({
   };
   return (
     <StudioInspectorGroup title="Where the options come from">
-      <Label className="text-xs">
+      <Label className="flex flex-col items-start gap-1 text-xs">
         Options source
         <NativeSelect
           value={kind}
@@ -106,7 +106,7 @@ export function StudioOptionsSourceEditor({
         </NativeSelect>
       </Label>
       {kind === "query" && (
-        <Label className="text-xs">
+        <Label className="flex flex-col items-start gap-1 text-xs">
           Query
           <NativeSelect
             value={query}
@@ -126,7 +126,7 @@ export function StudioOptionsSourceEditor({
         </Label>
       )}
       {kind === "flow" && (
-        <Label className="text-xs">
+        <Label className="flex flex-col items-start gap-1 text-xs">
           Options flow
           <NativeSelect
             value={flow}
@@ -146,7 +146,7 @@ export function StudioOptionsSourceEditor({
         </Label>
       )}
       {needed.map((input) => (
-        <Label key={input.key} className="text-xs">
+        <Label key={input.key} className="flex flex-col items-start gap-1 text-xs">
           {input.label} is filled by
           <NativeSelect
             value={inputs[input.key] ?? ""}

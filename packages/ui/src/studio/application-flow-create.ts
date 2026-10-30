@@ -31,7 +31,8 @@ import { studioFlowCallerNames } from "./application-flow-start";
 import { projectStudioFlowDraftChoices } from "./application-flow-step-form";
 import {
   describeStudioFlowLocation,
-  studioEventWords,
+  studioEventSentence,
+  studioFlowValidationOptions,
   studioFlowKeyFrom as keyFrom,
   studioWords,
 } from "./application-flow-model";
@@ -65,8 +66,7 @@ export type StudioFlowControlEvent = SourceBinding["event"];
 export type StudioFlowAuthoringEvent = StudioFlowControlEvent;
 
 /** "When it is used": the one wording of an event, from the words every Studio surface shares. */
-export const studioFlowEventTitle = (event: string): string =>
-  `When it ${studioEventWords[event] ?? "is used"}`;
+export const studioFlowEventTitle = (event: string): string => studioEventSentence(event);
 
 /** Tables expose row actions through declared menu entries; other row surfaces use their own activation. */
 const hasRowActionMenu = (item: ReturnType<typeof sourcePageItems>[number] | undefined): boolean =>
@@ -515,13 +515,13 @@ const created = (
           : `The new flow is not valid: ${first.message} (${first.path.map(String).join(", ")}).`,
     };
   }
-  const issue = validateFlow(flow, {
-    targetFlow: (reference) =>
-      [
-        ...parsed.data.body.flows,
-        ...parsed.data.body.modules.flatMap((module) => module.flows),
-      ].find((entry) => entry.id === reference || entry.key === reference),
-  })[0];
+  const issue = validateFlow(
+    flow,
+    studioFlowValidationOptions(parsed.data, flow, [
+      ...parsed.data.body.flows,
+      ...parsed.data.body.modules.flatMap((module) => module.flows),
+    ]),
+  )[0];
   if (issue !== undefined)
     return {
       kind: "refused",

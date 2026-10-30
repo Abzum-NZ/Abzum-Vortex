@@ -27,6 +27,7 @@ import {
   samePath,
   studioWords,
   studioFlowKeyFrom,
+  studioFlowValidationOptions,
   studioWithoutUnusedFlows,
   studioFlowDefinitionOf,
   studioFlowListAt,
@@ -394,8 +395,8 @@ const stepBuilderChoices = (
   flow: SourceFlow,
   source: Readonly<ApplicationSourceDocument>,
   context: StudioFlowContext,
-): StudioFlowStepBuilderChoice[] =>
-  Object.entries(definition.properties).flatMap(([property, declaration]) => {
+): StudioFlowStepBuilderChoice[] => {
+  const choices = Object.entries(definition.properties).flatMap(([property, declaration]) => {
     if (!declaration.required) return [];
     const options = builderChoiceOptions(declaration.type, flow, source, context);
     const [label, unset] = builderChoiceLabels[property] ?? [
@@ -404,6 +405,21 @@ const stepBuilderChoices = (
     ];
     return options === undefined ? [] : [{ property, label, unset, options }];
   });
+  // Set value changes a page value: which one is the builder's choice, from the values the flow's
+  // pages declare. (Its form and field are the other way to name a target, chosen on the step.)
+  if (definition.type === "interface.set_value")
+    choices.push({
+      property: "value",
+      label: "Page value to set",
+      unset: "Choose a page value before adding the step",
+      options: projectStudioFlowDraftChoices({
+        ...context,
+        source: source as ApplicationSourceDocument,
+        flow,
+      }).pageValues.map((entry) => ({ value: entry.name, label: entry.label })),
+    });
+  return choices;
+};
 
 /**
  * A step with its required settings: the flow's own values, and the builder's pick for every
@@ -418,8 +434,34 @@ const seededTask = (
   picks: Readonly<Record<string, string>>,
 ): RegisteredTask | undefined => {
   const properties: RegisteredTask["properties"] = {};
+  if (definition.type === "interface.set_value") {
+    const value = picks.value;
+    const choice = choices.find((entry) => entry.property === "value");
+    if (value === undefined || choice?.options.some((option) => option.value === value) !== true)
+      return undefined;
+    properties.value = text(value);
+    // It starts as an empty value of the page value's own type, which the builder then sets.
+    const declared = source.body.pages
+      .map((page) => page.values?.[value])
+      .find((entry) => entry !== undefined);
+    properties.to = {
+      kind: "literal",
+      literal:
+        declared?.type === "money"
+          ? { type: "money", value: { amount: "0", currency: String(declared.currency) } }
+          : declared?.type === "decimal_number"
+            ? { type: "decimal_number", value: "0" }
+            : declared?.type === "yes_no"
+              ? { type: "yes_no", value: false }
+              : declared?.type === "json"
+                ? { type: "json", value: [] }
+                : { type: "text", value: "" },
+    } as FlowValue;
+  }
   for (const [key, declaration] of Object.entries(definition.properties)) {
     if (!declaration.required) continue;
+    // Set value's target was chosen above, and its new value starts from that value's type.
+    if (definition.type === "interface.set_value" && key === "to") continue;
     const choice = choices.find((entry) => entry.property === key);
     const pick = picks[key];
     if (choice !== undefined) {
@@ -1281,13 +1323,13 @@ export const applyStudioFlowCombine = (
         : `The combined flow is not valid: ${issue.message} (${issue.path.map(String).join(", ")}).`,
     );
   }
-  const problem = validateFlow(combined, {
-    targetFlow: (reference) =>
-      [
-        ...parsed.data.body.flows,
-        ...parsed.data.body.modules.flatMap((module) => module.flows),
-      ].find((entry) => entry.id === reference || entry.key === reference),
-  })[0];
+  const problem = validateFlow(
+    combined,
+    studioFlowValidationOptions(parsed.data, combined, [
+      ...parsed.data.body.flows,
+      ...parsed.data.body.modules.flatMap((module) => module.flows),
+    ]),
+  )[0];
   if (problem !== undefined) return refuse(`The combined flow is not valid: ${problem.message}.`);
   return {
     kind: "applied",
