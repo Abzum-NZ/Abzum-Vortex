@@ -100,9 +100,13 @@ begin
       'outcome', 'conflict', 'correlationId', context_value -> 'correlationId'
     );
   end if;
-  access_decision := vortex_access.evaluate_organization_record_access_internal(
-    access_loaded -> 'declaration', p_record_id, access_loaded -> 'facts'
-  );
+  access_decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+    pg_catalog.jsonb_build_object(
+      'declaration', access_loaded -> 'declaration',
+      'recordId', p_record_id,
+      'facts', access_loaded -> 'facts'
+    )
+  )) -> 0);
   if access_decision ->> 'outcome' <> 'allowed' then
     perform vortex_record.append_record_activity_internal(p_activity_id, 'execute_named_action', array[p_record_id]::uuid[], array[]::uuid[], 'refused');
     return pg_catalog.jsonb_build_object('outcome', 'refused_recorded');
@@ -193,20 +197,25 @@ begin
       and (lock_entry ->> 'recordId')::uuid = p_record_id then
       continue;
     end if;
-    target_loaded := vortex_record.load_record_access_facts_internal(
-      (lock_entry ->> 'recordTypeId')::uuid, 'read',
-      (lock_entry ->> 'recordId')::uuid, null, null::jsonb
-    );
+    target_loaded := (vortex_record.load_record_access_facts_internal(
+      'read', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordTypeId', (lock_entry ->> 'recordTypeId')::uuid,
+        'recordId', (lock_entry ->> 'recordId')::uuid
+      ))
+    ) -> 0);
     if target_loaded ->> 'outcome' <> 'loaded'
       or pg_catalog.jsonb_typeof(target_loaded -> 'declaration') <> 'object' then
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'relationship_target_unavailable'
       );
     end if;
-    target_decision := vortex_access.evaluate_organization_record_access_internal(
-      target_loaded -> 'declaration', (lock_entry ->> 'recordId')::uuid,
-      target_loaded -> 'facts'
-    );
+    target_decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'declaration', target_loaded -> 'declaration',
+        'recordId', (lock_entry ->> 'recordId')::uuid,
+        'facts', target_loaded -> 'facts'
+      )
+    )) -> 0);
     if target_decision ->> 'outcome' <> 'allowed' then
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'relationship_target_unavailable'
@@ -247,9 +256,13 @@ begin
   if access_loaded ->> 'outcome' <> 'loaded' then
     return pg_catalog.jsonb_build_object('outcome', 'restart');
   end if;
-  access_decision := vortex_access.evaluate_organization_record_access_internal(
-    access_loaded -> 'declaration', p_record_id, access_loaded -> 'facts'
-  );
+  access_decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+    pg_catalog.jsonb_build_object(
+      'declaration', access_loaded -> 'declaration',
+      'recordId', p_record_id,
+      'facts', access_loaded -> 'facts'
+    )
+  )) -> 0);
   if access_decision ->> 'outcome' <> 'allowed' then
     return pg_catalog.jsonb_build_object('outcome', 'restart');
   end if;

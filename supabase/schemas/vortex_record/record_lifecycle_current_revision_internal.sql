@@ -7,16 +7,23 @@ declare
   decision jsonb;
 begin
   begin
-    loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'delete', p_record_id, null, null::jsonb
-    );
+    loaded := (vortex_record.load_record_access_facts_internal(
+      'delete', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordTypeId', p_record_type_id,
+        'recordId', p_record_id
+      ))
+    ) -> 0);
     if loaded ->> 'outcome' is distinct from 'loaded'
       or pg_catalog.jsonb_typeof(loaded -> 'declaration') is distinct from 'object' then
       return null;
     end if;
-    decision := vortex_access.evaluate_organization_record_access_internal(
-      loaded -> 'declaration', p_record_id, loaded -> 'facts'
-    );
+    decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'declaration', loaded -> 'declaration',
+        'recordId', p_record_id,
+        'facts', loaded -> 'facts'
+      )
+    )) -> 0);
     if decision ->> 'outcome' is distinct from 'allowed' then
       return null;
     end if;
