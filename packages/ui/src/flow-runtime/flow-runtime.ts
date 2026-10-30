@@ -231,12 +231,33 @@ export function createFlowRuntimeState() {
           release();
         }
       };
+      let started = false;
+      const startScheduled = () => {
+        started = true;
+        return start();
+      };
       const scheduled =
         concurrency === "queue"
-          ? (entry.tail ?? Promise.resolve()).then(start, start)
-          : Promise.resolve().then(start);
-      const result = scheduled.finally(() => {
+          ? (entry.tail ?? Promise.resolve()).then(startScheduled, startScheduled)
+          : Promise.resolve().then(startScheduled);
+      let cancelWaiting: (() => void) | undefined;
+      const completion =
+        concurrency !== "queue"
+          ? scheduled
+          : Promise.race([
+              scheduled,
+              new Promise<ServerDrivenResult>((resolve) => {
+                cancelWaiting = () => {
+                  if (!started) resolve(abandoned);
+                };
+                if (controller.signal.aborted) cancelWaiting();
+                else controller.signal.addEventListener("abort", cancelWaiting, { once: true });
+              }),
+            ]);
+      const result = completion.finally(() => {
         signal?.removeEventListener("abort", abort);
+        if (cancelWaiting !== undefined)
+          controller.signal.removeEventListener("abort", cancelWaiting);
         entry.jobs.delete(job);
         changeRunning(controlId, -1);
       });
@@ -249,7 +270,8 @@ export function createFlowRuntimeState() {
           cancel: abort,
         });
       if (concurrency !== "queue") return result;
-      const tail = result.then(
+      // Keep the queue ordered even if a waiting caller has already abandoned its wait.
+      const tail = scheduled.then(
         () => undefined,
         () => undefined,
       );
