@@ -9,7 +9,6 @@ import type {
 import {
   equalFormValue,
   type ControlSemanticEvent,
-  type ChoiceInputPayload,
   type DisplaySemanticEvent,
   type ServerDrivenResult,
   type FlowIntentHost,
@@ -23,11 +22,11 @@ import {
   recordsSelectionMaximumIds,
   type RecordsTablePivotView,
   type RecordsTableQueryChange,
-  type ReferenceChoiceSelectionEvidenceMap,
   type ComponentRequestGeneration,
   type GridLayoutCommitResult,
   type GridViewCommand,
   type GridViewCommandResult,
+  type JsonValue,
 } from "@vortex/platform/schema";
 import type {
   ApplicationPageModel,
@@ -90,7 +89,6 @@ export function useRuntimeInputs({
   readPivotPage,
   commitPivotView,
   groupEventsFor,
-  requestChoicePageRef,
   subject,
   requestedStepId,
   guidedSummaryStepId,
@@ -98,14 +96,12 @@ export function useRuntimeInputs({
   prepareGuidedSummary,
   advanceGuidedStep,
   currentEditFormBaselines,
-  choiceEvidenceFor,
   submittedFormsRef,
   formCancelledRef,
   applyDispatch,
   formBlock,
   selection,
   application,
-  activeChoicePages,
   pinActivationInFlightRef,
   placementRequestsRef,
   navigationKey,
@@ -115,7 +111,6 @@ export function useRuntimeInputs({
   address,
   rereadTables,
   router,
-  requestChoicePage,
   runtimeInputsRef,
   controlDraftsRef,
   controls,
@@ -180,13 +175,6 @@ export function useRuntimeInputs({
     fieldId: string,
     opensGrouped: boolean,
   ) => Readonly<Record<string, (event: DisplaySemanticEvent) => unknown>>;
-  requestChoicePageRef: RefObject<
-    (
-      placementId: string,
-      event: Extract<ControlSemanticEvent, { event: "choices_requested" }>,
-      formId?: string,
-    ) => Promise<void>
-  >;
   subject: ApplicationPageModel["subject"];
   requestedStepId: RefObject<string | undefined>;
   guidedSummaryStepId: string | undefined;
@@ -209,11 +197,6 @@ export function useRuntimeInputs({
     requested?: string,
   ) => Promise<void>;
   currentEditFormBaselines: ApplicationPageModel["editFormBaselines"];
-  choiceEvidenceFor: (
-    formId: string,
-    values: Readonly<Record<string, unknown>>,
-    surface?: "page" | "dialog",
-  ) => ReferenceChoiceSelectionEvidenceMap | undefined;
   submittedFormsRef: RefObject<Map<string, SubmittedForm>>;
   formCancelledRef: RefObject<boolean>;
   applyDispatch: (
@@ -225,7 +208,6 @@ export function useRuntimeInputs({
   formBlock: ReturnType<typeof createFormBlockRuntime>;
   selection: PageSelection;
   application: ApplicationPageModel["invocation"];
-  activeChoicePages: Readonly<Record<string, ChoiceInputPayload>>;
   pinActivationInFlightRef: RefObject<boolean>;
   placementRequestsRef: RefObject<{
     base: string;
@@ -239,11 +221,6 @@ export function useRuntimeInputs({
   address: PageAddress;
   rereadTables: (placementIds: readonly string[]) => void;
   router: ReturnType<typeof useRouter>;
-  requestChoicePage: (
-    placementId: string,
-    event: Extract<ControlSemanticEvent, { event: "choices_requested" }>,
-    formId?: string,
-  ) => Promise<void>;
   runtimeInputsRef: RefObject<Readonly<Record<string, unknown>>>;
   controlDraftsRef: RefObject<ControlDrafts> | undefined;
   controls: ReturnType<typeof draftControls>;
@@ -318,7 +295,7 @@ export function useRuntimeInputs({
       ...Object.keys(controls),
       ...Object.keys(model.bindings),
       ...guidedActiveFormIds,
-      ...model.linkInputPlacementIds,
+      ...model.optionPlacementIds,
       ...Object.keys(model.pageParameters.controls),
       ...Object.keys(model.pageParameters.drawers),
     ]);
@@ -531,8 +508,8 @@ export function useRuntimeInputs({
         )
           events.table_records_requested = (event: DisplaySemanticEvent) => {
             if (event.event !== "table_records_requested") return;
-            return import("./record-choices").then(({ requestRecordChoices }) =>
-              requestRecordChoices(
+            return import("./field-options").then(({ requestFieldOptions }) =>
+              requestFieldOptions(
                 model,
                 placementId,
                 {
@@ -601,21 +578,41 @@ export function useRuntimeInputs({
         )
           events.row_expanded = rowDetailHandlers(placementId);
       }
-      if (model.referenceChoiceInputs.some((field) => field.placementId === placementId))
-        events.choices_requested = (event: ControlSemanticEvent) => {
-          if (event.event !== "choices_requested") return;
-          return requestChoicePageRef.current(placementId, event);
-        };
-      // A link field's picker asks for its records; the page reads them under the person's access.
-      if (model.linkInputPlacementIds.includes(placementId))
-        events.records_requested = (event: ControlSemanticEvent) => {
-          if (event.event !== "records_requested") return;
-          return import("./record-choices")
-            .then(({ requestRecordChoices }) =>
-              requestRecordChoices(model, placementId, event, () => router.refresh()),
+      // A field's picker asks for its options; the page reads them under the person's access.
+      if (model.optionPlacementIds.includes(placementId))
+        events.options_requested = (event: ControlSemanticEvent) => {
+          if (event.event !== "options_requested") return;
+          const owner = formOwners[placementId];
+          const store = controlDraftsRef?.current;
+          // A field whose options are worked out from other fields sends just those fields' draft.
+          const inputKeys = model.optionInputKeys[placementId];
+          const draft =
+            owner === undefined || store === undefined || inputKeys === undefined
+              ? undefined
+              : Object.fromEntries(
+                  inputKeys.map((key) => [
+                    key,
+                    Object.values(store.drafts).find(
+                      (entry) => entry.owner === owner && entry.fieldKey === key,
+                    )?.value ??
+                      store.baselines[owner]?.[key] ??
+                      null,
+                  ]),
+                );
+          return import("./field-options")
+            .then(({ requestFieldOptions }) =>
+              requestFieldOptions(
+                model,
+                placementId,
+                {
+                  ...event,
+                  ...(draft === undefined ? {} : { draft: draft as Record<string, JsonValue> }),
+                },
+                () => router.refresh(),
+              ),
             )
             .then((page) => {
-              if (titles.current.scope === navigationKey)
+              if ("choices" in page && titles.current.scope === navigationKey)
                 rememberPublishedChoices(titles.current.values, placementId, page);
               return page;
             });
@@ -791,11 +788,9 @@ export function useRuntimeInputs({
               });
               return;
             }
-            const choiceEvidence = choiceEvidenceFor(placementId, values);
             submittedFormsRef.current.set(submitBinding.bindingId, {
               formId: placementId,
               values,
-              ...(choiceEvidence === undefined ? {} : { choiceEvidence }),
             });
             return {
               values,
@@ -884,12 +879,7 @@ export function useRuntimeInputs({
         releaseKey: application.releaseKey,
       });
       inputs[placementId] = {
-        data:
-          activeChoicePages[placementId] !== undefined
-            ? { status: "ready", values: activeChoicePages[placementId] }
-            : tableValues !== undefined
-              ? { ...ready, values: tableValues }
-              : data,
+        data: tableValues !== undefined ? { ...ready, values: tableValues } : data,
         events,
         ...(pins?.success !== true || !pinFrame.success
           ? {}
@@ -935,10 +925,8 @@ export function useRuntimeInputs({
     formOwners,
     recordDetailOwners,
     launcherPlacements,
-    choiceEvidenceFor,
-    activeChoicePages,
+
     model,
-    model.referenceChoiceInputs,
     currentData,
     application,
     currentPageKey,
@@ -959,7 +947,6 @@ export function useRuntimeInputs({
     router,
     refreshPlacements,
     runBinding,
-    requestChoicePage,
     selection,
     changeTableQuery,
     commitLayout,

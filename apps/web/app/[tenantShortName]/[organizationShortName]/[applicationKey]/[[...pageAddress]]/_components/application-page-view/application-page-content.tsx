@@ -15,8 +15,6 @@ import {
   PagePuckRenderer,
   type FlowIntentHost,
   type ServerDrivenResult,
-  type ControlSemanticEvent,
-  type ChoiceInputPayload,
   type DisplaySemanticEvent,
   type RenderedPage,
   type PlatformThemeTokens,
@@ -53,7 +51,6 @@ import { placementEventNamesByPage, applicationLauncherPlacementIds } from "./pl
 import { useUnsavedWorkPrompt } from "./use-unsaved-work-prompt";
 import { useNavigationScope } from "./use-navigation-scope";
 import { usePlacementRefresh } from "./use-placement-refresh";
-import { useReferenceChoices } from "./use-reference-choices";
 import { useFlowRuntime } from "./use-flow-runtime";
 import { useFieldFlowEvents } from "./use-field-flow-events";
 import { useApplyDispatch } from "./use-apply-dispatch";
@@ -140,13 +137,6 @@ export function ApplicationPageViewContent({
   // The page address owns every table's query state; the served address only starts it.
   const { address, currentSearch } = usePageAddress({ model, served: searchParams.toString() });
   const [selection, setSelection] = useState<PageSelection>({});
-  const [choicePages, setChoicePages] = useState<Readonly<Record<string, ChoiceInputPayload>>>({});
-  const [dialogChoicePages, setDialogChoicePages] = useState<
-    Readonly<Record<string, ChoiceInputPayload>>
-  >({});
-  const [choicePagesOwner, setChoicePagesOwner] = useState(model);
-  const activeChoicePages = choicePagesOwner === model ? choicePages : {};
-  const activeDialogChoicePages = choicePagesOwner === model ? dialogChoicePages : {};
   const [refreshedPlacementData, setRefreshedPlacementData] = useState<
     RefreshedPlacementData | undefined
   >(undefined);
@@ -182,14 +172,6 @@ export function ApplicationPageViewContent({
   const runtimeInputsRef = useRef<Readonly<Record<string, unknown>>>({});
   const setPanelRef = useRef<FlowIntentHost["setPanel"]>(undefined);
   const dialogFormRef = useRef<HTMLDivElement>(null);
-  const requestChoicePageRef = useRef<
-    (
-      placementId: string,
-      event: Extract<ControlSemanticEvent, { event: "choices_requested" }>,
-      formId?: string,
-    ) => Promise<void>
-  >(async () => undefined);
-  const choiceRequestIdsRef = useRef<Record<string, number>>({});
   const submittedFormsRef = useRef(new Map<string, SubmittedForm>());
   const continuingFormsRef = useRef(new Map<string, SubmittedForm>());
   /** Set when the person cancels a form a running flow paused at; a board move clears it when it starts. */
@@ -289,9 +271,6 @@ export function ApplicationPageViewContent({
     address,
     router,
     model,
-    choiceRequestIdsRef,
-    setChoicePages,
-    setDialogChoicePages,
     setRefreshedPlacementData,
     refreshedPlacementData,
   });
@@ -301,21 +280,6 @@ export function ApplicationPageViewContent({
     showPageMessage(undefined);
     runtimeState.messages.clearAll();
   }, [navigationKey]);
-
-  const { choicePayloadFor, choiceEvidenceFor, requestChoicePage } = useReferenceChoices({
-    setChoicePagesOwner,
-    model,
-    setChoicePages,
-    setDialogChoicePages,
-    choiceRequestIdsRef,
-    activeChoicePages,
-    activeDialogChoicePages,
-    currentData,
-    application,
-    router,
-    showPageMessage,
-    requestChoicePageRef,
-  });
 
   const applyMessageActionRef = useRef<
     (dispatch: Promise<ServerDrivenResult>, bindingId: string) => void
@@ -337,11 +301,8 @@ export function ApplicationPageViewContent({
       platformComponentRegistry,
       runtimeInputsRef,
       controlDraftsRef,
-      choicePayloadFor,
       fieldInputControlReleases,
       showPageMessage,
-      choiceEvidenceFor,
-      requestChoicePageRef,
       currentData,
       dialogFormRef,
       platformThemeTokens,
@@ -586,7 +547,6 @@ export function ApplicationPageViewContent({
     readPivotPage,
     commitPivotView,
     groupEventsFor,
-    requestChoicePageRef,
     subject,
     requestedStepId,
     guidedSummaryStepId,
@@ -594,14 +554,12 @@ export function ApplicationPageViewContent({
     prepareGuidedSummary,
     advanceGuidedStep,
     currentEditFormBaselines,
-    choiceEvidenceFor,
     submittedFormsRef,
     formCancelledRef,
     applyDispatch,
     formBlock,
     selection,
     application,
-    activeChoicePages,
     pinActivationInFlightRef,
     placementRequestsRef,
     navigationKey,
@@ -611,7 +569,6 @@ export function ApplicationPageViewContent({
     address,
     rereadTables,
     router,
-    requestChoicePage,
     runtimeInputsRef,
     controlDraftsRef,
     controls,

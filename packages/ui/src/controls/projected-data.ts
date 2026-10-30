@@ -5,6 +5,7 @@ import {
   type BooleanInputPayload,
   type ButtonPayload,
   type ChoiceInputPayload,
+  type ChoiceOption,
   type DateInputPayload,
   type DialogPayload,
   type DrawerPayload,
@@ -13,7 +14,6 @@ import {
   type LinkInputPayload,
   type NumberInputPayload,
   type RecordChoicePage,
-  type ReferenceChoiceSelectionEvidence,
   type RichTextInputPayload,
   type TabsPayload,
   type TextInputPayload,
@@ -60,8 +60,7 @@ export const CONTROL_EVENT_NAMES = Object.freeze([
   "form_reset",
   "form_submit",
   "tab_changed",
-  "choices_requested",
-  "records_requested",
+  "options_requested",
 ] as const);
 
 /** Declared semantic event names this form and action family can emit. */
@@ -100,14 +99,7 @@ export type ControlSemanticEvent =
     }>
   | Readonly<{ event: "field_focus_lost"; fieldKey: string; value: TypedFieldValue }>
   | Readonly<{
-      event: "choices_requested";
-      search?: string;
-      continuationToken?: string;
-      selectedKey?: string;
-      selectedEvidence?: ReferenceChoiceSelectionEvidence;
-    }>
-  | Readonly<{
-      event: "records_requested";
+      event: "options_requested";
       search?: string;
       continuationToken?: string;
       /** For a dependent link field: the record chosen in the field it depends on, in the form's draft. */
@@ -124,7 +116,7 @@ export type ControlSemanticEvent =
   | Readonly<{ event: "tab_changed"; tabKey: string }>;
 
 /**
- * A control's callback. Only `records_requested` answers with data: the page runtime reads one page
+ * A control's callback. Only `options_requested` answers with data: the page runtime reads one page
  * of pickable records for the link input that asked and returns it, which the input reads
  * with {@link readRecordChoicePage}.
  */
@@ -226,6 +218,21 @@ export const readRecordChoicePage = (
   isRecord(value) && Array.isArray(value.choices)
     ? (value as RecordChoicePage)
     : fail("A record choice page is invalid", location);
+
+/**
+ * One page of the options a choice field offers as the page answered its options request: the
+ * options (each a key and a label) and, when more exist, the position the next page starts at.
+ */
+export const readChoiceOptionsPage = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation = {},
+): Readonly<{ options: readonly ChoiceOption[]; nextContinuationToken?: string }> => {
+  if (!isRecord(value)) return fail("A choice options page is invalid", location);
+  const options = parseChoiceOptions(value.options, location);
+  return typeof value.nextContinuationToken === "string"
+    ? { options, nextContinuationToken: value.nextContinuationToken }
+    : { options };
+};
 
 /**
  * One runtime input a control receives besides its data (a form's draft feedback or flow

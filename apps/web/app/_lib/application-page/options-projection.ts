@@ -1,10 +1,9 @@
 import {
-  type ReferenceChoiceInputValues,
   type PermittedApplicationsRead,
   type PermittedApplication,
   type InstalledRuntimeContext,
   type BoundHumanOrganizationRequest,
-  createReferenceChoiceService,
+  type OptionFilterKey,
   createStoredPageCapabilityService,
   requireProjectedPlacement,
   CHOICE_INPUT_BLOCK_RELEASE,
@@ -13,6 +12,7 @@ import {
   DATE_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
+  FORM_CONTAINER_BLOCK_RELEASE,
   placementSettings,
   fieldControl,
   planChoiceOptionGates,
@@ -20,31 +20,32 @@ import {
   applyChoiceOptionGates,
 } from "@vortex/platform/server";
 import {
+  type ApplicationContent,
   type IdentitySession,
   type OrganizationSelectionCandidate,
   isRecord,
   sameId,
   walkPageComposition,
+  walkPlacementData,
+  type VisitedPlacement,
 } from "@vortex/platform/schema";
 import { loadInstalledContext, requestDependencies } from "./installed-context";
-import { getQueryContinuationKey } from "../query-continuation-key";
 import { platformPermissionSource } from "../platform-permission-source";
 import { withContributedFormPlacements, withContributedPlacements } from "./contributed-placements";
-import { collectPlacements } from "./placement-helpers";
 import {
-  projectedReferenceChoiceForm,
-  hasReferenceChoiceSource,
-  referenceChoiceFieldForPlacement,
-  type ProjectedReferenceChoiceForm,
-} from "../reference-choices";
+  collectPlacements,
+  isLinkInputPlacement,
+  linkInputTargets,
+  placementOptionFilter,
+  projectedUseAvailability,
+} from "./placement-helpers";
 
-export type ReferenceChoicePageResult =
-  | Readonly<{ kind: "completed"; values: ReferenceChoiceInputValues }>
+export type OptionsPageResult =
   | Readonly<{ kind: "reload" }>
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
-export type ReferenceChoiceAddress = Readonly<{
+export type OptionsAddress = Readonly<{
   read: Extract<PermittedApplicationsRead, { kind: "available" }>;
   application: PermittedApplication;
   pageKey: string;
@@ -52,43 +53,9 @@ export type ReferenceChoiceAddress = Readonly<{
   installedContext?: InstalledRuntimeContext;
 }>;
 
-/** Proves one dynamic choice key against its installed source under the gate's transaction. */
-const validateProjectedReferenceChoice = async (
-  bound: Parameters<
-    ReturnType<typeof createReferenceChoiceService>["resolveExactInTransaction"]
-  >[0],
-  context: InstalledRuntimeContext,
-  projectedPage: Readonly<Record<string, unknown>>,
-  placementId: string,
-  key: string,
-): Promise<boolean> => {
-  const match = /^r_([0-9a-f]{32})$/.exec(key);
-  const gate = requireProjectedPlacement(projectedPage, placementId);
-  if (match === null || gate.kind !== "on_page") return false;
-  const descriptor = referenceChoiceFieldForPlacement(gate.placement, context.releaseSet.modules);
-  if (descriptor === undefined) return false;
-  const hex = match[1]!;
-  const recordId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-  const service = createReferenceChoiceService({
-    ...requestDependencies(),
-    continuationKey: getQueryContinuationKey(),
-  });
-  const resolved = await service.resolveExactInTransaction(bound, {
-    ...descriptor.command,
-    exactRecordId: recordId,
-  });
-  return (
-    resolved.kind === "available" &&
-    resolved.value.outcome === "completed" &&
-    resolved.value.choices.some((choice) => choice.key === key)
-  );
-};
-
 /** Uses the page's own option gates for a published control value. */
 export const validateProjectedControlOption = async (
-  bound: Parameters<
-    ReturnType<typeof createReferenceChoiceService>["resolveExactInTransaction"]
-  >[0],
+  bound: BoundHumanOrganizationRequest,
   context: InstalledRuntimeContext,
   projectedPage: Readonly<Record<string, unknown>>,
   placementId: string,
@@ -103,8 +70,6 @@ export const validateProjectedControlOption = async (
 ): Promise<boolean> => {
   const gate = requireProjectedPlacement(projectedPage, placementId);
   if (gate.kind !== "on_page") return false;
-  if (hasReferenceChoiceSource(gate.placement))
-    return validateProjectedReferenceChoice(bound, context, projectedPage, placementId, value);
   const props = structuredClone(gate.placement.props);
   const placement = {
     props,
@@ -155,8 +120,76 @@ export const validateProjectedControlOption = async (
   );
 };
 
+/** A form field whose value is one of the options a source offers: the record a link input picks. */
+export type ProjectedOptionsField = Readonly<{
+  fieldKey: string;
+  placementId: string;
+  recordTypes: readonly Readonly<{ moduleRootId: string; recordTypeId: string }>[];
+  optionFilter?: OptionFilterKey;
+}>;
+
+export type ProjectedOptionsForm = Readonly<{
+  fields: ReadonlyMap<string, ProjectedOptionsField>;
+}>;
+
+/** A form id is usable only when one authored Form placement has that identity in the release. */
+export const applicationHasAuthoredForm = (
+  application: ApplicationContent,
+  formId: string,
+): boolean => {
+  let matches = 0;
+  const countForm = (placement: VisitedPlacement): undefined => {
+    const block = placement.vortex.block;
+    if (
+      sameId(placement.placementId, formId) &&
+      isRecord(block) &&
+      typeof block.blockId === "string" &&
+      sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
+    )
+      matches += 1;
+  };
+  for (const page of application.pages) walkPageComposition(page.composition, countForm);
+  for (const shell of application.shells) walkPlacementData(shell.layout, countForm);
+  return matches === 1;
+};
+
+/**
+ * The option-sourced fields (link inputs) of the one usable Form on the viewer's projected page,
+ * by the field key they publish. Undefined when the form is not on the page, is not usable, or two
+ * of its fields share a key.
+ */
+export const projectedOptionsForm = (
+  page: Readonly<Record<string, unknown>>,
+  formId: string,
+): ProjectedOptionsForm | undefined => {
+  const placements = collectPlacements(page);
+  const form = placements.filter((placement) => sameId(placement.placementId, formId));
+  if (form.length !== 1 || projectedUseAvailability(form[0]!) !== "available") return undefined;
+  const fields = new Map<string, ProjectedOptionsField>();
+  for (const placement of placements) {
+    if (
+      placement.formId === undefined ||
+      !sameId(placement.formId, formId) ||
+      !isLinkInputPlacement(placement) ||
+      projectedUseAvailability(placement) !== "available"
+    )
+      continue;
+    const name = placement.settings.name;
+    if (!isRecord(name) || name.kind !== "text" || typeof name.value !== "string") continue;
+    if (fields.has(name.value)) return undefined;
+    const optionFilter = placementOptionFilter(placement.settings);
+    fields.set(name.value, {
+      fieldKey: name.value,
+      placementId: placement.placementId,
+      recordTypes: linkInputTargets(placement.settings),
+      ...(optionFilter === undefined ? {} : { optionFilter }),
+    });
+  }
+  return { fields };
+};
+
 /** Projects only the admitted row's form, inside the transaction that proved its membership. */
-export const projectRowReferenceChoiceForm = async (
+export const projectRowOptionsForm = async (
   transaction: Parameters<
     ReturnType<typeof createStoredPageCapabilityService>["projectFormInTransaction"]
   >[0],
@@ -169,7 +202,7 @@ export const projectRowReferenceChoiceForm = async (
   formId: string,
   subject: Readonly<{ moduleRootId: string; recordTypeId: string; recordId: string }>,
 ): Promise<
-  | (ProjectedReferenceChoiceForm &
+  | (ProjectedOptionsForm &
       Readonly<{
         visibleFields: ReadonlyMap<string, Readonly<{ placementId: string; kind: string }>>;
         projectedPage: Readonly<Record<string, unknown>>;
@@ -201,7 +234,7 @@ export const projectRowReferenceChoiceForm = async (
   });
   if (!replaced) return undefined;
   const enriched = withContributedFormPlacements(page, context, subject, formId);
-  const projected = projectedReferenceChoiceForm(enriched, context.releaseSet.modules, formId);
+  const projected = projectedOptionsForm(enriched, formId);
   if (projected === undefined) return undefined;
   const visibleFields = new Map<string, Readonly<{ placementId: string; kind: string }>>();
   for (const placement of collectPlacements(enriched)) {
@@ -226,23 +259,22 @@ export const projectRowReferenceChoiceForm = async (
     )
       return undefined;
     const control = fieldControl(placement);
-    const kind = hasReferenceChoiceSource(placement)
-      ? "dynamic_choice"
-      : (control ??
-        (sameId(blockId, CHOICE_INPUT_BLOCK_RELEASE.blockId)
-          ? "choice"
-          : sameId(blockId, LINK_INPUT_BLOCK_RELEASE.blockId)
-            ? "link"
-            : "other"));
+    const kind =
+      control ??
+      (sameId(blockId, CHOICE_INPUT_BLOCK_RELEASE.blockId)
+        ? "choice"
+        : sameId(blockId, LINK_INPUT_BLOCK_RELEASE.blockId)
+          ? "link"
+          : "other");
     visibleFields.set(name.value, { placementId: placement.placementId, kind });
   }
   return { ...projected, visibleFields, projectedPage: enriched };
 };
 
 /** Reprojects the current addressed page under the actor and the exact installed release. */
-export const projectReferenceChoicePage = async (
+export const projectOptionsPage = async (
   session: IdentitySession,
-  address: ReferenceChoiceAddress,
+  address: OptionsAddress,
   request: Readonly<{ installationRevision: number; releaseKey: string; subjectRecordId?: string }>,
   bound?: BoundHumanOrganizationRequest,
 ): Promise<
@@ -254,7 +286,7 @@ export const projectReferenceChoicePage = async (
       selection: OrganizationSelectionCandidate;
       dependencies: ReturnType<typeof requestDependencies>;
     }>
-  | Exclude<ReferenceChoicePageResult, { kind: "completed" }>
+  | OptionsPageResult
 > => {
   const dependencies = requestDependencies();
   const selection: OrganizationSelectionCandidate = {

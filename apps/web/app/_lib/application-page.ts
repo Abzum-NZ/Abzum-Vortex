@@ -1,29 +1,14 @@
 import { logRefusal, sameId, splitProjectedPage } from "@vortex/platform/schema";
 import "server-only";
 
+import type { BoundHumanOrganizationRequest } from "@vortex/platform/server";
+import type { IdentitySession, JsonValue } from "@vortex/platform/schema";
 import {
-  createReferenceChoiceService,
-  projectReferenceChoiceInputValues,
-  readyControlData,
-  type BoundHumanOrganizationRequest,
-} from "@vortex/platform/server";
-import type {
-  IdentitySession,
-  ReferenceChoiceSelectionEvidence,
-  JsonValue,
-} from "@vortex/platform/schema";
-import { getQueryContinuationKey } from "./query-continuation-key";
-import {
-  type ProjectedReferenceChoiceForm,
-  projectedReferenceChoiceForm,
-  resolveReferenceChoiceOption,
-} from "./reference-choices";
-import {
-  type ReferenceChoiceAddress,
-  projectReferenceChoicePage,
-  type ReferenceChoicePageResult,
-} from "./application-page/reference-choice";
-import { collectPlacements } from "./application-page/placement-helpers";
+  type OptionsAddress,
+  type ProjectedOptionsForm,
+  projectOptionsPage,
+  projectedOptionsForm,
+} from "./application-page/options-projection";
 import type {
   ApplicationPageLoaderAddress,
   SearchParameters,
@@ -53,9 +38,9 @@ export type {
 } from "./application-page/types";
 
 /** The form submission's fields come only from its current actor-permitted page. */
-export const loadProjectedReferenceChoiceForm = async (
+export const loadProjectedOptionsForm = async (
   session: IdentitySession,
-  address: ReferenceChoiceAddress,
+  address: OptionsAddress,
   request: Readonly<{
     installationRevision: number;
     releaseKey: string;
@@ -64,125 +49,19 @@ export const loadProjectedReferenceChoiceForm = async (
   }>,
   bound?: BoundHumanOrganizationRequest,
 ): Promise<
-  | (ProjectedReferenceChoiceForm & Readonly<{ projectedPage?: Readonly<Record<string, unknown>> }>)
+  | (ProjectedOptionsForm & Readonly<{ projectedPage?: Readonly<Record<string, unknown>> }>)
   | undefined
 > => {
   try {
-    const projected = await projectReferenceChoicePage(session, address, request, bound);
+    const projected = await projectOptionsPage(session, address, request, bound);
     if (projected.kind !== "available") return undefined;
-    const form = projectedReferenceChoiceForm(
-      projected.page,
-      projected.context.releaseSet.modules,
-      request.formId,
-    );
+    const form = projectedOptionsForm(projected.page, request.formId);
     return form === undefined
       ? undefined
       : { ...form, ...(bound === undefined ? {} : { projectedPage: projected.rawPage }) };
   } catch (cause) {
-    logRefusal("reference-choices", "project form", "reference_choice_form_unavailable", cause);
+    logRefusal("field-options", "project form", "options_form_unavailable", cause);
     return undefined;
-  }
-};
-
-/** Rechecks one dynamic choice request against the viewer's current installed page and authority. */
-export const loadReferenceChoicePage = async (
-  session: IdentitySession,
-  address: ReferenceChoiceAddress,
-  request: Readonly<{
-    placementId: string;
-    installationRevision: number;
-    releaseKey: string;
-    search?: string;
-    continuationToken?: string;
-    selectedKey?: string;
-    selectedEvidence?: ReferenceChoiceSelectionEvidence;
-  }>,
-): Promise<ReferenceChoicePageResult> => {
-  try {
-    const projected = await projectReferenceChoicePage(session, address, request);
-    if (projected.kind !== "available") return projected;
-    const { dependencies, selection, context } = projected;
-    const continuationKey = getQueryContinuationKey();
-    const placement = collectPlacements(projected.page).find(
-      (entry) => entry.placementId === request.placementId && entry.formId !== undefined,
-    );
-    if (placement === undefined || placement.formId === undefined) return { kind: "refused" };
-    const form = projectedReferenceChoiceForm(
-      projected.page,
-      context.releaseSet.modules,
-      placement.formId,
-    );
-    const field = form?.placements.get(request.placementId);
-    if (field === undefined || form === undefined) return { kind: "refused" };
-
-    const service = createReferenceChoiceService({ ...dependencies, continuationKey });
-    const currentField = field;
-    const result = await service.run(session, selection, {
-      ...currentField.command,
-      ...(request.search === undefined || request.search.trim() === ""
-        ? {}
-        : { search: request.search }),
-      ...(request.continuationToken === undefined
-        ? {}
-        : { continuationToken: request.continuationToken }),
-    });
-    if (result.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
-    if (result.kind !== "available" || result.value.outcome !== "completed")
-      return { kind: "refused" };
-
-    const pageChoices = result.value.choices;
-    let selectedChoice =
-      request.selectedKey === undefined
-        ? undefined
-        : pageChoices.find((choice) => choice.key === request.selectedKey);
-    let selectedEvidenceOverride: Readonly<Record<string, ReferenceChoiceSelectionEvidence>> = {};
-    if (
-      selectedChoice === undefined &&
-      request.selectedKey !== undefined &&
-      request.selectedEvidence !== undefined
-    ) {
-      selectedChoice = await resolveReferenceChoiceOption({
-        service,
-        session,
-        selection,
-        field: currentField,
-        key: request.selectedKey,
-        evidence: request.selectedEvidence,
-      });
-      if (selectedChoice !== undefined)
-        selectedEvidenceOverride = { [selectedChoice.key]: request.selectedEvidence };
-    }
-    const choices =
-      selectedChoice === undefined ||
-      pageChoices.some((choice) => choice.key === selectedChoice?.key)
-        ? pageChoices
-        : [selectedChoice, ...pageChoices];
-    // The page of choices is checked once against the choice input contract here, where it is built.
-    const values = projectReferenceChoiceInputValues(
-      choices,
-      selectedChoice?.key ?? null,
-      undefined,
-      {
-        ...(request.search === undefined ? {} : { search: request.search }),
-        ...(request.continuationToken === undefined
-          ? {}
-          : { continuationToken: request.continuationToken }),
-        ...(result.value.nextContinuationToken === undefined
-          ? {}
-          : { nextContinuationToken: result.value.nextContinuationToken }),
-        ...(Object.keys(selectedEvidenceOverride).length === 0
-          ? {}
-          : { optionEvidenceOverrides: selectedEvidenceOverride }),
-      },
-    );
-    const page = readyControlData(values, (cause) =>
-      logRefusal("reference-choices", "choice page", "reference_choice_page_invalid", cause),
-    );
-    if (page.status !== "ready") return { kind: "temporarily_unavailable" };
-    return { kind: "completed", values };
-  } catch (cause) {
-    logRefusal("reference-choices", "choice page", "reference_choice_page_unavailable", cause);
-    return { kind: "temporarily_unavailable" };
   }
 };
 
