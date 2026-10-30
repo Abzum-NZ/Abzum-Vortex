@@ -50,14 +50,14 @@ import {
   type StudioSemanticSelection,
 } from "@vortex/ui/studio";
 import type { StudioDraft, StudioDraftStep } from "./use-studio-draft";
-
-type StudioFlowDeleteResult = ReturnType<typeof deleteStudioFlow>;
 import { deferredStudioPart } from "./studio-deferred-part";
 import { useStudioTabVisited } from "./studio-frame";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
 import { StudioFormulaEditor, formulaReferenceName } from "./studio-formula-editor";
 import { FixedInput, startLiteral, StudioFlowValueControl } from "./studio-flow-value-control";
 import { StudioReferencesAlert } from "./studio-used-in";
+
+type StudioFlowDeleteResult = ReturnType<typeof deleteStudioFlow>;
 
 // The workflow canvas pulls in @xyflow/react; load it only when the Flows tab shows a flow.
 const StudioFlowCanvas = dynamic(
