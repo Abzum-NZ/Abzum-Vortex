@@ -65,7 +65,7 @@ const safeCause = (error: unknown): readonly Readonly<Record<string, unknown>>[]
   const causes: Readonly<Record<string, unknown>>[] = [];
   let current: unknown = error;
   for (let depth = 0; depth < 5 && current !== undefined && current !== null; depth += 1) {
-    let isError = false;
+    let isError: boolean;
     try {
       isError = current instanceof Error;
       // guard-allow: silent-catch A hostile error proxy may reject prototype inspection; retain only its safe type.
