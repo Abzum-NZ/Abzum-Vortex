@@ -584,7 +584,8 @@ const existingRowActionFlow = (
   source: Readonly<ApplicationSourceDocument>,
   command: StudioFlowCreateCommand,
 ): SourceFlow | undefined => {
-  if (command.kind === "before_save" || command.event !== "row_action") return undefined;
+  if (command.kind === "before_save" || command.kind === "flow" || command.event !== "row_action")
+    return undefined;
   const wantedOperation =
     command.kind === "action"
       ? command.step?.kind === "operation"
