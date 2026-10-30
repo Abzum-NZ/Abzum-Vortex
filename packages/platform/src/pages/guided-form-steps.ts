@@ -1,8 +1,6 @@
 import "server-only";
 
-import { guidedFormConfirmationReference } from "./guided-form-confirmation";
 
-import { createHmac, timingSafeEqual } from "node:crypto";
 
 import {
   createHumanOrganizationRequestService,
@@ -16,7 +14,6 @@ import {
   placementSettings,
 } from "../definition/application-composition-catalogue";
 import type { InstalledRuntimeContext } from "../definition/installed-runtime-context";
-import type { QueryContinuationKey } from "../queries/continuation-token";
 import { decideChoiceOptionPermission } from "../records/choice-option-permission";
 import { prepareRecordFieldValues } from "../records/field-values";
 import type {
@@ -117,82 +114,11 @@ export type GuidedFormStepActionResult =
   | Readonly<{ kind: "conflict"; activeStepId: string; computedStepId: string; revision: number }>
   | Readonly<{ kind: "unavailable" | "temporarily_unavailable" }>;
 
-export type GuidedFormConfirmRequest = Readonly<{
-  address: GuidedFormPageAddress;
-  draftId: string;
-  expectedRevision: number;
-  stepId: string;
-}>;
-
-export type GuidedFormConfirmResult =
-  | Readonly<{ kind: "confirmed"; proof: string }>
-  | Readonly<{ kind: "conflict" | "unavailable" | "temporarily_unavailable" }>;
-
 export type GuidedFormAbandonRequest = Readonly<{
   address: GuidedFormPageAddress;
   draftId: string;
   expectedRevision: number;
 }>;
-
-const confirmationLifetimeSeconds = 120;
-const confirmationPurpose = "vortex-guided-form-final-confirmation-v1";
-
-const confirmationSignature = (
-  continuationKey: QueryContinuationKey,
-  details: Readonly<{
-    draftId: string;
-    revision: number;
-    issuedAt: number;
-    pageId: string;
-    flowId: string;
-    sessionId: string;
-    identityId: string;
-    organizationId: string;
-    applicationRootId: string;
-    subjectRecordId?: string;
-  }>,
-): Buffer =>
-  createHmac("sha256", continuationKey.key)
-    .update(
-      JSON.stringify([
-        confirmationPurpose,
-        details.draftId.toLowerCase(),
-        details.revision,
-        details.issuedAt,
-        details.pageId.toLowerCase(),
-        details.flowId.toLowerCase(),
-        details.sessionId.toLowerCase(),
-        details.identityId.toLowerCase(),
-        details.organizationId.toLowerCase(),
-        details.applicationRootId.toLowerCase(),
-        details.subjectRecordId?.toLowerCase() ?? null,
-      ]),
-    )
-    .digest();
-
-export const issueGuidedFormConfirmation = async (
-  continuationKey: QueryContinuationKey,
-  details: Omit<Parameters<typeof confirmationSignature>[1], "issuedAt">,
-): Promise<string | undefined> => {
-  const issuedAt = Math.floor(Date.now() / 1_000);
-  const signature = confirmationSignature(continuationKey, { ...details, issuedAt }).toString(
-    "hex",
-  );
-  return `${details.draftId.toLowerCase()}.${details.revision}.${issuedAt}.${signature}`;
-};
-
-export const verifiesGuidedFormConfirmation = async (
-  continuationKey: QueryContinuationKey,
-  proof: unknown,
-  details: Omit<Parameters<typeof confirmationSignature>[1], "issuedAt" | "draftId" | "revision">,
-): Promise<boolean> => {
-  const reference = guidedFormConfirmationReference(proof);
-  if (reference === undefined) return false;
-  const age = Math.floor(Date.now() / 1_000) - reference.issuedAt;
-  if (age < 0 || age > confirmationLifetimeSeconds) return false;
-  const expected = confirmationSignature(continuationKey, { ...details, ...reference });
-  return timingSafeEqual(Buffer.from(reference.signature, "hex"), expected);
-};
 
 const recordTypeForPage = (
   page: Readonly<Record<string, unknown>>,

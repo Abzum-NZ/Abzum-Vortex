@@ -12,6 +12,8 @@ import {
   visibleGuidedFormValidation,
   visibleGuidedFormValues,
   type DateTimeZones,
+  type GuidedFormStepFields,
+  type PrivateFormDraftScope,
   type InstalledRuntimeContext,
   type PageSubjectReadResult,
   type RecordLinkResolver,
@@ -53,7 +55,14 @@ export const projectGuidedForm = async (
     boundRequest?: BoundHumanOrganizationRequest;
   }>,
 ): Promise<
-  | Readonly<{ kind: "projected"; guidedForm: NonNullable<ApplicationPageModel["guidedForm"]> }>
+  | Readonly<{
+      kind: "projected";
+      guidedForm: NonNullable<ApplicationPageModel["guidedForm"]>;
+      /** What a draft save needs: the visible steps' fields, the record type and the draft's identity. */
+      steps: readonly GuidedFormStepFields[];
+      recordType: NonNullable<ReturnType<typeof getGuidedFormRecordType>>;
+      scope: PrivateFormDraftScope;
+    }>
   | Readonly<{ kind: "refused"; result: ApplicationPageInternalResult }>
 > => {
   const {
@@ -125,6 +134,9 @@ export const projectGuidedForm = async (
   }
   return {
     kind: "projected",
+    steps: stepFields,
+    recordType,
+    scope: draftScope,
     guidedForm: {
       draftId: String(openedDraft.draft.draftId),
       revision: openedDraft.draft.revision,

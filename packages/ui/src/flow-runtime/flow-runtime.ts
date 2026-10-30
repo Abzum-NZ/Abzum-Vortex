@@ -7,8 +7,6 @@ import type {
   PageDefinition,
 } from "@vortex/platform/schema";
 import {
-  guidedFormConfirmationKey,
-  guidedFormConfirmationReference,
   isRecord,
 } from "@vortex/platform/schema";
 import type { FlowIntentHost } from "./intents";
@@ -117,13 +115,10 @@ export function createFlowRuntimeState(
       subject: FlowSubjectContext | undefined,
       inputs: Readonly<Record<string, unknown>>,
     ) => {
-      const values = inputs.values;
-      const guided = guidedFormConfirmationReference(
-        isRecord(values) ? values[guidedFormConfirmationKey] : undefined,
-      );
-      return guided === undefined
-        ? JSON.stringify([bindingId, subject?.recordId ?? null, canonicalInputs(inputs)])
-        : JSON.stringify([bindingId, guided.draftId, guided.revision]);
+      const draft = inputs.draft;
+      return isRecord(draft)
+        ? JSON.stringify([bindingId, draft.draftId, draft.revision])
+        : JSON.stringify([bindingId, subject?.recordId ?? null, canonicalInputs(inputs)]);
     },
     retryId: (key: string, proposed: string) => retries.get(key) ?? proposed,
     rememberResult: (key: string, runId: string, result: ServerDrivenResult) => {

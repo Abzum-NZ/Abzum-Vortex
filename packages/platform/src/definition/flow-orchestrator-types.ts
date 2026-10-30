@@ -200,6 +200,29 @@ type NamedActionRecordPort = Readonly<{
 
 export type NamedActionExecutionResult = Awaited<ReturnType<NamedActionRecordPort["execute"]>>;
 
+/** The guided-form draft steps of one page: both calls check the draft is the caller's own at the sent revision. */
+export type FlowGuidedDraftPort = Readonly<{
+  save(
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    input: Readonly<{
+      draftId: string;
+      revision: number;
+      step: string;
+      requestedStep?: string;
+      values: Readonly<Record<string, unknown>>;
+    }>,
+  ): Promise<
+    | Readonly<{ outcome: "saved"; stepId: string; revision: number; valid: boolean }>
+    | Readonly<{ outcome: "conflict" | "refused" | "unavailable" }>
+  >;
+  discard(
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    input: Readonly<{ draftId: string; revision: number }>,
+  ): Promise<Readonly<{ outcome: "discarded" | "conflict" | "refused" | "unavailable" }>>;
+}>;
+
 export type FlowOrchestratorDependencies = Readonly<{
   continuationKey: QueryContinuationKey;
   /** Admits exactly one planned server segment and supplies its transaction-bound ports. */
@@ -271,27 +294,7 @@ export type FlowOrchestratorDependencies = Readonly<{
    * The guided-form draft of the page the run belongs to. Both calls check that the draft is the
    * caller's own and at the sent revision before anything is stored or removed.
    */
-  guidedDrafts?: Readonly<{
-    save(
-      session: IdentitySession,
-      selection: OrganizationSelectionCandidate,
-      input: Readonly<{
-        draftId: string;
-        revision: number;
-        step: string;
-        requestedStep?: string;
-        values: Readonly<Record<string, unknown>>;
-      }>,
-    ): Promise<
-      | Readonly<{ outcome: "saved"; stepId: string; revision: number; valid: boolean }>
-      | Readonly<{ outcome: "conflict" | "refused" | "unavailable" }>
-    >;
-    discard(
-      session: IdentitySession,
-      selection: OrganizationSelectionCandidate,
-      input: Readonly<{ draftId: string; revision: number }>,
-    ): Promise<Readonly<{ outcome: "discarded" | "conflict" | "refused" | "unavailable" }>>;
-  }>;
+  guidedDrafts?: FlowGuidedDraftPort;
   /** Acquires a current installed identity for a human; no display values or replayed read results. */
   recordPins?: Readonly<{
     /** Only a source-bound retry may accept an identity for the originally stored selector. */

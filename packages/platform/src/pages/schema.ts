@@ -32,7 +32,3 @@ export * from "./display-payload-board";
 export * from "./display-payload-pivot";
 export * from "./control-payload";
 
-export {
-  guidedFormConfirmationKey,
-  guidedFormConfirmationReference,
-} from "./guided-form-confirmation";
