@@ -22,6 +22,8 @@ declare
   subjects jsonb := '[]'::jsonb;
   proposals jsonb;
   graph jsonb;
+  meta jsonb;
+  projection_records jsonb := '[]'::jsonb;
 begin
   if not vortex_record.record_change_set_is_valid_internal(p_subjects) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
@@ -41,6 +43,27 @@ begin
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'index', subject_index, 'reasonCode', 'operation_unavailable'
       );
+    end if;
+    meta := vortex_record.resolve_record_action_context_internal(
+      (subject ->> 'recordTypeId')::uuid, subject ->> 'operation'
+    );
+    if meta -> 'recordType' ? 'systemProjection' then
+      prepared := vortex_record.prepare_record_values_internal(
+        subject ->> 'operation', (subject ->> 'recordTypeId')::uuid, (subject ->> 'recordId')::uuid,
+        (subject ->> 'expectedConcurrencyNumber')::bigint, subject -> 'submittedValues',
+        (subject ->> 'selectedGroupId')::uuid, (subject ->> 'activityId')::uuid
+      );
+      if prepared ->> 'outcome' is distinct from 'prepared' then
+        return prepared || pg_catalog.jsonb_build_object('index', subject_index);
+      end if;
+      projection_records := projection_records || pg_catalog.jsonb_build_array(
+        prepared || pg_catalog.jsonb_build_object(
+          'recordKey', 'intent:' || subject_index::text, 'recordTypeId', subject -> 'recordTypeId',
+          'recordId', subject -> 'recordId', 'concurrencyNumber', subject -> 'expectedConcurrencyNumber',
+          'canRead', true, 'relationshipSources', '[]'::jsonb
+        )
+      );
+      continue;
     end if;
     if subject ->> 'operation' = 'update' then
       loaded := vortex_record.load_record_access_facts_internal(
@@ -86,6 +109,9 @@ begin
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'relationship_refused');
   end if;
   if before_closure ->> 'outcome' = 'refused' then return before_closure; end if;
+  if (before_closure ->> 'recordCount')::integer + pg_catalog.jsonb_array_length(projection_records) > 1000 then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'record_change_too_large');
+  end if;
   for record_value in
     select item.value from pg_catalog.jsonb_array_elements(before_closure -> 'records') as item(value)
     where item.value ? 'recordId'
@@ -135,8 +161,10 @@ begin
   );
   if graph ->> 'outcome' is distinct from 'prepared' then return graph; end if;
   return graph || pg_catalog.jsonb_build_object(
+    'records', (graph -> 'records') || projection_records,
     'subjects', subjects, 'correlationId', context_value -> 'correlationId',
-    'readableFieldIds', '[]'::jsonb, 'recordCount', after_closure -> 'recordCount'
+    'readableFieldIds', '[]'::jsonb,
+    'recordCount', (after_closure ->> 'recordCount')::integer + pg_catalog.jsonb_array_length(projection_records)
   );
 end
 $function$;

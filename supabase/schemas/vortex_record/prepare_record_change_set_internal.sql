@@ -50,7 +50,19 @@ begin
         'outcome', 'refused', 'index', ordinal, 'reasonCode', 'record_unavailable'
       );
     end if;
-    if subject ->> 'operation' = 'create' then
+    if meta -> 'recordType' ? 'systemProjection' then
+      if subject ->> 'operation' <> 'update' then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'index', ordinal, 'reasonCode', 'record_unavailable');
+      end if;
+      prepared := vortex_record.prepare_settings_record_change_internal(
+        (subject ->> 'recordTypeId')::uuid, (subject ->> 'recordId')::uuid,
+        (subject ->> 'expectedConcurrencyNumber')::bigint, subject -> 'submittedValues', subject -> 'finalValues'
+      );
+      if prepared ->> 'outcome' = 'prepared' and prepared -> 'currentConcurrencyNumber'
+        is distinct from subject -> 'expectedConcurrencyNumber' then
+        return pg_catalog.jsonb_build_object('outcome', 'conflict', 'index', ordinal, 'reasonCode', 'record_revision_conflict');
+      end if;
+    elsif subject ->> 'operation' = 'create' then
       prepared := vortex_record.classify_record_change_values_internal(
         (subject ->> 'recordTypeId')::uuid, subject -> 'finalValues', meta, subject -> 'submittedValues',
         (meta #>> '{context,organizationId}')::uuid, (meta #>> '{context,applicationRootId}')::uuid,
@@ -113,7 +125,7 @@ begin
         end loop;
       end if;
     end if;
-    if prepared ->> 'outcome' not in ('allowed', 'prepared') then
+    if not coalesce(prepared ->> 'outcome' in ('allowed', 'prepared'), false) then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'index', ordinal, 'subject', prepared);
     end if;
     plans := plans || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(

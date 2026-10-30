@@ -84,6 +84,19 @@ begin
     subject := plan -> 'subject';
     prepared := plan -> 'prepared';
     meta := plan -> 'meta';
+    if meta -> 'recordType' ? 'systemProjection' then
+      result_value := vortex_access.change_organization_settings_record_internal(
+        (subject ->> 'recordId')::uuid, (subject ->> 'expectedConcurrencyNumber')::bigint,
+        prepared -> 'coreValues', prepared -> 'extensionValues'
+      );
+      if result_value ->> 'outcome' is distinct from 'saved' then
+        raise exception using errcode = '40001', message = 'Prepared settings record change was refused';
+      end if;
+      results := results || pg_catalog.jsonb_build_array(result_value || pg_catalog.jsonb_build_object(
+        'recordId', subject -> 'recordId'
+      ));
+      continue;
+    end if;
     if subject ->> 'operation' in ('create', 'update') then
       -- A different intent may have deleted or changed a link target since its
       -- preparation. Recheck target eligibility against the completed graph.

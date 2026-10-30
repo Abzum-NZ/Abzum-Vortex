@@ -133,7 +133,10 @@ begin
       or pg_catalog.jsonb_array_length(event_result) is distinct from 1 then
       raise exception using errcode = '55000', message = 'Record change Event append failed';
     end if;
-    if subject ->> 'operation' = 'update' and plan #>> '{meta,storageScope}' = 'application_contained' then
+    if subject ->> 'operation' = 'update' and (
+      plan #>> '{meta,storageScope}' = 'application_contained'
+      or plan #>> '{meta,recordType,systemProjection,protectedView}' = 'organization_runtime_settings'
+    ) then
       begin
         notice_sequence := pg_catalog.nextval('vortex_record.record_invalidation_sequence'::pg_catalog.regclass);
         perform vortex_platform.publish_change_notice(
