@@ -1,3 +1,4 @@
+import { createDetachedSegmentInvoker } from "./flow-detached-invocation";
 import "server-only";
 
 import { createHash } from "node:crypto";
@@ -48,7 +49,7 @@ import type { createDatabaseApplicationBoundReleaseSetService } from "./applicat
 import { readPermittedApplicationsAtAddress } from "./application-address";
 import { createFlowCurrentRecordReader } from "./flow-current-record";
 import { createFlowQueryReader } from "./flow-query-reader";
-import { createFlowRecordChangePort } from "./flow-record-changes";
+import { createFlowRecordChangePort, flowRecordTypeRelationships } from "./flow-record-changes";
 import { createFlowOrchestrator } from "./flow-orchestrator";
 import type {
   FlowNamedAction,
@@ -61,7 +62,8 @@ import {
   installedModuleClosure,
   installedSelectedRecordReadContext,
 } from "./flow-selected-record-context";
-import { flowPlansOf } from "../workflows/flow-plan";
+import { flowEntrySegmentsMatch, flowPlansOf } from "../workflows/flow-plan";
+import { flowNeedsRunStart } from "../workflows/flow-run-start";
 import { openFlowAdmissionRun } from "../workflows/start";
 import {
   admitFlowContinuation,
@@ -440,6 +442,7 @@ export async function invokeInstalledFlow(
       canonicalJson(selection) === canonicalJson(boundRequest.selection);
     const admissionHost: AdmissionHost = {
       requests: requestDependencies,
+      continuationKey: dependencies.continuationKey,
       invocation,
       installationOf: installedFlowBindings,
       pageAccess: async (context, bound) => {
@@ -778,6 +781,14 @@ export async function invokeInstalledFlow(
           return false;
         }
       },
+      resolveActor: async (session, selection) => {
+        const result = await requests.run(
+          session,
+          selection,
+          async (_transaction, scope) => scope.organizationAccountId,
+        );
+        return result.kind === "available" ? result.value : undefined;
+      },
       // The release was read from the trusted installation for this exact request.
       resolveRelease: async () => release,
       ...(runId === undefined ? {} : { newRunId: () => runId }),
@@ -859,34 +870,10 @@ export async function invokeInstalledFlow(
         linked.set(setsChoice.option, named);
         optionActions.set(setsChoice.fieldId.toLowerCase(), linked);
       }
-      const relationships = recordType.relationships.map((relationship) => {
-        const field = recordType.fields.find((entry) =>
-          sameId(entry.fieldId, relationship.fromFieldId),
-        );
-        if (
-          field === undefined ||
-          (field.type !== "link" && field.type !== "link_to_one_of_several")
-        )
-          throw new Error("FLOW_RELATIONSHIP_FIELD_INVALID");
-        const targets =
-          relationship.toRecordType === undefined
-            ? relationship.toRecordTypes!
-            : [relationship.toRecordType];
-        return {
-          relationshipId: String(relationship.relationshipId),
-          cardinality: relationship.cardinality,
-          fromRecordTypeId: String(relationship.fromRecordTypeId),
-          fromFieldId: String(relationship.fromFieldId),
-          targetRecordTypeIds: targets.map((target) => {
-            if (target.state !== "resolved") throw new Error("FLOW_RELATIONSHIP_TARGET_INVALID");
-            return String(target.recordTypeId);
-          }),
-        };
-      });
       recordTypes.set(String(recordType.recordTypeId).toLowerCase(), {
         fieldIds,
         optionActions,
-        relationships,
+        relationships: flowRecordTypeRelationships(recordType),
       });
     }
     const namedActions = installedNamedActions(
@@ -1214,9 +1201,14 @@ export async function invokeInstalledFlow(
   const endpoint = createFlowBindingEndpoint({
     readInstallation:
       invocation.kind !== "continuation" ? async () => bindingInstallation : readInstalled,
-    openRun: async (session, selection, binding, installation) => {
+    openRun: async (session, selection, binding, installation, request) => {
       const plan = installation.plans?.get(String(binding.flow.flowId));
-      if (plan === undefined) return { kind: "refused" };
+      if (
+        plan === undefined ||
+        !flowEntrySegmentsMatch(plan, request.entrySegments) ||
+        !flowNeedsRunStart(plan.segments)
+      )
+        return { kind: "reload", installationRevision: installation.installationRevision };
       const release: FlowRelease = {
         releaseKey: installation.releaseKey,
         installationRevision: installation.installationRevision,
@@ -1464,6 +1456,7 @@ export async function invokeInstalledFlow(
         ? undefined
         : adaptSelectedReadInputs(adaptedInputs, resolved);
     },
+    invokeSegment: createDetachedSegmentInvoker(dependencies.continuationKey, orchestratorFor),
     continueForm,
     orchestratorFor,
   });

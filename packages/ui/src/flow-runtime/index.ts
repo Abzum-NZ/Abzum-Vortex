@@ -1,15 +1,24 @@
 export { useFlowIntentHost, type FlowIntentHostOptions } from "./flow-intent-host";
 export {
+  continueFlowEventCycle,
+  flowSetFieldChange,
+  startFlowEventCycle,
+  type FlowCycleRefusal,
+  type FlowEventCycle,
+} from "./flow-cycle";
+export {
   createFormBlockRuntime,
   type FormBlockRuntime,
   type FormFieldAnswers,
 } from "./form-block-runtime";
 export {
   createFlowRuntime,
+  createFlowRuntimeState,
   type FlowBindingReference,
   type PlacementFlowBinding,
   type FlowRuntime,
   type FlowRuntimeOptions,
+  type FlowRuntimeState,
 } from "./flow-runtime";
 export {
   FLOW_INTENT_KINDS,
@@ -27,9 +36,9 @@ export {
   type FlowIntentKind,
   type FlowMessageIntent,
 } from "./intents";
-export { driveServerFlow, type ServerDrivenResult } from "./server-driven-run";
+export type { ServerDrivenResult } from "./server-driven-run";
+export { createFlowInvokeClient } from "./lazy-flow-client";
 export {
-  createFlowInvokeClient,
   parseServerFlowResponse,
   type FlowApplicationAddress,
   type FlowSubjectContext,

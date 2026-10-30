@@ -1,12 +1,10 @@
 import type { JsonValue } from "../catalogue/common";
-import {
-  flowReadFieldsProjectionSchema,
-  flowReadFieldsTypeMapSchema,
-  flowTaskChildLists,
-  type FlowTask,
-} from "../workflows/flow-contracts";
+import type { FlowTask } from "../workflows/flow-contracts";
+import { isFlowReadFieldsProjection, isFlowReadFieldsTypeMap } from "../workflows/flow-read-fields";
+import { flowTaskChildLists } from "../workflows/flow-task-tree";
 import type { FlowValue } from "../workflows/flow-values";
-import { typedValueMatchesType } from "./condition-types";
+import type { FlowProgram } from "./flow-interpreter-types";
+import { flowValueMatchesType } from "./flow-value-shapes";
 
 export const findTask = (tasks: readonly FlowTask[], taskId: string): FlowTask | undefined => {
   for (const task of tasks) {
@@ -19,10 +17,16 @@ export const findTask = (tasks: readonly FlowTask[], taskId: string): FlowTask |
   return undefined;
 };
 
+/** Whether a Read record fields result is exactly the projection its task declared. */
 export const validReadFieldsResume = (
-  task: FlowTask | undefined,
+  flow: FlowProgram | undefined,
+  taskId: string,
   produced: Readonly<Record<string, JsonValue>> | undefined,
 ): boolean => {
+  const task =
+    flow === undefined
+      ? undefined
+      : findTask([...flow.tasks, ...flow.errors, ...flow.finally], taskId);
   if (task?.type !== "record.read_fields") return false;
   const registered = task as Extract<FlowTask, { properties: unknown }> & {
     properties: Readonly<Record<string, FlowValue>>;
@@ -30,16 +34,14 @@ export const validReadFieldsResume = (
   };
   const fields = registered.properties.fields;
   const projection =
-    fields?.kind === "literal" && fields.literal.type === "json"
-      ? flowReadFieldsProjectionSchema.safeParse(fields.literal.value)
-      : undefined;
-  const types = flowReadFieldsTypeMapSchema.safeParse(registered.readFieldTypes);
-  if (!projection?.success || !types.success) return false;
-  const declaredAliases = projection.data.map((field) => field.alias);
-  const typeAliases = Object.keys(types.data);
+    fields?.kind === "literal" && fields.literal.type === "json" ? fields.literal.value : undefined;
+  const types = registered.readFieldTypes;
+  if (!isFlowReadFieldsProjection(projection) || !isFlowReadFieldsTypeMap(types)) return false;
+  const declaredAliases = projection.map((field) => field.alias);
+  const typeAliases = Object.keys(types);
   if (
     declaredAliases.length !== typeAliases.length ||
-    declaredAliases.some((alias) => !Object.hasOwn(types.data, alias))
+    declaredAliases.some((alias) => !Object.hasOwn(types, alias))
   )
     return false;
   if (
@@ -57,9 +59,7 @@ export const validReadFieldsResume = (
   return (
     actualAliases.length === declaredAliases.length &&
     declaredAliases.every(
-      (alias) =>
-        Object.hasOwn(actual, alias) &&
-        typedValueMatchesType(actual[alias], types.data[alias]!, "flow"),
+      (alias) => Object.hasOwn(actual, alias) && flowValueMatchesType(actual[alias], types[alias]!),
     )
   );
 };

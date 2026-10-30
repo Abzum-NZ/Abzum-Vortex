@@ -3,13 +3,14 @@ import {
   HumanOrganizationRequestRestart,
   type BoundHumanOrganizationRequest,
 } from "../access/human-organization-request";
-import { isRecord } from "../catalogue/runtime-primitives";
+import { isRecord, sameId } from "../catalogue/runtime-primitives";
 import { z } from "zod";
 import { jsonValueSchema } from "../catalogue/common";
 import { fieldIdSchema } from "../catalogue/identifiers";
 import { applyRecordChanges } from "../records/apply-record-changes";
 import { revision } from "../records/record-save-preparation";
 import type { FlowOrchestratorDependencies } from "./flow-orchestrator-types";
+import type { RecordTypeDefinition } from "./module-contracts";
 
 /** The admitted segment owns the transaction and rolls back every refused task. */
 export const createFlowRecordChangePort = (
@@ -100,3 +101,27 @@ export const createFlowRecordChangePort = (
     return current;
   },
 });
+
+/** The release's relationships of one record type, as the record change planners resolve them. */
+export const flowRecordTypeRelationships = (recordType: RecordTypeDefinition) =>
+  recordType.relationships.map((relationship) => {
+    const field = recordType.fields.find((entry) =>
+      sameId(entry.fieldId, relationship.fromFieldId),
+    );
+    if (field === undefined || (field.type !== "link" && field.type !== "link_to_one_of_several"))
+      throw new Error("FLOW_RELATIONSHIP_FIELD_INVALID");
+    const targets =
+      relationship.toRecordType === undefined
+        ? relationship.toRecordTypes!
+        : [relationship.toRecordType];
+    return {
+      relationshipId: String(relationship.relationshipId),
+      cardinality: relationship.cardinality,
+      fromRecordTypeId: String(relationship.fromRecordTypeId),
+      fromFieldId: String(relationship.fromFieldId),
+      targetRecordTypeIds: targets.map((target) => {
+        if (target.state !== "resolved") throw new Error("FLOW_RELATIONSHIP_TARGET_INVALID");
+        return String(target.recordTypeId);
+      }),
+    };
+  });

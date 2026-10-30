@@ -14,8 +14,8 @@ import type {
   FlowRuntimeValues,
   FlowTaskTraceObservation,
   FlowTaskTraceObserver,
-} from "./flow-interpreter";
-import type { FlowDefinition } from "../workflows/flow-contracts";
+  FlowProgram,
+} from "./flow-interpreter-types";
 
 export const flowRunStateVersion = "1" as const;
 
@@ -23,6 +23,9 @@ export const initialState = (start: FlowRunStart): FlowRunState => ({
   version: flowRunStateVersion,
   runId: start.runId,
   now: start.now,
+  ...(start.organizationLocalDate === undefined
+    ? {}
+    : { organizationLocalDate: start.organizationLocalDate }),
   ...(start.actor === undefined ? {} : { actor: start.actor }),
   ...(start.subject === undefined ? {} : { subject: start.subject }),
   activations: [],
@@ -34,7 +37,7 @@ export const initialState = (start: FlowRunStart): FlowRunState => ({
   ...(start.previousRecord === undefined ? {} : { previousRecord: start.previousRecord }),
 });
 
-export const initialVariables = (flow: FlowDefinition): FlowRuntimeValues =>
+export const initialVariables = (flow: FlowProgram): FlowRuntimeValues =>
   Object.fromEntries(
     Object.entries(flow.variables).map(([name, declaration]) => [
       name,
@@ -43,7 +46,7 @@ export const initialVariables = (flow: FlowDefinition): FlowRuntimeValues =>
   );
 
 export const newActivation = (
-  flow: FlowDefinition,
+  flow: FlowProgram,
   inputs: FlowRuntimeValues,
   prefix: string,
   callTaskId?: string,

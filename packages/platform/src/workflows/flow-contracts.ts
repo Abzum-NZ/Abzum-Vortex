@@ -1,3 +1,5 @@
+import { flowTaskChildLists } from "./flow-task-tree";
+export { flowControlTaskTypeKeys, flowTaskChildLists, isFlowControlTask } from "./flow-task-tree";
 import { z } from "zod";
 import { workflowValueTypeSchema } from "../catalogue/catalogues";
 import { descriptionSchema, jsonValueSchema } from "../catalogue/common";
@@ -6,6 +8,18 @@ import type { FlowId } from "../catalogue/identifiers";
 import { boundedRecord, flowFormulaSchema, flowLiteralSchema, flowFormulaValueSchema, flowLiteralValueSchema, flowReferenceValueSchema, flowValueSchema, shorthandReferenceValueSchema, templateFreeText } from "./flow-values";
 import { flowMaximumTaskCount, flowMaximumSetBasedForEachItems, flowMaximumRunFlowDepth } from "./flow-limits";
 import type { FlowFormula, FlowLiteral, FlowValue } from "./flow-values";
+import {
+  flowReadFieldsScalarTypeKeys,
+  flowMaximumRecordReadFields,
+  isFlowReadFieldsProjection,
+  isFlowReadFieldsTypeMap,
+  type FlowReadFieldsScalarType,
+} from "./flow-read-fields";
+export {
+  flowMaximumRecordReadFields,
+  flowReadFieldsScalarTypeKeys,
+  type FlowReadFieldsScalarType,
+} from "./flow-read-fields";
 
 /**
  * The one flow definition every behaviour kind uses: interactive actions, named-action bodies,
@@ -33,74 +47,22 @@ import type { FlowFormula, FlowLiteral, FlowValue } from "./flow-values";
 export const flowExecutionKindSchema = z.enum(["interactive", "transaction", "background"]);
 export type FlowExecutionKind = z.infer<typeof flowExecutionKindSchema>;
 
-/** A selected-record read declares at most twenty output members and source field references. */
-export const flowMaximumRecordReadFields = 20;
-
-/** Scalar output types supported by Flow for selected-record field projections. */
-export const flowReadFieldsScalarTypeKeys = [
-  "text",
-  "formatted_text",
-  "whole_number",
-  "decimal_number",
-  "money",
-  "yes_no",
-  "date",
-  "date_time",
-  "choice",
-] as const satisfies readonly z.infer<typeof workflowValueTypeSchema>[];
 export const flowReadFieldsScalarTypeSchema = z.enum(flowReadFieldsScalarTypeKeys);
-export type FlowReadFieldsScalarType = z.infer<typeof flowReadFieldsScalarTypeSchema>;
 
 /** Compiler-owned scalar types keyed by the aliases in a selected-record projection. */
 export const flowReadFieldsTypeMapSchema = z
   .record(builderKeySchema, flowReadFieldsScalarTypeSchema)
-  .superRefine((types, context) => {
-    const count = Object.keys(types).length;
-    if (count < 1)
-      context.addIssue({
-        code: "custom",
-        message: "A selected-record type map must contain at least one member",
-      });
-    if (count > flowMaximumRecordReadFields)
-      context.addIssue({
-        code: "custom",
-        message: `A selected-record type map can contain at most ${flowMaximumRecordReadFields} members`,
-      });
+  .refine(isFlowReadFieldsTypeMap, {
+    error: "A selected-record type map must contain 1 to 20 named scalar members",
   });
-
-/** One named output member of a selected-record field projection. */
-export const flowReadFieldsProjectionEntrySchema = z
-  .object({
-    alias: builderKeySchema,
-    // A source record type alias can use 240 characters, plus a dot and a 40-character field key.
-    field: z.string().min(1).max(281),
-  })
-  .strict();
 
 /** The closed, ordered projection carried by `record.read_fields`. */
 export const flowReadFieldsProjectionSchema = z
-  .array(flowReadFieldsProjectionEntrySchema)
+  .array(z.object({ alias: builderKeySchema, field: z.string().min(1).max(281) }).strict())
   .min(1)
   .max(flowMaximumRecordReadFields)
-  .superRefine((fields, context) => {
-    const aliases = new Set<string>();
-    const references = new Set<string>();
-    fields.forEach((field, index) => {
-      if (aliases.has(field.alias))
-        context.addIssue({
-          code: "custom",
-          path: [index, "alias"],
-          message: "Projection aliases must be unique",
-        });
-      aliases.add(field.alias);
-      if (references.has(field.field))
-        context.addIssue({
-          code: "custom",
-          path: [index, "field"],
-          message: "Projected field references must be unique",
-        });
-      references.add(field.field);
-    });
+  .refine(isFlowReadFieldsProjection, {
+    error: "Select 1 to 20 fields with unique aliases and field references",
   });
 
 /** The projection is authored as one JSON literal, never a runtime map or computed value. */
@@ -291,14 +253,7 @@ export type FlowRunAs = z.infer<typeof flowRunAsSchema>;
 
 // ─── Tasks: an ordered, nested list ──────────────────────────────────────────────────────────
 
-export const flowControlTaskTypeKeys = [
-  "if",
-  "switch",
-  "for_each",
-  "sequential",
-  "run_flow",
-  "stop",
-] as const;
+
 
 /**
  * Registered (non-control) task type keys are dotted, such as `record.save`, so they can never
@@ -479,37 +434,6 @@ const flowTaskTreeSchema: z.ZodType<FlowTask> = z.lazy(() => {
   return z.union([control, registered]);
 });
 export const flowTaskSchema: z.ZodType<FlowTask> = flowTaskTreeSchema;
-
-export const isFlowControlTask = (task: FlowTask): boolean =>
-  (flowControlTaskTypeKeys as readonly string[]).includes(task.type);
-
-/** The nested task lists a task owns, with the path segments that reach each. */
-export const flowTaskChildLists = (
-  task: FlowTask,
-): { path: (string | number)[]; tasks: FlowTask[] }[] => {
-  const lists: { path: (string | number)[]; tasks: FlowTask[] }[] = [];
-  if (!isFlowControlTask(task)) return lists;
-  const control = task as Extract<FlowTask, { type: (typeof flowControlTaskTypeKeys)[number] }>;
-  switch (control.type) {
-    case "if":
-      lists.push({ path: ["then"], tasks: control.then });
-      if (control.else) lists.push({ path: ["else"], tasks: control.else });
-      break;
-    case "switch":
-      control.cases.forEach((entry, index) =>
-        lists.push({ path: ["cases", index, "tasks"], tasks: entry.tasks }),
-      );
-      if (control.default) lists.push({ path: ["default"], tasks: control.default });
-      break;
-    case "for_each":
-    case "sequential":
-      lists.push({ path: ["tasks"], tasks: control.tasks });
-      break;
-    default:
-      break;
-  }
-  return lists;
-};
 
 // ─── The flow ────────────────────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,8 @@
 import type { JsonValue } from "../catalogue/common";
 import type { FlowDateUnit, FlowLiteral, FlowReference, FlowRoundingMode } from "./flow-values";
 
+export const flowRoundingModes = ["half_up", "half_even", "half_down", "up", "down", "ceiling", "floor"] as const;
+
 type ArithmeticPrecision = { scale: number; rounding: FlowRoundingMode };
 export type FlowFormula =
   | { op: "literal"; type: FlowLiteral["type"]; value: JsonValue }
@@ -82,4 +84,3 @@ export const flowFormulaHasUnroundedDivide = (formula: FlowFormula): boolean =>
       ? [formula.then, formula.else]
       : flowFormulaChildren(formula)
     ).some(flowFormulaHasUnroundedDivide));
-

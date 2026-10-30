@@ -1,9 +1,45 @@
 "use client";
 
-import { createContext, useContext, useLayoutEffect, useState, type MouseEvent } from "react";
+import {
+  createContext,
+  useContext,
+  useLayoutEffect,
+  useState,
+  type MouseEvent,
+  type RefObject,
+} from "react";
 import { usePagePresence } from "@vortex/ui";
 import type { ProjectedApplicationFrame, ProjectedNavigation } from "@vortex/platform/schema";
 import type { ApplicationWebMcpRuntime, PagePuckRendererProps, UnsavedWorkGuard } from "@vortex/ui";
+
+/** The current page's in-memory control drafts, kept by the surrounding frame. */
+type ControlDraft = {
+  kind: string;
+  value: unknown;
+  fieldKey: string;
+  owner?: string;
+  display?: { title?: string; files?: readonly { fileId: string; name: string }[] };
+};
+export type ControlDrafts = {
+  scope: string;
+  model?: object;
+  pending?: Promise<void>;
+  restoreBaselines?: (registry: {
+    valuesOf: (formId: string) => Readonly<Record<string, unknown>> | undefined;
+    markSaved: (formId: string, values: Readonly<Record<string, unknown>>) => void;
+  }) => void;
+  drafts: Record<string, ControlDraft>;
+  baselines: Record<string, Readonly<Record<string, unknown>>>;
+  baselineFields: Record<string, Record<string, { kind: string; fieldKey: string }>>;
+  restored: Record<string, unknown>;
+};
+export const emptyControlDrafts = (): ControlDrafts => ({
+  scope: "",
+  drafts: {},
+  baselines: {},
+  baselineFields: {},
+  restored: {},
+});
 
 /** What the current page tells the frame around it. Each part is absent until the page sets it. */
 export type ApplicationFramePageState = Readonly<{
@@ -30,6 +66,8 @@ export type ApplicationFramePageState = Readonly<{
 export type FramePageStateOwner = Readonly<Record<string, never>>;
 
 export type ApplicationFrameStateValue = Readonly<{
+  /** The page draft store, retained while the addressed frame stays mounted. */
+  controlDraftsRef: RefObject<ControlDrafts>;
   /** The current frame's projection, shared with navigation blocks in page content. */
   navigation: ProjectedNavigation;
   /** Sets one part of the page state on behalf of `owner`. */
