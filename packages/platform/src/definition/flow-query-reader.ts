@@ -32,7 +32,8 @@ export const createFlowQueryReader = (
         queryId: declared.query.queryId,
         inputValues: target.parameters,
         requestedFieldIds: declared.query.selectedFieldIds,
-        pageSize: target.pageSize,
+        // Absent, the query's own declared page size (at most 200) applies.
+        pageSize: target.pageSize ?? declared.query.pageSize,
         continuationToken: target.continuation === "" ? undefined : target.continuation,
       });
       if (result.kind !== "available") return result;

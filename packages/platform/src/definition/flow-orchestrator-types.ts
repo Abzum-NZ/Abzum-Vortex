@@ -247,7 +247,8 @@ export type FlowOrchestratorDependencies = Readonly<{
       target: Readonly<{
         queryId: string;
         parameters: Readonly<Record<string, JsonValue>>;
-        pageSize: number;
+        /** Undefined uses the query's declared page size. */
+        pageSize: number | undefined;
         /** Empty for the first page. */
         continuation: string;
       }>,
