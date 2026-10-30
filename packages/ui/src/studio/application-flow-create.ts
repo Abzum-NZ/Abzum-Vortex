@@ -180,7 +180,12 @@ export type StudioFlowCreateResult =
       /** The binding made, for a command that binds a control: its alias and the event it declares. */
       binding?: Readonly<{ id: string; eventId: string }>;
     }>
-  | Readonly<{ kind: "refused"; reason: string }>;
+  | Readonly<{
+      kind: "refused";
+      reason: string;
+      /** For a row action the table already has: the flow it runs, which a caller may open instead. */
+      existing?: Extract<StudioSemanticSelection, { kind: "flow" }>;
+    }>;
 
 export type StudioFlowCreateChoices = Readonly<{
   /**
@@ -531,12 +536,61 @@ const uniqueFlowName = (
   }
 };
 
+/** The operation a flow's Call protected operation steps run, by the key the step names. */
+const operationsCalled = (flow: SourceFlow): readonly string[] =>
+  flow.tasks.flatMap((task) => {
+    const operation = (task as { properties?: Readonly<Record<string, unknown>> }).properties
+      ?.operation as { kind?: string; literal?: { value?: unknown } } | undefined;
+    return task.type === "operation.call" &&
+      operation?.kind === "literal" &&
+      typeof operation.literal?.value === "string"
+      ? [operation.literal.value]
+      : [];
+  });
+
+/**
+ * The flow a table already runs as a row action when the command would add the same one: the same
+ * bound flow, or a flow calling the same operation. A table lists each row action once.
+ */
+const existingRowActionFlow = (
+  source: Readonly<ApplicationSourceDocument>,
+  command: StudioFlowCreateCommand,
+): SourceFlow | undefined => {
+  if (command.kind === "before_save" || command.event !== "row_action") return undefined;
+  const wantedOperation =
+    command.kind === "action"
+      ? command.step?.kind === "operation"
+        ? command.step.operation
+        : undefined
+      : command.kind === "control"
+        ? operationsCalled({ tasks: command.tasks } as SourceFlow)[0]
+        : undefined;
+  for (const binding of source.body.flow_bindings) {
+    if (binding.control !== command.controlAlias || binding.event !== "row_action") continue;
+    const flow = source.body.flows.find(
+      (entry) => entry.key === binding.flow || entry.id === binding.flow,
+    );
+    if (flow === undefined) continue;
+    if (command.kind === "bind" && flow.key === command.flowKey) return flow;
+    if (wantedOperation !== undefined && operationsCalled(flow).includes(wantedOperation))
+      return flow;
+  }
+  return undefined;
+};
+
 export const applyStudioFlowCreate = (
   source: Readonly<ApplicationSourceDocument>,
   command: StudioFlowCreateCommand,
   borrowed: StudioBorrowedChoices | null,
 ): StudioFlowCreateResult => {
   try {
+    const duplicate = existingRowActionFlow(source, command);
+    if (duplicate !== undefined)
+      return {
+        kind: "refused",
+        reason: `${duplicate.labels.name ?? "This action"} is already a row action of this table.`,
+        existing: { kind: "flow", flowAlias: duplicate.id, moduleKey: null },
+      };
     const candidate: ApplicationSourceDocument = structuredClone(source);
     const body = candidate.body;
     if (command.kind === "bind") {
