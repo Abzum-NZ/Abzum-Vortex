@@ -35,6 +35,11 @@ import { createViewerSafeRecordLinkReadService } from "../queries/viewer-safe-re
 import { adaptPrivateFormSubmit } from "../pages/form-request";
 import { createPageSubjectReader } from "../pages/page-subject-read";
 import { logRecordsTableRequestRefusal } from "../pages/records-table-features";
+import {
+  createRecordsTableBatchEditService,
+  type RecordsTableBatchEditDependencies,
+} from "../pages/records-table-features/batch-edit";
+import { recordsTableBatchEditRequestSchema } from "../pages/records-table-batch-edit-request";
 import { requireProjectedPlacement } from "../pages/projected-placement-gate";
 import { createStoredPageCapabilityService } from "../pages/stored-page-capability";
 import { recordsTableBindingRefusal } from "../pages/records-table-features/flow-dispatch";
@@ -138,6 +143,8 @@ export type InvocationDependencies = Readonly<{
   telemetry: NonNullable<Parameters<typeof createRecordSaveService>[0]["telemetry"]>;
   releaseCatalogue: Parameters<typeof createDatabaseApplicationBoundReleaseSetService>[0];
   continuationKey: QueryContinuationKey;
+  /** Makes a Studio preview's link target record types readable for a pasted link title. */
+  prepareLinkTargets: RecordsTableBatchEditDependencies["prepareLinkTargets"];
   validateControlOption: (input: FlowControlOptionRequest) => Promise<boolean>;
   projectRowForm: (
     bound: BoundHumanOrganizationRequest,
@@ -1192,6 +1199,36 @@ export async function invokeInstalledFlow(
       );
       if (carriedValues === undefined) throw new Error("FLOW_RUN_TOKEN_UNAVAILABLE");
       return { kind: "run_opened", carriedValues };
+    },
+    adaptBatchEdit: async (binding, callerInputs, installation) => {
+      const request = recordsTableBatchEditRequestSchema.safeParse({
+        placementId: String(binding.controlId),
+        operation: callerInputs.operation,
+        rows: callerInputs.rows,
+      });
+      if (!request.success) {
+        logFlowRefusal("BINDING_BATCH_EDIT_ROWS_INVALID");
+        return undefined;
+      }
+      const prepared = await createRecordsTableBatchEditService({
+        ...requestDependencies,
+        continuationKey: dependencies.continuationKey,
+        prepareLinkTargets: dependencies.prepareLinkTargets,
+      }).prepare(
+        identity.session,
+        { pageId: body.pageKey, selection, installedContext: bindingContext! },
+        request.data,
+      );
+      if (prepared.kind === "cells_refused") return prepared;
+      if (prepared.kind !== "ready") {
+        logFlowRefusal(`BINDING_BATCH_EDIT_${prepared.kind.toUpperCase()}`);
+        return undefined;
+      }
+      void installation;
+      return {
+        kind: "adapted",
+        inputs: { rows: prepared.rows, operation: request.data.operation },
+      };
     },
     adaptFormSubmit: async (binding, callerInputs, subject, installation) => {
       const resolveValues = async (values: unknown) => {

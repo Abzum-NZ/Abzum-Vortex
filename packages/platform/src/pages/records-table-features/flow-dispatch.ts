@@ -190,6 +190,7 @@ export const recordsTableBindingRefusal = async (
     event !== "row_action" &&
     event !== "row_clicked" &&
     event !== "bulk_action" &&
+    event !== "batch_edit" &&
     event !== recordsTableInlineEditEvent &&
     event !== recordsTableRowEditEvent
   )
@@ -213,6 +214,16 @@ export const recordsTableBindingRefusal = async (
     return recordsTableRequestRefusal("contract", "placement_contract_unreadable");
   // A bulk action runs a named action through the table's own bulk run, never a flow binding.
   if (event === "bulk_action") return recordsTableRequestRefusal(event, "command_not_declared");
+  // A batch of pasted, filled or undone cells names its rows itself; every cell is decided when
+  // the batch is prepared, so only the feature and its declared binding are checked here.
+  if (event === "batch_edit") {
+    const { spreadsheet } = contract.features;
+    return !spreadsheet.enabled
+      ? recordsTableRequestRefusal(event, "feature_off")
+      : spreadsheet.eventId === undefined || !sameId(spreadsheet.eventId, binding.eventId)
+        ? recordsTableRequestRefusal(event, "binding_not_declared")
+        : undefined;
+  }
   const command =
     event === "row_action"
       ? contract.rowBehaviours.rowActions.find((action) => sameId(action.eventId, binding.eventId))

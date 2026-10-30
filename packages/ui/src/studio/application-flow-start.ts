@@ -131,6 +131,10 @@ const suppliedByEvent: Readonly<
     { name: "record_id", label: "The edited record" },
     { name: "values", label: "All changed fields of the row" },
   ],
+  batch_edit: [
+    { name: "rows", label: "The pasted, filled or undone rows" },
+    { name: "operation", label: "Whether it was a paste, fill, undo or redo" },
+  ],
   [recordsTableInlineEditEvent]: [
     { name: "record_id", label: "The edited record" },
     { name: "values", label: "The edited values" },

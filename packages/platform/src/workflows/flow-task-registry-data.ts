@@ -160,6 +160,8 @@ const controlDefinitions: Record<FlowControlTaskTypeKey, DefinitionInput> = {
     summary: "Runs a list of tasks for every item, within the flow's item limit.",
     runLocations: allLocations,
     effect: "pure",
+    // Only a set-based For each applies its record steps as one change and reports them here.
+    outputs: [output("applied", "json")],
   },
   sequential: {
     title: "Sequential",
@@ -226,8 +228,14 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       record_type: optional("record_type_id"),
       record: optional("record_reference"),
       values: required("field_values"),
+      // The revision the person saw; the change is refused when the record is no longer at it.
+      expected_revision: optional("whole_number"),
     },
-    outputs: [output("record", "record_reference")],
+    outputs: [
+      output("record", "record_reference"),
+      output("revision", "whole_number"),
+      output("previous", "json"),
+    ],
   },
   "record.link": {
     title: "Link records",

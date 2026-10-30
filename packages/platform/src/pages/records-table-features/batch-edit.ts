@@ -11,7 +11,6 @@ import { fieldIdSchema } from "../../catalogue/identifiers";
 import { sameId } from "../../catalogue/runtime-primitives";
 import type { QueryContinuationKey } from "../../queries/continuation-token";
 import { createProtectedQueryService } from "../../queries/protected-query-service";
-import { createRecordSaveService, type RecordBatchSaveProblem } from "../../records/save-record";
 import { pageSubjectFromRead } from "../page-subject-read";
 import { fieldEditorsOf } from "../placement-read/shared";
 import type { RecordsTableRequestRejection } from "../records-selection";
@@ -57,6 +56,18 @@ export type RecordsTableBatchEditDependencies = HumanOrganizationRequestDependen
     prepareLinkTargets: LinkTitleDependencies["prepareTargets"];
   }>;
 
+/** The rows a batch flow saves, or why the batch stops before any is written. */
+export type RecordsTableBatchEditPreparation =
+  | Readonly<{
+      kind: "ready";
+      rows: readonly Readonly<{
+        record: string;
+        expected_revision: number;
+        values: Readonly<Record<string, JsonValue>>;
+      }>[];
+    }>
+  | Exclude<RecordsTableBatchEditResult, { kind: "saved" }>;
+
 const log = (cause: string): void => {
   console.error(`[records-table] batch edit refused cause=${cause}`);
 };
@@ -90,29 +101,10 @@ const problem = (
   message: message ?? messageOf(reason),
 });
 
-/** A save problem as the person is told it: a rule's authored words, or the safe wording of its kind. */
-const problemOfSave = (saved: RecordBatchSaveProblem): RecordsTableBatchEditProblem => {
-  const reason: RecordsTableBatchEditRefusalReason =
-    saved.reason === "changed"
-      ? "changed"
-      : saved.reason === "refused"
-        ? "refused"
-        : saved.reason === "field_refused"
-          ? "not_editable"
-          : "invalid";
-  return problem(
-    saved.recordId,
-    reason,
-    saved.fieldId,
-    saved.reason === "required_value" ? "A value is required." : saved.message,
-  );
-};
-
 export const createRecordsTableBatchEditService = (
   dependencies: RecordsTableBatchEditDependencies,
 ) => {
   const requests = createHumanOrganizationRequestService(dependencies);
-  const records = createRecordSaveService(dependencies);
   const queries = createProtectedQueryService(dependencies);
 
   /** The feature switches of the installed placement, and what the request may name. */
@@ -137,11 +129,16 @@ export const createRecordsTableBatchEditService = (
   };
 
   return Object.freeze({
-    async run(
+    /**
+     * Decides every cell of a pasted, filled or undone batch and returns the rows the batch flow
+     * saves, or the problems that stop it. Nothing is written here: the flow's set-based change is
+     * the one write, in one transaction.
+     */
+    async prepare(
       session: IdentitySession,
       address: RecordsTableCommandAddress,
       request: RecordsTableBatchEditRequest,
-    ): Promise<RecordsTableBatchEditResult> {
+    ): Promise<RecordsTableBatchEditPreparation> {
       const placement = await placementFor(session, address, request);
       if (placement === undefined) return { kind: "unavailable" };
       if ("kind" in placement) return placement;
@@ -291,26 +288,12 @@ export const createRecordsTableBatchEditService = (
           ]),
         ) as Readonly<Record<string, JsonValue>>;
 
-      const saved = await records.saveBatch(
-        session,
-        address.selection,
-        request.commandId,
-        recordTypeId,
-        request.rows.map((row) => ({
-          recordId: row.recordId,
-          expectedConcurrencyNumber: row.revision,
-          submittedValues: valuesOf(row),
-        })),
-      );
-      if (saved.kind === "refused")
-        return { kind: "cells_refused", problems: saved.problems.map(problemOfSave) };
-      if (saved.kind !== "saved") return { kind: "unavailable" };
       return {
-        kind: "saved",
-        rows: saved.rows.map((row) => ({
-          recordId: row.recordId as RecordsTableBatchEditProblem["recordId"],
-          revision: row.concurrencyNumber,
-          previous: row.previous as Record<string, never>,
+        kind: "ready",
+        rows: request.rows.map((row) => ({
+          record: row.recordId,
+          expected_revision: row.revision,
+          values: valuesOf(row),
         })),
       };
     },

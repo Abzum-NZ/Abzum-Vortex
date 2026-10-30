@@ -125,10 +125,6 @@ export {
   type RecordsTableBulkDependencies,
 } from "./records-table-features/bulk-run";
 export {
-  createRecordsTableBatchEditService,
-  type RecordsTableBatchEditDependencies,
-} from "./records-table-features/batch-edit";
-export {
   createRecordsRangeSummaryService,
   type RecordsRangeSummaryDependencies,
 } from "./records-table-features/range-summary";

@@ -9,6 +9,7 @@ import {
   authoredRecordsTableEventAvailable,
   builderKeySchema,
   defaultFlowBindingSettings,
+  defaultBatchEditFlowSource,
   defaultChangeFlowSource,
   defaultOperationFlowSource,
   sourceItemTree,
@@ -62,6 +63,7 @@ export type StudioFlowAuthoringEvent = Extract<
   | "form_submit"
   | "row_clicked"
   | "row_action"
+  | "batch_edit"
   | typeof recordsTableInlineEditEvent
   | typeof recordsTableRowEditEvent
 >;
@@ -73,6 +75,7 @@ export const studioFlowEventLabels: Readonly<Record<StudioFlowAuthoringEvent, st
   form_submit: "When submitted",
   row_clicked: "When a row is clicked",
   row_action: "Row action",
+  batch_edit: "When cells are pasted, filled or undone",
   [recordsTableInlineEditEvent]: "When a value is edited",
   [recordsTableRowEditEvent]: "When a row is saved",
 };
@@ -99,6 +102,7 @@ const controlEventRecordType = (
   if (
     event === "row_clicked" ||
     event === "row_action" ||
+    event === "batch_edit" ||
     event === recordsTableInlineEditEvent ||
     event === recordsTableRowEditEvent
   ) {
@@ -120,6 +124,7 @@ export const studioFlowCreateSavesChange = (
   recordType: string | null,
 ): boolean =>
   (event === "card_moved" ||
+    event === "batch_edit" ||
     event === recordsTableInlineEditEvent ||
     event === recordsTableRowEditEvent) &&
   recordType !== null;
@@ -266,6 +271,7 @@ export const projectStudioFlowCreateChoices = (
         // a card added from a column is offered while the board's quick add is on.
         ((event === recordsTableInlineEditEvent ||
           event === recordsTableRowEditEvent ||
+          event === "batch_edit" ||
           event === "card_added") &&
           (placed === undefined || !authoredRecordsTableEventAvailable(placed.props, event)))
       )
@@ -449,6 +455,14 @@ const bindControl = (
     (item.props as Record<string, unknown>).row_action_event_id = eventId;
   if (event === "row_clicked") {
     if (item !== undefined) item.props.row_click = { mode: "flow", event_id: eventId };
+  }
+  if (event === "batch_edit") {
+    if (item === undefined) return refuse("The table is no longer on the page.");
+    // The table names the action that saves a batch in its Spreadsheet controls feature.
+    const props = item.props as Record<string, unknown>;
+    const features = isRecord(props.features) ? props.features : {};
+    const feature = isRecord(features.spreadsheet) ? features.spreadsheet : {};
+    props.features = { ...features, spreadsheet: { ...feature, event_id: eventId } };
   }
   if (event === recordsTableInlineEditEvent || event === recordsTableRowEditEvent) {
     if (item === undefined) return refuse("The table is no longer on the page.");
@@ -793,7 +807,8 @@ export const applyStudioFlowCreate = (
     if (
       command.kind === "action" &&
       (command.event === recordsTableInlineEditEvent ||
-        command.event === recordsTableRowEditEvent) &&
+        command.event === recordsTableRowEditEvent ||
+        command.event === "batch_edit") &&
       command.recordType === null
     )
       return { kind: "refused", reason: "Choose the table's query first." };
@@ -810,24 +825,42 @@ export const applyStudioFlowCreate = (
       command.recordType !== null &&
       studioFlowCreateSavesChange(command.event, command.recordType)
     ) {
-      // A board's card move and a table's inline edit each save the changed value of one record
-      // through the one Save record task: the record and the changed field with its new value.
-      flow = {
-        ...defaultChangeFlowSource({ id: key, key, recordType: command.recordType }),
-        labels: { name },
-        recordInput: "record",
-      };
-      binding = bindControl(
-        candidate,
-        command.controlAlias,
-        command.event,
-        key,
-        {
-          record: { kind: "caller", name: "record_id" },
-          values: { kind: "caller", name: "values" },
-        },
-        borrowed,
-      );
+      if (command.event === "batch_edit") {
+        flow = {
+          ...defaultBatchEditFlowSource({ id: key, key, recordType: command.recordType }),
+          labels: { name },
+        };
+        binding = bindControl(
+          candidate,
+          command.controlAlias,
+          command.event,
+          key,
+          {
+            rows: { kind: "caller", name: "rows" },
+            operation: { kind: "caller", name: "operation" },
+          },
+          borrowed,
+        );
+      } else {
+        // A board's card move and a table's inline edit each save the changed value of one record
+        // through the one Save record task: the record and the changed field with its new value.
+        flow = {
+          ...defaultChangeFlowSource({ id: key, key, recordType: command.recordType }),
+          labels: { name },
+          recordInput: "record",
+        };
+        binding = bindControl(
+          candidate,
+          command.controlAlias,
+          command.event,
+          key,
+          {
+            record: { kind: "caller", name: "record_id" },
+            values: { kind: "caller", name: "values" },
+          },
+          borrowed,
+        );
+      }
     } else if (command.kind === "action") {
       flow = interactiveFlow(key, name, {
         outputs: {},

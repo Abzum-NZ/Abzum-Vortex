@@ -624,7 +624,22 @@ export const createFlowTaskRunner = (
       }
       // Inputs for an action only make sense when the value names an option an action owns.
       if (Object.hasOwn(call.properties, "action_inputs")) return { outcome: "validation" };
-      const subject = await resolveRecordTarget(run, state, call, recordTypeId.data, recordId.data);
+      // The revision the person saw, when the step names it; the write refuses a record past it.
+      const expected = call.properties.expected_revision?.value;
+      if (
+        expected !== undefined &&
+        (typeof expected !== "number" || !Number.isSafeInteger(expected))
+      )
+        return { outcome: "validation" };
+      const subject = await resolveRecordTarget(
+        run,
+        state,
+        call,
+        recordTypeId.data,
+        recordId.data,
+        undefined,
+        expected,
+      );
       if ("outcome" in subject) return subject;
       const command = saveRecordCommandSchema.safeParse({
         contractVersion: "2.0.0",
@@ -1406,7 +1421,14 @@ export const createFlowTaskRunner = (
       if (slice.outputs !== undefined) return slice.outputs;
       if (slice.call.taskType === "record.delete" || slice.call.taskType === "record.restore")
         return {};
-      return { record: changed!.results[slice.start]!.recordId };
+      const result = changed!.results[slice.start]!;
+      return slice.call.taskType === "record.set_fields"
+        ? {
+            record: result.recordId,
+            revision: result.concurrencyNumber,
+            previous: (changed!.previous[slice.start] ?? {}) as JsonValue,
+          }
+        : { record: result.recordId };
     });
     const warnings = changed?.warnings ?? [];
     appendWarnings(run, first, warnings);

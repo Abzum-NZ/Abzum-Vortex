@@ -446,6 +446,50 @@ export const defaultChangeFlowSource = (input: DefaultChangeFlowInput): SourceFl
     errors: [refreshTask("refresh_after_failure")],
   });
 
+export type DefaultBatchEditFlowInput = DefaultFlowIdentity & Readonly<{ recordType: string }>;
+
+const loopItemField = (name: string) =>
+  ({ kind: "reference", reference: { source: "loop_item", path: [name] } }) as const;
+
+/**
+ * The default for pasted, filled and undone cells (and an undo's inverse): one set-based For each
+ * that sets the fields of every row at the revision the person saw, so the whole batch is one
+ * change in one transaction. A stale row or a refused cell refuses all of it. The batch's
+ * `applied` output carries each record's new revision and the values it replaced, which Undo sends
+ * back. The invoking grid supplies `rows` (record, expected revision and values per row) after the
+ * server has decided every cell.
+ */
+export const defaultBatchEditFlowSource = (input: DefaultBatchEditFlowInput): SourceFlow =>
+  interactiveSource(input, {
+    inputs: {
+      rows: { type: "json", required: true },
+      operation: { type: "text", required: true },
+    },
+    tasks: [
+      {
+        id: "apply",
+        type: "for_each",
+        items: inputReference("rows"),
+        maximumItems: 200,
+        tasks: [
+          {
+            id: "set",
+            type: "record.set_fields",
+            version: taskVersion,
+            properties: {
+              record_type: textLiteral(input.recordType),
+              record: loopItemField("record"),
+              values: loopItemField("values"),
+              expected_revision: loopItemField("expected_revision"),
+            },
+          },
+        ],
+      } as unknown as Task,
+    ],
+    outputs: { applied: { type: "json", value: outputReference("apply", "applied") } },
+    errors: [refreshTask("refresh_after_failure")],
+  });
+
 export type DefaultQueryFlowInput = DefaultFlowIdentity &
   Readonly<{
     /** The declared query the flow reads: its alias in the owning definition. */

@@ -353,7 +353,7 @@ export function validateApplicationSourceCatalogue(
         key: string,
         eventId: string,
         expectedEvent: string,
-        requiredInputType: "record_reference" | "record_reference_list",
+        requiredInputType: "record_reference" | "record_reference_list" | "json",
       ): void => {
         const previous = boundEventIds.get(eventId);
         if (previous !== undefined) {
@@ -430,6 +430,9 @@ export function validateApplicationSourceCatalogue(
           "invalid_value",
         );
       }
+      // Paste, fill and undo bind their batch to a flow that takes the rows as JSON.
+      if (features.spreadsheet.enabled && features.spreadsheet.eventId !== undefined)
+        checkRowBehaviour("features", features.spreadsheet.eventId, "batch_edit", "json");
       if (features.rowEdit.enabled) {
         if (features.rowEdit.eventId !== undefined)
           checkRowBehaviour(

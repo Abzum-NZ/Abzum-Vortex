@@ -263,7 +263,7 @@ export function useRuntimeInputs({
   // The spreadsheet status bar's totals of a selected range, read from the server per settled range.
   const rangeSummary = useRangeSummary({ model, address });
   // Paste, Fill and Undo: one validated batch per gesture, and the session's stack of batches.
-  const batchEdit = useBatchUndo({ model, navigationKey, address });
+  const batchEdit = useBatchUndo({ navigationKey, address, runBinding });
   const titles = useRef<{ scope: string; values: PublishedRecordTitles }>({
     scope: navigationKey,
     values: new Map(),
@@ -445,7 +445,7 @@ export function useRuntimeInputs({
           tableData?.features?.spreadsheet?.fill === true ||
           tableData?.features?.spreadsheet?.undo === true
         )
-          Object.assign(events, batchEdit.eventsFor(placementId));
+          Object.assign(events, batchEdit.eventsFor(placementId, bindings));
         if (supportsEvent("selection_changed"))
           events.selection_changed = (event: DisplaySemanticEvent) => {
             if (event.event !== "selection_changed") return;

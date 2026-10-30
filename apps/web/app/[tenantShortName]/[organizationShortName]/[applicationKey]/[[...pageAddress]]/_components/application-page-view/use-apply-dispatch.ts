@@ -129,6 +129,14 @@ export function useApplyDispatch({
           router.refresh();
           return outcome;
         }
+        if (server.kind === "cells_refused") {
+          showResult({
+            target: "banner",
+            severity: "error",
+            text: "Nothing was saved. Fix the cells listed and try again.",
+          });
+          return { ...outcome, cellProblems: server.problems };
+        }
         if (server.kind === "finished") {
           let resultNotice = finishedNotice(
             server.descriptor.outcome,
@@ -264,6 +272,7 @@ export function useApplyDispatch({
             ...outcome,
             confirmed,
             changed: changedUnderPerson,
+            ...(server.outputs.applied === undefined ? {} : { applied: server.outputs.applied }),
             ...(diagnostic?.corrections === undefined
               ? {}
               : { corrections: diagnostic.corrections }),

@@ -1,11 +1,6 @@
 import { z } from "zod";
 import { recordsTableRequestRejectionSchema } from "./records-selection";
-import {
-  fieldIdSchema,
-  platformIdSchema,
-  recordIdSchema,
-  revisionSchema,
-} from "../catalogue/identifiers";
+import { fieldIdSchema, recordIdSchema, revisionSchema } from "../catalogue/identifiers";
 
 /** The most records one pasted, filled or undone batch changes. */
 export const recordsTableBatchEditMaximumRows = 200;
@@ -41,15 +36,14 @@ export const pastedLinkTitleOf = (value: unknown): string | undefined => {
 
 /**
  * One batch of cell changes on the loaded page: explicit record ids with the revision the person
- * saw, at most 200 of them, and the fields each changes. `commandId` is the person's one gesture:
- * submitting it again replays what it committed. It is the whole of the bounded explicit-ids
- * transaction contract of the bulk commands; there is no second selection shape.
+ * saw, at most 200 of them, and the fields each changes. The command identity is the flow run's own,
+ * derived from the person's one gesture on the server: sending the gesture again replays what it
+ * committed. It is the whole of the bounded explicit-ids transaction contract of the bulk commands;
+ * there is no second selection shape.
  */
 export const recordsTableBatchEditRequestSchema = z
   .object({
-    pageKey: z.string().min(1).max(200),
     placementId: z.string().min(1).max(200),
-    commandId: platformIdSchema,
     /** The gesture to authorize against the installed placement's own feature switch. */
     operation: z.enum(["paste", "fill", "undo", "redo"]),
     rows: z
