@@ -552,6 +552,7 @@ export const defaultBulkActionFlowSource = (input: DefaultBulkActionFlowInput): 
             version: taskVersion,
             properties: {
               operation: textLiteral(input.operation),
+              inputs: { kind: "map", entries: {} },
               subjects: inputReference("subjects"),
             },
           } as unknown as Task,
@@ -611,7 +612,8 @@ export const defaultBulkMatchingFlowSource = (input: DefaultBulkActionFlowInput)
           version: taskVersion,
           properties: {
             operation: textLiteral(input.operation),
-            subjects: outputReference("page", "records"),
+            inputs: { kind: "map", entries: {} },
+              subjects: outputReference("page", "records"),
           },
         } as unknown as Task,
       ],

@@ -4,6 +4,7 @@ import { isIsoCurrencyCode } from "../catalogue/currencies";
 import { checkFlowFormula } from "../rules/flow-formula-check";
 import { formatterCatalogue, unitCatalogue } from "../pages/value-format";
 import { recordTypeIdSchema } from "../catalogue/identifiers";
+import { isSetBasedForEach } from "../workflows/flow-set-based";
 import type {
   DefinitionRuleFailureFamily,
   DefinitionValidationLocation,
@@ -371,6 +372,9 @@ export function validateFlow(
         ? { known: false as const }
         : { known: true as const, type: declared.type as StaticType };
     }
+    // A set-based For each reports what its field changes did as one list.
+    if (task.type === "for_each" && key === "applied" && isSetBasedForEach(task))
+      return { known: true as const, type: "json" as StaticType };
     if (isFlowControlTask(task)) return { known: false as const };
     const registered = task as Extract<FlowTask, { properties: unknown }>;
     if (key === "outcome" && registered.allowRefusal === true)

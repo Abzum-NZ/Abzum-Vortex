@@ -414,8 +414,10 @@ const bindControl = (
   const declared = new Set(
     body.events.filter((entry) => entry.record_type === recordType).map((entry) => entry.id),
   );
+  // Each bulk action of a table is its own event, as each row action menu entry is.
+  const ownEvent = rowActionMenu || event === "bulk_action";
   const shared =
-    rowActionMenu || recordType === undefined
+    ownEvent || recordType === undefined
       ? undefined
       : body.flow_bindings.find(
           (binding) => binding.event === event && declared.has(binding.event_id),
@@ -436,7 +438,7 @@ const bindControl = (
       : blockEventId) ??
     shared ??
     keyFrom(
-      rowActionMenu || recordType === undefined
+      ownEvent || recordType === undefined
         ? `event_${flowKey}`
         : `event_${recordType.slice(recordType.lastIndexOf(":") + 1)}_${event}`,
       aliases,
