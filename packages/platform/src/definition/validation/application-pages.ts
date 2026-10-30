@@ -38,6 +38,7 @@ import type { ApplicationScope } from "./application-scope";
 import { typedConditionTypesValid } from "./field-types";
 import { compareExactDecimals, parseExactDecimal } from "../../records/exact-decimal";
 import { isIsoCurrencyCode } from "../../catalogue/currencies";
+import { reachablePageFlows } from "../../workflows/flow-reachability";
 
 export function applicationPageRules(scope: ApplicationScope): void {
   const {
@@ -357,23 +358,11 @@ export function applicationPageRules(scope: ApplicationScope): void {
         .filter((binding) => placementById.has(String(binding.controlId).toLowerCase()))
         .map((binding) => String(object(binding.flow).flowId)),
     );
-    const flowsById = new Map(array(content.flows).map((flow) => [String(flow.id), flow]));
-    const pendingFlows = [...pageFlowIds];
-    const visitedFlows = new Set<string>();
-    while (pendingFlows.length > 0) {
-      const flowId = pendingFlows.pop()!;
-      if (visitedFlows.has(flowId)) continue;
-      visitedFlows.add(flowId);
-      const flow = flowsById.get(flowId);
-      if (flow === undefined) continue;
+    for (const flow of reachablePageFlows([...pageFlowIds], array(content.flows))) {
       walkValues(flow, (step) => {
-        if (step.type === "run_flow" && typeof step.flowId === "string")
-          pendingFlows.push(step.flowId);
         if (step.type !== "interface.show_message" && step.type !== "interface.clear_message")
           return;
         const properties = object(step.properties ?? {});
-        const actionFlow = object(object(properties.action_flow ?? {}).literal ?? {}).value;
-        if (typeof actionFlow === "string") pendingFlows.push(actionFlow);
         const target = object(object(properties.target ?? {}).literal ?? {}).value;
         if (target !== "inline" && target !== "slot") return;
         const component = object(object(properties.component ?? {}).literal ?? {}).value;

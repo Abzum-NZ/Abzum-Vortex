@@ -971,6 +971,23 @@ const linkFlowPlans = (plans: ReadonlyMap<string, FlowPlan>, applicationKey?: st
         if (!plans.has(childId))
           throw new FlowPlanError(id, step.id, `Flow ${id} cannot run unavailable flow ${childId}`);
         const child = visit(childId, next);
+        const pageReference = (value: unknown) =>
+          flowValueReferences(value).some(
+            (reference) => reference.source === "page" || reference.source === "form",
+          );
+        const childStep = allSteps([
+          ...child.definition.tasks,
+          ...child.definition.errors,
+          ...child.definition.finally,
+        ])
+          .reverse()
+          .find(pageReference);
+        if (childStep !== undefined || pageReference(child.definition.outputs))
+          throw new FlowPlanError(
+            id,
+            step.id,
+            `Flow ${id} cannot run flow ${childId} on the server: ${childStep === undefined ? "an output" : `step ${childStep.id}`} reads a page or form value`,
+          );
         if (child.pageSteps)
           throw new FlowPlanError(
             id,

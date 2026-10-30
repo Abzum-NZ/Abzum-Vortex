@@ -1,5 +1,6 @@
 import { flowRuntimeValueOf } from "../../rules/flow-runtime-value";
 import { sourceFlowCollectionSchema } from "../../workflows/flow-source-contracts";
+import { reachablePageFlows } from "../../workflows/flow-reachability";
 import {
   sourceItemTree,
   sourcePageItems,
@@ -192,7 +193,11 @@ function compileOwnedFlowSources(
             const application = body as unknown as ApplicationSourceDocument["body"];
             const controls = new Set(
               application.flow_bindings
-                .filter((binding) => binding.flow === flow.id || binding.flow === flow.key)
+                .filter((binding) =>
+                  reachablePageFlows([binding.flow], parsed.data).some(
+                    (reachable) => reachable.id === flow.id,
+                  ),
+                )
                 .map((binding) => binding.control),
             );
             return application.pages.flatMap((page) => {
