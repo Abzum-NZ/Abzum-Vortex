@@ -153,7 +153,7 @@ export const compileModuleCandidate = (
   resolution: DefinitionResolution,
   permissions: PlatformPermissionSource,
 ): CompiledModuleCandidate => {
-  if (candidate.draft.source.kind !== "module" || resolution.contractVersion !== "4.1.0")
+  if (candidate.draft.source.kind !== "module" || resolution.contractVersion !== "4.2.0")
     return refuse("DEFINITION_COMPILATION_REFUSED");
   // Dependency resolution authenticated these outputs and checked that they parse, but passes them
   // as stored: schema defaults (such as a Module's empty `queries`) are not filled in here.
@@ -227,7 +227,7 @@ export const compileApplicationCandidate = (
 }> => {
   if (
     candidate.draft.source.kind !== "application" ||
-    resolution.contractVersion !== "4.1.0" ||
+    resolution.contractVersion !== "4.2.0" ||
     dependencies.composition === undefined
   )
     return refuse("DEFINITION_COMPILATION_REFUSED");

@@ -13,7 +13,6 @@ import {
   typedSemanticFieldType,
   typedValueMatchesType,
 } from "./field-types";
-import { actionValueCompatible } from "./action-values";
 
 function totalFilterFieldsFilterable(
   value: unknown,
@@ -143,47 +142,6 @@ export function sourceTypeCompatibilityRule(
         !typedConditionTypesValid(action.precondition, subjectFields, inputTypes, "source")
       )
         valid = false;
-      const subjectRecordType = `${source.key}:${String(action.record_type)}`;
-      const sourceValueCompatible = (candidate: unknown, targetField: JsonObject | undefined) =>
-        actionValueCompatible(
-          candidate,
-          targetField,
-          subjectFields,
-          inputs,
-          subjectRecordType,
-          "source",
-        );
-      for (const task of array(action.tasks)) {
-        const properties = object(task.properties);
-        if (String(task.type) === "record.set_fields") {
-          for (const [fieldKey, candidate] of Object.entries(object(properties.values)))
-            if (!sourceValueCompatible(candidate, subjectFields.get(fieldKey))) valid = false;
-        }
-        if (String(task.type) === "record.create") {
-          const qualified = String(properties.record_type);
-          const split = qualified.lastIndexOf(":");
-          if (split >= 0 && qualified.slice(0, split) === source.key) {
-            const targetFields = fieldsFor(records.get(qualified.slice(split + 1)));
-            if (
-              Object.entries(object(properties.values)).some(
-                ([fieldKey, candidate]) =>
-                  !sourceValueCompatible(candidate, targetFields.get(fieldKey)),
-              )
-            )
-              valid = false;
-          }
-        }
-        if (String(task.type) === "record.changes") {
-          for (const change of array(properties.changes)) {
-            const targetInput = inputs.get(String(change.target_input));
-            if (
-              targetInput?.type !== "record_reference" ||
-              !array(targetInput.record_types).map(String).includes(subjectRecordType)
-            )
-              valid = false;
-          }
-        }
-      }
     }
     for (const sharingCondition of array(body.sharing_conditions)) {
       const fields = fieldsFor(records.get(String(sharingCondition.source_record_type)));

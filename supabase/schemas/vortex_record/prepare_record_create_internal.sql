@@ -18,6 +18,7 @@ declare
   ownership_mode text;
   owner_account_id uuid;
   owner_group_id uuid;
+  selected_group_id uuid;
   field_item jsonb;
   field_id_value uuid;
   column_value jsonb;
@@ -66,11 +67,18 @@ begin
       end if;
       owner_account_id := (context_value ->> 'organizationAccountId')::uuid;
     elsif ownership_mode = 'group' then
-      if not vortex_access.lock_current_record_owner_group_internal(p_selected_group_id) then
+      -- A create that selects no Group (a flow step has no one to ask) is owned by the one
+      -- Group the account currently belongs to; none or several refuse it.
+      selected_group_id := coalesce(p_selected_group_id, (
+        select case when pg_catalog.count(*) = 1
+          then (pg_catalog.array_agg(owner_group.group_id))[1] end
+        from vortex_access.list_current_record_owner_groups() as owner_group
+      ));
+      if not vortex_access.lock_current_record_owner_group_internal(selected_group_id) then
         refusal_reason := 'owner_unavailable';
         raise exception using errcode = 'P4020', message = refusal_reason;
       end if;
-      owner_group_id := p_selected_group_id;
+      owner_group_id := selected_group_id;
     elsif p_selected_group_id is not null then
       refusal_reason := 'owner_invalid';
       raise exception using errcode = 'P4020', message = refusal_reason;

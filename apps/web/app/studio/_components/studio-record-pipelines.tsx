@@ -289,7 +289,9 @@ function PipelineDialog({
   const allowed = (from: string, to: string) =>
     moves.some((move) => move.from === from && move.to === to);
   const gatesFor = (option: string) =>
-    module.actions.filter((action) => inlineActionSetsOption(record, action, stageField, option));
+    module.actions.filter((action) =>
+      inlineActionSetsOption(module, record, action, stageField, option),
+    );
 
   // One edit of the pipeline: the patch over the pipeline as the draft holds it now.
   const commit = (

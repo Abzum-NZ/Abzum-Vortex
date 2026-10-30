@@ -76,6 +76,46 @@ const applicationRoleTemplateAllFields = [
  * settings record, installed-application projection and registered application
  * role-template projection remain declared here.
  */
+
+/** A named action's flow: one step that sets the given fields of the record the action runs on. */
+const actionFlow = (
+  id: string,
+  key: string,
+  recordKey: string,
+  inputs: Record<string, { type: "text"; required: boolean }>,
+  entries: Record<string, unknown>,
+): SourceApplicationModule["flows"][number] =>
+  ({
+    id,
+    key,
+    labels: {},
+    execution: "transaction",
+    runAs: { kind: "saver" },
+    inputs: {
+      record: {
+        type: "record_reference",
+        required: true,
+        recordTypeIds: [recordKey],
+        description: "The record the action runs on.",
+      },
+      ...inputs,
+    },
+    recordInput: "record",
+    variables: {},
+    triggers: [],
+    tasks: [
+      {
+        id: "set_fields",
+        type: "record.set_fields",
+        version: "1.0.0",
+        properties: { values: { kind: "map", entries } },
+      },
+    ],
+    outputs: {},
+    errors: [],
+    finally: [],
+  }) as unknown as SourceApplicationModule["flows"][number];
+
 export const organisationAdministrationModule: SourceApplicationModule =
   sourceApplicationModuleSchema.parse({
     id: "mod_organisation_administration",
@@ -1099,30 +1139,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
             validation: { maximum_length: 2_000 },
           },
         ],
-        tasks: [
-          {
-            id: "set_title",
-            type: "record.set_fields",
-            properties: { values: { title: "{{ inputs.title }}" } },
-          },
-          {
-            id: "set_body",
-            type: "record.set_fields",
-            properties: { values: { body: "{{ inputs.body }}" } },
-          },
-          {
-            id: "set_state",
-            type: "record.set_fields",
-            properties: {
-              values: { state: { kind: "literal", literal: { type: "json", value: "published" } } },
-            },
-          },
-          {
-            id: "set_published_at",
-            type: "record.set_fields",
-            properties: { values: { published_at: "{{ execution.now }}" } },
-          },
-        ],
+        flow: "flow_record_notice",
       },
       {
         id: "act_withdraw_notice",
@@ -1133,15 +1150,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
         shareable: false,
         precondition: { field: "state", operator: "equals", value: "published" },
         inputs: [],
-        tasks: [
-          {
-            id: "set_state_withdrawn",
-            type: "record.set_fields",
-            properties: {
-              values: { state: { kind: "literal", literal: { type: "json", value: "withdrawn" } } },
-            },
-          },
-        ],
+        flow: "flow_withdraw_notice",
       },
       {
         id: "act_record_privacy_request",
@@ -1168,30 +1177,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
             validation: { maximum_length: 2_000 },
           },
         ],
-        tasks: [
-          {
-            id: "set_subject",
-            type: "record.set_fields",
-            properties: { values: { subject: "{{ inputs.subject }}" } },
-          },
-          {
-            id: "set_details",
-            type: "record.set_fields",
-            properties: { values: { details: "{{ inputs.details }}" } },
-          },
-          {
-            id: "set_state",
-            type: "record.set_fields",
-            properties: {
-              values: { state: { kind: "literal", literal: { type: "json", value: "received" } } },
-            },
-          },
-          {
-            id: "set_received_at",
-            type: "record.set_fields",
-            properties: { values: { received_at: "{{ execution.now }}" } },
-          },
-        ],
+        flow: "flow_record_privacy_request",
       },
       {
         id: "act_complete_privacy_request",
@@ -1202,20 +1188,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
         shareable: false,
         precondition: { field: "state", operator: "equals", value: "received" },
         inputs: [],
-        tasks: [
-          {
-            id: "set_state",
-            type: "record.set_fields",
-            properties: {
-              values: { state: { kind: "literal", literal: { type: "json", value: "completed" } } },
-            },
-          },
-          {
-            id: "set_closed_at",
-            type: "record.set_fields",
-            properties: { values: { closed_at: "{{ execution.now }}" } },
-          },
-        ],
+        flow: "flow_complete_privacy_request",
       },
       {
         id: "act_refuse_privacy_request",
@@ -1226,24 +1199,71 @@ export const organisationAdministrationModule: SourceApplicationModule =
         shareable: false,
         precondition: { field: "state", operator: "equals", value: "received" },
         inputs: [],
-        tasks: [
-          {
-            id: "set_state",
-            type: "record.set_fields",
-            properties: {
-              values: { state: { kind: "literal", literal: { type: "json", value: "refused" } } },
-            },
-          },
-          {
-            id: "set_closed_at",
-            type: "record.set_fields",
-            properties: { values: { closed_at: "{{ execution.now }}" } },
-          },
-        ],
+        flow: "flow_refuse_privacy_request",
       },
     ],
     events: [],
-    flows: [],
+    flows: [
+      actionFlow(
+        "flow_record_notice",
+        "record_notice",
+        "organisation_notice",
+        {
+          title: { type: "text", required: true },
+          body: { type: "text", required: true },
+        },
+        {
+          title: "{{ inputs.title }}",
+          body: "{{ inputs.body }}",
+          state: { kind: "literal", literal: { type: "json", value: "published" } },
+          published_at: "{{ execution.now }}",
+        },
+      ),
+      actionFlow(
+        "flow_withdraw_notice",
+        "withdraw_notice",
+        "organisation_notice",
+        {},
+        {
+          state: { kind: "literal", literal: { type: "json", value: "withdrawn" } },
+        },
+      ),
+      actionFlow(
+        "flow_record_privacy_request",
+        "record_privacy_request",
+        "privacy_request_case",
+        {
+          subject: { type: "text", required: true },
+          details: { type: "text", required: true },
+        },
+        {
+          subject: "{{ inputs.subject }}",
+          details: "{{ inputs.details }}",
+          state: { kind: "literal", literal: { type: "json", value: "received" } },
+          received_at: "{{ execution.now }}",
+        },
+      ),
+      actionFlow(
+        "flow_complete_privacy_request",
+        "complete_privacy_request",
+        "privacy_request_case",
+        {},
+        {
+          state: { kind: "literal", literal: { type: "json", value: "completed" } },
+          closed_at: "{{ execution.now }}",
+        },
+      ),
+      actionFlow(
+        "flow_refuse_privacy_request",
+        "refuse_privacy_request",
+        "privacy_request_case",
+        {},
+        {
+          state: { kind: "literal", literal: { type: "json", value: "refused" } },
+          closed_at: "{{ execution.now }}",
+        },
+      ),
+    ],
     extension_points: [],
     sharing_conditions: [],
     queries: [

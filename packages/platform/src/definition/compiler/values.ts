@@ -204,30 +204,6 @@ export function qualifiedField(resolution: Resolution, reference: string): strin
   return resolution.field(reference.slice(0, separator), reference.slice(separator + 1));
 }
 
-/**
- * One action task value in canonical form. References pass through unchanged; a `json` literal is
- * normalised to its target field's canonical value, as a field default is, so a link literal's
- * record type alias resolves to its identity and exact numbers and money take one form.
- */
-export function actionTaskValue(
-  value: unknown,
-  targetField: JsonObject | undefined,
-  valueContext: ModuleValueContext | undefined,
-): unknown {
-  if (valueContext === undefined) return value;
-  const entry = asObject(value);
-  if (entry.kind !== "literal") return value;
-  const literal = asObject(entry.literal);
-  if (literal.type !== "json") return value;
-  return {
-    ...entry,
-    literal: {
-      ...literal,
-      value: normaliseModuleFieldValue(targetField, literal.value, valueContext),
-    },
-  };
-}
-
 /** Module-owned inputs carry exact decimal and money bounds; Application action inputs keep theirs. */
 export function actionInput(
   input: JsonObject,
