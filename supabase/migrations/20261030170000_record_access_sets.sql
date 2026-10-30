@@ -997,6 +997,7 @@ declare
   record_types_fact jsonb;
   relationships_fact jsonb;
   results jsonb;
+  closure_needed boolean := false;
 begin
   -- Step 1: the targets. One record type, record identity, optional expected
   -- revision, optional protected projection row and optional requested fields
@@ -1240,6 +1241,19 @@ begin
       pg_catalog.lower(type_item.type_id::text),
       case when declaration is null then '[]'::jsonb else required_permissions end
     );
+    -- A closure starts only from an inherited owner under an ownership route
+    -- or from a relationship route; without either nothing is expanded.
+    closure_needed := closure_needed or (declaration is not null and exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(required_permissions) as required(value)
+      cross join lateral pg_catalog.jsonb_array_elements(
+        permission_by_id -> pg_catalog.lower(required.value ->> 'permissionId') -> 'recordScope' -> 'routes'
+      ) as route(value)
+      where route.value ->> 'kind' = 'relationship'
+        or (route.value ->> 'kind' = 'ownership'
+          and target_meta ->> 'ownershipMode' = 'inherited'
+          and target_meta ? 'ownershipRelationshipId')
+    ));
   end loop;
 
   -- Step 5: the target rows, one query per record type, requested field set and
@@ -1370,167 +1384,169 @@ begin
   -- the same permission, so the chase and the relationship routes use the same
   -- mechanism. Each wave reads the edges of all its pairs in one query, and the
   -- related rows it reaches in one query per storage contract.
-  select coalesce(pg_catalog.array_agg(started.target_index order by started.target_index, started.ordinality), array[]::integer[]),
-    coalesce(pg_catalog.array_agg(target_record_ids[started.target_index] order by started.target_index, started.ordinality), array[]::uuid[]),
-    coalesce(pg_catalog.array_agg(started.permission_id order by started.target_index, started.ordinality), array[]::uuid[])
-  into wave_targets, wave_records, wave_permissions
-  from (
-    select indexed.target_index, item.ordinality, (item.value ->> 'permissionId')::uuid as permission_id
-    from pg_catalog.generate_subscripts(target_record_ids, 1) as indexed(target_index)
-    cross join lateral pg_catalog.jsonb_array_elements(
-      required_by_type -> pg_catalog.lower(target_type_ids[indexed.target_index]::text)
-    ) with ordinality as item(value, ordinality)
-    where target_facts[indexed.target_index] is not null
-  ) as started;
+  if closure_needed then
+    select coalesce(pg_catalog.array_agg(started.target_index order by started.target_index, started.ordinality), array[]::integer[]),
+      coalesce(pg_catalog.array_agg(target_record_ids[started.target_index] order by started.target_index, started.ordinality), array[]::uuid[]),
+      coalesce(pg_catalog.array_agg(started.permission_id order by started.target_index, started.ordinality), array[]::uuid[])
+    into wave_targets, wave_records, wave_permissions
+    from (
+      select indexed.target_index, item.ordinality, (item.value ->> 'permissionId')::uuid as permission_id
+      from pg_catalog.generate_subscripts(target_record_ids, 1) as indexed(target_index)
+      cross join lateral pg_catalog.jsonb_array_elements(
+        required_by_type -> pg_catalog.lower(target_type_ids[indexed.target_index]::text)
+      ) with ordinality as item(value, ordinality)
+      where target_facts[indexed.target_index] is not null
+    ) as started;
 
-  while pg_catalog.cardinality(wave_targets) > 0 loop
-    next_targets := array[]::integer[];
-    next_records := array[]::uuid[];
-    next_permissions := array[]::uuid[];
-    for edge_item in
-      with wave as (
-        select distinct pair.target_position, pair.record_id, pair.permission_id
-        from rows from (
-          pg_catalog.unnest(wave_targets), pg_catalog.unnest(wave_records),
-          pg_catalog.unnest(wave_permissions)
-        ) as pair(target_position, record_id, permission_id)
-        where pg_catalog.format('%s:%s:%s', pair.target_position,
-          pg_catalog.lower(pair.record_id::text), pg_catalog.lower(pair.permission_id::text))
-          <> all (seen_pairs)
-      ),
-      expanded as (
-        select wave.target_position, wave.record_id, wave.permission_id,
-          type_meta -> pg_catalog.lower(fact.value -> 'recordScope' ->> 'recordTypeId') as meta,
-          permission_by_id -> pg_catalog.lower(wave.permission_id::text) -> 'recordScope' as scope
-        from wave
-        cross join lateral (
-          select case when wave.record_id = target_record_ids[wave.target_position]
-            then target_facts[wave.target_position]
-            else closure_records -> pg_catalog.lower(wave.record_id::text) end as value
-        ) as fact
-        where fact.value is not null
-      )
-      -- Inherited ownership: the declared parent under the same permission,
-      -- which repeats for the grandparent when that pair is expanded.
-      select expanded.target_position, edge.relationship_id,
-        edge.from_record_id, edge.to_record_id,
-        edge.to_storage_contract_id as reached_contract, edge.to_record_id as reached_record,
-        expanded.permission_id as reached_permission
-      from expanded
-      join vortex_record.relationship_edges as edge
-        on edge.relationship_id = (expanded.meta ->> 'ownershipRelationshipId')::uuid
-        and edge.from_storage_contract_id = (expanded.meta ->> 'storageContractId')::uuid
-        and edge.from_record_id = expanded.record_id
-      where expanded.meta is not null and expanded.scope is not null
-        and expanded.meta ->> 'ownershipMode' = 'inherited'
-        and expanded.meta ? 'ownershipRelationshipId'
-        and exists (
-          select 1 from pg_catalog.jsonb_array_elements(expanded.scope -> 'routes') as route(value)
-          where route.value ->> 'kind' = 'ownership'
+    while pg_catalog.cardinality(wave_targets) > 0 loop
+      next_targets := array[]::integer[];
+      next_records := array[]::uuid[];
+      next_permissions := array[]::uuid[];
+      for edge_item in
+        with wave as (
+          select distinct pair.target_position, pair.record_id, pair.permission_id
+          from rows from (
+            pg_catalog.unnest(wave_targets), pg_catalog.unnest(wave_records),
+            pg_catalog.unnest(wave_permissions)
+          ) as pair(target_position, record_id, permission_id)
+          where pg_catalog.format('%s:%s:%s', pair.target_position,
+            pg_catalog.lower(pair.record_id::text), pg_catalog.lower(pair.permission_id::text))
+            <> all (seen_pairs)
+        ),
+        expanded as (
+          select wave.target_position, wave.record_id, wave.permission_id,
+            type_meta -> pg_catalog.lower(fact.value -> 'recordScope' ->> 'recordTypeId') as meta,
+            permission_by_id -> pg_catalog.lower(wave.permission_id::text) -> 'recordScope' as scope
+          from wave
+          cross join lateral (
+            select case when wave.record_id = target_record_ids[wave.target_position]
+              then target_facts[wave.target_position]
+              else closure_records -> pg_catalog.lower(wave.record_id::text) end as value
+          ) as fact
+          where fact.value is not null
         )
-      union all
-      -- Relationship routes: the target is always the `to` endpoint, so the
-      -- sources this permission can reach it through are the `from` rows of
-      -- that relationship's edges, each expanded under its own source permission.
-      select expanded.target_position, edge.relationship_id,
-        edge.from_record_id, edge.to_record_id,
-        edge.from_storage_contract_id, edge.from_record_id,
-        (route.value ->> 'sourcePermissionId')::uuid
-      from expanded
-      cross join lateral pg_catalog.jsonb_array_elements(expanded.scope -> 'routes') as route(value)
-      join vortex_record.relationship_edges as edge
-        on edge.relationship_id = (route.value ->> 'relationshipId')::uuid
-        and edge.to_storage_contract_id = (expanded.meta ->> 'storageContractId')::uuid
-        and edge.to_record_id = expanded.record_id
-      where expanded.meta is not null and expanded.scope is not null
-        and route.value ->> 'kind' = 'relationship'
-        and relationship_by_id ? pg_catalog.lower(route.value ->> 'relationshipId')
-    loop
-      if edge_item.reached_record <> target_record_ids[edge_item.target_position]
-        and not closure_records ? pg_catalog.lower(edge_item.reached_record::text) then
-        load_contracts := load_contracts || edge_item.reached_contract;
-        load_records := load_records || edge_item.reached_record;
-      end if;
-      target_reached[edge_item.target_position] := target_reached[edge_item.target_position]
-        || ',' || pg_catalog.lower(edge_item.reached_record::text);
-      target_edges[edge_item.target_position] := target_edges[edge_item.target_position]
-        || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-          'relationshipId', edge_item.relationship_id,
-          'fromRecordId', edge_item.from_record_id,
-          'toRecordId', edge_item.to_record_id
-        ));
-      next_targets := next_targets || edge_item.target_position;
-      next_records := next_records || edge_item.reached_record;
-      next_permissions := next_permissions || edge_item.reached_permission;
-    end loop;
+        -- Inherited ownership: the declared parent under the same permission,
+        -- which repeats for the grandparent when that pair is expanded.
+        select expanded.target_position, edge.relationship_id,
+          edge.from_record_id, edge.to_record_id,
+          edge.to_storage_contract_id as reached_contract, edge.to_record_id as reached_record,
+          expanded.permission_id as reached_permission
+        from expanded
+        join vortex_record.relationship_edges as edge
+          on edge.relationship_id = (expanded.meta ->> 'ownershipRelationshipId')::uuid
+          and edge.from_storage_contract_id = (expanded.meta ->> 'storageContractId')::uuid
+          and edge.from_record_id = expanded.record_id
+        where expanded.meta is not null and expanded.scope is not null
+          and expanded.meta ->> 'ownershipMode' = 'inherited'
+          and expanded.meta ? 'ownershipRelationshipId'
+          and exists (
+            select 1 from pg_catalog.jsonb_array_elements(expanded.scope -> 'routes') as route(value)
+            where route.value ->> 'kind' = 'ownership'
+          )
+        union all
+        -- Relationship routes: the target is always the `to` endpoint, so the
+        -- sources this permission can reach it through are the `from` rows of
+        -- that relationship's edges, each expanded under its own source permission.
+        select expanded.target_position, edge.relationship_id,
+          edge.from_record_id, edge.to_record_id,
+          edge.from_storage_contract_id, edge.from_record_id,
+          (route.value ->> 'sourcePermissionId')::uuid
+        from expanded
+        cross join lateral pg_catalog.jsonb_array_elements(expanded.scope -> 'routes') as route(value)
+        join vortex_record.relationship_edges as edge
+          on edge.relationship_id = (route.value ->> 'relationshipId')::uuid
+          and edge.to_storage_contract_id = (expanded.meta ->> 'storageContractId')::uuid
+          and edge.to_record_id = expanded.record_id
+        where expanded.meta is not null and expanded.scope is not null
+          and route.value ->> 'kind' = 'relationship'
+          and relationship_by_id ? pg_catalog.lower(route.value ->> 'relationshipId')
+      loop
+        if edge_item.reached_record <> target_record_ids[edge_item.target_position]
+          and not closure_records ? pg_catalog.lower(edge_item.reached_record::text) then
+          load_contracts := load_contracts || edge_item.reached_contract;
+          load_records := load_records || edge_item.reached_record;
+        end if;
+        target_reached[edge_item.target_position] := target_reached[edge_item.target_position]
+          || ',' || pg_catalog.lower(edge_item.reached_record::text);
+        target_edges[edge_item.target_position] := target_edges[edge_item.target_position]
+          || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+            'relationshipId', edge_item.relationship_id,
+            'fromRecordId', edge_item.from_record_id,
+            'toRecordId', edge_item.to_record_id
+          ));
+        next_targets := next_targets || edge_item.target_position;
+        next_records := next_records || edge_item.reached_record;
+        next_permissions := next_permissions || edge_item.reached_permission;
+      end loop;
 
-    -- Every pair of this wave is expanded now, including those that reached nothing.
-    select seen_pairs || coalesce(pg_catalog.array_agg(distinct pg_catalog.format('%s:%s:%s',
-        pair.target_position, pg_catalog.lower(pair.record_id::text),
-        pg_catalog.lower(pair.permission_id::text))), array[]::text[])
-    into seen_pairs
-    from rows from (
-      pg_catalog.unnest(wave_targets), pg_catalog.unnest(wave_records),
-      pg_catalog.unnest(wave_permissions)
-    ) as pair(target_position, record_id, permission_id);
+      -- Every pair of this wave is expanded now, including those that reached nothing.
+      select seen_pairs || coalesce(pg_catalog.array_agg(distinct pg_catalog.format('%s:%s:%s',
+          pair.target_position, pg_catalog.lower(pair.record_id::text),
+          pg_catalog.lower(pair.permission_id::text))), array[]::text[])
+      into seen_pairs
+      from rows from (
+        pg_catalog.unnest(wave_targets), pg_catalog.unnest(wave_records),
+        pg_catalog.unnest(wave_permissions)
+      ) as pair(target_position, record_id, permission_id);
 
-    -- The related rows this wave reached, one query per storage contract.
-    for current_contract in
-      select distinct queued.contract_id
-      from rows from (pg_catalog.unnest(load_contracts), pg_catalog.unnest(load_records))
-        as queued(contract_id, record_id)
-    loop
-      select meta.value into current_meta
-      from pg_catalog.jsonb_each(type_meta) as meta(key, value)
-      where (meta.value ->> 'storageContractId')::uuid = current_contract
-      limit 1;
-      if current_meta is null then
-        continue;
-      end if;
-      load_sql := pg_catalog.format(
-        'select coalesce(pg_catalog.jsonb_object_agg(
-           pg_catalog.lower(stored.record_id::text), pg_catalog.jsonb_build_object(
-           ''recordScope'', pg_catalog.jsonb_build_object(
-             ''storageScope'', %L,
-             ''organizationId'', stored.organisation_id,
-             ''moduleRootId'', %L::uuid,
-             ''recordTypeId'', %L::uuid,
-             ''storageContractId'', %L::uuid,
-             ''recordId'', stored.record_id
-           ) || case when %L = ''application_contained''
-             then pg_catalog.jsonb_build_object(''applicationRootId'', stored.application_root_id)
-             else ''{}''::jsonb end,
-           ''lifecycleState'', stored.lifecycle_state,
-           ''fieldValues'', pg_catalog.jsonb_build_object(%s)
-         ) || case
-           when stored.owner_organisation_account_id is not null
-             then pg_catalog.jsonb_build_object(
-               ''ownerOrganizationAccountId'', stored.owner_organisation_account_id)
-           when stored.owner_group_id is not null
-             then pg_catalog.jsonb_build_object(''ownerGroupId'', stored.owner_group_id)
-           else ''{}''::jsonb end), ''{}''::jsonb)
-         from record_data.%I as stored
-         where stored.organisation_id = $1 and stored.record_id = any ($2)',
-        current_meta ->> 'storageScope', (current_meta ->> 'moduleRootId')::uuid,
-        (current_meta ->> 'recordTypeId')::uuid, current_contract,
-        current_meta ->> 'storageScope', current_meta ->> 'valueExpression',
-        current_meta ->> 'table'
-      );
-      execute load_sql into loaded_records using context_organization_id, array(
-        select distinct queued.record_id
+      -- The related rows this wave reached, one query per storage contract.
+      for current_contract in
+        select distinct queued.contract_id
         from rows from (pg_catalog.unnest(load_contracts), pg_catalog.unnest(load_records))
           as queued(contract_id, record_id)
-        where queued.contract_id = current_contract
-      );
-      closure_records := closure_records || loaded_records;
-    end loop;
-    load_contracts := array[]::uuid[];
-    load_records := array[]::uuid[];
+      loop
+        select meta.value into current_meta
+        from pg_catalog.jsonb_each(type_meta) as meta(key, value)
+        where (meta.value ->> 'storageContractId')::uuid = current_contract
+        limit 1;
+        if current_meta is null then
+          continue;
+        end if;
+        load_sql := pg_catalog.format(
+          'select coalesce(pg_catalog.jsonb_object_agg(
+             pg_catalog.lower(stored.record_id::text), pg_catalog.jsonb_build_object(
+             ''recordScope'', pg_catalog.jsonb_build_object(
+               ''storageScope'', %L,
+               ''organizationId'', stored.organisation_id,
+               ''moduleRootId'', %L::uuid,
+               ''recordTypeId'', %L::uuid,
+               ''storageContractId'', %L::uuid,
+               ''recordId'', stored.record_id
+             ) || case when %L = ''application_contained''
+               then pg_catalog.jsonb_build_object(''applicationRootId'', stored.application_root_id)
+               else ''{}''::jsonb end,
+             ''lifecycleState'', stored.lifecycle_state,
+             ''fieldValues'', pg_catalog.jsonb_build_object(%s)
+           ) || case
+             when stored.owner_organisation_account_id is not null
+               then pg_catalog.jsonb_build_object(
+                 ''ownerOrganizationAccountId'', stored.owner_organisation_account_id)
+             when stored.owner_group_id is not null
+               then pg_catalog.jsonb_build_object(''ownerGroupId'', stored.owner_group_id)
+             else ''{}''::jsonb end), ''{}''::jsonb)
+           from record_data.%I as stored
+           where stored.organisation_id = $1 and stored.record_id = any ($2)',
+          current_meta ->> 'storageScope', (current_meta ->> 'moduleRootId')::uuid,
+          (current_meta ->> 'recordTypeId')::uuid, current_contract,
+          current_meta ->> 'storageScope', current_meta ->> 'valueExpression',
+          current_meta ->> 'table'
+        );
+        execute load_sql into loaded_records using context_organization_id, array(
+          select distinct queued.record_id
+          from rows from (pg_catalog.unnest(load_contracts), pg_catalog.unnest(load_records))
+            as queued(contract_id, record_id)
+          where queued.contract_id = current_contract
+        );
+        closure_records := closure_records || loaded_records;
+      end loop;
+      load_contracts := array[]::uuid[];
+      load_records := array[]::uuid[];
 
-    wave_targets := next_targets;
-    wave_records := next_records;
-    wave_permissions := next_permissions;
-  end loop;
+      wave_targets := next_targets;
+      wave_records := next_records;
+      wave_permissions := next_permissions;
+    end loop;
+  end if;
 
   -- Step 7: the facts. Every record type, relationship and saved condition of
   -- the installed definitions, built once for the call; per target the records
