@@ -1254,6 +1254,7 @@ export const continueFlowRun = (
   segment?: FlowServerSegment,
   replay?: FlowSegmentReplay,
   boundaryBefore?: ReadonlySet<string>,
+  observer?: FlowTaskTraceObserver,
 ): FlowRunStep => {
   const machine: Machine = {
     state: clone(previous),
@@ -1291,7 +1292,7 @@ export const continueFlowRun = (
       throw error;
     }
   }
-  return drive(machine);
+  return drive(machine, observer);
 };
 
 /**
