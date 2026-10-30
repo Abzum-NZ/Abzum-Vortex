@@ -31,7 +31,9 @@ export async function runFlowBinding(
       server: {
         client: options.client,
         binding,
-        ...(subject === undefined ? {} : { subject }),
+        ...((subject ?? options.subject) === undefined
+          ? {}
+          : { subject: subject ?? options.subject }),
         ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
         ...(options.committed === undefined
           ? {}
