@@ -84,6 +84,14 @@ export type RecordChoiceRead =
       reasonCode: ProtectedQueryRefusalReasonCode | "request_invalid";
     }>;
 
+/**
+ * A further decision on the records one page of choices holds, such as the delegation decision of
+ * an option filter. It returns the choices that stay offered.
+ */
+export type RecordChoiceAdmission = (
+  choices: readonly RecordChoice[],
+) => Promise<readonly RecordChoice[]>;
+
 /** The Query engine entry point the picker reads through; it authorises the viewer itself. */
 type RecordChoiceQueryRunner = Readonly<{
   prepareRead?: ReturnType<typeof createProtectedQueryService>["prepareRead"];
@@ -148,6 +156,7 @@ export const createRecordChoiceReader = (queries: RecordChoiceQueryRunner) =>
       bound: BoundHumanOrganizationRequest,
       candidate: RecordChoiceCommand,
       selected: Readonly<{ recordTypeId: string; recordId: string }>,
+      admit?: RecordChoiceAdmission,
     ): Promise<HumanOrganizationRequestResult<RecordChoiceRead>> {
       const parsed = recordChoiceCommandSchema.safeParse(candidate);
       const record = recordIdSchema.safeParse(selected.recordId);
@@ -182,12 +191,50 @@ export const createRecordChoiceReader = (queries: RecordChoiceQueryRunner) =>
             ? prepared.result
             : { kind: "available", value: await prepared.read(bound.transaction, bound.scope) };
         },
-      }).read(bound.session, bound.selection, { ...parsed.data, targets, pageSize: 1 });
+      }).read(bound.session, bound.selection, { ...parsed.data, targets, pageSize: 1 }, admit);
+    },
+    /** Rechecks one selected identity through the same picker query, in its own request. */
+    async resolveExact(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      candidate: RecordChoiceCommand,
+      selected: Readonly<{ recordTypeId: string; recordId: string }>,
+      admit?: RecordChoiceAdmission,
+    ): Promise<HumanOrganizationRequestResult<RecordChoiceRead>> {
+      const parsed = recordChoiceCommandSchema.safeParse(candidate);
+      const record = recordIdSchema.safeParse(selected.recordId);
+      const type = recordTypeIdSchema.safeParse(selected.recordTypeId);
+      const invalid = () => ({
+        kind: "available" as const,
+        value: { outcome: "refused" as const, reasonCode: "request_invalid" as const },
+      });
+      if (
+        !parsed.success ||
+        !record.success ||
+        !type.success ||
+        parsed.data.search !== undefined ||
+        parsed.data.continuationToken !== undefined ||
+        (parsed.data.narrowedBy !== undefined && parsed.data.targets.length > 1)
+      )
+        return invalid();
+      const targets = parsed.data.targets.filter((target) =>
+        sameId(target.recordTypeId, type.data),
+      );
+      if (targets.length !== 1) return invalid();
+      return createRecordChoiceReader({
+        run: (runSession, runSelection, command) =>
+          queries.run(runSession, runSelection, {
+            ...command,
+            pageSize: 1,
+            exactRecordIds: [record.data],
+          }),
+      }).read(session, selection, { ...parsed.data, targets, pageSize: 1 }, admit);
     },
     async read(
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
       candidate: RecordChoiceCommand,
+      admit?: RecordChoiceAdmission,
     ): Promise<HumanOrganizationRequestResult<RecordChoiceRead>> {
       const parsed = recordChoiceCommandSchema.safeParse(candidate);
       if (!parsed.success)
@@ -275,14 +322,15 @@ export const createRecordChoiceReader = (queries: RecordChoiceQueryRunner) =>
         if (page.nextContinuationToken !== undefined)
           next.push({ recordTypeId: target.recordTypeId, token: page.nextContinuationToken });
       }
-      if (several) choices.sort((left, right) => left.title.localeCompare(right.title));
+      const offered = admit === undefined ? choices : [...(await admit(choices))];
+      if (several) offered.sort((left, right) => left.title.localeCompare(right.title));
       const nextContinuationToken =
         next.length === 0 ? undefined : several ? encodePositions(next) : next[0]!.token;
       return {
         kind: "available",
         value: Object.freeze({
           outcome: "completed",
-          choices: Object.freeze(choices),
+          choices: Object.freeze(offered),
           ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
         }),
       };

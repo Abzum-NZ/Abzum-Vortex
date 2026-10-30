@@ -24,7 +24,11 @@ import {
 } from "../components/select";
 import { DefinitionRenderError } from "../definition-error";
 import { flowSetFieldChange } from "../flow-runtime/flow-cycle";
-import type { ChoiceInputPayload, ChoiceOption } from "./projected-data";
+import {
+  readChoiceOptionsPage,
+  type ChoiceInputPayload,
+  type ChoiceOption,
+} from "./projected-data";
 import {
   readControlSettings,
   resolveControlContext,
@@ -56,7 +60,7 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const context = resolveControlContext<ChoiceInputPayload>(props, [
     "field_changed",
     "field_focus_lost",
-    "choices_requested",
+    "options_requested",
   ]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds(props.placementId);
@@ -70,7 +74,23 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const draftFeedback = useFieldFeedback(fieldKey);
   const explicitlyDisabled =
     context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
-  const declaredOptions = context.values?.options ?? settings.options("options");
+  const baseOptions = context.values?.options ?? settings.options("options");
+  // The options a field whose source the page runs are the page's answers; until the first one the
+  // field offers its declared list.
+  const [remote, setRemote] = useState<
+    Readonly<{ options: readonly ChoiceOption[]; next?: string }> | undefined
+  >(undefined);
+  const projected = context.values?.value;
+  const [selected, setSelected] = useSeededState<string | null>(projected ?? null);
+  // The chosen option stays listed while the page's answer no longer offers it, so the person sees
+  // what the field holds and the server refuses a value that is no longer allowed.
+  const heldOption = baseOptions.find((option) => option.key === selected);
+  const declaredOptions =
+    remote === undefined
+      ? baseOptions
+      : heldOption === undefined || remote.options.some((option) => option.key === selected)
+        ? remote.options
+        : [heldOption, ...remote.options];
   // A dependent choice offers only the options that belong to what the form's draft holds in its
   // parent field, and waits while that is empty; the server judges the pair again at save.
   const dependsOn = settings.dependsOn();
@@ -89,12 +109,11 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
         );
   const projectedError = context.values?.error;
   const note = inactiveNote(context);
-  const projected = context.values?.value;
 
   if (
     projected !== undefined &&
     projected !== null &&
-    !declaredOptions.some((option) => option.key === projected)
+    !baseOptions.some((option) => option.key === projected)
   )
     throw new DefinitionRenderError(
       "INVALID_COMPOSITION",
@@ -102,12 +121,12 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
       context.location,
     );
 
-  const [selected, setSelected] = useSeededState<string | null>(projected ?? null);
   const [searchTerm, setSearchTerm] = useState("");
   const [comboboxOpen, setComboboxOpen] = useState(false);
   const [selectOpen, setSelectOpen] = useState(false);
   const lastRequestedSearch = useRef<string | undefined>(undefined);
   const [remoteLoading, setRemoteLoading] = useState(false);
+  const [remoteFailed, setRemoteFailed] = useState(false);
   const choiceRequestGeneration = useRef(0);
   const [previouslyInactive, setPreviouslyInactive] = useState(context.inactive);
   if (context.inactive && !previouslyInactive) {
@@ -182,50 +201,72 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
     });
   };
 
-  const referenceChoices = context.values?.options !== undefined;
-  const choicesRequested = useRef(context.events?.choices_requested);
-  choicesRequested.current = context.events?.choices_requested;
+  const remoteOptions = context.events?.options_requested !== undefined;
+  const optionsRequested = useRef(context.events?.options_requested);
+  optionsRequested.current = context.events?.options_requested;
   const requestChoices = useRef<(search: string, continuationToken?: string) => void>(
     () => undefined,
   );
   requestChoices.current = (search, continuationToken) => {
-    const handler = choicesRequested.current;
+    const handler = optionsRequested.current;
     if (handler === undefined || disabled) return;
     const boundedSearch = search.trim().slice(0, 100);
-    const selectedEvidence =
-      permittedSelected === null ? undefined : context.values?.optionEvidence?.[permittedSelected];
+    setRemoteFailed(false);
     const event = {
-      event: "choices_requested" as const,
+      event: "options_requested" as const,
       ...(boundedSearch === "" ? {} : { search: boundedSearch }),
       ...(continuationToken === undefined ? {} : { continuationToken }),
-      ...(permittedSelected === null
-        ? {}
-        : {
-            selectedKey: permittedSelected,
-            ...(selectedEvidence === undefined ? {} : { selectedEvidence }),
-          }),
     };
     const request = ++choiceRequestGeneration.current;
     setRemoteLoading(true);
-    void Promise.resolve(handler(event)).finally(() => {
-      if (choiceRequestGeneration.current === request) setRemoteLoading(false);
-    });
+    void Promise.resolve(handler(event))
+      .then((answer) => {
+        if (choiceRequestGeneration.current !== request) return;
+        const page = readChoiceOptionsPage(answer, context.location);
+        setRemote((current) => ({
+          options:
+            continuationToken === undefined || current === undefined
+              ? page.options
+              : [...current.options, ...page.options],
+          ...(page.nextContinuationToken === undefined ? {} : { next: page.nextContinuationToken }),
+        }));
+      })
+      .catch((cause: unknown) => {
+        if (choiceRequestGeneration.current !== request) return;
+        console.error("[choice-input] options unavailable", cause);
+        setRemoteFailed(true);
+      })
+      .finally(() => {
+        if (choiceRequestGeneration.current === request) setRemoteLoading(false);
+      });
   };
+  // Opening reads the first page at once; typing reads again once the person pauses.
   useEffect(() => {
-    if (!referenceChoices || !comboboxOpen || choicesRequested.current === undefined) return;
+    if (!remoteOptions || !comboboxOpen || optionsRequested.current === undefined) return;
     const search = searchTerm.trim();
-    if (search === "" && lastRequestedSearch.current === undefined) return;
     if (search === lastRequestedSearch.current) return;
+    const first = lastRequestedSearch.current === undefined;
     lastRequestedSearch.current = search;
+    if (first) {
+      requestChoices.current(search);
+      return;
+    }
     const timeout = setTimeout(() => requestChoices.current(search), 200);
     return () => clearTimeout(timeout);
-  }, [comboboxOpen, referenceChoices, searchTerm]);
+  }, [comboboxOpen, remoteOptions, searchTerm]);
+  // A changed parent makes the options read for the old one stale: they are read again on opening.
+  useEffect(() => {
+    setRemote(undefined);
+    lastRequestedSearch.current = undefined;
+    choiceRequestGeneration.current += 1;
+    setRemoteLoading(false);
+  }, [parentKey]);
   const loadMoreChoices = (): void => {
-    const continuationToken = context.values?.nextContinuationToken;
+    const continuationToken = remote?.next;
     if (continuationToken !== undefined && !remoteLoading)
       requestChoices.current(searchTerm.trim(), continuationToken);
   };
-  const searchable = referenceChoices || options.length > SEARCHABLE_OPTION_THRESHOLD;
+  const searchable = remoteOptions || options.length > SEARCHABLE_OPTION_THRESHOLD;
   const radio = variant === "radio" && !searchable;
   const described = describedBy(ids, help, error, note, draftFeedback);
   const ariaRequired = required || described["aria-required"] === true;
@@ -329,9 +370,13 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
                 )}
               </ComboboxList>
               <ComboboxEmpty role="status">
-                {remoteLoading ? "Searching choices…" : "No matching options"}
+                {remoteLoading
+                  ? "Searching choices…"
+                  : remoteFailed
+                    ? "Choices are unavailable. Close and reopen to retry."
+                    : "No matching options"}
               </ComboboxEmpty>
-              {referenceChoices && context.values?.nextContinuationToken !== undefined ? (
+              {remoteOptions && remote?.next !== undefined ? (
                 <Button
                   type="button"
                   variant="ghost"

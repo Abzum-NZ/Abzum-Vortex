@@ -11,7 +11,10 @@ import {
   type RecordLinkResolver,
   type InstalledRuntimeContext,
   readRecordTypeVisibleFieldIds,
+  delegableRoleIds,
   flowPlansOf,
+  type OptionFilterKey,
+  type RecordChoiceAdmission,
 } from "@vortex/platform/server";
 import {
   isRecord,
@@ -37,9 +40,10 @@ import {
   first,
   isLinkInputPlacement,
   linkInputTargets,
+  placementOptionFilter,
   projectedUseAvailability,
 } from "./placement-helpers";
-import { projectReferenceChoicePage, type ReferenceChoiceAddress } from "./reference-choice";
+import { projectOptionsPage, type OptionsAddress } from "./options-projection";
 import type { PageDataState, SearchParameters } from "./types";
 import { withContributedFormPlacements, withContributedPlacements } from "./contributed-placements";
 
@@ -359,7 +363,7 @@ type RecordChoicePageRequest = Readonly<{
 }>;
 
 type ProjectedChoicePage = Extract<
-  Awaited<ReturnType<typeof projectReferenceChoicePage>>,
+  Awaited<ReturnType<typeof projectOptionsPage>>,
   { kind: "available" }
 >;
 
@@ -376,6 +380,7 @@ const prepareLinkChoiceDescriptor = async (
       kind: "ready";
       targets: RecordChoiceCommand["targets"];
       narrowedBy?: RecordChoiceCommand["narrowedBy"];
+      optionFilter?: OptionFilterKey;
     }>
   | Extract<RecordChoicePageResult, { kind: "refused" | "temporarily_unavailable" }>
 > => {
@@ -402,6 +407,7 @@ const prepareLinkChoiceDescriptor = async (
   };
   /** For a dependent field being edited: the parent the viewer chose, which narrows the choices. */
   let dependency: Readonly<{ link: LinkDependency; parentRecordId: string }> | undefined;
+  let optionFilter: OptionFilterKey | undefined;
   if (request.fieldId !== undefined) {
     // A Records table's link picker offers the target records of one declared field.
     if (request.purpose === undefined) return { kind: "refused", cause: "purpose_missing" };
@@ -444,6 +450,7 @@ const prepareLinkChoiceDescriptor = async (
     )
       return { kind: "refused", cause: "placement_unavailable" };
     declaredTargets = linkInputTargets(placement.settings);
+    optionFilter = placementOptionFilter(placement.settings);
     // An automatic field input of a dependent link field narrows its choices by the form's draft
     // of the parent; the dependency is the field's own declaration, never the request's.
     const bound = isRecord(placement.settings.field) ? placement.settings.field.fieldId : undefined;
@@ -530,8 +537,29 @@ const prepareLinkChoiceDescriptor = async (
       recordId: dependency.parentRecordId,
     } as RecordChoiceCommand["narrowedBy"];
   }
-  return { kind: "ready", targets, ...(narrowedBy === undefined ? {} : { narrowedBy }) };
+  return {
+    kind: "ready",
+    targets,
+    ...(narrowedBy === undefined ? {} : { narrowedBy }),
+    ...(optionFilter === undefined ? {} : { optionFilter }),
+  };
 };
+
+/**
+ * The decision an option filter adds to a page of choices: only the choices it keeps are offered.
+ * It runs in the request transaction the caller holds, so it sees what the picker's read saw.
+ */
+export const optionFilterAdmission = (
+  filter: OptionFilterKey | undefined,
+  decide: (recordIds: readonly string[]) => Promise<ReadonlySet<string>>,
+): RecordChoiceAdmission | undefined =>
+  filter === undefined
+    ? undefined
+    : async (choices) => {
+        if (choices.length === 0) return choices;
+        const allowed = await decide(choices.map((choice) => choice.recordId));
+        return choices.filter((choice) => allowed.has(choice.recordId.toLowerCase()));
+      };
 
 /** Rechecks a selected link using the same picker descriptor and the gate's transaction. */
 export const validateProjectedLinkChoice = async (
@@ -567,6 +595,9 @@ export const validateProjectedLinkChoice = async (
       ...(descriptor.narrowedBy === undefined ? {} : { narrowedBy: descriptor.narrowedBy }),
     },
     request.selected,
+    optionFilterAdmission(descriptor.optionFilter, (ids) =>
+      delegableRoleIds(bound.transaction, ids),
+    ),
   );
   return (
     result.kind === "available" &&
@@ -648,12 +679,12 @@ export const validateProjectedLinkControl = async (
  * projected again under the viewer and the exact installed release, so only a link input the
  * viewer can use on that page is read for, and only its declared record types.
  */
-export const loadRecordChoicePage = async (
+export const loadFieldOptionsPage = async (
   session: IdentitySession,
-  address: ReferenceChoiceAddress,
+  address: OptionsAddress,
   request: RecordChoicePageRequest,
 ): Promise<RecordChoicePageResult> => {
-  const projected = await projectReferenceChoicePage(session, address, request);
+  const projected = await projectOptionsPage(session, address, request);
   if (projected.kind === "reload" || projected.kind === "temporarily_unavailable") return projected;
   if (projected.kind !== "available") return { kind: "refused", cause: "page_not_projected" };
   const { selection, dependencies } = projected;
@@ -670,20 +701,33 @@ export const loadRecordChoicePage = async (
   );
   if (descriptor.kind !== "ready") return descriptor;
   const { targets, narrowedBy } = descriptor;
-  const read = await createRecordChoiceReader(queries).read(session, selection, {
-    targets,
-    ...(narrowedBy === undefined ? {} : { narrowedBy }),
-    ...(request.search === undefined || request.search.trim() === ""
-      ? {}
-      : { search: request.search }),
-    pageSize: Math.min(
-      request.pageSize ?? recordChoicePageSizes.default,
-      recordChoicePageSizes.maximum,
-    ),
-    ...(request.continuationToken === undefined
-      ? {}
-      : { continuationToken: request.continuationToken }),
+  const requests = createHumanOrganizationRequestService(dependencies);
+  const admission = optionFilterAdmission(descriptor.optionFilter, async (ids) => {
+    const decided = await requests.run(session, selection, (transaction) =>
+      delegableRoleIds(transaction, ids),
+    );
+    if (decided.kind !== "available") throw new Error("OPTION_FILTER_UNAVAILABLE");
+    return decided.value;
   });
+  const read = await createRecordChoiceReader(queries).read(
+    session,
+    selection,
+    {
+      targets,
+      ...(narrowedBy === undefined ? {} : { narrowedBy }),
+      ...(request.search === undefined || request.search.trim() === ""
+        ? {}
+        : { search: request.search }),
+      pageSize: Math.min(
+        request.pageSize ?? recordChoicePageSizes.default,
+        recordChoicePageSizes.maximum,
+      ),
+      ...(request.continuationToken === undefined
+        ? {}
+        : { continuationToken: request.continuationToken }),
+    },
+    admission,
+  );
   if (read.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
   if (read.kind !== "available") return { kind: "refused", cause: `request_${read.kind}` };
   if (read.value.outcome !== "completed")

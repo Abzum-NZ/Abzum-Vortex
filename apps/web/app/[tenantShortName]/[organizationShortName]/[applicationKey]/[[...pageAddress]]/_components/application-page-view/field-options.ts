@@ -8,11 +8,11 @@ import type { ApplicationPageModel } from "../../../../../../_lib/application-pa
  * The server projects the page again under the person, so only a link input they can use is read
  * for. A changed release reloads the page; any other failure rejects, and the picker says so.
  */
-export const requestRecordChoices = async (
+export const requestFieldOptions = async (
   model: ApplicationPageModel,
   placementId: string,
   event: Pick<
-    Extract<ControlSemanticEvent, { event: "records_requested" }>,
+    Extract<ControlSemanticEvent, { event: "options_requested" }>,
     "search" | "continuationToken"
   > & {
     /** For a Records table's link picker: the field whose target records are offered, and why. */
@@ -24,7 +24,7 @@ export const requestRecordChoices = async (
   reload: () => void,
 ): Promise<RecordChoicePage> => {
   const application = model.invocation;
-  const response = await fetch("/api/record-choices", {
+  const response = await fetch("/api/field-options", {
     method: "POST",
     headers: { "content-type": "application/json" },
     credentials: "same-origin",
@@ -50,10 +50,10 @@ export const requestRecordChoices = async (
   const body: unknown = await response.json();
   if (isRecord(body) && body.kind === "reload") {
     reload();
-    throw new Error("RECORD_CHOICES_RELEASE_CHANGED");
+    throw new Error("FIELD_OPTIONS_RELEASE_CHANGED");
   }
   if (!response.ok || !isRecord(body) || body.kind !== "completed")
-    throw new Error(`RECORD_CHOICES_UNAVAILABLE: ${response.status}`);
+    throw new Error(`FIELD_OPTIONS_UNAVAILABLE: ${response.status}`);
   return {
     choices: Array.isArray(body.choices) ? body.choices : [],
     ...(typeof body.nextContinuationToken === "string"

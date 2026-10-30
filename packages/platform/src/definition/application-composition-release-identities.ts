@@ -109,7 +109,7 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     key: "platform.form.choice_input",
     rendererKey: "platform.renderer.choice_input",
     releaseVersion: "1.2.0",
-    contentFingerprint: "sha256:83d812b462c8a61a662bcdca1fa3a41ccb76c326fc82590157649b897c4f417b",
+    contentFingerprint: "sha256:79f9c8ab1539d251d5ec324343cb59941307cf3df620dd22eb28d30e9998d720",
   },
   VALIDATION_MESSAGE_BLOCK_RELEASE: {
     blockId: "78acc234-87bc-4e8f-986f-4857369b41f8",
@@ -179,7 +179,7 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     key: "platform.form.link_input",
     rendererKey: "platform.renderer.link_input",
     releaseVersion: "1.0.0",
-    contentFingerprint: "sha256:30d2c9fca0e9372f18baee4b280f0a95a6faf2988e7bd0bf746defd19156fa8b",
+    contentFingerprint: "sha256:002dc4af413bfbd6ca1d8e5d814be9c25d8c151789453efa86f55c3b79e4646d",
   },
   RICH_TEXT_INPUT_BLOCK_RELEASE: {
     blockId: "6f2c8d94-1a7b-4e53-8d90-3c5e7b1a4f28",

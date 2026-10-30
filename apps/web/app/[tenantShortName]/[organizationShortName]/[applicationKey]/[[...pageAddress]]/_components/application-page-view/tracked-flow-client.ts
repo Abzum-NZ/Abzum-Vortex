@@ -61,13 +61,9 @@ export function trackFlowInvokeClient(
       segmentValues,
     ) => {
       const submission = submissions.get(clickId);
-      const inputs =
-        submission?.choiceEvidence === undefined
-          ? callerInputs
-          : { ...callerInputs, choiceEvidence: submission.choiceEvidence };
       const response = await client.startBinding(
         binding,
-        inputs,
+        callerInputs,
         clickId,
         signal,
         gestureSubject,

@@ -21,7 +21,7 @@ import {
   type BoundHumanOrganizationRequest,
 } from "@vortex/platform/server";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
-import { loadProjectedReferenceChoiceForm } from "../../../_lib/application-page";
+import { loadProjectedOptionsForm } from "../../../_lib/application-page";
 import { loadGuidedConfirmation } from "../../../_lib/application-page/guided-confirmation";
 import { installedReleaseCatalogue } from "../../../_lib/definition-catalogue";
 import { applicationStoreService } from "../../../_lib/application-store-service";
@@ -31,10 +31,7 @@ import {
   verifiesGuidedFormConfirmation,
 } from "@vortex/platform/server";
 import { getQueryContinuationKey } from "../../../_lib/query-continuation-key";
-import {
-  applicationHasAuthoredForm,
-  resolveReferenceChoiceFormValues,
-} from "../../../_lib/reference-choices";
+import { resolveFormOptionValues } from "../../../_lib/application-page/form-option-values";
 import { appTelemetry } from "../../../_lib/server-composition";
 import { platformPermissionSource } from "../../../_lib/platform-permission-source";
 import { readBoundedRequestText } from "../../_lib/bounded-request-body";
@@ -46,9 +43,10 @@ import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { privateJsonResponse as privateResponse } from "../../../_lib/private-response";
 import { mapWebError } from "../../../_lib/web-error-mapper";
 import {
-  projectRowReferenceChoiceForm,
+  applicationHasAuthoredForm,
+  projectRowOptionsForm,
   validateProjectedControlOption,
-} from "../../../_lib/application-page/reference-choice";
+} from "../../../_lib/application-page/options-projection";
 import {
   previewLinkChoiceTypeIds,
   validateProjectedLinkControl,
@@ -227,7 +225,7 @@ export const createFlowInvocationHandler =
               releaseCatalogue: installedReleaseCatalogue,
               continuationKey: getQueryContinuationKey(),
               projectRowForm: (bound, context, page, pageId, formId, subject) =>
-                projectRowReferenceChoiceForm(
+                projectRowOptionsForm(
                   bound.transaction,
                   bound.scope,
                   context,
@@ -282,8 +280,16 @@ export const createFlowInvocationHandler =
                 verifiesGuidedFormConfirmation(getQueryContinuationKey(), proof, details),
               hasAuthoredForm: applicationHasAuthoredForm,
               projectForm: (session, form) =>
-                loadProjectedReferenceChoiceForm(session, address, form, bound),
-              resolveFormValues: resolveReferenceChoiceFormValues,
+                loadProjectedOptionsForm(session, address, form, bound),
+              resolveFormValues: (args) =>
+                resolveFormOptionValues({
+                  session: args.session,
+                  selection: args.selection,
+                  modules: args.modules,
+                  projectedFields: args.projectedFields,
+                  values: args.values,
+                  ...(bound === undefined ? {} : { bound }),
+                }),
               loadGuidedPage: (session, guided, subject) =>
                 loadGuidedConfirmation(
                   session,

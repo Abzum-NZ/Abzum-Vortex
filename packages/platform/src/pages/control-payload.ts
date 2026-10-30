@@ -7,7 +7,6 @@ import {
   sourceModuleFieldValueSchemas,
 } from "../records/module-field-values";
 import { richTextDocumentSchema } from "../records/rich-text";
-import { referenceChoiceSelectionEvidenceMapSchema } from "../workflows/form-continuation-answer";
 import {
   flowFieldCorrectionSchema,
   flowRefusalFeedbackCodeSchema,
@@ -217,15 +216,13 @@ export const dateTimeInputPayloadSchema = z
 export type DateTimeInputPayload = z.output<typeof dateTimeInputPayloadSchema>;
 
 /**
- * The ready values a choice input accepts. Option evidence maps exactly the projected options to
- * their Query page evidence, and a chosen value is one of the projected options.
+ * The ready values a choice input accepts: a chosen value is one of the projected options.
  */
 export const choiceInputPayloadSchema = z
   .object({
     kind: z.literal("choice_input"),
     value: choiceValueSchema.nullable().exactOptional(),
     options: choiceOptionsSchema.exactOptional(),
-    optionEvidence: referenceChoiceSelectionEvidenceMapSchema.exactOptional(),
     nextContinuationToken: displayTextSchema.exactOptional(),
     error: fieldErrorSchema,
   })
@@ -233,19 +230,6 @@ export const choiceInputPayloadSchema = z
   .readonly()
   .superRefine((payload, context) => {
     const options = payload.options;
-    if (payload.optionEvidence !== undefined) {
-      const evidenceKeys = Object.keys(payload.optionEvidence);
-      if (
-        options === undefined ||
-        options.some((option) => !Object.hasOwn(payload.optionEvidence!, option.key)) ||
-        evidenceKeys.some((key) => !options.some((option) => option.key === key))
-      )
-        context.addIssue({
-          code: "custom",
-          path: ["optionEvidence"],
-          message: "Choice option evidence must match the projected options exactly",
-        });
-    }
     if (
       typeof payload.value === "string" &&
       options !== undefined &&

@@ -394,7 +394,7 @@ const loadApplicationPageJoined = async (
     tenantShortName: address.tenantShortName,
     organizationShortName: address.organizationShortName,
   });
-  const { referenceChoices, subjects, readConcurrently } = services;
+  const { subjects, readConcurrently } = services;
 
   if (
     pageDefinition.type === "guided_form" &&
@@ -634,7 +634,6 @@ const loadApplicationPageJoined = async (
         values: { kind: "date_time_input", ...dateTimeZones },
       };
   const bindings: Record<string, PlacementFlowBinding[]> = {};
-  const referenceChoiceInputs: Array<ApplicationPageModel["referenceChoiceInputs"][number]> = [];
   // Placement reads are independent: each reads under its own protected request and writes only
   // its own placement entry, so they run concurrently and are assembled by placement identity.
   const markSubjectUnreadable = (): void => {
@@ -673,8 +672,6 @@ const loadApplicationPageJoined = async (
     markSubjectUnreadable,
     page,
     pageSubjectRecordTypeId,
-    referenceChoiceInputs,
-    referenceChoices,
     dependencies,
     adoptSubjectRead,
   };
@@ -811,9 +808,6 @@ const loadApplicationPageJoined = async (
     applyFormFieldAccess(page, { omitted: unshown, readOnly: new Set(), refused: new Map() });
     for (const placementId of Object.keys(data))
       if (unshown.has(placementId.toLowerCase())) delete data[placementId];
-    for (let index = referenceChoiceInputs.length - 1; index >= 0; index -= 1)
-      if (unshown.has(referenceChoiceInputs[index]!.placementId.toLowerCase()))
-        referenceChoiceInputs.splice(index, 1);
   }
   // A form whose required field the viewer cannot fill in is refused, naming that field.
   for (const { placementId } of placements) {
@@ -933,7 +927,6 @@ const loadApplicationPageJoined = async (
       ),
     },
     editFormBaselines,
-    referenceChoiceInputs,
     linkInputPlacementIds: linkInputs.map((entry) => entry.placementId),
     ...(guidedForm === undefined ? {} : { guidedForm }),
     pages: application.content.pages
