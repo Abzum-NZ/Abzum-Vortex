@@ -23,7 +23,6 @@ import {
 } from "../components/dialog";
 import type { LinkNavigationEnvironment } from "../launcher/link-navigation";
 import { performNavigateTask } from "../launcher/link-navigation";
-import type { ReferenceChoiceSelectionEvidenceMap } from "@vortex/platform/schema";
 import type {
   FlowConfirmAnswer,
   FlowConfirmIntent,
@@ -60,10 +59,7 @@ export type FlowIntentHostOptions = Readonly<{
   renderForm: (
     form: FlowFormIntent,
     controls: Readonly<{
-      submit: (
-        values: Extract<FlowFormAnswer, { kind: "submit" }>["values"],
-        choiceEvidence?: ReferenceChoiceSelectionEvidenceMap,
-      ) => void;
+      submit: (values: Extract<FlowFormAnswer, { kind: "submit" }>["values"]) => void;
       cancel: () => void;
     }>,
   ) => Readonly<{ title: string; body: ReactNode }>;
@@ -324,12 +320,7 @@ function FlowSurfaceHost({
   if (current?.kind === "form") {
     const { form, settle } = current;
     const rendered = optionsRef.current.renderForm(form, {
-      submit: (values, choiceEvidence) =>
-        settle({
-          kind: "submit",
-          values,
-          ...(choiceEvidence === undefined ? {} : { choiceEvidence }),
-        }),
+      submit: (values) => settle({ kind: "submit", values }),
       cancel: () => settle({ kind: "cancel" }),
     });
     return (

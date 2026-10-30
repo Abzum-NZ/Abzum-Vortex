@@ -55,6 +55,18 @@ const recordChoiceCommandSchema = z
       })
       .strict()
       .optional(),
+    /**
+     * A link field's declared query: its permitted rows are the choices, read with these input
+     * values in place of the target's own listing. One target only.
+     */
+    sourceQuery: z
+      .object({
+        moduleRootId: moduleRootIdSchema,
+        queryId: queryIdSchema,
+        inputValues: z.record(z.string(), z.custom<JsonValue>()),
+      })
+      .strict()
+      .optional(),
     /** Narrows the records to those whose title or another searchable field holds this text. */
     search: z.string().trim().min(1).max(100).optional(),
     pageSize: z.number().int().min(1).max(recordChoicePageSizes.maximum),
@@ -83,6 +95,14 @@ export type RecordChoiceRead =
       outcome: "refused";
       reasonCode: ProtectedQueryRefusalReasonCode | "request_invalid";
     }>;
+
+/**
+ * A further decision on the records one page of choices holds, such as the delegation decision of
+ * an option filter. It returns the choices that stay offered.
+ */
+export type RecordChoiceAdmission = (
+  choices: readonly RecordChoice[],
+) => Promise<readonly RecordChoice[]>;
 
 /** The Query engine entry point the picker reads through; it authorises the viewer itself. */
 type RecordChoiceQueryRunner = Readonly<{
@@ -135,6 +155,9 @@ const decodePositions = (token: string): Positions | undefined => {
   }
 };
 
+/** The most pages one request reads while an admission keeps leaving them empty. */
+const admittedPageReadBound = 10;
+
 /**
  * Reads one page of the records a link field may point at. Each target record type is read by
  * its own listing query (the record type's identity): the Query engine admits only records the
@@ -148,6 +171,7 @@ export const createRecordChoiceReader = (queries: RecordChoiceQueryRunner) =>
       bound: BoundHumanOrganizationRequest,
       candidate: RecordChoiceCommand,
       selected: Readonly<{ recordTypeId: string; recordId: string }>,
+      admit?: RecordChoiceAdmission,
     ): Promise<HumanOrganizationRequestResult<RecordChoiceRead>> {
       const parsed = recordChoiceCommandSchema.safeParse(candidate);
       const record = recordIdSchema.safeParse(selected.recordId);
@@ -182,19 +206,88 @@ export const createRecordChoiceReader = (queries: RecordChoiceQueryRunner) =>
             ? prepared.result
             : { kind: "available", value: await prepared.read(bound.transaction, bound.scope) };
         },
-      }).read(bound.session, bound.selection, { ...parsed.data, targets, pageSize: 1 });
+      }).read(bound.session, bound.selection, { ...parsed.data, targets, pageSize: 1 }, admit);
     },
+    /** Rechecks one selected identity through the same picker query, in its own request. */
+    async resolveExact(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      candidate: RecordChoiceCommand,
+      selected: Readonly<{ recordTypeId: string; recordId: string }>,
+      admit?: RecordChoiceAdmission,
+    ): Promise<HumanOrganizationRequestResult<RecordChoiceRead>> {
+      const parsed = recordChoiceCommandSchema.safeParse(candidate);
+      const record = recordIdSchema.safeParse(selected.recordId);
+      const type = recordTypeIdSchema.safeParse(selected.recordTypeId);
+      const invalid = () => ({
+        kind: "available" as const,
+        value: { outcome: "refused" as const, reasonCode: "request_invalid" as const },
+      });
+      if (
+        !parsed.success ||
+        !record.success ||
+        !type.success ||
+        parsed.data.search !== undefined ||
+        parsed.data.continuationToken !== undefined ||
+        (parsed.data.narrowedBy !== undefined && parsed.data.targets.length > 1)
+      )
+        return invalid();
+      const targets = parsed.data.targets.filter((target) =>
+        sameId(target.recordTypeId, type.data),
+      );
+      if (targets.length !== 1) return invalid();
+      return createRecordChoiceReader({
+        run: (runSession, runSelection, command) =>
+          queries.run(runSession, runSelection, {
+            ...command,
+            pageSize: 1,
+            exactRecordIds: [record.data],
+          }),
+      }).read(session, selection, { ...parsed.data, targets, pageSize: 1 }, admit);
+    },
+    /**
+     * One page of choices. When a further decision (the admission) leaves a page empty while more
+     * records follow, the next pages are read, within a bound, until there are choices to offer or
+     * the records end, so the picker never says there is nothing while more exist.
+     */
     async read(
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
       candidate: RecordChoiceCommand,
+      admit?: RecordChoiceAdmission,
+    ): Promise<HumanOrganizationRequestResult<RecordChoiceRead>> {
+      const reader = createRecordChoiceReader(queries);
+      let page = await reader.readPage(session, selection, candidate, admit);
+      for (
+        let reads = 1;
+        admit !== undefined &&
+        reads < admittedPageReadBound &&
+        page.kind === "available" &&
+        page.value.outcome === "completed" &&
+        page.value.choices.length === 0 &&
+        page.value.nextContinuationToken !== undefined;
+        reads += 1
+      )
+        page = await reader.readPage(
+          session,
+          selection,
+          { ...candidate, continuationToken: page.value.nextContinuationToken },
+          admit,
+        );
+      return page;
+    },
+    async readPage(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      candidate: RecordChoiceCommand,
+      admit?: RecordChoiceAdmission,
     ): Promise<HumanOrganizationRequestResult<RecordChoiceRead>> {
       const parsed = recordChoiceCommandSchema.safeParse(candidate);
       if (!parsed.success)
         return { kind: "available", value: { outcome: "refused", reasonCode: "request_invalid" } };
       const command = parsed.data;
       const several = command.targets.length > 1;
-      if (command.narrowedBy !== undefined && several)
+      if ((command.narrowedBy !== undefined || command.sourceQuery !== undefined) && several)
         return { kind: "available", value: { outcome: "refused", reasonCode: "request_invalid" } };
       let positions: Positions | undefined;
       if (command.continuationToken !== undefined) {
@@ -223,10 +316,10 @@ export const createRecordChoiceReader = (queries: RecordChoiceQueryRunner) =>
       const next: Positions = [];
       for (const { target, token } of read) {
         const result = await queries.run(session, selection, {
-          moduleRootId: target.moduleRootId,
+          moduleRootId: command.sourceQuery?.moduleRootId ?? target.moduleRootId,
           // A record type is listed by its own identity: the listing query the engine resolves for it.
-          queryId: queryIdSchema.parse(target.recordTypeId),
-          inputValues: {},
+          queryId: command.sourceQuery?.queryId ?? queryIdSchema.parse(target.recordTypeId),
+          inputValues: command.sourceQuery?.inputValues ?? {},
           requestedFieldIds: [target.titleFieldId],
           requestedSystemFieldKeys: [],
           sort: [],
@@ -275,14 +368,15 @@ export const createRecordChoiceReader = (queries: RecordChoiceQueryRunner) =>
         if (page.nextContinuationToken !== undefined)
           next.push({ recordTypeId: target.recordTypeId, token: page.nextContinuationToken });
       }
-      if (several) choices.sort((left, right) => left.title.localeCompare(right.title));
+      const offered = admit === undefined ? choices : [...(await admit(choices))];
+      if (several) offered.sort((left, right) => left.title.localeCompare(right.title));
       const nextContinuationToken =
         next.length === 0 ? undefined : several ? encodePositions(next) : next[0]!.token;
       return {
         kind: "available",
         value: Object.freeze({
           outcome: "completed",
-          choices: Object.freeze(choices),
+          choices: Object.freeze(offered),
           ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
         }),
       };
