@@ -6,6 +6,10 @@ import type {
 } from "../access/human-organization-request";
 import { describeFailure, isRecord, sameId } from "../catalogue/runtime-primitives";
 import { continueFlowRun } from "../rules/flow-interpreter";
+import {
+  browserFlowMemberTypeResolver,
+  pageFlowGuardMatches,
+} from "../rules/flow-page-output-state";
 import { iterationKey } from "../rules/flow-interpreter-state";
 import type { FlowBindingInvocation } from "../workflows/flow-invocation-contracts";
 import { startFlow } from "../workflows/start";
@@ -244,13 +248,27 @@ export const admitFlowSegment = async (
       plan.segments
         .slice(0, index)
         .some((part) => part.kind === "server" && part.id === failure?.segmentId);
-    const pageFailure =
-      host.invocation.phase === "page_failure" &&
-      plan.segments
-        .slice(0, index)
-        .some(
-          (part) => part.kind === "page" && part.section !== "finally" && part.tasks.length > 0,
-        );
+    let pageFailure = false;
+    if (host.invocation.phase === "page_failure") {
+      try {
+        const resolveMember = browserFlowMemberTypeResolver(plan.browser);
+        pageFailure = plan.segments.slice(0, index).some((part) => {
+          if (part.kind !== "page" || part.section === "finally" || part.tasks.length === 0)
+            return false;
+          try {
+            return pageFlowGuardMatches(part.guard, state, plan.definition, resolveMember);
+          } catch (error) {
+            console.error(
+              `[flows] page failure guard could not be evaluated: ${describeFailure(error)}`,
+            );
+            return false;
+          }
+        });
+      } catch (error) {
+        console.error(`[flows] invalid page failure path: ${describeFailure(error)}`);
+        return { kind: "refused" };
+      }
+    }
     if (segment.tasks.length === 0 && (serverFailure || pageFailure)) return { kind: "refused" };
     if (segment.section === "errors" && !serverFailure && !pageFailure) return { kind: "refused" };
     if (

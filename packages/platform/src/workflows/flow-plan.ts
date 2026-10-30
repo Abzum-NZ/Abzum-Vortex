@@ -769,7 +769,21 @@ export const compileFlowPlan = (
   const bindingFormInputs = inputTypes(flow, bindingFormReferences.map((reference) => ({ kind: "reference", reference })), new Set(), "binding", formTypes);
   const segments = classifyFlowSegments(
     flow,
-    unclassifiedSegments,
+    unclassifiedSegments.map((segment, index) => {
+      if (segment.kind !== "server" || segment.section === "tasks") return segment;
+      const precedingPageGuards = unclassifiedSegments.slice(0, index).flatMap((part) =>
+        part.kind === "page" && part.section !== "finally" && part.tasks.length > 0
+          ? part.guard
+          : [],
+      );
+      return {
+        ...segment,
+        inputs: {
+          ...segment.inputs,
+          ...inputTypes(flow, precedingPageGuards, new Set(), segment.id, formTypes),
+        },
+      };
+    }),
     flowValueReferences,
     (reference) => serverOnlyReference(reference, serverInputs),
     (values, produced, id) => inputTypes(flow, values, produced, id, formTypes),
