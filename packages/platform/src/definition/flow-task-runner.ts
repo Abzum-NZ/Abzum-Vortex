@@ -3,7 +3,6 @@ import type { IdentitySession, OrganizationSelectionCandidate } from "../access/
 import { jsonValueSchema, type JsonValue } from "../catalogue/common";
 import {
   builderKeySchema,
-  flowIdSchema,
   groupIdSchema,
   queryIdSchema,
   recordIdSchema,
@@ -63,6 +62,7 @@ import type {
   Run,
 } from "./flow-orchestrator-types";
 import type { RecordChangeIntent } from "../records/apply-record-changes";
+import { planBackendTask, runBackendTask, type BackendTaskPlan } from "./flow-backend-task";
 import { planRecordLink } from "./flow-relationship-changes";
 import { planRelationshipCopies } from "./flow-relationship-copies";
 
@@ -100,13 +100,7 @@ export const createFlowTaskRunner = (
         /** The key of every field of the record type, by lower-case field id. */
         fieldKeys: ReadonlyMap<string, string>;
       }>
-    | Readonly<{
-        kind: "backend";
-        flowId: string;
-        mode: "await" | "start";
-        inputs: Readonly<Record<string, JsonValue>>;
-        commandId: string;
-      }>
+    | BackendTaskPlan
     | Readonly<{
         kind: "action";
         command: ExecuteNamedActionCommand;
@@ -667,27 +661,8 @@ export const createFlowTaskRunner = (
           "This workflow can't run on the back end here.",
           "the back-end adapter",
         );
-      const flowId = flowIdSchema.safeParse(call.properties.flow?.value);
-      const mode = z.enum(["await", "start"]).safeParse(call.properties.mode?.value);
-      const inputs = z
-        .record(z.string(), jsonValueSchema)
-        .safeParse(call.properties.inputs?.value ?? {});
-      if (
-        !flowId.success ||
-        !mode.success ||
-        !inputs.success ||
-        carriesSensitive(inputs.data, run.sensitive)
-      )
-        return { outcome: "validation" };
-      return {
-        plan: {
-          kind: "backend",
-          flowId: flowId.data,
-          mode: mode.data,
-          inputs: inputs.data,
-          commandId,
-        },
-      };
+      const plan = planBackendTask(call, run, commandId);
+      return plan === undefined ? { outcome: "validation" } : { plan };
     }
 
     if (call.taskType !== "operation.call")
@@ -919,49 +894,7 @@ export const createFlowTaskRunner = (
       };
     }
 
-    if (plan.kind === "backend") {
-      const actorId =
-        run.authority.kind === "actor"
-          ? run.authority.actorId
-          : await dependencies.resolveActor?.(session, selection);
-      if (
-        actorId === undefined ||
-        dependencies.backend === undefined ||
-        selection.applicationRootId === undefined
-      )
-        return { result: { outcome: "failed" }, stored: {} };
-      const started = await dependencies.backend.run({
-        organizationId: selection.organizationId,
-        applicationRootId: selection.applicationRootId,
-        actorId,
-        flowId: plan.flowId,
-        origin: "backend_run",
-        sourceKey: plan.commandId,
-        mode: plan.mode,
-        inputs: plan.inputs,
-      });
-      if (started.kind === "unavailable") return { result: { outcome: "uncertain" }, stored: {} };
-      if (started.kind === "not_finished") {
-        console.error(
-          `[flows] back-end run ${started.backendRunId} of task ${call.taskId} ${started.state}: ${started.failureCode}`,
-        );
-        return {
-          result: { outcome: started.state === "refused" ? "refused" : "failed" },
-          stored: {},
-        };
-      }
-      const outputs: Record<string, JsonValue> =
-        started.kind === "finished"
-          ? { run: started.backendRunId, outputs: started.outputs }
-          : { run: started.backendRunId };
-      return {
-        result: {
-          outcome: started.kind === "finished" ? "completed" : "background_pending",
-          outputs,
-        },
-        stored: outputs,
-      };
-    }
+    if (plan.kind === "backend") return runBackendTask(dependencies, run, plan, call.taskId);
 
     if (plan.kind === "action") {
       const executed = await runNamedAction(session, selection, plan.command);

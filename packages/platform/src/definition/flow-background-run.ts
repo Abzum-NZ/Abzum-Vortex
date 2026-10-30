@@ -83,6 +83,55 @@ export type BackgroundRunDependencies = Readonly<{
   backend: () => BackendAdapter;
 }>;
 
+/** The acting organisation account's open scope on one installed application. */
+export type BackendActorScope = Readonly<{
+  identityId: string;
+  session: IdentitySession;
+  selection: ReturnType<typeof organizationSelectionCandidateSchema.parse>;
+  installation: ReturnType<typeof installedFlowRelease>;
+  release: FlowRelease;
+}>;
+
+/**
+ * Opens the scope a back-end run works in: the account must be active now, and its own current
+ * access to the application decides whether the run can start at all.
+ */
+export const openBackendActorScope = async (
+  requestDependencies: HumanOrganizationRequestDependencies,
+  organizationId: string,
+  applicationRootId: string,
+  actorId: string,
+): Promise<BackendActorScope | Readonly<{ reason: string }>> => {
+  const actor = await resolveActor(organizationId, actorId);
+  if (actor.kind === "refused") return { reason: actor.reason };
+  const session = mintSession(actor.identityId);
+  const selection = organizationSelectionCandidateSchema.parse({
+    organizationId,
+    applicationRootId,
+  });
+  const loaded = await createHumanOrganizationRequestService(requestDependencies).run(
+    session,
+    selection,
+    async (transaction, scope) => {
+      if (scope.applicationRootId === undefined) throw new Error("BACKEND_RUN_SCOPE_UNAVAILABLE");
+      return createInstalledContextLoader(transaction, scope).load();
+    },
+  );
+  if (loaded.kind !== "available") return { reason: "application_unavailable" };
+  const installation = installedFlowRelease(loaded.value);
+  if (installation.applicationRootId !== applicationRootId)
+    return { reason: "application_unavailable" };
+  const release: FlowRelease = {
+    releaseKey: installation.releaseKey,
+    installationRevision: installation.installationRevision,
+    flows: installation.flows,
+    plans: installation.plans,
+    ...(installation.recordTypes === undefined ? {} : { recordTypes: installation.recordTypes }),
+    ...(installation.namedActions === undefined ? {} : { namedActions: installation.namedActions }),
+  };
+  return { identityId: actor.identityId, session, selection, installation, release };
+};
+
 /**
  * Runs one claimed back-end run with the shared interpreter and the existing task runner, as the
  * organisation account that started it. Every protected task claims its effect in the ledger as
@@ -92,33 +141,15 @@ export type BackgroundRunDependencies = Readonly<{
 export const createBackgroundFlowExecutor =
   (dependencies: BackgroundRunDependencies) =>
   async (claimed: ClaimedBackendRun): Promise<BackendRunOutcome> => {
-    const actor = await resolveActor(claimed.organizationId, claimed.actorId);
-    if (actor.kind === "refused") return refused(actor.reason);
-    const session = mintSession(actor.identityId);
-    const selection = organizationSelectionCandidateSchema.parse({
-      organizationId: claimed.organizationId,
-      applicationRootId: claimed.applicationRootId,
-    });
+    const opened = await openBackendActorScope(
+      dependencies.requests,
+      claimed.organizationId,
+      claimed.applicationRootId,
+      claimed.actorId,
+    );
+    if ("reason" in opened) return refused(opened.reason);
+    const { identityId, session, selection, installation, release } = opened;
     const requests = createHumanOrganizationRequestService(dependencies.requests);
-
-    const loaded = await requests.run(session, selection, async (transaction, scope) => {
-      if (scope.applicationRootId === undefined) throw new Error("BACKEND_RUN_SCOPE_UNAVAILABLE");
-      return createInstalledContextLoader(transaction, scope).load();
-    });
-    if (loaded.kind !== "available") return refused("application_unavailable");
-    const installation = installedFlowRelease(loaded.value);
-    if (installation.applicationRootId !== claimed.applicationRootId)
-      return refused("application_unavailable");
-    const release: FlowRelease = {
-      releaseKey: installation.releaseKey,
-      installationRevision: installation.installationRevision,
-      flows: installation.flows,
-      plans: installation.plans,
-      ...(installation.recordTypes === undefined ? {} : { recordTypes: installation.recordTypes }),
-      ...(installation.namedActions === undefined
-        ? {}
-        : { namedActions: installation.namedActions }),
-    };
     const flow = release.flows.get(claimed.flowId);
     if (flow === undefined) return refused("flow_unavailable");
     if (flow.execution !== "background") return refused("flow_not_background");
@@ -168,7 +199,7 @@ export const createBackgroundFlowExecutor =
         requests,
         reader: createViewerSafeRecordLinkReadService(),
         installation,
-        identityId: actor.identityId,
+        identityId,
       }),
       backend: { run: (request) => dependencies.backend().run(request) },
       resolveActor: () => Promise.resolve(claimed.actorId),

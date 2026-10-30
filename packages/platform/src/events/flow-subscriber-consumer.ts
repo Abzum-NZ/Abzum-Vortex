@@ -1,0 +1,111 @@
+import "server-only";
+
+import type { HumanOrganizationRequestDependencies } from "../access/human-organization-request";
+import { openBackendActorScope } from "../definition/flow-background-run";
+import type { FlowDefinition } from "../workflows/flow-contracts";
+import type { BackendAdapter } from "../workflows/backend-adapters";
+import type { EventConsumerAdapter } from "./dispatcher";
+import {
+  eventOccurrenceEnvelopeSchema,
+  type EventOccurrenceEnvelope,
+} from "./occurrence-contracts";
+
+/** Whether an Event-triggered back-end flow subscribes to this occurrence's record type and event. */
+const subscribes = (flow: FlowDefinition, occurrence: EventOccurrenceEnvelope): boolean =>
+  flow.execution === "background" &&
+  flow.triggers.some(
+    (trigger) =>
+      trigger.type === "Event" &&
+      trigger.recordTypeId.toLowerCase() === occurrence.descriptor.recordTypeId.toLowerCase() &&
+      (occurrence.descriptor.kind === "standard"
+        ? trigger.event.kind === "standard" &&
+          trigger.event.eventKind === occurrence.descriptor.eventKind
+        : trigger.event.kind === "declared" &&
+          trigger.event.eventKey === occurrence.descriptor.key),
+  );
+
+/**
+ * Orders subscribers so each runs after the subscribers it names, otherwise in flow order. Publish
+ * refuses a cycle; a flow left over is still run, last, rather than dropped.
+ */
+export const orderSubscribers = (flows: readonly FlowDefinition[]): FlowDefinition[] => {
+  const byId = new Map(flows.map((flow) => [flow.id.toLowerCase(), flow]));
+  const ordered: FlowDefinition[] = [];
+  const placed = new Set<string>();
+  const place = (flow: FlowDefinition, visiting: ReadonlySet<string>): void => {
+    const key = flow.id.toLowerCase();
+    if (placed.has(key) || visiting.has(key)) return;
+    const next = new Set(visiting).add(key);
+    for (const trigger of flow.triggers) {
+      if (trigger.type !== "Event") continue;
+      for (const afterId of trigger.runAfter ?? []) {
+        const earlier = byId.get(afterId.toLowerCase());
+        if (earlier !== undefined) place(earlier, next);
+      }
+    }
+    placed.add(key);
+    ordered.push(flow);
+  };
+  for (const flow of flows) place(flow, new Set());
+  return ordered;
+};
+
+/**
+ * Runs the after-save subscribers of one committed occurrence, each once, as the account that made
+ * the change. A subscriber's result is its own row in the back-end run history, so a re-delivered
+ * occurrence skips what finished and one subscriber failing never stops the others.
+ */
+export const createFlowSubscriberConsumer = (
+  dependencies: Readonly<{
+    requests: HumanOrganizationRequestDependencies;
+    adapter: () => BackendAdapter;
+  }>,
+): EventConsumerAdapter => ({
+  consumerKey: "flow-subscribers",
+  policy: { leaseSeconds: 120, maxAttempts: 5, retryBackoffSeconds: 30 },
+  async deliver(delivery) {
+    const occurrence = eventOccurrenceEnvelopeSchema.safeParse(delivery.occurrence);
+    if (!occurrence.success) return { outcome: "completed" };
+    const { organizationId, installation, actorId, recordId, occurrenceId } = occurrence.data;
+    const opened = await openBackendActorScope(
+      dependencies.requests,
+      organizationId,
+      installation.applicationRootId,
+      actorId,
+    );
+    if ("reason" in opened) {
+      console.error(
+        `[subscribers] occurrence ${occurrenceId} not delivered to subscribers: ${opened.reason}`,
+      );
+      return { outcome: "completed" };
+    }
+    const subscribers = orderSubscribers(
+      [...opened.release.flows.values()].filter((flow) => subscribes(flow, occurrence.data)),
+    );
+    const adapter = dependencies.adapter();
+    let infrastructureFailed = false;
+    for (const flow of subscribers) {
+      try {
+        const backendRunId = await adapter.enqueue({
+          organizationId,
+          applicationRootId: installation.applicationRootId,
+          actorId,
+          flowId: flow.id,
+          origin: "event",
+          sourceKey: occurrenceId,
+          mode: "start",
+          inputs: { recordId, occurrenceId },
+        });
+        await adapter.runRecorded(backendRunId);
+      } catch (error) {
+        // A subscriber that could not be recorded or settled is retried with the delivery; the
+        // others still ran.
+        infrastructureFailed = true;
+        console.error(`[subscribers] flow ${flow.id} for occurrence ${occurrenceId} failed`, error);
+      }
+    }
+    return infrastructureFailed
+      ? { outcome: "retryable_failure", failureCode: "unclassified" }
+      : { outcome: "completed" };
+  },
+});
