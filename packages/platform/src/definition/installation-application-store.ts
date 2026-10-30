@@ -362,8 +362,7 @@ const firstInstallExpectedSchema = z
 /**
  * Installs the reviewed version for the first time: registers its access if that is not done yet,
  * makes every role it offers an organisation role, applies the installer's choice for the default
- * member role and activates the release. Each step runs only while the state is exactly the one the
- * person reviewed.
+ * member role and activates the release. A retry reuses progress toward the reviewed target.
  */
 const install = async (
   environment: ApplicationStoreEnvironment,
@@ -401,22 +400,21 @@ const install = async (
         applicationRootId: rootId.data,
         applicationReleaseRevision: selector.releaseRevision,
       });
-      candidate = await readCurrentFirstInstallCandidate(environment, session, selector);
-      if (
-        canonicalJson(candidate.snapshot.selected) !== canonicalJson(reviewed.selected) ||
-        canonicalJson(candidate.snapshot.roles) !== canonicalJson(reviewed.roles)
-      )
-        return "conflict";
+      candidate = await readCurrentFirstInstallCandidate(environment, session, selector, reviewed);
     }
-    if (candidate.snapshot.registrationState !== "provisioned_inactive") return "conflict";
     const acceptRole = yes(inputs.accept_member_role);
-    await activateFirstInstall(
-      environment,
-      candidate,
-      acceptRole
-        ? { kind: "accept", sourceRoleId: releaseMemberRole(candidate.snapshot.roles).sourceRoleId }
-        : { kind: "decline" },
-    );
+    if (candidate.snapshot.registrationState === "provisioned_inactive") {
+      await activateFirstInstall(
+        environment,
+        candidate,
+        acceptRole
+          ? {
+              kind: "accept",
+              sourceRoleId: releaseMemberRole(candidate.snapshot.roles).sourceRoleId,
+            }
+          : { kind: "decline" },
+      );
+    } else if (candidate.snapshot.registrationState !== "active_exact") return "conflict";
     return {
       kind: "available",
       value: {

@@ -242,8 +242,8 @@ export const readCurrentApplicationLatestRelease = (
 
 /**
  * Reads the first-install state for `selector` as `session` may see it: the latest published
- * version, the selected release and its bindings. With `expected`, the state must be exactly what
- * the caller saw, otherwise the read is a conflict.
+ * version, the selected release and its bindings. With `expected`, the reviewed target and roles
+ * must still match; registration and bindings may have advanced toward that target.
  */
 export const readCurrentFirstInstallCandidate = async (
   environment: FirstInstallFlowEnvironment,
@@ -269,7 +269,20 @@ export const readCurrentFirstInstallCandidate = async (
   const { latest, releaseSet, bindings } = current;
   const registrationState = firstInstallState(selector, releaseSet, bindings);
   const snapshot = firstInstallSnapshot(selector, latest, releaseSet, bindings, registrationState);
-  if (expected !== undefined && !sameContent(expected, snapshot))
-    return installationProblem("first_install_snapshot_changed", "conflict");
+  if (expected !== undefined) {
+    const target = (value: FirstInstallSnapshot) => ({
+      organizationId: value.organizationId,
+      rootId: value.rootId,
+      selected: value.selected,
+      latest: value.latest,
+      roles: value.roles,
+    });
+    const reviewedTarget = target(expected);
+    if (
+      Object.values(reviewedTarget).some((value) => value === undefined) ||
+      !sameContent(reviewedTarget, target(snapshot))
+    )
+      return installationProblem("first_install_snapshot_changed", "conflict");
+  }
   return { selector, releaseSet, snapshot, session };
 };
