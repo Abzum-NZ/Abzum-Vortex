@@ -1093,6 +1093,12 @@ export const createFlowTaskRunner = (
     const organizationId = run.authority.selection.organizationId;
     const planned = await planTask(run, state, call);
     if (!("plan" in planned)) return planned;
+    // A test run claims nothing in the ledger: its effects are rolled back and a repeat is a new run.
+    if (dependencies.trace !== undefined) {
+      const tested = await runPlan(run, state, call, planned.plan);
+      appendWarnings(run, call, tested.warnings);
+      return tested.result;
+    }
 
     const key = {
       runId: state.runId,

@@ -8,6 +8,7 @@ import type {
 import type { JsonValue } from "../catalogue/common";
 import { findPlatformServiceOperation } from "../catalogue/platform-service-operation-catalogue";
 import { requireRequestSavepoint } from "../db/request-transaction";
+import { orderSubscribers, subscribes } from "../events/flow-subscriber-consumer";
 import { createViewerSafeRecordLinkReadService } from "../queries/viewer-safe-record-link-read";
 import type { QueryContinuationKey } from "../queries/continuation-token";
 import { createNamedActionRecordPort } from "../records/action-record-port";
@@ -67,6 +68,9 @@ export type FlowTestRunResult = Readonly<{
   steps: readonly FlowTraceStep[];
   totalMs: number;
 }>;
+
+/** A test run delivers at most this many occurrences, so subscribers that save cannot loop. */
+const maximumOccurrences = 50;
 
 const notRunReason = (segment: FlowServerSegment): FlowTraceNotRun | undefined =>
   segment.multiTransaction
@@ -140,8 +144,23 @@ export const runFlowTest = async (
     }),
   };
 
-  const portsFor = (current: BoundHumanOrganizationRequest): FlowOrchestratorDependencies => {
-    const runId = randomUUID();
+  /** What the flow saved, in order: each is an occurrence its after-save subscribers would receive. */
+  const occurrences: {
+    recordTypeId: string;
+    recordId: string;
+    eventKind: "created" | "changed" | "deleted" | "restored";
+    occurrenceId: string;
+  }[] = [];
+  const note = (
+    recordTypeId: string,
+    recordId: string,
+    eventKind: (typeof occurrences)[number]["eventKind"],
+  ): void => {
+    occurrences.push({ recordTypeId, recordId, eventKind, occurrenceId: randomUUID() });
+  };
+
+  /** The back end of one request: a child runs inline, in that request, as the builder. */
+  const inlineFor = (current: BoundHumanOrganizationRequest) => {
     const backgroundDependencies: BackgroundRunDependencies = {
       requests: requestDependencies,
       applicationStore: dependencies.applicationStore,
@@ -184,6 +203,12 @@ export const runFlowTest = async (
           : { kind: "finished", backendRunId: childRunId, outputs: outcome.outputs ?? {} };
       },
     };
+    return inline;
+  };
+
+  const portsFor = (current: BoundHumanOrganizationRequest): FlowOrchestratorDependencies => {
+    const runId = randomUUID();
+    const inline = inlineFor(current);
     const admission: Pick<
       FlowOrchestratorDependencies,
       "admitSegment" | "admitContinuation" | "admitPageStart"
@@ -207,12 +232,14 @@ export const runFlowTest = async (
         }
         // A refused or failed segment undoes its own changes, as in a normal run.
         const declined = new Error("FLOW_TEST_SEGMENT_DECLINED");
+        const noted = occurrences.length;
         let lost: Awaited<ReturnType<typeof execute>> | undefined;
         try {
           return await requireRequestSavepoint(current.transaction).withSavepoint(async (child) => {
             const executed = await execute(portsFor({ ...current, transaction: child }), undefined);
             if (executed.outcome !== "succeeded") {
               lost = executed;
+              occurrences.length = noted;
               throw declined;
             }
             return {
@@ -230,9 +257,53 @@ export const runFlowTest = async (
       },
     };
     const ports = createFlowRunPorts(host, release, undefined, installation, admission, current);
+    const { records, recordChanges } = ports;
     return {
       ...ports,
       trace,
+      ...(records === undefined
+        ? {}
+        : {
+            records: {
+              save: async (session, selection, command) => {
+                const result = await records.save(session, selection, command);
+                if (result.kind === "available" && result.value.outcome === "saved")
+                  note(
+                    command.recordTypeId,
+                    result.value.recordId,
+                    command.operation === "create" ? "created" : "changed",
+                  );
+                return result;
+              },
+            },
+          }),
+      ...(recordChanges === undefined
+        ? {}
+        : {
+            recordChanges: {
+              ...recordChanges,
+              apply: async (commandId, intents) => {
+                const result = await recordChanges.apply(commandId, intents);
+                if (result.kind === "completed")
+                  result.results.forEach((saved, index) => {
+                    const intent = intents[index];
+                    if (intent === undefined || !("recordId" in saved)) return;
+                    note(
+                      intent.recordTypeId,
+                      saved.recordId,
+                      intent.operation === "create"
+                        ? "created"
+                        : intent.operation === "update"
+                          ? "changed"
+                          : intent.operation === "delete"
+                            ? "deleted"
+                            : "restored",
+                    );
+                  });
+                return result;
+              },
+            },
+          }),
       // The builder's own authority opens the draft, so the flow's invocation permission is not asked.
       authorizeInvocation: () => Promise.resolve(true),
       backend: inline,
@@ -262,15 +333,29 @@ export const runFlowTest = async (
     };
   };
 
+  // A flow that runs for a record gets that record as the page's subject, with its current revision.
+  const ports = portsFor(bound);
+  const flow = release.flows.get(request.flowId);
+  const recordInput =
+    flow?.recordInput ??
+    Object.entries(flow?.inputs ?? {}).find(([, input]) => input.type === "record_reference")?.[0];
+  const recordId = recordInput === undefined ? undefined : request.inputs[recordInput];
+  const recordTypeId =
+    recordInput === undefined ? undefined : flow?.inputs[recordInput]?.recordTypeIds?.[0];
+  const subjectRead =
+    typeof recordId === "string" && recordTypeId !== undefined
+      ? await ports.subjects?.read(bound.session, bound.selection, { recordTypeId, recordId })
+      : undefined;
   const started = performance.now();
-  const response: FlowOrchestratorResponse = await createFlowOrchestrator(
-    portsFor(bound),
-  ).invokeBinding({
+  const response: FlowOrchestratorResponse = await createFlowOrchestrator(ports).invokeBinding({
     session: bound.session,
     selection: bound.selection,
     bindingId: randomUUID(),
     gestureId: randomUUID(),
     binding: { flowId: request.flowId, inputs: { ...request.inputs } },
+    ...(subjectRead?.kind === "read" && typeof recordId === "string"
+      ? { subject: { recordId, revision: subjectRead.revision } }
+      : {}),
   });
   const totalMs = Math.round((performance.now() - started) * 100) / 100;
   const steps = trace.steps();

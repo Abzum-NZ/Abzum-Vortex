@@ -119,6 +119,26 @@ export const createFlowTraceCollector = (
       skipped.delete(key);
       return reason;
     },
+    /** An after-save subscriber's run ended: its flow, how, and the code that names a failure. */
+    subscriber: (
+      flowId: string,
+      flowKey: string,
+      outcome: "succeeded" | "refused" | "failed",
+      failureCode: string | undefined,
+      started: number,
+    ): void => {
+      steps.push({
+        flowId,
+        taskId: flowKey,
+        taskType: "after_save_subscriber",
+        iteration: "",
+        location: "back end",
+        outcome: outcome === "succeeded" ? "completed" : outcome,
+        ms: Math.round((clock() - started) * 100) / 100,
+        outputs: {},
+        ...(failureCode === undefined ? {} : { refusal: { outcome, failureCode } }),
+      });
+    },
     /** A step of a segment the test run cannot run at all. */
     notRun: (
       flowId: string,

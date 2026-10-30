@@ -43,7 +43,7 @@ export const studioFlowTestRunRequestSchema = z
 
 type TraceRefusal = Readonly<{ code: string; sentence: string }>;
 type TraceStep = Omit<FlowTestRunResult["steps"][number], "refusal"> &
-  Readonly<{ refusal?: TraceRefusal }>;
+  Readonly<{ refusal?: TraceRefusal; flow: string }>;
 
 export type StudioFlowTestRunReply =
   | Readonly<{
@@ -138,6 +138,12 @@ export const runStudioFlowTest = async (
               ? application.content.flows
               : (modules.find((module) => module.definitionKey === request.moduleKey)?.content
                   .flows ?? []);
+          const flowKeys = new Map(
+            [
+              ...application.content.flows,
+              ...modules.flatMap((module) => module.content.flows),
+            ].map((candidate) => [String(candidate.id).toLowerCase(), candidate.key]),
+          );
           const flow = flows.find((candidate) => candidate.key === request.flowKey);
           if (flow === undefined) return { kind: "flow_missing" };
           const result = await runFlowTest(
@@ -177,6 +183,7 @@ export const runStudioFlowTest = async (
             totalMs: result.totalMs,
             steps: result.steps.map(({ refusal, ...step }) => ({
               ...step,
+              flow: flowKeys.get(step.flowId.toLowerCase()) ?? step.flowId,
               ...(refusal === undefined ? {} : { refusal: refusalOf(refusal as never) }),
             })),
           };

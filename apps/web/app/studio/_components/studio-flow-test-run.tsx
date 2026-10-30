@@ -38,7 +38,9 @@ const failureSentences: Readonly<
 };
 
 const titleOf = (type: string): string =>
-  Object.values(flowTaskRegistry).find((entry) => entry.type === type)?.title ?? type;
+  type === "after_save_subscriber"
+    ? "After-save subscriber"
+    : (Object.values(flowTaskRegistry).find((entry) => entry.type === type)?.title ?? type);
 
 const locationLabels: Readonly<Record<Step["location"], string>> = {
   page: "Page",
@@ -62,13 +64,17 @@ const parsedInput = (declaration: Declaration, raw: string | boolean): JsonValue
   return text;
 };
 
-function TraceStep({ step }: Readonly<{ step: Step }>) {
+function TraceStep({ step, flowKey }: Readonly<{ step: Step; flowKey: string }>) {
   const ended = step.outcome === "refused" || step.outcome === "failed";
   return (
     <li className="space-y-1 border-b py-2 text-sm last:border-b-0">
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium">{titleOf(step.taskType)}</span>
-        <code className="text-xs text-muted-foreground">{step.taskId}</code>
+        <code className="text-xs text-muted-foreground">
+          {step.flow === flowKey || step.taskType === "after_save_subscriber"
+            ? step.taskId
+            : `${step.flow} / ${step.taskId}`}
+        </code>
         <Badge variant="outline">{locationLabels[step.location]}</Badge>
         <Badge variant={ended ? "destructive" : "secondary"}>
           {step.outcome.replace("_", " ")}
@@ -288,7 +294,11 @@ export function StudioFlowTestRun({
           </p>
           <ol className="m-0 list-none p-0">
             {reply.steps.map((step, index) => (
-              <TraceStep key={`${step.taskId}:${step.iteration}:${index}`} step={step} />
+              <TraceStep
+                key={`${step.taskId}:${step.iteration}:${index}`}
+                step={step}
+                flowKey={flow.key}
+              />
             ))}
           </ol>
         </div>
