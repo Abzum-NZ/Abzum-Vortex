@@ -1,7 +1,17 @@
-CREATE FUNCTION vortex_record.validate_named_action_reference_inputs(p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_inputs jsonb) RETURNS boolean
-    LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO ''
-    AS $$
+create or replace function vortex_record.validate_named_action_reference_inputs_internal(
+  p_action_owner_kind text,
+  p_action_owner_id uuid,
+  p_action_release_revision bigint,
+  p_action_id uuid,
+  p_record_type_id uuid,
+  p_inputs jsonb
+)
+returns boolean
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
 declare
   context_value jsonb;
   action_context jsonb;
@@ -91,10 +101,9 @@ exception
     or check_violation then
     return false;
 end
-$$;
-alter function vortex_record.validate_named_action_reference_inputs(text,uuid,bigint,uuid,uuid,jsonb) owner to vortex_record_adapter;
-
-
-REVOKE ALL ON FUNCTION vortex_record.validate_named_action_reference_inputs(p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_inputs jsonb) FROM PUBLIC;
-REVOKE ALL ON FUNCTION vortex_record.validate_named_action_reference_inputs(p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_inputs jsonb) FROM vortex_record_adapter;
-GRANT ALL ON FUNCTION vortex_record.validate_named_action_reference_inputs(p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_inputs jsonb) TO vortex_request;
+$function$;
+alter function vortex_record.validate_named_action_reference_inputs_internal(text,uuid,bigint,uuid,uuid,jsonb) owner to vortex_record_adapter;
+revoke all on function vortex_record.validate_named_action_reference_inputs_internal(text,uuid,bigint,uuid,uuid,jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+comment on function vortex_record.validate_named_action_reference_inputs_internal(text,uuid,bigint,uuid,uuid,jsonb) is
+  'Private: whether every record reference input of the exact installed action names a record the action may use under current authority.';

@@ -55,7 +55,7 @@ type RelationshipTotalCalculationIssue = Readonly<{
   requirement?: Readonly<{ code: string; message: string; ruleKey?: string }>;
 }>;
 
-export type RelationshipTotalParentMutation = Readonly<{
+type RelationshipTotalParentMutation = Readonly<{
   recordTypeId: string;
   recordId: string;
   expectedConcurrencyNumber: number;

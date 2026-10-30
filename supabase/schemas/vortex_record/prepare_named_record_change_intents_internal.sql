@@ -78,7 +78,7 @@ begin
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'record_unavailable');
   end if;
   bounds := vortex_record.decide_record_field_bounds_internal(decision);
-  if not vortex_record.validate_named_action_reference_inputs(
+  if not vortex_record.validate_named_action_reference_inputs_internal(
     action_reference ->> 'ownerKind', (action_reference ->> 'ownerId')::uuid,
     (action_reference ->> 'releaseRevision')::bigint, (action_reference ->> 'actionId')::uuid,
     (p_named_action ->> 'recordTypeId')::uuid, p_named_action -> 'inputs'

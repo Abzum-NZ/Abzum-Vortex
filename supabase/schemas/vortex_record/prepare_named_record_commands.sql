@@ -25,8 +25,8 @@ begin
     or p_named - array['action', 'recordTypeId', 'subjects']::text[] <> '{}'::jsonb
     or not vortex_platform.is_non_nil_uuid(p_named ->> 'recordTypeId')
     or pg_catalog.jsonb_typeof(p_named -> 'action') is distinct from 'object'
-    or not (p_named -> 'action' ?& array['ownerKind', 'ownerId', 'releaseRevision', 'actionId'])
-    or p_named -> 'action' - array['ownerKind', 'ownerId', 'releaseRevision', 'actionId']::text[] <> '{}'::jsonb
+    or not ((p_named -> 'action') ?& array['ownerKind', 'ownerId', 'releaseRevision', 'actionId'])
+    or (p_named -> 'action') - array['ownerKind', 'ownerId', 'releaseRevision', 'actionId']::text[] <> '{}'::jsonb
     or p_named #>> '{action,ownerKind}' not in ('application', 'module')
     or not vortex_platform.is_non_nil_uuid(p_named #>> '{action,ownerId}')
     or not vortex_platform.is_non_nil_uuid(p_named #>> '{action,actionId}')
