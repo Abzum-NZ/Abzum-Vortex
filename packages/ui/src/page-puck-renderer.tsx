@@ -162,6 +162,8 @@ export type PagePuckRendererProps = Readonly<{
     disabled?: boolean;
     onBack: () => void;
     onNext: () => void;
+    /** Present when the guided form binds a cancel flow. */
+    onCancel?: () => void;
   }>;
   guidedSummaryValues?: Readonly<Record<string, unknown>>;
   className?: string;
@@ -334,6 +336,16 @@ export function PagePuckRenderer({
             Step {stepIndex + 1} of {guidedSteps.length}
           </span>
         </span>
+        {guidedStepNavigation.onCancel === undefined ? null : (
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={guidedStepNavigation.disabled}
+            onClick={guidedStepNavigation.onCancel}
+          >
+            Cancel
+          </Button>
+        )}
         <Button
           type="button"
           variant="secondary"

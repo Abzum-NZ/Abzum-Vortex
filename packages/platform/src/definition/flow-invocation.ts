@@ -40,11 +40,19 @@ import type { BackendAdapter } from "../workflows/backend-adapters";
 import { installedFlowRelease } from "./flow-installed-release";
 import { createFlowRunPorts, type FlowRunPortsHost } from "./flow-run-ports";
 import { createFlowOrchestrator } from "./flow-orchestrator";
-import type { FlowOrchestratorDependencies, FlowRelease } from "./flow-orchestrator-types";
+import type {
+  FlowGuidedDraftPort,
+  FlowOrchestratorDependencies,
+  FlowRelease,
+} from "./flow-orchestrator-types";
 import { createFormContinuationService } from "./form-continuation";
 import { flowEntrySegmentsMatch } from "../workflows/flow-plan";
 import { flowNeedsRunStart } from "../workflows/flow-run-start";
-import { openFlowAdmissionRun, type FlowReceiptClaim } from "../workflows/start";
+import {
+  commandIdOf as flowSegmentCommandId,
+  openFlowAdmissionRun,
+  type FlowReceiptClaim,
+} from "../workflows/start";
 import {
   admitFlowContinuation,
   admitFlowPageStart,
@@ -82,12 +90,6 @@ type GuidedControl = Readonly<{
   pageId: string;
   flowId?: string;
   summary: boolean;
-}>;
-type ConfirmationReference = Readonly<{
-  draftId: string;
-  revision: number;
-  issuedAt: number;
-  signature: string;
 }>;
 
 type GuidedInvocationPage = Readonly<{
@@ -148,20 +150,6 @@ export type InvocationDependencies = Readonly<{
     shells?: unknown,
   ) => Readonly<{ all: ReadonlySet<string>; summary?: string }> | undefined;
   guidedFormFlowId: (page: unknown, bindings: unknown, shells?: unknown) => string | undefined;
-  confirmationKey: string;
-  confirmationReference: (proof: unknown) => ConfirmationReference | undefined;
-  verifiesConfirmation: (
-    proof: unknown,
-    details: Readonly<{
-      pageId: string;
-      flowId: string;
-      sessionId: string;
-      identityId: string;
-      organizationId: string;
-      applicationRootId: string;
-      subjectRecordId?: string;
-    }>,
-  ) => Promise<boolean>;
   hasAuthoredForm: (application: ApplicationContent, formId: string) => boolean;
   projectForm: (
     session: IdentitySession,
@@ -184,10 +172,16 @@ export type InvocationDependencies = Readonly<{
       values: unknown;
     }>,
   ) => Promise<Readonly<Record<string, JsonValue>> | undefined>;
+  /** The draft steps of the guided page the request addresses, for a flow's draft tasks. */
+  guidedDrafts: (
+    guided: Readonly<{ pageKey: string; pageId: string }>,
+    subject: Readonly<{ recordId: string }> | undefined,
+    boundRequest: BoundHumanOrganizationRequest | undefined,
+  ) => FlowGuidedDraftPort;
   loadGuidedPage: (
     session: IdentitySession,
     guided: GuidedControl,
-    subject: Readonly<{ recordId: string; revision: number }> | undefined,
+    subject: Readonly<{ recordId: string }> | undefined,
   ) => Promise<GuidedInvocationPage | undefined>;
 }>;
 
@@ -219,6 +213,10 @@ export type FlowInvocationRequest = Readonly<{
 const logFlowRefusal = (code: string): void => {
   console.error(`[flows] invocation refused ${code}`);
 };
+
+/** A guided control shared by two pages, or a form submit anywhere but the summary form, never starts a flow. */
+const refusesGuidedBinding = (guided: GuidedControl | null, event: string): boolean =>
+  guided === null || (event === "form_submit" && !guided.summary);
 
 const guidedClickId = (draftId: string, revision: number, bindingId: string): string => {
   const hex = createHash("sha256")
@@ -329,6 +327,24 @@ export async function invokeInstalledFlow(
     selectedRecordReader,
     recordPinService,
   };
+  /** The draft port of the guided page this request addresses; absent when it addresses none. */
+  const guidedDraftsFor = (
+    installation: InstalledFlowBindings,
+    boundRequest: BoundHumanOrganizationRequest | undefined,
+  ): Readonly<{ guidedDrafts?: FlowGuidedDraftPort }> => {
+    const page = installation.applicationContent?.pages.find(
+      (candidate) => candidate.key === body.pageKey && candidate.type === "guided_form",
+    );
+    return page === undefined
+      ? {}
+      : {
+          guidedDrafts: dependencies.guidedDrafts(
+            { pageKey: page.key, pageId: String(page.pageId) },
+            body.pageRecordId === undefined ? undefined : { recordId: body.pageRecordId },
+            boundRequest,
+          ),
+        };
+  };
   const dependenciesFor = (
     release: FlowRelease,
     runId: string | undefined,
@@ -364,11 +380,7 @@ export async function invokeInstalledFlow(
         const page = admittedProjection?.page;
         if (page === undefined) return false;
         const guided = guidedControls.get(binding.controlId.toLowerCase());
-        if (
-          guided !== undefined &&
-          (guided === null || !guided.summary || binding.event !== "form_submit")
-        )
-          return false;
+        if (guided !== undefined && refusesGuidedBinding(guided, binding.event)) return false;
         return admitPageGesture(
           {
             validateOption: dependencies.validateControlOption,
@@ -399,22 +411,26 @@ export async function invokeInstalledFlow(
       bindPin: (bound, input) => recordPinService.bindFlowPinInRequest(bound.transaction, input),
       portsFor: dependenciesFor,
     };
-    return createFlowRunPorts(
-      portsHost,
-      release,
-      runId,
-      installation,
-      {
-        admitSegment: (run, state, segment, execute, entry) =>
-          admitFlowSegment(admissionHost, installation, run, state, segment, execute, entry),
-        admitContinuation: (run, state, execute, openReplay) =>
-          admitFlowContinuation(admissionHost, installation, run, state, execute, openReplay),
-        admitPageStart: (run, state) => admitFlowPageStart(admissionHost, installation, run, state),
-      },
-      boundRequest,
-      pin,
-      receipt,
-    );
+    return {
+      ...createFlowRunPorts(
+        portsHost,
+        release,
+        runId,
+        installation,
+        {
+          admitSegment: (run, state, segment, execute, entry) =>
+            admitFlowSegment(admissionHost, installation, run, state, segment, execute, entry),
+          admitContinuation: (run, state, execute, openReplay) =>
+            admitFlowContinuation(admissionHost, installation, run, state, execute, openReplay),
+          admitPageStart: (run, state) =>
+            admitFlowPageStart(admissionHost, installation, run, state),
+        },
+        boundRequest,
+        pin,
+        receipt,
+      ),
+      ...guidedDraftsFor(installation, boundRequest),
+    };
   };
   const orchestratorFor = (
     release: FlowRelease,
@@ -724,7 +740,8 @@ export async function invokeInstalledFlow(
       binding === undefined ? undefined : guidedControls.get(binding.controlId.toLowerCase());
     if (
       guided !== undefined &&
-      (guided === null || !guided.summary || binding?.event !== "form_submit")
+      binding !== undefined &&
+      refusesGuidedBinding(guided, binding.event)
     ) {
       logFlowRefusal("BINDING_GUIDED_CONTROL_NOT_CONFIRMED");
       return { kind: "refused", committedNow: false };
@@ -920,11 +937,7 @@ export async function invokeInstalledFlow(
       };
       const guided = guidedControls.get(binding.controlId.toLowerCase());
       if (guided === undefined) {
-        if (
-          isRecord(callerInputs.values) &&
-          Object.hasOwn(callerInputs.values, dependencies.confirmationKey)
-        )
-          return undefined;
+        if (Object.hasOwn(callerInputs, "draft")) return undefined;
         const resolved = await resolveValues(callerInputs.values);
         if (resolved === undefined) return undefined;
         const adaptedInputs = adaptPrivateFormSubmit(
@@ -943,34 +956,45 @@ export async function invokeInstalledFlow(
         guided.flowId.toLowerCase() !== String(binding.flow.flowId).toLowerCase()
       )
         return undefined;
-      const submitted = callerInputs.values;
+      const named = callerInputs.draft;
       if (
-        !isRecord(submitted) ||
-        Object.keys(submitted).length !== 1 ||
-        !Object.hasOwn(submitted, dependencies.confirmationKey)
+        !isRecord(named) ||
+        Object.keys(named).length !== 2 ||
+        typeof named.draftId !== "string" ||
+        typeof named.revision !== "number" ||
+        !isRecord(callerInputs.values) ||
+        Object.keys(callerInputs.values).length !== 0
       )
         return undefined;
-      const proof = submitted[dependencies.confirmationKey];
-      const reference = dependencies.confirmationReference(proof);
-      if (reference === undefined) return undefined;
-      if (
-        !(await dependencies.verifiesConfirmation(proof, {
-          pageId: guided.pageId,
-          flowId: guided.flowId,
-          sessionId: identity.session.sessionId,
-          identityId: identity.session.identityId,
-          organizationId: address.read.organizationId,
-          applicationRootId: address.application.applicationRootId,
-          ...(subject === undefined ? {} : { subjectRecordId: subject.recordId }),
-        }))
-      )
-        return undefined;
+      // The submit takes its answers only from the caller's own stored draft at the revision it
+      // names: the draft is read for this session, so another person's draft is never found.
       const model = await dependencies.loadGuidedPage(identity.session, guided, subject);
       const draft = model?.guidedForm;
+      /** The retry of a submit whose reply was lost: its draft is gone, its stored outcome remains. */
+      const replaysCompletedSubmit = async (): Promise<boolean> => {
+        if (invocation.kind !== "binding" || invocation.segment === undefined) return false;
+        const commandId = flowSegmentCommandId(
+          identity.session,
+          selection,
+          guidedClickId(
+            named.draftId as string,
+            named.revision as number,
+            String(binding.bindingId),
+          ),
+          invocation.segment.segmentId,
+          "0",
+        );
+        const found = await requests.run(identity.session, selection, async (transaction) => {
+          const rows =
+            await transaction.query`select vortex_record.flow_segment_receipt(${commandId}::uuid, true) as result`;
+          return isRecord(rows[0]?.result) && rows[0].result.status === "completed";
+        });
+        return found.kind === "available" && found.value === true;
+      };
       const summary = Array.isArray(model?.page.steps)
         ? model.page.steps.find((step) => isRecord(step) && step.summary === true)
         : undefined;
-      if (
+      const draftIsCurrent = !(
         model === undefined ||
         draft === undefined ||
         !isRecord(summary) ||
@@ -978,8 +1002,8 @@ export async function invokeInstalledFlow(
         guided.flowId === undefined ||
         String(model.pageId).toLowerCase() !== guided.pageId.toLowerCase() ||
         draft.computedStepId !== summary.id ||
-        draft.draftId.toLowerCase() !== reference.draftId.toLowerCase() ||
-        draft.revision !== reference.revision ||
+        draft.draftId.toLowerCase() !== named.draftId.toLowerCase() ||
+        draft.revision !== named.revision ||
         draft.flowId.toLowerCase() !== guided.flowId.toLowerCase() ||
         (model.subject?.recordId.toLowerCase() ?? null) !==
           (subject?.recordId.toLowerCase() ?? null) ||
@@ -989,14 +1013,30 @@ export async function invokeInstalledFlow(
             held.event === "form_submit" &&
             held.bindingId.toLowerCase() === String(binding.bindingId).toLowerCase(),
         )
-      )
-        return undefined;
+      );
+      if (!draftIsCurrent) {
+        if (!(await replaysCompletedSubmit())) return undefined;
+        // Only the stored outcome is replayed; the answers of a draft that is gone are never read.
+        return adaptPrivateFormSubmit(
+          binding,
+          {
+            values: {},
+            draft: { draftId: named.draftId, revision: named.revision },
+            ...(callerInputs.selectedOwnerGroupId === undefined
+              ? {}
+              : { selectedOwnerGroupId: callerInputs.selectedOwnerGroupId }),
+          },
+          subject,
+        );
+      }
+      if (model === undefined || draft === undefined) return undefined;
       const resolved = await resolveValues(draft.values);
       if (resolved === undefined) return undefined;
       const adaptedInputs = adaptPrivateFormSubmit(
         binding,
         {
           values: resolved.values,
+          draft: { draftId: draft.draftId, revision: draft.revision },
           ...(callerInputs.selectedOwnerGroupId === undefined
             ? {}
             : { selectedOwnerGroupId: callerInputs.selectedOwnerGroupId }),
@@ -1012,16 +1052,17 @@ export async function invokeInstalledFlow(
     orchestratorFor,
   });
 
-  const submittedValues =
-    invocation.kind === "binding" ? invocation.callerInputs?.values : undefined;
-  const confirmation = isRecord(submittedValues)
-    ? dependencies.confirmationReference(submittedValues[dependencies.confirmationKey])
-    : undefined;
+  const namedDraft =
+    invocation.kind === "binding" && isRecord(invocation.callerInputs?.draft)
+      ? invocation.callerInputs.draft
+      : undefined;
   const invocationWithStableClick =
-    invocation.kind === "binding" && confirmation !== undefined
+    invocation.kind === "binding" &&
+    typeof namedDraft?.draftId === "string" &&
+    typeof namedDraft.revision === "number"
       ? {
           ...invocation,
-          clickId: guidedClickId(confirmation.draftId, confirmation.revision, invocation.bindingId),
+          clickId: guidedClickId(namedDraft.draftId, namedDraft.revision, invocation.bindingId),
         }
       : invocation;
   const result = await endpoint.invoke(identity.session, selection, invocationWithStableClick);

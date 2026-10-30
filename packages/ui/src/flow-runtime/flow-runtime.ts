@@ -6,11 +6,7 @@ import type {
   FlowFormula,
   PageDefinition,
 } from "@vortex/platform/schema";
-import {
-  guidedFormConfirmationKey,
-  guidedFormConfirmationReference,
-  isRecord,
-} from "@vortex/platform/schema";
+import { isRecord } from "@vortex/platform/schema";
 import type { FlowIntentHost } from "./intents";
 import type { ServerDrivenResult } from "./server-driven-run";
 import type { FlowInvokeClient, FlowSubjectContext } from "./server-flow-client";
@@ -75,7 +71,7 @@ export function createFlowRuntimeState(
   initialFormTypes: Readonly<Record<string, Readonly<Record<string, string>>>> = {},
 ) {
   let formTypes = initialFormTypes;
-  type Job = { controller: AbortController; flush: () => void };
+  type Job = { controller: AbortController; flush: () => void; hold: () => () => void };
   const entries = new Map<string, { jobs: Set<Job>; tail?: Promise<void> }>();
   const scopes = createExclusiveScopes();
   const settler = createFormSettler();
@@ -117,13 +113,10 @@ export function createFlowRuntimeState(
       subject: FlowSubjectContext | undefined,
       inputs: Readonly<Record<string, unknown>>,
     ) => {
-      const values = inputs.values;
-      const guided = guidedFormConfirmationReference(
-        isRecord(values) ? values[guidedFormConfirmationKey] : undefined,
-      );
-      return guided === undefined
-        ? JSON.stringify([bindingId, subject?.recordId ?? null, canonicalInputs(inputs)])
-        : JSON.stringify([bindingId, guided.draftId, guided.revision]);
+      const draft = inputs.draft;
+      return isRecord(draft)
+        ? JSON.stringify([bindingId, draft.draftId, draft.revision])
+        : JSON.stringify([bindingId, subject?.recordId ?? null, canonicalInputs(inputs)]);
     },
     retryId: (key: string, proposed: string) => retries.get(key) ?? proposed,
     rememberResult: (key: string, runId: string, result: ServerDrivenResult) => {
@@ -190,6 +183,13 @@ export function createFlowRuntimeState(
     flush: (bindingId: string) => {
       for (const job of entries.get(bindingId)?.jobs ?? []) job.flush();
     },
+    /** Stops the timeout clocks of a binding's running jobs while a step waits on the person; the returned call starts them again. */
+    holdTimeouts: (bindingId: string) => {
+      const releases = [...(entries.get(bindingId)?.jobs ?? [])].map((job) => job.hold());
+      return () => {
+        for (const release of releases) release();
+      };
+    },
     subscribe: (controlId: string, listener: () => void) => {
       const current = listeners.get(controlId) ?? new Set<() => void>();
       current.add(listener);
@@ -226,14 +226,19 @@ export function createFlowRuntimeState(
       const abort = () => controller.abort();
       signal?.addEventListener("abort", abort, { once: true });
       let flush = () => {};
+      let hold = (): (() => void) => () => {};
       const job: Job = {
         controller,
         flush: () => {
           flush();
         },
+        hold: () => hold(),
       };
       const settlesForm =
-        (event === "form_submit" || (event === "action" && exclusive === "form")) && formId;
+        (event === "form_submit" ||
+          event === "guided_step_changed" ||
+          (event === "action" && exclusive === "form")) &&
+        formId;
       const pendingChanges = settlesForm ? settler.pending(settlesForm) : [];
       const scope = {
         exclusive,
@@ -252,13 +257,34 @@ export function createFlowRuntimeState(
       entry.jobs.add(job);
       changeRunning(controlId, 1);
       let timedOut = false;
-      const timer =
-        timeoutMs === null
-          ? undefined
-          : setTimeout(() => {
-              timedOut = true;
-              controller.abort();
-            }, timeoutMs);
+      let timeLeft = timeoutMs;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let armedAt = 0;
+      let holds = 0;
+      let finished = false;
+      const arm = () => {
+        if (timeLeft === null || finished) return;
+        armedAt = Date.now();
+        timer = setTimeout(() => {
+          timedOut = true;
+          controller.abort();
+        }, timeLeft);
+      };
+      arm();
+      // The time a step spends waiting on the person is not the flow's own: the clock stands still.
+      hold = () => {
+        if (holds++ === 0 && timer !== undefined && timeLeft !== null) {
+          clearTimeout(timer);
+          timer = undefined;
+          timeLeft = Math.max(0, timeLeft - (Date.now() - armedAt));
+        }
+        let released = false;
+        return () => {
+          if (released) return;
+          released = true;
+          if (--holds === 0) arm();
+        };
+      };
       const ready =
         debounceMs === 0
           ? Promise.resolve()
@@ -317,6 +343,7 @@ export function createFlowRuntimeState(
           signal?.removeEventListener("abort", abort);
           if (stopWaiting !== undefined)
             controller.signal.removeEventListener("abort", stopWaiting);
+          finished = true;
           if (timer !== undefined) clearTimeout(timer);
           ticket?.remove();
           release?.();

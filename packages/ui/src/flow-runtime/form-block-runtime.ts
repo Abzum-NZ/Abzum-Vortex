@@ -17,6 +17,8 @@ type PreparedForm = Readonly<{
   values: FormFieldAnswers;
   selectedOwnerGroupId?: string;
   recordChanges?: readonly string[];
+  /** The guided form's own draft a final submit confirms; the server reads the answers from it. */
+  draft?: Readonly<{ draftId: string; revision: number }>;
 }>;
 
 export type FormBlockRuntime = Readonly<{
@@ -27,6 +29,13 @@ export type FormBlockRuntime = Readonly<{
     prepare: (signal: AbortSignal) => PreparedForm | undefined | Promise<PreparedForm | undefined>,
     gestureId: string,
     sourceTablePlacementId?: string,
+  ) => Promise<ServerDrivenResult | undefined>;
+  /** A guided form's step change or cancel: the bound flow with the draft and step it names. */
+  guided: (
+    binding: PlacementFlowBinding,
+    /** Read once, after the form's pending changes have settled. */
+    inputs: () => Readonly<Record<string, unknown>>,
+    gestureId: string,
   ) => Promise<ServerDrivenResult | undefined>;
   /** The form's mount event, when the placement binds it. */
   ready: (
@@ -62,6 +71,7 @@ export function createFormBlockRuntime(runtime: FlowRuntime): FormBlockRuntime {
             ? undefined
             : {
                 values: submission.values,
+                ...(submission.draft === undefined ? {} : { draft: submission.draft }),
                 ...(submission.recordChanges === undefined
                   ? {}
                   : { recordChanges: submission.recordChanges }),
@@ -74,6 +84,10 @@ export function createFormBlockRuntime(runtime: FlowRuntime): FormBlockRuntime {
         sourceTablePlacementId,
       );
     },
+    guided: (binding, inputs, gestureId) =>
+      binding.event === "guided_step_changed" || binding.event === "form_cancel"
+        ? dispatchOnce(binding, async () => inputs(), gestureId)
+        : Promise.resolve(undefined),
     ready: (binding, gestureId) =>
       binding.event === "form_ready"
         ? dispatchOnce(binding, {}, gestureId)

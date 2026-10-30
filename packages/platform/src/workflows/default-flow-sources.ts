@@ -132,6 +132,8 @@ export type DefaultSaveFlowInput = DefaultFlowIdentity &
     form: string;
     /** What follows a save: the saved record's page, the list, or a refresh of the page's data. */
     after: DefaultFlowAfter;
+    /** The final submit of a guided form: the save is followed by discarding the form's stored draft. */
+    guidedDraft?: true;
   }>;
 
 /**
@@ -150,6 +152,12 @@ export const defaultSaveFlowSource = (input: DefaultSaveFlowInput): SourceFlow =
           }
         : {}),
       values: { type: "json", required: true },
+      ...(input.guidedDraft === undefined
+        ? {}
+        : {
+            draft_id: { type: "text", required: true },
+            revision: { type: "whole_number", required: true },
+          }),
       ...(input.mode === "create" && input.ownershipMode === "group"
         ? { selected_owner_group_id: { type: "text", required: true } }
         : {}),
@@ -194,6 +202,16 @@ export const defaultSaveFlowSource = (input: DefaultSaveFlowInput): SourceFlow =
             : {}),
         },
       },
+      ...(input.guidedDraft === undefined
+        ? []
+        : [
+            {
+              id: "discard_draft",
+              type: "form.discard_draft",
+              version: taskVersion,
+              properties: { draft_id: inputReference("draft_id"), revision: inputReference("revision") },
+            } as unknown as Task,
+          ]),
       {
         id: "report",
         type: "if",
@@ -229,6 +247,80 @@ export const defaultSaveFlowSource = (input: DefaultSaveFlowInput): SourceFlow =
             },
           }
         : {},
+  });
+
+export type DefaultGuidedStepFlowInput = DefaultFlowIdentity &
+  Readonly<{
+    /** The placement alias of the step's form, and the key of the guided page the flow stays on. */
+    form: string;
+    page: string;
+  }>;
+
+/**
+ * The default step change of a guided form, every step visible: check the step's form, save its
+ * answers to the person's draft, then open the step the draft reaches. The page supplies the draft, the step and the step's answers by name.
+ */
+export const defaultGuidedStepFlowSource = (input: DefaultGuidedStepFlowInput): SourceFlow =>
+  interactiveSource(input, {
+    inputs: {
+      draft_id: { type: "text", required: true },
+      revision: { type: "whole_number", required: true },
+      step: { type: "text", required: true },
+      requested_step: { type: "text", required: false },
+      values: { type: "json", required: true },
+    },
+    tasks: [
+      {
+        id: "validate",
+        type: "interface.validate_form",
+        version: taskVersion,
+        properties: { form: textLiteral(input.form) },
+      } as unknown as Task,
+      {
+        id: "save_draft",
+        type: "form.save_draft",
+        version: taskVersion,
+        properties: {
+          draft_id: inputReference("draft_id"),
+          revision: inputReference("revision"),
+          step: inputReference("step"),
+          requested_step: inputReference("requested_step"),
+          values: inputReference("values"),
+        },
+      } as unknown as Task,
+      {
+        id: "go_to_step",
+        type: "interface.navigate",
+        version: taskVersion,
+        properties: {
+          page: textLiteral(input.page),
+          parameters: { kind: "map", entries: { step: "{{ outputs.save_draft.step_id }}" } },
+        },
+      } as unknown as Task,
+    ],
+    outputs: {},
+  });
+
+export type DefaultGuidedCancelFlowInput = DefaultFlowIdentity &
+  Readonly<{ after: DefaultFlowAfter }>;
+
+/** The default Cancel of a guided form: discard the person's draft, then the page they go on to. */
+export const defaultGuidedCancelFlowSource = (input: DefaultGuidedCancelFlowInput): SourceFlow =>
+  interactiveSource(input, {
+    inputs: {
+      draft_id: { type: "text", required: true },
+      revision: { type: "whole_number", required: true },
+    },
+    tasks: [
+      {
+        id: "discard_draft",
+        type: "form.discard_draft",
+        version: taskVersion,
+        properties: { draft_id: inputReference("draft_id"), revision: inputReference("revision") },
+      } as unknown as Task,
+      ...afterTasks(input.after, ""),
+    ],
+    outputs: {},
   });
 
 export type DefaultDeleteFlowInput = DefaultFlowIdentity &

@@ -2,8 +2,6 @@ import type { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
   flowBindingInvocationSchema,
-  guidedFormConfirmationKey,
-  guidedFormConfirmationReference,
   logRefusal,
   recordIdSchema,
   sameId,
@@ -23,14 +21,11 @@ import {
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { loadProjectedOptionsForm } from "../../../_lib/application-page";
 import { loadGuidedConfirmation } from "../../../_lib/application-page/guided-confirmation";
+import { createGuidedDraftPort } from "../../../_lib/application-page/guided-draft-port";
 import { installedReleaseCatalogue } from "../../../_lib/definition-catalogue";
 import { applicationStoreService } from "../../../_lib/application-store-service";
 import { backendAdapter } from "../../../_lib/backend-adapter";
-import {
-  getGuidedFormControlIds,
-  getGuidedFormFlowId,
-  verifiesGuidedFormConfirmation,
-} from "@vortex/platform/server";
+import { getGuidedFormControlIds, getGuidedFormFlowId } from "@vortex/platform/server";
 import { getQueryContinuationKey } from "../../../_lib/query-continuation-key";
 import { resolveFormOptionValues } from "../../../_lib/application-page/form-option-values";
 import { appTelemetry } from "../../../_lib/server-composition";
@@ -217,6 +212,17 @@ export const createFlowInvocationHandler =
               if (demand.kind !== "ready") return refusedResponse();
             }
 
+            const guidedAddress = (pageKey: string) => ({
+              tenantShortName: body.tenantShortName,
+              organizationShortName: body.organizationShortName,
+              read: address.read,
+              application: address.application,
+              pageKey,
+              ...(address.navigation === undefined ? {} : { navigation: address.navigation }),
+              ...(address.installedContext === undefined
+                ? {}
+                : { installedContext: address.installedContext }),
+            });
             const result = await invokeInstalledFlow(identity.session, body, address, {
               authorityId: getIdentityAuthorityConfiguration().authorityId,
               ...(bound === undefined ? {} : { boundRequest: bound }),
@@ -276,10 +282,6 @@ export const createFlowInvocationHandler =
               },
               guidedFormControls: getGuidedFormControlIds,
               guidedFormFlowId: getGuidedFormFlowId,
-              confirmationKey: guidedFormConfirmationKey,
-              confirmationReference: guidedFormConfirmationReference,
-              verifiesConfirmation: (proof, details) =>
-                verifiesGuidedFormConfirmation(getQueryContinuationKey(), proof, details),
               hasAuthoredForm: applicationHasAuthoredForm,
               projectForm: (session, form) =>
                 loadProjectedOptionsForm(session, address, form, bound),
@@ -292,20 +294,12 @@ export const createFlowInvocationHandler =
                   values: args.values,
                   ...(bound === undefined ? {} : { bound }),
                 }),
+              guidedDrafts: (guided, subject, boundRequest) =>
+                createGuidedDraftPort(guidedAddress(guided.pageKey), guided, subject, boundRequest),
               loadGuidedPage: (session, guided, subject) =>
                 loadGuidedConfirmation(
                   session,
-                  {
-                    tenantShortName: body.tenantShortName,
-                    organizationShortName: body.organizationShortName,
-                    read: address.read,
-                    application: address.application,
-                    pageKey: guided.pageKey,
-                    ...(address.navigation === undefined ? {} : { navigation: address.navigation }),
-                    ...(address.installedContext === undefined
-                      ? {}
-                      : { installedContext: address.installedContext }),
-                  },
+                  guidedAddress(guided.pageKey),
                   guided,
                   subject,
                   bound,

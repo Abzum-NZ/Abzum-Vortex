@@ -2,13 +2,6 @@ import type { ControlSemanticEvent, FormBlockRuntime, PageMessageDraft } from "@
 export type { PageMessageDraft } from "@vortex/ui";
 import type { FlowFieldCorrection, RecordsSelectionInput } from "@vortex/platform/schema";
 import type { ApplicationPageModel, PageDataState } from "../../../../../../_lib/application-page";
-import type {
-  GuidedFormAbandonRequest,
-  GuidedFormConfirmRequest,
-  GuidedFormConfirmResult,
-  GuidedFormStepActionResult,
-  GuidedFormStepRequest,
-} from "@vortex/platform/server";
 
 export type EditFormBaseline = ApplicationPageModel["editFormBaselines"][string];
 
@@ -27,16 +20,6 @@ export type TableContinuationTarget = Readonly<{
     pageDirection: "forward" | "backward";
     continuationToken?: string;
   }>;
-}>;
-
-export type GuidedFormActions = Readonly<{
-  advance: (request: GuidedFormStepRequest) => Promise<GuidedFormStepActionResult>;
-  confirm: (request: GuidedFormConfirmRequest) => Promise<GuidedFormConfirmResult>;
-  abandon: (
-    request: GuidedFormAbandonRequest,
-  ) => Promise<
-    Readonly<{ kind: "abandoned" | "conflict" | "unavailable" | "temporarily_unavailable" }>
-  >;
 }>;
 
 /**
@@ -78,6 +61,8 @@ export type DispatchOutcome = Readonly<{
 export type SubmittedForm = Readonly<{
   formId: string;
   values: Readonly<Record<string, unknown>>;
+  /** A guided step: its answers are saved when the flow answers, though no record is committed. */
+  draftSaved?: true;
 }>;
 
 export type RefreshedPlacementData = Readonly<{

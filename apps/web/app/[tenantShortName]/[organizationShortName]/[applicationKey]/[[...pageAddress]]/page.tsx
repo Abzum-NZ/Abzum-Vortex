@@ -44,11 +44,6 @@ import {
   fieldInputControlReleasesFor,
   platformBlockReleasesFor,
 } from "../../../../_lib/platform-block-releases";
-import {
-  abandonGuidedFormDraftAction,
-  advanceGuidedFormStepAction,
-  confirmGuidedFormAction,
-} from "./guided-form-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -434,11 +429,6 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
             </Alert>
           )
         }
-        guidedFormActions={{
-          advance: advanceGuidedFormStepAction,
-          confirm: confirmGuidedFormAction,
-          abandon: abandonGuidedFormDraftAction,
-        }}
       />
     </>
   );

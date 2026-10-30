@@ -9,6 +9,8 @@ type PrivateFormSubmission = Readonly<{
   /** Whole-record patch membership, independent of individually mapped answers. */
   recordChanges?: readonly string[];
   selectedOwnerGroupId?: string;
+  /** A guided form's own stored draft the submit confirms; the server alone fills it from the draft. */
+  draft?: Readonly<{ draftId: string; revision: number }>;
 }>;
 
 /**
@@ -20,7 +22,11 @@ const readPrivateFormSubmission = (candidate: unknown): PrivateFormSubmission | 
   if (!isRecord(candidate)) return undefined;
   if (
     Object.keys(candidate).some(
-      (key) => key !== "values" && key !== "recordChanges" && key !== "selectedOwnerGroupId",
+      (key) =>
+        key !== "values" &&
+        key !== "recordChanges" &&
+        key !== "selectedOwnerGroupId" &&
+        key !== "draft",
     )
   )
     return undefined;
@@ -40,8 +46,20 @@ const readPrivateFormSubmission = (candidate: unknown): PrivateFormSubmission | 
     typeof candidate.selectedOwnerGroupId !== "string"
   )
     return undefined;
+  const draft = candidate.draft;
+  if (
+    draft !== undefined &&
+    (!isRecord(draft) ||
+      Object.keys(draft).length !== 2 ||
+      typeof draft.draftId !== "string" ||
+      !Number.isSafeInteger(draft.revision))
+  )
+    return undefined;
   return {
     values,
+    ...(draft === undefined
+      ? {}
+      : { draft: { draftId: draft.draftId as string, revision: draft.revision as number } }),
     ...(changes === undefined ? {} : { recordChanges: changes as string[] }),
     ...(candidate.selectedOwnerGroupId === undefined
       ? {}
@@ -87,6 +105,10 @@ export const adaptFormSubmitInputs = (
           : Object.fromEntries(
               submission.recordChanges.map((name) => [name, submission.values[name]]),
             );
+    else if (input.name === "draft_id" && submission.draft !== undefined)
+      adapted[input.name] = submission.draft.draftId;
+    else if (input.name === "revision" && submission.draft !== undefined)
+      adapted[input.name] = submission.draft.revision;
     else if (input.name === "selected_owner_group_id")
       adapted[input.name] = submission.selectedOwnerGroupId;
     else if (Object.hasOwn(submission.values, input.name))
