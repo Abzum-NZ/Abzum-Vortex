@@ -334,6 +334,7 @@ export const prepare = async (
 /** @internal Shared only by the fixed named-action save composition. */
 export const parseRelationshipTotalPreparation = (
   candidate: unknown,
+  requiredRecordKeys: readonly string[] = ["root"],
 ): RelationshipTotalPreparationOutcome => {
   if (typeof candidate !== "object" || candidate === null) return { outcome: "refused" };
   const value = candidate as Record<string, unknown>;
@@ -422,7 +423,10 @@ export const parseRelationshipTotalPreparation = (
       relationshipSources,
     });
   }
-  return records.filter((record) => record.recordKey === "root").length === 1
+  const keys = new Set(records.map((record) => record.recordKey));
+  return keys.size === records.length &&
+    requiredRecordKeys.length > 0 &&
+    requiredRecordKeys.every((key) => keys.has(key))
     ? {
         outcome: "prepared",
         correlationId: value.correlationId,

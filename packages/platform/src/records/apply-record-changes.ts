@@ -14,6 +14,7 @@ import {
 } from "./before-save-rules";
 import { operationClock } from "./field-candidate";
 import {
+  contractError,
   finalizeCalculatedValues,
   one,
   parsePreparation,
@@ -70,9 +71,9 @@ export type RecordChangesResult =
 
 const completed = (value: Record<string, unknown>): readonly Saved[] => {
   if (!Array.isArray(value.results) || value.results.length === 0)
-    throw new Error("RECORD_CHANGES_RESULT_INVALID");
+    throw contractError("RECORD_CHANGES_RESULT_INVALID", undefined);
   return value.results.map((entry) => {
-    if (!isRecord(entry)) throw new Error("RECORD_CHANGES_RESULT_INVALID");
+    if (!isRecord(entry)) throw contractError("RECORD_CHANGES_RESULT_INVALID", undefined);
     const result = saveRecordResultSchema.parse({
       contractVersion: "2.0.0",
       outcome: entry.outcome,
@@ -82,7 +83,7 @@ const completed = (value: Record<string, unknown>): readonly Saved[] => {
       correlationId: entry.correlationId,
       backgroundDelivery: entry.backgroundDelivery,
     });
-    if (result.outcome !== "saved") throw new Error("RECORD_CHANGES_RESULT_INVALID");
+    if (result.outcome !== "saved") throw contractError("RECORD_CHANGES_RESULT_INVALID", undefined);
     return result;
   });
 };
@@ -135,7 +136,12 @@ export const applyRecordChanges = async (
             expectedConcurrencyNumber: intent.expectedConcurrencyNumber,
           }),
     });
-    if (!command.success) return { kind: "refused", index, reasonCode: "command_invalid" };
+    if (!command.success) {
+      console.error(
+        `[record] change intent ${index} is invalid: ${command.error.issues.map((issue) => `${issue.code}:${issue.path.join(".")}`).join(", ")}`,
+      );
+      return { kind: "refused", index, reasonCode: "command_invalid" };
+    }
     commands.push(command.data);
   }
   const subjects = commands.map((command) => ({
@@ -152,35 +158,44 @@ export const applyRecordChanges = async (
   }));
   const preparedRow = one(
     await transaction.query<{ preparation: unknown }>`
-    select vortex_record.prepare_record_changes(${commandId}::uuid, ${JSON.stringify(subjects)}::jsonb) as preparation
+    select vortex_record.prepare_record_changes(${commandId}::uuid, ${JSON.stringify(subjects)}::text::jsonb) as preparation
   `,
   ).preparation;
-  if (!isRecord(preparedRow)) throw new Error("RECORD_CHANGES_PREPARATION_INVALID");
+  if (!isRecord(preparedRow)) throw contractError("RECORD_CHANGES_PREPARATION_INVALID", undefined);
   if (preparedRow.outcome === "completed") {
     const results = completed(preparedRow);
     return { kind: "completed", results, previous: results.map(() => ({})), warnings: [] };
   }
   if (preparedRow.outcome === "restart") return { kind: "restart" };
-  if (preparedRow.outcome !== "prepared") return refusal(preparedRow);
-  const graph = parseRelationshipTotalPreparation(preparedRow);
+  if (preparedRow.outcome !== "prepared") {
+    console.error(
+      `[record] change preparation refused: ${preparedRow.reasonCode ?? preparedRow.outcome}`,
+    );
+    return refusal(preparedRow);
+  }
+  const graph = parseRelationshipTotalPreparation(
+    preparedRow,
+    commands.map((_command, index) => `intent:${index}`),
+  );
   if (
     graph.outcome !== "prepared" ||
     !Array.isArray(preparedRow.subjects) ||
     preparedRow.subjects.length !== commands.length
   )
-    throw new Error("RECORD_CHANGES_PREPARATION_INVALID");
+    throw contractError("RECORD_CHANGES_PREPARATION_INVALID", undefined);
   const preparations = new Map<string, PreparedSave>();
   for (const [index, candidate] of preparedRow.subjects.entries()) {
     if (!isRecord(candidate) || candidate.recordKey !== `intent:${index}`)
-      throw new Error("RECORD_CHANGES_SUBJECT_INVALID");
+      throw contractError("RECORD_CHANGES_SUBJECT_INVALID", undefined);
     const parsed = parsePreparation(candidate);
-    if (parsed.outcome !== "prepared") throw new Error("RECORD_CHANGES_SUBJECT_INVALID");
+    if (parsed.outcome !== "prepared")
+      throw contractError("RECORD_CHANGES_SUBJECT_INVALID", undefined);
     preparations.set(candidate.recordKey, parsed);
   }
   const rules = new Map<string, BeforeSaveRuleExecution>();
   for (const record of graph.records) {
     const ruleSet = beforeSaveFlowSetOf(record.beforeSaveFlows, record.recordType.recordTypeId);
-    if (ruleSet === undefined) throw new Error("RECORD_CHANGES_RULE_SET_INVALID");
+    if (ruleSet === undefined) throw contractError("RECORD_CHANGES_RULE_SET_INVALID", undefined);
     rules.set(record.recordKey, beginBeforeSaveRuleExecution(ruleSet));
   }
   const settings = await readOrganizationRuntimeSettings(transaction);
@@ -209,7 +224,8 @@ export const applyRecordChanges = async (
       const key = `intent:${index}`;
       const values = calculated.records.get(key);
       const prepared = preparations.get(key)!;
-      if (values === undefined) throw new Error("RECORD_CHANGES_CALCULATED_SUBJECT_MISSING");
+      if (values === undefined)
+        throw contractError("RECORD_CHANGES_CALCULATED_SUBJECT_MISSING", undefined);
       for (const check of values.pendingChecks)
         if (check.kind === "choice_permission") {
           const held = prepared.existingValues[check.fieldId];
@@ -259,10 +275,11 @@ export const applyRecordChanges = async (
             (item.value ->> 'permissionId')::uuid, (item.value ->> 'recordId')::uuid))
         else vortex_record.read_record((item.value ->> 'recordTypeId')::uuid,
           (item.value ->> 'recordId')::uuid) -> 'record' end as decision
-      from pg_catalog.jsonb_array_elements(${JSON.stringify([...requests.values()])}::jsonb) as item(value)
+      from pg_catalog.jsonb_array_elements(${JSON.stringify([...requests.values()])}::text::jsonb) as item(value)
     `;
     for (const row of rows) decisions.set(row.key, row.decision);
-    if (decisions.size !== requests.size) throw new Error("RECORD_CHANGES_CHECKS_INCOMPLETE");
+    if (decisions.size !== requests.size)
+      throw contractError("RECORD_CHANGES_CHECKS_INCOMPLETE", undefined);
   }
   const previous = [];
   for (const [index, command] of commands.entries()) {
@@ -294,17 +311,19 @@ export const applyRecordChanges = async (
       {
         choicePermission: async (permissionId) => {
           const decision = decisions.get(`${key}:permission:${permissionId.toLowerCase()}`);
-          if (typeof decision !== "boolean") throw new Error("RECORD_CHANGES_PERMISSION_INVALID");
+          if (typeof decision !== "boolean")
+            throw contractError("RECORD_CHANGES_PERMISSION_INVALID", undefined);
           return decision;
         },
         readRecord: async (recordTypeId, recordId) => {
           const decision = decisions.get(
             `record:${recordTypeId.toLowerCase()}:${recordId.toLowerCase()}`,
           );
-          if (!isRecord(decision)) throw new Error("RECORD_CHANGES_DEPENDENCY_READ_INVALID");
+          if (!isRecord(decision))
+            throw contractError("RECORD_CHANGES_DEPENDENCY_READ_INVALID", undefined);
           if (decision.outcome !== "allowed") return undefined;
           if (!isRecord(decision.values))
-            throw new Error("RECORD_CHANGES_DEPENDENCY_VALUES_INVALID");
+            throw contractError("RECORD_CHANGES_DEPENDENCY_VALUES_INVALID", undefined);
           const targetIndex = commands.findIndex(
             (candidate) =>
               candidate.operation === "update" &&
@@ -336,18 +355,23 @@ export const applyRecordChanges = async (
       ),
     );
   }
-  if (!calculated.success) throw new Error("RECORD_CHANGES_INVALID_CALCULATION_ACCEPTED");
+  if (!calculated.success)
+    throw contractError("RECORD_CHANGES_INVALID_CALCULATION_ACCEPTED", undefined);
   const stored = one(
     await transaction.query<{ result: unknown }>`
-    select vortex_record.apply_record_changes(${commandId}::uuid, ${JSON.stringify(subjects)}::jsonb,
-      ${JSON.stringify(calculated.parentMutations)}::jsonb) as result
+    select vortex_record.apply_record_changes(${commandId}::uuid, ${JSON.stringify(subjects)}::text::jsonb,
+      ${JSON.stringify(calculated.parentMutations)}::text::jsonb) as result
   `,
   ).result;
-  if (!isRecord(stored)) throw new Error("RECORD_CHANGES_RESULT_INVALID");
+  if (!isRecord(stored)) throw contractError("RECORD_CHANGES_RESULT_INVALID", undefined);
   if (stored.outcome === "restart") return { kind: "restart" };
-  if (stored.outcome !== "completed") return refusal(stored);
+  if (stored.outcome !== "completed") {
+    console.error(`[record] change persistence refused: ${stored.reasonCode ?? stored.outcome}`);
+    return refusal(stored);
+  }
   const results = completed(stored);
-  if (results.length !== subjects.length) throw new Error("RECORD_CHANGES_RESULT_COUNT_INVALID");
+  if (results.length !== subjects.length)
+    throw contractError("RECORD_CHANGES_RESULT_COUNT_INVALID", undefined);
   const warnings = graph.records.flatMap((record) =>
     rules.get(record.recordKey)!.warnings.map((warning) =>
       record.canRead
