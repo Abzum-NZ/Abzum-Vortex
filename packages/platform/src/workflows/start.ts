@@ -589,7 +589,7 @@ const startFlowInternal = async <Value>(
               dependencies.execute({ ...context, transaction: child }, segment, replay, runId),
             )
           : await dependencies.execute(context, segment, replay, runId);
-        if (Object.keys(executed.effects).length > 0)
+        if (Object.values(executed.effects).some((effect) => effect.outcome === "committed"))
           throw new Error("FLOW_SEGMENT_UNEXPECTED_EFFECT");
       } catch (error) {
         if (error instanceof HumanOrganizationRequestRestart || !hasCompletion) throw error;
@@ -620,7 +620,7 @@ const startFlowInternal = async <Value>(
         }
         const receipt = await recordSegmentEffects(child, runId, executed);
         await child.query`select vortex_record.complete_flow_segment_receipt(${commandId}::uuid, ${JSON.stringify(receipt)}::text::jsonb)`;
-        return { value: executed.value, committedNow: Object.keys(executed.effects).length > 0 };
+        return { value: executed.value, committedNow: Object.values(executed.effects).some((effect) => effect.outcome === "committed") };
       });
       await recordOutcome("succeeded");
       return { kind: "completed", ...value, runId };
@@ -683,7 +683,7 @@ const startFlowInternal = async <Value>(
           kind: "completed",
           value: executed.value,
           runId: pending.runId,
-          committedNow: completion.value === "recorded" && Object.keys(executed.effects).length > 0,
+          committedNow: completion.value === "recorded" && Object.values(executed.effects).some((effect) => effect.outcome === "committed"),
         };
       }
       if (executed.outcome !== "succeeded" && pending.replay === undefined && hasCompletion) {
