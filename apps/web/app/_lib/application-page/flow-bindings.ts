@@ -1,6 +1,7 @@
 import {
   buildLinkTilesQueryBinding,
   flowEntrySegments,
+  formFieldOf,
   readOrganizationRuntimeSettings,
   type HumanOrganizationRequestDependencies,
   type InstalledRuntimeContext,
@@ -309,6 +310,7 @@ export const projectFlowBindingTargets = (input: {
 export const projectPlacementBindings = (
   input: Readonly<{
     application: InstalledRuntimeContext["releaseSet"]["application"];
+    context: InstalledRuntimeContext;
     plans: FlowPlanSet;
     recordTypeByPlacement: Map<string, string>;
     bindings: Record<string, PlacementFlowBinding[]>;
@@ -316,10 +318,12 @@ export const projectPlacementBindings = (
     pageSubjectRecordTypeId: string | undefined;
     selectedReadTypesByFlow: Map<string, ReadonlyMap<string, string>>;
   }>,
-  { placementId, formId }: ReturnType<typeof collectPlacements>[number],
+  placement: ReturnType<typeof collectPlacements>[number],
 ): void => {
+  const { placementId, formId } = placement;
   const {
     application,
+    context,
     plans,
     recordTypeByPlacement,
     bindings,
@@ -377,7 +381,28 @@ export const projectPlacementBindings = (
           }
           return flowTaskChildLists(task).some((child) => savesValues(child.tasks));
         });
-      const flow = application.content.flows.find((entry) => sameId(entry.id, binding.flow.flowId));
+      const flow = plans.flows.get(String(binding.flow.flowId));
+      if (flow === undefined) throw new Error("FLOW_BINDING_DEFINITION_UNAVAILABLE");
+      const label = placement.settings.label;
+      const recordType = context.releaseSet.modules
+        .flatMap((module) => module.content.recordTypes)
+        .find(
+          (entry) =>
+            placementRecordTypeId !== undefined &&
+            sameId(entry.recordTypeId, placementRecordTypeId),
+        );
+      const field = recordType === undefined ? undefined : formFieldOf(placement, recordType);
+      const name = placement.settings.name;
+      const controlName =
+        isRecord(label) &&
+        label.kind === "text" &&
+        typeof label.value === "string" &&
+        label.value.trim()
+          ? label.value.trim()
+          : (field?.label ??
+            (isRecord(name) && name.kind === "text" && typeof name.value === "string"
+              ? name.value.replaceAll("_", " ")
+              : (flow.labels.name ?? flow.key.replaceAll("_", " "))));
       const fullPlan = plans.plans.get(String(binding.flow.flowId));
       if (fullPlan === undefined) throw new Error("FLOW_BINDING_PLAN_UNAVAILABLE");
       const entrySegments = flowEntrySegments(fullPlan);
@@ -395,6 +420,9 @@ export const projectPlacementBindings = (
         savesFormValues: flow !== undefined && savesValues(flow.tasks),
         bindingId: binding.bindingId,
         controlId: binding.controlId,
+        controlName,
+        flowName: flow.labels.name ?? flow.key.replaceAll("_", " "),
+        ...(formId === undefined ? {} : { formId }),
         eventId: binding.eventId,
         event: binding.event,
         flowId: binding.flow.flowId,

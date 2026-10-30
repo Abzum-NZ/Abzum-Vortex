@@ -679,6 +679,7 @@ const loadApplicationPageJoined = async (
   };
   const flowBindingInput = {
     application,
+    context,
     plans: flowPlansOf(context.releaseSet),
     recordTypeByPlacement,
     bindings,

@@ -295,14 +295,25 @@ export function useApplyDispatch({
         }
         if (server.kind === "skipped") return outcome;
         if (server.kind === "refused") {
-          showResult(unavailableNotice);
+          showResult(
+            server.reason === undefined
+              ? unavailableNotice
+              : { tone: "problem", text: server.reason },
+          );
           return outcome;
         }
         if (server.kind === "abandoned") {
           // A surface that went away at a pause before any answer was sent: nothing to report.
           if (server.unanswered) return outcome;
           // The run may have committed a step before the answer was lost: never report nothing.
-          showResult(outcomeNotices.uncertain ?? unavailableNotice);
+          showResult(
+            server.timedOut
+              ? {
+                  tone: "problem",
+                  text: "The action timed out. Its outcome is unknown; retrying the same action is safe.",
+                }
+              : (outcomeNotices.uncertain ?? unavailableNotice),
+          );
           if (model.guidedForm !== undefined) setCompletedGuidedNavigationKey(navigationKey);
           if (sourceBindingId !== undefined)
             void refreshPlacements(refreshTargetsForBinding(sourceBindingId), undefined, {

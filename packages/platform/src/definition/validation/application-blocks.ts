@@ -106,6 +106,59 @@ const sourceBlockKey = (item: SourceItem): string | undefined => {
 const sourceButtonActionKind = (item: SourceItem): unknown =>
   sourceBlockSetting(item, "action_kind", "string") ?? "action";
 
+/** The page currently dispatches these events to their bound flows. */
+const pageFlowEvents = new Set([
+  "action",
+  "row_clicked",
+  "row_action",
+  "inline_edit",
+  "row_edit",
+  "card_moved",
+  "card_added",
+  "field_changed",
+  "field_focus_lost",
+  "form_ready",
+  "form_reset",
+  "form_submit",
+]);
+
+/** Refuse a binding that the current page wiring cannot dispatch. */
+export function applicationFlowBindingPageEventRule(
+  source: ApplicationSourceDocument,
+): DefinitionRuleFailure[] {
+  const placed = placedApplicationBlocks(source.body);
+  return array(object(source.body).flow_bindings).flatMap((binding): DefinitionRuleFailure[] => {
+    const control = String(binding.control);
+    const event = String(binding.event);
+    const placement = placed.get(control);
+    if (placement === undefined) return [];
+    const guided = placement.pageType === "guided_form";
+    const guidedEvent =
+      event === "field_changed" || event === "field_focus_lost" || event === "form_submit";
+    if (pageFlowEvents.has(event) && (!guided || guidedEvent)) return [];
+    const controlKey = builderKeySchema.safeParse(control);
+    const bindingKey = builderKeySchema.safeParse(binding.id);
+    return [
+      {
+        ruleCode: "vortex.definition.application_control_binding",
+        family: "unsupported_choice",
+        sentence: `Control ${boundedBindingName(control)} does not raise ${event} on ${guided ? "a guided form" : "a page"}.`,
+        location: {
+          documentKind: "application",
+          documentKey: source.key,
+          segments: [
+            { kind: "application", key: source.key },
+            ...(controlKey.success ? [{ kind: "block" as const, key: controlKey.data }] : []),
+            ...(bindingKey.success
+              ? [{ kind: "flow_binding" as const, key: bindingKey.data }]
+              : []),
+          ],
+        },
+      },
+    ];
+  });
+}
+
 /** Whether a form container holds, at any depth, a button that submits the enclosing form. */
 const containsSubmitButton = (item: SourceItem): boolean =>
   sourceItemChildSlots(item).some(([, children]) =>
@@ -180,7 +233,10 @@ export function applicationControlBindingRule(
     const source = parsed.data as ApplicationSourceDocument;
     const body = object(source.body);
     const boundEvents = new Map<string, Set<string>>();
-    const failures = applicationFlowBindingUniquenessRule(source);
+    const failures = [
+      ...applicationFlowBindingUniquenessRule(source),
+      ...applicationFlowBindingPageEventRule(source),
+    ];
     for (const binding of array(body.flow_bindings)) {
       const control = String(binding.control);
       const event = String(binding.event);

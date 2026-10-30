@@ -26,14 +26,14 @@ export type ServerDrivenResult =
   /** The surface is older than the installation: nothing ran and the page must reload. */
   | Readonly<{ kind: "reload"; installationRevision: number }>
   /** Unknown, expired, foreign, tampered or not permitted: the one neutral refusal. */
-  | Readonly<{ kind: "refused" }>
+  | Readonly<{ kind: "refused"; reason?: string }>
   | Readonly<{ kind: "unavailable" }>
   /**
    * The intent surface or caller went away before the run finished. `unanswered` is true when it
    * went away at a pause before any answer was sent, so this interaction sent nothing after the start;
    * otherwise an answer was sent or a result arrived and what the run committed is not known here.
    */
-  | Readonly<{ kind: "abandoned"; unanswered: boolean }>;
+  | Readonly<{ kind: "abandoned"; unanswered: boolean; timedOut?: boolean }>;
 
 const minimumContinuationLength = 16;
 const maximumContinuationLength = 128;

@@ -373,7 +373,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       events?.form_submit?.({
         event: "form_submit",
         gestureId: crypto.randomUUID(),
-        values: registry.values(),
+        readValues: registry.values,
         ...(selectedOwnerGroupId === undefined ? {} : { selectedOwnerGroupId }),
       }),
     );

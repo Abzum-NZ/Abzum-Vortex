@@ -27,7 +27,10 @@ import { compileParsedDefinition } from "./compiler";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
 import { DefinitionCompilationError } from "./compilation-error";
 import { validateDefinitionSet } from "./validation";
-import { applicationFlowBindingUniquenessRule } from "./validation/application-blocks";
+import {
+  applicationFlowBindingPageEventRule,
+  applicationFlowBindingUniquenessRule,
+} from "./validation/application-blocks";
 import {
   deriveSavedConditionRevisions,
   type SavedConditionLike,
@@ -228,7 +231,10 @@ export const compileApplicationCandidate = (
     dependencies.composition === undefined
   )
     return refuse("DEFINITION_COMPILATION_REFUSED");
-  const duplicate = applicationFlowBindingUniquenessRule(candidate.draft.source)[0];
+  const duplicate = [
+    ...applicationFlowBindingUniquenessRule(candidate.draft.source),
+    ...applicationFlowBindingPageEventRule(candidate.draft.source),
+  ][0];
   if (duplicate !== undefined)
     throw new DefinitionCompilationError(
       duplicate.ruleCode,

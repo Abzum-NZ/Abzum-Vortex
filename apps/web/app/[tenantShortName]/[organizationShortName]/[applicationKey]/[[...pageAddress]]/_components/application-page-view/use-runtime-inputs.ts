@@ -94,7 +94,7 @@ export function useRuntimeInputs({
   requestedStepId,
   guidedSummaryStepId,
   setNotice,
-  submitGuidedSummary,
+  prepareGuidedSummary,
   advanceGuidedStep,
   currentEditFormBaselines,
   setFormFeedback,
@@ -138,7 +138,7 @@ export function useRuntimeInputs({
   runBinding: (
     placementId: string,
     binding: PlacementFlowBinding,
-    supplied: Record<string, unknown>,
+    supplied: Record<string, unknown> | (() => Record<string, unknown>),
     selectedRecordId?: string,
     gestureSubject?: Readonly<{ recordId: string; revision: number }>,
     afterAccepted?: () => Promise<Notice | undefined>,
@@ -191,13 +191,14 @@ export function useRuntimeInputs({
   requestedStepId: RefObject<string | undefined>;
   guidedSummaryStepId: string | undefined;
   setNotice: Dispatch<SetStateAction<Notice | undefined>>;
-  submitGuidedSummary: (
+  prepareGuidedSummary: (
     placementId: string,
     binding: PlacementFlowBinding,
     submittedValues: Readonly<Record<string, unknown>>,
-    selectedOwnerGroupId: string | undefined,
-    gestureId: string,
-  ) => Promise<void>;
+  ) => Promise<
+    | { proof: string; afterAccepted: () => Promise<Notice | undefined>; finish: () => void }
+    | undefined
+  >;
   advanceGuidedStep: (
     stepId: string,
     values: Readonly<Record<string, unknown>>,
@@ -683,7 +684,10 @@ export function useRuntimeInputs({
           return runBinding(
             placementId,
             actionBinding,
-            { ...(event.values ?? {}), ...(recordId === undefined ? {} : { record_id: recordId }) },
+            () => ({
+              ...(event.readValues?.() ?? {}),
+              ...(recordId === undefined ? {} : { record_id: recordId }),
+            }),
             recordId,
           );
         };
@@ -714,58 +718,89 @@ export function useRuntimeInputs({
                 setNotice(unavailableNotice);
                 return;
               }
-              return submitGuidedSummary(
-                placementId,
-                submitBinding,
-                event.values,
-                event.selectedOwnerGroupId,
+              let prepared: Awaited<ReturnType<typeof prepareGuidedSummary>>;
+              const dispatch = formBlock.submit(
+                asComponentBinding(placementId, submitBinding),
+                async (signal) => {
+                  const result = await prepareGuidedSummary(
+                    placementId,
+                    submitBinding,
+                    event.readValues(),
+                  );
+                  if (signal.aborted) {
+                    result?.finish();
+                    return undefined;
+                  }
+                  prepared = result;
+                  if (result === undefined) return undefined;
+                  return {
+                    values: { $guidedFormConfirmation: result.proof },
+                    ...(event.selectedOwnerGroupId === undefined
+                      ? {}
+                      : { selectedOwnerGroupId: event.selectedOwnerGroupId }),
+                  };
+                },
                 event.gestureId,
               );
+              return applyDispatch(
+                dispatch,
+                placementId,
+                async () => prepared?.afterAccepted(),
+                submitBinding.bindingId,
+              ).finally(() => prepared?.finish());
             }
-            return advanceGuidedStep(model.guidedForm.activeStepId, event.values, requested);
+            return advanceGuidedStep(model.guidedForm.activeStepId, event.readValues(), requested);
           }
           if (submitBinding === undefined) return;
-          const baseline = currentEditFormBaselines[placementId];
-          // Keep every answer for individual caller inputs. Only the whole-record values input
-          // receives the changed fields; read-only prefilled answers are not record writes.
-          const recordValues =
-            baseline === undefined
-              ? event.values
-              : Object.fromEntries(
-                  Object.entries(event.values).filter(
-                    ([name, value]) =>
-                      !Object.hasOwn(baseline, name) || !equalFormValue(value, baseline[name]),
-                  ),
-                );
-          const recordSubmission =
-            submitBinding.savesFormValues &&
-            submitBinding.callerInputs.every((name) => name === "values" || name === "record");
-          if (
-            baseline !== undefined &&
-            recordSubmission &&
-            Object.keys(recordValues).length === 0
-          ) {
-            setNotice(undefined);
-            setFormFeedback((current) => ({
-              ...current,
-              [placementId]: { kind: "message", tone: "success", text: "No changes to save." },
-            }));
-            return;
-          }
-          const choiceEvidence = choiceEvidenceFor(placementId, event.values);
-          submittedFormsRef.current.set(submitBinding.bindingId, {
-            formId: placementId,
-            values: event.values,
-            ...(choiceEvidence === undefined ? {} : { choiceEvidence }),
-          });
+          const prepare = () => {
+            const values = event.readValues();
+            const baseline = currentEditFormBaselines[placementId];
+            // Keep every answer for individual caller inputs. Only the whole-record values input
+            // receives the changed fields; read-only prefilled answers are not record writes.
+            const recordValues =
+              baseline === undefined
+                ? values
+                : Object.fromEntries(
+                    Object.entries(values).filter(
+                      ([name, value]) =>
+                        !Object.hasOwn(baseline, name) || !equalFormValue(value, baseline[name]),
+                    ),
+                  );
+            const recordSubmission =
+              submitBinding.savesFormValues &&
+              submitBinding.callerInputs.every((name) => name === "values" || name === "record");
+            if (
+              baseline !== undefined &&
+              recordSubmission &&
+              Object.keys(recordValues).length === 0
+            ) {
+              setNotice(undefined);
+              setFormFeedback((current) => ({
+                ...current,
+                [placementId]: { kind: "message", tone: "success", text: "No changes to save." },
+              }));
+              return;
+            }
+            const choiceEvidence = choiceEvidenceFor(placementId, values);
+            submittedFormsRef.current.set(submitBinding.bindingId, {
+              formId: placementId,
+              values,
+              ...(choiceEvidence === undefined ? {} : { choiceEvidence }),
+            });
+            return {
+              values,
+              ...(event.selectedOwnerGroupId === undefined
+                ? {}
+                : { selectedOwnerGroupId: event.selectedOwnerGroupId }),
+              ...(baseline === undefined || !submitBinding.savesFormValues
+                ? {}
+                : { recordChanges: Object.keys(recordValues) }),
+            };
+          };
           return applyDispatch(
             formBlock.submit(
               asComponentBinding(placementId, submitBinding),
-              event.values,
-              event.selectedOwnerGroupId,
-              baseline === undefined || !submitBinding.savesFormValues
-                ? undefined
-                : Object.keys(recordValues),
+              prepare,
               event.gestureId,
             ),
             placementId,
@@ -913,7 +948,7 @@ export function useRuntimeInputs({
     guidedFormCompleted,
     guidedSummaryStepId,
     advanceGuidedStep,
-    submitGuidedSummary,
+    prepareGuidedSummary,
     model.bindings,
     model.guidedForm,
     placementEventNames,

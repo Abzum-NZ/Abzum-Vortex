@@ -10,6 +10,25 @@ import type { ServerDrivenResult } from "./server-driven-run";
 import type { FlowInvokeClient, FlowSubjectContext } from "./server-flow-client";
 import { startFlowEventCycle, type FlowEventCycle } from "./flow-cycle";
 import type { TypedFieldValue } from "../controls/projected-data";
+import { createExclusiveScopes } from "./exclusive";
+import { createFormSettler } from "./settle";
+
+type CallerInputs =
+  | Readonly<Record<string, unknown>>
+  | ((
+      signal: AbortSignal,
+    ) =>
+      | Readonly<Record<string, unknown>>
+      | undefined
+      | Promise<Readonly<Record<string, unknown>> | undefined>);
+
+/** Stable key ordering makes equivalent submitted answers share one retry identity. */
+const canonicalInputs = (inputs: Readonly<Record<string, unknown>>) =>
+  JSON.stringify(inputs, (_key, value: unknown) =>
+    value !== null && typeof value === "object" && !Array.isArray(value)
+      ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)))
+      : value,
+  );
 
 export type FlowRuntimeOptions = Readonly<{
   client: FlowInvokeClient;
@@ -26,6 +45,13 @@ export type FlowRuntimeOptions = Readonly<{
         controlId: string;
         concurrency: FlowBindingConcurrency;
         condition: FlowFormula | null;
+        debounceMs: number;
+        exclusive: ComponentFlowBinding["settings"]["exclusive"];
+        timeoutMs: number | null;
+        event: string;
+        flowName: string;
+        controlName: string;
+        formId?: string;
       }>
     | undefined;
   /**
@@ -39,13 +65,14 @@ export type FlowRuntimeOptions = Readonly<{
 
 /** State shared by page and agent dispatches, with subscriptions scoped to a component. */
 export function createFlowRuntimeState() {
-  const entries = new Map<
-    string,
-    { sequence: number; controller?: AbortController; tail?: Promise<void> }
-  >();
+  type Job = { controller: AbortController; flush: () => void };
+  const entries = new Map<string, { jobs: Set<Job>; tail?: Promise<void> }>();
+  const scopes = createExclusiveScopes();
+  const settler = createFormSettler();
   const running = new Map<string, number>();
   const cycles = new Map<string, Readonly<{ cycle: FlowEventCycle }>>();
   const listeners = new Map<string, Set<() => void>>();
+  const retries = new Map<string, string>();
   const forms = new Map<string, (fieldKey: string) => TypedFieldValue | undefined>();
   const notify = (controlId: string) => listeners.get(controlId)?.forEach((listener) => listener());
   const changeRunning = (controlId: string, amount: number) => {
@@ -57,6 +84,21 @@ export function createFlowRuntimeState() {
   };
   const abandoned: ServerDrivenResult = { kind: "abandoned", unanswered: true };
   return {
+    dispose: () => {
+      for (const entry of entries.values()) for (const job of entry.jobs) job.controller.abort();
+      retries.clear();
+    },
+    retryKey: (
+      bindingId: string,
+      subject: FlowSubjectContext | undefined,
+      inputs: Readonly<Record<string, unknown>>,
+    ) => JSON.stringify([bindingId, subject?.recordId ?? null, canonicalInputs(inputs)]),
+    retryId: (key: string, proposed: string) => retries.get(key) ?? proposed,
+    rememberResult: (key: string, runId: string, result: ServerDrivenResult) => {
+      if (result.kind === "unavailable" || (result.kind === "abandoned" && !result.unanswered))
+        retries.set(key, runId);
+      else if (result.kind !== "abandoned") retries.delete(key);
+    },
     isRunning: (controlId: string) => (running.get(controlId) ?? 0) > 0,
     registerForm: (formId: string, read: (fieldKey: string) => TypedFieldValue | undefined) => {
       const key = formId.toLowerCase();
@@ -79,8 +121,10 @@ export function createFlowRuntimeState() {
     cancel: (bindingId: string) => {
       const entry = entries.get(bindingId);
       if (entry === undefined) return;
-      entry.sequence += 1;
-      entry.controller?.abort();
+      for (const job of entry.jobs) job.controller.abort();
+    },
+    flush: (bindingId: string) => {
+      for (const job of entries.get(bindingId)?.jobs ?? []) job.flush();
     },
     subscribe: (controlId: string, listener: () => void) => {
       const current = listeners.get(controlId) ?? new Set<() => void>();
@@ -93,39 +137,105 @@ export function createFlowRuntimeState() {
     },
     run: (
       bindingId: string,
-      controlId: string,
-      concurrency: FlowBindingConcurrency,
+      settings: NonNullable<ReturnType<FlowRuntimeOptions["bindingSettings"]>>,
       signal: AbortSignal | undefined,
       execute: (signal: AbortSignal) => Promise<ServerDrivenResult>,
     ): Promise<ServerDrivenResult> => {
       if (signal?.aborted) return Promise.resolve(abandoned);
-      const entry = entries.get(bindingId) ?? { sequence: 0 };
+      const { controlId, concurrency, debounceMs, exclusive, timeoutMs, event, formId } = settings;
+      const entry = entries.get(bindingId) ?? { jobs: new Set<Job>() };
       entries.set(bindingId, entry);
-      if (concurrency === "ignore_while_running" && entry.controller !== undefined)
+      if (concurrency === "ignore_while_running" && entry.jobs.size > 0)
         return Promise.resolve(abandoned);
-      if (concurrency === "latest_wins") entry.controller?.abort();
-      const sequence = ++entry.sequence;
+      if (concurrency === "latest_wins") for (const job of entry.jobs) job.controller.abort();
+      const controller = new AbortController();
+      const abort = () => controller.abort();
+      signal?.addEventListener("abort", abort, { once: true });
+      let flush = () => {};
+      const job: Job = {
+        controller,
+        flush: () => {
+          flush();
+        },
+      };
+      entry.jobs.add(job);
+      changeRunning(controlId, 1);
+      const ready =
+        debounceMs === 0
+          ? Promise.resolve()
+          : new Promise<void>((resolve) => {
+              const done = () => {
+                clearTimeout(timer);
+                controller.signal.removeEventListener("abort", done);
+                flush = () => {};
+                resolve();
+              };
+              const timer = setTimeout(done, debounceMs);
+              flush = done;
+              controller.signal.addEventListener("abort", done, { once: true });
+            });
       const start = async (): Promise<ServerDrivenResult> => {
-        if (signal?.aborted) return abandoned;
-        const controller = new AbortController();
-        const abort = () => controller.abort();
-        signal?.addEventListener("abort", abort, { once: true });
-        entry.controller = controller;
-        changeRunning(controlId, 1);
+        if (controller.signal.aborted) return abandoned;
+        await ready;
+        if (controller.signal.aborted) return abandoned;
+        if ((event === "form_submit" || (event === "action" && exclusive === "form")) && formId) {
+          const field = await settler.settle(formId, controller.signal);
+          if (controller.signal.aborted) return abandoned;
+          if (field !== undefined) return { kind: "refused", reason: `Still checking ${field}.` };
+        }
+        if (exclusive === "form" && formId === undefined)
+          return { kind: "refused", reason: "This action has no form to lock." };
+        const scope = { exclusive, name: settings.flowName, ...(formId ? { formId } : {}) };
+        let held = scopes.conflict(scope);
+        while (held !== undefined) {
+          if (concurrency !== "queue")
+            return { kind: "refused", reason: `${held.name} is still running.` };
+          await scopes.wait(controller.signal);
+          if (controller.signal.aborted) return abandoned;
+          held = scopes.conflict(scope);
+        }
+        const release = scopes.acquire(scope);
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        let timedOut = false;
+        let stopWaiting: (() => void) | undefined;
         try {
-          const result = await execute(controller.signal);
-          return controller.signal.aborted ||
-            (concurrency === "latest_wins" && entry.sequence !== sequence)
-            ? abandoned
-            : result;
+          const stopped = new Promise<ServerDrivenResult>((resolve) => {
+            stopWaiting = () => resolve(abandoned);
+            controller.signal.addEventListener("abort", stopWaiting, { once: true });
+          });
+          if (timeoutMs !== null)
+            timer = setTimeout(() => {
+              timedOut = true;
+              controller.abort();
+            }, timeoutMs);
+          const result = await Promise.race([execute(controller.signal), stopped]);
+          if (timedOut) return { kind: "abandoned", unanswered: false, timedOut: true };
+          return controller.signal.aborted ? abandoned : result;
         } finally {
-          signal?.removeEventListener("abort", abort);
-          if (entry.controller === controller) delete entry.controller;
-          changeRunning(controlId, -1);
+          if (timer !== undefined) clearTimeout(timer);
+          if (stopWaiting !== undefined)
+            controller.signal.removeEventListener("abort", stopWaiting);
+          release();
         }
       };
-      if (concurrency !== "queue") return start();
-      const result = (entry.tail ?? Promise.resolve()).then(start, start);
+      const scheduled =
+        concurrency === "queue"
+          ? (entry.tail ?? Promise.resolve()).then(start, start)
+          : Promise.resolve().then(start);
+      const result = scheduled.finally(() => {
+        signal?.removeEventListener("abort", abort);
+        entry.jobs.delete(job);
+        changeRunning(controlId, -1);
+      });
+      if (formId && (event === "field_changed" || event === "options_requested"))
+        settler.track({
+          formId,
+          fieldName: settings.controlName,
+          finished: result,
+          flush: job.flush,
+          cancel: abort,
+        });
+      if (concurrency !== "queue") return result;
       const tail = result.then(
         () => undefined,
         () => undefined,
@@ -144,6 +254,9 @@ export type FlowRuntimeState = ReturnType<typeof createFlowRuntimeState>;
 /** The safe identity of a binding used by a surface that does not receive its input map. */
 export type PlacementFlowBinding = Readonly<{
   controlId: ComponentFlowBinding["controlId"];
+  controlName: string;
+  flowName: string;
+  formId?: string;
   settings: ComponentFlowBinding["settings"];
   browser?: Readonly<{ plan: BrowserFlowPlan; inputs: Readonly<Record<string, FlowBindingInput>> }>;
   bindingId: string;
@@ -174,7 +287,7 @@ export type FlowRuntime = Readonly<{
    */
   dispatch: (
     binding: PlacementFlowBinding,
-    callerInputs: Readonly<Record<string, unknown>> | undefined,
+    callerInputs: CallerInputs | undefined,
     clickId: string,
     subject?: FlowSubjectContext,
     sourceTablePlacementId?: string,
@@ -183,7 +296,7 @@ export type FlowRuntime = Readonly<{
   /** Starts one exact server binding and drives its normal intents and continuations. */
   dispatchReference: (
     binding: FlowBindingReference,
-    callerInputs: Readonly<Record<string, unknown>> | undefined,
+    callerInputs: CallerInputs | undefined,
     clickId: string,
     signal?: AbortSignal,
     subject?: FlowSubjectContext,
@@ -195,7 +308,7 @@ export type FlowRuntime = Readonly<{
 export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
   const dispatchReference = async (
     binding: FlowBindingReference,
-    callerInputs: Readonly<Record<string, unknown>> | undefined,
+    callerInputs: CallerInputs | undefined,
     clickId: string,
     signal?: AbortSignal,
     subject?: FlowSubjectContext,
@@ -207,36 +320,48 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
       console.error(`[flow] binding ${binding.bindingId} has no projected settings`);
       return { kind: "refused" };
     }
-    const end = options.begin?.(binding.bindingId, clickId);
+    let retry: { key: string; runId: string } | undefined;
+    let releaseRun = () => {};
     return options.state
-      .run(
-        binding.bindingId,
-        settings.controlId,
-        settings.concurrency,
-        signal,
-        async (runSignal) => {
-          const releaseCycle = options.state.trackCycle(
-            clickId,
-            cycle ?? startFlowEventCycle(binding.flowId, settings.controlId),
+      .run(binding.bindingId, settings, signal, async (runSignal) => {
+        const inputs =
+          typeof callerInputs === "function" ? await callerInputs(runSignal) : (callerInputs ?? {});
+        if (runSignal.aborted) return { kind: "abandoned", unanswered: true };
+        if (inputs === undefined) return { kind: "skipped" };
+        const key = options.state.retryKey(binding.bindingId, subject, inputs);
+        const runId = options.state.retryId(key, clickId);
+        retry = { key, runId };
+        const end = options.begin?.(binding.bindingId, runId);
+        const releaseCycle = options.state.trackCycle(
+          runId,
+          cycle ?? startFlowEventCycle(binding.flowId, settings.controlId),
+        );
+        releaseRun = () => {
+          releaseCycle();
+          end?.();
+          releaseRun = () => {};
+        };
+        try {
+          const { runFlowBinding } = await import("./flow-runtime-driver");
+          return await runFlowBinding(
+            options,
+            binding,
+            inputs,
+            runId,
+            runSignal,
+            subject,
+            sourceTablePlacementId,
+            settings,
           );
-          try {
-            const { runFlowBinding } = await import("./flow-runtime-driver");
-            return await runFlowBinding(
-              options,
-              binding,
-              callerInputs,
-              clickId,
-              runSignal,
-              subject,
-              sourceTablePlacementId,
-              settings,
-            );
-          } finally {
-            releaseCycle();
-          }
-        },
-      )
-      .finally(end);
+        } finally {
+          releaseRun();
+        }
+      })
+      .then((result) => {
+        if (retry !== undefined) options.state.rememberResult(retry.key, retry.runId, result);
+        return result;
+      })
+      .finally(() => releaseRun());
   };
   return Object.freeze({
     prefetch: async () => {

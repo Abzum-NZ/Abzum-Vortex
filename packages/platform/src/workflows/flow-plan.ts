@@ -119,6 +119,8 @@ export type FlowSegmentStub = Readonly<{
   carriedInputKeys: readonly string[];
   finalOutputTypes: FlowPlanValueTypes;
   fingerprint: `sha256:${string}`;
+  /** Every successful path from this segment navigates before the next server segment. */
+  navigatesOnSuccess: boolean;
   labels: readonly string[];
 }>;
 
@@ -461,6 +463,59 @@ const sameGuard = (left: readonly FlowPathCondition[], right: readonly FlowPathC
     (condition, index) =>
       condition.taskId === right[index]!.taskId && condition.branch === right[index]!.branch,
   );
+
+type PageReach = "fall" | "navigate" | "stop";
+
+/** Possible first exits from a page-only task list along successful execution paths. */
+const pageReach = (tasks: readonly FlowTask[]): Set<PageReach> => {
+  let exits = new Set<PageReach>(["fall"]);
+  for (const task of tasks) {
+    if (!exits.has("fall")) break;
+    exits.delete("fall");
+    let next: Set<PageReach>;
+    if (task.type === "interface.navigate") next = new Set(["navigate"]);
+    else if (task.type === "stop") next = new Set(["stop"]);
+    else if (task.type === "if") {
+      const branch = task as Extract<FlowTask, { type: "if" }>;
+      next = new Set([...pageReach(branch.then), ...pageReach(branch.else ?? [])]);
+    } else if (task.type === "switch") {
+      const branch = task as Extract<FlowTask, { type: "switch" }>;
+      next = new Set([
+        ...branch.cases.flatMap((entry) => [...pageReach(entry.tasks)]),
+        ...pageReach(branch.default ?? []),
+      ]);
+    } else if (task.type === "sequential")
+      next = pageReach((task as Extract<FlowTask, { type: "sequential" }>).tasks);
+    else if (task.type === "for_each")
+      next = new Set(["fall", ...pageReach((task as Extract<FlowTask, { type: "for_each" }>).tasks)]);
+    else next = new Set(["fall"]);
+    for (const exit of next) exits.add(exit);
+  }
+  return exits;
+};
+
+/** A conservative guarantee: conditional paths never let a possible stop or server read pass. */
+const navigatesAfterSegment = (segments: readonly FlowPlanSegment[], index: number): boolean => {
+  const current = segments[index];
+  if (current?.kind !== "server" || current.section !== "tasks") return false;
+  if (allSteps(current.tasks).some((task) => task.type === "stop")) return false;
+  const compatible = (guard: readonly FlowPathCondition[]) =>
+    guard.every((condition) =>
+      current.guard.every((held) => held.taskId !== condition.taskId || held.branch === condition.branch),
+    );
+  const guaranteed = (guard: readonly FlowPathCondition[]) =>
+    guard.every((condition) =>
+      current.guard.some((held) => held.taskId === condition.taskId && held.branch === condition.branch),
+    );
+  for (const next of segments.slice(index + 1)) {
+    if (next.section === "errors" || !compatible(next.guard)) continue;
+    if (next.kind === "server") return false;
+    const exits = pageReach(next.tasks);
+    if (exits.has("stop")) return false;
+    if (guaranteed(next.guard) && !exits.has("fall")) return exits.has("navigate");
+  }
+  return false;
+};
 
 const cut = (
   flow: FlowDefinition,
@@ -922,7 +977,7 @@ export const compileFlowPlan = (
           },
         ]),
       ),
-      segments: segments.map((segment) =>
+      segments: segments.map((segment, index) =>
         segment.kind === "page"
           ? segment
           : {
@@ -941,6 +996,7 @@ export const compileFlowPlan = (
               carriedInputKeys: Object.keys(segment.carriedInputs),
               finalOutputTypes: segment.finalOutputTypes,
               fingerprint: segment.fingerprint,
+              navigatesOnSuccess: navigatesAfterSegment(segments, index),
               labels: segment.labels,
             },
       ),

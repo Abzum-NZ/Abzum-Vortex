@@ -29,8 +29,6 @@ import {
   type DefinitionCompilerRefusalCode,
 } from "../compilation-error";
 import { flowBindingSettingsSchema } from "../application-flow-bindings";
-import type { ComponentSemanticEventKind } from "../component-semantic-events";
-import { flowBindingSettingNotYetRunnable } from "../flow-step-settings";
 import {
   compileFlowPlans,
   flowBindingPlanIssue,
@@ -783,18 +781,6 @@ function compileApplicationFlowBindings(
         location,
         undefined,
         `Binding ${String(binding.id)}: ${planIssue}`,
-      );
-    const notYet = flowBindingSettingNotYetRunnable(
-      binding.event as ComponentSemanticEventKind,
-      settings.data,
-    );
-    if (notYet !== undefined)
-      throw new DefinitionCompilationError(
-        "vortex.definition.unsupported_workflow_node",
-        "unsupported_choice",
-        location,
-        undefined,
-        `Binding ${String(binding.id)}: ${notYet}`,
       );
     return {
       bindingId: resolution.id(definitionKey, "flow_binding", String(binding.id), "content"),

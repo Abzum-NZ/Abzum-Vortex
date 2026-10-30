@@ -306,6 +306,7 @@ export function ApplicationPageViewContent({
   const { formBlock, flowRuntime, webMcpRuntime, runtimeState, intentHostElement } = useFlowRuntime(
     {
       application,
+      navigationKey,
       subject,
       continuingFormsRef,
       formCancelledRef,
@@ -415,7 +416,7 @@ export function ApplicationPageViewContent({
     guidedActiveFormIds,
     guidedActivePlacementIds,
     guidedSummaryStepId,
-    submitGuidedSummary,
+    prepareGuidedSummary,
     advanceGuidedStep,
     guidedPreviousStepId,
     requestGuidedStep,
@@ -435,8 +436,6 @@ export function ApplicationPageViewContent({
     requestedStepId,
     guidedSubmitInFlight,
     unsavedWorkRegistry,
-    formBlock,
-    applyDispatch,
   });
 
   const {
@@ -567,7 +566,7 @@ export function ApplicationPageViewContent({
     requestedStepId,
     guidedSummaryStepId,
     setNotice,
-    submitGuidedSummary,
+    prepareGuidedSummary,
     advanceGuidedStep,
     currentEditFormBaselines,
     setFormFeedback,

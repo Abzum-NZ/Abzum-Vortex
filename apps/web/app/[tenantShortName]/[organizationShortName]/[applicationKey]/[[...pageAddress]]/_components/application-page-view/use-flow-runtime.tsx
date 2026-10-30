@@ -48,6 +48,7 @@ import { unavailableNotice } from "./notices";
 
 export function useFlowRuntime({
   application,
+  navigationKey,
   subject,
   continuingFormsRef,
   formCancelledRef,
@@ -73,6 +74,7 @@ export function useFlowRuntime({
   setPanelRef,
 }: Readonly<{
   application: ApplicationPageModel["invocation"];
+  navigationKey: string;
   subject: ApplicationPageModel["subject"];
   continuingFormsRef: RefObject<Map<string, SubmittedForm>>;
   formCancelledRef: RefObject<boolean>;
@@ -303,18 +305,16 @@ export function useFlowRuntime({
         if (placementId.toLowerCase() === form.formId.toLowerCase())
           events.form_submit = (event: ControlSemanticEvent) => {
             if (event.event !== "form_submit") return;
+            const values = event.readValues();
             const answer = formContinuationAnswerSchema.safeParse({
               kind: "submit",
-              values: event.values,
+              values,
             });
             if (!answer.success || answer.data.kind !== "submit") {
               setNotice(unavailableNotice);
               return;
             }
-            controls.submit(
-              answer.data.values,
-              choiceEvidenceFor(form.formId, event.values, "dialog"),
-            );
+            controls.submit(answer.data.values, choiceEvidenceFor(form.formId, values, "dialog"));
           };
         else if (isReferenceChoice)
           events.choices_requested = (event: ControlSemanticEvent) => {
@@ -378,7 +378,8 @@ export function useFlowRuntime({
   });
   const committedRef = useRef(committed);
   committedRef.current = committed;
-  const runtimeState = useMemo(() => createFlowRuntimeState(), []);
+  const runtimeState = useMemo(() => createFlowRuntimeState(), [navigationKey]);
+  useEffect(() => () => runtimeState.dispose(), [runtimeState]);
   const bindingSettings = useMemo(() => {
     const bindings = new Map<
       string,
@@ -386,6 +387,13 @@ export function useFlowRuntime({
         controlId: string;
         concurrency: ComponentFlowBinding["settings"]["concurrency"];
         condition: ComponentFlowBinding["settings"]["condition"];
+        debounceMs: number;
+        exclusive: ComponentFlowBinding["settings"]["exclusive"];
+        timeoutMs: number | null;
+        event: string;
+        flowName: string;
+        controlName: string;
+        formId?: string;
       }
     >(
       Object.values(model.bindings).flatMap((items) =>
@@ -397,6 +405,13 @@ export function useFlowRuntime({
                 controlId: binding.controlId,
                 concurrency: binding.settings.concurrency,
                 condition: binding.settings.condition,
+                debounceMs: binding.settings.debounceMs,
+                exclusive: binding.settings.exclusive,
+                timeoutMs: binding.settings.timeoutMs,
+                event: binding.event,
+                flowName: binding.flowName,
+                controlName: binding.controlName,
+                ...(binding.formId === undefined ? {} : { formId: binding.formId }),
               },
             ] as const,
         ),

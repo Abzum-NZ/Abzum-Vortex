@@ -25,7 +25,7 @@ const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
 export function usePendingGesture(): PendingGesture {
   const [pending, setPending] = useState(false);
   // Guards the gap before the busy state renders, so a second press in the same frame is ignored.
-  const runningNow = useRef(false);
+  const runningNow = useRef(0);
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -35,14 +35,14 @@ export function usePendingGesture(): PendingGesture {
   }, []);
   const track = useCallback((outcome: unknown) => {
     if (!isPromiseLike(outcome)) return;
-    runningNow.current = true;
+    runningNow.current += 1;
     setPending(true);
     const settle = (): void => {
-      runningNow.current = false;
-      if (mounted.current) setPending(false);
+      runningNow.current -= 1;
+      if (mounted.current && runningNow.current === 0) setPending(false);
     };
     outcome.then(settle, settle);
   }, []);
-  const running = useCallback(() => runningNow.current, []);
+  const running = useCallback(() => runningNow.current > 0, []);
   return { pending, running, track };
 }
