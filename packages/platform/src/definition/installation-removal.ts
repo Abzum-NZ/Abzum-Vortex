@@ -11,8 +11,10 @@ import {
 import { sameId } from "../catalogue/runtime-primitives";
 import { moduleInstallationBindingSchema } from "../files/storage";
 import { canonicalJson } from "./canonical-json";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   installationProblem,
+  type StoreReceiptCompletion,
   installationTargetFacts,
   readBuilderOperationDeadlines,
   readInstallationDatabaseTime,
@@ -52,6 +54,12 @@ export const readApplicationRemoval = async (
   session: IdentitySession,
   organizationId: z.infer<typeof organizationIdSchema>,
   rootId: z.infer<typeof applicationRootIdSchema>,
+  reviewed?: RemovalExpected,
+  /** Runs in the reading transaction when the reviewed removal is already complete. */
+  completeIfRemoved?: (
+    transaction: RequestDatabaseTransaction,
+    applicationName: string,
+  ) => Promise<void>,
 ) => {
   let failure: unknown;
   const result = await environment.requests.runChange(
@@ -73,12 +81,32 @@ export const readApplicationRemoval = async (
         );
         const bindings = await readInstallationBindings(transaction, rootId);
         const revision = bindings.registeredReleaseRevision;
+        const removed =
+          reviewed !== undefined &&
+          revision === null &&
+          canonicalJson(sortedBindingTuples(bindings.moduleBindings)) ===
+            canonicalJson(
+              sortedBindingTuples(
+                reviewed.moduleBindings.map((binding) =>
+                  binding.state === "detached"
+                    ? binding
+                    : {
+                        ...binding,
+                        state: "detached" as const,
+                        bindingRevision: binding.bindingRevision + 1,
+                      },
+                ),
+              ),
+            );
         // Never installed, or every module already detached: there is nothing here to remove.
         if (
-          revision === null ||
-          bindings.moduleBindings.every((binding) => binding.state === "detached")
-        )
+          !removed &&
+          (revision === null ||
+            bindings.moduleBindings.every((binding) => binding.state === "detached"))
+        ) {
+          if (reviewed !== undefined) installationProblem("removal_changed", "conflict");
           installationProblem("removal_not_installed", "refused", "not_installed");
+        }
         if (
           bindings.moduleBindings.some(
             (binding) =>
@@ -93,7 +121,7 @@ export const readApplicationRemoval = async (
           {
             organizationId,
             rootId,
-            releaseRevision: revision,
+            releaseRevision: removed ? reviewed.applicationReleaseRevision : revision!,
           },
           context,
           "replace_or_remove",
@@ -119,14 +147,19 @@ export const readApplicationRemoval = async (
           )
         )
           installationProblem("removal_authority_lapsed", "refused");
+        if (removed && completeIfRemoved !== undefined)
+          await completeIfRemoved(transaction, releaseSet.application.content.name);
         return {
           releaseSet,
-          expected: removalExpectedSchema.parse({
-            organizationId,
-            applicationRootId: rootId,
-            applicationReleaseRevision: revision,
-            moduleBindings: bindings.moduleBindings,
-          }),
+          removed,
+          expected: removed
+            ? reviewed
+            : removalExpectedSchema.parse({
+                organizationId,
+                applicationRootId: rootId,
+                applicationReleaseRevision: revision,
+                moduleBindings: bindings.moduleBindings,
+              }),
         };
       } catch (error) {
         failure = error;
@@ -160,6 +193,7 @@ export const removeApplication = async (
   organizationId: z.infer<typeof organizationIdSchema>,
   rootId: z.infer<typeof applicationRootIdSchema>,
   expectedCandidate: unknown,
+  receipt?: StoreReceiptCompletion,
 ) => {
   const parsed = removalExpectedSchema.safeParse(expectedCandidate);
   if (
@@ -169,8 +203,19 @@ export const removeApplication = async (
   )
     installationProblem("removal_expectation_invalid", "conflict");
   const expected = parsed.data;
-  const current = await readApplicationRemoval(environment, session, organizationId, rootId);
+  const current = await readApplicationRemoval(
+    environment,
+    session,
+    organizationId,
+    rootId,
+    expected,
+    receipt === undefined
+      ? undefined
+      : (transaction, applicationName) =>
+          receipt(transaction, { application_name: applicationName }),
+  );
   if (!sameRemoval(expected, current.expected)) installationProblem("removal_changed", "conflict");
+  if (current.removed) return { application_name: current.releaseSet.application.content.name };
   const operation = removalOperation(
     rootId,
     environment.containsCustomComponents(current.releaseSet),
@@ -215,6 +260,12 @@ export const removeApplication = async (
                 environment.permissions,
                 operation,
               );
+              // The withdrawal is the removal's target: its receipt completes in this transaction,
+              // before the withdrawal changes the access version the completion checks.
+              if (receipt !== undefined)
+                await receipt(transaction, {
+                  application_name: current.releaseSet.application.content.name,
+                });
               const value = await callback(transaction, scope, issuedAt);
               const completedAt = await readInstallationDatabaseTime(transaction);
               if (

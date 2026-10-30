@@ -28,4 +28,9 @@ export const applicationStoreService = (): ApplicationStoreService =>
     accessAdministration: createOrganizationAccessAdministrationService(
       humanOrganizationRequestDependencies(),
     ),
+    bindAccessAdministration: (boundRequest) =>
+      createOrganizationAccessAdministrationService({
+        ...humanOrganizationRequestDependencies(),
+        boundRequest,
+      }),
   });

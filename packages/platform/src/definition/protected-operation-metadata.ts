@@ -148,7 +148,7 @@ export const protectedOperationMetadata: Record<
   review_application_installation: {
     authorityKind: "permission",
     transaction: "read",
-    workflow: "single",
+    workflow: "multi_transaction",
   },
   install_application: {
     authorityKind: "permission",
@@ -168,7 +168,7 @@ export const protectedOperationMetadata: Record<
   review_application_removal: {
     authorityKind: "permission",
     transaction: "read",
-    workflow: "single",
+    workflow: "multi_transaction",
   },
   remove_application: {
     authorityKind: "permission",
