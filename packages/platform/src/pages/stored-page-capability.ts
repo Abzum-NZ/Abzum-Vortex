@@ -35,7 +35,6 @@ import {
   type FlowTask,
 } from "../workflows/flow-contracts";
 import { flowTaskRegistry } from "../workflows/flow-task-registry";
-import { collectActionFlowTasks } from "../rules/action-flow-run";
 import { flowPlansOf } from "../workflows/flow-plan";
 import { evaluateTypedCondition } from "../rules/typed-condition";
 import { TypedConditionEvaluationError } from "../rules/typed-condition-error";
@@ -639,9 +638,6 @@ export const createStoredPageCapabilityService = (
               requestedFieldIds: actions.size > 0 ? null : conditionSubjectFieldIds,
             },
             [...actions.values()],
-            (dependencies.clock ?? (() => new Date()))().toISOString(),
-            (action) => (seed) =>
-              collectActionFlowTasks(flowLibrary(), action.actionId, randomUUID(), seed),
           );
           return {
             subject: pageSubjectFromRead(combined.record, combined.capabilities, recordId),

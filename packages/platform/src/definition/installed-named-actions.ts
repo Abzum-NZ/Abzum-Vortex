@@ -39,6 +39,7 @@ export const installedNamedActionDescriptors = (
       key: string;
       subjectRecordTypeId: string;
       inputs: readonly ActionInputDefinition[];
+      flowId?: string | undefined;
       setsChoiceFieldId?: string | undefined;
       setsChoiceOption?: string | undefined;
     }>[],
@@ -53,6 +54,7 @@ export const installedNamedActionDescriptors = (
         key: String(action.key),
         named: {
           action: reference.data,
+          flowId: action.flowId,
           subjectRecordTypeId: String(action.subjectRecordTypeId),
           referenceInputTypes: Object.fromEntries(
             action.inputs.flatMap((input) => {
@@ -106,6 +108,7 @@ export const installedNamedActionDescriptors = (
         key,
         named: {
           action: reference.data,
+          flowId: action.flowId,
           subjectRecordTypeId: entry.recordTypeId,
           referenceInputTypes: {},
         },

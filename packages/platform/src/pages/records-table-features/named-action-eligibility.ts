@@ -2,7 +2,6 @@ import "server-only";
 
 import type { InstalledNamedActionReference } from "../../records/named-actions";
 import type { RequestDatabaseTransaction } from "../../db/request-transaction";
-import type { ActionFlowRunner } from "../../rules/action-flow-run";
 import {
   namedActionPreviewEligibility,
   type NamedActionEligibility,
@@ -24,7 +23,6 @@ export type NamedActionRecordEligibility = Readonly<{
 
 export type NamedActionEligibilityAction = Readonly<{
   action: InstalledNamedActionReference;
-  run: ActionFlowRunner;
 }>;
 
 type EligibilityRow = Readonly<{ recordId: string; record: unknown; previews: unknown }>;
@@ -80,7 +78,7 @@ export const readNamedActionEligibility = async (
     return {
       recordId: row.recordId,
       ...(subject.kind === "readable" ? { revision: subject.subject.concurrencyNumber } : {}),
-      actions: actions.map(({ action, run }, index) => {
+      actions: actions.map(({ action }, index) => {
         if (subject.kind !== "readable")
           return { actionId: action.actionId, eligibility: "removed" };
         const entry = previews[index];
@@ -94,7 +92,7 @@ export const readNamedActionEligibility = async (
           throw new Error("NAMED_ACTION_ELIGIBILITY_PREVIEW_INVALID");
         return {
           actionId: action.actionId,
-          eligibility: namedActionPreviewEligibility(entry.preview, issuedAt, run),
+          eligibility: namedActionPreviewEligibility(entry.preview),
         };
       }),
     };

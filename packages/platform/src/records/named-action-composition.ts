@@ -15,19 +15,21 @@ import {
   recordLinkValueSchema,
   recordRichTextDocumentSchema,
 } from "./module-field-values";
-import type { ActionFlowOutcome, ActionFlowSeed } from "../rules/action-flow-run";
+import type { TransactionFlowOutcome, TransactionFlowSeed } from "../rules/transaction-flow-run";
 import { flowRuntimeValueOf } from "../rules/flow-runtime-value";
 import type { FlowProtectedTaskCall } from "../rules/flow-interpreter";
 import { isRecord } from "../catalogue/runtime-primitives";
+import { evaluateTypedCondition } from "../rules/typed-condition";
+import { TypedConditionEvaluationError } from "../rules/typed-condition-error";
 
 /**
  * What the record service owns about running a named action as a flow: checking the action's
- * typed inputs against their declarations, giving the flow the record and inputs it reads, and
- * turning the record tasks the flow collected into the one mutation list `apply_record_changes`
- * applies. The flow itself is run by the flow interpreter; nothing here decides a precondition.
+ * typed inputs against their declarations, deciding its declared precondition, giving the flow the
+ * record and inputs it reads, and turning the record steps the flow collected into the one
+ * mutation list `apply_record_changes` applies. The flow itself is run by the flow interpreter.
  *
- * The database re-derives every task from the installed action and its inputs, so what is composed
- * here is a verified statement of intent, never an authority the database trusts.
+ * The database checks every write against the write policy derived from the installed flow, so
+ * what is composed here is a verified statement of intent, never an authority the database trusts.
  */
 
 type NamedActionDefinition = ReturnType<typeof actionDefinitionSchema.parse>;
@@ -242,6 +244,56 @@ export const normalizeActionInputs = (
   return result;
 };
 
+// ─── The declared precondition ─────────────────────────────────────────────────────────────────
+
+/**
+ * Whether the action's declared precondition holds for the subject as it is now and the supplied
+ * inputs, by the shared typed condition evaluator. `undefined` when it cannot be decided: an input
+ * it compares with is not supplied yet (a preview), or the evaluator refuses the values.
+ */
+export const actionPreconditionHolds = (
+  prepared: PreparedNamedAction,
+  normalizedInputs: Readonly<Record<string, JsonValue>>,
+): boolean | undefined => {
+  const condition = prepared.action.precondition;
+  if (condition === undefined) return true;
+  const fieldIds = new Set<string>();
+  const parameterKeys = new Set<string>();
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) node.forEach(walk);
+    else if (isRecord(node)) {
+      if (node.source === "field" && typeof node.fieldId === "string") fieldIds.add(node.fieldId);
+      if (node.source === "parameter" && typeof node.key === "string") parameterKeys.add(node.key);
+      Object.values(node).forEach(walk);
+    }
+  };
+  walk(condition);
+  if ([...parameterKeys].some((key) => !hasOwn(normalizedInputs, key))) return undefined;
+  try {
+    return evaluateTypedCondition({
+      condition,
+      sourceRecordFields: prepared.recordType.fields,
+      declaredFieldIds: [...fieldIds],
+      parameterDeclarations: [...parameterKeys].map((key) => ({
+        key,
+        type: prepared.action.inputs.find((input) => input.key === key)!.type as never,
+      })),
+      fieldValues: Object.fromEntries(
+        [...fieldIds].map((fieldId) => [
+          fieldId,
+          hasOwn(prepared.existingValues, fieldId) ? prepared.existingValues[fieldId] : null,
+        ]),
+      ),
+      parameterValues: Object.fromEntries(
+        [...parameterKeys].map((key) => [key, normalizedInputs[key]]),
+      ),
+    });
+  } catch (error) {
+    if (!(error instanceof TypedConditionEvaluationError)) throw error;
+    return undefined;
+  }
+};
+
 // ─── What the flow reads ──────────────────────────────────────────────────────────────────────
 
 /**
@@ -252,7 +304,7 @@ export const actionFlowSeed = (
   prepared: PreparedNamedAction,
   normalizedInputs: Readonly<Record<string, JsonValue>>,
   issuedAt: string,
-): ActionFlowSeed => ({
+): TransactionFlowSeed => ({
   triggerRecord: Object.fromEntries(
     prepared.recordType.fields.map((field) => [
       field.key,
@@ -272,7 +324,6 @@ export const actionFlowSeed = (
       .filter((input) => hasOwn(normalizedInputs, input.key))
       .map((input) => [input.key, flowRuntimeValueOf(input.type, normalizedInputs[input.key])]),
   ),
-  declaredInputKeys: prepared.action.inputs.map((input) => input.key),
   subjectRecordId: prepared.recordId,
   actor: prepared.actorOrganizationAccountId,
   now: issuedAt,
@@ -280,74 +331,12 @@ export const actionFlowSeed = (
 
 // ─── What the flow asked for ──────────────────────────────────────────────────────────────────
 
-type FlowValueJson = Readonly<
-  | { kind: "literal"; literal: { type: string; value: JsonValue } }
-  | { kind: "reference"; reference: Readonly<Record<string, unknown>> }
->;
-
-/**
- * Only a single typed value is written to a field here, so a map value is not one and is refused
- * rather than flattened or guessed, exactly as a formula is. Action validation already refuses a
- * map as a field value, so this is the fail-closed backstop, never a path a published action takes.
- */
-const isFlowValue = (candidate: unknown): candidate is FlowValueJson => {
-  if (!isRecord(candidate)) return false;
-  if (candidate.kind === "literal")
-    return isRecord(candidate.literal) && hasOwn(candidate.literal, "value");
-  return candidate.kind === "reference" && isRecord(candidate.reference);
+const textProperty = (call: FlowProtectedTaskCall, property: string): string | undefined => {
+  const carried = call.properties[property]?.value;
+  return typeof carried === "string" ? carried : undefined;
 };
 
-/**
- * What a compiled value reads, resolved against whichever record type owns the field being written:
- * a literal, an action input, a subject field, the subject record itself, the actor or the one
- * checked operation time. A flow value is a single typed value, so it is never coerced.
- */
-const writtenValue = (
-  prepared: PreparedNamedAction,
-  normalizedInputs: Readonly<Record<string, JsonValue>>,
-  subjectInput: string,
-  issuedAt: string,
-  field: RecordTypeDefinition["fields"][number],
-  candidate: unknown,
-): JsonValue | undefined => {
-  if (!isFlowValue(candidate)) return undefined;
-  let value: unknown;
-  if (candidate.kind === "literal") value = candidate.literal.value;
-  else {
-    const reference = candidate.reference;
-    // This collector cannot pause for a form answer or read intermediate task results.
-    if (reference.source === "task_output") return undefined;
-    if (reference.source === "input" && typeof reference.name === "string") {
-      const inputKey = reference.name;
-      if (inputKey === subjectInput)
-        value = { recordTypeId: prepared.recordType.recordTypeId, recordId: prepared.recordId };
-      else if (hasOwn(normalizedInputs, inputKey)) value = normalizedInputs[inputKey];
-      // An omitted optional input is an empty field value, not an invalid flow reference.
-      else if (prepared.action.inputs.some((input) => input.key === inputKey && !input.required))
-        value = null;
-      else return undefined;
-    } else if (reference.source === "trigger_record" && typeof reference.field === "string") {
-      const subjectField = prepared.recordType.fields.find((item) => item.key === reference.field);
-      if (subjectField === undefined) return undefined;
-      value = hasOwn(prepared.existingValues, subjectField.fieldId)
-        ? prepared.existingValues[subjectField.fieldId]
-        : null;
-    } else if (reference.source === "execution_actor") {
-      if (field.type === "link") {
-        if (field.settings.target.state !== "resolved")
-          throw new Error("Named action actor link target is unresolved");
-        value = {
-          recordTypeId: field.settings.target.recordTypeId,
-          recordId: prepared.actorOrganizationAccountId,
-        };
-      } else value = prepared.actorOrganizationAccountId;
-    } else if (reference.source === "execution_now") value = issuedAt;
-    else return undefined;
-  }
-  return jsonValueSchema.safeParse(value).success ? (value as JsonValue) : undefined;
-};
-
-/** The field-id keyed map of flow values a compiled record task carries, or undefined. */
+/** The field-id keyed map of evaluated values a record step carries, or undefined. */
 const valueMap = (
   call: FlowProtectedTaskCall,
   property: string,
@@ -356,21 +345,29 @@ const valueMap = (
   return isRecord(carried) ? carried : undefined;
 };
 
-const textProperty = (call: FlowProtectedTaskCall, property: string): string | undefined => {
-  const carried = call.properties[property]?.value;
-  return typeof carried === "string" ? carried : undefined;
+/** Names a record type's fields by key or by permanent identity, as a record step writes them. */
+const writtenFields = (
+  fields: RecordTypeDefinition["fields"],
+  values: Readonly<Record<string, unknown>>,
+): Record<string, JsonValue> | undefined => {
+  const byName = new Map<string, string>();
+  for (const field of fields) {
+    byName.set(field.key.toLowerCase(), field.fieldId);
+    byName.set(field.fieldId.toLowerCase(), field.fieldId);
+  }
+  const written: Record<string, JsonValue> = {};
+  for (const [name, value] of Object.entries(values)) {
+    const fieldId = byName.get(name.toLowerCase());
+    if (
+      fieldId === undefined ||
+      hasOwn(written, fieldId) ||
+      !jsonValueSchema.safeParse(value).success
+    )
+      return undefined;
+    written[fieldId] = value as JsonValue;
+  }
+  return written;
 };
-
-const sameKeys = (left: readonly string[], right: readonly string[]): boolean =>
-  left.length === right.length &&
-  [...left]
-    .map((key) => key.toLowerCase())
-    .sort()
-    .join("|") ===
-    [...right]
-      .map((key) => key.toLowerCase())
-      .sort()
-      .join("|");
 
 /**
  * Resolves one authored relationship copy against the subject. The target is read through the
@@ -431,29 +428,15 @@ const relationshipCopy = (
 };
 
 /**
- * Turns the record tasks an action's flow collected into the composition `apply_record_changes`
- * applies. Every collected task must be the compiled task of exactly one installed task, of the
- * type that task has, and every installed task must be covered once; anything else means the flow
- * is not the installed action's, and the action is refused as invalid.
+ * Turns the record steps an action's flow collected into the composition `apply_record_changes`
+ * applies. The database checks every part of it against the write policy derived from the same
+ * flow, so this is a verified statement of intent, never an authority.
  */
 export const composeFlowEffects = (
   prepared: PreparedNamedAction,
   normalizedInputs: Readonly<Record<string, JsonValue>>,
-  collected: Extract<ActionFlowOutcome, { kind: "collected" }>,
-  issuedAt: string,
+  collected: Extract<TransactionFlowOutcome, { kind: "collected" }>,
 ): NamedActionComposition | undefined => {
-  const tasks = prepared.action.tasks;
-  const byId = new Map<string, FlowProtectedTaskCall>();
-  for (const call of collected.calls) {
-    // A flow that calls the same task twice is not the installed action's flow.
-    if (byId.has(call.taskId)) return undefined;
-    byId.set(call.taskId, call);
-  }
-  if (byId.size !== tasks.length) return undefined;
-
-  const fields = new Map<string, (typeof prepared.recordType.fields)[number]>(
-    prepared.recordType.fields.map((field) => [field.fieldId, field]),
-  );
   const targets = new Map(prepared.createTargets.map((target) => [target.ordinal, target]));
   const submittedValues: Record<string, JsonValue | null> = {};
   const creations: NamedActionCreation[] = [];
@@ -462,69 +445,54 @@ export const composeFlowEffects = (
   let softDeletesSubject = false;
   const announcedEventKeys: string[] = [];
 
-  for (const [ordinal, task] of tasks.entries()) {
-    const call = byId.get(task.id);
-    if (call === undefined || call.taskType !== task.type) return undefined;
-    if (task.type === "event.announce") {
-      if (textProperty(call, "event") !== task.properties.eventKey) return undefined;
-      announcedEventKeys.push(task.properties.eventKey);
+  for (const call of collected.calls) {
+    if (call.taskType === "event.announce") {
+      const key = textProperty(call, "event");
+      if (key === undefined) return undefined;
+      announcedEventKeys.push(key);
       continue;
     }
-    if (task.type === "record.create") {
+    if (call.taskType === "record.create") {
+      const ordinal = creations.length;
       const target = targets.get(ordinal);
       const authored = valueMap(call, "values");
       if (
         target === undefined ||
         authored === undefined ||
-        task.properties.recordType.state !== "resolved" ||
-        task.properties.recordType.recordTypeId.toLowerCase() !==
-          target.recordTypeId.toLowerCase() ||
-        textProperty(call, "record_type")?.toLowerCase() !== target.recordTypeId.toLowerCase() ||
-        !sameKeys(Object.keys(authored), Object.keys(task.properties.values))
+        textProperty(call, "record_type")?.toLowerCase() !== target.recordTypeId.toLowerCase()
       )
         return undefined;
-      const targetFields = new Map<string, (typeof target.recordType.fields)[number]>(
-        target.recordType.fields.map((item) => [item.fieldId, item]),
-      );
-      const values: Record<string, JsonValue | null> = {};
-      for (const [fieldId, source] of Object.entries(authored)) {
-        const field = targetFields.get(fieldId);
-        if (field === undefined) return undefined;
-        const value = writtenValue(
-          prepared,
-          normalizedInputs,
-          collected.subjectInput,
-          issuedAt,
-          field,
-          source,
-        );
-        if (value === undefined) return undefined;
-        values[fieldId] = value;
-      }
+      const values = writtenFields(target.recordType.fields, authored);
+      if (values === undefined) return undefined;
       creations.push({ ordinal, recordTypeId: target.recordTypeId, values });
       continue;
     }
-    if (task.type === "record.changes") {
+    if (call.taskType === "record.changes") {
       const changes = call.properties.changes?.value;
-      const authoredChanges = task.properties.changes;
-      if (!Array.isArray(changes) || changes.length !== authoredChanges.length) return undefined;
-      for (const [index, authoredChange] of authoredChanges.entries()) {
-        const change = changes[index];
+      if (!Array.isArray(changes)) return undefined;
+      for (const change of changes) {
+        const target = isRecord(change) && isRecord(change.target) ? change.target : undefined;
+        const reference =
+          target !== undefined && isRecord(target.reference) ? target.reference : undefined;
         if (
           !isRecord(change) ||
           change.kind !== "copy_relationships" ||
           !Array.isArray(change.relationshipIds) ||
-          !sameKeys(
-            change.relationshipIds.filter((item): item is string => typeof item === "string"),
-            authoredChange.relationshipIds,
-          )
+          reference === undefined ||
+          reference.source !== "input" ||
+          typeof reference.name !== "string"
         )
           return undefined;
         const copy = relationshipCopy(
           prepared,
           normalizedInputs,
-          ordinal,
-          authoredChange,
+          relationshipCopies.length,
+          {
+            targetInputKey: reference.name,
+            relationshipIds: change.relationshipIds.filter(
+              (item): item is string => typeof item === "string",
+            ),
+          },
           setFieldIds,
         );
         if (copy === undefined) return undefined;
@@ -532,7 +500,7 @@ export const composeFlowEffects = (
       }
       continue;
     }
-    if (task.type === "record.delete") {
+    if (call.taskType === "record.delete") {
       const record = call.properties.record?.value;
       // One delete per action; a second could only name the same subject.
       if (
@@ -545,24 +513,13 @@ export const composeFlowEffects = (
       softDeletesSubject = true;
       continue;
     }
-    if (task.type !== "record.set_fields") return undefined;
+    if (call.taskType !== "record.set_fields") return undefined;
     const authored = valueMap(call, "values");
-    const authoredValues = task.properties.values;
-    if (authored === undefined || !sameKeys(Object.keys(authored), Object.keys(authoredValues)))
-      return undefined;
-    for (const fieldId of Object.keys(authoredValues)) {
+    const values =
+      authored === undefined ? undefined : writtenFields(prepared.recordType.fields, authored);
+    if (values === undefined) return undefined;
+    for (const [fieldId, value] of Object.entries(values)) {
       setFieldIds.add(fieldId.toLowerCase());
-      const field = fields.get(fieldId);
-      if (field === undefined) return undefined;
-      const value = writtenValue(
-        prepared,
-        normalizedInputs,
-        collected.subjectInput,
-        issuedAt,
-        field,
-        authored[fieldId],
-      );
-      if (value === undefined) return undefined;
       submittedValues[fieldId] = value;
     }
   }

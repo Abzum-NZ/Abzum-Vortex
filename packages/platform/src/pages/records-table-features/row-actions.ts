@@ -1,6 +1,5 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
 import { sameId } from "../../catalogue/runtime-primitives";
 import type { ComponentFlowBinding } from "../../definition/application-flow-bindings";
 import { flowTaskChildLists, type FlowDefinition } from "../../workflows/flow-contracts";
@@ -10,7 +9,6 @@ import type { RequestDatabaseTransaction } from "../../db/request-transaction";
 import type { FlowNamedAction } from "../../definition/flow-orchestrator-types";
 import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
 import { installedNamedActions } from "../../definition/installed-named-actions";
-import { collectActionFlowTasks } from "../../rules/action-flow-run";
 import { projectNamedActionAvailability } from "./named-action-availability";
 
 type RowActions = NonNullable<RecordsTableFeatureProjection["rowActions"]>;
@@ -83,30 +81,12 @@ export const projectRowActionAvailability = async (
   projection: RowActions,
   issuedAt: string,
 ): Promise<RowActions> => {
-  const library = (flowId: string) => installed.flows.get(flowId);
   const named = projection.actions.flatMap((declaration) => {
     const action = namedActionFor(installed, placementId, declaration.eventId);
     if (action === undefined) return [];
     if (!sameId(action.subjectRecordTypeId, recordTypeId))
       throw new Error("ROW_ACTION_RECORD_TYPE_MISMATCH");
-    const flowId = action.action.actionId;
-    const actionFlow = library(flowId);
-    if (
-      actionFlow === undefined ||
-      actionFlow.execution !== "transaction" ||
-      actionFlow.runAs.kind !== "saver" ||
-      actionFlow.triggers.length !== 0
-    )
-      throw new Error("ROW_ACTION_NAMED_FLOW_INVALID");
-    const runId = randomUUID();
-    return [
-      {
-        key: declaration.eventId,
-        action: action.action,
-        run: (seed: Parameters<typeof collectActionFlowTasks>[3]) =>
-          collectActionFlowTasks(library, flowId, runId, seed),
-      },
-    ];
+    return [{ key: declaration.eventId, action: action.action }];
   });
   if (named.length === 0 || projection.availability.length === 0) return projection;
   const availability = await projectNamedActionAvailability(

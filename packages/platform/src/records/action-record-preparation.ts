@@ -8,7 +8,7 @@ import {
 } from "../definition/module-contracts";
 import { executeNamedActionResultSchema, type ExecuteNamedActionResult } from "./named-actions";
 import { revision } from "./save-record";
-import type { NamedActionCreateTarget, PreparedNamedAction } from "./action-flow-effects";
+import type { NamedActionCreateTarget, PreparedNamedAction } from "./named-action-composition";
 import type { DatabaseRow } from "../db/request-transaction";
 
 export type ResultRow = DatabaseRow & { readonly value: unknown };

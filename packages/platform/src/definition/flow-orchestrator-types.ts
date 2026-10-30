@@ -40,7 +40,7 @@ import { formContinuationAnswerSchema } from "../workflows/form-continuation-ans
 import type { RecordSaveServiceResult } from "../records/save-record";
 import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
 import type { QueryContinuationKey } from "../queries/continuation-token";
-import type { ActionFlowRunner } from "../rules/action-flow-run";
+import type { TransactionFlowRunner } from "../rules/transaction-flow-run";
 import type { BeforeSaveRuleWarning } from "../rules/before-save-flow-run";
 import type {
   FlowFailureCode,
@@ -108,6 +108,8 @@ export type FlowRecordType = Readonly<{
 /** A named action of a release: the one installed action a task names by its key. */
 export type FlowNamedAction = Readonly<{
   action: InstalledNamedActionReference;
+  /** The Module flow the action runs; absent for an action that targets a protected operation. */
+  flowId: string | undefined;
   /** The record type the action runs on. */
   subjectRecordTypeId: string;
   /**
@@ -188,7 +190,7 @@ type NamedActionRecordPort = Readonly<{
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
     command: unknown,
-    run: ActionFlowRunner,
+    run: TransactionFlowRunner,
   ): Promise<
     HumanOrganizationRequestResult<ExecuteNamedActionResult> &
       Readonly<{ warnings?: readonly BeforeSaveRuleWarning[] }>

@@ -13,7 +13,6 @@ import {
 import { createInstalledContextLoader } from "../../definition/installed-page-bundle-context";
 import { installedNamedActions } from "../../definition/installed-named-actions";
 import { recordsTableBulkActions } from "../../definition/application-composition/records-table-features/bulk-actions";
-import { collectActionFlowTasks } from "../../rules/action-flow-run";
 import { flowPlansOf } from "../../workflows/flow-plan";
 import type {
   NamedActionAvailability,
@@ -111,27 +110,12 @@ export const readRecordsTableNamedActionAvailability = async (
       const recordTypeId = String(query.recordType.recordTypeId);
       const application = installed.releaseSet.application;
       const named = installedNamedActions(application, installed.releaseSet.modules);
-      const library = flowPlansOf(installed.releaseSet).library;
       const actions: (NamedActionEligibilityAction & { key: string })[] = [];
       for (const declaration of declared) {
         const action = named.get(declaration.action);
         if (action === undefined || !sameId(action.subjectRecordTypeId, recordTypeId))
           return refuse("action_not_installed");
-        const flowId = action.action.actionId;
-        const flow = library(flowId);
-        if (
-          flow === undefined ||
-          flow.execution !== "transaction" ||
-          flow.runAs.kind !== "saver" ||
-          flow.triggers.length > 0
-        )
-          return refuse("action_flow_unavailable");
-        const runId = randomUUID();
-        actions.push({
-          key: declaration.action,
-          action: action.action,
-          run: (seed) => collectActionFlowTasks(library, flowId, runId, seed),
-        });
+        actions.push({ key: declaration.action, action: action.action });
       }
       return {
         kind: "available",

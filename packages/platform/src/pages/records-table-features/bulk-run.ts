@@ -29,7 +29,7 @@ import {
   createNamedActionRecordPort,
   namedActionBatchMaximum,
 } from "../../records/action-record-port";
-import { collectActionFlowTasks, type ActionFlowRunner } from "../../rules/action-flow-run";
+import { runTransactionFlow, type TransactionFlowRunner } from "../../rules/transaction-flow-run";
 import { flowPlansOf } from "../../workflows/flow-plan";
 import {
   fieldChoiceLabelsOf,
@@ -304,11 +304,12 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
         refuse("action_not_installed");
         return report({ kind: "refused", reason: "not_available" });
       }
-      // The action's own compiled transaction flow, from the exact installed release.
+      // The action's own transaction flow, from the exact installed release.
       const library = flowPlansOf(placement.installed.releaseSet).library;
-      const flowId = named.action.actionId;
-      const flow = library(flowId);
+      const flowId = named.flowId;
+      const flow = flowId === undefined ? undefined : library(flowId);
       if (
+        flowId === undefined ||
         flow === undefined ||
         flow.execution !== "transaction" ||
         flow.runAs.kind !== "saver" ||
@@ -318,8 +319,8 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
         return report({ kind: "refused", reason: "not_available" });
       }
       const runId = randomUUID();
-      const runner: ActionFlowRunner = (seed) =>
-        collectActionFlowTasks(library, flowId, runId, seed);
+      const runner: TransactionFlowRunner = (seed) =>
+        runTransactionFlow(library, flowId, runId, seed);
 
       // The records the run covers, with the revision each is bound at.
       let targets: readonly Readonly<{ recordId: string; revision?: number }>[];
@@ -401,7 +402,7 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
           readNamedActionEligibility(
             transaction,
             placement.recordTypeId,
-            [{ action: named.action, run: runner }],
+            [{ action: named.action }],
             batch.map((target) => ({
               recordId: target.recordId,
               commandId: batchCommandId,
