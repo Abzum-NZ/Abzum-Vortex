@@ -9,6 +9,7 @@ import {
 } from "react";
 import {
   recordsSelectionCountResultSchema,
+  recordsTableBulkRequestMaximum,
   type NamedActionAvailability,
   type RecordsSelectionInput,
   type RecordsTableBulkRunLine,
@@ -270,23 +271,43 @@ export function useBulkSelection({
             binding,
             selection.kind === "ids"
               ? {
-                  subjects: selection.items.map((item) => ({
-                    record: item.recordId,
-                    revision: item.revision,
-                  })),
+                  // Few rows run in this request; more are queued to run on the back end.
+                  [selection.items.length > recordsTableBulkRequestMaximum ? "queued" : "subjects"]:
+                    selection.items.map((item) => ({
+                      record: item.recordId,
+                      revision: item.revision,
+                    })),
+                  [selection.items.length > recordsTableBulkRequestMaximum ? "subjects" : "queued"]:
+                    [],
                   selection: "",
                   excluded: [],
                 }
-              : { subjects: [], selection: selection.token, excluded: selection.excluded },
+              : {
+                  subjects: [],
+                  queued: [],
+                  selection: selection.token,
+                  excluded: selection.excluded,
+                },
             undefined,
             undefined,
             undefined,
             crypto.randomUUID(),
             "transient",
           );
+          // A run whose outcome the page cannot tell offers its own Retry (the dispatch shows it);
+          // the table is read again so the person sees what the run changed.
+          if (!outcome.confirmed && !outcome.changed && outcome.notice === undefined) {
+            setRuns((current) => without(current, placementId));
+            await refreshPlacements([placementId]);
+            return;
+          }
           // Every matching record runs on the back end, a page at a time: the table is read again
           // while it works, so the person watches the rows change until it has had time to end.
-          if (selection.kind === "matching" && outcome.confirmed)
+          if (
+            (selection.kind === "matching" ||
+              selection.items.length > recordsTableBulkRequestMaximum) &&
+            outcome.confirmed
+          )
             for (let read = 0; read < matchingRefreshReads; read += 1) {
               await new Promise((resolve) =>
                 window.setTimeout(resolve, matchingRefreshMilliseconds),

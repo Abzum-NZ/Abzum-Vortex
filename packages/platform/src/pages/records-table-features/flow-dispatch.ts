@@ -3,6 +3,7 @@ import "server-only";
 import { recordIdSchema, fieldIdSchema } from "../../catalogue/identifiers";
 import { isRecord, sameId } from "../../catalogue/runtime-primitives";
 import { recordsTableContractOrLog } from "../../definition/application-composition/records-display";
+import { recordsTableBulkRequestMaximum } from "../../definition/application-composition/records-table-features/bulk-actions";
 import { recordsTableInlineEditEvent } from "../../definition/application-composition/records-table-features/inline-edit";
 import { recordsTableRowEditEvent } from "../../definition/application-composition/records-table-features/row-edit";
 import type { ComponentFlowBinding } from "../../definition/application-flow-bindings";
@@ -223,30 +224,31 @@ export const recordsTableBindingRefusal = async (
         )
       : undefined;
     if (declared === undefined) return recordsTableRequestRefusal(event, "command_not_declared");
-    const subjects = inputs.subjects;
-    const records = Array.isArray(subjects) ? subjects : [];
-    // Every matching record names none: its sealed selection stands for them, and the matching
-    // flow opens it under the person's own access; the chosen rows name themselves.
-    const matching = typeof inputs.selection === "string" && inputs.selection !== "";
-    const unmatched = Array.isArray(inputs.excluded)
-      ? inputs.excluded.some((id) => !recordIdSchema.safeParse(id).success)
-      : true;
-    if (matching)
-      return records.length === 0 && !unmatched
-        ? undefined
-        : recordsTableRequestRefusal(event, "record_selection_invalid");
-    return records.length === 0 ||
-      records.length > Math.min(200, declared.maxRecords) ||
-      records.some(
+    const listed = (value: unknown, most: number): boolean =>
+      Array.isArray(value) &&
+      value.length > 0 &&
+      value.length <= Math.min(most, declared.maxRecords) &&
+      value.every(
         (entry) =>
-          !isRecord(entry) ||
-          !recordIdSchema.safeParse(entry.record).success ||
-          typeof entry.revision !== "number",
-      ) ||
-      new Set(records.map((entry) => String((entry as { record: string }).record).toLowerCase()))
-        .size !== records.length
-      ? recordsTableRequestRefusal(event, "record_selection_invalid")
-      : undefined;
+          isRecord(entry) &&
+          recordIdSchema.safeParse(entry.record).success &&
+          typeof entry.revision === "number",
+      ) &&
+      new Set(value.map((entry) => String((entry as { record: string }).record).toLowerCase()))
+        .size === value.length;
+    const empty = (value: unknown): boolean => Array.isArray(value) && value.length === 0;
+    // Exactly one way in: the chosen rows run in the request (few), or queue on the back end
+    // (more), or every matching record stands for itself by its sealed selection and runs there.
+    const matching = typeof inputs.selection === "string" && inputs.selection !== "";
+    const excludedValid =
+      Array.isArray(inputs.excluded) &&
+      inputs.excluded.every((id) => recordIdSchema.safeParse(id).success);
+    const valid = matching
+      ? empty(inputs.subjects) && empty(inputs.queued) && excludedValid
+      : empty(inputs.excluded) &&
+        ((listed(inputs.subjects, recordsTableBulkRequestMaximum) && empty(inputs.queued)) ||
+          (empty(inputs.subjects) && listed(inputs.queued, 200)));
+    return valid ? undefined : recordsTableRequestRefusal(event, "record_selection_invalid");
   }
   // A batch of pasted, filled or undone cells names its rows itself; every cell is decided when
   // the batch is prepared, so only the feature and its declared binding are checked here.

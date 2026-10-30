@@ -119,7 +119,9 @@ export const admitPageGesture = async (
     const gate = requireProjectedPlacement(page, binding.controlId);
     if (gate.kind !== "on_page") return false;
     tableId = String(binding.controlId);
-    const chosen = Array.isArray(inputs.subjects) ? inputs.subjects : [];
+    const chosen = [inputs.subjects, inputs.queued].flatMap((list) =>
+      Array.isArray(list) ? list : [],
+    );
     bulkRecordIds = chosen.flatMap((entry) =>
       isRecord(entry) && typeof entry.record === "string" ? [entry.record] : [],
     );

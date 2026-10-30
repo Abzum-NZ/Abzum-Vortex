@@ -13,6 +13,7 @@ import {
   defaultFlowBindingSettings,
   defaultBatchEditFlowSource,
   defaultBulkActionFlowSource,
+  defaultBulkIdsFlowSource,
   defaultBulkMatchingFlowSource,
   defaultChangeFlowSource,
   defaultOperationFlowSource,
@@ -856,9 +857,16 @@ export const applyStudioFlowCreate = (
           : keyFrom(`${key}_matching`, new Set(body.flows.flatMap((flow) => [flow.id, flow.key])));
       if (key === undefined || matchingKey === undefined)
         return refuse("No free name could be made for this flow. Choose another name.");
+      const idsKey = keyFrom(
+        `${key}_chosen`,
+        new Set(body.flows.flatMap((flow) => [flow.id, flow.key])),
+      );
+      if (idsKey === undefined)
+        return refuse("No free name could be made for this flow. Choose another name.");
       const input = {
         id: key,
         key,
+        idsFlow: idsKey,
         operation: operation.key,
         query: command.query,
         matchingFlow: matchingKey,
@@ -869,10 +877,14 @@ export const applyStudioFlowCreate = (
         ...defaultBulkActionFlowSource(input),
         labels: { name },
       };
-      body.flows.push(flow, {
-        ...defaultBulkMatchingFlowSource(input),
-        labels: { name: `${name} (every matching record)` },
-      });
+      body.flows.push(
+        flow,
+        {
+          ...defaultBulkMatchingFlowSource(input),
+          labels: { name: `${name} (every matching record)` },
+        },
+        { ...defaultBulkIdsFlowSource(input), labels: { name: `${name} (chosen records)` } },
+      );
       const bound = bindControl(
         candidate,
         command.controlAlias,
@@ -880,6 +892,7 @@ export const applyStudioFlowCreate = (
         key,
         {
           subjects: { kind: "caller", name: "subjects" },
+          queued: { kind: "caller", name: "queued" },
           selection: { kind: "caller", name: "selection" },
           excluded: { kind: "caller", name: "excluded" },
         },

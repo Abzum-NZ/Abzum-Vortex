@@ -497,6 +497,8 @@ export type DefaultBulkActionFlowInput = DefaultFlowIdentity &
     /** The table's query (its alias in the owning definition) and the key of the matching flow. */
     query: string;
     matchingFlow: string;
+    /** The key of the flow that applies a chosen selection too large for the request. */
+    idsFlow: string;
     /** What the person is told when "every matching record" has started in the background. */
     started: string;
     /** The toast that tells the person the action was done on the selected records. */
@@ -514,6 +516,7 @@ export const defaultBulkActionFlowSource = (input: DefaultBulkActionFlowInput): 
   interactiveSource(input, {
     inputs: {
       subjects: { type: "json", required: true },
+      queued: { type: "json", required: true },
       selection: { type: "text", required: true },
       excluded: { type: "json", required: true },
     },
@@ -547,22 +550,77 @@ export const defaultBulkActionFlowSource = (input: DefaultBulkActionFlowInput): 
         ],
         else: [
           {
-            id: "apply",
-            type: "operation.call",
-            version: taskVersion,
-            properties: {
-              operation: textLiteral(input.operation),
-              inputs: { kind: "map", entries: {} },
-              subjects: inputReference("subjects"),
+            id: "route_chosen",
+            type: "if",
+            condition: {
+              op: "is_not_empty",
+              arg: { op: "reference", reference: { source: "input", name: "queued" } },
             },
-          } as unknown as Task,
-          showMessage("done", input.done),
-          refreshTask("refresh"),
+            then: [
+              {
+                id: "start_chosen",
+                type: "backend.run",
+                version: taskVersion,
+                properties: {
+                  flow: textLiteral(input.idsFlow),
+                  mode: textLiteral("start"),
+                  inputs: { kind: "map", entries: { subjects: inputReference("queued") } },
+                },
+              } as unknown as Task,
+              showMessage("started_chosen", input.started, { severity: "info" }),
+            ],
+            else: [
+              {
+                id: "apply",
+                type: "operation.call",
+                version: taskVersion,
+                properties: {
+                  operation: textLiteral(input.operation),
+                  inputs: { kind: "map", entries: {} },
+                  subjects: inputReference("subjects"),
+                },
+              } as unknown as Task,
+              showMessage("done", input.done),
+              refreshTask("refresh"),
+            ],
+              } as unknown as Task,
         ],
       } as unknown as Task,
     ],
     outputs: {},
   });
+
+/**
+ * The flow that applies a bulk action to chosen rows too many for one request (more than the
+ * request maximum, at most 200): one command in one transaction on the back end, as the person who
+ * started it.
+ */
+export const defaultBulkIdsFlowSource = (input: DefaultBulkActionFlowInput): SourceFlow => ({
+  id: input.idsFlow,
+  key: input.idsFlow,
+  description: input.description ?? "Applies a bulk action to the chosen records on the back end.",
+  labels: {},
+  execution: "background",
+  runAs: { kind: "initiator" },
+  inputs: { subjects: { type: "json", required: true } },
+  variables: {},
+  triggers: [],
+  tasks: [
+    {
+      id: "apply",
+      type: "operation.call",
+      version: taskVersion,
+      properties: {
+        operation: textLiteral(input.operation),
+        inputs: { kind: "map", entries: {} },
+        subjects: inputReference("subjects"),
+      },
+    } as unknown as Task,
+  ],
+  outputs: {},
+  errors: [],
+  finally: [],
+});
 
 /**
  * The matching flow of a bulk action, run on the back end as the person who started it: it reads
