@@ -143,7 +143,7 @@ const fromOwnSite = (request: NextRequest): boolean => {
 export const createFlowInvocationHandler =
   (channel: ProtectedOperationChannel) =>
   async (request: NextRequest): Promise<NextResponse> => {
-    const route = channel === "mcp" ? "/api/flows/invoke/mcp" : "/api/flows/invoke";
+    const route = channel === "webmcp" ? "/api/flows/invoke/webmcp" : "/api/flows/invoke";
     try {
       if (!fromOwnSite(request)) return privateResponse({ kind: "refused" }, 403);
       // Read before holding a database transaction: a slow upload must not pin a pooled connection.

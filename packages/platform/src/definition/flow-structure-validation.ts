@@ -6,9 +6,11 @@ import {
   type FlowTask,
 } from "../workflows/flow-contracts";
 import { flowLiteralSchema } from "../workflows/flow-values";
+import { isSetBasedForEach } from "../workflows/flow-set-based";
 import type { DefinitionCompilerRefusalCode } from "./compilation-error";
 import {
   flowMaximumForEachItemsOther,
+  flowMaximumSetBasedForEachItems,
   flowMaximumServerSeconds,
   flowMaximumTaskCount,
   flowMaximumTaskNestingDepth,
@@ -200,7 +202,6 @@ export const validateStructure = (flow: FlowSource, add: Add) => {
   // Tasks: identity, count, nesting and per-task limits.
   const seen = new Set<string>();
   let count = 0;
-  const forEachMaximum = flowMaximumForEachItemsOther;
   const visit = (tasks: readonly FlowTask[], path: Path, depth: number) => {
     tasks.forEach((task, index) => {
       const taskPath = [...path, index];
@@ -222,6 +223,9 @@ export const validateStructure = (flow: FlowSource, add: Add) => {
           "invalid_value",
           `A step times out within ${flowMaximumServerSeconds} seconds`,
         );
+      const forEachMaximum = isSetBasedForEach(task)
+        ? flowMaximumSetBasedForEachItems
+        : flowMaximumForEachItemsOther;
       if (
         task.type === "for_each" &&
         (task as { maximumItems: number }).maximumItems > forEachMaximum
@@ -230,7 +234,7 @@ export const validateStructure = (flow: FlowSource, add: Add) => {
           [...taskPath, "maximumItems"],
           source,
           "too_many_items",
-          `For each allows at most ${forEachMaximum.toLocaleString("en-NZ")} items`,
+          `For each allows at most ${forEachMaximum.toLocaleString("en-NZ")} items${forEachMaximum === flowMaximumForEachItemsOther ? " unless it only changes records" : ""}`,
         );
       for (const child of flowTaskChildLists(task))
         visit(child.tasks, [...taskPath, ...child.path], depth + 1);

@@ -440,7 +440,6 @@ export const protectedOperationDescriptorSchema = z
  *
  * - `web`: a signed-in person using the Vortex web application.
  * - `webmcp`: an agent acting in the person's open page, under their session.
- * - `mcp`: an MCP client acting through the Vortex MCP surface.
  * - `programmatic_interface`: a caller of a published programmatic interface.
  * - `connection`: an external system reaching the organisation through an installed connection.
  *   Connection grants and administration changes are recorded under it as well.
@@ -450,7 +449,6 @@ export const protectedOperationDescriptorSchema = z
 export const protectedOperationChannelSchema = z.enum([
   "web",
   "webmcp",
-  "mcp",
   "programmatic_interface",
   "connection",
   "federation",

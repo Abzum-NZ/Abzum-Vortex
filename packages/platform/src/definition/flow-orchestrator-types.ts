@@ -20,6 +20,8 @@ import type {
   ViewerSafeRecordPinSelector,
 } from "../records/record-links";
 import type { SaveRecordCommand } from "../records/records";
+import type { RecordChangeIntent, RecordChangesResult } from "../records/apply-record-changes";
+import type { FlowRecordTarget, FlowRecordTargetRead } from "./flow-relationship-changes";
 import type {
   FlowDefinition,
   FlowReadFieldsScalarType,
@@ -90,6 +92,13 @@ export type FlowSelectedRecordReadProjection = Readonly<{
 
 /** One record type of a release: each field's identity by its key and by its own identity. */
 export type FlowRecordType = Readonly<{
+  relationships: readonly Readonly<{
+    relationshipId: string;
+    cardinality: string;
+    fromRecordTypeId: string;
+    fromFieldId: string;
+    targetRecordTypeIds: readonly string[];
+  }>[];
   /** Lower-case field key or field id, to the field id. */
   fieldIds: ReadonlyMap<string, string>;
   /** Lower-case choice field id, to each of its options (by value) that a named action sets. */
@@ -127,7 +136,10 @@ type FlowSubjectReadPort = Readonly<{
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
     subject: Readonly<{ recordTypeId: string; recordId: string }>,
-  ): Promise<"read" | "refused" | "temporarily_unavailable">;
+  ): Promise<
+    | Readonly<{ kind: "read"; revision: number }>
+    | Readonly<{ kind: "refused" | "temporarily_unavailable" }>
+  >;
 }>;
 
 /** The current protected read result; unavailable is intentionally indistinguishable. */
@@ -212,10 +224,34 @@ export type FlowOrchestratorDependencies = Readonly<{
   actionRecords?: NamedActionRecordPort;
   /** Runs Save record tasks; without it a Save record task is unavailable. */
   records?: RecordSaveTaskPort;
+  /** Record intents run only through the admitted segment's transaction. */
+  recordChanges?: Readonly<{
+    readTargets(
+      targets: readonly FlowRecordTarget[],
+      lock?: boolean,
+    ): Promise<readonly FlowRecordTargetRead[]>;
+    /** Locks and reads only the current revisions of a set's targets; the writer decides authority. */
+    readRevisions(targets: readonly FlowRecordTarget[]): Promise<ReadonlyMap<string, number>>;
+    apply(commandId: string, intents: readonly RecordChangeIntent[]): Promise<RecordChangesResult>;
+    restoreRevision(recordTypeId: string, recordId: string): Promise<number | undefined>;
+  }>;
   /** Verifies the viewer's read access to a claimed page subject before a protected change. */
   subjects?: FlowSubjectReadPort;
   /** Reads selected fields afresh; its result is never entered into the protected effect ledger. */
   selectedRecordReads?: FlowSelectedRecordReadPort;
+  /** Reads a declared query's bounded identity list afresh, without replaying read results. */
+  queryRecords?: Readonly<{
+    read(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      target: Readonly<{ queryId: string; parameters: Readonly<Record<string, JsonValue>> }>,
+    ): Promise<
+      HumanOrganizationRequestResult<
+        | Readonly<{ outcome: "read"; recordIds: readonly string[] }>
+        | Readonly<{ outcome: "unavailable" }>
+      >
+    >;
+  }>;
   /**
    * Reads the record a flow with a record input runs for, at its start and again at every resume,
    * so a stored run never holds record values. Without it such a flow cannot start.

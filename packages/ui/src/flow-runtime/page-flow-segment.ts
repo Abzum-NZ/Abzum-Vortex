@@ -54,7 +54,7 @@ export async function drivePageFlowSegment(
         console.error("[flow] unexpected boundary in a page segment");
         return { kind: "unavailable" };
       }
-      if (step.kind === "protected_task") {
+      if (step.kind === "protected_task" || step.kind === "protected_set") {
         console.error("[flow] protected task appeared in a page segment");
         return { kind: "unavailable" };
       }

@@ -1,9 +1,19 @@
 import "server-only";
 
+import { projectRecordsTableFeatures } from ".";
+import {
+  createHumanOrganizationRequestService,
+  type HumanOrganizationRequestDependencies,
+} from "../../access/human-organization-request";
 import type { IdentitySession } from "../../access/identity-access";
 import type { JsonValue } from "../../catalogue/common";
 import { fieldIdSchema } from "../../catalogue/identifiers";
 import { sameId } from "../../catalogue/runtime-primitives";
+import type { QueryContinuationKey } from "../../queries/continuation-token";
+import { createProtectedQueryService } from "../../queries/protected-query-service";
+import { createRecordSaveService, type RecordBatchSaveProblem } from "../../records/save-record";
+import { pageSubjectFromRead } from "../page-subject-read";
+import { fieldEditorsOf } from "../placement-read/shared";
 import type { RecordsTableRequestRejection } from "../records-selection";
 import {
   pastedLinkTitleOf,
@@ -13,29 +23,18 @@ import {
   type RecordsTableBatchEditRequest,
   type RecordsTableBatchEditResult,
 } from "../records-table-batch-edit-request";
-import {
-  createHumanOrganizationRequestService,
-  type HumanOrganizationRequestDependencies,
-} from "../../access/human-organization-request";
-import { createRecordSaveService, type RecordBatchSaveProblem } from "../../records/save-record";
-import type { QueryContinuationKey } from "../../queries/continuation-token";
-import { createProtectedQueryService } from "../../queries/protected-query-service";
-import { fieldEditorsOf } from "../placement-read/shared";
-import { pageSubjectFromRead } from "../page-subject-read";
 import { inlineEditCellRefusal } from "./flow-dispatch";
-import { projectRecordsTableFeatures } from ".";
-import {
-  loadRecordsTablePlacement,
-  type RecordsTableCommandAddress,
-  type RecordsTablePlacement,
-} from "./placement";
 import {
   linkTitleCellKey,
   resolveLinkTitles,
   type LinkTitleDependencies,
   type PastedTitleCell,
 } from "./link-title-resolution";
-import { recordCommandId } from "./record-command-id";
+import {
+  loadRecordsTablePlacement,
+  type RecordsTableCommandAddress,
+  type RecordsTablePlacement,
+} from "./placement";
 
 /**
  * Pasting, filling and undoing cells of a Records table's loaded page. The browser names records
@@ -295,9 +294,9 @@ export const createRecordsTableBatchEditService = (
       const saved = await records.saveBatch(
         session,
         address.selection,
+        request.commandId,
         recordTypeId,
         request.rows.map((row) => ({
-          commandId: recordCommandId("records.batch-edit", request.commandId, row.recordId),
           recordId: row.recordId,
           expectedConcurrencyNumber: row.revision,
           submittedValues: valuesOf(row),

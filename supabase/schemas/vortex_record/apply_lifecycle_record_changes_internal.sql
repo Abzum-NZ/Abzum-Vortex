@@ -15,19 +15,9 @@ security definer
 set search_path = ''
 as $function$
 declare
-  nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000'::uuid;
-  root_snapshot jsonb;
-  deletion_result jsonb;
-  current_revision bigint;
   context_value jsonb;
   receipt vortex_record.command_receipts%rowtype;
-  preparation jsonb;
-  effect_row vortex_record.record_lifecycle_command_effects%rowtype;
-  event_kind text;
   event_result jsonb;
-  subject_ids uuid[];
-  revisions jsonb;
-  restored_revision bigint;
   target_kind text;
   target_id uuid;
   organization_id_value uuid;
@@ -57,275 +47,7 @@ declare
   target_module_binding_count integer;
   origin_application_is_consumer boolean;
 begin
-  -- Delete has two calls in one request transaction: null mutations claim the
-  -- receipt and traverse, then calculated parent mutations complete the command.
-  -- Both calls enter through apply_record_changes; a non-final outcome rolls
-  -- back the request transaction, including every traversal write.
-  if p_operation = 'delete' then
-    if p_mutations is null then
-      if p_command_id is null or p_command_id = nil_uuid
-        or p_record_type_id is null or p_record_type_id = nil_uuid
-        or p_record_id is null or p_record_id = nil_uuid
-        or p_activity_id is null or p_activity_id = nil_uuid
-        or p_occurrence_id is null or p_occurrence_id = nil_uuid
-        or p_expected_concurrency_number is null
-        or p_expected_concurrency_number not between 1 and 9007199254740990 then
-        return pg_catalog.jsonb_build_object(
-          'outcome', 'refused', 'reasonCode', 'command_invalid'
-        );
-      end if;
-      context_value := vortex_access.validated_human_request_context();
-      if not context_value ? 'applicationRootId' then
-        raise exception using errcode = '42501',
-          message = 'Record delete requires an Application context';
-      end if;
-      receipt_claim := vortex_record.claim_command_receipt_internal(
-        'record_delete', p_command_id, false
-      );
-      if receipt_claim ->> 'status' is distinct from 'claimed' then
-        if receipt_claim ->> 'status' = 'identity_conflict' then
-          return pg_catalog.jsonb_build_object(
-            'outcome', 'refused', 'reasonCode', 'command_identity_conflict',
-            'correlationId', context_value -> 'correlationId'
-          );
-        end if;
-        if receipt_claim ->> 'status' is distinct from 'completed' then
-          return pg_catalog.jsonb_build_object(
-            'outcome', 'conflict', 'correlationId', context_value -> 'correlationId'
-          );
-        end if;
-        return pg_catalog.jsonb_build_object(
-          'outcome', 'deleted',
-          'recordId', receipt_claim -> 'recordId',
-          'concurrencyNumber', receipt_claim -> 'concurrencyNumber',
-          'correlationId', context_value -> 'correlationId',
-          'replayed', true
-        );
-      end if;
-
-      -- The evaluator needs the root's last active values. They are captured
-      -- before the traversal and only used if that traversal deletes exactly the
-      -- revision they were read at.
-      root_snapshot := vortex_record.relationship_total_record_snapshot_internal(
-        vortex_record.relationship_total_catalogue_internal(),
-        p_record_type_id, p_record_id, false
-      );
-
-      perform pg_catalog.set_config(
-        'vortex_record.lifecycle_command_id', p_command_id::text, true
-      );
-      begin
-        perform vortex_record.soft_delete_record_recursive_internal(
-          p_record_type_id, p_record_id, p_expected_concurrency_number, array[]::text[]
-        );
-        deletion_result := pg_catalog.jsonb_build_object('outcome', 'completed');
-      exception
-        when serialization_failure or deadlock_detected then
-          deletion_result := pg_catalog.jsonb_build_object('outcome', 'conflict');
-        when no_data_found or insufficient_privilege or object_not_in_prerequisite_state then
-          deletion_result := pg_catalog.jsonb_build_object(
-            'outcome', 'refused', 'reasonCode', 'record_unavailable'
-          );
-        when check_violation then
-          deletion_result := pg_catalog.jsonb_build_object(
-            'outcome', 'refused', 'reasonCode', 'relationship_refused'
-          );
-      end;
-      perform pg_catalog.set_config('vortex_record.lifecycle_command_id', '', true);
-
-      if deletion_result ->> 'outcome' = 'conflict' then
-        current_revision := vortex_record.record_lifecycle_current_revision_internal(
-          p_record_type_id, p_record_id
-        );
-        return pg_catalog.jsonb_build_object(
-          'outcome', 'conflict', 'correlationId', context_value -> 'correlationId'
-        ) || case when current_revision is null then '{}'::jsonb
-          else pg_catalog.jsonb_build_object('concurrencyNumber', current_revision) end;
-      end if;
-      if deletion_result ->> 'outcome' is distinct from 'completed' then
-        return pg_catalog.jsonb_build_object(
-          'outcome', 'refused',
-          'reasonCode', coalesce(deletion_result ->> 'reasonCode', 'record_unavailable'),
-          'correlationId', context_value -> 'correlationId'
-        );
-      end if;
-      if root_snapshot is null then
-        raise exception using errcode = '55000',
-          message = 'Protected record delete root is not installed';
-      end if;
-      if (root_snapshot ->> 'concurrencyNumber')::bigint
-          is distinct from p_expected_concurrency_number then
-        raise exception using errcode = '40001',
-          message = 'Protected record delete root changed before deletion';
-      end if;
-
-      return vortex_record.prepare_record_lifecycle_totals_internal(
-        'delete', p_record_type_id, p_record_id, p_command_id, root_snapshot
-      );
-    end if;
-    context_value := vortex_access.validated_human_request_context();
-    receipt := vortex_record.lock_command_receipt_internal('record_delete', p_command_id);
-    if receipt.command_id is null
-      or receipt.result is not null then
-      raise exception using errcode = '55000',
-        message = 'Protected record delete is not prepared';
-    end if;
-    if p_activity_id is null or p_activity_id = '00000000-0000-0000-0000-000000000000'::uuid
-      or p_occurrence_id is null or p_occurrence_id = '00000000-0000-0000-0000-000000000000'::uuid then
-      raise exception using errcode = '22023',
-        message = 'Protected record delete identities are invalid';
-    end if;
-
-    -- The journaled effects prove the preflight that ran was this delete.
-    if exists (
-      select 1 from vortex_record.record_lifecycle_command_effects as effect
-      where effect.command_id = receipt.command_id and effect.effect_kind = 'restored'
-    ) or not exists (
-      select 1 from vortex_record.record_lifecycle_command_effects as effect
-      where effect.command_id = receipt.command_id
-        and effect.effect_kind = 'soft_deleted'
-        and effect.record_type_id = p_record_type_id
-        and effect.record_id = p_record_id
-    ) then
-      raise exception using errcode = '55000',
-        message = 'Protected record delete is not prepared';
-    end if;
-
-    -- Closure identity and revisions are re-derived under the held locks rather
-    -- than taken from the caller.
-    preparation := vortex_record.prepare_record_lifecycle_totals_internal(
-      'delete', p_record_type_id, p_record_id, p_command_id, null
-    );
-    if preparation ->> 'outcome' is distinct from 'prepared' then
-      raise exception using errcode = '40001',
-        message = 'Protected record delete closure changed';
-    end if;
-    perform vortex_record.apply_record_lifecycle_generated_values_internal(
-      preparation, false, p_mutations
-    );
-
-    for effect_row in
-      select effect.*
-      from vortex_record.record_lifecycle_command_effects as effect
-      where effect.organization_id = (context_value ->> 'organizationId')::uuid
-        and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
-        and effect.actor_organization_account_id = (context_value ->> 'organizationAccountId')::uuid
-        and effect.command_id = receipt.command_id
-      order by effect.effect_sequence
-    loop
-      if effect_row.effect_kind = 'soft_deleted' then
-        event_kind := 'deleted';
-      else
-        event_kind := 'unlinked';
-      end if;
-      event_result := vortex_platform.append_record_occurrences(
-        effect_row.storage_contract_id, effect_row.record_id,
-        pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-          'occurrenceId', case
-            when event_kind = 'deleted' and effect_row.record_id = p_record_id
-              and effect_row.record_type_id = p_record_type_id
-              then p_occurrence_id
-            else pg_catalog.gen_random_uuid() end,
-          'descriptor', pg_catalog.jsonb_build_object(
-            'kind', 'standard', 'eventKind', event_kind,
-            'recordTypeId', effect_row.record_type_id
-          ),
-          'payload', pg_catalog.jsonb_build_object('kind', event_kind)
-        ))
-      );
-      if pg_catalog.jsonb_array_length(event_result) <> 1 then
-        raise exception using errcode = '55000',
-          message = 'Protected record delete Event append failed';
-      end if;
-    end loop;
-
-    select pg_catalog.array_agg(distinct effect.record_id order by effect.record_id)
-      into subject_ids
-    from vortex_record.record_lifecycle_command_effects as effect
-    where effect.organization_id = (context_value ->> 'organizationId')::uuid
-      and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
-      and effect.actor_organization_account_id = (context_value ->> 'organizationAccountId')::uuid
-      and effect.command_id = receipt.command_id;
-    if subject_ids is null or not (p_record_id = any (subject_ids)) then
-      raise exception using errcode = '55000',
-        message = 'Protected record delete effects are unavailable';
-    end if;
-    perform vortex_record.append_record_activity_internal(p_activity_id, 'delete_record', subject_ids, array[]::uuid[], 'completed');
-
-    perform vortex_record.complete_command_receipt_internal(
-      'record_delete', p_command_id, p_record_id, p_expected_concurrency_number + 1,
-      'Protected record delete receipt is stale'
-    );
-
-    return pg_catalog.jsonb_build_object(
-      'outcome', 'deleted',
-      'recordId', p_record_id,
-      'concurrencyNumber', p_expected_concurrency_number + 1,
-      'correlationId', context_value -> 'correlationId',
-      'replayed', false
-    );
-  elsif p_operation = 'restore' then
-    context_value := vortex_access.validated_human_request_context();
-    receipt := vortex_record.lock_command_receipt_internal('record_restore', p_command_id);
-    if receipt.command_id is null
-      or receipt.result is not null then
-      raise exception using errcode = '55000',
-        message = 'Protected record restore is not prepared';
-    end if;
-    if p_activity_id is null or p_activity_id = '00000000-0000-0000-0000-000000000000'::uuid then
-      raise exception using errcode = '22023',
-        message = 'Protected record restore identities are invalid';
-    end if;
-
-    -- The journaled effects prove the preflight that ran was this restore.
-    if exists (
-      select 1 from vortex_record.record_lifecycle_command_effects as effect
-      where effect.command_id = receipt.command_id and effect.effect_kind <> 'restored'
-    ) or not exists (
-      select 1 from vortex_record.record_lifecycle_command_effects as effect
-      where effect.command_id = receipt.command_id
-        and effect.effect_kind = 'restored'
-        and effect.record_type_id = p_record_type_id
-        and effect.record_id = p_record_id
-    ) then
-      raise exception using errcode = '55000',
-        message = 'Protected record restore is not prepared';
-    end if;
-
-    preparation := vortex_record.prepare_record_lifecycle_totals_internal(
-      'restore', p_record_type_id, p_record_id, p_command_id, null
-    );
-    if preparation ->> 'outcome' is distinct from 'prepared'
-      or (
-        select (item.value ->> 'concurrencyNumber')::bigint
-        from pg_catalog.jsonb_array_elements(preparation -> 'records') as item(value)
-        where item.value ->> 'recordKey' = 'root'
-      ) is distinct from p_expected_concurrency_number + 1 then
-      raise exception using errcode = '40001',
-        message = 'Protected record restore closure changed';
-    end if;
-    revisions := vortex_record.apply_record_lifecycle_generated_values_internal(
-      preparation, true, p_mutations
-    );
-    select (item.value ->> 'concurrencyNumber')::bigint into strict restored_revision
-    from pg_catalog.jsonb_array_elements(revisions) as item(value)
-    where item.value ->> 'recordKey' = 'root';
-
-    perform vortex_record.append_record_activity_internal(p_activity_id, 'restore_record', array[p_record_id]::uuid[], array[]::uuid[], 'completed');
-
-    perform vortex_record.complete_command_receipt_internal(
-      'record_restore', p_command_id, p_record_id, restored_revision,
-      'Protected record restore receipt is stale'
-    );
-
-    return pg_catalog.jsonb_build_object(
-      'outcome', 'restored',
-      'recordId', p_record_id,
-      'concurrencyNumber', restored_revision,
-      'correlationId', context_value -> 'correlationId',
-      'replayed', false
-    );
-  elsif p_operation = 'transfer_ownership' then
+  if p_operation = 'transfer_ownership' then
     -- The transfer's target is the command's ordered mutation list; it carries
     -- one transfer_ownership mutation with the exact installed target kind and
     -- identifier, never an authority.
@@ -383,7 +105,7 @@ begin
       -- A replay reprojects from current access and intentionally never returns
       -- owner metadata (including the prior target).
       loaded := (vortex_record.read_record(
-        p_record_type_id, (receipt_claim ->> 'recordId')::uuid
+        p_record_type_id, (receipt_claim -> 'result' ->> 'recordId')::uuid
       )) -> 'record';
       if loaded ->> 'outcome' <> 'allowed' then
         return pg_catalog.jsonb_build_object(
@@ -521,7 +243,8 @@ begin
       raise exception using errcode = '55000', message = 'Record ownership transfer Event append failed';
     end if;
     perform vortex_record.complete_command_receipt_internal(
-      'record_save', p_command_id, p_record_id, updated_concurrency_number,
+      'record_save', p_command_id,
+      pg_catalog.jsonb_build_object('recordId', p_record_id, 'concurrencyNumber', updated_concurrency_number),
       'Record ownership transfer receipt is stale'
     );
     if record_fact #>> '{recordScope,storageScope}' = 'application_contained' then
@@ -774,4 +497,4 @@ grant execute on function vortex_record.apply_lifecycle_record_changes_internal(
 comment on function vortex_record.apply_lifecycle_record_changes_internal(
   text, uuid, uuid, uuid, bigint, jsonb, uuid, uuid
 ) is
-  'Private lifecycle implementation reached only through apply_record_changes. Delete claims, traverses and finalises in two calls within one request transaction; restore and ownership transfer retain their own receipt, Activity and Event handling.';
+  'Private ownership-transfer implementation reached through the shared mutation core, retaining its exact transfer authority, receipt, Activity and Event checks.';

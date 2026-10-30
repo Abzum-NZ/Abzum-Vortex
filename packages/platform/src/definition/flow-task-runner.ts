@@ -1,7 +1,13 @@
 import { z } from "zod";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
-import type { JsonValue } from "../catalogue/common";
-import { groupIdSchema, recordIdSchema, recordTypeIdSchema } from "../catalogue/identifiers";
+import { jsonValueSchema, type JsonValue } from "../catalogue/common";
+import {
+  builderKeySchema,
+  groupIdSchema,
+  queryIdSchema,
+  recordIdSchema,
+  recordTypeIdSchema,
+} from "../catalogue/identifiers";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import { describeFailure, isRecord, sameId } from "../catalogue/runtime-primitives";
 import {
@@ -55,6 +61,9 @@ import type {
   NamedActionExecutionResult,
   Run,
 } from "./flow-orchestrator-types";
+import type { RecordChangeIntent } from "../records/apply-record-changes";
+import { planRecordLink } from "./flow-relationship-changes";
+import { planRelationshipCopies } from "./flow-relationship-copies";
 
 /**
  * Runs the protected tasks of one flow run: plans each task, claims its effect in the ledger and
@@ -74,6 +83,13 @@ export const createFlowTaskRunner = (
 
   /** What one protected task will run, decided before its effect is claimed. */
   type TaskPlan =
+    | Readonly<{
+        kind: "changes";
+        commandId: string;
+        intents: readonly RecordChangeIntent[];
+        outputs?: Readonly<Record<string, JsonValue>>;
+        warningTarget?: Readonly<{ recordTypeId: string; recordId: string }>;
+      }>
     | Readonly<{ kind: "operation"; entry: PlatformOperation; inputs: Record<string, unknown> }>
     | Readonly<{
         kind: "save";
@@ -132,40 +148,57 @@ export const createFlowTaskRunner = (
   ): Promise<readonly BeforeSaveRuleWarning[] | undefined> => {
     if (outputs.warnings === undefined) return [];
     const warnings = storedWarningsSchema.parse(outputs.warnings);
-    const dynamic = warnings.some((warning) => warning.kind === "dynamic");
-    let record: FlowRuntimeValues | undefined;
-    if (dynamic) {
-      if (
-        run.authority.kind !== "person" ||
-        dependencies.currentRecords === undefined ||
-        plan.kind === "operation"
-      )
-        return undefined;
-      const result = isRecord(outputs.result) ? outputs.result : undefined;
-      const recordId = recordIdSchema.safeParse(
-        plan.kind === "save" || plan.asSave ? outputs.record : result?.recordId,
-      );
-      if (!recordId.success) return undefined;
-      const current = await dependencies.currentRecords.read(
-        run.authority.session,
-        run.authority.selection,
-        {
-          recordTypeId: plan.command.recordTypeId,
-          recordId: recordId.data,
-        },
-      );
-      if (current.outcome !== "read") return undefined;
-      record = current.values;
-    }
-    return warnings.map((warning) => {
+    const records = new Map<string, FlowRuntimeValues>();
+    const rendered: BeforeSaveRuleWarning[] = [];
+    for (const warning of warnings) {
+      let record: FlowRuntimeValues | undefined;
+      if (warning.kind === "dynamic") {
+        if (
+          run.authority.kind !== "person" ||
+          dependencies.currentRecords === undefined ||
+          plan.kind === "operation"
+        )
+          return undefined;
+        const result = isRecord(outputs.result) ? outputs.result : undefined;
+        const changedTarget =
+          plan.kind === "changes" ? (plan.warningTarget ?? plan.intents[0]) : undefined;
+        const recordId = recordIdSchema.safeParse(
+          warning.record?.recordId ??
+            (plan.kind === "changes"
+              ? (outputs.record ??
+                (changedTarget !== undefined && "recordId" in changedTarget
+                  ? changedTarget.recordId
+                  : undefined))
+              : plan.kind === "save" || plan.asSave
+                ? outputs.record
+                : result?.recordId),
+        );
+        const recordTypeId =
+          warning.record?.recordTypeId ??
+          (plan.kind === "changes" ? changedTarget?.recordTypeId : plan.command.recordTypeId);
+        if (!recordId.success || recordTypeId === undefined) return undefined;
+        const key = targetKey(recordTypeId, recordId.data);
+        record = records.get(key);
+        if (record === undefined) {
+          const current = await dependencies.currentRecords.read(
+            run.authority.session,
+            run.authority.selection,
+            { recordTypeId, recordId: recordId.data },
+          );
+          if (current.outcome !== "read") return undefined;
+          record = current.values;
+          records.set(key, record);
+        }
+      }
       const flow = run.release.flows.get(warning.flowId);
       if (warning.kind === "dynamic" && (flow === undefined || record === undefined))
         throw new Error("FLOW_WARNING_SOURCE_UNAVAILABLE");
-      return {
+      rendered.push({
         code: warning.code,
         flowId: warning.flowId,
         taskPath: warning.taskPath,
         messageIsLiteral: warning.kind === "literal",
+        ...(warning.record === undefined ? {} : { record: warning.record }),
         message:
           warning.kind === "literal"
             ? warning.message
@@ -176,8 +209,9 @@ export const createFlowTaskRunner = (
                 record!,
                 (dependencies.now ?? (() => new Date()))().toISOString(),
               ),
-      };
-    });
+      });
+    }
+    return rendered;
   };
 
   /** The rule's authored refusal of a protected record path, when its safe error carries one. */
@@ -244,11 +278,60 @@ export const createFlowTaskRunner = (
         );
   };
 
-  /**
-   * Plans one named action of the exact release, run for the surface's subject record through the
-   * same named-action path (`runNamedAction`).
-   */
-  const planNamedAction = (
+  // Revisions produced inside this admitted segment supersede its original page evidence.
+  // Other records are resolved by a current protected read; no caller-supplied revision is trusted.
+  const changedRevisions = new Map<string, number>();
+  const targetKey = (recordTypeId: string, recordId: string) =>
+    `${recordTypeId.toLowerCase()}:${recordId.toLowerCase()}`;
+  /** The revisions a set-based For each read in one statement, while its calls are planned. */
+  let setRevisions: ReadonlyMap<string, number> | undefined;
+  const resolveRecordTarget = async (
+    run: Run,
+    state: FlowRunState,
+    call: FlowProtectedTaskCall,
+    recordTypeId: string,
+    candidate: unknown,
+    operation?: "restore",
+    currentRevision?: number,
+  ): Promise<Readonly<{ recordId: string; revision: number }> | TaskResult> => {
+    const recordId = recordIdSchema.safeParse(candidate);
+    if (!recordId.success) return { outcome: "validation" };
+    if (run.authority.kind !== "person" || dependencies.subjects === undefined)
+      return notAvailable(
+        run,
+        call,
+        "This workflow can't read the record here.",
+        "a protected record revision read",
+      );
+    if (operation === "restore") {
+      const current = await dependencies.recordChanges?.restoreRevision(
+        recordTypeId,
+        recordId.data,
+      );
+      return current === undefined
+        ? { outcome: "refused" }
+        : { recordId: recordId.data, revision: current };
+    }
+    const known = currentRevision ?? setRevisions?.get(targetKey(recordTypeId, recordId.data));
+    const read =
+      known === undefined
+        ? await dependencies.subjects.read(run.authority.session, run.authority.selection, {
+            recordTypeId,
+            recordId: recordId.data,
+          })
+        : { kind: "read" as const, revision: known };
+    if (read.kind !== "read") return { outcome: read.kind === "refused" ? "refused" : "failed" };
+    return {
+      recordId: recordId.data,
+      revision:
+        changedRevisions.get(targetKey(recordTypeId, recordId.data)) ??
+        (state.subject !== undefined && sameId(state.subject.recordId, recordId.data)
+          ? state.subject.revision
+          : read.revision),
+    };
+  };
+
+  const planNamedAction = async (
     run: Run,
     state: FlowRunState,
     call: FlowProtectedTaskCall,
@@ -256,7 +339,7 @@ export const createFlowTaskRunner = (
     named: FlowNamedAction,
     inputs: Record<string, unknown>,
     asSave?: true,
-  ): Readonly<{ plan: TaskPlan }> | TaskResult => {
+  ): Promise<Readonly<{ plan: TaskPlan }> | TaskResult> => {
     if (dependencies.actionRecords === undefined)
       return notAvailable(
         run,
@@ -264,27 +347,25 @@ export const createFlowTaskRunner = (
         "This workflow can't run app actions here.",
         "a registered protected operation",
       );
-    if (state.subject === undefined)
+    const record = Object.hasOwn(call.properties, "record")
+      ? call.properties.record?.value
+      : state.subject?.recordId;
+    if (record === undefined)
       return notAvailable(
         run,
         call,
         "This step needs the record you're working on.",
         "the record the action runs on",
       );
-    if (dependencies.subjects === undefined)
-      return notAvailable(
-        run,
-        call,
-        "This workflow can't read the record here.",
-        "a protected read of the page's record",
-      );
+    const target = await resolveRecordTarget(run, state, call, named.subjectRecordTypeId, record);
+    if ("outcome" in target) return target;
     const command = executeNamedActionCommandSchema.safeParse({
       contractVersion: "2.0.0",
       commandId,
       action: named.action,
       recordTypeId: named.subjectRecordTypeId,
-      recordId: state.subject.recordId,
-      expectedConcurrencyNumber: state.subject.revision,
+      recordId: target.recordId,
+      expectedConcurrencyNumber: target.revision,
       inputs: Object.fromEntries(
         Object.entries(inputs).map(([name, value]) => [
           name,
@@ -306,17 +387,143 @@ export const createFlowTaskRunner = (
   };
 
   /**
-   * Decides what one protected task runs, from the task, the exact release and the segment's
-   * subject only. Nothing runs here, so a task that cannot run is settled before any claim.
+   * Resolves one protected task against its exact release and current readable target.
+   * Preparation reads may run here; no change runs before the task is claimed.
    */
-  const planTask = (
+  const planTask = async (
     run: Run,
     state: FlowRunState,
     call: FlowProtectedTaskCall,
-  ): Readonly<{ plan: TaskPlan }> | TaskResult => {
+  ): Promise<Readonly<{ plan: TaskPlan }> | TaskResult> => {
     const commandId = effectCommandId(state.runId, call.taskPath, call.iteration);
 
-    if (call.taskType === "record.save") {
+    if (call.taskType === "record.changes") {
+      if (dependencies.recordChanges === undefined || run.release.recordTypes === undefined)
+        return notAvailable(
+          run,
+          call,
+          "This workflow can't copy relationships here.",
+          "the admitted record change port",
+        );
+      const copies = await planRelationshipCopies(
+        run.release.recordTypes,
+        call.properties,
+        dependencies.recordChanges.readTargets,
+      );
+      if (copies.outcome !== "planned")
+        return {
+          outcome: copies.outcome,
+          ...(copies.reason === undefined ? {} : { diagnostic: { code: copies.reason } }),
+        };
+      for (const record of copies.targets) {
+        const target = await resolveRecordTarget(
+          run,
+          state,
+          call,
+          record.recordTypeId,
+          record.recordId,
+          undefined,
+          record.revision,
+        );
+        if ("outcome" in target) return target;
+        if (target.revision !== record.revision) return { outcome: "conflict" };
+      }
+      return {
+        plan: {
+          kind: "changes",
+          commandId,
+          intents: copies.intents,
+          outputs: copies.outputs,
+          warningTarget: copies.targets[0]!,
+        },
+      };
+    }
+
+    if (call.taskType === "record.link") {
+      if (dependencies.recordChanges === undefined || run.release.recordTypes === undefined)
+        return notAvailable(
+          run,
+          call,
+          "This workflow can't link records here.",
+          "the admitted record change port",
+        );
+      const linked = await planRecordLink(
+        run.release.recordTypes,
+        call.properties,
+        dependencies.recordChanges.readTargets,
+      );
+      if (linked.outcome !== "planned")
+        return {
+          outcome: linked.outcome,
+          ...(linked.reason === undefined ? {} : { diagnostic: { code: linked.reason } }),
+        };
+      const target = await resolveRecordTarget(
+        run,
+        state,
+        call,
+        linked.subject.recordTypeId,
+        linked.subject.recordId,
+        undefined,
+        linked.subject.revision,
+      );
+      if ("outcome" in target) return target;
+      if (target.revision !== linked.subject.revision) return { outcome: "conflict" };
+      return {
+        plan: {
+          kind: "changes",
+          commandId,
+          intents: linked.intents,
+          outputs: linked.outputs,
+          warningTarget: {
+            recordTypeId: linked.subject.recordTypeId,
+            recordId: linked.subject.recordId,
+          },
+        },
+      };
+    }
+
+    if (call.taskType === "record.delete" || call.taskType === "record.restore") {
+      if (dependencies.recordChanges === undefined)
+        return notAvailable(
+          run,
+          call,
+          "This workflow can't change records here.",
+          "the admitted record change port",
+        );
+      const recordTypeId = recordTypeIdSchema.safeParse(call.properties.record_type?.value);
+      if (!recordTypeId.success || !run.release.recordTypes?.has(recordTypeId.data.toLowerCase()))
+        return { outcome: "validation" };
+      const operation = call.taskType === "record.delete" ? "delete" : "restore";
+      const target = await resolveRecordTarget(
+        run,
+        state,
+        call,
+        recordTypeId.data,
+        call.properties.record?.value,
+        operation === "restore" ? "restore" : undefined,
+      );
+      if ("outcome" in target) return target;
+      return {
+        plan: {
+          kind: "changes",
+          commandId,
+          intents: [
+            {
+              operation,
+              recordTypeId: recordTypeId.data,
+              recordId: target.recordId,
+              expectedConcurrencyNumber: target.revision,
+            },
+          ],
+        },
+      };
+    }
+
+    if (
+      call.taskType === "record.save" ||
+      call.taskType === "record.create" ||
+      call.taskType === "record.set_fields"
+    ) {
       if (dependencies.records === undefined)
         return notAvailable(
           run,
@@ -324,7 +531,17 @@ export const createFlowTaskRunner = (
           "This workflow can't save records here.",
           "the interactive record task port",
         );
-      const recordTypeId = recordTypeIdSchema.safeParse(call.properties.record_type?.value);
+      const activeFlow = run.library(state.activations.at(-1)?.flowId ?? run.flowId);
+      const subjectTypes =
+        activeFlow?.recordInput === undefined
+          ? undefined
+          : activeFlow.inputs[activeFlow.recordInput]?.recordTypeIds;
+      const recordTypeId = recordTypeIdSchema.safeParse(
+        call.properties.record_type?.value ??
+          (call.taskType === "record.set_fields" && subjectTypes?.length === 1
+            ? subjectTypes[0]
+            : undefined),
+      );
       const recordType = recordTypeId.success
         ? run.release.recordTypes?.get(recordTypeId.data.toLowerCase())
         : undefined;
@@ -353,7 +570,10 @@ export const createFlowTaskRunner = (
         submittedNames.set(fieldId.toLowerCase(), name);
       }
       // A task that names a record changes it; one that names none creates a record.
-      if (!Object.hasOwn(call.properties, "record")) {
+      if (
+        call.taskType === "record.create" ||
+        (call.taskType === "record.save" && !Object.hasOwn(call.properties, "record"))
+      ) {
         // A new record has nothing to clear, so a field the person left empty is simply not set.
         for (const [fieldId, value] of Object.entries(submittedValues))
           if (value === null) delete submittedValues[fieldId];
@@ -385,27 +605,14 @@ export const createFlowTaskRunner = (
           ? { plan: { kind: "save", command: command.data, submittedNames, fieldKeys } }
           : { outcome: "validation" };
       }
-      const recordId = recordIdSchema.safeParse(call.properties.record?.value);
+      const recordId = recordIdSchema.safeParse(
+        Object.hasOwn(call.properties, "record")
+          ? call.properties.record?.value
+          : state.subject?.recordId,
+      );
       if (Object.hasOwn(call.properties, "selected_owner_group_id"))
         return { outcome: "validation" };
       if (!recordId.success) return { outcome: "validation" };
-      // A change is bound to the revision the person saw: the surface's subject. Without it the
-      // change cannot be checked against what the person was shown, so it does not run.
-      const subject = state.subject;
-      if (subject === undefined || subject.recordId.toLowerCase() !== recordId.data.toLowerCase())
-        return notAvailable(
-          run,
-          call,
-          "This step can only change the record you're working on.",
-          "the revision of the record the page shows",
-        );
-      if (dependencies.subjects === undefined)
-        return notAvailable(
-          run,
-          call,
-          "This workflow can't read the record here.",
-          "a protected read of the page's record",
-        );
       // A choice option that a named action sets is changed only by that action, run for this
       // record with the action's own inputs, permission, rules and refusals.
       const linkedActions = Object.entries(submittedValues).flatMap(([fieldId, value]) => {
@@ -427,6 +634,8 @@ export const createFlowTaskRunner = (
       }
       // Inputs for an action only make sense when the value names an option an action owns.
       if (Object.hasOwn(call.properties, "action_inputs")) return { outcome: "validation" };
+      const subject = await resolveRecordTarget(run, state, call, recordTypeId.data, recordId.data);
+      if ("outcome" in subject) return subject;
       const command = saveRecordCommandSchema.safeParse({
         contractVersion: "2.0.0",
         commandId,
@@ -458,6 +667,8 @@ export const createFlowTaskRunner = (
       (candidate) => platformOperationKey(candidate.key) === operationKey,
     );
     if (entry !== undefined) {
+      // A record target belongs to a named action, never to a platform-service operation.
+      if (Object.hasOwn(call.properties, "record")) return { outcome: "validation" };
       // A platform operation acts on the organisation's live data or an outside service; a
       // preview changes only its own copy of the records, so it never runs one.
       if (
@@ -549,13 +760,6 @@ export const createFlowTaskRunner = (
     }
   };
 
-  const taskTarget = (plan: TaskPlan) =>
-    plan.kind === "action"
-      ? { recordTypeId: plan.command.recordTypeId, recordId: plan.command.recordId }
-      : plan.kind === "save" && plan.command.operation === "update"
-        ? { recordTypeId: plan.command.recordTypeId, recordId: plan.command.recordId }
-        : undefined;
-
   /** Runs a planned task's effect, holding the claim. Every failure is a safe outcome. */
   const runPlan = async (
     run: Run,
@@ -570,17 +774,40 @@ export const createFlowTaskRunner = (
     // Non-person execution contexts stay fail-closed until exact per-task grants are implemented.
     if (run.authority.kind !== "person") return { result: { outcome: "failed" }, stored: {} };
     const { session, selection } = run.authority;
-    // The page subject is retained as run evidence. A fresh read under this initiator's request
-    // scope verifies the exact record type and identity before either protected change is attempted.
-    // The record service still checks change or action permission inside its own transaction.
-    const target = taskTarget(plan);
-    if (target !== undefined) {
-      const subject = await dependencies.subjects!.read(session, selection, target);
-      if (subject !== "read")
+    if (plan.kind === "changes") {
+      if (plan.intents.length === 0) {
+        const outputs = { ...plan.outputs };
+        return { result: { outcome: "completed", outputs }, stored: outputs };
+      }
+      const changed = await dependencies.recordChanges!.apply(plan.commandId, plan.intents);
+      if (changed.kind === "restart") return { result: { outcome: "conflict" }, stored: {} };
+      if (changed.kind === "refused") {
+        const failure = changed.result;
         return {
-          result: { outcome: subject === "refused" ? "refused" : "failed" },
+          result: {
+            outcome:
+              failure?.outcome === "refused" ? refusalOutcome(failure.error.code) : "refused",
+            ...(failure?.outcome === "refused" ? ruleRefusalResult(failure.error) : {}),
+          },
           stored: {},
         };
+      }
+      for (const [index, result] of changed.results.entries())
+        changedRevisions.set(
+          targetKey(plan.intents[index]!.recordTypeId, result.recordId),
+          result.concurrencyNumber,
+        );
+      const outputs: Record<string, JsonValue> =
+        plan.outputs !== undefined
+          ? { ...plan.outputs }
+          : call.taskType === "record.delete"
+            ? {}
+            : { record: changed.results[0]!.recordId };
+      return {
+        result: { outcome: "committed", outputs },
+        stored: outputs,
+        warnings: changed.warnings,
+      };
     }
     if (plan.kind === "save") {
       const saved = await dependencies.records!.save(session, selection, plan.command);
@@ -588,6 +815,10 @@ export const createFlowTaskRunner = (
         return { result: { outcome: requestOutcome(saved.kind) }, stored: {} };
       const value = saved.value;
       if (value.outcome === "saved") {
+        changedRevisions.set(
+          targetKey(plan.command.recordTypeId, value.recordId),
+          value.concurrencyNumber,
+        );
         const recordId = recordIdSchema.safeParse(value.recordId);
         if (!recordId.success) return { result: { outcome: "refused" }, stored: {} };
         const outputs = { record: recordId.data };
@@ -656,6 +887,10 @@ export const createFlowTaskRunner = (
         return { result: { outcome: requestOutcome(executed.kind) }, stored: {} };
       const value = executed.value;
       if (value.outcome === "completed") {
+        changedRevisions.set(
+          targetKey(plan.command.recordTypeId, value.recordId),
+          value.concurrencyNumber,
+        );
         // Only the record's identity and revision are kept: its readable values stay with the port.
         const outputs = plan.asSave
           ? { record: value.recordId }
@@ -737,6 +972,39 @@ export const createFlowTaskRunner = (
       return { outcome: "refused" };
     if (call.taskType === "record.read_fields") return runSelectedRecordRead(run, state, call);
 
+    if (call.taskType === "record.query") {
+      if (run.authority.kind !== "person" || dependencies.queryRecords === undefined)
+        return notAvailable(
+          run,
+          call,
+          "This workflow can't read records here.",
+          "the current initiator's protected query reader",
+        );
+      const queryId = queryIdSchema.safeParse(call.properties.query?.value);
+      const parameters = z
+        .record(builderKeySchema, jsonValueSchema)
+        .safeParse(call.properties.parameters?.value ?? {});
+      if (
+        !queryId.success ||
+        !parameters.success ||
+        carriesSensitive(parameters.data, run.sensitive)
+      )
+        return { outcome: "validation" };
+      try {
+        const result = await dependencies.queryRecords.read(
+          run.authority.session,
+          run.authority.selection,
+          { queryId: queryId.data, parameters: parameters.data },
+        );
+        if (result.kind !== "available") return { outcome: requestOutcome(result.kind) };
+        if (result.value.outcome !== "read") return { outcome: "refused" };
+        return { outcome: "completed", outputs: { records: [...result.value.recordIds] } };
+      } catch (error) {
+        reportUnexpectedFailure("record query task", error);
+        return { outcome: "failed" };
+      }
+    }
+
     // Identity acquisition is a fresh protected read, never an effect-ledger replay. The tuple
     // selects a later read; it contains no title/address and does not confer target authority.
     if (call.taskType === "record.pin_identity") {
@@ -799,7 +1067,7 @@ export const createFlowTaskRunner = (
 
     const principal: FlowEffectPrincipal = { kind: "person", id: run.authority.session.identityId };
     const organizationId = run.authority.selection.organizationId;
-    const planned = planTask(run, state, call);
+    const planned = await planTask(run, state, call);
     if (!("plan" in planned)) return planned;
 
     const key = {
@@ -923,7 +1191,11 @@ export const createFlowTaskRunner = (
       warnings: readonly BeforeSaveRuleWarning[];
     }>
   > => {
-    if (call.taskType === "record.read_fields" || call.taskType === "record.pin_identity")
+    if (
+      call.taskType === "record.read_fields" ||
+      call.taskType === "record.pin_identity" ||
+      call.taskType === "record.query"
+    )
       return { result: await runProtectedTask(run, state, call), replay: undefined, warnings: [] };
     if (run.selectedRecordReadSeen && call.taskType !== "record.save")
       return {
@@ -931,12 +1203,18 @@ export const createFlowTaskRunner = (
         replay: { kind: "task_result", outcome: "refused" },
         warnings: [],
       };
-    const planned = planTask(run, state, call);
+    const planned = await planTask(run, state, call);
     if (!("plan" in planned))
       return {
         result: planned,
         replay:
-          call.effect === "read" ? undefined : { kind: "task_result", outcome: planned.outcome },
+          call.effect === "read"
+            ? undefined
+            : {
+                kind: "task_result",
+                outcome: planned.outcome,
+                ...(planned.diagnostic === undefined ? {} : { diagnostic: planned.diagnostic }),
+              },
         warnings: [],
       };
     const ran = await runPlan(run, state, call, planned.plan);
@@ -975,12 +1253,12 @@ export const createFlowTaskRunner = (
     replay: Extract<FlowRunResume, { kind: "task_result" }>,
     warnings: readonly z.infer<typeof storedFlowWarningSchema>[],
   ): Promise<FlowRunResume | undefined> => {
-    const planned = planTask(run, state, call);
-    if (!("plan" in planned)) return undefined;
     if (run.authority.kind !== "person") return undefined;
     // The completed receipt is scoped to the verified actor and binding. Its subject may have
     // been deleted by this very command; replay exposes only its stored safe outcome.
     if (warnings.length === 0) return replay;
+    const planned = await planTask(run, state, call);
+    if (!("plan" in planned)) return undefined;
     const rendered = await replayWarnings(run, planned.plan, {
       ...replay.outputs,
       warnings,
@@ -990,5 +1268,162 @@ export const createFlowTaskRunner = (
     return replay;
   };
 
-  return Object.freeze({ run: runProtectedTask, runSegmentTask, replaySegmentTask });
+  type SetStep = Readonly<{
+    taskPath: string;
+    iteration: string;
+    calls: readonly FlowProtectedTaskCall[];
+  }>;
+  type SetRun = Readonly<{
+    result: TaskResult;
+    replay: Extract<FlowRunResume, { kind: "task_result" }>;
+    warnings: readonly BeforeSaveRuleWarning[];
+  }>;
+
+  /**
+   * A set-based For each: every item's record calls are planned against one batched target read,
+   * then applied as ONE change (one command, receipt and storage write); each call gets its own
+   * outputs, and a refusal names the call whose intent the writer refused.
+   */
+  const runSegmentSet = async (run: Run, state: FlowRunState, step: SetStep): Promise<SetRun> => {
+    const stop = (taskId: string, failure: TaskResult): SetRun => {
+      const result = { ...failure, outputs: { task: taskId } };
+      return { result, replay: { kind: "task_result", ...result }, warnings: [] };
+    };
+    const first = step.calls[0]!;
+    if (run.selectedRecordReadSeen) return stop(first.taskId, { outcome: "refused" });
+    if (dependencies.recordChanges === undefined)
+      return stop(
+        first.taskId,
+        notAvailable(
+          run,
+          first,
+          "This workflow can't change records here.",
+          "the admitted record change port",
+        ),
+      );
+    const targets = step.calls.flatMap((call) => {
+      const recordTypeId = recordTypeIdSchema.safeParse(call.properties.record_type?.value);
+      const recordId = recordIdSchema.safeParse(call.properties.record?.value);
+      return recordTypeId.success && recordId.success
+        ? [{ recordTypeId: recordTypeId.data, recordId: recordId.data }]
+        : [];
+    });
+    setRevisions =
+      targets.length === 0 ? new Map() : await dependencies.recordChanges.readRevisions(targets);
+    const intents: RecordChangeIntent[] = [];
+    const slices: {
+      call: FlowProtectedTaskCall;
+      start: number;
+      outputs?: Record<string, JsonValue>;
+    }[] = [];
+    try {
+      for (const call of step.calls) {
+        const planned = await planTask(run, state, call);
+        if (!("plan" in planned)) return stop(call.taskId, planned);
+        const plan = planned.plan;
+        if (plan.kind !== "changes" && plan.kind !== "save")
+          return stop(call.taskId, { outcome: "validation" });
+        slices.push({
+          call,
+          start: intents.length,
+          ...(plan.kind === "changes" && plan.outputs !== undefined
+            ? { outputs: { ...plan.outputs } }
+            : {}),
+        });
+        if (plan.kind === "changes") intents.push(...plan.intents);
+        else {
+          const command = plan.command;
+          intents.push(
+            command.operation === "create"
+              ? {
+                  operation: "create",
+                  recordTypeId: command.recordTypeId,
+                  values: command.submittedValues,
+                  ...(command.selectedOwnerGroupId === undefined
+                    ? {}
+                    : { selectedOwnerGroupId: command.selectedOwnerGroupId }),
+                }
+              : {
+                  operation: "update",
+                  recordTypeId: command.recordTypeId,
+                  recordId: command.recordId,
+                  expectedConcurrencyNumber: command.expectedConcurrencyNumber,
+                  values: command.submittedValues,
+                },
+          );
+        }
+      }
+    } finally {
+      setRevisions = undefined;
+    }
+    if (intents.length > 200) return stop(first.taskId, { outcome: "refused" });
+    const changed =
+      intents.length === 0
+        ? undefined
+        : await dependencies.recordChanges.apply(
+            effectCommandId(state.runId, step.taskPath, step.iteration),
+            intents,
+          );
+    if (changed?.kind === "restart") return stop(first.taskId, { outcome: "conflict" });
+    if (changed?.kind === "refused") {
+      const failed =
+        [...slices].reverse().find((slice) => slice.start <= changed.index) ?? slices[0]!;
+      const failure = changed.result;
+      return stop(failed.call.taskId, {
+        outcome: failure?.outcome === "refused" ? refusalOutcome(failure.error.code) : "refused",
+        ...(failure?.outcome === "refused" ? ruleRefusalResult(failure.error) : {}),
+      });
+    }
+    for (const [index, result] of (changed?.results ?? []).entries())
+      changedRevisions.set(
+        targetKey(intents[index]!.recordTypeId, result.recordId),
+        result.concurrencyNumber,
+      );
+    const setOutputs = slices.map((slice): Record<string, JsonValue> => {
+      if (slice.outputs !== undefined) return slice.outputs;
+      if (slice.call.taskType === "record.delete" || slice.call.taskType === "record.restore")
+        return {};
+      return { record: changed!.results[slice.start]!.recordId };
+    });
+    const warnings = changed?.warnings ?? [];
+    appendWarnings(run, first, warnings);
+    const outcome = changed === undefined ? "completed" : "committed";
+    return {
+      result: { outcome, outputs: { set: setOutputs } },
+      replay: { kind: "task_result", outcome, outputs: { set: setOutputs } },
+      warnings,
+    };
+  };
+
+  /** Rebuilds a stored set's warning text from current readable data; warnings name their record. */
+  const replaySegmentSet = async (
+    run: Run,
+    state: FlowRunState,
+    step: SetStep,
+    replay: Extract<FlowRunResume, { kind: "task_result" }>,
+    warnings: readonly z.infer<typeof storedFlowWarningSchema>[],
+  ): Promise<FlowRunResume | undefined> => {
+    if (run.authority.kind !== "person") return undefined;
+    if (warnings.length === 0) return replay;
+    const rendered = await replayWarnings(
+      run,
+      {
+        kind: "changes",
+        commandId: effectCommandId(state.runId, step.taskPath, step.iteration),
+        intents: [],
+      },
+      { warnings },
+    );
+    if (rendered === undefined) return undefined;
+    appendWarnings(run, step.calls[0]!, rendered);
+    return replay;
+  };
+
+  return Object.freeze({
+    run: runProtectedTask,
+    runSegmentTask,
+    replaySegmentTask,
+    runSegmentSet,
+    replaySegmentSet,
+  });
 };
