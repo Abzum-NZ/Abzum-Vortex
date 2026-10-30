@@ -128,16 +128,6 @@ export type StudioFlowCreateStep =
   | Readonly<{ kind: "message"; message: string }>;
 
 export type StudioFlowCreateCommand =
-  /** A table's bulk action that runs no flow yet: its default flow, and the matching flow that works through every matching record on the back end. */
-  | Readonly<{
-      kind: "bulk_action";
-      controlAlias: string;
-      /** The bulk action as the table declares it (its action reference). */
-      action: string;
-      /** The table's query, as the owning definition names it. */
-      query: string;
-      name: string;
-    }>
   /** On a record page, the flow gets the record the page shows as its record_id input. */
   | Readonly<{
       kind: "action";
@@ -615,12 +605,7 @@ const existingRowActionFlow = (
   source: Readonly<ApplicationSourceDocument>,
   command: StudioFlowCreateCommand,
 ): SourceFlow | undefined => {
-  if (
-    command.kind === "before_save" ||
-    command.kind === "flow" ||
-    command.kind === "bulk_action" ||
-    command.event !== "row_action"
-  )
+  if (command.kind === "before_save" || command.kind === "flow" || command.event !== "row_action")
     return undefined;
   const wantedOperation =
     command.kind === "action"
@@ -824,7 +809,9 @@ export const applyStudioFlowCreate = (
         .before_save_rules.push(flow.id);
       return created(candidate, flow, module.key, undefined);
     }
-    if (command.kind === "bulk_action") {
+    // A table's next bulk action without a flow gets its default flows: the one the event runs, the
+    // chosen records queued on the back end, and the matching flow that works through every match.
+    if (command.kind === "action" && command.event === "bulk_action") {
       const page = body.pages.find((candidate) =>
         sourcePageItems(candidate.composition).some(
           (item) => item.props.id === command.controlAlias,
@@ -840,16 +827,16 @@ export const applyStudioFlowCreate = (
       const declared = isRecord(features.bulk_actions) ? features.bulk_actions : {};
       const entries = Array.isArray(declared.actions) ? declared.actions : [];
       const entry = entries.find(
-        (candidate) => isRecord(candidate) && candidate.action === command.action,
+        (candidate) => isRecord(candidate) && candidate.event_id === undefined,
       );
       if (item === undefined || !isRecord(entry))
-        return refuse("That bulk action is no longer on the table.");
-      if (entry.event_id !== undefined) return refuse("That bulk action already runs a flow.");
+        return refuse("Every bulk action of the table already runs a flow.");
+      const declaredAction = String(entry.action);
       const operation = body.modules
         .flatMap((module) => module.actions)
         .find(
           (candidate) =>
-            candidate.key === command.action || command.action.endsWith(`:${candidate.key}`),
+            candidate.key === declaredAction || declaredAction.endsWith(`:${candidate.key}`),
         );
       if (operation === undefined) return refuse("That action is no longer in the application.");
       const key = keyFrom(name, new Set(body.flows.flatMap((flow) => [flow.id, flow.key])));
@@ -870,7 +857,7 @@ export const applyStudioFlowCreate = (
         key,
         idsFlow: idsKey,
         operation: operation.key,
-        query: command.query,
+        query: String(item.props.vortex.query),
         matchingFlow: matchingKey,
         started: "Started; it will finish in the background.",
         done: `${operation.label} done.`,
