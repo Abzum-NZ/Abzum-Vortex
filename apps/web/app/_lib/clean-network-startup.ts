@@ -136,7 +136,7 @@ function deliverLookup(
   address: string | LookupAddress[] | undefined,
   family?: number,
 ): void {
-  let callback = cell.delivery;
+  const callback = cell.delivery;
   cell.delivery = undefined;
   cell.hostname = undefined;
   cell.options = undefined;
@@ -151,7 +151,6 @@ function deliverLookup(
     cell.stopped = true;
     cell.outcome = "callback_failed";
   } finally {
-    callback = undefined;
     cell.invocationCount -= 1;
   }
 }

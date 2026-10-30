@@ -358,8 +358,8 @@ const runCommand = async <Result>(
     return parseResult(await operation(), schema, unavailableCode);
   } catch (error) {
     if (error instanceof Error && error.message === unavailableCode) throw error;
-    if (databaseCode(error) === "V3001") throw new Error(conflictCode);
-    throw new Error(unavailableCode);
+    if (databaseCode(error) === "V3001") throw new Error(conflictCode, { cause: error });
+    throw new Error(unavailableCode, { cause: error });
   }
 };
 
@@ -465,7 +465,7 @@ export const readCapabilityBalance = async (
     return parseResult(rows, capabilityBalanceRecordSchema, "CAPABILITY_BALANCE_UNAVAILABLE");
   } catch (error) {
     if (error instanceof Error && error.message === "CAPABILITY_BALANCE_UNAVAILABLE") throw error;
-    throw new Error("CAPABILITY_BALANCE_UNAVAILABLE");
+    throw new Error("CAPABILITY_BALANCE_UNAVAILABLE", { cause: error });
   }
 };
 
@@ -493,7 +493,7 @@ export const expireStaleCapabilityReservations = async (
   } catch (error) {
     if (error instanceof Error && error.message === "EXPIRE_STALE_RESERVATIONS_UNAVAILABLE")
       throw error;
-    throw new Error("EXPIRE_STALE_RESERVATIONS_UNAVAILABLE");
+    throw new Error("EXPIRE_STALE_RESERVATIONS_UNAVAILABLE", { cause: error });
   }
 };
 

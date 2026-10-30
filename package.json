@@ -27,7 +27,7 @@
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build"
   },
   "devDependencies": {
-    "@eslint/js": "9.39.5",
+    "@eslint/js": "catalog:",
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "knip": "catalog:",
