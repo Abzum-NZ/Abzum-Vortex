@@ -140,14 +140,14 @@ const recordSegmentEffects = async <Value>(
 };
 
 type StartFlowExecutionResult<Value> =
-  | Readonly<{ kind: "completed"; value: Value; runId: string; committedNow?: boolean }>
+  | Readonly<{ kind: "completed"; value: Value; runId: string; committedNow?: boolean; replayedCommitted?: true }>
   | Readonly<{ kind: "reload" }>
   | Readonly<{ kind: "rate_limited"; retryAfterSeconds: number }>
   | Readonly<{ kind: "already_answered" }>
   | Readonly<{ kind: "refused" }>;
 
 export type StartFlowResult<Value> = StartFlowExecutionResult<Value> &
-  Readonly<{ committedNow: boolean }>;
+  Readonly<{ committedNow: boolean; replayedCommitted?: true }>;
 
 export type FlowContinuationExecution<Value> =
   | Readonly<{ kind: "finished"; value: Value }>
@@ -619,7 +619,14 @@ const startFlowInternal = async <Value>(
         return { kind: "refused" };
       }
       await recordOutcome(executed.outcome);
-      return { kind: "completed", value: executed.value, runId };
+      return {
+        kind: "completed",
+        value: executed.value,
+        runId,
+        ...(replay !== undefined && Object.keys(replay.effects).length > 0
+          ? { replayedCommitted: true }
+          : {}),
+      };
     }
     const rollback = new Error("FLOW_SEGMENT_REFUSED_ROLLBACK");
     let declined: Readonly<{ value: Value; outcome: "refused" | "failed" }> | undefined;
@@ -741,10 +748,19 @@ const startFlowInternal = async <Value>(
   return { kind: "refused" };
 };
 
-/** Reports only effects committed by this request, never a replay of an earlier commit. */
+/**
+ * `committedNow` reports only effects committed by this request; `replayedCommitted` marks the
+ * replay of a segment that committed earlier, whose original reply may have been lost.
+ */
 export const startFlow = async <Value>(
   ...args: Parameters<typeof startFlowInternal<Value>>
 ): Promise<StartFlowResult<Value>> => {
   const result = await startFlowInternal(...args);
-  return { ...result, committedNow: result.kind === "completed" && result.committedNow === true };
+  return {
+    ...result,
+    committedNow: result.kind === "completed" && result.committedNow === true,
+    ...(result.kind === "completed" && result.replayedCommitted === true
+      ? { replayedCommitted: true as const }
+      : {}),
+  };
 };
