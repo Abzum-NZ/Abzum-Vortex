@@ -27,8 +27,7 @@ returns table (
   source_version text,
   source_revision bigint,
   source_validation_contract_version text,
-  source_catalogue_fingerprint text,
-  meaning_fingerprint text
+  source_catalogue_fingerprint text
 )
 language sql
 stable
@@ -42,7 +41,7 @@ as $function$
     entry.action_kind, entry.named_action, entry.administrative, entry.source_kind,
     entry.source_definition_key, entry.source_root_id, entry.source_version,
     entry.source_revision, entry.source_validation_contract_version,
-    entry.source_catalogue_fingerprint, entry.meaning_fingerprint
+    entry.source_catalogue_fingerprint
   from vortex_access.permission_registrations as registration
   join vortex_access.permission_catalogue_entries as entry
     on entry.organization_id = registration.organization_id

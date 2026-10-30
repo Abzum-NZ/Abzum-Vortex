@@ -2,7 +2,6 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { fingerprintPermissionMeaning } from "../access/permission-fingerprints";
 import type { BuilderConferredPermission } from "./builder-authority";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import type { IdentitySession, SelectedOrganizationScope } from "../access/identity-access";
@@ -71,7 +70,6 @@ export type ApplicationRoleTemplate = Readonly<{
 type Declared = Readonly<{
   declaration: PermissionDeclaration;
   reference: BuilderConferredPermission;
-  meaningFingerprint: string;
 }>;
 
 const referenceKey = (
@@ -98,7 +96,6 @@ const declaredPermissions = (
         ownerId,
         permissionId: String(declaration.permissionId),
       },
-      meaningFingerprint: fingerprintPermissionMeaning(ownerKind, ownerId, declaration),
     },
   ];
   return new Map([
@@ -614,25 +611,26 @@ const preparesShownTemplate = (
   releaseSet: SystemApplicationBoundReleaseSetResult,
   sourceRoleId: string,
 ): boolean => {
-  const shown = new Map(
-    templatePermissions(releaseSet, sourceRoleId).map((entry) => [
-      referenceKey(entry.reference),
-      entry.meaningFingerprint,
-    ]),
+  const shown = new Set(
+    templatePermissions(releaseSet, sourceRoleId).map((entry) => referenceKey(entry.reference)),
   );
   const candidate = prepared.candidate;
   return (
     "permissions" in candidate &&
+    "templateSource" in candidate &&
+    sameId(candidate.templateSource.applicationRootId, releaseSet.application.rootId) &&
+    candidate.templateSource.releaseRevision === releaseSet.application.releaseRevision &&
     candidate.permissions.length === shown.size &&
     candidate.permissions.every(
       (permission) =>
-        shown.get(
+        permission.acceptedRegistrationRevision === candidate.templateSource.registrationRevision &&
+        shown.has(
           referenceKey({
             ownerKind: permission.ownerKind,
             ownerId: String(permission.ownerId),
             permissionId: String(permission.permissionId),
           }),
-        ) === permission.meaningFingerprint,
+        ),
     )
   );
 };

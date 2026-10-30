@@ -251,12 +251,12 @@ begin
     insert into vortex_access.permission_continuities (
       organization_id, application_root_id, owner_kind, owner_id, permission_id,
       registration_kind, registration_owner_id, state, continuity_revision,
-      meaning_fingerprint, last_processed_registration_revision, changed_at
+      last_processed_registration_revision, changed_at
     )
     select entry.organization_id, entry.application_root_id, entry.owner_kind,
       entry.owner_id, entry.permission_id, 'application', p_application_root_id,
       case when current_registration.state = 'active' then 'available' else 'unavailable' end,
-      1, entry.meaning_fingerprint, current_registration.revision,
+      1, current_registration.revision,
       pg_catalog.statement_timestamp()
     from vortex_access.permission_catalogue_entries as entry
     where entry.organization_id = p_organization_id
@@ -291,10 +291,42 @@ begin
     ) as changed;
   end if;
 
+  -- A still-available permission retains continuity only while its protected
+  -- authority-bearing fields match the previous registration exactly.
+  if exists (
+    select 1 from vortex_access.permission_continuities as continuity
+    join vortex_access.permission_catalogue_entries as target
+      on target.organization_id = continuity.organization_id
+      and target.registration_kind = continuity.registration_kind
+      and target.registration_owner_id = continuity.registration_owner_id
+      and target.registration_revision = raw_result.registration_revision
+      and target.application_root_id is not distinct from continuity.application_root_id
+      and target.owner_kind = continuity.owner_kind
+      and target.owner_id = continuity.owner_id
+      and target.permission_id = continuity.permission_id
+    left join vortex_access.permission_catalogue_entries as previous
+      on previous.organization_id = continuity.organization_id
+      and previous.registration_kind = continuity.registration_kind
+      and previous.registration_owner_id = continuity.registration_owner_id
+      and previous.registration_revision = continuity.last_processed_registration_revision
+      and previous.application_root_id is not distinct from continuity.application_root_id
+      and previous.owner_kind = continuity.owner_kind
+      and previous.owner_id = continuity.owner_id
+      and previous.permission_id = continuity.permission_id
+    where continuity.organization_id = p_organization_id
+      and continuity.application_root_id = p_application_root_id
+      and continuity.state = 'available'
+      and raw_result.registration_state = 'active'
+      and previous.permission_id is null
+  ) then
+    raise exception using errcode = '55000',
+      message = 'Previous permission meaning is unavailable';
+  end if;
+
   if exists (
     with target as (
       select entry.application_root_id, entry.owner_kind, entry.owner_id,
-        entry.permission_id, entry.meaning_fingerprint
+        entry.permission_id, entry as target_entry
       from vortex_access.permission_catalogue_entries as entry
       where raw_result.registration_state = 'active'
         and entry.organization_id = p_organization_id
@@ -302,19 +334,26 @@ begin
         and entry.registration_owner_id = p_application_root_id
         and entry.registration_revision = raw_result.registration_revision
     )
-    select 1
-    from vortex_access.permission_continuities as continuity
-    left join target
-      on target.application_root_id = continuity.application_root_id
-      and target.owner_kind = continuity.owner_kind
-      and target.owner_id = continuity.owner_id
+    select 1 from vortex_access.permission_continuities as continuity
+    left join target on target.application_root_id = continuity.application_root_id
+      and target.owner_kind = continuity.owner_kind and target.owner_id = continuity.owner_id
       and target.permission_id = continuity.permission_id
+    left join vortex_access.permission_catalogue_entries as previous
+      on previous.organization_id = continuity.organization_id
+      and previous.registration_kind = continuity.registration_kind
+      and previous.registration_owner_id = continuity.registration_owner_id
+      and previous.registration_revision = continuity.last_processed_registration_revision
+      and previous.application_root_id is not distinct from continuity.application_root_id
+      and previous.owner_kind = continuity.owner_kind and previous.owner_id = continuity.owner_id
+      and previous.permission_id = continuity.permission_id
     where continuity.organization_id = p_organization_id
       and continuity.application_root_id = p_application_root_id
       and continuity.continuity_revision = 9007199254740991
       and (
         (target.permission_id is null and continuity.state <> 'unavailable')
         or (target.permission_id is not null and continuity.state <> 'available')
+        or (target.permission_id is not null and continuity.state = 'available'
+          and not vortex_access.permission_meaning_is_same_internal(previous, target.target_entry))
       )
   ) then
     raise exception using errcode = '22003',
@@ -323,7 +362,7 @@ begin
 
   with target as (
     select entry.application_root_id, entry.owner_kind, entry.owner_id,
-      entry.permission_id, entry.meaning_fingerprint
+      entry.permission_id, entry as target_entry
     from vortex_access.permission_catalogue_entries as entry
     where raw_result.registration_state = 'active'
       and entry.organization_id = p_organization_id
@@ -332,37 +371,32 @@ begin
       and entry.registration_revision = raw_result.registration_revision
   ), transition as (
     select continuity.ctid as continuity_row, target.permission_id as target_permission_id,
-      target.meaning_fingerprint as target_meaning_fingerprint
+      vortex_access.permission_meaning_is_same_internal(previous, target.target_entry) as same_meaning
     from vortex_access.permission_continuities as continuity
-    left join target
-      on target.application_root_id = continuity.application_root_id
-      and target.owner_kind = continuity.owner_kind
-      and target.owner_id = continuity.owner_id
+    left join target on target.application_root_id = continuity.application_root_id
+      and target.owner_kind = continuity.owner_kind and target.owner_id = continuity.owner_id
       and target.permission_id = continuity.permission_id
+    left join vortex_access.permission_catalogue_entries as previous
+      on previous.organization_id = continuity.organization_id
+      and previous.registration_kind = continuity.registration_kind
+      and previous.registration_owner_id = continuity.registration_owner_id
+      and previous.registration_revision = continuity.last_processed_registration_revision
+      and previous.application_root_id is not distinct from continuity.application_root_id
+      and previous.owner_kind = continuity.owner_kind and previous.owner_id = continuity.owner_id
+      and previous.permission_id = continuity.permission_id
     where continuity.organization_id = p_organization_id
       and continuity.application_root_id = p_application_root_id
   )
   update vortex_access.permission_continuities as continuity
-  set state = case
-        when transition.target_permission_id is null then 'unavailable'
-        else 'available'
-      end,
-      -- The continuity revision is the permission's availability lineage: it advances only
-      -- when the permission is withdrawn or registered again. A meaning change while it stays
-      -- registered keeps the lineage; roles keep the meaning they accepted until they accept
-      -- the new one.
+  set state = case when transition.target_permission_id is null then 'unavailable'
+        else 'available' end,
       continuity_revision = case
-        when transition.target_permission_id is not null
-          and continuity.state = 'available'
-          then continuity.continuity_revision
-        when transition.target_permission_id is null
-          and continuity.state = 'unavailable'
+        when transition.target_permission_id is not null and continuity.state = 'available'
+          and transition.same_meaning then continuity.continuity_revision
+        when transition.target_permission_id is null and continuity.state = 'unavailable'
           then continuity.continuity_revision
         else continuity.continuity_revision + 1
       end,
-      meaning_fingerprint = coalesce(
-        transition.target_meaning_fingerprint, continuity.meaning_fingerprint
-      ),
       last_processed_registration_revision = raw_result.registration_revision,
       changed_at = pg_catalog.statement_timestamp()
   from transition
@@ -372,11 +406,11 @@ begin
     insert into vortex_access.permission_continuities (
       organization_id, application_root_id, owner_kind, owner_id, permission_id,
       registration_kind, registration_owner_id, state, continuity_revision,
-      meaning_fingerprint, last_processed_registration_revision, changed_at
+      last_processed_registration_revision, changed_at
     )
     select entry.organization_id, entry.application_root_id, entry.owner_kind,
       entry.owner_id, entry.permission_id, 'application', p_application_root_id,
-      'available', 1, entry.meaning_fingerprint, raw_result.registration_revision,
+      'available', 1, raw_result.registration_revision,
       pg_catalog.statement_timestamp()
     from vortex_access.permission_catalogue_entries as entry
     where entry.organization_id = p_organization_id
@@ -569,7 +603,6 @@ begin
         and continuity.permission_id = permission.permission_id
         and continuity.state = 'available'
         and continuity.continuity_revision = permission.continuity_revision
-        and continuity.meaning_fingerprint = permission.meaning_fingerprint
       where permission.organization_id = p_organization_id
         and permission.role_id = role_record.role_id
         and permission.role_revision = role_record.live_revision
@@ -584,8 +617,6 @@ begin
             and (candidate.value ->> 'ownerId')::uuid = permission.owner_id
             and (candidate.value #>> '{permission,permissionId}')::uuid =
               permission.permission_id
-            and candidate.value ->> 'meaningFingerprint' =
-              permission.meaning_fingerprint
         );
       target_permission_count := pg_catalog.jsonb_array_length(
         target_template -> 'livePermissions'
@@ -634,7 +665,7 @@ begin
         role_application_root_id, application_root_id, owner_kind, owner_id,
         permission_id, registration_kind, registration_owner_id,
         accepted_registration_revision, catalogue_fingerprint,
-        continuity_revision, meaning_fingerprint
+        continuity_revision
       )
       select permission.organization_id, permission.role_id, next_role_revision,
         pg_catalog.row_number() over (
@@ -645,8 +676,7 @@ begin
         permission.owner_id, permission.permission_id,
         permission.registration_kind, permission.registration_owner_id,
         permission.accepted_registration_revision,
-        permission.catalogue_fingerprint, permission.continuity_revision,
-        permission.meaning_fingerprint
+        permission.catalogue_fingerprint, permission.continuity_revision
       from vortex_access.organization_role_permission_entries as permission
       join vortex_access.permission_continuities as continuity
         on continuity.organization_id = permission.organization_id

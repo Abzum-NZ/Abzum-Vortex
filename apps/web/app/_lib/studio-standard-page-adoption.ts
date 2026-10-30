@@ -25,7 +25,6 @@ import {
   readApplicationDefinitionDraft,
   createDatabaseDefinitionPublicationRepository,
   createDatabaseDefinitionPublicationService,
-  fingerprintCanonicalValue,
   readAuthenticatedApplicationPageAdoptionRelease,
   type StoredApplicationDefinitionDraft,
 } from "@vortex/platform/server";
@@ -125,8 +124,6 @@ export type ComparisonChoice = Readonly<{
     summaryTruncated: boolean;
   }>;
   target: PageAdoptionTargetOption;
-  keepFingerprint: string;
-  adoptFingerprint: string;
 }>;
 
 export type StudioStandardPageAdoptionLoadResult =
@@ -180,7 +177,8 @@ const toChoices = (
           target: target.target,
           decision: "keep_replacement",
         });
-        const adopt = buildPageAdoptionPlan({
+        // Both choices must remain eligible for this revision.
+        buildPageAdoptionPlan({
           draft,
           currentIdentities: identities,
           currentContent,
@@ -196,8 +194,6 @@ const toChoices = (
           candidate: keep.candidate,
           differences: keep.differences,
           target,
-          keepFingerprint: keep.comparisonFingerprint,
-          adoptFingerprint: adopt.comparisonFingerprint,
         });
       } catch (error) {
         // An ineligible identity pair is omitted; the route never returns partial source evidence.
@@ -404,8 +400,6 @@ export const saveStudioStandardPageAdoption = async (
           target: lockedCommand.target,
           decision: lockedCommand.decision,
         });
-        if (plan.comparisonFingerprint !== lockedCommand.comparisonFingerprint)
-          throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
         return {
           source: plan.source,
           verifySaved: async (verifyTransaction, verifyScope, savedDraft) => {
@@ -439,9 +433,7 @@ export const saveStudioStandardPageAdoption = async (
               verifiedCandidate.currentReleaseRevision !==
                 lockedCommand.expectedPublicationAnchor ||
               canonicalJson(verifiedCandidate.compilation.canonical.content) !==
-                canonicalJson(plan.expectedCanonicalContent) ||
-              fingerprintCanonicalValue(verifiedCandidate.compilation.canonical.content) !==
-                fingerprintCanonicalValue(plan.expectedCanonicalContent)
+                canonicalJson(plan.expectedCanonicalContent)
             )
               throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
             const verifiedRelease = await readLatestPageAdoptionRelease(

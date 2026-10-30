@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.record_share_grant_json_internal(p_grant_id uuid) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_access.record_share_grant_json_internal(p_grant_id uuid) RETURNS jsonb
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -68,7 +68,6 @@ begin
       'sourceClusterId', consent.source_cluster_id,
       'recipientOrganizationId', consent.recipient_organization_id,
       'recipientClusterId', consent.recipient_cluster_id,
-      'proposedGrantFingerprint', consent.proposed_grant_fingerprint,
       'status', consent.status,
       'requestedByOrganizationAccountId', consent.requested_by_organization_account_id,
       'requestedAt', pg_catalog.to_char(
@@ -93,7 +92,6 @@ begin
   return pg_catalog.jsonb_build_object(
     'grant', grant_json,
     'consentRequest', consent_json,
-    'proposalFingerprint', stored.proposal_fingerprint,
     'revision', stored.revision,
     'changedAt', pg_catalog.to_char(
       stored.changed_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'

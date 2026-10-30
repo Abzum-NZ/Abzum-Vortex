@@ -13,7 +13,7 @@ export const platformPermissionOwnerId = platformIdSchema.parse(
 );
 
 export type PlatformPermissionDeclaration = PermissionDeclaration &
-  Pick<ModulePlatformPermissionDeclaration, "meaningFingerprint" | "stewardMinimum">;
+  Pick<ModulePlatformPermissionDeclaration, "stewardMinimum">;
 
 const sourceDeclarations: readonly ModulePlatformPermissionDeclaration[] = [
   ...organisationAdministrationPlatformPermissions,
@@ -26,15 +26,13 @@ export const platformPermissionDeclarations: readonly PlatformPermissionDeclarat
       const declaration = modulePlatformPermissionDeclarationSchema.parse(sourceDeclaration);
       if (declaration.pinnedPermissionId === undefined)
         throw new TypeError("Platform permission declarations require a pinned permission id");
-      const { pinnedPermissionId, meaningFingerprint, stewardMinimum, ...permissionFields } =
-        declaration;
+      const { pinnedPermissionId, stewardMinimum, ...permissionFields } = declaration;
       const permission = permissionDeclarationSchema.parse({
         ...permissionFields,
         permissionId: pinnedPermissionId,
       });
       return Object.freeze({
         ...permission,
-        ...(meaningFingerprint === undefined ? {} : { meaningFingerprint }),
         ...(stewardMinimum === undefined ? {} : { stewardMinimum }),
       });
     }),

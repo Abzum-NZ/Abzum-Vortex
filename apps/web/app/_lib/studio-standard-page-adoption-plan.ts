@@ -36,7 +36,6 @@ export const pageAdoptionCommandSchema = z
     candidateReleaseRevision: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
     originalPageId: pageIdSchema,
     replacementPageId: pageIdSchema,
-    comparisonFingerprint: z.string().min(1).max(240),
     decision: z.enum(["keep_replacement", "adopt_original"]),
     target: z.discriminatedUnion("kind", [
       z.object({ kind: z.literal("navigation"), id: platformIdSchema }).strict(),
@@ -64,7 +63,6 @@ export type PageAdoptionTargetOption = Readonly<{
 type PageAdoptionPlan = Readonly<{
   source: ApplicationSourceDocument;
   expectedCanonicalContent: ApplicationContent;
-  comparisonFingerprint: string;
   original: Readonly<{ pageId: string; key: string; name: string; type: PageDefinition["type"] }>;
   replacement: Readonly<{
     pageId: string;
@@ -938,26 +936,9 @@ export const buildPageAdoptionPlan = (
             }
       : {}),
   };
-  // The saved authored document is compiled again after the write; this server-side expected
-  // canonical value proves no other current Application binding changed.
-  const comparisonFingerprint = fingerprintCanonicalValue({
-    organizationId: draft.organizationId,
-    rootId: draft.rootId,
-    draftRevision: draft.draftRevision,
-    sourceFingerprint: draft.sourceFingerprint,
-    expectedPublicationAnchor: draft.publishedRevision,
-    candidateReleaseRevision: release.publication.revision,
-    candidateContentFingerprint: release.publication.contentFingerprint,
-    candidateResolutionFingerprint: release.compilationOutput.resolutionFingerprint,
-    originalPageId,
-    replacementPageId,
-    target,
-    decision,
-  });
   return Object.freeze({
     source,
     expectedCanonicalContent,
-    comparisonFingerprint,
     original: {
       pageId: originalPageId,
       key: original.key,

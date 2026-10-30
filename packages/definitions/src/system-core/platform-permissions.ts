@@ -13,7 +13,6 @@ export const systemCorePlatformPermissions: readonly ModulePlatformPermissionDec
       "Register, grant, check, revoke and reauthorise connection instances in the selected organisation without application-installation or access-assignment authority.",
     actionKind: "manage",
     administrative: true,
-    meaningFingerprint: "sha256:809b4b3ad29ff61ab5ea73c06504909540b8111a2b3c2e1310559a7e9dc2e31e",
   },
   {
     pinnedPermissionId: "e85c2232-2ed7-4ce8-b1e5-7e2ad8e2b847",
