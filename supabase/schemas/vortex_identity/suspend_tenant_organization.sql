@@ -1,6 +1,5 @@
 create or replace function vortex_identity.suspend_tenant_organization(
   p_duplicate_key uuid,
-  p_command_fingerprint text,
   p_tenant_id uuid,
   p_organization_id uuid,
   p_expected_revision bigint
@@ -25,6 +24,8 @@ declare
   current_state text;
   stored record;
   claimed jsonb;
+  target_access_found boolean;
+  target_organization_found boolean;
   new_correlation_id uuid := pg_catalog.gen_random_uuid();
   resulting_revision bigint;
 begin
@@ -35,9 +36,7 @@ begin
     or p_organization_id is null
     or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
     or p_expected_revision is null
-    or p_expected_revision not between 1 and 9007199254740991
-    or p_command_fingerprint is null
-    or p_command_fingerprint !~ '^sha256:[0-9a-f]{64}$' then
+    or p_expected_revision not between 1 and 9007199254740991 then
     raise exception using
       errcode = '22023',
       message = 'Tenant organisation suspension command is invalid';
@@ -52,9 +51,7 @@ begin
   where version.organization_id = p_organization_id
     and organization.tenant_id = p_tenant_id
   for update of version;
-  if not found then
-    raise exception using errcode = 'V3101', message = 'Tenant operation is unavailable';
-  end if;
+  target_access_found := found;
 
   perform 1
   from vortex_identity.tenants as tenant
@@ -81,9 +78,7 @@ begin
   where organization.tenant_id = p_tenant_id
     and organization.organization_id = p_organization_id
   for update;
-  if not found then
-    raise exception using errcode = 'V3101', message = 'Tenant operation is unavailable';
-  end if;
+  target_organization_found := found;
 
   evaluated_at := pg_catalog.clock_timestamp();
   perform vortex_identity.require_current_tenant_capability(
@@ -101,20 +96,15 @@ begin
   end if;
 
   claimed := vortex_record.claim_scoped_command_receipt_internal(
-    'suspend_tenant_organization', p_duplicate_key, null, p_tenant_id, actor_identity_id,
+    'suspend_tenant_organization', p_duplicate_key, p_organization_id, p_tenant_id, actor_identity_id,
     'Administration duplicate conflicts'
   );
   if claimed is not null then
     select r.* into stored
     from pg_catalog.jsonb_to_record(claimed) as r(
       "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
-      "subjectRevisions" bigint[], "fingerprint" text, "clusterId" uuid
+      "subjectRevisions" bigint[]
     );
-    if stored."fingerprint" <> p_command_fingerprint then
-      raise exception using
-        errcode = 'V3001',
-        message = 'Administration duplicate conflicts';
-    end if;
     return query
     select 'replayed'::text,
       'suspend_tenant_organization'::text,
@@ -123,6 +113,10 @@ begin
       stored."receiptId",
       stored."acceptedAt";
     return;
+  end if;
+
+  if not target_access_found or not target_organization_found then
+    raise exception using errcode = 'V3101', message = 'Tenant operation is unavailable';
   end if;
 
   if current_revision <> p_expected_revision
@@ -146,8 +140,7 @@ begin
     pg_catalog.jsonb_build_object(
       'receiptId', new_correlation_id, 'acceptedAt', evaluated_at,
       'subjectIds', pg_catalog.to_jsonb(array[p_organization_id]),
-      'subjectRevisions', pg_catalog.to_jsonb(array[resulting_revision]),
-      'fingerprint', p_command_fingerprint, 'clusterId', null::uuid
+      'subjectRevisions', pg_catalog.to_jsonb(array[resulting_revision])
     )
   );
 
@@ -161,14 +154,14 @@ begin
 end
 $function$;
 
-revoke execute on function vortex_identity.suspend_tenant_organization(uuid, text, uuid, uuid, bigint)
+revoke execute on function vortex_identity.suspend_tenant_organization(uuid, uuid, uuid, bigint)
   from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
-grant execute on function vortex_identity.suspend_tenant_organization(uuid, text, uuid, uuid, bigint)
+grant execute on function vortex_identity.suspend_tenant_organization(uuid, uuid, uuid, bigint)
   to vortex_runtime;
 
-comment on function vortex_identity.suspend_tenant_organization(uuid, text, uuid, uuid, bigint) is
+comment on function vortex_identity.suspend_tenant_organization(uuid, uuid, uuid, bigint) is
   'Protected non-cascading active-to-suspended organisation transition under the bound request context person''s current tenant authority and accepted replay.';
 
-alter function vortex_identity.suspend_tenant_organization(p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_organization_id uuid, p_expected_revision bigint) owner to vortex_owner;
+alter function vortex_identity.suspend_tenant_organization(p_duplicate_key uuid, p_tenant_id uuid, p_organization_id uuid, p_expected_revision bigint) owner to vortex_owner;
 
-grant execute on function vortex_identity.suspend_tenant_organization(p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_organization_id uuid, p_expected_revision bigint) to postgres;
+grant execute on function vortex_identity.suspend_tenant_organization(p_duplicate_key uuid, p_tenant_id uuid, p_organization_id uuid, p_expected_revision bigint) to postgres;

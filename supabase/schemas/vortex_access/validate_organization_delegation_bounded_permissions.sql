@@ -29,12 +29,12 @@ begin
         candidate.value ->> 'ownerKind' = 'platform'
         and candidate.value ?& array[
           'acceptedRegistrationRevision', 'catalogueFingerprint',
-          'continuityRevision', 'kind', 'meaningFingerprint', 'ownerId',
+          'continuityRevision', 'kind', 'ownerId',
           'ownerKind', 'permissionId'
         ]
         and candidate.value - array[
           'acceptedRegistrationRevision', 'catalogueFingerprint',
-          'continuityRevision', 'kind', 'meaningFingerprint', 'ownerId',
+          'continuityRevision', 'kind', 'ownerId',
           'ownerKind', 'permissionId'
         ] = '{}'::jsonb
       ) or (
@@ -42,12 +42,12 @@ begin
         and candidate.value ?& array[
           'acceptedRegistrationRevision', 'applicationRootId',
           'catalogueFingerprint', 'continuityRevision', 'kind',
-          'meaningFingerprint', 'ownerId', 'ownerKind', 'permissionId'
+          'ownerId', 'ownerKind', 'permissionId'
         ]
         and candidate.value - array[
           'acceptedRegistrationRevision', 'applicationRootId',
           'catalogueFingerprint', 'continuityRevision', 'kind',
-          'meaningFingerprint', 'ownerId', 'ownerKind', 'permissionId'
+          'ownerId', 'ownerKind', 'permissionId'
         ] = '{}'::jsonb
       )
     ) is not true
@@ -108,9 +108,6 @@ begin
         'string'
       and candidate.value ->> 'catalogueFingerprint' ~
         '^sha256:[a-f0-9]{64}$'
-      and pg_catalog.jsonb_typeof(candidate.value -> 'meaningFingerprint') =
-        'string'
-      and candidate.value ->> 'meaningFingerprint' ~ '^sha256:[a-f0-9]{64}$'
       and (
         (
           candidate.value ->> 'ownerKind' = 'platform'
@@ -198,8 +195,7 @@ begin
           accepted_registration_revision,
         candidate.value ->> 'catalogueFingerprint' as catalogue_fingerprint,
         (candidate.value ->> 'continuityRevision')::numeric::bigint as
-          continuity_revision,
-        candidate.value ->> 'meaningFingerprint' as meaning_fingerprint
+          continuity_revision
       from pg_catalog.jsonb_array_elements(p_permissions) as candidate(value)
     )
     select 1
@@ -215,15 +211,30 @@ begin
         and registration.state = 'active'
         and registration.permission_catalogue_fingerprint =
           parsed.catalogue_fingerprint
+      join vortex_access.permission_registrations as current_registration
+        on current_registration.organization_id = entry.organization_id
+        and current_registration.registration_kind = entry.registration_kind
+        and current_registration.registration_owner_id = entry.registration_owner_id
+        and current_registration.state = 'active'
+      join vortex_access.permission_catalogue_entries as current_entry
+        on current_entry.organization_id = entry.organization_id
+        and current_entry.registration_kind = entry.registration_kind
+        and current_entry.registration_owner_id = entry.registration_owner_id
+        and current_entry.registration_revision = current_registration.revision
+        and current_entry.application_root_id is not distinct from entry.application_root_id
+        and current_entry.owner_kind = entry.owner_kind
+        and current_entry.owner_id = entry.owner_id
+        and current_entry.permission_id = entry.permission_id
+        and vortex_access.permission_meaning_is_same_internal(entry, current_entry)
       join vortex_access.permission_continuities as continuity
-        on continuity.organization_id = entry.organization_id
+        on continuity.last_processed_registration_revision = current_registration.revision
+        and continuity.organization_id = entry.organization_id
         and continuity.application_scope_id = coalesce(entry.application_root_id, '00000000-0000-0000-0000-000000000000'::uuid)
         and continuity.owner_kind = entry.owner_kind
         and continuity.owner_id = entry.owner_id
         and continuity.permission_id = entry.permission_id
         and continuity.state = 'available'
         and continuity.continuity_revision = parsed.continuity_revision
-        and continuity.meaning_fingerprint = parsed.meaning_fingerprint
       where entry.organization_id = p_organization_id
         and entry.application_root_id is not distinct from
           parsed.application_root_id
@@ -232,7 +243,6 @@ begin
         and entry.permission_id = parsed.permission_id
         and entry.registration_revision =
           parsed.accepted_registration_revision
-        and entry.meaning_fingerprint = parsed.meaning_fingerprint
     )
   ) then
     raise exception using errcode = '23514',

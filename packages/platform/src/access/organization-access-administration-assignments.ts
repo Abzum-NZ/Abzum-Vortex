@@ -378,7 +378,10 @@ export const createAccessAdministrationAssignmentOperations = ({
       candidate: OrganizationSelectionCandidate,
       commandCandidate: DeactivateOrganizationAdministrationRoleActivationCommand,
     ): Promise<
-      HumanOrganizationRequestResult<ChangeOrganizationAdministrationRoleActivationResult>
+      HumanOrganizationRequestResult<
+        ChangeOrganizationAdministrationRoleActivationResult,
+        "permission_denied" | "activation_not_found"
+      >
     > => {
       const command =
         deactivateOrganizationAdministrationRoleActivationCommandSchema.safeParse(commandCandidate);
@@ -439,6 +442,7 @@ export const createAccessAdministrationAssignmentOperations = ({
             throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
           return parsed.data;
         }),
+        ["permission_denied", "activation_not_found"] as const,
       );
     },
 

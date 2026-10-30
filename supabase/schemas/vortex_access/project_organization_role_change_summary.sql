@@ -29,8 +29,7 @@ as $function$
             'kind', policy.authentication_requirement,
             'maximumAgeSeconds', policy.authentication_maximum_age_seconds
           )
-        end,
-        'requiredCallerExecutionBindingId', policy.required_caller_execution_binding_id
+        end
       ))
     end,
     'source', case role.role_kind

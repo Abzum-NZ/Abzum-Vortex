@@ -1,7 +1,6 @@
 create or replace function vortex_identity.adopt_organization(
   p_operator_actor_id uuid,
   p_duplicate_key uuid,
-  p_command_fingerprint text,
   p_tenant_id uuid,
   p_organization_id uuid,
   p_steward_identity_id uuid,
@@ -38,16 +37,48 @@ declare
   authoritative_tenant_id uuid;
   authoritative_organization_id uuid;
   authoritative_account_id uuid;
+  replay_account_id uuid;
 begin
   if not vortex_platform.is_non_nil_uuid(p_operator_actor_id::text)
     or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
     or not vortex_platform.is_non_nil_uuid(p_tenant_id::text)
     or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
     or not vortex_platform.is_non_nil_uuid(p_steward_identity_id::text)
-    or not vortex_platform.is_non_nil_uuid(p_organization_account_id::text)
-    or p_command_fingerprint is null
-    or p_command_fingerprint !~ '^sha256:[0-9a-f]{64}$' then
+    or not vortex_platform.is_non_nil_uuid(p_organization_account_id::text) then
     raise exception using errcode = '22023', message = 'Organization adoption input is invalid';
+  end if;
+
+  -- Keep Access before Identity without creating state or refusing a replay.
+  perform 1
+  from vortex_access.organization_access_versions as version
+  join vortex_identity.organizations as organization
+    on organization.organization_id = version.organization_id
+  where version.organization_id = p_organization_id
+    and organization.tenant_id = p_tenant_id
+  for update of version;
+
+  claimed := vortex_record.claim_scoped_command_receipt_internal(
+    'adopt_organization', p_duplicate_key, p_organization_id, p_tenant_id, p_operator_actor_id,
+    'Administration duplicate conflicts'
+  );
+  if claimed is not null then
+    select r.* into stored
+    from pg_catalog.jsonb_to_record(claimed) as r(
+      "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
+      "subjectRevisions" bigint[]
+    );
+    select account.organization_account_id into replay_account_id
+    from vortex_identity.organization_accounts as account
+    where account.organization_id = p_organization_id
+      and account.organization_account_id = any(stored."subjectIds");
+    if replay_account_id is null then
+      raise exception using errcode = '55000', message = 'Stored adoption result is unavailable';
+    end if;
+    return query select 'replayed'::text, 'adopt_organization'::text,
+      p_tenant_id, p_organization_id, replay_account_id,
+      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", p_organization_id)],
+      stored."receiptId", stored."acceptedAt";
+    return;
   end if;
 
   -- This is deliberately an unlocked eligibility probe. Existing request
@@ -76,28 +107,6 @@ begin
     raise exception using errcode = 'V3003', message = 'Administration scope is unavailable';
   end if;
 
-  claimed := vortex_record.claim_scoped_command_receipt_internal(
-    'adopt_organization', p_duplicate_key, null, p_tenant_id, p_operator_actor_id,
-    'Administration duplicate conflicts'
-  );
-  if claimed is not null then
-    select r.* into stored
-    from pg_catalog.jsonb_to_record(claimed) as r(
-      "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
-      "subjectRevisions" bigint[], "fingerprint" text, "clusterId" uuid
-    );
-    if stored."fingerprint" <> p_command_fingerprint then
-      raise exception using errcode = 'V3001', message = 'Administration duplicate conflicts';
-    end if;
-    if not stored."subjectIds" @> array[p_organization_id, p_organization_account_id] then
-      raise exception using errcode = 'V3003', message = 'Administration scope is unavailable';
-    end if;
-    return query select 'replayed'::text, 'adopt_organization'::text,
-      p_tenant_id, p_organization_id, p_organization_account_id,
-      stored."subjectRevisions"[pg_catalog.array_position(stored."subjectIds", p_organization_id)],
-      stored."receiptId", stored."acceptedAt";
-    return;
-  end if;
 
   if exists (
     select 1
@@ -178,8 +187,7 @@ begin
     pg_catalog.jsonb_build_object(
       'receiptId', new_correlation_id, 'acceptedAt', operation_at,
       'subjectIds', pg_catalog.to_jsonb(result_subject_ids),
-      'subjectRevisions', pg_catalog.to_jsonb(result_subject_revisions),
-      'fingerprint', p_command_fingerprint, 'clusterId', null::uuid
+      'subjectRevisions', pg_catalog.to_jsonb(result_subject_revisions)
     )
   );
   return query select 'accepted'::text, 'adopt_organization'::text,
@@ -188,12 +196,12 @@ begin
 end
 $function$;
 
-revoke execute on function vortex_identity.adopt_organization(uuid,uuid,text,uuid,uuid,uuid,uuid) from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
+revoke execute on function vortex_identity.adopt_organization(uuid,uuid,uuid,uuid,uuid,uuid) from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
 
-grant execute on function vortex_identity.adopt_organization(uuid,uuid,text,uuid,uuid,uuid,uuid) to vortex_runtime;
+grant execute on function vortex_identity.adopt_organization(uuid,uuid,uuid,uuid,uuid,uuid) to vortex_runtime;
 
-comment on function vortex_identity.adopt_organization(uuid,uuid,text,uuid,uuid,uuid,uuid) is 'Configured-system-only explicit organisation stewardship adoption through the existing Access coordinator.';
+comment on function vortex_identity.adopt_organization(uuid,uuid,uuid,uuid,uuid,uuid) is 'Configured-system-only explicit organisation stewardship adoption through the existing Access coordinator.';
 
-alter function vortex_identity.adopt_organization(p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_organization_id uuid, p_steward_identity_id uuid, p_organization_account_id uuid) owner to vortex_owner;
+alter function vortex_identity.adopt_organization(p_operator_actor_id uuid, p_duplicate_key uuid, p_tenant_id uuid, p_organization_id uuid, p_steward_identity_id uuid, p_organization_account_id uuid) owner to vortex_owner;
 
-grant execute on function vortex_identity.adopt_organization(p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_organization_id uuid, p_steward_identity_id uuid, p_organization_account_id uuid) to postgres;
+grant execute on function vortex_identity.adopt_organization(p_operator_actor_id uuid, p_duplicate_key uuid, p_tenant_id uuid, p_organization_id uuid, p_steward_identity_id uuid, p_organization_account_id uuid) to postgres;

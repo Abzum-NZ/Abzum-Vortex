@@ -5,8 +5,7 @@ create or replace function vortex_access.accepted_permission_meaning_internal(
   p_owner_id uuid,
   p_permission_id uuid,
   p_continuity_revision bigint,
-  p_accepted_registration_revision bigint,
-  p_meaning_fingerprint text
+  p_accepted_registration_revision bigint
 )
 returns setof vortex_access.permission_catalogue_entries
 language plpgsql
@@ -15,8 +14,8 @@ security invoker
 set search_path = ''
 as $function$
 begin
-  -- A grant keeps its accepted meaning while the permission remains available in its original
-  -- availability lineage. Explicit role acceptance or delegation scope change moves that meaning.
+  -- Accepted authority remains valid only in the same continuity and while its
+  -- stored authority-bearing fields still match the current registration.
   return query
     select accepted.*
     from vortex_access.permission_registrations as registration
@@ -40,7 +39,6 @@ begin
       and continuity.last_processed_registration_revision = registration.revision
       and continuity.state = 'available'
       and continuity.continuity_revision = p_continuity_revision
-      and continuity.meaning_fingerprint = current_entry.meaning_fingerprint
     join vortex_access.permission_catalogue_entries as accepted
       on accepted.organization_id = current_entry.organization_id
       and accepted.registration_kind = current_entry.registration_kind
@@ -50,7 +48,7 @@ begin
       and accepted.owner_kind = current_entry.owner_kind
       and accepted.owner_id = current_entry.owner_id
       and accepted.permission_id = current_entry.permission_id
-      and accepted.meaning_fingerprint = p_meaning_fingerprint
+      and vortex_access.permission_meaning_is_same_internal(accepted, current_entry)
     where registration.organization_id = p_organization_id
       and registration.state = 'active'
       and p_accepted_registration_revision <= registration.revision
@@ -58,9 +56,9 @@ begin
 end
 $function$;
 
-revoke execute on function vortex_access.accepted_permission_meaning_internal(uuid, uuid, text, uuid, uuid, bigint, bigint, text)
+revoke execute on function vortex_access.accepted_permission_meaning_internal(uuid, uuid, text, uuid, uuid, bigint, bigint)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
-grant execute on function vortex_access.accepted_permission_meaning_internal(uuid, uuid, text, uuid, uuid, bigint, bigint, text)
+grant execute on function vortex_access.accepted_permission_meaning_internal(uuid, uuid, text, uuid, uuid, bigint, bigint)
   to vortex_owner, postgres;
-alter function vortex_access.accepted_permission_meaning_internal(uuid, uuid, text, uuid, uuid, bigint, bigint, text)
+alter function vortex_access.accepted_permission_meaning_internal(uuid, uuid, text, uuid, uuid, bigint, bigint)
   owner to vortex_owner;

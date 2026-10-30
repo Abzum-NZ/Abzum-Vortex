@@ -4,20 +4,20 @@
 
 ## Purpose and ownership
 
-The current platform administration permission catalogue is version `1.4.0` and contains 22 permissions. Its permanent owner remains `ownerKind = platform` with owner ID `cabe121e-0baf-4084-9471-cce915d460a8`. Changing where a declaration is authored does not change its permission ID, key, authority meaning or stored meaning fingerprint. Registering a platform permission makes it available in one organisation; it does not assign that permission to a person or Group.
+The current platform administration permission catalogue is version `1.4.0` and contains 23 permissions. Its permanent owner remains `ownerKind = platform` with owner ID `cabe121e-0baf-4084-9471-cce915d460a8`. Changing where a declaration is authored does not change its permission ID, key, authority meaning. Registering a platform permission makes it available in one organisation; it does not assign that permission to a person or Group.
 
-Organisation Administration owns the 14 permissions that protect its system record types and management operations. The system core declaration owns the eight platform permissions that have no corresponding system record type: connections, security, support and application building. The permission's owning source is declaration metadata. It does not replace the permanent platform permission owner.
+Organisation Administration owns the 15 permissions that protect its system record types and management operations. The system core declaration owns the eight platform permissions that have no corresponding system record type: connections, security, support and application building. The permission's owning source is declaration metadata. It does not replace the permanent platform permission owner.
 
 ## Owner decisions
 
 These decisions were recorded on 27 September 2026 and define the declaration and registration design:
 
-1. Keep `ownerKind = platform` and owner `cabe121e-0baf-4084-9471-cce915d460a8`. Move only the authoring location. Record the owning system module as metadata. Keep all permission identities and meaning fingerprints unchanged.
+1. Keep `ownerKind = platform` and owner `cabe121e-0baf-4084-9471-cce915d460a8`. Move only the authoring location. Record the owning system module as metadata. Keep all permission identities and authority-bearing fields unchanged.
 2. Add `pinnedPermissionId` for a declared permission's permanent identity. Accept it only in platform system-module declaration sources, including the declaration-only system core.
 3. Keep permissions without a system record type in the platform system core declaration: connections, security, support and builder permissions.
 4. Register platform permissions from declared data when an organisation is created, independently of module installation.
 5. Seed a declaration table through a migration and have one generic registration function read it. Do not keep catalogue JSON in SQL function bodies.
-6. Preserve `registration_kind = 'platform'`, the `platform_catalogue` source kind and registration revisions 1-6 as history. Registration revision 7 is the first table-driven revision.
+6. Preserve `registration_kind = 'platform'`, the `platform_catalogue` source kind and registration revisions 1-6 as history. The current declaration-driven registration uses revision 6.
 7. Mark the steward minimum in declared data with `stewardMinimum`. Store it as `steward_minimum` in the seeded declaration data, and guard against silently removing the flag or a flagged permission.
 
 ## Declaration ownership and registration
@@ -26,16 +26,14 @@ The declaration sources and aggregate used by runtime packages are:
 
 | Purpose | Source |
 | --- | --- |
-| Organisation Administration's 14 platform permissions | `packages/definitions/src/organisation-administration/module.ts` |
+| Organisation Administration's 15 platform permissions | `packages/definitions/src/organisation-administration/module.ts` |
 | The eight permissions without a system record type; declaration only, not an installable module | `packages/definitions/src/system-core/platform-permissions.ts` |
 | Aggregate platform permission declarations consumed by runtime packages | `packages/definitions/src/platform-permissions.ts` in `@vortex/definitions` |
 | Permission declaration schema only | `packages/platform/src/access/permissions.ts` in `@vortex/contracts` |
 
-`@vortex/contracts` keeps the permission declaration schema; it does not import `@vortex/definitions`. The `pinnedPermissionId` field preserves an existing permanent ID in these platform declaration sources. `stewardMinimum` marks the 13 permissions required by the permanent-steward safeguard. The existing opaque meaning fingerprint for `platform.organization.connections.manage` stays stored data and is not recalculated or changed when its declaration moves:
+`@vortex/contracts` keeps the permission declaration schema; it does not import `@vortex/definitions`. The `pinnedPermissionId` field preserves an existing permanent ID in these platform declaration sources. `stewardMinimum` marks the 13 permissions required by the permanent-steward safeguard. Authority meaning is represented by the declared fields and permission continuity revision.
 
-`sha256:809b4b3ad29ff61ab5ea73c06504909540b8111a2b3c2e1310559a7e9dc2e31e`
-
-At organisation creation, one generic registration function reads the seeded declaration table and registers the declared platform permissions. This path does not depend on installing Organisation Administration or another module. It preserves `registration_kind = 'platform'` and the `platform_catalogue` source kind. Revisions 1-6 remain immutable history; revision 7 is the first revision registered from the seeded declarations. The revision 7 registration function must not embed catalogue JSON.
+At organisation creation, one generic registration function reads the seeded declaration table and registers the declared platform permissions. This path does not depend on installing Organisation Administration or another module. It preserves `registration_kind = 'platform'` and the `platform_catalogue` source kind. The current revision 6 is registered from the seeded declarations; the registration function does not embed catalogue JSON.
 
 ### Steward minimum and guard
 
@@ -76,13 +74,13 @@ The shipped `1.4.0` catalogue currently mirrors platform registration revision 6
 
 ### Expected catalogue and exactness
 
-The private `vortex_access.read_platform_permission_declaration_catalogue_internal(bigint)` producer returns the complete expected permission set for one supported platform registration revision. Passing `NULL` selects the current declared target, `greatest(7, max(first_revision))`, for the fixed platform owner. A non-null request supports historical revisions 1-6, revision 7, and revision 8 or later only when a declaration has that exact `first_revision`. Membership is the fixed-owner declarations whose `first_revision` is at most the requested revision. Unsupported, empty, duplicate, or unrepresentable sets return no rows; named actions are unrepresentable by the catalogue entry shape and refuse the whole set. Revision 7 keeps source version `1.4.0`; additive revision `r >= 7` uses `1.` followed by `r - 3` and `.0` (for example, revision 8 is `1.5.0`).
+The private `vortex_access.read_platform_permission_declaration_catalogue_internal(bigint)` producer returns the complete declared platform permission set for revision 6. It requires the fixed platform owner, 23 distinct identifiers and keys, and no named actions; an unsupported or inconsistent set returns no rows.
 
 The producer is a `STABLE SECURITY DEFINER` owned by `vortex_owner`, with an empty `search_path`. Its explicit `EXECUTE` grant is limited to `postgres`; API and unrelated runtime roles are explicitly revoked. It reads only the existing guarded declaration table at the fixed platform owner scope. It adds no declaration-table grants, schema privileges, or role membership. This full-catalogue producer is distinct from the private guarded-steward-minimum reader.
 
-Revisions 1-6 retain their shipped source version, fingerprint, and entry count: revision 1 is `1.0.0` / 13 entries; revision 2 is `1.0.1` / 13; revision 3 is `1.1.0` / 14; revision 4 is `1.2.0` / 15; revision 5 is `1.3.0` / 18; and revision 6 is `1.4.0` / 22. Their historical fingerprints remain fixed constants. Revision 1 also preserves the historical Teams labels and descriptions for the two Groups permissions. The table-driven revision 7 and later fingerprints use a separate SQL framing contract: the `vortex.platform-permission-catalogue/v1` domain plus LF, then length-framed UTF-8 text and explicit null frames for platform scope, fixed owner, version, count, and each expected catalogue entry. The 22 fields are ordered as application root, owner kind and ID, permission ID and key, label and description, record type, record scope, field policy, action kind and named action, administrative flag, source kind, source definition key and root, source version and revision, validation version, content and resolution fingerprints, and meaning fingerprint. Entries sort by permission key under the `C` collation and then permission ID. Declaration `source_module_key`, `steward_minimum`, and `first_revision` are not hash fields; `first_revision` controls membership. This framing is neither JSON nor a hash of mutable registration claims; the opaque meaning fingerprint remains stored data.
+Revision 6 retains the shipped `1.4.0` catalogue fingerprint as a fixed constant. Current catalogue exactness compares the declared permission fields and the registered entries directly; permission continuity records whether accepted authority remains current.
 
-The generic `platform_permission_catalogue_revision_is_exact(uuid, bigint)` remains a read-only `STABLE SECURITY INVOKER` check with its existing signature, owner, and ACL. It requires one active current fixed-owner registration and matching immutable current history, attribution, source metadata, and fingerprints, then proves the complete scoped entry set in both directions against the private expected producer. For current revisions 4, 5, and 6 it also requires the retained predecessor snapshots 3/14 entries, 4/15, and 5/18 respectively. Each predecessor identity must have exactly one retained current row; every stored catalogue column must match with null-safe equality except `registration_revision`, `source_version`, and `source_catalogue_fingerprint`. Current 1-3 retain their pre-continuity validation phase. Current 4-6 and 7+ require the full available continuity set at the current revision. Direct-new revision 7 or later does not fabricate revisions 1-6; metadata progression preserves its existing immutable history.
+The private `platform_permission_catalogue_revision_is_exact(uuid, bigint)` check requires the current active fixed-owner registration, its matching immutable history, the complete declared entry set and the available continuity set at revision 6.
 
 ## Registration is not assignment
 

@@ -79,7 +79,6 @@ export const permissionRegistryEntryCandidateSchema = z
     ownerId: platformIdSchema,
     permission: permissionDeclarationSchema,
     sourceRelease: permissionRegistryDefinitionReleaseSchema,
-    meaningFingerprint: fingerprintSchema,
   })
   .strict()
   .superRefine((value, context) => {
@@ -114,7 +113,6 @@ export const preparedApplicationPermissionRegistrationSchema = z
     applicationCatalogueFingerprint: fingerprintSchema,
     applicationPermissionIds: z.array(permissionIdSchema),
     entries: z.array(permissionRegistryEntryCandidateSchema),
-    candidateFingerprint: fingerprintSchema,
   })
   .strict()
   .superRefine((value, context) => {
