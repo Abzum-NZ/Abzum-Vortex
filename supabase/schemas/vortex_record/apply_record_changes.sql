@@ -44,6 +44,7 @@ declare
   persisted_results jsonb := '[]'::jsonb;
   projections jsonb := '{}'::jsonb;
   batch_projection jsonb;
+  occurrence_items jsonb := '[]'::jsonb;
   batch_type record;
 begin
   if pg_catalog.jsonb_typeof(p_parent_mutations) is distinct from 'array'
@@ -217,9 +218,9 @@ begin
           when subject ->> 'operation' = 'create' then 'create_record' else 'update_record' end,
         array[(saved ->> 'recordId')::uuid], changed_fields, 'completed'
       );
-      event_result := vortex_platform.append_record_occurrences(
-        (plan #>> '{meta,storageContractId}')::uuid, (saved ->> 'recordId')::uuid,
-        pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      occurrence_items := occurrence_items || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'storageContractId', plan #>> '{meta,storageContractId}', 'recordId', saved ->> 'recordId',
+        'occurrences', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
           'occurrenceId', subject -> 'occurrenceId',
           'descriptor', pg_catalog.jsonb_build_object(
             'kind', 'standard', 'recordTypeId', subject -> 'recordTypeId',
@@ -229,11 +230,7 @@ begin
             then pg_catalog.jsonb_build_object('kind', 'created')
             else pg_catalog.jsonb_build_object('kind', 'changed', 'changedFieldIds', pg_catalog.to_jsonb(changed_fields)) end
         ))
-      );
-      if pg_catalog.jsonb_typeof(event_result) is distinct from 'array'
-        or pg_catalog.jsonb_array_length(event_result) is distinct from 1 then
-        raise exception using errcode = '55000', message = 'Record change Event append failed';
-      end if;
+      ));
       if subject ->> 'operation' = 'update' and (
         plan #>> '{meta,storageScope}' = 'application_contained'
         or plan #>> '{meta,recordType,systemProjection,protectedView}' = 'organization_runtime_settings'
@@ -267,6 +264,19 @@ begin
       'replayed', false
     ));
   end loop;
+  -- The Events of every saved record are appended together, one resolution per storage contract.
+  if pg_catalog.jsonb_array_length(occurrence_items) > 0 then
+    event_result := vortex_platform.append_record_occurrence_set(occurrence_items);
+    if pg_catalog.jsonb_typeof(event_result) is distinct from 'array'
+      or pg_catalog.jsonb_array_length(event_result) is distinct from pg_catalog.jsonb_array_length(occurrence_items)
+      or exists (
+        select 1 from pg_catalog.jsonb_array_elements(event_result) as appended(value)
+        where pg_catalog.jsonb_typeof(appended.value) is distinct from 'array'
+          or pg_catalog.jsonb_array_length(appended.value) is distinct from 1
+      ) then
+      raise exception using errcode = '55000', message = 'Record change Event append failed';
+    end if;
+  end if;
   for parent_plan in select item.value from pg_catalog.jsonb_array_elements(parent_plans) as item(value)
     where not exists (select 1 from pg_catalog.jsonb_array_elements(calculation -> 'lifecycleProposals') as changed(value)
       where changed.value -> 'recordTypeId' = item.value -> 'recordTypeId'

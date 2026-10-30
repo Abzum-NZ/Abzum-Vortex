@@ -22,8 +22,8 @@ declare
   bounds jsonb;
   changeable text[];
   proposed_values jsonb;
+  proposed jsonb;
   proposed_facts jsonb;
-  proposed_records jsonb;
   entry_key text;
   entry_value jsonb;
   column_entry jsonb;
@@ -92,7 +92,7 @@ begin
         'outcome', 'refused', 'reasonCode', 'record_unavailable'
       );
     end if;
-    bounds := vortex_record.decide_record_field_bounds_internal(decision);
+    bounds := vortex_record.remembered_record_field_bounds_internal(p_memo, decision, 'decided');
   end if;
   select coalesce(pg_catalog.array_agg(item.value #>> '{}'), array[]::text[])
   into changeable
@@ -111,7 +111,6 @@ begin
     end if;
   end loop;
 
-  proposed_values := loaded -> 'fieldValues';
   for entry_key, entry_value in
     select pg_catalog.lower(entry.key), entry.value
     from pg_catalog.jsonb_each(p_final_values) as entry(key, value)
@@ -137,27 +136,14 @@ begin
       );
     end if;
 
-    proposed_values := proposed_values || pg_catalog.jsonb_build_object(entry_key, entry_value);
     physical_values := physical_values || pg_catalog.jsonb_build_object(
       column_entry ->> 'token', entry_value
     );
   end loop;
 
-  proposed_records := coalesce((
-    select pg_catalog.jsonb_agg(
-      case
-        when pg_catalog.lower(stored.value -> 'recordScope' ->> 'recordId')
-          = pg_catalog.lower(p_record_id::text)
-          then stored.value || pg_catalog.jsonb_build_object('fieldValues', proposed_values)
-        else stored.value
-      end
-      order by stored.ordinality
-    )
-    from pg_catalog.jsonb_array_elements(loaded -> 'facts' -> 'records')
-      with ordinality as stored(value, ordinality)
-  ), '[]'::jsonb);
-  proposed_facts := (loaded -> 'facts')
-    || pg_catalog.jsonb_build_object('records', proposed_records);
+  proposed := vortex_record.proposed_change_facts_internal(loaded, p_record_id, p_final_values);
+  proposed_values := proposed -> 'values';
+  proposed_facts := proposed -> 'facts';
 
   if not (loaded ? 'previewInstallationId') then
     decision := vortex_record.decide_record_access_internal(
@@ -168,7 +154,7 @@ begin
         'outcome', 'refused', 'reasonCode', 'proposed_record_refused'
       );
     end if;
-    bounds := vortex_record.decide_record_field_bounds_internal(decision);
+    bounds := vortex_record.remembered_record_field_bounds_internal(p_memo, decision, 'decided');
   end if;
 
   for field_id in
