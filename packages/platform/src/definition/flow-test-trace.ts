@@ -12,7 +12,12 @@ export type FlowTraceLocation = "page" | "server" | "back end";
 
 /** Why a step was not run in a test run. */
 export type FlowTraceNotRun =
-  "multi_transaction" | "access_change" | "scope_lock" | "external_effect" | "needs_a_person";
+  | "multi_transaction"
+  | "access_change"
+  | "scope_lock"
+  | "external_effect"
+  | "needs_a_person"
+  | "action_event";
 
 /** What a refused or failed step reports; the host words it exactly as a user would read it. */
 type FlowTraceRefusal = Readonly<{
@@ -137,6 +142,20 @@ export const createFlowTraceCollector = (
         ms: Math.round((clock() - started) * 100) / 100,
         outputs: {},
         ...(failureCode === undefined ? {} : { refusal: { outcome, failureCode } }),
+      });
+    },
+    /** A subscriber to an event a named action announced: the test run does not deliver it. */
+    subscriberNotRun: (flowId: string, flowKey: string): void => {
+      steps.push({
+        flowId,
+        taskId: flowKey,
+        taskType: "after_save_subscriber",
+        iteration: "",
+        location: "back end",
+        outcome: "not_run",
+        ms: 0,
+        outputs: {},
+        notRun: "action_event",
       });
     },
     /** A step of a segment the test run cannot run at all. */

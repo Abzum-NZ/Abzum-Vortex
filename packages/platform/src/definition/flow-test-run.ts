@@ -12,6 +12,7 @@ import { orderSubscribers, subscribes } from "../events/flow-subscriber-consumer
 import { createViewerSafeRecordLinkReadService } from "../queries/viewer-safe-record-link-read";
 import type { QueryContinuationKey } from "../queries/continuation-token";
 import { createNamedActionRecordPort } from "../records/action-record-port";
+import { executeNamedActionCommandSchema } from "../records/named-actions";
 import { createRecordSaveService } from "../records/save-record";
 import type { BackendRunRequest, BackendRunResult } from "../workflows/backend-adapters";
 import { flowTaskChildLists, type FlowTask } from "../workflows/flow-contracts";
@@ -159,6 +160,33 @@ export const runFlowTest = async (
     occurrences.push({ recordTypeId, recordId, eventKind, occurrenceId: randomUUID() });
   };
 
+  /** Subscribers to events the flow's named actions announced: listed in the trace, never run. */
+  const announced: { flowId: string; flowKey: string }[] = [];
+  const noteAnnouncements = (command: unknown): void => {
+    const parsed = executeNamedActionCommandSchema.safeParse(command);
+    if (!parsed.success) return;
+    const { application, modules } = context.releaseSet;
+    const owners = [application, ...modules].map((owner) => owner.content);
+    const action = owners
+      .flatMap((content) => content.actions)
+      .find((candidate) => sameId(candidate.actionId, parsed.data.action.actionId));
+    for (const eventKey of action?.writePolicy.eventKeys ?? []) {
+      const event = owners
+        .flatMap((content) => content.events)
+        .find((candidate) => candidate.key === eventKey);
+      if (event === undefined) continue;
+      for (const subscriber of release.flows.values())
+        if (
+          subscribes(subscriber, {
+            kind: "declared",
+            key: eventKey,
+            recordTypeId: String(event.recordTypeId),
+          })
+        )
+          announced.push({ flowId: subscriber.id, flowKey: subscriber.key });
+    }
+  };
+
   /** The back end of one request: a child runs inline, in that request, as the builder. */
   const inlineFor = (current: BoundHumanOrganizationRequest) => {
     const backgroundDependencies: BackgroundRunDependencies = {
@@ -233,6 +261,7 @@ export const runFlowTest = async (
         // A refused or failed segment undoes its own changes, as in a normal run.
         const declined = new Error("FLOW_TEST_SEGMENT_DECLINED");
         const noted = occurrences.length;
+        const announcedBefore = announced.length;
         let lost: Awaited<ReturnType<typeof execute>> | undefined;
         try {
           return await requireRequestSavepoint(current.transaction).withSavepoint(async (child) => {
@@ -240,6 +269,7 @@ export const runFlowTest = async (
             if (executed.outcome !== "succeeded") {
               lost = executed;
               occurrences.length = noted;
+              announced.length = announcedBefore;
               throw declined;
             }
             return {
@@ -257,7 +287,7 @@ export const runFlowTest = async (
       },
     };
     const ports = createFlowRunPorts(host, release, undefined, installation, admission, current);
-    const { records, recordChanges } = ports;
+    const { records, recordChanges, actionRecords } = ports;
     return {
       ...ports,
       trace,
@@ -300,6 +330,18 @@ export const runFlowTest = async (
                             : "restored",
                     );
                   });
+                return result;
+              },
+            },
+          }),
+      ...(actionRecords === undefined
+        ? {}
+        : {
+            actionRecords: {
+              execute: async (session, selection, command, run) => {
+                const result = await actionRecords.execute(session, selection, command, run);
+                if (result.kind === "available" && result.value.outcome === "completed")
+                  noteAnnouncements(command);
                 return result;
               },
             },
@@ -408,6 +450,7 @@ export const runFlowTest = async (
       );
     }
   }
+  for (const subscriber of announced) trace.subscriberNotRun(subscriber.flowId, subscriber.flowKey);
   const totalMs = Math.round((performance.now() - started) * 100) / 100;
   const steps = trace.steps();
   const paused = steps.at(-1)?.outcome === "paused";
