@@ -3849,6 +3849,34 @@
                 }
               }
             }
+          },
+          {
+            "id": "done",
+            "type": "interface.show_message",
+            "version": "1.0.0",
+            "properties": {
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Profile saved."
+                }
+              },
+              "target": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "toast"
+                }
+              },
+              "severity": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "success"
+                }
+              }
+            }
           }
         ],
         "outputs": {}
@@ -3958,104 +3986,31 @@
                 }
               }
             }
-          }
-        ],
-        "outputs": {
-          "result": {
-            "type": "json",
-            "value": {
-              "kind": "reference",
-              "reference": {
-                "source": "task_output",
-                "task": "call",
-                "key": "result"
-              }
-            }
-          }
-        }
-      },
-      {
-        "id": "flow_retire_role",
-        "key": "retire_role",
-        "labels": {
-          "name": "Retire role"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "role_id": {
-            "type": "record_reference",
-            "required": true,
-            "recordTypeIds": ["vortex.system_directory:role"]
           },
-          "expected_role_revision": {
-            "type": "whole_number",
-            "required": true
-          }
-        },
-        "tasks": [
           {
-            "id": "call",
-            "type": "operation.call",
+            "id": "done",
+            "type": "interface.show_message",
             "version": "1.0.0",
             "properties": {
-              "operation": {
+              "message": {
                 "kind": "literal",
                 "literal": {
                   "type": "text",
-                  "value": "platform.retire_role"
+                  "value": "Role saved."
                 }
-              }
-            }
-          }
-        ],
-        "outputs": {
-          "result": {
-            "type": "json",
-            "value": {
-              "kind": "reference",
-              "reference": {
-                "source": "task_output",
-                "task": "call",
-                "key": "result"
-              }
-            }
-          }
-        }
-      },
-      {
-        "id": "flow_create_group",
-        "key": "create_group",
-        "labels": {
-          "name": "Create group"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "group_key": {
-            "type": "text",
-            "required": true
-          },
-          "label": {
-            "type": "text",
-            "required": true
-          }
-        },
-        "tasks": [
-          {
-            "id": "call",
-            "type": "operation.call",
-            "version": "1.0.0",
-            "properties": {
-              "operation": {
+              },
+              "target": {
                 "kind": "literal",
                 "literal": {
                   "type": "text",
-                  "value": "platform.create_group"
+                  "value": "toast"
+                }
+              },
+              "severity": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "success"
                 }
               }
             }
@@ -4164,105 +4119,31 @@
                 }
               }
             }
-          }
-        ],
-        "outputs": {
-          "result": {
-            "type": "json",
-            "value": {
-              "kind": "reference",
-              "reference": {
-                "source": "task_output",
-                "task": "call",
-                "key": "result"
-              }
-            }
-          }
-        }
-      },
-      {
-        "id": "flow_retire_group",
-        "key": "retire_group",
-        "labels": {
-          "name": "Retire group"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "group_id": {
-            "type": "record_reference",
-            "required": true,
-            "recordTypeIds": ["vortex.system_directory:group"]
           },
-          "expected_group_revision": {
-            "type": "whole_number",
-            "required": true
-          }
-        },
-        "tasks": [
           {
-            "id": "call",
-            "type": "operation.call",
+            "id": "done",
+            "type": "interface.show_message",
             "version": "1.0.0",
             "properties": {
-              "operation": {
+              "message": {
                 "kind": "literal",
                 "literal": {
                   "type": "text",
-                  "value": "platform.retire_group"
+                  "value": "Group renamed."
                 }
-              }
-            }
-          }
-        ],
-        "outputs": {
-          "result": {
-            "type": "json",
-            "value": {
-              "kind": "reference",
-              "reference": {
-                "source": "task_output",
-                "task": "call",
-                "key": "result"
-              }
-            }
-          }
-        }
-      },
-      {
-        "id": "flow_remove_group_membership",
-        "key": "remove_group_membership",
-        "labels": {
-          "name": "Remove group membership"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "membership_id": {
-            "type": "record_reference",
-            "required": true,
-            "recordTypeIds": ["vortex.system_directory:group_membership"]
-          },
-          "expected_membership_revision": {
-            "type": "whole_number",
-            "required": true
-          }
-        },
-        "tasks": [
-          {
-            "id": "call",
-            "type": "operation.call",
-            "version": "1.0.0",
-            "properties": {
-              "operation": {
+              },
+              "target": {
                 "kind": "literal",
                 "literal": {
                   "type": "text",
-                  "value": "platform.remove_group_membership"
+                  "value": "toast"
+                }
+              },
+              "severity": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "success"
                 }
               }
             }
@@ -4724,159 +4605,6 @@
           }
         ],
         "outputs": {}
-      },
-      {
-        "id": "flow_revoke_role_assignment",
-        "key": "revoke_role_assignment",
-        "labels": {
-          "name": "Revoke role assignment"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "role_assignment_id": {
-            "type": "record_reference",
-            "required": true,
-            "recordTypeIds": ["vortex.system_directory:role_assignment"]
-          },
-          "expected_assignment_revision": {
-            "type": "whole_number",
-            "required": true
-          }
-        },
-        "tasks": [
-          {
-            "id": "call",
-            "type": "operation.call",
-            "version": "1.0.0",
-            "properties": {
-              "operation": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "platform.revoke_role_assignment"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {
-          "result": {
-            "type": "json",
-            "value": {
-              "kind": "reference",
-              "reference": {
-                "source": "task_output",
-                "task": "call",
-                "key": "result"
-              }
-            }
-          }
-        }
-      },
-      {
-        "id": "flow_deactivate_role_activation",
-        "key": "deactivate_role_activation",
-        "labels": {
-          "name": "Deactivate role activation"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "role_activation_id": {
-            "type": "record_reference",
-            "required": true,
-            "recordTypeIds": ["vortex.system_directory:role_activation"]
-          },
-          "expected_activation_revision": {
-            "type": "whole_number",
-            "required": true
-          }
-        },
-        "tasks": [
-          {
-            "id": "call",
-            "type": "operation.call",
-            "version": "1.0.0",
-            "properties": {
-              "operation": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "platform.deactivate_role_activation"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {
-          "result": {
-            "type": "json",
-            "value": {
-              "kind": "reference",
-              "reference": {
-                "source": "task_output",
-                "task": "call",
-                "key": "result"
-              }
-            }
-          }
-        }
-      },
-      {
-        "id": "flow_revoke_delegation_authority",
-        "key": "revoke_delegation_authority",
-        "labels": {
-          "name": "Revoke delegation authority"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "delegation_authority_id": {
-            "type": "record_reference",
-            "required": true,
-            "recordTypeIds": ["vortex.system_directory:delegation"]
-          },
-          "expected_delegation_revision": {
-            "type": "whole_number",
-            "required": true
-          }
-        },
-        "tasks": [
-          {
-            "id": "call",
-            "type": "operation.call",
-            "version": "1.0.0",
-            "properties": {
-              "operation": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "platform.revoke_delegation_authority"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {
-          "result": {
-            "type": "json",
-            "value": {
-              "kind": "reference",
-              "reference": {
-                "source": "task_output",
-                "task": "call",
-                "key": "result"
-              }
-            }
-          }
-        }
       },
       {
         "id": "flow_add_group_membership",
@@ -6049,154 +5777,6 @@
         "outputs": {}
       },
       {
-        "id": "flow_access_request_create",
-        "key": "access_request_create",
-        "labels": {
-          "name": "Submit access request"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "values": {
-            "type": "json",
-            "required": true
-          }
-        },
-        "variables": {},
-        "triggers": [],
-        "tasks": [
-          {
-            "id": "save",
-            "type": "record.save",
-            "version": "1.0.0",
-            "properties": {
-              "record_type": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "vortex.iam.core:access_request"
-                }
-              },
-              "values": {
-                "kind": "reference",
-                "reference": {
-                  "source": "input",
-                  "name": "values"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {
-          "record": {
-            "type": "record_reference",
-            "recordTypeIds": ["vortex.iam.core:access_request"],
-            "value": {
-              "kind": "reference",
-              "reference": {
-                "source": "task_output",
-                "task": "save",
-                "key": "record"
-              }
-            }
-          }
-        },
-        "errors": [],
-        "finally": []
-      },
-      {
-        "id": "flow_access_request_update",
-        "key": "access_request_update",
-        "labels": {
-          "name": "Save access request"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "record": {
-            "type": "record_reference",
-            "recordTypeIds": ["vortex.iam.core:access_request"],
-            "required": true
-          },
-          "values": {
-            "type": "json",
-            "required": true
-          }
-        },
-        "variables": {},
-        "triggers": [],
-        "tasks": [
-          {
-            "id": "save",
-            "type": "record.save",
-            "version": "1.0.0",
-            "properties": {
-              "record_type": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "vortex.iam.core:access_request"
-                }
-              },
-              "record": {
-                "kind": "reference",
-                "reference": {
-                  "source": "input",
-                  "name": "record"
-                }
-              },
-              "values": {
-                "kind": "reference",
-                "reference": {
-                  "source": "input",
-                  "name": "values"
-                }
-              }
-            }
-          },
-          {
-            "id": "return_to_detail",
-            "type": "interface.navigate",
-            "version": "1.0.0",
-            "properties": {
-              "page": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "iam_access_request_detail"
-                }
-              },
-              "parameters": {
-                "kind": "map",
-                "entries": {
-                  "record_id": "{{ inputs.record }}"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {
-          "record": {
-            "type": "record_reference",
-            "recordTypeIds": ["vortex.iam.core:access_request"],
-            "value": {
-              "kind": "reference",
-              "reference": {
-                "source": "task_output",
-                "task": "save",
-                "key": "record"
-              }
-            }
-          }
-        },
-        "errors": [],
-        "finally": []
-      },
-      {
         "id": "flow_create_custom_role",
         "key": "create_custom_role",
         "labels": {
@@ -6357,159 +5937,31 @@
                 }
               }
             }
-          }
-        ],
-        "outputs": {}
-      },
-      {
-        "id": "iam_open_access_request",
-        "key": "iam_open_access_request",
-        "description": "Opens the clicked access request's own detail page with the record identity the clicked row carries.",
-        "labels": {
-          "name": "Open access request"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "record_id": {
-            "type": "record_reference",
-            "required": true,
-            "recordTypeIds": ["vortex.iam.core:access_request"]
-          }
-        },
-        "tasks": [
+          },
           {
-            "id": "open_detail",
-            "type": "interface.navigate",
+            "id": "done",
+            "type": "interface.show_message",
             "version": "1.0.0",
             "properties": {
-              "page": {
+              "message": {
                 "kind": "literal",
                 "literal": {
                   "type": "text",
-                  "value": "iam_access_request_detail"
+                  "value": "Role created."
                 }
               },
-              "parameters": {
-                "kind": "map",
-                "entries": {
-                  "record_id": "{{ inputs.record_id }}"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {}
-      },
-      {
-        "id": "iam_open_person",
-        "key": "iam_open_person",
-        "description": "Opens the clicked person's own detail page with the record identity the clicked row carries.",
-        "labels": {
-          "name": "Open person"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "record_id": {
-            "type": "record_reference",
-            "required": true,
-            "recordTypeIds": ["vortex.system_directory:person"]
-          }
-        },
-        "tasks": [
-          {
-            "id": "open_detail",
-            "type": "interface.navigate",
-            "version": "1.0.0",
-            "properties": {
-              "page": {
+              "target": {
                 "kind": "literal",
                 "literal": {
                   "type": "text",
-                  "value": "iam_person_detail"
+                  "value": "toast"
                 }
               },
-              "parameters": {
-                "kind": "map",
-                "entries": {
-                  "record_id": "{{ inputs.record_id }}"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {}
-      },
-      {
-        "id": "navigate_new_access_request",
-        "key": "navigate_new_access_request",
-        "description": "Opens the access request creation form.",
-        "labels": {
-          "name": "New access request"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {},
-        "tasks": [
-          {
-            "id": "open_page",
-            "type": "interface.navigate",
-            "version": "1.0.0",
-            "properties": {
-              "page": {
+              "severity": {
                 "kind": "literal",
                 "literal": {
                   "type": "text",
-                  "value": "iam_access_request_new"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {}
-      },
-      {
-        "id": "navigate_edit_access_request",
-        "key": "navigate_edit_access_request",
-        "description": "Opens the current access request in the edit form.",
-        "labels": {
-          "name": "Edit"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "record_id": {
-            "type": "record_reference",
-            "required": true,
-            "recordTypeIds": ["vortex.iam.core:access_request"]
-          }
-        },
-        "tasks": [
-          {
-            "id": "open_page",
-            "type": "interface.navigate",
-            "version": "1.0.0",
-            "properties": {
-              "page": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "iam_access_request_edit"
-                }
-              },
-              "parameters": {
-                "kind": "map",
-                "entries": {
-                  "record_id": "{{ inputs.record_id }}"
+                  "value": "success"
                 }
               }
             }

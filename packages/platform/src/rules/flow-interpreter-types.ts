@@ -107,7 +107,8 @@ export type FlowInterfaceIntent = Readonly<{
     | "refresh"
     | "set_panel"
     | "set_filter"
-    | "set_value";
+    | "set_value"
+    | "validate_form";
   taskId: string;
   properties: FlowRuntimeValues;
 }>;

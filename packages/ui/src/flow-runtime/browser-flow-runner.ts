@@ -215,19 +215,8 @@ export async function runBrowserFlow(
       if (result.kind !== "result" || result.intents.length !== 0)
         throw new Error("FLOW_PAGE_SEGMENT_RESPONSE_INVALID");
       carriedValues = result.carriedValues;
-      if (result.descriptor.commit === "confirmed" || result.descriptor.commit === "partial") {
+      if (result.descriptor.commit === "confirmed" || result.descriptor.commit === "partial")
         committed = true;
-        if (result.warnings.length > 0)
-          await host.showMessage(
-            {
-              title: "Saved, with a warning",
-              target: "dialog",
-              text: result.warnings.map((warning) => warning.message).join(" "),
-              severity: "warning",
-            },
-            signal,
-          );
-      }
       if (result.failure !== undefined)
         return {
           kind: "failure",

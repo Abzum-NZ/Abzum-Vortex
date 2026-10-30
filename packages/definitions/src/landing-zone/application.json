@@ -1819,6 +1819,34 @@
             }
           },
           {
+            "id": "saved",
+            "type": "interface.show_message",
+            "version": "1.0.0",
+            "properties": {
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Saved"
+                }
+              },
+              "target": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "toast"
+                }
+              },
+              "severity": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "success"
+                }
+              }
+            }
+          },
+          {
             "id": "open_bookmarks",
             "type": "interface.navigate",
             "version": "1.0.0",
@@ -1847,49 +1875,6 @@
             }
           }
         }
-      },
-      {
-        "id": "landing_zone_open_favourite_status",
-        "key": "landing_zone_open_favourite_status",
-        "description": "Opens the protected Favourite status form for one returned tile record.",
-        "labels": {
-          "name": "Edit favourite"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "record_id": {
-            "type": "record_reference",
-            "required": true,
-            "recordTypeIds": ["vortex.landing_zone:tile"]
-          }
-        },
-        "variables": {},
-        "tasks": [
-          {
-            "id": "open_favourite_status",
-            "type": "interface.navigate",
-            "version": "1.0.0",
-            "properties": {
-              "page": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "page_landing_favourite_status"
-                }
-              },
-              "parameters": {
-                "kind": "map",
-                "entries": {
-                  "record_id": "{{ inputs.record_id }}"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {}
       },
       {
         "id": "landing_zone_save_favourite_status",
@@ -1975,6 +1960,34 @@
             }
           },
           {
+            "id": "saved",
+            "type": "interface.show_message",
+            "version": "1.0.0",
+            "properties": {
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Saved"
+                }
+              },
+              "target": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "toast"
+                }
+              },
+              "severity": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "success"
+                }
+              }
+            }
+          },
+          {
             "id": "return_to_manage_saved_tiles",
             "type": "interface.navigate",
             "version": "1.0.0",
@@ -2003,49 +2016,6 @@
             }
           }
         }
-      },
-      {
-        "id": "landing_zone_open_remove_tile",
-        "key": "landing_zone_open_remove_tile",
-        "description": "Opens the protected removal form for one returned private tile record.",
-        "labels": {
-          "name": "Remove tile"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {
-          "record_id": {
-            "type": "record_reference",
-            "required": true,
-            "recordTypeIds": ["vortex.landing_zone:tile"]
-          }
-        },
-        "variables": {},
-        "tasks": [
-          {
-            "id": "open_remove_tile",
-            "type": "interface.navigate",
-            "version": "1.0.0",
-            "properties": {
-              "page": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "page_landing_remove_tile"
-                }
-              },
-              "parameters": {
-                "kind": "map",
-                "entries": {
-                  "record_id": "{{ inputs.record_id }}"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {}
       },
       {
         "id": "landing_zone_remove_tile",
@@ -2125,6 +2095,34 @@
               "inputs": {
                 "kind": "map",
                 "entries": {}
+              }
+            }
+          },
+          {
+            "id": "removed",
+            "type": "interface.show_message",
+            "version": "1.0.0",
+            "properties": {
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Removed from your saved tiles."
+                }
+              },
+              "target": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "toast"
+                }
+              },
+              "severity": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "success"
+                }
               }
             }
           },

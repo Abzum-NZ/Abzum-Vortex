@@ -471,7 +471,10 @@ const applySettings = (
   }
   // Quick add opens the record type's create form from a column, through one flow like the move.
   if (board !== undefined) {
-    const added = ensureStudioBoardQuickAdd(flowed, alias, board);
+    const added = ensureStudioBoardQuickAdd(flowed, alias, board, {
+      rootId: current.rootId,
+      catalogue: current.catalogue,
+    });
     if (added.kind === "refused") return added;
     flowed = added.source;
   }
