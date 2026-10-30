@@ -3,6 +3,7 @@
 import { useEffect, useState, type ChangeEvent, type ReactElement } from "react";
 import { Field, FieldLabel } from "../components/field";
 import { Input } from "../components/input";
+import { flowSetFieldChange } from "../flow-runtime/flow-cycle";
 import type { DateTimeInputPayload } from "./projected-data";
 import {
   readControlSettings,
@@ -19,7 +20,7 @@ import {
   useSeededState,
   fieldFocusLost,
 } from "./field-parts";
-import { useRequiredFormField } from "./form-context";
+import { useFormFieldPublisher, useRequiredFormField } from "./form-context";
 import { formatterFor, toLocalInputValue, toStoredInstant } from "./date-time-zone";
 
 type DateTimeInputProps = ControlRenderProps<DateTimeInputPayload>;
@@ -40,6 +41,7 @@ export function DateTimeInput(props: DateTimeInputProps): ReactElement {
   }, []);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();
+  const publish = useFormFieldPublisher(fieldKey);
   const label = context.accessibleName ?? props.metadata.name;
   const authoredHelp = settings.text("help_text");
   const required = settings.boolean("required");
@@ -67,10 +69,26 @@ export function DateTimeInput(props: DateTimeInputProps): ReactElement {
   const [raw, setRaw] = useSeededState(initialInput);
   const [initialRaw] = useSeededState(initialInput);
   const [typedValue, setTypedValue] = useSeededState(projected);
-  const validationError = useRequiredFormField(fieldKey, props.placementId, typedValue, {
-    label,
-    missing: required && !disabled && !readOnly && typedValue === null,
-  });
+  const validationError = useRequiredFormField(
+    fieldKey,
+    props.placementId,
+    typedValue,
+    { label, missing: required && !disabled && !readOnly && typedValue === null },
+    (value, cycle) => {
+      if (disabled || readOnly || draftFeedback?.hidden === true) return undefined;
+      if (value !== null && typeof value !== "string") return undefined;
+      const next = toLocalInputValue(value, timeZone);
+      if (value !== null && next === "") return undefined;
+      return {
+        value,
+        apply: () => {
+          setRaw(next);
+          setTypedValue(value);
+        },
+        emit: () => context.events?.field_changed?.(flowSetFieldChange(cycle, fieldKey, value)),
+      };
+    },
+  );
   const invalidLocalTime =
     raw !== "" && raw !== initialRaw && toStoredInstant(raw, timeZone) === undefined;
   const error = invalidLocalTime
@@ -87,6 +105,7 @@ export function DateTimeInput(props: DateTimeInputProps): ReactElement {
           ? null
           : (toStoredInstant(next, timeZone) ?? next);
     setTypedValue(value);
+    publish(value);
     context.events?.field_changed?.({
       event: "field_changed",
       origin: "user",

@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "../components/select";
 import { DefinitionRenderError } from "../definition-error";
+import { flowSetFieldChange } from "../flow-runtime/flow-cycle";
 import type { ChoiceInputPayload, ChoiceOption } from "./projected-data";
 import {
   readControlSettings,
@@ -39,7 +40,7 @@ import {
   useSeededState,
   fieldFocusLost,
 } from "./field-parts";
-import { useFormFieldValue, useRequiredFormField } from "./form-context";
+import { useFormFieldPublisher, useFormFieldValue, useRequiredFormField } from "./form-context";
 import { waitingForParent } from "./dependent-field";
 
 export type ChoiceInputProps = ControlRenderProps<ChoiceInputPayload>;
@@ -60,6 +61,7 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();
+  const publish = useFormFieldPublisher(fieldKey);
   const label = context.accessibleName ?? props.metadata.name;
   const help = settings.text("help_text");
   const authoredPlaceholder = settings.text("placeholder") ?? "Select an option";
@@ -123,10 +125,25 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const permittedSelected =
     selected !== null && options.some((option) => option.key === selected) ? selected : null;
   const selectedOption = options.find((option) => option.key === permittedSelected) ?? null;
-  const validationError = useRequiredFormField(fieldKey, props.placementId, permittedSelected, {
-    label,
-    missing: required && !explicitlyDisabled && permittedSelected === null,
-  });
+  const validationError = useRequiredFormField(
+    fieldKey,
+    props.placementId,
+    permittedSelected,
+    { label, missing: required && !explicitlyDisabled && permittedSelected === null },
+    (value, cycle) => {
+      if (disabled || draftFeedback?.hidden === true) return undefined;
+      if (
+        value !== null &&
+        (typeof value !== "string" || !options.some((option) => option.key === value))
+      )
+        return undefined;
+      return {
+        value,
+        apply: () => setSelected(value),
+        emit: () => context.events?.field_changed?.(flowSetFieldChange(cycle, fieldKey, value)),
+      };
+    },
+  );
   const error = projectedError ?? validationError;
 
   // A changed parent leaves this field holding an option that no longer belongs: it clears with it.
@@ -138,6 +155,7 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
     if (before === undefined || before === parentKey) return;
     if (selected !== null) {
       setSelected(null);
+      publish(null);
       context.events?.field_changed?.({
         event: "field_changed",
         origin: "user",
@@ -153,6 +171,7 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
     if (disabled) return;
     const value = next !== null && options.some((option) => option.key === next) ? next : null;
     setSelected(value);
+    publish(value);
     context.events?.field_changed?.({
       event: "field_changed",
       origin: "user",

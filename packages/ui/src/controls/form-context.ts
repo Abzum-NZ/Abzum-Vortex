@@ -4,11 +4,22 @@ import { createContext, useContext, useEffect, useRef, useSyncExternalStore } fr
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import type { FormFieldDraftFeedback } from "./draft-feedback";
 import type { TypedFieldValue } from "./projected-data";
+import type { FlowEventCycle } from "../flow-runtime/flow-cycle";
+
+/** One validated input change, published before its field-change event is dispatched. */
+export type FormFieldSet = Readonly<{
+  value: TypedFieldValue;
+  apply: () => void;
+  emit: () => void;
+}>;
+export type FormFieldSetter = (value: unknown, cycle: FlowEventCycle) => FormFieldSet | undefined;
 
 type FormField = Readonly<{
   placementId: string;
   read: () => TypedFieldValue;
+  publish: (value: TypedFieldValue) => void;
   validate?: () => string | undefined;
+  write?: (value: unknown, cycle: FlowEventCycle) => boolean;
 }>;
 
 /** Evaluated presentation reactions for one field or button placement. */
@@ -40,6 +51,8 @@ export type FormScope = Readonly<{
   reportFieldChanged: () => void;
   /** The current typed value of one registered field, or undefined while it is not registered. */
   valueOf: (fieldKey: string) => TypedFieldValue | undefined;
+  /** Publishes a typed input value before its field-change event starts a flow. */
+  publish: (fieldKey: string, value: TypedFieldValue) => void;
   /** Calls `listener` whenever any field's value or registration changes; returns its removal. */
   subscribe: (listener: () => void) => () => void;
 }>;
@@ -82,7 +95,9 @@ export const useFormScope = (): FormScope | undefined => useContext(FormScopeCon
 export function createFormFieldRegistry(location: DefinitionRenderErrorLocation): Readonly<{
   register: FormScope["register"];
   valueOf: FormScope["valueOf"];
+  publish: FormScope["publish"];
   values: () => Readonly<Record<string, TypedFieldValue>>;
+  write: (fieldKey: string, value: unknown, cycle: FlowEventCycle) => boolean;
   validationErrors: () => Readonly<Record<string, string>>;
 }> {
   const fields = new Map<string, FormField>();
@@ -101,6 +116,8 @@ export function createFormFieldRegistry(location: DefinitionRenderErrorLocation)
       };
     },
     valueOf: (fieldKey) => fields.get(fieldKey)?.read(),
+    publish: (fieldKey, value) => fields.get(fieldKey)?.publish(value),
+    write: (fieldKey, value, cycle) => fields.get(fieldKey)?.write?.(value, cycle) ?? false,
     values: () =>
       Object.freeze(
         Object.fromEntries([...fields].map(([fieldKey, field]) => [fieldKey, field.read()])),
@@ -128,15 +145,18 @@ export function useFormField(
   placementId: string,
   value: TypedFieldValue,
   validate?: () => string | undefined,
+  setter?: FormFieldSetter,
 ): void {
   const scope = useFormScope();
   const register = scope?.register;
   const reportFieldChanged = scope?.reportFieldChanged;
   const valueRef = useRef(value);
   const validateRef = useRef(validate);
+  const setterRef = useRef(setter);
   const previousRef = useRef(value);
   valueRef.current = value;
   validateRef.current = validate;
+  setterRef.current = setter;
   useEffect(() => {
     if (equalFormValue(previousRef.current, value)) return;
     previousRef.current = value;
@@ -148,7 +168,22 @@ export function useFormField(
     const unregister = register?.(fieldKey, {
       placementId,
       read: () => valueRef.current,
+      publish: (next) => {
+        valueRef.current = next;
+        previousRef.current = next;
+        reportFieldChanged?.();
+      },
       validate: () => validateRef.current?.(),
+      write: (next, cycle) => {
+        const change = setterRef.current?.(next, cycle);
+        if (change === undefined) return false;
+        valueRef.current = change.value;
+        previousRef.current = change.value;
+        change.apply();
+        reportFieldChanged?.();
+        change.emit();
+        return true;
+      },
     });
     reportFieldChanged?.();
     return () => {
@@ -156,6 +191,12 @@ export function useFormField(
       reportFieldChanged?.();
     };
   }, [register, reportFieldChanged, fieldKey, placementId]);
+}
+
+/** Makes a typed keystroke visible to the form before its event starts a flow. */
+export function useFormFieldPublisher(fieldKey: string): (value: TypedFieldValue) => void {
+  const scope = useFormScope();
+  return (value) => scope?.publish(fieldKey, value);
 }
 
 /** The local field-specific submit error, when the enclosing form has one. */
@@ -172,12 +213,14 @@ export function useRequiredFormField(
   placementId: string,
   value: TypedFieldValue,
   requirement: Readonly<{ label: string; missing: boolean }>,
+  setter?: FormFieldSetter,
 ): string | undefined {
   useFormField(
     fieldKey,
     placementId,
     value,
     requirement.missing ? () => `${requirement.label} is required.` : undefined,
+    setter,
   );
   return useFormFieldError(fieldKey);
 }

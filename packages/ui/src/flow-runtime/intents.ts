@@ -181,6 +181,7 @@ export type FlowIntentHost = Readonly<{
     value: JsonValue | undefined,
   ) => void | Promise<void>;
   setPageValues?: (values: Readonly<Record<string, JsonValue>>) => void;
+  setFormValue?: (form: string, field: string, value: JsonValue) => boolean;
 }>;
 
 /** Carries out one non-blocking intent (never a form or confirmation). */
@@ -216,6 +217,13 @@ export async function performPresentationIntent(
       return;
     }
     case "set_value": {
+      const form = text(intent.properties.form);
+      const field = text(intent.properties.field);
+      if (form !== undefined && field !== undefined && Object.hasOwn(intent.properties, "to")) {
+        if (host.setFormValue?.(form, field, intent.properties.to!) !== true)
+          throw new Error("FLOW_FORM_FIELD_WRITE_REFUSED");
+        return;
+      }
       const values = intent.properties.values;
       if (
         typeof values !== "object" ||

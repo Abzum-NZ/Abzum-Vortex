@@ -296,6 +296,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       draftFeedbackFor,
       reportFieldChanged,
       valueOf: registry.valueOf,
+      publish: registry.publish,
       subscribe,
     }),
     [
@@ -312,7 +313,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   const events = context.events;
   const eventsRef = useRef(events);
   useEffect(
-    () => flowRuntimeState?.registerForm(formId, registry.valueOf),
+    () => flowRuntimeState?.registerForm(formId, registry.valueOf, registry.write),
     [flowRuntimeState, formId, registry],
   );
   useEffect(() => {

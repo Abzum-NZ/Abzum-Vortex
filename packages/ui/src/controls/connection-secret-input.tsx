@@ -18,7 +18,7 @@ import {
   useFieldFeedback,
   useFieldIds,
 } from "./field-parts";
-import { useFormField, useFormFieldError } from "./form-context";
+import { useFormField, useFormFieldError, useFormFieldPublisher } from "./form-context";
 
 /** The form sees only the one-use reference returned by the write-only endpoint. */
 export function ConnectionSecretInput(props: ControlRenderProps<never>): ReactElement {
@@ -26,6 +26,7 @@ export function ConnectionSecretInput(props: ControlRenderProps<never>): ReactEl
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();
+  const publish = useFormFieldPublisher(fieldKey);
   const label = context.accessibleName ?? props.metadata.name;
   const required = settings.boolean("required");
   const readOnly = settings.boolean("read_only");
@@ -36,13 +37,18 @@ export function ConnectionSecretInput(props: ControlRenderProps<never>): ReactEl
   const [busy, setBusy] = useState(false);
   const [reference, setReference] = useState<string | null>(null);
   const [failure, setFailure] = useState<string>();
-  useFormField(fieldKey, props.placementId, reference, () =>
-    busyRef.current
-      ? "Wait for the secret to be stored."
-      : (failure ??
-        (required && !disabled && !readOnly && reference === null
-          ? `${label} is required.`
-          : undefined)),
+  useFormField(
+    fieldKey,
+    props.placementId,
+    reference,
+    () =>
+      busyRef.current
+        ? "Wait for the secret to be stored."
+        : (failure ??
+          (required && !disabled && !readOnly && reference === null
+            ? `${label} is required.`
+            : undefined)),
+    () => undefined,
   );
   const formError = useFormFieldError(fieldKey);
   const help = settings.text("help_text");
@@ -61,6 +67,7 @@ export function ConnectionSecretInput(props: ControlRenderProps<never>): ReactEl
     setBusy(true);
     setFailure(undefined);
     setReference(null);
+    publish(null);
     context.events?.field_changed?.({
       event: "field_changed",
       fieldKey,
@@ -87,6 +94,7 @@ export function ConnectionSecretInput(props: ControlRenderProps<never>): ReactEl
       )
         throw new Error("secret_not_stored");
       setReference(result.reference);
+      publish(result.reference);
       context.events?.field_changed?.({
         event: "field_changed",
         fieldKey,

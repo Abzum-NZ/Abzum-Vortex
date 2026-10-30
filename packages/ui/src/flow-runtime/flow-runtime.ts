@@ -48,7 +48,13 @@ export function createFlowRuntimeState(declarations: NonNullable<PageDefinition[
   const running = new Map<string, number>();
   const cycles = new Map<string, Readonly<{ cycle: FlowEventCycle }>>();
   const listeners = new Map<string, Set<() => void>>();
-  const forms = new Map<string, (fieldKey: string) => TypedFieldValue | undefined>();
+  const forms = new Map<
+    string,
+    Readonly<{
+      read: (fieldKey: string) => TypedFieldValue | undefined;
+      write: (fieldKey: string, value: unknown, cycle: FlowEventCycle) => boolean;
+    }>
+  >();
   const notify = (controlId: string) => listeners.get(controlId)?.forEach((listener) => listener());
   const pageValues = createPageValueSlots(declarations, (key) => notify(`page:${key}`));
   const changeRunning = (controlId: string, amount: number) => {
@@ -62,16 +68,23 @@ export function createFlowRuntimeState(declarations: NonNullable<PageDefinition[
   return {
     pageValues,
     isRunning: (controlId: string) => (running.get(controlId) ?? 0) > 0,
-    registerForm: (formId: string, read: (fieldKey: string) => TypedFieldValue | undefined) => {
+    registerForm: (
+      formId: string,
+      read: (fieldKey: string) => TypedFieldValue | undefined,
+      write: (fieldKey: string, value: unknown, cycle: FlowEventCycle) => boolean,
+    ) => {
       const key = formId.toLowerCase();
       if (forms.has(key)) throw new Error(`Form '${formId}' is registered more than once`);
-      forms.set(key, read);
+      const form = { read, write };
+      forms.set(key, form);
       return () => {
-        if (forms.get(key) === read) forms.delete(key);
+        if (forms.get(key) === form) forms.delete(key);
       };
     },
     readFormValue: (formId: string, fieldKey: string) =>
-      forms.get(formId.toLowerCase())?.(fieldKey),
+      forms.get(formId.toLowerCase())?.read(fieldKey),
+    writeFormValue: (formId: string, fieldKey: string, value: unknown, cycle: FlowEventCycle) =>
+      forms.get(formId.toLowerCase())?.write(fieldKey, value, cycle) ?? false,
     cycleFor: (gestureId: string) => cycles.get(gestureId)?.cycle,
     trackCycle: (gestureId: string, cycle: FlowEventCycle) => {
       const held = { cycle };
