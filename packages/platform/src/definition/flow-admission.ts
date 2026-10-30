@@ -16,6 +16,7 @@ import { startFlow } from "../workflows/start";
 import { openFlowCarriedValues } from "../workflows/flow-carried-values";
 import type { QueryContinuationKey } from "../queries/continuation-token";
 import { canonicalJson } from "./canonical-json";
+import { bindingsWithMessageActions } from "./message-action-bindings";
 import { createInstalledContextLoader } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
 import type { InstalledFlowBindings } from "./flow-binding-endpoint";
@@ -54,9 +55,9 @@ const prepareAdmission = (
   run: Run,
   state: FlowRunState,
 ) => {
-  const capturedBinding = installation.bindings.find((entry) =>
-    sameId(entry.bindingId, run.bindingId),
-  );
+  const capturedBinding = bindingsWithMessageActions(installation.bindings, [
+    ...installation.flows.values(),
+  ]).find((entry) => sameId(entry.bindingId, run.bindingId));
   if (capturedBinding === undefined || !sameId(capturedBinding.flow.flowId, run.flowId))
     return undefined;
   const selection = run.authority.selection;
@@ -70,9 +71,9 @@ const prepareAdmission = (
       const current = await createInstalledContextLoader(bound.transaction, bound.scope).load();
       currentContext = current;
       currentInstallation = host.installationOf(current);
-      const matches = currentInstallation.bindings.filter((entry) =>
-        sameId(entry.bindingId, run.bindingId),
-      );
+      const matches = bindingsWithMessageActions(currentInstallation.bindings, [
+        ...currentInstallation.flows.values(),
+      ]).filter((entry) => sameId(entry.bindingId, run.bindingId));
       if (matches.length !== 1 || canonicalJson(matches[0]) !== canonicalJson(capturedBinding))
         return false;
       currentRelease = {

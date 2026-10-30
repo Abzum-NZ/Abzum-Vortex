@@ -338,7 +338,9 @@ export function useRuntimeInputs({
         Object.hasOwn(controlDraftsRef.current.restored, placementId)
       )
         data = controlDraftsRef.current.restored[placementId] as typeof data;
-      const bindings = model.bindings[placementId] ?? [];
+      const bindings = (model.bindings[placementId] ?? []).filter(
+        (binding) => binding.messageAction === undefined,
+      );
       const events: EventHandlers = {};
       const boardData = boardPayloadFor(data);
       const tableData = tablePayloadFor(data);

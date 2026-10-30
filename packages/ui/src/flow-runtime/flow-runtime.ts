@@ -160,6 +160,8 @@ export type FlowRuntimeState = ReturnType<typeof createFlowRuntimeState>;
 
 /** The safe identity of a binding used by a surface that does not receive its input map. */
 export type PlacementFlowBinding = Readonly<{
+  /** Derived action bindings are started only by their message, not by the control's event. */
+  messageAction?: Readonly<{ authoredBindingId: string; sourceFlowId: string; taskId: string }>;
   controlId: ComponentFlowBinding["controlId"];
   settings: ComponentFlowBinding["settings"];
   browser?: Readonly<{ plan: BrowserFlowPlan; inputs: Readonly<Record<string, FlowBindingInput>> }>;
