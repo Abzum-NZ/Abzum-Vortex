@@ -595,6 +595,7 @@ export function useStudioFlowsTab({
         catalogue={catalogue}
         target={behaviourTarget}
         references={behaviourReferences(behaviourTarget)}
+        borrowed={borrowed}
         onEdit={behaviourEdit}
         createChoices={createChoices}
         disabled={disabled}

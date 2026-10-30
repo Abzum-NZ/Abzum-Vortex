@@ -11,6 +11,12 @@ import {
   type SourceFlow,
 } from "@vortex/platform/schema";
 import { studioFlowCallerNames } from "./application-flow-start";
+import {
+  applyStudioFlowCreate,
+  studioFlowCreateSavesChange,
+  type StudioFlowCreateCommand,
+} from "./application-flow-create";
+import type { StudioBorrowedChoices } from "./contextual-palette";
 import { studioEventWords, studioWithoutUnusedFlows } from "./application-flow-model";
 import { studioFlowLabel } from "./semantic-selection";
 
@@ -192,4 +198,85 @@ export const applyStudioUnbind = (
     (binding) => binding.id !== bindingId,
   );
   return checked(candidate);
+};
+
+type CreateCommand = Extract<StudioFlowCreateCommand, { kind: "action" }>;
+
+/** The operation a flow's Call protected operation step runs. */
+const operationOf = (flow: SourceFlow): string | undefined => {
+  for (const task of flow.tasks) {
+    const operation = (task as { properties?: Readonly<Record<string, unknown>> }).properties
+      ?.operation as { kind?: string; literal?: { value?: unknown } } | undefined;
+    if (
+      task.type === "operation.call" &&
+      operation?.kind === "literal" &&
+      typeof operation.literal?.value === "string"
+    )
+      return operation.literal.value;
+  }
+  return undefined;
+};
+
+/**
+ * The default flow of an event, made the way a new one is made: a board move or a table edit saves
+ * the change; a button calls the named action its flow calls today. Other events have no generator,
+ * so they cannot be reset.
+ */
+export const studioBindingDefault = (
+  source: ApplicationSourceDocument,
+  bindingId: string,
+): CreateCommand | undefined => {
+  const binding = bindingIn(source, bindingId);
+  if (binding === undefined) return undefined;
+  const flow = flowOf(source, binding.flow);
+  if (flow === undefined) return undefined;
+  const recordType =
+    source.body.events.find((event) => event.id === binding.event_id)?.record_type ?? null;
+  const base = {
+    kind: "action",
+    controlAlias: binding.control,
+    name: studioFlowLabel(flow),
+  } as const;
+  if (studioFlowCreateSavesChange(binding.event, recordType))
+    return { ...base, event: binding.event, recordType };
+  const operation = binding.event === "action" ? operationOf(flow) : undefined;
+  return operation === undefined
+    ? undefined
+    : {
+        ...base,
+        event: binding.event,
+        recordType,
+        step: { kind: "operation", operation },
+      };
+};
+
+/**
+ * Makes the event run a freshly generated default flow again, and removes the flow it ran when
+ * nothing else uses it. One edit of the draft.
+ */
+export const applyStudioResetToDefault = (
+  source: ApplicationSourceDocument,
+  bindingId: string,
+  borrowed: StudioBorrowedChoices | null,
+): StudioBehaviourResult => {
+  const command = studioBindingDefault(source, bindingId);
+  const binding = bindingIn(source, bindingId);
+  if (command === undefined || binding === undefined)
+    return { kind: "refused", reason: "This event has no default flow to go back to." };
+  const replaced = binding.flow;
+  const candidate = structuredClone(source);
+  candidate.body.flow_bindings = candidate.body.flow_bindings.filter(
+    (entry) => entry.id !== bindingId,
+  );
+  // The event the old binding declared goes with it when nothing else names it.
+  const eventId = binding.event_id;
+  const named = JSON.stringify(candidate.body.flows) + JSON.stringify(candidate.body.pages);
+  if (
+    !candidate.body.flow_bindings.some((entry) => entry.event_id === eventId) &&
+    !named.includes(`"${eventId}"`)
+  )
+    candidate.body.events = candidate.body.events.filter((entry) => entry.id !== eventId);
+  const created = applyStudioFlowCreate(candidate, command, borrowed);
+  if (created.kind !== "applied") return { kind: "refused", reason: created.reason };
+  return { kind: "applied", source: studioWithoutUnusedFlows(created.source, [replaced]) };
 };

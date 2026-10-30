@@ -29,6 +29,9 @@ import {
   applyStudioBindingSettings,
   applyStudioFlowCombine,
   applyStudioRebind,
+  applyStudioResetToDefault,
+  studioBindingDefault,
+  type StudioBorrowedChoices,
   projectStudioBehaviour,
   type StudioFlowCreateChoices,
   type StudioFlowCreateCommand,
@@ -67,6 +70,7 @@ export function StudioBehaviourPanel({
   createChoices,
   disabled,
   references,
+  borrowed,
   onOpen,
   onCreate,
   onEdit,
@@ -81,6 +85,8 @@ export function StudioBehaviourPanel({
   disabled: boolean;
   /** The page values a start condition can read. */
   references: readonly FormulaReferenceChoice[];
+  /** What the modules this application uses offer, for a default flow made again. */
+  borrowed: StudioBorrowedChoices | null;
   onOpen: (selection: StudioFlowSelection) => void;
   onCreate: (command: StudioFlowCreateCommand) => string | true;
   onEdit: StudioBehaviourEdit;
@@ -118,6 +124,7 @@ export function StudioBehaviourPanel({
           interactive={interactive}
           disabled={disabled}
           references={references}
+          borrowed={borrowed}
           canCreate={createChoices.actions.some(
             (choice) => choice.controlAlias === control && choice.event === entry.event,
           )}
@@ -150,6 +157,7 @@ function BehaviourEvent({
   interactive,
   disabled,
   references,
+  borrowed,
   canCreate,
   onOpen,
   onEdit,
@@ -160,6 +168,7 @@ function BehaviourEvent({
   interactive: ApplicationSourceDocument["body"]["flows"];
   disabled: boolean;
   references: readonly FormulaReferenceChoice[];
+  borrowed: StudioBorrowedChoices | null;
   canCreate: boolean;
   onOpen: (selection: StudioFlowSelection) => void;
   onEdit: StudioBehaviourEdit;
@@ -244,6 +253,19 @@ function BehaviourEvent({
                 </NativeSelect>
               </Label>
             </>
+          )}
+          {studioBindingDefault(source, binding.id) !== undefined && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={disabled}
+              onClick={() =>
+                run((current) => applyStudioResetToDefault(current, binding.id, borrowed))
+              }
+            >
+              Go back to the default flow
+            </Button>
           )}
           <BindingSettings
             settings={binding.settings}

@@ -67,6 +67,7 @@ import {
 } from "@vortex/platform/schema";
 import { StudioField } from "./studio-field";
 import { StudioReferencesAlert, StudioUsedIn, useStudioPlaceOpener } from "./studio-used-in";
+import { StudioOptionsSourceEditor } from "./studio-options-source-editor";
 import { StudioLinkSection } from "./studio-link-section";
 import { useStudioDraftText } from "./use-studio-draft-text";
 import { useStudioDraftHeld } from "./use-studio-draft-held";
@@ -85,6 +86,8 @@ type Source = ApplicationSourceDocument;
 type SourceRecord = Source["body"]["modules"][number]["record_types"][number];
 type SourceField = SourceRecord["fields"][number];
 type Plain = Readonly<Record<string, unknown>>;
+/** The field types that declare where their options come from. */
+const optionsSourceTypes: ReadonlySet<string> = new Set(["choice", "several_choices", "link"]);
 
 /** A record type a link may point at: its qualified key, its name, and the label each record is shown by. */
 export type StudioLinkTarget = Readonly<{
@@ -381,7 +384,11 @@ export function ModuleFieldsEditor({
         : [];
 
   /** One edit of the field: the patch over the field as the draft holds it. */
-  const commit = (patch: Partial<FormState>, merge?: string): string | undefined => {
+  const commit = (
+    patch: Partial<FormState>,
+    merge?: string,
+    optionsSource?: Plain,
+  ): string | undefined => {
     if (existing === undefined || record === undefined)
       return "The field is not in this record type any more.";
     const next: FormState = { ...stored, ...patch };
@@ -400,6 +407,8 @@ export function ModuleFieldsEditor({
       if (problems.length > 0) return problems.join(" ");
       settings = writeModuleFieldSettings(next.type, next.settings, declarations, plain);
     }
+    // The options source the field declares replaces the one it held; the form never rebuilds it.
+    if (optionsSource !== undefined) settings = { ...settings, options_source: optionsSource };
     const defaultModel = moduleFieldDefaultDeclaration(next.type, settings);
     if (patch.defaultValue !== undefined && defaultModel.kind === "declared") {
       const problems = studioSettingProblems(next.defaultValue, [defaultModel.declaration]);
@@ -1031,6 +1040,34 @@ export function ModuleFieldsEditor({
           </p>
         )}
       </StudioInspectorGroup>
+      {existing !== undefined && optionsSourceTypes.has(form.type) && (
+        <StudioOptionsSourceEditor
+          key={`options-source:${qualifiedRecord}.${fieldKey ?? ""}`}
+          link={linkTypes.has(form.type)}
+          source={(existing.settings as { options_source?: Plain }).options_source}
+          fields={formulaFields.map(({ key, label }) => ({ key, label }))}
+          queries={(module?.queries ?? []).map((query) => ({
+            reference: `${moduleKey}:${query.key}`,
+            label: query.label ?? query.key,
+            inputs: query.inputs.map((input) => ({
+              key: input.key,
+              label: input.label,
+              required: input.required,
+            })),
+          }))}
+          flows={(module?.flows ?? []).map((flow) => ({
+            alias: flow.id,
+            label: flow.labels.name ?? flow.key,
+            inputs: Object.entries(flow.inputs).map(([key, declaration]) => ({
+              key,
+              label: key.replaceAll("_", " "),
+              required: declaration.required,
+            })),
+          }))}
+          disabled={disabled || shapeLocked}
+          onChange={(next) => commit({}, undefined, next)}
+        />
+      )}
       {linkTypes.has(form.type) && (
         <StudioLinkSection
           settings={form.settings}
