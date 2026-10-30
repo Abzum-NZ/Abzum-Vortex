@@ -25,14 +25,12 @@ import type { ProtectedOperationChannel } from "./application-flow-bindings";
 import { canonicalJson } from "./canonical-json";
 import { bindingsWithMessageActions } from "./message-action-bindings";
 import type { ModuleDefinitionConsumerReadResult } from "./definition-consumer-read";
-import type { RecordReferenceChoiceCommand } from "../queries/reference-choice-contracts";
 import type { PermittedApplication, PermittedApplicationsRead } from "./application-launcher-read";
 import { runOrganizationAccessOperation } from "../access/organization-access-decision-access";
 import {
   createHumanOrganizationRequestService,
   type BoundHumanOrganizationRequest,
 } from "../access/human-organization-request";
-import { createReferenceChoiceService } from "../queries/reference-choice-service";
 import { createViewerSafeRecordLinkReadService } from "../queries/viewer-safe-record-link-read";
 import { adaptPrivateFormSubmit } from "../pages/form-request";
 import { createPageSubjectReader } from "../pages/page-subject-read";
@@ -47,6 +45,7 @@ import { readPermittedApplicationsAtAddress } from "./application-address";
 import { createFlowCurrentRecordReader } from "./flow-current-record";
 import { createFlowQueryReader } from "./flow-query-reader";
 import { createFlowRecordChangePort } from "./flow-record-changes";
+import { createOptionMembershipCheck } from "./option-membership-check";
 import type { BackendAdapter } from "../workflows/backend-adapters";
 import { installedFlowRelease } from "./flow-installed-release";
 import { createFlowProtectedExecutor } from "./flow-protected-executor";
@@ -70,6 +69,7 @@ import { createInstalledContextLoader } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
 import type { ApplicationStoreService } from "./installation-application-store";
 import { createViewerSafeRecordLinkService, type FlowPinTarget } from "./viewer-safe-record-link";
+import type { OptionFilterKey } from "../records/option-filters";
 import type { QueryContinuationKey } from "../queries/continuation-token";
 import {
   createFlowBindingEndpoint,
@@ -77,9 +77,12 @@ import {
   type FlowBindingEndpointResult,
 } from "./flow-binding-endpoint";
 
+/** A form field whose value is one of the options its source offers: the record a link input picks. */
 type ProjectedFormField = Readonly<{
   fieldKey: string;
-  command: RecordReferenceChoiceCommand;
+  placementId: string;
+  recordTypes: readonly Readonly<{ moduleRootId: string; recordTypeId: string }>[];
+  optionFilter?: OptionFilterKey;
 }>;
 type ProjectedForm = Readonly<{
   fields: ReadonlyMap<string, ProjectedFormField>;
@@ -182,7 +185,6 @@ export type InvocationDependencies = Readonly<{
   ) => Promise<ProjectedForm | undefined>;
   resolveFormValues: (
     args: Readonly<{
-      service: ReturnType<typeof createReferenceChoiceService>;
       session: IdentitySession;
       selection: OrganizationSelectionCandidate;
       application: ApplicationContent;
@@ -191,7 +193,6 @@ export type InvocationDependencies = Readonly<{
       projectedFields: ReadonlyMap<string, ProjectedFormField>;
       sequential?: boolean;
       values: unknown;
-      evidence?: unknown;
     }>,
   ) => Promise<Readonly<Record<string, JsonValue>> | undefined>;
   loadGuidedPage: (
@@ -288,10 +289,6 @@ export async function invokeInstalledFlow(
   };
   const requests = createHumanOrganizationRequestService({
     ...requestDependencies,
-  });
-  const referenceChoices = createReferenceChoiceService({
-    ...requestDependencies,
-    continuationKey: dependencies.continuationKey,
   });
   const selectedRecordReader = createViewerSafeRecordLinkReadService();
   const recordPinService = createViewerSafeRecordLinkService({
@@ -411,6 +408,16 @@ export async function invokeInstalledFlow(
       ...(boundRequest === undefined ? {} : { boundRequest }),
     };
     const requests = createHumanOrganizationRequestService(scopedDependencies);
+    // The one check a save makes that a value is among the options its field's source offers now.
+    const optionMember =
+      boundRequest === undefined
+        ? undefined
+        : createOptionMembershipCheck({
+            dependencies: { ...scopedDependencies, continuationKey: dependencies.continuationKey },
+            installation,
+            session: boundRequest.session,
+            selection: boundRequest.selection,
+          });
     const subjectReader = createPageSubjectReader(scopedDependencies);
     const matchesBound = (session: IdentitySession, selection: OrganizationSelectionCandidate) =>
       boundRequest !== undefined &&
@@ -489,7 +496,7 @@ export async function invokeInstalledFlow(
       backend: dependencies.backend,
       ...(boundRequest === undefined
         ? {}
-        : { recordChanges: createFlowRecordChangePort(boundRequest) }),
+        : { recordChanges: createFlowRecordChangePort(boundRequest, optionMember) }),
       records:
         boundRequest === undefined
           ? records
@@ -501,6 +508,7 @@ export async function invokeInstalledFlow(
                       boundRequest.issuedAt,
                       selection,
                       command,
+                      optionMember,
                     )
                   : { kind: "unavailable" },
             },
@@ -947,7 +955,6 @@ export async function invokeInstalledFlow(
     }
     if (answer.kind !== "submit") return formContinuation.continue(session, selection, request);
     const values = await dependencies.resolveFormValues({
-      service: referenceChoices,
       session,
       selection,
       application: installed.applicationContent,
@@ -956,7 +963,6 @@ export async function invokeInstalledFlow(
       projectedFields: projectedForm.fields,
       ...(dependencies.boundRequest === undefined ? {} : { sequential: true }),
       values: answer.values,
-      ...(answer.choiceEvidence === undefined ? {} : { evidence: answer.choiceEvidence }),
     });
     if (values === undefined) {
       logFlowRefusal("FORM_CONTINUATION_VALUES_NOT_RESOLVED");
@@ -1199,7 +1205,6 @@ export async function invokeInstalledFlow(
             page: projectedForm.projectedPage,
           };
         const resolvedValues = await dependencies.resolveFormValues({
-          service: referenceChoices,
           session: identity.session,
           selection,
           application: installation.applicationContent,
@@ -1208,9 +1213,6 @@ export async function invokeInstalledFlow(
           projectedFields: projectedForm.fields,
           ...(dependencies.boundRequest === undefined ? {} : { sequential: true }),
           values,
-          ...(callerInputs.choiceEvidence === undefined
-            ? {}
-            : { evidence: callerInputs.choiceEvidence }),
         });
         return resolvedValues === undefined
           ? undefined
@@ -1251,18 +1253,13 @@ export async function invokeInstalledFlow(
           selectedCallerNames.add(callerInputName);
 
           const choiceField = resolved.fields.get(callerInputName);
-          if (
-            choiceField === undefined ||
-            choiceField.command.kind !== "record_reference" ||
-            choiceField.command.allowedRecordTypes.length !== 1
-          )
-            return undefined;
-          const choiceRecordType = choiceField.command.allowedRecordTypes[0];
+          if (choiceField === undefined || choiceField.recordTypes.length !== 1) return undefined;
+          const choiceRecordType = choiceField.recordTypes[0];
           const selectedReadModule = installation.selectedRecordReadModules?.get(
             declaredRecordTypeId.toLowerCase(),
           );
           if (
-            choiceRecordType?.state !== "resolved" ||
+            choiceRecordType === undefined ||
             !sameId(choiceRecordType.recordTypeId, declaredRecordTypeId) ||
             selectedReadModule === undefined ||
             !sameId(choiceRecordType.moduleRootId, selectedReadModule.moduleRootId)
@@ -1298,11 +1295,9 @@ export async function invokeInstalledFlow(
           return undefined;
         const resolved = await resolveValues(callerInputs.values);
         if (resolved === undefined) return undefined;
-        const adapterInputs: Record<string, unknown> = { ...callerInputs };
-        delete adapterInputs.choiceEvidence;
         const adaptedInputs = adaptPrivateFormSubmit(
           binding,
-          { ...adapterInputs, values: resolved.values },
+          { ...callerInputs, values: resolved.values },
           subject,
         );
         return adaptedInputs === undefined

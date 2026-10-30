@@ -13,7 +13,6 @@ import {
   UnsavedWorkProvider,
   useFlowIntentHost,
   type ControlSemanticEvent,
-  type ChoiceInputPayload,
   type FlowFormAnswer,
   type FlowFormIntent,
   type FlowIntentHost,
@@ -27,7 +26,6 @@ import {
 import {
   formContinuationAnswerSchema,
   type ComponentFlowBinding,
-  type ReferenceChoiceSelectionEvidenceMap,
   isRecord,
   sameId,
   readCompiledItemSettings,
@@ -57,11 +55,8 @@ export function useFlowRuntime({
   platformComponentRegistry,
   runtimeInputsRef,
   controlDraftsRef,
-  choicePayloadFor,
   fieldInputControlReleases,
   showPageMessage,
-  choiceEvidenceFor,
-  requestChoicePageRef,
   currentData,
   dialogFormRef,
   platformThemeTokens,
@@ -84,21 +79,8 @@ export function useFlowRuntime({
   platformComponentRegistry: ReturnType<typeof createPlatformComponentRegistryForReleases>;
   runtimeInputsRef: RefObject<Readonly<Record<string, unknown>>>;
   controlDraftsRef: RefObject<ControlDrafts> | undefined;
-  choicePayloadFor: (placementId: string, formId?: string) => ChoiceInputPayload | undefined;
   fieldInputControlReleases: FieldInputControlReleaseMap;
   showPageMessage: (message: PageMessageDraft | undefined) => void;
-  choiceEvidenceFor: (
-    formId: string,
-    values: Readonly<Record<string, unknown>>,
-    surface?: "page" | "dialog",
-  ) => ReferenceChoiceSelectionEvidenceMap | undefined;
-  requestChoicePageRef: RefObject<
-    (
-      placementId: string,
-      event: Extract<ControlSemanticEvent, { event: "choices_requested" }>,
-      formId?: string,
-    ) => Promise<void>
-  >;
   currentData: ApplicationPageModel["data"];
   dialogFormRef: RefObject<HTMLDivElement | null>;
   platformThemeTokens: PlatformThemeTokens;
@@ -257,10 +239,7 @@ export function useFlowRuntime({
     (
       form: FlowFormIntent,
       controls: Readonly<{
-        submit: (
-          values: Extract<FlowFormAnswer, { kind: "submit" }>["values"],
-          choiceEvidence?: ReferenceChoiceSelectionEvidenceMap,
-        ) => void;
+        submit: (values: Extract<FlowFormAnswer, { kind: "submit" }>["values"]) => void;
         cancel: () => void;
       }>,
     ) => {
@@ -301,16 +280,6 @@ export function useFlowRuntime({
       for (const placementId of surface.placementIds) {
         const current = runtimeInputsRef.current[placementId];
         let input: Record<string, unknown> = isRecord(current) ? current : {};
-        const isReferenceChoice = model.referenceChoiceInputs.some(
-          (field) =>
-            field.placementId === placementId &&
-            field.formId.toLowerCase() === form.formId.toLowerCase(),
-        );
-        const dialogChoicePage = isReferenceChoice
-          ? choicePayloadFor(placementId, form.formId)
-          : undefined;
-        if (dialogChoicePage !== undefined)
-          input = { ...input, data: { status: "ready", values: dialogChoicePage } };
         const placement = surface.placements[placementId];
         const settings =
           placement !== undefined && isRecord(placement.settings) ? placement.settings : undefined;
@@ -343,18 +312,13 @@ export function useFlowRuntime({
               showPageMessage(unavailableNotice);
               return;
             }
-            controls.submit(answer.data.values, choiceEvidenceFor(form.formId, values, "dialog"));
+            controls.submit(answer.data.values);
           };
-        else if (isReferenceChoice)
-          events.choices_requested = (event: ControlSemanticEvent) => {
-            if (event.event !== "choices_requested") return;
-            return requestChoicePageRef.current(placementId, event, form.formId);
-          };
-        else if (model.linkInputPlacementIds.includes(placementId))
-          events.records_requested = (event: ControlSemanticEvent) => {
-            if (event.event !== "records_requested") return;
-            return import("./record-choices").then(({ requestRecordChoices }) =>
-              requestRecordChoices(model, placementId, event, () => router.refresh()),
+        else if (model.optionPlacementIds.includes(placementId))
+          events.options_requested = (event: ControlSemanticEvent) => {
+            if (event.event !== "options_requested") return;
+            return import("./field-options").then(({ requestFieldOptions }) =>
+              requestFieldOptions(model, placementId, event, () => router.refresh()),
             );
           };
         const modalInput: Record<string, unknown> = {};
@@ -399,16 +363,7 @@ export function useFlowRuntime({
         ),
       };
     },
-    [
-      choiceEvidenceFor,
-      choicePayloadFor,
-      currentData,
-      dialogState,
-      model,
-      navigation,
-      resolvePageHref,
-      router,
-    ],
+    [currentData, dialogState, model, navigation, resolvePageHref, router],
   );
   const messageActionRef = useRef<(message: FlowMessageIntent) => void>(() => undefined);
   const {

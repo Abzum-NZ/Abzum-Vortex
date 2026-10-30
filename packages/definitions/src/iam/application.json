@@ -1521,20 +1521,17 @@
                     "title": "Add group membership",
                     "content": [
                       {
-                        "type": "platform.renderer.choice_input",
+                        "type": "platform.renderer.link_input",
                         "props": {
                           "id": "input_add_group_membership_person",
                           "name": "organization_account_id",
                           "label": "Person",
                           "required": true,
-                          "choice_source": {
-                            "query": "vortex.system_directory:people",
-                            "label_field": "vortex.system_directory:person.display_name"
-                          },
+                          "record_types": ["vortex.system_directory:person"],
                           "vortex": {
                             "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.2.0"
+                              "block_id": "8d1b6a2f-4c3e-4f0a-9c2b-6f1d2e7a5b94",
+                              "release_version": "1.0.0"
                             },
                             "responsive": {
                               "desktop": {
@@ -1822,20 +1819,17 @@
                     "title": "Assign role to person",
                     "content": [
                       {
-                        "type": "platform.renderer.choice_input",
+                        "type": "platform.renderer.link_input",
                         "props": {
                           "id": "input_assign_role_assignment_person",
                           "name": "organization_account_id",
                           "label": "Person",
                           "required": true,
-                          "choice_source": {
-                            "query": "vortex.system_directory:people",
-                            "label_field": "vortex.system_directory:person.display_name"
-                          },
+                          "record_types": ["vortex.system_directory:person"],
                           "vortex": {
                             "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.2.0"
+                              "block_id": "8d1b6a2f-4c3e-4f0a-9c2b-6f1d2e7a5b94",
+                              "release_version": "1.0.0"
                             },
                             "responsive": {
                               "desktop": {
@@ -1966,20 +1960,17 @@
                     "title": "Assign role to group",
                     "content": [
                       {
-                        "type": "platform.renderer.choice_input",
+                        "type": "platform.renderer.link_input",
                         "props": {
                           "id": "input_assign_role_assignment_group",
                           "name": "group_id",
                           "label": "Group",
                           "required": true,
-                          "choice_source": {
-                            "query": "vortex.system_directory:groups",
-                            "label_field": "vortex.system_directory:group.label"
-                          },
+                          "record_types": ["vortex.system_directory:group"],
                           "vortex": {
                             "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.2.0"
+                              "block_id": "8d1b6a2f-4c3e-4f0a-9c2b-6f1d2e7a5b94",
+                              "release_version": "1.0.0"
                             },
                             "responsive": {
                               "desktop": {

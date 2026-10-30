@@ -1052,29 +1052,6 @@
         }
       },
       {
-        "kind": "group",
-        "key": "choice_source",
-        "label": "Choice source",
-        "help": "Use a published Module query and a readable label field instead of authored options",
-        "required": false,
-        "properties": [
-          {
-            "kind": "query_reference",
-            "key": "query",
-            "label": "Published Module query",
-            "help": "The installed Module query that supplies choices",
-            "required": true
-          },
-          {
-            "kind": "field_reference",
-            "key": "label_field",
-            "label": "Label field",
-            "help": "A selected text field from the query used to label each choice",
-            "required": true
-          }
-        ]
-      },
-      {
         "kind": "choice",
         "key": "variant",
         "label": "Variant",
@@ -1835,6 +1812,19 @@
             "required": true,
             "minLength": 1,
             "maxLength": 120
+          }
+        ]
+      },
+      {
+        "kind": "choice",
+        "key": "option_filter",
+        "label": "Option filter",
+        "help": "Offers only the records the person may delegate, for the roles of an invitation",
+        "required": false,
+        "options": [
+          {
+            "key": "delegable_roles",
+            "label": "Roles the person may delegate"
           }
         ]
       },

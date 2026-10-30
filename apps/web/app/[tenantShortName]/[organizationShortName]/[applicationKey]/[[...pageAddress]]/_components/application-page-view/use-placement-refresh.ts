@@ -10,7 +10,7 @@ import {
   type RefObject,
 } from "react";
 import type { useRouter } from "next/navigation";
-import { observeSettled, settledValue, type ChoiceInputPayload } from "@vortex/ui";
+import { observeSettled, settledValue } from "@vortex/ui";
 import {
   mountedRecordPinFrameSchema,
   isCurrentComponentRequestGeneration,
@@ -67,9 +67,6 @@ export function usePlacementRefresh({
   address,
   router,
   model,
-  choiceRequestIdsRef,
-  setChoicePages,
-  setDialogChoicePages,
   setRefreshedPlacementData,
   refreshedPlacementData,
 }: Readonly<{
@@ -85,13 +82,10 @@ export function usePlacementRefresh({
   address: PageAddress;
   router: ReturnType<typeof useRouter>;
   model: ApplicationPageModel;
-  choiceRequestIdsRef: RefObject<Record<string, number>>;
-  setChoicePages: Dispatch<SetStateAction<Readonly<Record<string, ChoiceInputPayload>>>>;
-  setDialogChoicePages: Dispatch<SetStateAction<Readonly<Record<string, ChoiceInputPayload>>>>;
   setRefreshedPlacementData: Dispatch<SetStateAction<RefreshedPlacementData | undefined>>;
   refreshedPlacementData: RefreshedPlacementData | undefined;
 }>) {
-  /** Apply all placement reads through the same generation and choice invalidation path. */
+  /** Apply all placement reads through the same generation path. */
   const applyAcceptedPlacements = useCallback(
     (
       scopeKey: string,
@@ -101,31 +95,6 @@ export function usePlacementRefresh({
     ) => {
       const scope = placementRequestsRef.current;
       if (scope.key !== scopeKey) return;
-      const refreshedChoices = new Set(
-        accepted
-          .filter((entry) =>
-            isCurrentComponentRequestGeneration(scope.generations.get(entry.key), entry.request),
-          )
-          .map((entry) => entry.placementId),
-      );
-      if (refreshedChoices.size > 0) {
-        for (const stateKey of Object.keys(choiceRequestIdsRef.current))
-          if (
-            [...refreshedChoices].some((id) => stateKey === id || stateKey.endsWith(`\u0000${id}`))
-          )
-            choiceRequestIdsRef.current[stateKey] =
-              (choiceRequestIdsRef.current[stateKey] ?? 0) + 1;
-        setChoicePages((current) =>
-          Object.fromEntries(Object.entries(current).filter(([id]) => !refreshedChoices.has(id))),
-        );
-        setDialogChoicePages((current) =>
-          Object.fromEntries(
-            Object.entries(current).filter(
-              ([key]) => ![...refreshedChoices].some((id) => key.endsWith(`\u0000${id}`)),
-            ),
-          ),
-        );
-      }
       setRefreshedPlacementData((current) => {
         const live = placementRequestsRef.current;
         if (live.key !== scopeKey) return current;
@@ -153,13 +122,7 @@ export function usePlacementRefresh({
         };
       });
     },
-    [
-      choiceRequestIdsRef,
-      placementRequestsRef,
-      setChoicePages,
-      setDialogChoicePages,
-      setRefreshedPlacementData,
-    ],
+    [placementRequestsRef, setRefreshedPlacementData],
   );
   const refreshPlacements = useCallback(
     async (

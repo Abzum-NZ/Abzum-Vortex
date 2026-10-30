@@ -891,7 +891,7 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           const target = request.target;
           // The exact paused target always goes to the form continuation interface, the one place
           // that compares the installation, release, flow, node, form and receipt with trusted
-          // state and resolves every reference-choice key; a stale target comes back as a reload
+          // state and proves every option-sourced value; a stale target comes back as a reload
           // and a forged one as the neutral refusal.
           if (!sameId(target.flowId, request.flowId))
             return refuse("FLOW_INVOKE_CONTINUATION_TARGET_FLOW_MISMATCH");

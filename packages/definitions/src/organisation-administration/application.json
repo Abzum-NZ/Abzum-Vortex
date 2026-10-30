@@ -1002,20 +1002,18 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.choice_input",
+                        "type": "platform.renderer.link_input",
                         "props": {
                           "id": "input_create_invitation_role",
                           "name": "role_id",
                           "label": "Role",
                           "required": true,
-                          "choice_source": {
-                            "query": "vortex.system_directory:roles",
-                            "label_field": "vortex.system_directory:role.label"
-                          },
+                          "record_types": ["vortex.system_directory:role"],
+                          "option_filter": "delegable_roles",
                           "vortex": {
                             "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.2.0"
+                              "block_id": "8d1b6a2f-4c3e-4f0a-9c2b-6f1d2e7a5b94",
+                              "release_version": "1.0.0"
                             },
                             "responsive": {
                               "desktop": {

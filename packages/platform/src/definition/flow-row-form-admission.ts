@@ -6,7 +6,6 @@ import type {
 } from "../access/human-organization-request";
 import { isRecord, sameId } from "../catalogue/runtime-primitives";
 import type { JsonValue } from "../catalogue/common";
-import { createReferenceChoiceService } from "../queries/reference-choice-service";
 import { adaptPrivateFormSubmit } from "../pages/form-request";
 import { readPageSubjectInTransaction } from "../pages/page-subject-read";
 import { requireProjectedPlacement } from "../pages/projected-placement-gate";
@@ -71,11 +70,6 @@ export const admitRowForm = async (
     return false;
   }
   const values = await dependencies.resolveFormValues({
-    service: createReferenceChoiceService({
-      ...requests,
-      boundRequest: bound,
-      continuationKey: dependencies.continuationKey,
-    }),
     session: bound.session,
     selection: bound.selection,
     application: context.releaseSet.application.content,
@@ -83,7 +77,6 @@ export const admitRowForm = async (
     formId,
     projectedFields: form.fields,
     values: callerInputs.values,
-    ...(callerInputs.choiceEvidence === undefined ? {} : { evidence: callerInputs.choiceEvidence }),
   });
   if (values === undefined) return false;
   const rowType = String(query.query.recordType.recordTypeId);
@@ -94,7 +87,7 @@ export const admitRowForm = async (
   if (row.kind !== "read") return false;
   for (const [name, submitted] of Object.entries(callerInputs.values)) {
     const field = form.visibleFields.get(name)!;
-    if (submitted === null || field.kind === "dynamic_choice" || field.kind === "other") continue;
+    if (submitted === null || field.kind === "other") continue;
     const selections =
       field.kind === "several_choices" && Array.isArray(submitted) ? submitted : [submitted];
     if (
@@ -130,9 +123,7 @@ export const admitRowForm = async (
       }
     }
   }
-  const adaptedInputs: Record<string, unknown> = { ...callerInputs };
-  delete adaptedInputs.choiceEvidence;
-  const adapted = adaptPrivateFormSubmit(binding, { ...adaptedInputs, values }, state.subject);
+  const adapted = adaptPrivateFormSubmit(binding, { ...callerInputs, values }, state.subject);
   const activation = state.activations[0];
   if (adapted === undefined || activation === undefined) return false;
   const flow =

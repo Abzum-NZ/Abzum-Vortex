@@ -7,6 +7,7 @@ import { isRecord, sameId } from "../catalogue/runtime-primitives";
 import { z } from "zod";
 import { jsonValueSchema } from "../catalogue/common";
 import { fieldIdSchema } from "../catalogue/identifiers";
+import type { OptionMembershipCheck } from "../records/option-membership";
 import { applyRecordChanges } from "../records/apply-record-changes";
 import { revision } from "../records/record-save-preparation";
 import type { FlowOrchestratorDependencies } from "./flow-orchestrator-types";
@@ -15,6 +16,7 @@ import type { RecordTypeDefinition } from "./module-contracts";
 /** The admitted segment owns the transaction and rolls back every refused task. */
 export const createFlowRecordChangePort = (
   bound: BoundHumanOrganizationRequest,
+  optionMember?: OptionMembershipCheck,
 ): NonNullable<FlowOrchestratorDependencies["recordChanges"]> => ({
   readTargets: async (targets, lock = false) => {
     const unique = [
@@ -83,7 +85,14 @@ export const createFlowRecordChangePort = (
     );
   },
   apply: async (commandId, intents) => {
-    const result = await applyRecordChanges(bound.transaction, bound.issuedAt, commandId, intents);
+    const result = await applyRecordChanges(
+      bound.transaction,
+      bound.issuedAt,
+      commandId,
+      intents,
+      undefined,
+      optionMember,
+    );
     if (result.kind === "restart") throw new HumanOrganizationRequestRestart();
     return result;
   },
