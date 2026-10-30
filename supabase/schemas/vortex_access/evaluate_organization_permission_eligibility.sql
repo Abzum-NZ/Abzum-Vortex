@@ -286,19 +286,15 @@ begin
         from pg_catalog.jsonb_object_keys(permission_candidate) as supplied(key)
         where supplied.key <> all (array[
           'applicationRootId', 'ownerKind', 'ownerId', 'permissionId',
-          'acceptedRegistrationRevision', 'meaningFingerprint'
+          'acceptedRegistrationRevision'
         ])
       )
-      or (permission_candidate ? 'acceptedRegistrationRevision') <>
-        (permission_candidate ? 'meaningFingerprint')
       or (permission_candidate ? 'acceptedRegistrationRevision' and (
         pg_catalog.jsonb_typeof(permission_candidate -> 'acceptedRegistrationRevision') <> 'number'
         or (permission_candidate ->> 'acceptedRegistrationRevision')::numeric
           not between 1 and 9007199254740991
         or (permission_candidate ->> 'acceptedRegistrationRevision')::numeric <>
           pg_catalog.trunc((permission_candidate ->> 'acceptedRegistrationRevision')::numeric)
-        or pg_catalog.jsonb_typeof(permission_candidate -> 'meaningFingerprint') <> 'string'
-        or permission_candidate ->> 'meaningFingerprint' !~ '^sha256:[a-f0-9]{64}$'
       ))
       or (
         permission_candidate ->> 'ownerKind' = 'platform'
@@ -337,8 +333,7 @@ begin
             permission.value ->> 'ownerKind',
             pg_catalog.lower(permission.value ->> 'ownerId'),
             pg_catalog.lower(permission.value ->> 'permissionId'),
-            permission.value ->> 'acceptedRegistrationRevision',
-            permission.value ->> 'meaningFingerprint'
+            permission.value ->> 'acceptedRegistrationRevision'
           ))
           from pg_catalog.jsonb_array_elements(
             scope_candidate -> 'permissions'

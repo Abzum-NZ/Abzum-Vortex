@@ -1,7 +1,6 @@
 import { z } from "zod";
 import {
   builderKeySchema,
-  fingerprintSchema,
   namespacedKeySchema,
   organizationAccountIdSchema,
   permissionIdSchema,
@@ -75,7 +74,6 @@ export const modulePlatformPermissionDeclarationSchema = z
     recordScope: permissionRecordScopeSchema.optional(),
     fieldPolicy: permissionFieldPolicySchema.optional(),
     stewardMinimum: z.boolean().optional(),
-    meaningFingerprint: fingerprintSchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {

@@ -198,14 +198,21 @@ export const requireOne = <Row>(rows: readonly Row[]): Row => {
 const recordedRefusalMarker = Symbol("recordedAccessAdministrationRefusal");
 type RecordedRefusal = Readonly<{
   marker: typeof recordedRefusalMarker;
-  reason: "recent_authentication_required" | "multi_factor_required" | null;
+  reason:
+    | "recent_authentication_required"
+    | "multi_factor_required"
+    | "permission_denied"
+    | "activation_not_found"
+    | null;
 }>;
 export const recordedRefusal = (row: Readonly<{ refusal_reason: unknown }>): RecordedRefusal => {
   const reason = row.refusal_reason;
   if (
     reason !== null &&
     reason !== "recent_authentication_required" &&
-    reason !== "multi_factor_required"
+    reason !== "multi_factor_required" &&
+    reason !== "permission_denied" &&
+    reason !== "activation_not_found"
   )
     throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
   return { marker: recordedRefusalMarker, reason };
@@ -233,7 +240,9 @@ export const isRecordedRefusal = (
     summary !== null ||
     (row.refusal_reason !== null &&
       row.refusal_reason !== "recent_authentication_required" &&
-      row.refusal_reason !== "multi_factor_required") ||
+      row.refusal_reason !== "multi_factor_required" &&
+      row.refusal_reason !== "permission_denied" &&
+      row.refusal_reason !== "activation_not_found") ||
     databaseRevision(row.access_version) !== accessVersion
   )
     throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
@@ -253,10 +262,14 @@ export const refuseAdministration = <Outcome>(
   return outcome;
 };
 
-export const mapRecordedRefusal = async <Result>(
+export const mapRecordedRefusal = async <
+  Result,
+  ExtraRefusal extends "permission_denied" | "activation_not_found" = never,
+>(
   operation: string,
   request: Promise<HumanOrganizationRequestResult<Result | RecordedRefusal>>,
-): Promise<HumanOrganizationRequestResult<Result>> => {
+  extraRefusals: readonly ExtraRefusal[] = [],
+): Promise<HumanOrganizationRequestResult<Result, ExtraRefusal>> => {
   const result = await request;
   if (result.kind !== "available") return result;
   if (
@@ -266,9 +279,19 @@ export const mapRecordedRefusal = async <Result>(
     result.value.marker === recordedRefusalMarker
   ) {
     const reason = (result.value as RecordedRefusal).reason;
+    if (
+      (reason === "permission_denied" || reason === "activation_not_found") &&
+      !extraRefusals.some((allowed) => allowed === reason)
+    )
+      throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
     return refuseAdministration(operation, "ACCESS_ADMIN_REFUSED_BY_DATABASE", {
       kind: "unavailable",
-      ...(reason === null ? {} : { code: reason }),
+      ...(reason === null
+        ? {}
+        : {
+            code: reason as
+              "recent_authentication_required" | "multi_factor_required" | ExtraRefusal,
+          }),
     } as const);
   }
   return { kind: "available", value: result.value as Result };

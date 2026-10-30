@@ -1,7 +1,6 @@
 create or replace function vortex_identity.adopt_tenant(
   p_operator_actor_id uuid,
   p_duplicate_key uuid,
-  p_command_fingerprint text,
   p_tenant_id uuid,
   p_tenant_steward_identity_id uuid
 )
@@ -33,9 +32,7 @@ begin
   if not vortex_platform.is_non_nil_uuid(p_operator_actor_id::text)
     or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
     or not vortex_platform.is_non_nil_uuid(p_tenant_id::text)
-    or not vortex_platform.is_non_nil_uuid(p_tenant_steward_identity_id::text)
-    or p_command_fingerprint is null
-    or p_command_fingerprint !~ '^sha256:[0-9a-f]{64}$' then
+    or not vortex_platform.is_non_nil_uuid(p_tenant_steward_identity_id::text) then
     raise exception using errcode = '22023', message = 'Tenant adoption input is invalid';
   end if;
 
@@ -55,11 +52,8 @@ begin
     select r.* into stored
     from pg_catalog.jsonb_to_record(claimed) as r(
       "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
-      "subjectRevisions" bigint[], "fingerprint" text, "clusterId" uuid
+      "subjectRevisions" bigint[]
     );
-    if stored."fingerprint" <> p_command_fingerprint then
-      raise exception using errcode = 'V3001', message = 'Administration duplicate conflicts';
-    end if;
     select assignment.assignment_id into replay_assignment_id
     from vortex_identity.tenant_administrator_assignments as assignment
     where assignment.assignment_id = any(stored."subjectIds");
@@ -133,8 +127,7 @@ begin
     pg_catalog.jsonb_build_object(
       'receiptId', new_correlation_id, 'acceptedAt', operation_at,
       'subjectIds', pg_catalog.to_jsonb(result_subject_ids),
-      'subjectRevisions', pg_catalog.to_jsonb(result_subject_revisions),
-      'fingerprint', p_command_fingerprint, 'clusterId', null::uuid
+      'subjectRevisions', pg_catalog.to_jsonb(result_subject_revisions)
     )
   );
   return query select 'accepted'::text, 'adopt_tenant'::text, p_tenant_id,
@@ -142,12 +135,12 @@ begin
 end
 $function$;
 
-revoke execute on function vortex_identity.adopt_tenant(uuid,uuid,text,uuid,uuid) from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
+revoke execute on function vortex_identity.adopt_tenant(uuid,uuid,uuid,uuid) from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
 
-grant execute on function vortex_identity.adopt_tenant(uuid,uuid,text,uuid,uuid) to vortex_runtime;
+grant execute on function vortex_identity.adopt_tenant(uuid,uuid,uuid,uuid) to vortex_runtime;
 
-comment on function vortex_identity.adopt_tenant(uuid,uuid,text,uuid,uuid) is 'Configured-system-only explicit tenant stewardship adoption; it creates no organisation authority.';
+comment on function vortex_identity.adopt_tenant(uuid,uuid,uuid,uuid) is 'Configured-system-only explicit tenant stewardship adoption; it creates no organisation authority.';
 
-alter function vortex_identity.adopt_tenant(p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_tenant_steward_identity_id uuid) owner to vortex_owner;
+alter function vortex_identity.adopt_tenant(p_operator_actor_id uuid, p_duplicate_key uuid, p_tenant_id uuid, p_tenant_steward_identity_id uuid) owner to vortex_owner;
 
-grant execute on function vortex_identity.adopt_tenant(p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_tenant_id uuid, p_tenant_steward_identity_id uuid) to postgres;
+grant execute on function vortex_identity.adopt_tenant(p_operator_actor_id uuid, p_duplicate_key uuid, p_tenant_id uuid, p_tenant_steward_identity_id uuid) to postgres;

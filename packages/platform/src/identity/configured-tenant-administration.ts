@@ -1,6 +1,5 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
 import {
   bootstrapVortexSuperAdministratorCommandSchema,
   vortexSuperAdministratorAssignmentMutationResultSchema,
@@ -128,8 +127,6 @@ type SuperAdministratorBootstrapRow = DatabaseRow & {
   accepted_at: unknown;
 };
 
-const fingerprint = (command: object): string =>
-  `sha256:${createHash("sha256").update(JSON.stringify(command), "utf8").digest("hex")}`;
 const configuredContext = (
   environment: Readonly<Record<string, string | undefined>>,
 ): ConfiguredTenantAdministrationOperatorContext | undefined => {
@@ -162,6 +159,11 @@ const refusalCode = (error: unknown) => {
     default:
       return "operation_unavailable" as const;
   }
+};
+const provisionRefusalCode = (error: unknown) => {
+  if (databaseCode(error) !== "V3190") return refusalCode(error);
+  console.error(`[identity] configured operation refused: ${describeFailure(error)}`);
+  return "reserved_tenant_short_name" as const;
 };
 const lifecycleRefusalCode = (error: unknown) => {
   if (databaseCode(error) !== "V3102") return refusalCode(error);
@@ -335,7 +337,6 @@ export const createConfiguredTenantAdministrationService = (
               ${operator.clusterId}::uuid,
               ${operator.systemActorId}::uuid,
               ${value.duplicateKey}::uuid,
-              ${fingerprint(value)}::text,
               ${value.tenant.shortName}::text,
               ${value.tenant.displayName}::text,
               ${value.rootOrganization.shortName}::text,
@@ -378,7 +379,11 @@ export const createConfiguredTenantAdministrationService = (
           return parsed.data;
         });
       } catch (error) {
-        return { outcome: "refused", operation: "provision_tenant", code: refusalCode(error) };
+        return {
+          outcome: "refused",
+          operation: "provision_tenant",
+          code: provisionRefusalCode(error),
+        };
       }
     },
 
@@ -399,7 +404,6 @@ export const createConfiguredTenantAdministrationService = (
             select * from vortex_identity.adopt_tenant(
               ${operator.systemActorId}::uuid,
               ${value.duplicateKey}::uuid,
-              ${fingerprint(value)}::text,
               ${value.tenantId}::uuid,
               ${value.tenantSteward.identityId}::uuid
             )
@@ -444,7 +448,6 @@ export const createConfiguredTenantAdministrationService = (
             select * from vortex_identity.adopt_organization(
               ${operator.systemActorId}::uuid,
               ${value.duplicateKey}::uuid,
-              ${fingerprint(value)}::text,
               ${value.tenantId}::uuid,
               ${value.organizationId}::uuid,
               ${value.organizationSteward.identityId}::uuid,
@@ -493,7 +496,7 @@ export const createConfiguredTenantAdministrationService = (
         const value = command.data;
         const rows = await run(
           (transaction) =>
-            transaction.query<ClusterIdentityLifecycleRow>`select * from vortex_identity.suspend_cluster_identity(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.identityId}::uuid, ${value.expectedRevision}::bigint)`,
+            transaction.query<ClusterIdentityLifecycleRow>`select * from vortex_identity.suspend_cluster_identity(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${value.identityId}::uuid, ${value.expectedRevision}::bigint)`,
         );
         return suspendClusterIdentityResultSchema.parse(lifecycleResult(one(rows)));
       } catch (error) {
@@ -525,7 +528,7 @@ export const createConfiguredTenantAdministrationService = (
         const value = command.data;
         const rows = await run(
           (transaction) =>
-            transaction.query<ClusterIdentityLifecycleRow>`select * from vortex_identity.reactivate_cluster_identity(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.identityId}::uuid, ${value.expectedRevision}::bigint)`,
+            transaction.query<ClusterIdentityLifecycleRow>`select * from vortex_identity.reactivate_cluster_identity(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${value.identityId}::uuid, ${value.expectedRevision}::bigint)`,
         );
         return reactivateClusterIdentityResultSchema.parse(lifecycleResult(one(rows)));
       } catch (error) {
@@ -553,7 +556,7 @@ export const createConfiguredTenantAdministrationService = (
         const value = command.data;
         const rows = await run(
           (transaction) =>
-            transaction.query<ClusterIdentityLifecycleRow>`select * from vortex_identity.close_cluster_identity(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.identityId}::uuid, ${value.expectedRevision}::bigint)`,
+            transaction.query<ClusterIdentityLifecycleRow>`select * from vortex_identity.close_cluster_identity(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${value.identityId}::uuid, ${value.expectedRevision}::bigint)`,
         );
         return closeClusterIdentityResultSchema.parse(lifecycleResult(one(rows)));
       } catch (error) {
@@ -579,7 +582,7 @@ export const createConfiguredTenantAdministrationService = (
         const value = command.data;
         const rows = await run(
           (transaction) =>
-            transaction.query<TenantLifecycleRow>`select * from vortex_identity.suspend_tenant(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.expectedRevision}::bigint)`,
+            transaction.query<TenantLifecycleRow>`select * from vortex_identity.suspend_tenant(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${value.tenantId}::uuid, ${value.expectedRevision}::bigint)`,
         );
         return suspendTenantResultSchema.parse(tenantLifecycleResult(one(rows)));
       } catch (error) {
@@ -605,7 +608,7 @@ export const createConfiguredTenantAdministrationService = (
         const value = command.data;
         const rows = await run(
           (transaction) =>
-            transaction.query<TenantLifecycleRow>`select * from vortex_identity.reactivate_tenant(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.tenantId}::uuid, ${value.expectedRevision}::bigint)`,
+            transaction.query<TenantLifecycleRow>`select * from vortex_identity.reactivate_tenant(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${value.tenantId}::uuid, ${value.expectedRevision}::bigint)`,
         );
         return reactivateTenantResultSchema.parse(tenantLifecycleResult(one(rows)));
       } catch (error) {
