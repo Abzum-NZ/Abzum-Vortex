@@ -89,6 +89,7 @@ type WorkflowPending = Readonly<{
   commandId: string;
   runId: string;
   replay?: FlowSegmentReceipt;
+  prepared?: unknown;
 }>;
 export type FlowSegmentReceipt = Readonly<{
   effects: FlowSegmentReplay;
@@ -184,8 +185,17 @@ type StartFlowDependencies<Value> = Readonly<{
     replay: FlowSegmentReceipt | undefined,
     runId: string,
   ) => Promise<SegmentExecution<Value>>;
+  /** Bind workflow identity before the pending receipt commits. */
+  prepareWorkflow?: (
+    context: SegmentContext,
+    segment: FlowServerSegment,
+    commandId: string,
+    runId: string,
+    resumed: boolean,
+    replay: boolean,
+  ) => Promise<Readonly<{ kind: "ready"; value?: unknown }> | Readonly<{ kind: "refused" }>>;
   /** Multi-transaction workflows run only after the admitted pending receipt commits. */
-  executeWorkflow?: (replay: FlowSegmentReceipt | undefined) => Promise<SegmentExecution<Value>>;
+  executeWorkflow?: (replay: FlowSegmentReceipt | undefined, prepared: unknown) => Promise<SegmentExecution<Value>>;
 }>;
 
 /** Opens completion evidence only for a flow that can reach another server segment first. */
@@ -563,23 +573,38 @@ const startFlowInternal = async <Value>(
     if (consumed.status === "already_answered") return { kind: "already_answered" };
     if (consumed.status !== "admitted" && consumed.status !== "replay") return { kind: "refused" };
     if (segment.multiTransaction) {
-      if (!workflowPending && replay === undefined) {
-        const rows =
-          await transaction.query`select vortex_record.flow_segment_receipt(${commandId}::uuid, false) as result`;
-        if (claimSchema.parse(rows[0]?.result).status !== "claimed")
-          throw new Error("FLOW_SEGMENT_CLAIM_INVALID");
+      const refused = new Error("FLOW_WORKFLOW_PREPARATION_REFUSED");
+      try {
+        const prepared = await requireRequestSavepoint(transaction).withSavepoint(async (child) => {
+          if (!workflowPending && replay === undefined) {
+            const rows =
+              await child.query`select vortex_record.flow_segment_receipt(${commandId}::uuid, false) as result`;
+            if (claimSchema.parse(rows[0]?.result).status !== "claimed")
+              throw new Error("FLOW_SEGMENT_CLAIM_INVALID");
+          }
+          const preparation = await dependencies.prepareWorkflow?.(
+            { ...context, transaction: child }, segment, commandId, runId,
+            workflowPending || replay !== undefined, replay !== undefined,
+          );
+          if (preparation?.kind === "refused") throw refused;
+          if (hasCompletion && replay === undefined && evidenceState !== "pending") {
+            const rows =
+              await child.query`select vortex_access.flow_run_evidence(${"pending"}::text, ${runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${commandId}::uuid) as result`;
+            z.object({ state: z.literal("pending") }).strict().parse(rows[0]?.result);
+          }
+          return preparation?.value;
+        });
+        return {
+          kind: "workflow_pending",
+          commandId,
+          runId,
+          prepared,
+          ...(replay === undefined ? {} : { replay }),
+        };
+      } catch (error) {
+        if (error === refused) return { kind: "refused" };
+        throw error;
       }
-      if (hasCompletion && replay === undefined && evidenceState !== "pending") {
-        const rows =
-          await transaction.query`select vortex_access.flow_run_evidence(${"pending"}::text, ${runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${commandId}::uuid) as result`;
-        z.object({ state: z.literal("pending") }).strict().parse(rows[0]?.result);
-      }
-      return {
-        kind: "workflow_pending",
-        commandId,
-        runId,
-        ...(replay === undefined ? {} : { replay }),
-      };
     }
     if (!segment.changes || replay !== undefined) {
       let executed: SegmentExecution<Value>;
@@ -657,7 +682,7 @@ const startFlowInternal = async <Value>(
       if (result.kind !== "available") return { kind: "refused" };
       if (result.value.kind !== "workflow_pending") return result.value;
       const pending = result.value;
-      const executed = await dependencies.executeWorkflow!(pending.replay);
+      const executed = await dependencies.executeWorkflow!(pending.replay, pending.prepared);
       if (executed.outcome === "succeeded" && pending.replay === undefined) {
         const completion = await requests.run(request.session, request.selection, async (transaction) => {
           if (hasCompletion) {

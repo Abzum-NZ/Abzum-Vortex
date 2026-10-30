@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
 import "server-only";
 
@@ -9,7 +10,7 @@ import {
 } from "../access/identity-access";
 import type { OrganizationAccessDeclaration } from "../access/organization-access-decision";
 import type { PermissionDeclaration } from "../access/permissions";
-import { recordIdSchema, type RecordId } from "../catalogue/identifiers";
+import { applicationRootIdSchema, recordIdSchema, type RecordId } from "../catalogue/identifiers";
 import { describeFailure, sameId } from "../catalogue/runtime-primitives";
 import {
   viewerSafeRecordLinkIdentitySchema,
@@ -43,6 +44,22 @@ import {
   type InstalledRuntimeContext,
   type InstalledRuntimeContextLoader,
 } from "./installed-runtime-context";
+
+/** The source-bound target retained for an interrupted cross-application pin. */
+const flowPinTargetSchema = z
+  .object({
+    commandId: z.uuid(),
+    sourceApplicationRootId: applicationRootIdSchema,
+    targetApplicationRootId: applicationRootIdSchema,
+    selector: viewerSafeRecordPinSelectorSchema,
+    identity: viewerSafeRecordLinkIdentitySchema.optional(),
+  })
+  .strict();
+const flowPinResultSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.enum(["none", "unavailable"]) }).strict(),
+  z.object({ status: z.enum(["started", "completed"]), target: flowPinTargetSchema }).strict(),
+]);
+export type FlowPinTarget = z.infer<typeof flowPinTargetSchema>;
 
 type ViewerSafeRecordLinkInstalledContextLoaderFactory = (
   transaction: RequestDatabaseTransaction,
@@ -537,8 +554,100 @@ export const createViewerSafeRecordLinkService = (
       : pinUnavailable;
   };
 
+  /** Binds or reads the original pin target while the source admission holds its transaction. */
+  const bindFlowPinInRequest = async (
+    transaction: RequestDatabaseTransaction,
+    input: Readonly<{
+      commandId: string;
+      runId: string;
+      taskPath: string;
+      iteration: string;
+      selector: ReturnType<typeof viewerSafeRecordPinSelectorSchema.parse>;
+      replay: boolean;
+    }>,
+  ): Promise<FlowPinTarget | undefined> => {
+    const action = input.replay ? "read_source" : "prepare";
+    const rows = await transaction.query`select vortex_platform.flow_pin_acquisition(
+      ${action}::text, ${input.commandId}::uuid, ${input.runId}::uuid,
+      ${input.taskPath}::text, ${input.iteration}::text,
+      ${JSON.stringify(input.selector)}::text::jsonb, ${null}::jsonb
+    ) as result`;
+    const result = flowPinResultSchema.parse(rows[0]?.result);
+    return result.status === "started" || result.status === "completed" ? result.target : undefined;
+  };
+
+  /** Rechecks and records the source-bound target under its own current human request scope. */
+  const acquireFlowPin = async (
+    session: IdentitySession,
+    source: OrganizationSelectionCandidate,
+    runId: string,
+    target: FlowPinTarget,
+  ): Promise<ViewerSafeRecordPinAcquisitionResult> => {
+    if (
+      source.applicationRootId === undefined ||
+      !sameId(source.applicationRootId, target.sourceApplicationRootId)
+    )
+      return pinUnavailable;
+    try {
+      const request = await requests.run<ViewerSafeRecordPinAcquisitionResult>(
+        session,
+        {
+          organizationId: source.organizationId,
+          applicationRootId: target.targetApplicationRootId,
+        },
+        async (transaction, scope) => {
+          const rows = await transaction.query`select vortex_platform.flow_pin_acquisition(
+            ${"read_target"}::text, ${target.commandId}::uuid, ${runId}::uuid,
+            ${null}::text, ${null}::text, ${null}::jsonb, ${null}::jsonb
+          ) as result`;
+          const held = flowPinResultSchema.parse(rows[0]?.result);
+          if (held.status !== "started" && held.status !== "completed") return pinUnavailable;
+          if (
+            held.target.commandId !== target.commandId ||
+            !sameId(held.target.sourceApplicationRootId, target.sourceApplicationRootId) ||
+            !sameId(held.target.targetApplicationRootId, target.targetApplicationRootId) ||
+            canonicalJson(held.target.selector) !== canonicalJson(target.selector)
+          )
+            return pinUnavailable;
+          const acquired = await acquireIdentityInRequest(
+            transaction,
+            scope,
+            source.organizationId,
+            target.targetApplicationRootId,
+            held.target.selector,
+          );
+          if (acquired.outcome !== "available") return pinUnavailable;
+          if (held.status === "completed" && held.target.identity === undefined)
+            throw new Error("FLOW_PIN_IDENTITY_UNAVAILABLE");
+          if (held.status === "completed")
+            return canonicalJson(held.target.identity) === canonicalJson(acquired.identity)
+              ? acquired
+              : pinUnavailable;
+          const completed = await transaction.query`select vortex_platform.flow_pin_acquisition(
+            ${"complete"}::text, ${target.commandId}::uuid, ${runId}::uuid,
+            ${null}::text, ${null}::text, ${null}::jsonb,
+            ${JSON.stringify(acquired.identity)}::text::jsonb
+          ) as result`;
+          const saved = flowPinResultSchema.parse(completed[0]?.result);
+          if (
+            saved.status !== "completed" ||
+            canonicalJson(saved.target.identity) !== canonicalJson(acquired.identity)
+          )
+            throw new Error("FLOW_PIN_ACQUISITION_NOT_RECORDED");
+          return acquired;
+        },
+      );
+      return request.kind === "available" ? request.value : pinUnavailable;
+    } catch (error) {
+      console.error(`[definition] FLOW_PIN_ACQUISITION_FAILED: ${describeFailure(error)}`);
+      return pinUnavailable;
+    }
+  };
+
   return Object.freeze({
     acquireIdentityInRequest,
+    bindFlowPinInRequest,
+    acquireFlowPin,
     async acquireIdentity(
       session: IdentitySession,
       sourceSelectionCandidate: unknown,

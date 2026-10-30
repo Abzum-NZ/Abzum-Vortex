@@ -75,7 +75,7 @@ import type { InstalledRuntimeContext } from "./installed-runtime-context";
 import { installedNamedActionDescriptors, installedNamedActions } from "./installed-named-actions";
 import { createProtectedOperationExecutor } from "./protected-operation-executor";
 import type { ApplicationStoreService } from "./installation-application-store";
-import { createViewerSafeRecordLinkService } from "./viewer-safe-record-link";
+import { createViewerSafeRecordLinkService, type FlowPinTarget } from "./viewer-safe-record-link";
 import type { QueryContinuationKey } from "../queries/continuation-token";
 import {
   createFlowBindingEndpoint,
@@ -424,6 +424,7 @@ export async function invokeInstalledFlow(
     runId: string | undefined,
     installation: InstalledFlowBindings,
     boundRequest?: BoundHumanOrganizationRequest,
+    pin?: Readonly<{ target: FlowPinTarget; storedTargetResume: boolean }>,
   ): FlowOrchestratorDependencies => {
     const scopedDependencies = {
       ...requestDependencies,
@@ -486,6 +487,7 @@ export async function invokeInstalledFlow(
           state,
         );
       },
+      bindPin: (bound, input) => recordPinService.bindFlowPinInRequest(bound.transaction, input),
       portsFor: dependenciesFor,
     };
     return {
@@ -537,6 +539,7 @@ export async function invokeInstalledFlow(
         identityId: identity.session.identityId,
       }),
       recordPins: {
+        storedTargetResume: pin?.storedTargetResume === true,
         acquireIdentity: async (session, selection, selector) => {
           if (
             canonicalJson(session) !== canonicalJson(identity.session) ||
@@ -585,6 +588,8 @@ export async function invokeInstalledFlow(
             );
           });
           if (checked.kind !== "available" || !checked.value) return { outcome: "unavailable" };
+          if (pin !== undefined && runId !== undefined)
+            return recordPinService.acquireFlowPin(session, selection, runId, pin.target);
           if (boundRequest === undefined)
             return recordPinService.acquireIdentity(session, selection, selector);
           if (selector.applicationKey !== address.application.key)

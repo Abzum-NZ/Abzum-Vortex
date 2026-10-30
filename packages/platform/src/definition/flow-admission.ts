@@ -9,6 +9,12 @@ import { continueFlowRun } from "../rules/flow-interpreter";
 import { iterationKey } from "../rules/flow-interpreter-state";
 import type { FlowBindingInvocation } from "../workflows/flow-invocation-contracts";
 import { startFlow } from "../workflows/start";
+import {
+  viewerSafeRecordPinSelectorSchema,
+  type ViewerSafeRecordPinSelector,
+} from "../records/record-links";
+import { carriesSensitive } from "./flow-orchestrator-support";
+import type { FlowPinTarget } from "./viewer-safe-record-link";
 import { canonicalJson } from "./canonical-json";
 import { createInstalledContextLoader } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
@@ -32,11 +38,23 @@ export type AdmissionHost = Readonly<{
     installation: InstalledFlowBindings,
     state: FlowRunState,
   ) => Promise<boolean>;
+  bindPin: (
+    bound: BoundHumanOrganizationRequest,
+    input: Readonly<{
+      commandId: string;
+      runId: string;
+      taskPath: string;
+      iteration: string;
+      selector: ViewerSafeRecordPinSelector;
+      replay: boolean;
+    }>,
+  ) => Promise<FlowPinTarget | undefined>;
   portsFor: (
     release: FlowRelease,
     runId: string,
     installation: InstalledFlowBindings,
     bound?: BoundHumanOrganizationRequest,
+    pin?: Readonly<{ target: FlowPinTarget; storedTargetResume: boolean }>,
   ) => FlowOrchestratorDependencies;
 }>;
 
@@ -105,10 +123,13 @@ const prepareAdmission = (
           .authorizeInvocation?.(run.authority.session, selection, flow)) === true
       );
     },
-    ports: (bound?: BoundHumanOrganizationRequest) => {
+    ports: (
+      bound?: BoundHumanOrganizationRequest,
+      pin?: Readonly<{ target: FlowPinTarget; storedTargetResume: boolean }>,
+    ) => {
       if (currentRelease === undefined || currentInstallation === undefined)
         throw new Error("FLOW_ADMISSION_CONTEXT_UNAVAILABLE");
-      return host.portsFor(currentRelease, state.runId, currentInstallation, bound);
+      return host.portsFor(currentRelease, state.runId, currentInstallation, bound, pin);
     },
   };
 };
@@ -228,7 +249,47 @@ export const admitFlowSegment = async (
       execute: async (bound, _part, replay) => {
         return execute(admission.ports(bound), replay);
       },
-      executeWorkflow: async (replay) => execute(admission.ports(), replay),
+      prepareWorkflow: async (bound, part, commandId, runId, resumed, replay) => {
+        const first = continueFlowRun(state, run.library, part);
+        if (first.kind !== "protected_task" || first.call.taskType !== "record.pin_identity")
+          return { kind: "ready" };
+        const call = first.call;
+        if (
+          call.taskVersion !== "1.0.0" ||
+          Object.keys(call.properties).length !== 3 ||
+          call.properties.application_key?.type !== "text" ||
+          call.properties.record_type_key?.type !== "text" ||
+          call.properties.record_id?.type !== "text"
+        )
+          return { kind: "refused" };
+        const selector = viewerSafeRecordPinSelectorSchema.safeParse({
+          applicationKey: call.properties.application_key.value,
+          recordTypeKey: call.properties.record_type_key.value,
+          recordId: call.properties.record_id.value,
+        });
+        if (!selector.success || carriesSensitive(selector.data, run.sensitive))
+          return { kind: "refused" };
+        const target = await host.bindPin(bound, {
+          commandId,
+          runId,
+          taskPath: call.taskPath,
+          iteration: call.iteration,
+          selector: selector.data,
+          replay,
+        });
+        return target === undefined
+          ? { kind: "refused" }
+          : { kind: "ready", value: { target, storedTargetResume: resumed } };
+      },
+      executeWorkflow: async (replay, prepared) =>
+        execute(
+          admission.ports(
+            undefined,
+            prepared as
+              Readonly<{ target: FlowPinTarget; storedTargetResume: boolean }> | undefined,
+          ),
+          replay,
+        ),
     },
     {
       session: run.authority.session,

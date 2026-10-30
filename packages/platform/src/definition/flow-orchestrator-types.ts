@@ -221,6 +221,8 @@ export type FlowOrchestratorDependencies = Readonly<{
   currentRecords?: FlowCurrentRecordPort;
   /** Acquires a current installed identity for a human; no display values or replayed read results. */
   recordPins?: Readonly<{
+    /** Only a source-bound retry may accept an identity for the originally stored selector. */
+    storedTargetResume?: boolean;
     acquireIdentity(
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
