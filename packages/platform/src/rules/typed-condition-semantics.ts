@@ -168,13 +168,6 @@ export const evaluateResolvedTypedCondition = <TSourceOperand>(
       less_than_or_equal: "lte",
       contains: "contains",
     } as const;
-    if (
-      ["greater_than", "greater_than_or_equal", "less_than", "less_than_or_equal"].includes(
-        node.operator,
-      ) &&
-      (left.value === null || right.value === null)
-    )
-      return { op: "literal", type: "yes_no", value: false };
     if (node.operator === "contains" || node.operator === "not_contains") {
       let contains: FlowFormula;
       if (left.value === null || right.value === null)
