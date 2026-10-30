@@ -1,7 +1,6 @@
 import "server-only";
 
 import { z } from "zod";
-import type { flowRefusalFeedbackSentences } from "@vortex/platform/schema";
 import {
   applicationRootIdSchema,
   organizationIdSchema,
@@ -64,16 +63,7 @@ class TestRunRolledBack extends Error {
 
 /** The sentence a person would be given for this refusal, with its code. */
 const refusalOf = (
-  refusal: Readonly<{
-    outcome: string;
-    failureCode?: string;
-    diagnostic?: Readonly<{
-      code: keyof typeof flowRefusalFeedbackSentences;
-      ruleRefusal?: Readonly<{ message: string }>;
-      corrections?: readonly Readonly<{ message?: string }>[];
-    }>;
-    ruleRefusalMessage?: string;
-  }>,
+  refusal: NonNullable<FlowTestRunResult["steps"][number]["refusal"]>,
 ): TraceRefusal => {
   const diagnostic = refusal.diagnostic;
   const code = diagnostic?.code ?? refusal.failureCode ?? refusal.outcome;
@@ -170,7 +160,7 @@ export const runStudioFlowTest = async (
                       : { failureCode: result.end.failureCode }),
                     ...(result.end.diagnostic === undefined
                       ? {}
-                      : { diagnostic: result.end.diagnostic as never }),
+                      : { diagnostic: result.end.diagnostic }),
                     ...(result.end.ruleRefusalMessage === undefined
                       ? {}
                       : { ruleRefusalMessage: result.end.ruleRefusalMessage }),
@@ -184,7 +174,7 @@ export const runStudioFlowTest = async (
             steps: result.steps.map(({ refusal, ...step }) => ({
               ...step,
               flow: flowKeys.get(step.flowId.toLowerCase()) ?? step.flowId,
-              ...(refusal === undefined ? {} : { refusal: refusalOf(refusal as never) }),
+              ...(refusal === undefined ? {} : { refusal: refusalOf(refusal) }),
             })),
           };
         },

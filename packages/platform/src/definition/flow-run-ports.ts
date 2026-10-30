@@ -38,7 +38,7 @@ export type FlowRunPortsHost = Readonly<{
   /** Save record tasks and named actions run through the record service's own protected paths. */
   records: ReturnType<typeof createRecordSaveService>;
   actionRecords: ReturnType<typeof createNamedActionRecordPort>;
-  backend: BackendAdapter;
+  backend: Pick<BackendAdapter, "run">;
   continuationKey: QueryContinuationKey;
   selectedRecordReader: ReturnType<typeof createViewerSafeRecordLinkReadService>;
   recordPinService: ReturnType<typeof createViewerSafeRecordLinkService>;

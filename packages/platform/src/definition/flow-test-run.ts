@@ -6,6 +6,7 @@ import type {
   HumanOrganizationRequestDependencies,
 } from "../access/human-organization-request";
 import type { JsonValue } from "../catalogue/common";
+import { sameId } from "../catalogue/runtime-primitives";
 import { findPlatformServiceOperation } from "../catalogue/platform-service-operation-catalogue";
 import { requireRequestSavepoint } from "../db/request-transaction";
 import { orderSubscribers, subscribes } from "../events/flow-subscriber-consumer";
@@ -16,6 +17,7 @@ import { executeNamedActionCommandSchema } from "../records/named-actions";
 import { createRecordSaveService } from "../records/save-record";
 import type { BackendRunRequest, BackendRunResult } from "../workflows/backend-adapters";
 import { flowTaskChildLists, type FlowTask } from "../workflows/flow-contracts";
+import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
 import type { FlowServerSegment } from "../workflows/flow-plan";
 import type { ApplicationStoreService } from "./installation-application-store";
 import { runBackendFlow, type BackgroundRunDependencies } from "./flow-background-run";
@@ -58,7 +60,7 @@ type FlowTestRunEnd =
       kind: "finished";
       outcome: string;
       failureCode?: string;
-      diagnostic?: unknown;
+      diagnostic?: FlowRefusalFeedback;
       ruleRefusalMessage?: string;
       outputs: Readonly<Record<string, JsonValue>>;
     }>
@@ -130,7 +132,7 @@ export const runFlowTest = async (
     applicationStore: dependencies.applicationStore,
     records: createRecordSaveService(requestDependencies),
     actionRecords: createNamedActionRecordPort(requestDependencies),
-    backend: { run: () => Promise.resolve({ kind: "unavailable" }) } as never,
+    backend: { run: () => Promise.reject(new Error("FLOW_TEST_RUN_BACKEND_IS_INLINE")) },
     continuationKey: dependencies.continuationKey,
     selectedRecordReader: createViewerSafeRecordLinkReadService(),
     recordPinService: createViewerSafeRecordLinkService({
@@ -166,15 +168,14 @@ export const runFlowTest = async (
     const parsed = executeNamedActionCommandSchema.safeParse(command);
     if (!parsed.success) return;
     const { application, modules } = context.releaseSet;
-    const owners = [application, ...modules].map((owner) => owner.content);
-    const action = owners
-      .flatMap((content) => content.actions)
-      .find((candidate) => sameId(candidate.actionId, parsed.data.action.actionId));
-    for (const eventKey of action?.writePolicy.eventKeys ?? []) {
-      const event = owners
-        .flatMap((content) => content.events)
-        .find((candidate) => candidate.key === eventKey);
-      if (event === undefined) continue;
+    const action = [
+      ...application.content.actions,
+      ...modules.flatMap((m) => m.content.actions),
+    ].find((candidate) => sameId(candidate.actionId, parsed.data.action.actionId));
+    const events = [...application.content.events, ...modules.flatMap((m) => m.content.events)];
+    for (const eventKey of action?.writePolicy?.eventKeys ?? []) {
+      const event = events.find((candidate) => candidate.key === eventKey);
+      if (event?.recordTypeId === undefined) continue;
       for (const subscriber of release.flows.values())
         if (
           subscribes(subscriber, {
