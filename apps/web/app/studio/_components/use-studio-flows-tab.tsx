@@ -149,8 +149,12 @@ export function useStudioFlowsTab({
   const controlLabel = useCallback(
     (alias: string) =>
       labels.get(studioSemanticSelectionKey({ kind: "placement", placementAlias: alias })) ??
-      "a control",
-    [labels],
+      // The page is the control of its own events (load, record loaded).
+      (() => {
+        const page = source.body.pages.find((entry) => entry.id === alias);
+        return page === undefined ? "a control" : `the page ${page.name}`;
+      })(),
+    [labels, source],
   );
   const outline = useMemo(() => {
     if (flowSelection === null) return null;

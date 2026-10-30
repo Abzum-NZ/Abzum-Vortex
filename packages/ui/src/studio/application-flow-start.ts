@@ -245,9 +245,13 @@ export const describeStudioFlowBehaviour = (
       ),
       ...sourceItemTree(shell?.layout.content ?? []),
     ];
-    return items
-      .filter((item) => controls.has(item.props.id))
-      .map((item) => `${page.name}: ${controlLabel(item.props.id)}`);
+    return [
+      // The page itself is the control of its own events.
+      ...(controls.has(page.id) ? [`${page.name}: the page`] : []),
+      ...items
+        .filter((item) => controls.has(item.props.id))
+        .map((item) => `${page.name}: ${controlLabel(item.props.id)}`),
+    ];
   });
 };
 

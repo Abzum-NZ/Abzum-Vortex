@@ -15,6 +15,7 @@ import {
   comparableConditionFieldType,
   builderKeySchema,
   sourceItemChildSlots,
+  sourceItemTree,
   sourcePageItems,
   sourcePageZones,
   conditionValueType,
@@ -37,6 +38,7 @@ import {
 } from "./condition-model";
 import type { StudioCompositionContext } from "./application-composition-commands";
 import { projectStudioFlowDraftChoices } from "./application-flow-step-form";
+import { studioDraftRecordType } from "./application-flow-values";
 import type { StudioSemanticSelection } from "./semantic-selection";
 
 type SourceQualifiedCondition = NonNullable<SourceItemVortex["visibility_condition"]>;
@@ -274,6 +276,8 @@ export type StudioReactionTarget = Readonly<{
   pageAlias: string;
   recordReference: string;
   placementAlias: string;
+  /** The page's own blocks can compare the record's fields; a block inside another compares page values and form answers only. */
+  top: boolean;
   path: readonly (string | number)[];
   placement: SourceItemVortex;
 }>;
@@ -354,7 +358,6 @@ export function resolveStudioReactionTarget(
   if (
     seen.length !== 1 ||
     target === undefined ||
-    !target.top ||
     target.pageAlias === undefined ||
     target.recordReference === undefined
   )
@@ -407,17 +410,51 @@ export function studioReactionOperands(
     source: context.source,
     catalogue: context.catalogue,
   }).forms.filter((form) => placed.has(form.alias));
-  for (const form of forms)
+  // A choice field's answer is compared with one of its options, picked from them.
+  const choicesOf = (
+    formAlias: string,
+  ): ReadonlyMap<string, readonly { value: string; label: string }[]> => {
+    const options = new Map<string, readonly { value: string; label: string }[]>();
+    const form = sourcePageItems(page.composition).find((item) => item.props.id === formAlias);
+    for (const control of form === undefined ? [] : sourceItemTree([form])) {
+      const reference = control.props.field;
+      if (typeof reference !== "string") continue;
+      const dot = reference.lastIndexOf(".");
+      const field = studioDraftRecordType(
+        context.source,
+        reference.slice(0, dot),
+        null,
+      )?.record.fields.find((candidate) => candidate.key === reference.slice(dot + 1));
+      const name =
+        typeof control.props.name === "string" && control.props.name !== ""
+          ? control.props.name
+          : field?.key;
+      const list = (
+        field?.settings as { options?: readonly { value: string; label: string }[] } | undefined
+      )?.options;
+      if (field?.type === "choice" && name !== undefined && list !== undefined)
+        options.set(
+          name,
+          list.map(({ value, label }) => ({ value, label })),
+        );
+    }
+    return options;
+  };
+  for (const form of forms) {
+    const choices = choicesOf(form.alias);
     for (const field of form.fields) {
       const type = conditionValueType(field.type);
       if (type === undefined) continue;
+      const options = choices.get(field.name);
       operands.push({
         operand: { source: "form", form: form.alias, field: field.name },
         label: `${form.label}: ${field.label}`,
         role: "form_field",
         type,
+        ...(options === undefined ? {} : { options }),
       });
     }
+  }
   return operands;
 }
 
@@ -781,7 +818,7 @@ export function projectStudioReactionEditor(
   const target = resolveStudioReactionTarget(context.source, selection);
   if (target === undefined) return { kind: "unsupported" };
   const metadata =
-    target.recordReference === ""
+    !target.top || target.recordReference === ""
       ? noRecordConditionContext(context, target.pageAlias)
       : parseStudioApplicationConditionContext(candidateMetadata);
   if (metadata === undefined) return { kind: "unsupported" };
@@ -793,7 +830,7 @@ export function projectStudioReactionEditor(
     context.localLifetime < 1 ||
     context.source.key !== context.key ||
     target.pageAlias !== metadata.pageAlias ||
-    target.recordReference !== metadata.recordReference ||
+    (target.top && target.recordReference !== metadata.recordReference) ||
     JSON.stringify(applicationModuleKeys(context.source)) !== metadata.bindingsSignature
   )
     return { kind: "stale" };

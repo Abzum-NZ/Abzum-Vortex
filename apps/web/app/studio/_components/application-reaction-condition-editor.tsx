@@ -76,7 +76,7 @@ export function ApplicationReactionConditionEditor(props: Props) {
   const savedTarget = resolveStudioReactionTarget(props.saved.source, props.selection);
   const modules = JSON.stringify(applicationModuleKeys(props.context.source));
   // A page without a record offers page values and form answers only: nothing to read from the server.
-  const needsFields = target !== undefined && target.recordReference !== "";
+  const needsFields = target !== undefined && target.top && target.recordReference !== "";
   const readable =
     target !== undefined &&
     (!needsFields ||

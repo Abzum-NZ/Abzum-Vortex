@@ -98,6 +98,28 @@ export type StudioFlowDraftChoices = Readonly<{
   pageValues: readonly Readonly<{ name: string; label: string; type: string }>[];
 }>;
 
+/**
+ * A placement as the builder named it: its title, label or name setting, else the outline's own
+ * label for it.
+ */
+const placementTitle = (
+  node: Readonly<{ label: string; settings: Readonly<Record<string, unknown>> }>,
+): string => {
+  for (const key of ["title", "label", "name"]) {
+    const value = node.settings[key];
+    if (typeof value === "string" && value.trim() !== "") return value.trim();
+  }
+  return node.label;
+};
+
+/** How serious a message is, by the name a Show message step stores. */
+const messageSeverityOptions: readonly Readonly<{ value: string; label: string }>[] = [
+  { value: "info", label: "Information" },
+  { value: "success", label: "Success" },
+  { value: "warning", label: "Warning" },
+  { value: "error", label: "Error" },
+];
+
 /** Where a message can show, by the name a Show message step stores. */
 const messageTargetOptions: readonly Readonly<{ value: string; label: string }>[] = [
   { value: "dialog", label: "In a dialog" },
@@ -146,7 +168,7 @@ export const projectStudioFlowDraftChoices = (
     if (blockKey === "platform.display.notice")
       messagePlacements.push({
         alias: node.selection.placementAlias,
-        label: node.label,
+        label: placementTitle(node),
         kind: "slot",
       });
     else if (
@@ -156,7 +178,7 @@ export const projectStudioFlowDraftChoices = (
     )
       messagePlacements.push({
         alias: node.selection.placementAlias,
-        label: node.label,
+        label: placementTitle(node),
         kind: "inline",
       });
     const name = node.settings.name;
@@ -195,7 +217,7 @@ export const projectStudioFlowDraftChoices = (
     if (isForm) {
       const entry = {
         alias: node.selection.placementAlias,
-        label: node.label,
+        label: placementTitle(node),
         fields: [] as StudioFlowNamedEntry[],
       };
       forms.push(entry);
@@ -744,16 +766,18 @@ export const projectStudioFlowStepForm = (
           ? studioFlowEventChoices(source, flow, moduleKey, task.properties.record)
           : messageStep && key === "target"
             ? messageTargetOptions
-            : messageStep && key === "component"
-              ? choices.messagePlacements.map((entry) => ({
-                  value: entry.alias,
-                  label: `${entry.label} (${entry.kind === "slot" ? "Notice slot" : "inline"})`,
-                }))
-              : task.type === "interface.set_value" && key === "value"
-                ? choices.pageValues.map((entry) => ({ value: entry.name, label: entry.label }))
-                : control === "field"
-                  ? studioFlowFieldOptions(source, flow, moduleKey, task.properties)
-                  : undefined;
+            : task.type === "interface.show_message" && key === "severity"
+              ? messageSeverityOptions
+              : messageStep && key === "component"
+                ? choices.messagePlacements.map((entry) => ({
+                    value: entry.alias,
+                    label: `${entry.label} (${entry.kind === "slot" ? "Notice slot" : "inline"})`,
+                  }))
+                : task.type === "interface.set_value" && key === "value"
+                  ? choices.pageValues.map((entry) => ({ value: entry.name, label: entry.label }))
+                  : control === "field"
+                    ? studioFlowFieldOptions(source, flow, moduleKey, task.properties)
+                    : undefined;
       const valueType =
         control === "value" && declaration.type === "record_change_list"
           ? "json"

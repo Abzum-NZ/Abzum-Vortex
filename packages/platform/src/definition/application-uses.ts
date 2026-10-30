@@ -330,6 +330,10 @@ export const describeSourcePlace = (source: Source, path: Path): ApplicationUseP
   }
   if (section === "flow_bindings" && typeof index === "number") {
     const control = body.flow_bindings[index]?.control;
+    // The page is the control of its own events.
+    const page = body.pages.find((entry) => entry.id === control);
+    if (page !== undefined)
+      return { label: `Page ${page.name}`, open: { kind: "page", pageAlias: page.id } };
     const block = control === undefined ? undefined : placementPath(source, control);
     return block === undefined
       ? { label: "A form of the application", open: { kind: "none" } }
@@ -1110,7 +1114,7 @@ const blockName = (source: Source, path: Path): string | undefined => {
     isObject(entry) && typeof entry.label === "string"
       ? entry.label
       : [props.title, props.label, props.name].find((text) => typeof text === "string");
-  return typeof title === "string" && title !== "" ? `${kind} '${title}'` : kind;
+  return typeof title === "string" && title !== "" ? `${kind} '${title}'` : `${kind} block`;
 };
 
 /** A flow named as a person knows it ("flow 'Update credit use'"). */
@@ -1266,7 +1270,11 @@ const placesOf = (source: Source, uses: readonly Use[]): readonly ApplicationUse
 export const describeApplicationUsers = (places: readonly ApplicationUsePlace[]): string => {
   const names = [
     ...new Set(
-      places.map((place) => (place.label.includes("'") ? `the ${place.label}` : place.label)),
+      places.map((place) =>
+        place.label.includes("'") || place.label.endsWith(" block")
+          ? `the ${place.label}`
+          : place.label,
+      ),
     ),
   ];
   return names.length <= 1
