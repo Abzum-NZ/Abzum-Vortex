@@ -44,6 +44,7 @@ import {
   type FlowEffectPrincipal,
 } from "./flow-continuation-store";
 import { reportUnexpectedFailure } from "./definition-error";
+import { runGuidedDraftTask } from "./flow-guided-draft-task";
 import {
   aliasSelectedRecordValues,
   carriesSensitive,
@@ -1085,6 +1086,25 @@ export const createFlowTaskRunner = (
       }
     }
 
+    // The guided-form draft is the person's own private scratch state, never a record or a
+    // replayable effect: the port checks ownership and revision, and a repeat answers a conflict.
+    if (call.taskType === "form.save_draft" || call.taskType === "form.discard_draft") {
+      if (run.authority.kind !== "person" || dependencies.guidedDrafts === undefined)
+        return notAvailable(
+          run,
+          call,
+          "Only a signed-in person can save this form's draft here.",
+          "a trusted guided-form draft port",
+        );
+      return runGuidedDraftTask(
+        dependencies.guidedDrafts,
+        run.authority.session,
+        run.authority.selection,
+        call,
+        run.sensitive,
+      );
+    }
+
     const principal: FlowEffectPrincipal =
       run.authority.kind === "person"
         ? { kind: "person", id: run.authority.session.identityId }
@@ -1217,6 +1237,8 @@ export const createFlowTaskRunner = (
     if (
       call.taskType === "record.read_fields" ||
       call.taskType === "record.pin_identity" ||
+      call.taskType === "form.save_draft" ||
+      call.taskType === "form.discard_draft" ||
       call.taskType === "record.query"
     )
       return { result: await runProtectedTask(run, state, call), replay: undefined, warnings: [] };

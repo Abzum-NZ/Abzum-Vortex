@@ -120,6 +120,8 @@ const pageFlowEvents = new Set([
   "form_ready",
   "form_reset",
   "form_submit",
+  "form_cancel",
+  "guided_step_changed",
 ]);
 
 /** Refuse a binding that the current page wiring cannot dispatch. */
@@ -133,9 +135,8 @@ export function applicationFlowBindingPageEventRule(
     const placement = placed.get(control);
     if (placement === undefined) return [];
     const guided = placement.pageType === "guided_form";
-    const guidedEvent =
-      event === "field_changed" || event === "field_focus_lost" || event === "form_submit";
-    if (pageFlowEvents.has(event) && (!guided || guidedEvent)) return [];
+    const guidedOnly = event === "form_cancel" || event === "guided_step_changed";
+    if (pageFlowEvents.has(event) && (guided || !guidedOnly)) return [];
     const controlKey = builderKeySchema.safeParse(control);
     const bindingKey = builderKeySchema.safeParse(binding.id);
     return [

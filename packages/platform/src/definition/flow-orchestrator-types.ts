@@ -267,6 +267,31 @@ export type FlowOrchestratorDependencies = Readonly<{
    * so a stored run never holds record values. Without it such a flow cannot start.
    */
   currentRecords?: FlowCurrentRecordPort;
+  /**
+   * The guided-form draft of the page the run belongs to. Both calls check that the draft is the
+   * caller's own and at the sent revision before anything is stored or removed.
+   */
+  guidedDrafts?: Readonly<{
+    save(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      input: Readonly<{
+        draftId: string;
+        revision: number;
+        step: string;
+        requestedStep?: string;
+        values: Readonly<Record<string, unknown>>;
+      }>,
+    ): Promise<
+      | Readonly<{ outcome: "saved"; stepId: string; revision: number; valid: boolean }>
+      | Readonly<{ outcome: "conflict" | "refused" | "unavailable" }>
+    >;
+    discard(
+      session: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      input: Readonly<{ draftId: string; revision: number }>,
+    ): Promise<Readonly<{ outcome: "discarded" | "conflict" | "refused" | "unavailable" }>>;
+  }>;
   /** Acquires a current installed identity for a human; no display values or replayed read results. */
   recordPins?: Readonly<{
     /** Only a source-bound retry may accept an identity for the originally stored selector. */
