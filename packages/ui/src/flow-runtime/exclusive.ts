@@ -4,20 +4,22 @@ type Scope = Readonly<{
   exclusive: ComponentFlowBinding["settings"]["exclusive"];
   formId?: string;
   name: string;
+  allowed?: ReadonlySet<object>;
 }>;
 
 /** The active exclusive runs on a page, shared by page and agent dispatches. */
 export function createExclusiveScopes() {
   const active = new Set<Scope>();
   const listeners = new Set<() => void>();
-  const conflicts = (next: Scope) =>
+  const conflicts = (next: Scope, job?: object) =>
     [...active].find(
       (held) =>
-        held.exclusive === "page" ||
-        next.exclusive === "page" ||
-        (held.formId !== undefined &&
-          next.formId !== undefined &&
-          held.formId.toLowerCase() === next.formId.toLowerCase()),
+        !held.allowed?.has(job ?? {}) &&
+        (held.exclusive === "page" ||
+          next.exclusive === "page" ||
+          (held.formId !== undefined &&
+            next.formId !== undefined &&
+            held.formId.toLowerCase() === next.formId.toLowerCase())),
     );
   return {
     conflict: conflicts,

@@ -1,5 +1,6 @@
 type Change = Readonly<{
   formId: string;
+  job: object;
   fieldName: string;
   finished: Promise<unknown>;
   flush: () => void;
@@ -10,6 +11,8 @@ type Change = Readonly<{
 export function createFormSettler() {
   const changes = new Set<Change>();
   return {
+    pending: (formId: string) =>
+      [...changes].filter((change) => change.formId.toLowerCase() === formId.toLowerCase()),
     track: (change: Change) => {
       changes.add(change);
       void change.finished.then(
@@ -17,12 +20,13 @@ export function createFormSettler() {
         () => changes.delete(change),
       );
     },
-    settle: async (formId: string, signal: AbortSignal): Promise<string | undefined> => {
+    settle: async (
+      pending: readonly Change[],
+      signal: AbortSignal,
+    ): Promise<string | undefined> => {
       const deadline = Date.now() + 2_000;
-      const matching = () =>
-        [...changes].filter((change) => change.formId.toLowerCase() === formId.toLowerCase());
       while (!signal.aborted) {
-        const current = matching();
+        const current = pending.filter((change) => changes.has(change));
         if (current.length === 0) return undefined;
         for (const change of current) change.flush();
         const remaining = deadline - Date.now();

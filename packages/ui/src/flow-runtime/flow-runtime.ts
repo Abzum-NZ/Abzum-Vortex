@@ -156,6 +156,16 @@ export function createFlowRuntimeState() {
     ): Promise<ServerDrivenResult> => {
       if (signal?.aborted) return Promise.resolve(abandoned);
       const { controlId, concurrency, debounceMs, exclusive, timeoutMs, event, formId } = settings;
+      const initialConflict = scopes.conflict({
+        exclusive,
+        name: settings.flowName,
+        ...(formId ? { formId } : {}),
+      });
+      if (initialConflict !== undefined && concurrency !== "queue")
+        return Promise.resolve({
+          kind: "refused",
+          reason: `${initialConflict.name} is still running.`,
+        });
       const entry = entries.get(bindingId) ?? { jobs: new Set<Job>() };
       entries.set(bindingId, entry);
       if (concurrency === "ignore_while_running" && entry.jobs.size > 0)
@@ -171,8 +181,29 @@ export function createFlowRuntimeState() {
           flush();
         },
       };
+      const settlesForm =
+        (event === "form_submit" || (event === "action" && exclusive === "form")) && formId;
+      const pendingChanges = settlesForm ? settler.pending(settlesForm) : [];
+      const scope = {
+        exclusive,
+        name: settings.flowName,
+        ...(formId ? { formId } : {}),
+        allowed: new Set(pendingChanges.map((change) => change.job)),
+      };
+      let release: (() => void) | undefined;
+      if (exclusive !== "none" && (exclusive !== "form" || formId !== undefined)) {
+        if (scopes.conflict(scope, job) === undefined) release = scopes.acquire(scope);
+      }
       entry.jobs.add(job);
       changeRunning(controlId, 1);
+      let timedOut = false;
+      const timer =
+        timeoutMs === null
+          ? undefined
+          : setTimeout(() => {
+              timedOut = true;
+              controller.abort();
+            }, timeoutMs);
       const ready =
         debounceMs === 0
           ? Promise.resolve()
@@ -191,79 +222,53 @@ export function createFlowRuntimeState() {
         if (controller.signal.aborted) return abandoned;
         await ready;
         if (controller.signal.aborted) return abandoned;
-        if ((event === "form_submit" || (event === "action" && exclusive === "form")) && formId) {
-          const field = await settler.settle(formId, controller.signal);
+        if (exclusive === "form" && formId === undefined)
+          return { kind: "refused", reason: "This action has no form to lock." };
+        if (release === undefined) {
+          let held = scopes.conflict(scope, job);
+          while (held !== undefined) {
+            if (concurrency !== "queue")
+              return { kind: "refused", reason: `${held.name} is still running.` };
+            await scopes.wait(controller.signal);
+            if (controller.signal.aborted) return abandoned;
+            held = scopes.conflict(scope, job);
+          }
+          release = scopes.acquire(scope);
+        }
+        if (settlesForm) {
+          const field = await settler.settle(pendingChanges, controller.signal);
           if (controller.signal.aborted) return abandoned;
           if (field !== undefined) return { kind: "refused", reason: `Still checking ${field}.` };
         }
-        if (exclusive === "form" && formId === undefined)
-          return { kind: "refused", reason: "This action has no form to lock." };
-        const scope = { exclusive, name: settings.flowName, ...(formId ? { formId } : {}) };
-        let held = scopes.conflict(scope);
-        while (held !== undefined) {
-          if (concurrency !== "queue")
-            return { kind: "refused", reason: `${held.name} is still running.` };
-          await scopes.wait(controller.signal);
-          if (controller.signal.aborted) return abandoned;
-          held = scopes.conflict(scope);
-        }
-        const release = scopes.acquire(scope);
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        let timedOut = false;
-        let stopWaiting: (() => void) | undefined;
-        try {
-          const stopped = new Promise<ServerDrivenResult>((resolve) => {
-            stopWaiting = () => resolve(abandoned);
-            controller.signal.addEventListener("abort", stopWaiting, { once: true });
-          });
-          if (timeoutMs !== null)
-            timer = setTimeout(() => {
-              timedOut = true;
-              controller.abort();
-            }, timeoutMs);
-          const result = await Promise.race([execute(controller.signal), stopped]);
-          if (timedOut) return { kind: "abandoned", unanswered: false, timedOut: true };
-          return controller.signal.aborted ? abandoned : result;
-        } finally {
-          if (timer !== undefined) clearTimeout(timer);
-          if (stopWaiting !== undefined)
-            controller.signal.removeEventListener("abort", stopWaiting);
-          release();
-        }
-      };
-      let started = false;
-      const startScheduled = () => {
-        started = true;
-        return start();
+        return Promise.race([execute(controller.signal), stopped]);
       };
       const scheduled =
         concurrency === "queue"
-          ? (entry.tail ?? Promise.resolve()).then(startScheduled, startScheduled)
-          : Promise.resolve().then(startScheduled);
-      let cancelWaiting: (() => void) | undefined;
-      const completion =
-        concurrency !== "queue"
-          ? scheduled
-          : Promise.race([
-              scheduled,
-              new Promise<ServerDrivenResult>((resolve) => {
-                cancelWaiting = () => {
-                  if (!started) resolve(abandoned);
-                };
-                if (controller.signal.aborted) cancelWaiting();
-                else controller.signal.addEventListener("abort", cancelWaiting, { once: true });
-              }),
-            ]);
-      const result = completion.finally(() => {
-        signal?.removeEventListener("abort", abort);
-        if (cancelWaiting !== undefined)
-          controller.signal.removeEventListener("abort", cancelWaiting);
-        entry.jobs.delete(job);
-        changeRunning(controlId, -1);
+          ? (entry.tail ?? Promise.resolve()).then(start, start)
+          : Promise.resolve().then(start);
+      let stopWaiting: (() => void) | undefined;
+      const stopped = new Promise<ServerDrivenResult>((resolve) => {
+        stopWaiting = () => resolve(abandoned);
+        if (controller.signal.aborted) stopWaiting();
+        else controller.signal.addEventListener("abort", stopWaiting, { once: true });
       });
+      const result = Promise.race([scheduled, stopped])
+        .then((outcome) =>
+          timedOut ? { kind: "abandoned" as const, unanswered: false, timedOut: true } : outcome,
+        )
+        .finally(() => {
+          signal?.removeEventListener("abort", abort);
+          if (stopWaiting !== undefined)
+            controller.signal.removeEventListener("abort", stopWaiting);
+          if (timer !== undefined) clearTimeout(timer);
+          release?.();
+          entry.jobs.delete(job);
+          changeRunning(controlId, -1);
+        });
       if (formId && (event === "field_changed" || event === "options_requested"))
         settler.track({
           formId,
+          job,
           fieldName: settings.controlName,
           finished: result,
           flush: job.flush,
