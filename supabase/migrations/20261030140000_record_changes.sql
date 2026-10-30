@@ -9925,4 +9925,6 @@ GRANT ALL ON FUNCTION vortex_record.transfer_offboarding_owned_record(p_command_
 
 drop function vortex_record.apply_record_changes(uuid,text,uuid,uuid,bigint,jsonb,uuid,jsonb,uuid,uuid,jsonb);
 
+drop function vortex_record.save_base_record_set(uuid,jsonb);
+
 reset role;

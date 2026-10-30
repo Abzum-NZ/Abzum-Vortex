@@ -1,9 +1,9 @@
 import "server-only";
 
 import { sameId } from "../catalogue/runtime-primitives";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import { optionParentValues, optionsSourceNarrowing } from "../definition/field-options-source";
 import type { RecordTypeDefinition } from "../definition/module-contracts";
-import type { RequestDatabaseTransaction } from "../db/request-transaction";
 
 /**
  * The write-time rule behind a declared field dependency, the same for a record save, a named
@@ -46,6 +46,10 @@ export const firstFieldDependencyRefusal = async (
   existingValues: Readonly<Record<string, unknown>>,
   submittedFieldIds: readonly string[],
   finalValues: Readonly<Record<string, unknown>>,
+  readRecord?: (
+    recordTypeId: string,
+    recordId: string,
+  ) => Promise<Readonly<Record<string, unknown>> | undefined>,
 ): Promise<FieldDependencyRefusal | undefined> => {
   const submitted = new Set(submittedFieldIds.map((fieldId) => fieldId.toLowerCase()));
   const effective = (fieldId: string): unknown => {
@@ -89,18 +93,22 @@ export const firstFieldDependencyRefusal = async (
     const parent = linkValue(effective(String(parentFieldId)));
     if (parent === undefined) return refusal("parent_empty");
     // The child is read as the saver reads it.
-    const rows = await transaction.query<{ record: unknown }>`
-      select vortex_record.read_record(${child.recordTypeId}::uuid, ${child.recordId}::uuid) -> 'record' as record
-    `;
-    const read = rows[0]?.record;
-    const values =
-      typeof read === "object" &&
-      read !== null &&
-      (read as Record<string, unknown>).outcome === "allowed" &&
-      typeof (read as Record<string, unknown>).values === "object" &&
-      (read as Record<string, unknown>).values !== null
-        ? ((read as Record<string, unknown>).values as Record<string, unknown>)
-        : undefined;
+    let values: Readonly<Record<string, unknown>> | undefined;
+    if (readRecord !== undefined) values = await readRecord(child.recordTypeId, child.recordId);
+    else {
+      const rows = await transaction.query<{ record: unknown }>`
+        select vortex_record.read_record(${child.recordTypeId}::uuid, ${child.recordId}::uuid) -> 'record' as record
+      `;
+      const read = rows[0]?.record;
+      values =
+        typeof read === "object" &&
+        read !== null &&
+        (read as Record<string, unknown>).outcome === "allowed" &&
+        typeof (read as Record<string, unknown>).values === "object" &&
+        (read as Record<string, unknown>).values !== null
+          ? ((read as Record<string, unknown>).values as Record<string, unknown>)
+          : undefined;
+    }
     const filterKey =
       values === undefined
         ? undefined
