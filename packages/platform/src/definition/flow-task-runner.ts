@@ -63,6 +63,7 @@ import type {
 } from "./flow-orchestrator-types";
 import type { RecordChangeIntent } from "../records/apply-record-changes";
 import { planRecordLink } from "./flow-relationship-changes";
+import { planRelationshipCopies } from "./flow-relationship-copies";
 
 /**
  * Runs the protected tasks of one flow run: plans each task, claims its effect in the ledger and
@@ -147,51 +148,57 @@ export const createFlowTaskRunner = (
   ): Promise<readonly BeforeSaveRuleWarning[] | undefined> => {
     if (outputs.warnings === undefined) return [];
     const warnings = storedWarningsSchema.parse(outputs.warnings);
-    const dynamic = warnings.some((warning) => warning.kind === "dynamic");
-    let record: FlowRuntimeValues | undefined;
-    if (dynamic) {
-      if (
-        run.authority.kind !== "person" ||
-        dependencies.currentRecords === undefined ||
-        plan.kind === "operation"
-      )
-        return undefined;
-      const result = isRecord(outputs.result) ? outputs.result : undefined;
-      const changedTarget =
-        plan.kind === "changes" ? (plan.warningTarget ?? plan.intents[0]) : undefined;
-      const recordId = recordIdSchema.safeParse(
-        plan.kind === "changes"
-          ? (outputs.record ??
-              (changedTarget !== undefined && "recordId" in changedTarget
-                ? changedTarget.recordId
-                : undefined))
-          : plan.kind === "save" || plan.asSave
-            ? outputs.record
-            : result?.recordId,
-      );
-      if (!recordId.success || (plan.kind === "changes" && changedTarget === undefined))
-        return undefined;
-      const current = await dependencies.currentRecords.read(
-        run.authority.session,
-        run.authority.selection,
-        {
-          recordTypeId:
-            plan.kind === "changes" ? changedTarget!.recordTypeId : plan.command.recordTypeId,
-          recordId: recordId.data,
-        },
-      );
-      if (current.outcome !== "read") return undefined;
-      record = current.values;
-    }
-    return warnings.map((warning) => {
+    const records = new Map<string, FlowRuntimeValues>();
+    const rendered: BeforeSaveRuleWarning[] = [];
+    for (const warning of warnings) {
+      let record: FlowRuntimeValues | undefined;
+      if (warning.kind === "dynamic") {
+        if (
+          run.authority.kind !== "person" ||
+          dependencies.currentRecords === undefined ||
+          plan.kind === "operation"
+        )
+          return undefined;
+        const result = isRecord(outputs.result) ? outputs.result : undefined;
+        const changedTarget =
+          plan.kind === "changes" ? (plan.warningTarget ?? plan.intents[0]) : undefined;
+        const recordId = recordIdSchema.safeParse(
+          warning.record?.recordId ??
+            (plan.kind === "changes"
+              ? (outputs.record ??
+                (changedTarget !== undefined && "recordId" in changedTarget
+                  ? changedTarget.recordId
+                  : undefined))
+              : plan.kind === "save" || plan.asSave
+                ? outputs.record
+                : result?.recordId),
+        );
+        const recordTypeId =
+          warning.record?.recordTypeId ??
+          (plan.kind === "changes" ? changedTarget?.recordTypeId : plan.command.recordTypeId);
+        if (!recordId.success || recordTypeId === undefined) return undefined;
+        const key = targetKey(recordTypeId, recordId.data);
+        record = records.get(key);
+        if (record === undefined) {
+          const current = await dependencies.currentRecords.read(
+            run.authority.session,
+            run.authority.selection,
+            { recordTypeId, recordId: recordId.data },
+          );
+          if (current.outcome !== "read") return undefined;
+          record = current.values;
+          records.set(key, record);
+        }
+      }
       const flow = run.release.flows.get(warning.flowId);
       if (warning.kind === "dynamic" && (flow === undefined || record === undefined))
         throw new Error("FLOW_WARNING_SOURCE_UNAVAILABLE");
-      return {
+      rendered.push({
         code: warning.code,
         flowId: warning.flowId,
         taskPath: warning.taskPath,
         messageIsLiteral: warning.kind === "literal",
+        ...(warning.record === undefined ? {} : { record: warning.record }),
         message:
           warning.kind === "literal"
             ? warning.message
@@ -202,8 +209,9 @@ export const createFlowTaskRunner = (
                 record!,
                 (dependencies.now ?? (() => new Date()))().toISOString(),
               ),
-      };
-    });
+      });
+    }
+    return rendered;
   };
 
   /** The rule's authored refusal of a protected record path, when its safe error carries one. */
@@ -385,6 +393,48 @@ export const createFlowTaskRunner = (
     call: FlowProtectedTaskCall,
   ): Promise<Readonly<{ plan: TaskPlan }> | TaskResult> => {
     const commandId = effectCommandId(state.runId, call.taskPath, call.iteration);
+
+    if (call.taskType === "record.changes") {
+      if (dependencies.recordChanges === undefined || run.release.recordTypes === undefined)
+        return notAvailable(
+          run,
+          call,
+          "This workflow can't copy relationships here.",
+          "the admitted record change port",
+        );
+      const copies = await planRelationshipCopies(
+        run.release.recordTypes,
+        call.properties,
+        dependencies.recordChanges.readTargets,
+      );
+      if (copies.outcome !== "planned")
+        return {
+          outcome: copies.outcome,
+          ...(copies.reason === undefined ? {} : { diagnostic: { code: copies.reason } }),
+        };
+      for (const record of copies.targets) {
+        const target = await resolveRecordTarget(
+          run,
+          state,
+          call,
+          record.recordTypeId,
+          record.recordId,
+          undefined,
+          record.revision,
+        );
+        if ("outcome" in target) return target;
+        if (target.revision !== record.revision) return { outcome: "conflict" };
+      }
+      return {
+        plan: {
+          kind: "changes",
+          commandId,
+          intents: copies.intents,
+          outputs: copies.outputs,
+          warningTarget: copies.targets[0]!,
+        },
+      };
+    }
 
     if (call.taskType === "record.link") {
       if (dependencies.recordChanges === undefined || run.release.recordTypes === undefined)

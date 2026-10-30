@@ -1,3 +1,4 @@
+import { recordChangeListSchema } from "../records/record-change-list";
 import { valueTypesCompatible, workflowValueTypeSchema } from "../catalogue/catalogues";
 import { isIsoCurrencyCode } from "../catalogue/currencies";
 import { checkFlowFormula } from "../rules/flow-formula-check";
@@ -874,6 +875,31 @@ export function validateFlow(
     // An undeclared property is refused by the placement check; its references still resolve.
     if (declared === undefined) {
       valueType(value, where, path);
+      return;
+    }
+    if (declared.type === "record_change_list") {
+      const changes = recordChangeListSchema.safeParse(
+        value.kind === "literal" && value.literal.type === "json" ? value.literal.value : undefined,
+      );
+      if (!changes.success) {
+        add(
+          path,
+          "vortex.definition.workflow_node_values",
+          "invalid_value",
+          "Changes must list the relationships to copy, their source record and their destination record",
+        );
+        return;
+      }
+      changes.data.forEach((change, index) => {
+        for (const name of ["subject", "target"] as const)
+          checkValue(
+            change[name],
+            ["record_reference"],
+            where,
+            [...path, "literal", "value", index, name],
+            true,
+          );
+      });
       return;
     }
     if (declared.type === "formula") {

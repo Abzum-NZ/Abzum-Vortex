@@ -94,6 +94,7 @@ export type FlowSelectedRecordReadProjection = Readonly<{
 export type FlowRecordType = Readonly<{
   relationships: readonly Readonly<{
     relationshipId: string;
+    cardinality: string;
     fromRecordTypeId: string;
     fromFieldId: string;
     targetRecordTypeIds: readonly string[];
@@ -223,7 +224,10 @@ export type FlowOrchestratorDependencies = Readonly<{
   records?: RecordSaveTaskPort;
   /** Record intents run only through the admitted segment's transaction. */
   recordChanges?: Readonly<{
-    readTargets(targets: readonly FlowRecordTarget[]): Promise<readonly FlowRecordTargetRead[]>;
+    readTargets(
+      targets: readonly FlowRecordTarget[],
+      lock?: boolean,
+    ): Promise<readonly FlowRecordTargetRead[]>;
     apply(commandId: string, intents: readonly RecordChangeIntent[]): Promise<RecordChangesResult>;
     restoreRevision(recordTypeId: string, recordId: string): Promise<number | undefined>;
   }>;

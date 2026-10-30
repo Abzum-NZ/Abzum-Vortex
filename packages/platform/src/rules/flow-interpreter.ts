@@ -1,3 +1,4 @@
+import { evaluateRecordChangeValues } from "./flow-record-change-values";
 import {
   at,
   failed,
@@ -652,7 +653,7 @@ export const serverStepRunners = {
   "record.delete": "protected_task",
   "record.restore": "protected_task",
   "record.link": "protected_task",
-  "record.changes": "action_flow",
+  "record.changes": "protected_task",
   "event.announce": "action_flow",
 } as const satisfies Record<ServerStepType, ServerStepRunner>;
 
@@ -767,7 +768,7 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
   const registered = task as Extract<FlowTask, { properties: unknown }>;
   const definition = flowTaskRegistry[registered.type as keyof typeof flowTaskRegistry];
   if (definition === undefined) return failed("task_unknown", "failed", taskId);
-  const properties = evaluateProperties(
+  const evaluatedProperties = evaluateProperties(
     registered.type === "data.calculate"
       ? Object.fromEntries(
           Object.entries(registered.properties).filter(([name]) => name !== "formula"),
@@ -778,6 +779,14 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
     flow,
     taskId,
   );
+
+  const properties =
+    registered.type === "record.changes"
+      ? evaluateRecordChangeValues(evaluatedProperties, (value) =>
+          evaluateValue(value, state, activation, flow, taskId),
+        )
+      : evaluatedProperties;
+  if (properties === undefined) return failed("value_unresolved", "failed", taskId);
 
   if (definition.effect === "pure") {
     if (!serverRuns(registered.type, "interpreter")) failed("task_not_available", "failed", taskId);

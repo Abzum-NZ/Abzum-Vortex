@@ -505,18 +505,24 @@ export const applyRecordChanges = async (
   const results = completed(stored);
   if (results.length !== subjects.length)
     throw contractError("RECORD_CHANGES_RESULT_COUNT_INVALID", undefined);
-  const warnings = graph.records.flatMap((record) =>
-    rules.get(record.recordKey)!.warnings.map((warning) =>
+  const warnings = graph.records.flatMap((record) => {
+    const recordId =
+      record.recordId ??
+      results[commands.findIndex((_command, index) => record.recordKey === `intent:${index}`)]
+        ?.recordId;
+    if (recordId === undefined)
+      throw contractError("RECORD_CHANGE_WARNING_TARGET_INVALID", undefined);
+    return rules.get(record.recordKey)!.warnings.map((warning) =>
       record.canRead
-        ? warning
+        ? { ...warning, record: { recordTypeId: record.recordType.recordTypeId, recordId } }
         : {
             ...warning,
             code: "related_record_rule_warning",
             message: "This change raised a warning on a related record",
             messageIsLiteral: true,
           },
-    ),
-  );
+    );
+  });
   return {
     kind: "completed",
     results,

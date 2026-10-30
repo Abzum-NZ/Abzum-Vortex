@@ -15,7 +15,7 @@ import type { FlowOrchestratorDependencies } from "./flow-orchestrator-types";
 export const createFlowRecordChangePort = (
   bound: BoundHumanOrganizationRequest,
 ): NonNullable<FlowOrchestratorDependencies["recordChanges"]> => ({
-  readTargets: async (targets) => {
+  readTargets: async (targets, lock = false) => {
     const unique = [
       ...new Map(
         targets.map((target) => [
@@ -25,11 +25,9 @@ export const createFlowRecordChangePort = (
       ).values(),
     ];
     const rows = await bound.transaction.query<{ ordinal: number; result: unknown }>`
-      select item.ordinality::integer as ordinal,
-        vortex_record.read_record((item.value ->> 'recordTypeId')::uuid, (item.value ->> 'recordId')::uuid) as result
-      from pg_catalog.jsonb_array_elements(${JSON.stringify(unique)}::text::jsonb)
-        with ordinality as item(value, ordinality)
-      order by item.ordinality
+      select ordinal, result from vortex_record.read_record_change_targets(
+        ${JSON.stringify(unique)}::text::jsonb, ${lock}::boolean
+      ) order by ordinal
     `;
     if (rows.length !== unique.length) throw new Error("FLOW_RECORD_TARGETS_INVALID");
     return rows.flatMap((row, index) => {

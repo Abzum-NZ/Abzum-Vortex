@@ -874,6 +874,7 @@ export async function invokeInstalledFlow(
             : [relationship.toRecordType];
         return {
           relationshipId: String(relationship.relationshipId),
+          cardinality: relationship.cardinality,
           fromRecordTypeId: String(relationship.fromRecordTypeId),
           fromFieldId: String(relationship.fromFieldId),
           targetRecordTypeIds: targets.map((target) => {

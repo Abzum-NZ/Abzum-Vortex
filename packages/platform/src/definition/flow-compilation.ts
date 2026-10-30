@@ -1,5 +1,6 @@
 import { flowRuntimeValueOf } from "../rules/flow-runtime-value";
-import type { JsonValue } from "../catalogue/common";
+import { recordChangeListSchema } from "../records/record-change-list";
+import { jsonValueSchema, type JsonValue } from "../catalogue/common";
 import type { DefinitionValidationLocation } from "../catalogue/validation-errors";
 import {
   flowReadFieldsProjectionSchema,
@@ -327,13 +328,35 @@ const resolveProperty = (
       for (const alias of Object.keys(value.entries)) ctx.resolver.field(record, alias);
       return value;
     }
-    case "record_change_list":
-      // A literal change list names record types and fields that have no declared shape to
-      // resolve here, so it is refused rather than kept with readable aliases. Constructed maps
-      // and arrays are refused too: neither proves canonical record and field identities.
-      if (value.kind === "literal" || value.kind === "map" || value.kind === "array")
+    case "record_change_list": {
+      if (value.kind !== "literal" || value.literal.type !== "json")
         throw refusal(ctx, "vortex.definition.workflow_node_values", "invalid_value");
-      return value;
+      const changes = recordChangeListSchema.safeParse(value.literal.value);
+      if (!changes.success)
+        throw refusal(ctx, "vortex.definition.workflow_node_values", "invalid_value");
+      return {
+        kind: "literal",
+        literal: {
+          type: "json",
+          value: jsonValueSchema.parse(
+            changes.data.map((change, index) => ({
+              ...change,
+              relationshipIds: change.relationshipIds.map((alias, relationshipIndex) => {
+                const { record, member } = splitMemberReference(ctx, alias);
+                return resolveAt(ctx, ctx.resolver.relationship(record, member), [
+                  ...path,
+                  "literal",
+                  "value",
+                  index,
+                  "relationshipIds",
+                  relationshipIndex,
+                ]);
+              }),
+            })),
+          ),
+        },
+      };
+    }
     default:
       // Generic values retain their complete shape, including bounded paths on task-output refs.
       return value;
