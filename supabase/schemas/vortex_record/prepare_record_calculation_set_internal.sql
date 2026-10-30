@@ -32,11 +32,15 @@ declare
   lifecycle jsonb;
   named_prepared jsonb;
   meta_cache jsonb := '{}'::jsonb;
+  type_contexts jsonb := '{}'::jsonb;
   cache_key text;
   update_targets jsonb := '[]'::jsonb;
   update_indexes integer[] := array[]::integer[];
   update_loaded jsonb[] := array[]::jsonb[];
   update_decisions jsonb[] := array[]::jsonb[];
+  locked_targets jsonb := '[]'::jsonb;
+  locked_loaded jsonb[] := array[]::jsonb[];
+  locked_memo jsonb := '{}'::jsonb;
   loaded_set jsonb;
   decision_set jsonb;
   set_position integer;
@@ -74,6 +78,18 @@ begin
         vortex_record.resolve_record_action_context_internal(
           (subject ->> 'recordTypeId')::uuid, subject ->> 'operation'
         ));
+      -- The record type's BeforeSave flows are read once here, not again for every record.
+      type_contexts := type_contexts || pg_catalog.jsonb_build_object(cache_key,
+        pg_catalog.jsonb_build_object('meta', meta_cache -> cache_key)
+        || case
+          when pg_catalog.jsonb_typeof(meta_cache -> cache_key -> 'recordType') = 'object'
+            and not (meta_cache -> cache_key -> 'recordType' ? 'systemProjection')
+          then pg_catalog.jsonb_build_object('beforeSaveFlows', vortex_record.before_save_flows_for_record_type_internal(
+            (meta_cache -> cache_key ->> 'moduleRootId')::uuid,
+            (meta_cache -> cache_key ->> 'moduleReleaseRevision')::bigint,
+            (subject ->> 'recordTypeId')::uuid
+          ))
+          else '{}'::jsonb end);
     end if;
     if subject ->> 'operation' = 'update' and preview_installation is null
       and not (meta_cache -> cache_key -> 'recordType' ? 'systemProjection')
@@ -123,7 +139,8 @@ begin
       prepared := coalesce(named_prepared, vortex_record.prepare_record_values_internal(
         subject ->> 'operation', (subject ->> 'recordTypeId')::uuid, (subject ->> 'recordId')::uuid,
         (subject ->> 'expectedConcurrencyNumber')::bigint, subject -> 'submittedValues',
-        (subject ->> 'selectedGroupId')::uuid, (subject ->> 'activityId')::uuid
+        (subject ->> 'selectedGroupId')::uuid, (subject ->> 'activityId')::uuid,
+        type_contexts -> ((subject ->> 'recordTypeId') || ':' || (subject ->> 'operation'))
       ));
       if prepared ->> 'outcome' is distinct from 'prepared' then
         return prepared || pg_catalog.jsonb_build_object('index', subject_index);
@@ -199,7 +216,31 @@ begin
     return pg_catalog.jsonb_build_object('outcome', 'restart');
   end if;
   -- Reuse current access, field policy, metadata and rule preparation after the
-  -- complete concrete union is locked. No record or receipt is written here.
+  -- complete concrete union is locked. No record or receipt is written here. Every plain
+  -- update source is loaded again at its expected revision and decided again with one load
+  -- and one decision for the whole set.
+  if pg_catalog.cardinality(update_indexes) > 0 then
+    select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'recordTypeId', p_subjects -> index_value -> 'recordTypeId',
+      'recordId', p_subjects -> index_value -> 'recordId',
+      'expectedConcurrencyNumber', p_subjects -> index_value -> 'expectedConcurrencyNumber'
+    ) order by position)
+    into locked_targets
+    from pg_catalog.unnest(update_indexes) with ordinality as target(index_value, position);
+    loaded_set := vortex_record.load_record_access_facts_internal('update', locked_targets);
+    for target_position in 1 .. pg_catalog.jsonb_array_length(loaded_set) loop
+      locked_loaded[update_indexes[target_position] + 1] := loaded_set -> (target_position - 1);
+    end loop;
+    locked_memo := vortex_record.record_access_decision_memo_internal((
+      select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object('owner', update_indexes[loaded.ordinality],
+        'input', pg_catalog.jsonb_build_object(
+          'declaration', loaded.value -> 'declaration',
+          'recordId', locked_targets -> (loaded.ordinality - 1)::integer -> 'recordId',
+          'facts', loaded.value -> 'facts')) order by loaded.ordinality)
+      from pg_catalog.jsonb_array_elements(loaded_set) with ordinality as loaded(value, ordinality)
+      where loaded.value ->> 'outcome' = 'loaded'
+        and pg_catalog.jsonb_typeof(loaded.value -> 'declaration') = 'object'));
+  end if;
   for subject, subject_index in
     select item.value, (item.ordinality - 1)::integer
     from pg_catalog.jsonb_array_elements(p_subjects) with ordinality as item(value, ordinality)
@@ -210,7 +251,9 @@ begin
       vortex_record.prepare_record_values_internal(
         subject ->> 'operation', (subject ->> 'recordTypeId')::uuid, (subject ->> 'recordId')::uuid,
         (subject ->> 'expectedConcurrencyNumber')::bigint, subject -> 'submittedValues',
-        (subject ->> 'selectedGroupId')::uuid, (subject ->> 'activityId')::uuid
+        (subject ->> 'selectedGroupId')::uuid, (subject ->> 'activityId')::uuid,
+        type_contexts -> ((subject ->> 'recordTypeId') || ':' || (subject ->> 'operation')),
+        locked_loaded[subject_index + 1], locked_memo -> (subject_index::text)
       )
     );
     if prepared ->> 'outcome' is distinct from 'prepared' then

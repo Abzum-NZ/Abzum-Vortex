@@ -14,14 +14,17 @@ declare
   input_value jsonb := pg_catalog.jsonb_build_object(
     'declaration', p_declaration, 'recordId', p_record_id, 'facts', p_facts
   );
+  input_digest text;
   remembered jsonb;
 begin
-  -- A decision the whole set already made for this exact input is reused; any other input is
-  -- decided now, so a memo never answers for a different declaration, record or facts.
+  -- A decision the whole set already made for this exact input (found by the digest of its text)
+  -- is reused; any other input is decided now, so a memo never answers for a different
+  -- declaration, record or facts.
   if p_memo is not null then
+    input_digest := pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(input_value::text, 'UTF8')), 'hex');
     select entry.value -> 'decision' into remembered
-    from pg_catalog.jsonb_array_elements(p_memo) as entry(value)
-    where entry.value -> 'input' = input_value
+    from pg_catalog.jsonb_array_elements(p_memo -> 'decisions') as entry(value)
+    where entry.value ->> 'digest' = input_digest
     limit 1;
     if remembered is not null then return remembered; end if;
   end if;
