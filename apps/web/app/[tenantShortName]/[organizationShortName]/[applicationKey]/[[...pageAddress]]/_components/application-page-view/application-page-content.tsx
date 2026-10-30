@@ -307,7 +307,11 @@ export function ApplicationPageViewContent({
   const { formBlock, flowRuntime, webMcpRuntime, runtimeState, intentHostElement } = useFlowRuntime(
     {
       application,
-      navigationKey,
+      flowScopeKey: JSON.stringify([
+        addressKey,
+        application.installationRevision,
+        application.releaseKey,
+      ]),
       subject,
       continuingFormsRef,
       formCancelledRef,

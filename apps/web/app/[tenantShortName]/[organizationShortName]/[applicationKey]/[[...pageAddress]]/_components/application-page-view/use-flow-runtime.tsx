@@ -48,7 +48,7 @@ import { unavailableNotice } from "./notices";
 
 export function useFlowRuntime({
   application,
-  navigationKey,
+  flowScopeKey,
   subject,
   continuingFormsRef,
   formCancelledRef,
@@ -75,7 +75,7 @@ export function useFlowRuntime({
   setPanelRef,
 }: Readonly<{
   application: ApplicationPageModel["invocation"];
-  navigationKey: string;
+  flowScopeKey: string;
   subject: ApplicationPageModel["subject"];
   continuingFormsRef: RefObject<Map<string, SubmittedForm>>;
   formCancelledRef: RefObject<boolean>;
@@ -385,7 +385,7 @@ export function useFlowRuntime({
   });
   const committedRef = useRef(committed);
   committedRef.current = committed;
-  const runtimeState = useMemo(() => createFlowRuntimeState(), [navigationKey]);
+  const runtimeState = useMemo(() => createFlowRuntimeState(), [flowScopeKey]);
   useEffect(() => () => runtimeState.dispose(), [runtimeState]);
   const bindingSettings = useMemo(() => {
     const bindings = new Map<
