@@ -88,7 +88,8 @@ export const readMemberRoleAssignable = async (
 };
 
 /**
- * Names an assignment that declined or failed. The permission was proved just before the
+ * Names an assignment that declined or failed. A request that could not run is a failure to
+ * retry, never an access refusal. For a refusal the permission was proved just before the
  * assignment's own transaction, so it is proved again: still held means someone else changed
  * access in between, not held means the permission itself.
  */
@@ -97,7 +98,10 @@ const assignmentDeclined = async (
   session: IdentitySession,
   selector: FirstInstallSelector,
   detail: string,
+  declined: Readonly<{ kind: string }>,
 ): Promise<never> => {
+  if (declined.kind === "temporarily_unavailable")
+    installationProblem(detail, "temporarily_unavailable");
   await proveAssignmentManagement(environment, session, selector);
   return refusedFor(detail, "access_changed");
 };
@@ -383,6 +387,7 @@ const applyFirstInstallRoles = async (
         session,
         selector,
         "first_install_member_role_revoke_refused",
+        revoked,
       );
     return false;
   }
@@ -430,6 +435,7 @@ const applyFirstInstallRoles = async (
       session,
       selector,
       "first_install_member_role_assignment_refused",
+      assignResult,
     );
   verifyAssignment(assignResult.value.assignment);
   return complete !== undefined;
