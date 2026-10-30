@@ -220,21 +220,25 @@ begin
     target_meta := vortex_record.resolve_record_action_context_internal(
       p_record_type_id, 'update'
     );
-    target_loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'update', copy_target.record_id, null, null::jsonb
-    );
+    target_loaded := (vortex_record.load_record_access_facts_internal(
+      'update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordTypeId', p_record_type_id,
+        'recordId', copy_target.record_id
+      ))
+    ) -> 0);
     if target_loaded ->> 'outcome' is distinct from 'loaded' then
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'relationship_copy_target_unavailable',
         'correlationId', context_value -> 'correlationId'
       );
     end if;
-    target_decision := vortex_access.evaluate_organization_record_access_internal(
-      target_meta -> 'declaration', copy_target.record_id,
-      (target_loaded -> 'facts') || pg_catalog.jsonb_build_object(
-        'binding', target_meta -> 'declaration' -> 'recordBinding'
+    target_decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'declaration', target_meta -> 'declaration',
+        'recordId', copy_target.record_id,
+        'facts', (target_loaded -> 'facts') || pg_catalog.jsonb_build_object( 'binding', target_meta -> 'declaration' -> 'recordBinding' )
       )
-    );
+    )) -> 0);
     if target_decision ->> 'outcome' is distinct from 'allowed' then
       return pg_catalog.jsonb_build_object(
         'outcome', 'permission_refused',

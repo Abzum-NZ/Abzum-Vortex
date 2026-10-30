@@ -68,9 +68,13 @@ begin
   if loaded ->> 'outcome' is distinct from 'loaded' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'record_unavailable');
   end if;
-  decision := vortex_access.evaluate_organization_record_access_internal(
-    loaded -> 'declaration', p_subject_record_id, loaded -> 'facts'
-  );
+  decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+    pg_catalog.jsonb_build_object(
+      'declaration', loaded -> 'declaration',
+      'recordId', p_subject_record_id,
+      'facts', loaded -> 'facts'
+    )
+  )) -> 0);
   if decision ->> 'outcome' is distinct from 'allowed' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'record_unavailable');
   end if;

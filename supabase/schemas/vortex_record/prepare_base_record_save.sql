@@ -149,9 +149,12 @@ begin
 
     -- The writable system projection is prepared through its protected read
     -- model. Its final write remains inside apply_record_changes.
-    loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'read', p_record_id, null, null::jsonb
-    );
+    loaded := (vortex_record.load_record_access_facts_internal(
+      'read', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordTypeId', p_record_type_id,
+        'recordId', p_record_id
+      ))
+    ) -> 0);
     if loaded ->> 'outcome' <> 'loaded' then
       return pg_catalog.jsonb_build_object('outcome', 'refused');
     end if;
@@ -163,9 +166,13 @@ begin
       );
     end if;
     if preview_installation is null then
-      decision := vortex_access.evaluate_organization_record_access_internal(
-        loaded -> 'declaration', p_record_id, loaded -> 'facts'
-      );
+      decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+        pg_catalog.jsonb_build_object(
+          'declaration', loaded -> 'declaration',
+          'recordId', p_record_id,
+          'facts', loaded -> 'facts'
+        )
+      )) -> 0);
       if decision ->> 'outcome' <> 'allowed' then
         perform vortex_record.append_record_activity_internal(p_activity_id, 'update_record', array[organization_id_value]::uuid[], array[]::uuid[], 'refused');
         return pg_catalog.jsonb_build_object(
@@ -199,9 +206,13 @@ begin
   end if;
 
   if p_operation = 'update' then
-    loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'update', p_record_id, p_expected_concurrency_number, null::jsonb
-    );
+    loaded := (vortex_record.load_record_access_facts_internal(
+      'update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordTypeId', p_record_type_id,
+        'recordId', p_record_id,
+        'expectedConcurrencyNumber', p_expected_concurrency_number
+      ))
+    ) -> 0);
     if loaded ->> 'outcome' = 'conflict' then
       return pg_catalog.jsonb_build_object(
         'outcome', 'conflict',
@@ -222,9 +233,13 @@ begin
       end if;
       bounds := preview_bounds;
     else
-      decision := vortex_access.evaluate_organization_record_access_internal(
-        loaded -> 'declaration', p_record_id, loaded -> 'facts'
-      );
+      decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+        pg_catalog.jsonb_build_object(
+          'declaration', loaded -> 'declaration',
+          'recordId', p_record_id,
+          'facts', loaded -> 'facts'
+        )
+      )) -> 0);
       if decision ->> 'outcome' <> 'allowed' then
         perform vortex_record.append_record_activity_internal(p_activity_id, 'update_record', array[organization_id_value]::uuid[], array[]::uuid[], 'refused');
         return pg_catalog.jsonb_build_object(

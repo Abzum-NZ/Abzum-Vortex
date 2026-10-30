@@ -243,9 +243,12 @@ begin
       end if;
     end loop;
 
-    loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'create', record_id_value, null, null::jsonb
-    );
+    loaded := (vortex_record.load_record_access_facts_internal(
+      'create', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordTypeId', p_record_type_id,
+        'recordId', record_id_value
+      ))
+    ) -> 0);
     if loaded ->> 'outcome' <> 'loaded' then
       refusal_reason := 'record_unavailable';
       raise exception using errcode = 'P4020', message = refusal_reason;
@@ -254,9 +257,13 @@ begin
       'binding', meta -> 'declaration' -> 'recordBinding'
     );
     if preview_installation is null then
-      decision := vortex_access.evaluate_organization_record_access_internal(
-        meta -> 'declaration', record_id_value, facts
-      );
+      decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+        pg_catalog.jsonb_build_object(
+          'declaration', meta -> 'declaration',
+          'recordId', record_id_value,
+          'facts', facts
+        )
+      )) -> 0);
       if decision ->> 'outcome' <> 'allowed' then
         refusal_reason := 'access_refused';
         raise exception using errcode = 'P4020', message = refusal_reason;
