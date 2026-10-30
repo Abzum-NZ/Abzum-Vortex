@@ -25,6 +25,7 @@ import {
   type FlowFormAnswer,
   type FlowFormIntent,
   type FlowIntentHost,
+  type FlowMessageIntent,
   type FlowInvokeClient,
   type LinkNavigationEnvironment,
   type PlatformThemeTokens,
@@ -372,11 +373,6 @@ export function useFlowRuntime({
     },
     [choiceEvidenceFor, choicePayloadFor, currentData, model, navigation, resolvePageHref, router],
   );
-  const { host, element: intentHostElement } = useFlowIntentHost({
-    renderForm,
-    navigation: navigationEnvironment,
-    setPanel: (panel, state) => setPanelRef.current?.(panel, state),
-  });
   const committedRef = useRef(committed);
   committedRef.current = committed;
   const runtimeStateRef = useRef<{
@@ -391,6 +387,18 @@ export function useFlowRuntime({
     };
   const runtimeState = runtimeStateRef.current.state;
   useEffect(() => () => runtimeState.messages.dispose(), [runtimeState]);
+  const messageActionRef = useRef<(message: FlowMessageIntent) => void>(() => undefined);
+  const {
+    host,
+    element: intentHostElement,
+    banner: messageBanner,
+  } = useFlowIntentHost({
+    renderForm,
+    navigation: navigationEnvironment,
+    state: runtimeState,
+    onMessageAction: (message) => messageActionRef.current(message),
+    setPanel: (panel, state) => setPanelRef.current?.(panel, state),
+  });
   const bindingSettings = useMemo(() => {
     const bindings = new Map<
       string,
@@ -454,6 +462,26 @@ export function useFlowRuntime({
       runtimeState,
     ],
   );
+  messageActionRef.current = (message) => {
+    const all = Object.values(model.bindings).flat();
+    const source = all.find((binding) => binding.bindingId === message.originBindingId);
+    const authoredId = source?.messageAction?.authoredBindingId ?? source?.bindingId;
+    const action = all.find(
+      (binding) =>
+        authoredId !== undefined &&
+        binding.messageAction !== undefined &&
+        binding.messageAction.authoredBindingId === authoredId &&
+        binding.messageAction.sourceFlowId === message.sourceFlowId &&
+        binding.messageAction.taskId === message.taskId &&
+        binding.flowId === message.actionFlow,
+    );
+    if (action === undefined) {
+      console.error("[flow] message action binding unavailable");
+      setNotice(unavailableNotice);
+      return;
+    }
+    void flowRuntime.dispatch(action, message.actionInputs, crypto.randomUUID());
+  };
   const webMcpRuntime = useMemo(
     () =>
       createFlowRuntime({
@@ -488,5 +516,5 @@ export function useFlowRuntime({
   }, [currentData, flowRuntime, model.bindings]);
   const formBlock = useMemo(() => createFormBlockRuntime(flowRuntime), [flowRuntime]);
 
-  return { formBlock, flowRuntime, webMcpRuntime, runtimeState, intentHostElement };
+  return { formBlock, flowRuntime, webMcpRuntime, runtimeState, intentHostElement, messageBanner };
 }

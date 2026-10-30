@@ -216,6 +216,7 @@ export async function runBrowserFlow(
           await host.showMessage(
             {
               title: "Saved, with a warning",
+              target: "dialog",
               text: result.warnings.map((warning) => warning.message).join(" "),
               severity: "warning",
             },

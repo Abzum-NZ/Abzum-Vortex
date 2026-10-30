@@ -303,8 +303,8 @@ export function ApplicationPageViewContent({
     requestChoicePageRef,
   });
 
-  const { formBlock, flowRuntime, webMcpRuntime, runtimeState, intentHostElement } = useFlowRuntime(
-    {
+  const { formBlock, flowRuntime, webMcpRuntime, runtimeState, intentHostElement, messageBanner } =
+    useFlowRuntime({
       application,
       subject,
       continuingFormsRef,
@@ -346,8 +346,7 @@ export function ApplicationPageViewContent({
         void refreshPlacements(targets, undefined, { content: true });
       },
       setPanelRef,
-    },
-  );
+    });
 
   /** A page-level address change (a guided form step) renders the page again on the server. */
   const setQuery = useCallback(
@@ -673,50 +672,44 @@ export function ApplicationPageViewContent({
           readSettings={readCompiledItemSettings}
           contentRegion
           feedback={
-            pageFeedback === undefined &&
-            (notice === undefined || notice.tone === "info") &&
-            model.bodyContentAvailable !== false ? undefined : (
-              <>
-                {pageFeedback}
-                {model.bodyContentAvailable !== false ? null : model.firstRecordTypeHref !==
-                  undefined ? (
-                  <FirstRecordTypeEmptyState
-                    action={
-                      <Button
-                        nativeButton={false}
-                        render={<Link href={model.firstRecordTypeHref} />}
-                      >
-                        Open the Data tab in Studio
-                      </Button>
-                    }
-                  />
-                ) : (
-                  <Alert role="status" aria-live="polite">
-                    <AlertDescription>No page content is available.</AlertDescription>
-                  </Alert>
-                )}
-                {notice === undefined || notice.tone === "info" ? null : (
-                  <Alert
-                    variant={notice.tone === "problem" ? "destructive" : "default"}
-                    role={notice.tone === "problem" ? "alert" : "status"}
-                    aria-live="polite"
-                    data-vortex-notice={notice.tone}
-                  >
-                    <AlertDescription>
-                      {notice.text}
-                      {notice.link === undefined ? null : (
-                        <>
-                          {" "}
-                          <a className="underline" href={notice.link.href}>
-                            {notice.link.label}
-                          </a>
-                        </>
-                      )}
-                    </AlertDescription>
-                  </Alert>
-                )}
-              </>
-            )
+            <>
+              {messageBanner}
+              {pageFeedback}
+              {model.bodyContentAvailable !== false ? null : model.firstRecordTypeHref !==
+                undefined ? (
+                <FirstRecordTypeEmptyState
+                  action={
+                    <Button nativeButton={false} render={<Link href={model.firstRecordTypeHref} />}>
+                      Open the Data tab in Studio
+                    </Button>
+                  }
+                />
+              ) : (
+                <Alert role="status" aria-live="polite">
+                  <AlertDescription>No page content is available.</AlertDescription>
+                </Alert>
+              )}
+              {notice === undefined || notice.tone === "info" ? null : (
+                <Alert
+                  variant={notice.tone === "problem" ? "destructive" : "default"}
+                  role={notice.tone === "problem" ? "alert" : "status"}
+                  aria-live="polite"
+                  data-vortex-notice={notice.tone}
+                >
+                  <AlertDescription>
+                    {notice.text}
+                    {notice.link === undefined ? null : (
+                      <>
+                        {" "}
+                        <a className="underline" href={notice.link.href}>
+                          {notice.link.label}
+                        </a>
+                      </>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+            </>
           }
           composition={currentContent as unknown as RenderedPage}
           registry={platformComponentRegistry}

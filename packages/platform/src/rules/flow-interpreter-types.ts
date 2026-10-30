@@ -93,6 +93,7 @@ type Awaiting =
 export type FlowInterfaceIntent = Readonly<{
   kind:
     | "show_message"
+    | "clear_message"
     | "show_form"
     | "confirm"
     | "navigate"

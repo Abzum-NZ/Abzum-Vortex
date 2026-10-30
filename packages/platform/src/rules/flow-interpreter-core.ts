@@ -831,7 +831,9 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
       return { kind: "continue" };
     }
     const kind = Object.hasOwn(pageStepIntents, registered.type)
-      ? pageStepIntents[registered.type as PageIntentStepType | "interface.set_value"]
+      ? pageStepIntents[
+          registered.type as PageIntentStepType | "interface.set_value" | "interface.clear_message"
+        ]
       : undefined;
     if (kind === undefined) return failed("task_not_available", "failed", taskId);
     const intent: FlowInterfaceIntent = { kind, taskId, properties };

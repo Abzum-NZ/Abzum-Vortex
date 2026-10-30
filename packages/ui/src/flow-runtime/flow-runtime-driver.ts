@@ -25,6 +25,15 @@ export async function runFlowBinding(
       timeZone: options.timeZone,
       host: {
         ...options.host,
+        showMessage: (message, signal) =>
+          options.host.showMessage(
+            {
+              ...message,
+              originBindingId: binding.bindingId,
+              sourceFlowId: binding.flowId,
+            },
+            signal,
+          ),
         setPageValues: options.state.pageValues.write,
         setFormValue: (form, field, value) => {
           const cycle = options.state.cycleFor(clickId);

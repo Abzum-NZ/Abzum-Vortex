@@ -7,6 +7,7 @@ import type { FlowInterfaceIntent } from "./flow-interpreter-core";
  */
 export const pageStepIntents = {
   "interface.show_message": "show_message",
+  "interface.clear_message": "clear_message",
   "interface.show_form": "show_form",
   "interface.confirm": "confirm",
   "interface.navigate": "navigate",
@@ -15,6 +16,6 @@ export const pageStepIntents = {
   "interface.set_filter": "set_filter",
   "interface.set_value": "set_value",
 } as const satisfies Record<
-  PageIntentStepType | "interface.set_value",
+  PageIntentStepType | "interface.set_value" | "interface.clear_message",
   FlowInterfaceIntent["kind"]
 >;

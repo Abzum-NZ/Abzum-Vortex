@@ -22,6 +22,7 @@ const presentation: PageStepImplementation = async (intent, host, signal) => {
 /** Registered page steps have an intent implementation; the interpreter handles control steps. */
 const pageStepImplementations = {
   "interface.show_message": presentation,
+  "interface.clear_message": presentation,
   "interface.show_form": async (intent, host, signal) => {
     const form = readFormIntent(intent);
     return form === undefined ? undefined : host.showForm(form, signal);
@@ -37,13 +38,17 @@ const pageStepImplementations = {
   "interface.set_panel": presentation,
   "interface.set_filter": presentation,
   "interface.set_value": presentation,
-} satisfies Record<PageIntentStepType | "interface.set_value", PageStepImplementation>;
+} satisfies Record<
+  PageIntentStepType | "interface.set_value" | "interface.clear_message",
+  PageStepImplementation
+>;
 
 /** The same page implementations handle both local steps and server-returned intents. */
 export const performPageFlowIntent: PageStepImplementation = (intent, host, signal) => {
   const implementation =
     pageStepImplementations[
-      `interface.${intent.kind}` as PageIntentStepType | "interface.set_value"
+      `interface.${intent.kind}` as
+        PageIntentStepType | "interface.set_value" | "interface.clear_message"
     ];
   if (implementation === undefined) throw new Error("FLOW_PAGE_STEP_UNAVAILABLE");
   return implementation(intent, host, signal);

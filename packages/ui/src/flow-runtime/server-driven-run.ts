@@ -96,6 +96,7 @@ export async function driveServerFlow(
             await host.showMessage(
               {
                 title: "Saved, with a warning",
+                target: "dialog",
                 text: response.warnings.map((warning) => warning.message).join(" "),
                 severity: "warning",
               },
