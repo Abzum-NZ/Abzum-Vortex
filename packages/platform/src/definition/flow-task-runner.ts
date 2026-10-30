@@ -62,6 +62,7 @@ import type {
   Run,
 } from "./flow-orchestrator-types";
 import type { RecordChangeIntent } from "../records/apply-record-changes";
+import { planRecordLink } from "./flow-relationship-changes";
 
 /**
  * Runs the protected tasks of one flow run: plans each task, claims its effect in the ledger and
@@ -81,7 +82,13 @@ export const createFlowTaskRunner = (
 
   /** What one protected task will run, decided before its effect is claimed. */
   type TaskPlan =
-    | Readonly<{ kind: "changes"; commandId: string; intents: readonly RecordChangeIntent[] }>
+    | Readonly<{
+        kind: "changes";
+        commandId: string;
+        intents: readonly RecordChangeIntent[];
+        outputs?: Readonly<Record<string, JsonValue>>;
+        warningTarget?: Readonly<{ recordTypeId: string; recordId: string }>;
+      }>
     | Readonly<{ kind: "operation"; entry: PlatformOperation; inputs: Record<string, unknown> }>
     | Readonly<{
         kind: "save";
@@ -150,21 +157,26 @@ export const createFlowTaskRunner = (
       )
         return undefined;
       const result = isRecord(outputs.result) ? outputs.result : undefined;
+      const changedTarget =
+        plan.kind === "changes" ? (plan.warningTarget ?? plan.intents[0]) : undefined;
       const recordId = recordIdSchema.safeParse(
         plan.kind === "changes"
           ? (outputs.record ??
-              ("recordId" in plan.intents[0]! ? plan.intents[0].recordId : undefined))
+              (changedTarget !== undefined && "recordId" in changedTarget
+                ? changedTarget.recordId
+                : undefined))
           : plan.kind === "save" || plan.asSave
             ? outputs.record
             : result?.recordId,
       );
-      if (!recordId.success) return undefined;
+      if (!recordId.success || (plan.kind === "changes" && changedTarget === undefined))
+        return undefined;
       const current = await dependencies.currentRecords.read(
         run.authority.session,
         run.authority.selection,
         {
           recordTypeId:
-            plan.kind === "changes" ? plan.intents[0]!.recordTypeId : plan.command.recordTypeId,
+            plan.kind === "changes" ? changedTarget!.recordTypeId : plan.command.recordTypeId,
           recordId: recordId.data,
         },
       );
@@ -270,6 +282,7 @@ export const createFlowTaskRunner = (
     recordTypeId: string,
     candidate: unknown,
     operation?: "restore",
+    currentRevision?: number,
   ): Promise<Readonly<{ recordId: string; revision: number }> | TaskResult> => {
     const recordId = recordIdSchema.safeParse(candidate);
     if (!recordId.success) return { outcome: "validation" };
@@ -289,10 +302,13 @@ export const createFlowTaskRunner = (
         ? { outcome: "refused" }
         : { recordId: recordId.data, revision: current };
     }
-    const read = await dependencies.subjects.read(run.authority.session, run.authority.selection, {
-      recordTypeId,
-      recordId: recordId.data,
-    });
+    const read =
+      currentRevision === undefined
+        ? await dependencies.subjects.read(run.authority.session, run.authority.selection, {
+            recordTypeId,
+            recordId: recordId.data,
+          })
+        : { kind: "read" as const, revision: currentRevision };
     if (read.kind !== "read") return { outcome: read.kind === "refused" ? "refused" : "failed" };
     return {
       recordId: recordId.data,
@@ -369,6 +385,49 @@ export const createFlowTaskRunner = (
     call: FlowProtectedTaskCall,
   ): Promise<Readonly<{ plan: TaskPlan }> | TaskResult> => {
     const commandId = effectCommandId(state.runId, call.taskPath, call.iteration);
+
+    if (call.taskType === "record.link") {
+      if (dependencies.recordChanges === undefined || run.release.recordTypes === undefined)
+        return notAvailable(
+          run,
+          call,
+          "This workflow can't link records here.",
+          "the admitted record change port",
+        );
+      const linked = await planRecordLink(
+        run.release.recordTypes,
+        call.properties,
+        dependencies.recordChanges.readTargets,
+      );
+      if (linked.outcome !== "planned")
+        return {
+          outcome: linked.outcome,
+          ...(linked.reason === undefined ? {} : { diagnostic: { code: linked.reason } }),
+        };
+      const target = await resolveRecordTarget(
+        run,
+        state,
+        call,
+        linked.subject.recordTypeId,
+        linked.subject.recordId,
+        undefined,
+        linked.subject.revision,
+      );
+      if ("outcome" in target) return target;
+      if (target.revision !== linked.subject.revision) return { outcome: "conflict" };
+      return {
+        plan: {
+          kind: "changes",
+          commandId,
+          intents: linked.intents,
+          outputs: linked.outputs,
+          warningTarget: {
+            recordTypeId: linked.subject.recordTypeId,
+            recordId: linked.subject.recordId,
+          },
+        },
+      };
+    }
 
     if (call.taskType === "record.delete" || call.taskType === "record.restore") {
       if (dependencies.recordChanges === undefined)
@@ -663,6 +722,10 @@ export const createFlowTaskRunner = (
     if (run.authority.kind !== "person") return { result: { outcome: "failed" }, stored: {} };
     const { session, selection } = run.authority;
     if (plan.kind === "changes") {
+      if (plan.intents.length === 0) {
+        const outputs = { ...plan.outputs };
+        return { result: { outcome: "completed", outputs }, stored: outputs };
+      }
       const changed = await dependencies.recordChanges!.apply(plan.commandId, plan.intents);
       if (changed.kind === "restart") return { result: { outcome: "conflict" }, stored: {} };
       if (changed.kind === "refused") {
@@ -682,7 +745,11 @@ export const createFlowTaskRunner = (
           result.concurrencyNumber,
         );
       const outputs: Record<string, JsonValue> =
-        call.taskType === "record.delete" ? {} : { record: changed.results[0]!.recordId };
+        plan.outputs !== undefined
+          ? { ...plan.outputs }
+          : call.taskType === "record.delete"
+            ? {}
+            : { record: changed.results[0]!.recordId };
       return {
         result: { outcome: "committed", outputs },
         stored: outputs,
@@ -1087,7 +1154,13 @@ export const createFlowTaskRunner = (
       return {
         result: planned,
         replay:
-          call.effect === "read" ? undefined : { kind: "task_result", outcome: planned.outcome },
+          call.effect === "read"
+            ? undefined
+            : {
+                kind: "task_result",
+                outcome: planned.outcome,
+                ...(planned.diagnostic === undefined ? {} : { diagnostic: planned.diagnostic }),
+              },
         warnings: [],
       };
     const ran = await runPlan(run, state, call, planned.plan);

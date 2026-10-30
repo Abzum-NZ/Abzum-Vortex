@@ -21,6 +21,7 @@ import type {
 } from "../records/record-links";
 import type { SaveRecordCommand } from "../records/records";
 import type { RecordChangeIntent, RecordChangesResult } from "../records/apply-record-changes";
+import type { FlowRecordTarget, FlowRecordTargetRead } from "./flow-relationship-changes";
 import type {
   FlowDefinition,
   FlowReadFieldsScalarType,
@@ -91,6 +92,12 @@ export type FlowSelectedRecordReadProjection = Readonly<{
 
 /** One record type of a release: each field's identity by its key and by its own identity. */
 export type FlowRecordType = Readonly<{
+  relationships: readonly Readonly<{
+    relationshipId: string;
+    fromRecordTypeId: string;
+    fromFieldId: string;
+    targetRecordTypeIds: readonly string[];
+  }>[];
   /** Lower-case field key or field id, to the field id. */
   fieldIds: ReadonlyMap<string, string>;
   /** Lower-case choice field id, to each of its options (by value) that a named action sets. */
@@ -216,6 +223,7 @@ export type FlowOrchestratorDependencies = Readonly<{
   records?: RecordSaveTaskPort;
   /** Record intents run only through the admitted segment's transaction. */
   recordChanges?: Readonly<{
+    readTargets(targets: readonly FlowRecordTarget[]): Promise<readonly FlowRecordTargetRead[]>;
     apply(commandId: string, intents: readonly RecordChangeIntent[]): Promise<RecordChangesResult>;
     restoreRevision(recordTypeId: string, recordId: string): Promise<number | undefined>;
   }>;

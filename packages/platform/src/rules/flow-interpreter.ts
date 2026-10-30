@@ -651,6 +651,7 @@ export const serverStepRunners = {
   "record.set_fields": "protected_task",
   "record.delete": "protected_task",
   "record.restore": "protected_task",
+  "record.link": "protected_task",
   "record.changes": "action_flow",
   "event.announce": "action_flow",
 } as const satisfies Record<ServerStepType, ServerStepRunner>;

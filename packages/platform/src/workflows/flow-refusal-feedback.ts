@@ -23,6 +23,7 @@ export const flowRefusalFeedbackCodeSchema = z.enum([
   "invitation_already_pending",
   "invitation_role_not_delegable",
   "connection_key_in_use",
+  "relationship_already_linked",
 ]);
 
 export type FlowRefusalFeedbackCode = z.infer<typeof flowRefusalFeedbackCodeSchema>;
@@ -30,6 +31,7 @@ export type FlowRefusalFeedbackCode = z.infer<typeof flowRefusalFeedbackCodeSche
 /** The one sentence each confirmed refusal shows, on a page notice and in a form. */
 export const flowRefusalFeedbackSentences: Readonly<Record<FlowRefusalFeedbackCode, string>> = {
   invalid_command: "The supplied inputs are invalid.",
+  relationship_already_linked: "This field already links to another record. Edit the field to replace its link.",
   duplicate_conflict: "A conflicting item already exists.",
   stale_revision: "This item changed. Refresh and try again.",
   multi_factor_required: "This needs two-step verification. Verify, or set it up, then try again.",

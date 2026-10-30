@@ -859,7 +859,34 @@ export async function invokeInstalledFlow(
         linked.set(setsChoice.option, named);
         optionActions.set(setsChoice.fieldId.toLowerCase(), linked);
       }
-      recordTypes.set(String(recordType.recordTypeId).toLowerCase(), { fieldIds, optionActions });
+      const relationships = recordType.relationships.map((relationship) => {
+        const field = recordType.fields.find((entry) =>
+          sameId(entry.fieldId, relationship.fromFieldId),
+        );
+        if (
+          field === undefined ||
+          (field.type !== "link" && field.type !== "link_to_one_of_several")
+        )
+          throw new Error("FLOW_RELATIONSHIP_FIELD_INVALID");
+        const targets =
+          relationship.toRecordType === undefined
+            ? relationship.toRecordTypes!
+            : [relationship.toRecordType];
+        return {
+          relationshipId: String(relationship.relationshipId),
+          fromRecordTypeId: String(relationship.fromRecordTypeId),
+          fromFieldId: String(relationship.fromFieldId),
+          targetRecordTypeIds: targets.map((target) => {
+            if (target.state !== "resolved") throw new Error("FLOW_RELATIONSHIP_TARGET_INVALID");
+            return String(target.recordTypeId);
+          }),
+        };
+      });
+      recordTypes.set(String(recordType.recordTypeId).toLowerCase(), {
+        fieldIds,
+        optionActions,
+        relationships,
+      });
     }
     const namedActions = installedNamedActions(
       application,
