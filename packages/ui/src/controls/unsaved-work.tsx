@@ -15,6 +15,8 @@ type RegisteredForm = Readonly<{
   dirty: boolean;
   resetBaseline: () => void;
   setSavedBaseline: (values: Readonly<Record<string, unknown>>) => boolean;
+  readBaseline: () => Readonly<Record<string, unknown>> | undefined;
+  readValues: () => Readonly<Record<string, unknown>> | undefined;
   registration: object;
 }>;
 
@@ -23,7 +25,11 @@ type UnsavedWorkRegistry = Readonly<{
     formId: string,
     resetBaseline: () => void,
     setSavedBaseline: RegisteredForm["setSavedBaseline"],
+    readBaseline?: RegisteredForm["readBaseline"],
+    readValues?: RegisteredForm["readValues"],
   ) => () => void;
+  baselineOf: (formId: string) => Readonly<Record<string, unknown>> | undefined;
+  valuesOf: (formId: string) => Readonly<Record<string, unknown>> | undefined;
   setDirty: (formId: string, dirty: boolean) => void;
   markSaved: (formId: string, values: Readonly<Record<string, unknown>>) => void;
   clearAll: () => void;
@@ -42,13 +48,21 @@ function createUnsavedWorkRegistry(): UnsavedWorkRegistry {
   };
 
   return {
-    registerForm: (formId, resetBaseline, setSavedBaseline) => {
+    registerForm: (
+      formId,
+      resetBaseline,
+      setSavedBaseline,
+      readBaseline = () => undefined,
+      readValues = () => undefined,
+    ) => {
       const previous = forms.get(formId);
       const registration = {};
       const form = {
         dirty: previous?.dirty ?? false,
         resetBaseline,
         setSavedBaseline,
+        readBaseline,
+        readValues,
         registration,
       };
       forms.set(formId, form);
@@ -59,6 +73,8 @@ function createUnsavedWorkRegistry(): UnsavedWorkRegistry {
         if (wasDirty !== hasUnsavedWork()) notify();
       };
     },
+    baselineOf: (formId) => forms.get(formId)?.readBaseline(),
+    valuesOf: (formId) => forms.get(formId)?.readValues(),
     setDirty: (formId, dirty) => {
       const form = forms.get(formId);
       if (form === undefined || form.dirty === dirty) return;

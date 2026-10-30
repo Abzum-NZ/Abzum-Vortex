@@ -45,7 +45,13 @@ const contributedFieldsOf = (
     pageDefinition.recordType?.state !== "resolved"
   )
     return undefined;
-  const subject = pageDefinition.recordType;
+  return contributedFieldsFor(context, pageDefinition.recordType);
+};
+
+const contributedFieldsFor = (
+  context: InstalledRuntimeContext,
+  subject: Readonly<{ moduleRootId: string; recordTypeId: string }>,
+): Readonly<{ fields: OwnerFields; recordTypeFields: RecordTypeFields }> | undefined => {
   const contributed = context.recordContributions.find(
     (entry) =>
       sameId(entry.moduleRootId, String(subject.moduleRootId)) &&
@@ -60,6 +66,17 @@ const contributedFieldsOf = (
     ? undefined
     : { fields: contributed.fields, recordTypeFields: recordType.fields };
 };
+
+const installedContributedFields = (owner: {
+  fields: OwnerFields;
+  recordTypeFields: RecordTypeFields;
+}) =>
+  owner.fields.flatMap((entry) => {
+    const field = owner.recordTypeFields.find((candidate) =>
+      sameId(String(candidate.fieldId), entry.fieldId),
+    );
+    return field === undefined ? [] : [field];
+  });
 
 /** The identities of the fields contributed to the record type this page is about. */
 export const contributedFieldIdsOf = (
@@ -166,6 +183,120 @@ const appendToFormContent = (
   return true;
 };
 
+/** Inserts the same contributed field inputs for a form and its proven record type. */
+const insertContributedFormFields = (
+  page: Record<string, unknown>,
+  context: InstalledRuntimeContext,
+  contributed: RecordTypeFields,
+  formId?: string,
+): boolean => {
+  const application = context.releaseSet.application;
+  let changed = false;
+  const placements = collectPlacements(page);
+  const editForms = placements.filter(({ placementId, vortex }) => {
+    const block = blockIdOf(vortex);
+    return (
+      block !== undefined &&
+      (formId === undefined || sameId(placementId, formId)) &&
+      sameId(block, FORM_CONTAINER_BLOCK_RELEASE.blockId) &&
+      (formId !== undefined ||
+        application.content.flowBindings.some(
+          (binding) =>
+            sameId(binding.controlId, placementId) &&
+            binding.event === "form_submit" &&
+            Object.values(binding.flow.inputs).some(
+              (input) => isRecord(input) && input.kind === "caller" && input.name === "record",
+            ),
+        ))
+    );
+  });
+  for (const form of editForms) {
+    // Every placement the form holds, at any depth, in document order.
+    const held = placements.filter(
+      (placement) =>
+        placement.formId !== undefined &&
+        sameId(placement.formId, form.placementId) &&
+        !sameId(placement.placementId, form.placementId),
+    );
+    // Contributed inputs follow the form's last field input wherever it sits; a form with no
+    // field input gets them at the end of its own content.
+    const last = held.filter(isEditFieldPlacement).at(-1);
+    if (last === undefined && !Array.isArray(form.props.content)) continue;
+    const responsive = (last ?? form).vortex.responsive;
+    const shownFields = new Set(
+      held.flatMap((placement) =>
+        isRecord(placement.settings.field) &&
+        placement.settings.field.kind === "field_reference" &&
+        typeof placement.settings.field.fieldId === "string"
+          ? [placement.settings.field.fieldId.toLowerCase()]
+          : [],
+      ),
+    );
+    let anchor = last?.placementId;
+    for (const field of contributed) {
+      const fieldId = String(field.fieldId);
+      if (shownFields.has(fieldId.toLowerCase())) continue;
+      const source = fieldInputSourceField(
+        field as unknown as Record<string, unknown>,
+        (parentId) =>
+          contributed.find((candidate) => sameId(String(candidate.fieldId), parentId)) as
+            Record<string, unknown> | undefined,
+      );
+      let settings: Record<string, unknown>;
+      try {
+        if (source === undefined) throw new Error("FIELD_INPUT_SOURCE_UNAVAILABLE");
+        settings = automaticFieldInputSettings(fieldId, source);
+      } catch (error) {
+        // A field no existing input draws exactly stays out of the form; the failure is logged,
+        // and the contributed field still reads and writes through its record paths.
+        console.error(
+          `[page] contributed field ${fieldId} has no form input: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        continue;
+      }
+      const id = contributedPlacementId(form.placementId, fieldId);
+      const item = {
+        type: FIELD_INPUT_BLOCK_RELEASE.rendererKey,
+        props: {
+          id,
+          ...settings,
+          vortex: {
+            block: {
+              blockId: FIELD_INPUT_BLOCK_RELEASE.blockId,
+              releaseVersion: FIELD_INPUT_BLOCK_RELEASE.releaseVersion,
+            },
+            responsive: structuredClone(responsive),
+            slotOrders: {},
+          },
+        },
+      };
+      const placed =
+        anchor === undefined
+          ? appendToFormContent(form.props, form.vortex, item)
+          : insertAfterPlacement(page, anchor, item);
+      if (!placed) continue;
+      anchor = id;
+      changed = true;
+    }
+  }
+  return changed;
+};
+
+/** Adds a row form's contributed fields after its query membership has proved the record type. */
+export const withContributedFormPlacements = (
+  projected: Readonly<Record<string, unknown>>,
+  context: InstalledRuntimeContext,
+  subject: Readonly<{ moduleRootId: string; recordTypeId: string }>,
+  formId: string,
+): Readonly<Record<string, unknown>> => {
+  const owner = contributedFieldsFor(context, subject);
+  if (owner === undefined || owner.fields.length === 0) return projected;
+  const contributed = installedContributedFields(owner);
+  if (contributed.length === 0) return projected;
+  const page = structuredClone(projected) as Record<string, unknown>;
+  return insertContributedFormFields(page, context, contributed, formId) ? page : projected;
+};
+
 /**
  * The page the viewer's projection becomes once the fields other installed Modules contributed to
  * its record type are placed on it: every Record detail of the page's record is extended by the
@@ -184,16 +315,10 @@ export const withContributedPlacements = (
 ): Readonly<Record<string, unknown>> => {
   const owner = contributedFieldsOf(context, pageDefinition);
   if (owner === undefined || owner.fields.length === 0) return projected;
-  const contributed = owner.fields.flatMap((entry) => {
-    const field = owner.recordTypeFields.find((candidate) =>
-      sameId(String(candidate.fieldId), entry.fieldId),
-    );
-    return field === undefined ? [] : [field];
-  });
+  const contributed = installedContributedFields(owner);
   if (contributed.length === 0) return projected;
 
   const page = structuredClone(projected) as Record<string, unknown>;
-  const application = context.releaseSet.application;
   let changed = false;
 
   if (pageDefinition.type === "detail") {
@@ -219,93 +344,9 @@ export const withContributedPlacements = (
     }
   }
 
-  if (pageDefinition.type === "form") {
-    const placements = collectPlacements(page);
-    const editForms = placements.filter(({ placementId, vortex }) => {
-      const block = blockIdOf(vortex);
-      return (
-        block !== undefined &&
-        sameId(block, FORM_CONTAINER_BLOCK_RELEASE.blockId) &&
-        application.content.flowBindings.some(
-          (binding) =>
-            sameId(binding.controlId, placementId) &&
-            binding.event === "form_submit" &&
-            Object.values(binding.flow.inputs).some(
-              (input) => isRecord(input) && input.kind === "caller" && input.name === "record",
-            ),
-        )
-      );
-    });
-    for (const form of editForms) {
-      // Every placement the form holds, at any depth, in document order.
-      const held = placements.filter(
-        (placement) =>
-          placement.formId !== undefined &&
-          sameId(placement.formId, form.placementId) &&
-          !sameId(placement.placementId, form.placementId),
-      );
-      // Contributed inputs follow the form's last field input wherever it sits; a form with no
-      // field input gets them at the end of its own content.
-      const last = held.filter(isEditFieldPlacement).at(-1);
-      if (last === undefined && !Array.isArray(form.props.content)) continue;
-      const responsive = (last ?? form).vortex.responsive;
-      const shownFields = new Set(
-        held.flatMap((placement) =>
-          isRecord(placement.settings.field) &&
-          placement.settings.field.kind === "field_reference" &&
-          typeof placement.settings.field.fieldId === "string"
-            ? [placement.settings.field.fieldId.toLowerCase()]
-            : [],
-        ),
-      );
-      let anchor = last?.placementId;
-      for (const field of contributed) {
-        const fieldId = String(field.fieldId);
-        if (shownFields.has(fieldId.toLowerCase())) continue;
-        const source = fieldInputSourceField(
-          field as unknown as Record<string, unknown>,
-          (parentId) =>
-            contributed.find((candidate) => sameId(String(candidate.fieldId), parentId)) as
-              Record<string, unknown> | undefined,
-        );
-        let settings: Record<string, unknown>;
-        try {
-          if (source === undefined) throw new Error("FIELD_INPUT_SOURCE_UNAVAILABLE");
-          settings = automaticFieldInputSettings(fieldId, source);
-        } catch (error) {
-          // A field no existing input draws exactly stays out of the form; the failure is logged,
-          // and the contributed field still reads and writes through its record paths.
-          console.error(
-            `[page] contributed field ${fieldId} has no form input: ${error instanceof Error ? error.message : String(error)}`,
-          );
-          continue;
-        }
-        const id = contributedPlacementId(form.placementId, fieldId);
-        const item = {
-          type: FIELD_INPUT_BLOCK_RELEASE.rendererKey,
-          props: {
-            id,
-            ...settings,
-            vortex: {
-              block: {
-                blockId: FIELD_INPUT_BLOCK_RELEASE.blockId,
-                releaseVersion: FIELD_INPUT_BLOCK_RELEASE.releaseVersion,
-              },
-              responsive: structuredClone(responsive),
-              slotOrders: {},
-            },
-          },
-        };
-        const placed =
-          anchor === undefined
-            ? appendToFormContent(form.props, form.vortex, item)
-            : insertAfterPlacement(page, anchor, item);
-        if (!placed) continue;
-        anchor = id;
-        changed = true;
-      }
-    }
-  }
+  if (pageDefinition.type === "form")
+    changed = insertContributedFormFields(page, context, contributed) || changed;
+
   return changed ? page : projected;
 };
 

@@ -21,6 +21,7 @@ import {
   type ValidationPayload,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
+import type { FlowEventCycle } from "../flow-runtime/flow-cycle";
 
 export {
   isIsoCalendarDate,
@@ -54,6 +55,7 @@ export {
 export const CONTROL_EVENT_NAMES = Object.freeze([
   "action",
   "field_changed",
+  "field_focus_lost",
   "form_ready",
   "form_reset",
   "form_submit",
@@ -69,8 +71,8 @@ export type ControlSemanticEventName = (typeof CONTROL_EVENT_NAMES)[number];
 export type TypedRichTextDocument = NonNullable<RichTextInputPayload["value"]>;
 
 /**
- * One declared semantic event. Events are emitted only by a real user interaction, except
- * `form_ready`, which a form emits once when it mounts. The bound flow, not the component,
+ * One declared semantic event. Fields also emit a marked change when a flow sets their value;
+ * `form_ready` is emitted once when a form mounts. The bound flow, not the component,
  * decides what an event does; no component saves, queries or calls an application service.
  */
 export type ControlSemanticEvent =
@@ -80,7 +82,23 @@ export type ControlSemanticEvent =
       /** An action button inside a form reports the form's current typed field values. */
       values?: Readonly<Record<string, TypedFieldValue>>;
     }>
-  | Readonly<{ event: "field_changed"; fieldKey: string; value: TypedFieldValue }>
+  | Readonly<{
+      event: "field_changed";
+      fieldKey: string;
+      value: TypedFieldValue;
+      /** Display details already shown to this viewer for an in-memory draft. */
+      draftDisplay?: Readonly<{
+        title?: string;
+        files?: readonly Readonly<{ fileId: string; name: string }>[];
+      }>;
+      origin: "user" | "flow";
+      depth: number;
+      /** Present for a flow-set change, so its next binding can enforce the cycle bound. */
+      cycle?: FlowEventCycle;
+      /** Choices, checkboxes and link selections settle as soon as they change. */
+      immediate: boolean;
+    }>
+  | Readonly<{ event: "field_focus_lost"; fieldKey: string; value: TypedFieldValue }>
   | Readonly<{
       event: "choices_requested";
       search?: string;
@@ -95,10 +113,11 @@ export type ControlSemanticEvent =
       /** For a dependent link field: the record chosen in the field it depends on, in the form's draft. */
       parentRecordId?: string;
     }>
-  | Readonly<{ event: "form_ready" }>
-  | Readonly<{ event: "form_reset" }>
+  | Readonly<{ event: "form_ready"; gestureId: string }>
+  | Readonly<{ event: "form_reset"; gestureId: string }>
   | Readonly<{
       event: "form_submit";
+      gestureId: string;
       values: Readonly<Record<string, TypedFieldValue>>;
       selectedOwnerGroupId?: string;
     }>

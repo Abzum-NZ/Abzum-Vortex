@@ -268,6 +268,7 @@ begin
     template_source := pg_catalog.jsonb_build_object(
       'applicationRootId', target_application_root_id,
       'registrationRevision', application_registration.revision,
+      'releaseRevision', application_registration.source_revision,
       'catalogueFingerprint', application_registration.permission_catalogue_fingerprint
     );
 
@@ -291,8 +292,7 @@ begin
       'permissionId', continuity.permission_id,
       'acceptedRegistrationRevision', registration.revision,
       'catalogueFingerprint', registration.permission_catalogue_fingerprint,
-      'continuityRevision', continuity.continuity_revision,
-      'meaningFingerprint', continuity.meaning_fingerprint
+      'continuityRevision', continuity.continuity_revision
     )) order by continuity.application_root_id nulls last,
       continuity.owner_kind collate "C", continuity.owner_id, continuity.permission_id),
     pg_catalog.bool_or(catalogue.administrative)
@@ -320,8 +320,7 @@ begin
     and catalogue.owner_kind = continuity.owner_kind
     and catalogue.owner_id = continuity.owner_id
     and catalogue.permission_id = continuity.permission_id
-    and catalogue.application_root_id is not distinct from continuity.application_root_id
-    and catalogue.meaning_fingerprint = continuity.meaning_fingerprint;
+    and catalogue.application_root_id is not distinct from continuity.application_root_id;
   if permissions_value is null
     or pg_catalog.jsonb_array_length(permissions_value)
       <> pg_catalog.jsonb_array_length(refs) then
@@ -358,7 +357,6 @@ begin
           and existing.permission_id = (proposed.value ->> 'permissionId')::uuid
           and existing.continuity_revision =
             (proposed.value ->> 'continuityRevision')::numeric::bigint
-          and existing.meaning_fingerprint = proposed.value ->> 'meaningFingerprint'
       )
     ) into authority_broadened;
 

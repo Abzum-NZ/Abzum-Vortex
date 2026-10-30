@@ -1,11 +1,15 @@
 import { useMemo, useRef, type Dispatch, type SetStateAction, type RefObject } from "react";
 import type { useRouter } from "next/navigation";
-import type { createFormBlockRuntime, DisplayTablePayload, useUnsavedWorkGuard } from "@vortex/ui";
+import type {
+  createFormBlockRuntime,
+  DisplayTablePayload,
+  useUnsavedWorkGuard,
+  useUnsavedWorkRegistry,
+} from "@vortex/ui";
 import {
   equalFormValue,
   type ControlSemanticEvent,
   type ChoiceInputPayload,
-  type DisplayInlineEditResult,
   type DisplaySemanticEvent,
   type ServerDrivenResult,
   type FlowIntentHost,
@@ -28,7 +32,6 @@ import type {
   ApplicationPageModel,
   PlacementFlowBinding,
 } from "../../../../../../_lib/application-page";
-import { rereadApplicationPlacements } from "../../placement-refresh-action";
 import type {
   placementEventNamesByPage,
   applicationLauncherPlacementIds,
@@ -44,7 +47,7 @@ import type {
   ControlReport,
 } from "./types";
 import { bindingFor, suppliedValues, bindingOfEvent, asComponentBinding } from "./event-values";
-import { cancelledMoveNotice, unavailableNotice } from "./notices";
+import { unavailableNotice } from "./notices";
 import {
   publishedControlData,
   rememberPublishedChoices,
@@ -56,7 +59,9 @@ import { useBulkSelection } from "./use-bulk-selection";
 import { useBatchUndo } from "./use-batch-undo";
 import { useRangeSummary } from "./use-range-summary";
 import { useRecordsExport } from "./use-records-export";
-import { requestRecordChoices } from "./record-choices";
+import type { draftControls } from "./control-drafts";
+import type { ControlDrafts } from "../../../_components/application-frame-state";
+import type { useFieldFlowEvents } from "./use-field-flow-events";
 
 export function useRuntimeInputs({
   currentData,
@@ -69,10 +74,10 @@ export function useRuntimeInputs({
   formOwners,
   recordDetailOwners,
   launcherPlacements,
-  busy,
   unsavedWork,
   onOpenApplication,
   runBinding,
+  fieldFlowEvents,
   readBoardColumns,
   continueTablePage,
   refreshPlacements,
@@ -106,13 +111,15 @@ export function useRuntimeInputs({
   navigationKey,
   currentTileDataRef,
   currentPageKey,
-  currentBusyRef,
   currentSearch,
   address,
   rereadTables,
   router,
   requestChoicePage,
   runtimeInputsRef,
+  controlDraftsRef,
+  controls,
+  unsavedWorkRegistry,
   setPanelRef,
 }: Readonly<{
   currentData: ApplicationPageModel["data"];
@@ -126,7 +133,6 @@ export function useRuntimeInputs({
   /** The Record detail each placement sits in, whose record an action in its header acts on. */
   recordDetailOwners: Readonly<Record<string, string>>;
   launcherPlacements: ReturnType<typeof applicationLauncherPlacementIds>;
-  busy: boolean;
   unsavedWork: ReturnType<typeof useUnsavedWorkGuard>["guard"];
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
   runBinding: (
@@ -138,7 +144,9 @@ export function useRuntimeInputs({
     afterAccepted?: () => Promise<Notice | undefined>,
     clickId?: string,
     reportOnControl?: ControlReport,
+    sourceTablePlacementId?: string,
   ) => Promise<DispatchOutcome>;
+  fieldFlowEvents: ReturnType<typeof useFieldFlowEvents>;
   readBoardColumns: (
     placementId: string,
     event: DisplaySemanticEvent,
@@ -187,7 +195,8 @@ export function useRuntimeInputs({
     placementId: string,
     binding: PlacementFlowBinding,
     submittedValues: Readonly<Record<string, unknown>>,
-    selectedOwnerGroupId?: string,
+    selectedOwnerGroupId: string | undefined,
+    gestureId: string,
   ) => Promise<void>;
   advanceGuidedStep: (
     stepId: string,
@@ -222,7 +231,6 @@ export function useRuntimeInputs({
   navigationKey: string;
   currentTileDataRef: RefObject<ApplicationPageModel["data"]>;
   currentPageKey: string | undefined;
-  currentBusyRef: RefObject<boolean>;
   currentSearch: string;
   address: PageAddress;
   rereadTables: (placementIds: readonly string[]) => void;
@@ -233,6 +241,9 @@ export function useRuntimeInputs({
     formId?: string,
   ) => Promise<void>;
   runtimeInputsRef: RefObject<Readonly<Record<string, unknown>>>;
+  controlDraftsRef: RefObject<ControlDrafts> | undefined;
+  controls: ReturnType<typeof draftControls>;
+  unsavedWorkRegistry: ReturnType<typeof useUnsavedWorkRegistry>;
   setPanelRef: RefObject<FlowIntentHost["setPanel"]>;
 }>) {
   const pageParameters = usePageParameters({
@@ -300,6 +311,7 @@ export function useRuntimeInputs({
     // sets are wired: every placement with data or with a flow binding receives its callbacks.
     const placementIds = new Set([
       ...Object.keys(currentData),
+      ...Object.keys(controls),
       ...Object.keys(model.bindings),
       ...Object.keys(formFeedback),
       ...guidedActiveFormIds,
@@ -311,7 +323,7 @@ export function useRuntimeInputs({
       for (const placementId of placementIds)
         if (!guidedActivePlacementIds.has(placementId)) placementIds.delete(placementId);
     for (const placementId of placementIds) {
-      const data =
+      let data =
         guidedFormCompleted && guidedActiveFormIds.includes(placementId)
           ? ({ status: "disabled", reason: "Refresh to start another form." } as const)
           : publishedControlData(
@@ -321,6 +333,11 @@ export function useRuntimeInputs({
               search,
               titles.current.values,
             );
+      if (
+        controlDraftsRef !== undefined &&
+        Object.hasOwn(controlDraftsRef.current.restored, placementId)
+      )
+        data = controlDraftsRef.current.restored[placementId] as typeof data;
       const bindings = model.bindings[placementId] ?? [];
       const events: EventHandlers = {};
       const boardData = boardPayloadFor(data);
@@ -338,7 +355,7 @@ export function useRuntimeInputs({
           !bindings.some((binding) => binding.event === "row_action")
         )
           events.row_action = async (event: DisplaySemanticEvent) => {
-            if (event.event !== "row_action" || busy) return;
+            if (event.event !== "row_action") return;
             if (unsavedWork.hasUnsavedWork() && !(await unsavedWork.confirmDiscardUnsavedWork()))
               return;
             await onOpenApplication(event);
@@ -355,132 +372,57 @@ export function useRuntimeInputs({
               }
               if (event.event === "row_clicked")
                 pageParameters.rowClicked(placementId, event.recordId);
-              if (!busy)
-                return runBinding(
-                  placementId,
-                  binding,
-                  suppliedValues(event),
-                  event.event === "row_clicked" || event.event === "row_action"
-                    ? event.recordId
-                    : undefined,
-                  (tableData !== undefined || boardData !== undefined) &&
-                    event.event === "row_action" &&
-                    event.revision !== undefined
-                    ? { recordId: event.recordId, revision: event.revision }
-                    : undefined,
-                  undefined,
-                  undefined,
-                  tableData !== undefined && event.event === "row_action" ? "transient" : undefined,
-                );
+              return runBinding(
+                placementId,
+                binding,
+                suppliedValues(event),
+                event.event === "row_clicked" || event.event === "row_action"
+                  ? event.recordId
+                  : undefined,
+                (tableData !== undefined || boardData !== undefined) &&
+                  event.event === "row_action" &&
+                  event.revision !== undefined
+                  ? { recordId: event.recordId, revision: event.revision }
+                  : undefined,
+                undefined,
+                undefined,
+                tableData !== undefined && event.event === "row_action" ? "transient" : undefined,
+                tableData !== undefined && event.event === "row_action" ? placementId : undefined,
+              );
             };
-        // An inline edit commits one stored value through the bound flow at the revision the row
-        // was displayed at. The cell shows what came of it: nothing is called saved until the
-        // server confirmed the write, and a record that changed keeps the person's draft.
+        // Display writes load their handlers on the first interaction.
         for (const editEvent of ["inline_edit", "row_edit"] as const)
           if (
             tableData !== undefined &&
             supportsEvent(editEvent) &&
             bindings.some((binding) => binding.event === editEvent)
           )
-            events[editEvent] = async (
-              event: DisplaySemanticEvent,
-            ): Promise<DisplayInlineEditResult> => {
-              if (
-                event.event !== editEvent ||
-                (event.event !== "inline_edit" && event.event !== "row_edit")
-              )
-                return { kind: "refused", message: unavailableNotice.text, changed: false };
-              const binding = bindingFor(bindings, event);
-              if (binding === undefined) {
-                console.error(`[page] ${editEvent} has no binding: EDIT_BINDING_MISSING`);
-                return { kind: "refused", message: unavailableNotice.text, changed: false };
-              }
-              if (busy)
-                return {
-                  kind: "refused",
-                  message: "Another change is still saving. Try again in a moment.",
-                  changed: false,
-                };
-              const outcome = await runBinding(
-                placementId,
-                binding,
-                suppliedValues(event),
-                event.recordId,
-                { recordId: event.recordId, revision: event.revision },
-                undefined,
-                event.commandId,
-                "in_place",
+            events[editEvent] = (event: DisplaySemanticEvent) =>
+              import("./display-write-events").then(({ inlineEdit }) =>
+                inlineEdit(
+                  { placementId, bindings, runBinding, refreshPlacements },
+                  editEvent,
+                  event,
+                ),
               );
-              // A neutral refusal may mean the viewer's access to the field ended: the table is read once more
-              // so a field no longer editable, or no longer readable, loses its editor and its draft.
-              // A changed record is already read again by the dispatch. Nothing here writes.
-              if (!outcome.confirmed && !outcome.changed && outcome.notice === unavailableNotice)
-                void refreshPlacements([placementId], undefined, { content: true });
-              return outcome.confirmed
-                ? { kind: "saved" }
-                : {
-                    kind: "refused",
-                    message: outcome.notice?.text ?? unavailableNotice.text,
-                    changed: outcome.changed,
-                    ...(outcome.corrections === undefined
-                      ? {}
-                      : { corrections: outcome.corrections }),
-                  };
-            };
-        // A moved card saves the record's choice field through the bound flow. The handler reports
-        // whether the server accepted the move, so the board keeps the card pending until the
-        // refreshed columns arrive and releases it at once when the move was refused.
         if (
           boardData !== undefined &&
           supportsEvent("card_moved") &&
           bindings.some((binding) => binding.event === "card_moved")
         )
-          events.card_moved = async (event: DisplaySemanticEvent): Promise<boolean> => {
-            if (event.event !== "card_moved" || busy) return false;
-            const binding = bindingFor(bindings, event);
-            if (binding === undefined || event.revision === undefined) {
-              console.error(
-                `[page] card move has no binding or revision: ${binding === undefined ? "BOARD_CARD_MOVE_BINDING_MISSING" : "BOARD_CARD_MOVE_REVISION_MISSING"}`,
-              );
-              setNotice(unavailableNotice);
-              return false;
-            }
-            let accepted = false;
-            formCancelledRef.current = false;
-            await runBinding(
-              placementId,
-              binding,
-              suppliedValues(event),
-              event.recordId,
-              { recordId: event.recordId, revision: event.revision },
-              async () => {
-                // A flow whose form the person cancelled finishes as completed without saving, so
-                // the move is not accepted and the card goes back to its column.
-                if (formCancelledRef.current) return cancelledMoveNotice;
-                accepted = true;
-                return undefined;
-              },
+          events.card_moved = (event: DisplaySemanticEvent) =>
+            import("./display-write-events").then(({ cardMoved }) =>
+              cardMoved({ placementId, bindings, runBinding, setNotice, formCancelledRef }, event),
             );
-            return accepted;
-          };
-        // Adding a card from a column runs the bound flow with the column's stage; the create form
-        // it opens saves through the normal record save, so nothing is written here.
         if (
           boardData !== undefined &&
           supportsEvent("card_added") &&
           bindings.some((binding) => binding.event === "card_added")
         )
-          events.card_added = async (event: DisplaySemanticEvent): Promise<boolean> => {
-            if (event.event !== "card_added" || busy) return false;
-            const binding = bindingFor(bindings, event);
-            if (binding === undefined) {
-              console.error("[page] card add has no binding: BOARD_CARD_ADD_BINDING_MISSING");
-              setNotice(unavailableNotice);
-              return false;
-            }
-            const outcome = await runBinding(placementId, binding, suppliedValues(event));
-            return outcome.confirmed;
-          };
+          events.card_added = (event: DisplaySemanticEvent) =>
+            import("./display-write-events").then(({ cardAdded }) =>
+              cardAdded({ placementId, bindings, runBinding, setNotice }, event),
+            );
         if (boardData !== undefined && supportsEvent("page_changed"))
           events.page_changed = (event: DisplaySemanticEvent) =>
             readBoardColumns(placementId, event);
@@ -581,21 +523,23 @@ export function useRuntimeInputs({
         )
           events.table_records_requested = (event: DisplaySemanticEvent) => {
             if (event.event !== "table_records_requested") return;
-            return requestRecordChoices(
-              model,
-              placementId,
-              {
-                fieldId: event.field,
-                purpose: event.purpose,
-                ...(event.parentRecordId === undefined
-                  ? {}
-                  : { parentRecordId: event.parentRecordId }),
-                ...(event.search === undefined ? {} : { search: event.search }),
-                ...(event.continuationToken === undefined
-                  ? {}
-                  : { continuationToken: event.continuationToken }),
-              },
-              () => router.refresh(),
+            return import("./record-choices").then(({ requestRecordChoices }) =>
+              requestRecordChoices(
+                model,
+                placementId,
+                {
+                  fieldId: event.field,
+                  purpose: event.purpose,
+                  ...(event.parentRecordId === undefined
+                    ? {}
+                    : { parentRecordId: event.parentRecordId }),
+                  ...(event.search === undefined ? {} : { search: event.search }),
+                  ...(event.continuationToken === undefined
+                    ? {}
+                    : { continuationToken: event.continuationToken }),
+                },
+                () => router.refresh(),
+              ),
             );
           };
         if (supportsEvent("search_changed"))
@@ -658,21 +602,53 @@ export function useRuntimeInputs({
       if (model.linkInputPlacementIds.includes(placementId))
         events.records_requested = (event: ControlSemanticEvent) => {
           if (event.event !== "records_requested") return;
-          return requestRecordChoices(model, placementId, event, () => router.refresh()).then(
-            (page) => {
+          return import("./record-choices")
+            .then(({ requestRecordChoices }) =>
+              requestRecordChoices(model, placementId, event, () => router.refresh()),
+            )
+            .then((page) => {
               if (titles.current.scope === navigationKey)
                 rememberPublishedChoices(titles.current.values, placementId, page);
               return page;
-            },
-          );
+            });
         };
       const publishedParameter = model.pageParameters.controls[placementId];
-      if (publishedParameter !== undefined && supportsEvent("field_changed")) {
+      const fieldFlows = fieldFlowEvents(placementId, bindings);
+      if (fieldFlows.changed !== undefined && supportsEvent("field_changed"))
+        events.field_changed = fieldFlows.changed;
+      if (fieldFlows.focusLost !== undefined && supportsEvent("field_focus_lost"))
+        events.field_focus_lost = fieldFlows.focusLost;
+      if (supportsEvent("field_changed")) {
         const fieldChanged = events.field_changed as
           ((event: ControlSemanticEvent) => void) | undefined;
         events.field_changed = (event: ControlSemanticEvent) => {
           fieldChanged?.(event);
-          pageParameters.change(placementId, event);
+          if (event.event === "field_changed") {
+            const control = controls[placementId];
+            if (control !== undefined && controlDraftsRef !== undefined) {
+              const store = controlDraftsRef.current;
+              const owner = formOwners[placementId];
+              if (owner !== undefined && store.baselines[owner] === undefined) {
+                const baseline = unsavedWorkRegistry?.baselineOf(owner);
+                if (baseline !== undefined) {
+                  store.baselines[owner] = baseline;
+                  store.baselineFields[owner] = Object.fromEntries(
+                    Object.entries(controls)
+                      .filter(([id]) => formOwners[id] === owner)
+                      .map(([id, field]) => [id, { kind: field.kind, fieldKey: field.fieldKey }]),
+                  );
+                }
+              }
+              store.drafts[placementId] = {
+                kind: control.kind,
+                value: event.value,
+                fieldKey: event.fieldKey,
+                ...(owner === undefined ? {} : { owner }),
+                ...(event.draftDisplay === undefined ? {} : { display: event.draftDisplay }),
+              };
+            }
+          }
+          if (publishedParameter !== undefined) pageParameters.change(placementId, event);
         };
       }
       // A table whose click is bound to a flow keeps that flow; the flow publishes the record when
@@ -694,7 +670,7 @@ export function useRuntimeInputs({
       const actionBinding = bindingOfEvent(bindings, "action");
       if (actionBinding !== undefined && model.guidedForm === undefined)
         events.action = (event: ControlSemanticEvent) => {
-          if (event.event !== "action" || event.intent !== "activate" || busy) return;
+          if (event.event !== "action" || event.intent !== "activate") return;
           const detailOwner = recordDetailOwners[placementId];
           const detail = detailOwner === undefined ? undefined : currentData[detailOwner];
           const recordId =
@@ -729,7 +705,7 @@ export function useRuntimeInputs({
         (model.guidedForm !== undefined && formOwners[placementId] === placementId)
       )
         events.form_submit = (event: ControlSemanticEvent) => {
-          if (event.event !== "form_submit" || busy || guidedFormCompleted) return;
+          if (event.event !== "form_submit" || guidedFormCompleted) return;
           if (model.guidedForm !== undefined) {
             const requested = requestedStepId.current;
             requestedStepId.current = undefined;
@@ -743,6 +719,7 @@ export function useRuntimeInputs({
                 submitBinding,
                 event.values,
                 event.selectedOwnerGroupId,
+                event.gestureId,
               );
             }
             return advanceGuidedStep(model.guidedForm.activeStepId, event.values, requested);
@@ -789,6 +766,7 @@ export function useRuntimeInputs({
               baseline === undefined || !submitBinding.savesFormValues
                 ? undefined
                 : Object.keys(recordValues),
+              event.gestureId,
             ),
             placementId,
             undefined,
@@ -798,30 +776,40 @@ export function useRuntimeInputs({
       const readyBinding = bindings.find((binding) => binding.event === "form_ready");
       if (readyBinding !== undefined && model.guidedForm === undefined)
         events.form_ready = (event: ControlSemanticEvent) => {
-          if (event.event !== "form_ready" || busy) return;
+          if (event.event !== "form_ready") return;
           void applyDispatch(
-            formBlock.ready(asComponentBinding(placementId, readyBinding)),
+            formBlock.ready(asComponentBinding(placementId, readyBinding), event.gestureId),
             undefined,
             undefined,
             readyBinding.bindingId,
           );
         };
       const resetBinding = bindings.find((binding) => binding.event === "form_reset");
-      if (resetBinding !== undefined && model.guidedForm === undefined)
+      if (supportsEvent("form_reset") && model.guidedForm === undefined)
         events.form_reset = (event: ControlSemanticEvent) => {
-          if (event.event !== "form_reset" || busy) return;
+          if (event.event !== "form_reset") return;
+          const store = controlDraftsRef?.current;
+          if (store !== undefined) {
+            for (const [id, draft] of Object.entries(store.drafts))
+              if (draft.owner === placementId) {
+                delete store.drafts[id];
+                delete store.restored[id];
+              }
+            delete store.baselines[placementId];
+            delete store.baselineFields[placementId];
+          }
           setFormFeedback((current) => {
-            if (!Object.hasOwn(current, placementId)) return current;
             const next = { ...current };
             delete next[placementId];
             return next;
           });
-          void applyDispatch(
-            formBlock.reset(asComponentBinding(placementId, resetBinding)),
-            undefined,
-            undefined,
-            resetBinding.bindingId,
-          );
+          if (resetBinding !== undefined)
+            void applyDispatch(
+              formBlock.reset(asComponentBinding(placementId, resetBinding), event.gestureId),
+              undefined,
+              undefined,
+              resetBinding.bindingId,
+            );
         };
       if (data === undefined) {
         if (Object.keys(events).length > 0 || flowFeedback !== undefined)
@@ -872,119 +860,24 @@ export function useRuntimeInputs({
                 sourceRevision: number,
                 isVisible?: () => boolean,
               ): Promise<void> => {
-                if (
-                  busy ||
-                  pinActivationInFlightRef.current ||
-                  placementRequestsRef.current.key !== navigationKey ||
-                  currentTileDataRef.current[placementId] !== data
-                )
-                  return;
-                const rows = pins.data.rows.filter(
-                  (row) =>
-                    row.sourceRecordId.toLowerCase() === sourceRecordId.toLowerCase() &&
-                    row.sourceRevision === sourceRevision,
-                );
-                const row = rows[0];
-                if (rows.length !== 1 || row === undefined || row.target.kind === "unavailable")
-                  return;
-                if (currentPageKey === undefined || typeof isVisible !== "function") return;
-                const generation = placementRequestsRef.current.generations.get(
-                  placementId.toLowerCase(),
-                );
-                const visible = isVisible;
-                const currentSource = () => {
-                  try {
-                    return (
-                      !currentBusyRef.current &&
-                      placementRequestsRef.current.key === navigationKey &&
-                      placementRequestsRef.current.generations.get(placementId.toLowerCase()) ===
-                        generation &&
-                      currentTileDataRef.current[placementId] === data &&
-                      visible()
-                    );
-                  } catch {
-                    return false;
-                  }
-                };
-                if (!currentSource()) return;
-                pinActivationInFlightRef.current = true;
-                try {
-                  // The unsaved-work wait precedes both source selection and target authority rereads.
-                  if (
-                    row.target.openBehaviour === "replace" &&
-                    unsavedWork.hasUnsavedWork() &&
-                    !(await unsavedWork.confirmDiscardUnsavedWork())
-                  )
-                    return;
-                  if (!currentSource()) return;
-                  const refreshed = await rereadApplicationPlacements(
-                    {
-                      tenantShortName: application.tenantShortName,
-                      organizationShortName: application.organizationShortName,
-                      applicationKey: application.applicationKey,
-                      pageKey: currentPageKey,
-                      installationRevision: application.installationRevision,
-                      search: currentSearch,
-                    },
-                    [placementId],
-                  );
-                  if (!currentSource()) return;
-                  if (refreshed.kind === "reload") {
-                    router.refresh();
-                    return;
-                  }
-                  if (refreshed.kind !== "available") return;
-                  const state = Object.entries(refreshed.data).find(
-                    ([id]) => id.toLowerCase() === placementId.toLowerCase(),
-                  )?.[1];
-                  if (state?.status !== "ready") return;
-                  const fresh = projectedLinkTilesSchema.safeParse(state.values);
-                  if (!fresh.success) return;
-                  const selected = fresh.data.rows.filter(
-                    (entry) =>
-                      entry.sourceRecordId.toLowerCase() === sourceRecordId.toLowerCase() &&
-                      entry.sourceRevision === sourceRevision,
-                  );
-                  const current = selected[0];
-                  if (
-                    selected.length !== 1 ||
-                    current === undefined ||
-                    current.target.kind === "unavailable" ||
-                    current.target.kind !== row.target.kind ||
-                    current.target.openBehaviour !== row.target.openBehaviour
-                  )
-                    return;
-                  const target = current.target;
-                  // Only the fresh protected tuple supplies an internal address; browser-held metadata is ignored.
-                  const internal = target.kind !== "external";
-                  if (
-                    (target.kind === "application" || target.kind === "page") &&
-                    (target.tenantShortName !== application.tenantShortName ||
-                      target.organizationShortName !== application.organizationShortName)
-                  )
-                    return;
-                  const href =
-                    target.kind === "record"
-                      ? `/${encodeURIComponent(application.tenantShortName)}/${encodeURIComponent(application.organizationShortName)}/${encodeURIComponent(target.detailAddress.applicationKey)}/${encodeURIComponent(target.detailAddress.pageKey)}?${new URLSearchParams({ record_id: target.detailAddress.recordId })}`
-                      : target.kind === "external"
-                        ? target.address
-                        : `/${encodeURIComponent(target.tenantShortName)}/${encodeURIComponent(target.organizationShortName)}/${encodeURIComponent(target.applicationKey)}/${encodeURIComponent(target.pageKey)}`;
-                  const address = new URL(href, window.location.origin);
-                  if (
-                    (internal && address.origin !== window.location.origin) ||
-                    (!internal && address.protocol !== "https:") ||
-                    !currentSource()
-                  )
-                    return;
-                  if (target.openBehaviour === "new_page")
-                    window.open(address.href, "_blank", "noopener,noreferrer");
-                  else if (internal) router.push(`${address.pathname}${address.search}`);
-                  else window.location.assign(address.href);
-                } catch {
-                  // No navigation or target metadata on a failed current protected reread.
-                } finally {
-                  pinActivationInFlightRef.current = false;
-                }
+                const { openTile } = await import("./open-tile");
+                await openTile({
+                  sourceRecordId,
+                  sourceRevision,
+                  ...(isVisible === undefined ? {} : { isVisible }),
+                  pinActivationInFlightRef,
+                  placementRequestsRef,
+                  navigationKey,
+                  currentTileDataRef,
+                  placementId,
+                  data,
+                  pins: pins.data,
+                  currentPageKey,
+                  unsavedWork,
+                  application,
+                  currentSearch,
+                  router,
+                });
               },
             }),
         ...(flowFeedback === undefined ? {} : { flowFeedback }),
@@ -993,7 +886,10 @@ export function useRuntimeInputs({
     return inputs;
   }, [
     applyDispatch,
-    busy,
+    controls,
+    controlDraftsRef,
+    unsavedWorkRegistry,
+    fieldFlowEvents,
     formBlock,
     formCancelledRef,
     formFeedback,

@@ -1,7 +1,11 @@
 import "server-only";
 
 import { z } from "zod";
-import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
+import type {
+  BoundHumanOrganizationRequest,
+  HumanOrganizationRequestResult,
+} from "../access/human-organization-request";
+import type { createProtectedQueryService } from "./protected-query-service";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
 import type { JsonValue } from "../catalogue/common";
 import {
@@ -82,6 +86,7 @@ export type RecordChoiceRead =
 
 /** The Query engine entry point the picker reads through; it authorises the viewer itself. */
 type RecordChoiceQueryRunner = Readonly<{
+  prepareRead?: ReturnType<typeof createProtectedQueryService>["prepareRead"];
   run(
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
@@ -138,6 +143,47 @@ const decodePositions = (token: string): Positions | undefined => {
  */
 export const createRecordChoiceReader = (queries: RecordChoiceQueryRunner) =>
   Object.freeze({
+    /** Rechecks one selected identity through the same picker query in the gate transaction. */
+    async resolveExactInTransaction(
+      bound: BoundHumanOrganizationRequest,
+      candidate: RecordChoiceCommand,
+      selected: Readonly<{ recordTypeId: string; recordId: string }>,
+    ): Promise<HumanOrganizationRequestResult<RecordChoiceRead>> {
+      const parsed = recordChoiceCommandSchema.safeParse(candidate);
+      const record = recordIdSchema.safeParse(selected.recordId);
+      const type = recordTypeIdSchema.safeParse(selected.recordTypeId);
+      const invalid = () => ({
+        kind: "available" as const,
+        value: { outcome: "refused" as const, reasonCode: "request_invalid" as const },
+      });
+      if (
+        !parsed.success ||
+        !record.success ||
+        !type.success ||
+        queries.prepareRead === undefined ||
+        parsed.data.search !== undefined ||
+        parsed.data.continuationToken !== undefined ||
+        (parsed.data.narrowedBy !== undefined && parsed.data.targets.length > 1)
+      )
+        return invalid();
+      const targets = parsed.data.targets.filter((target) =>
+        sameId(target.recordTypeId, type.data),
+      );
+      if (targets.length !== 1) return invalid();
+      const prepareRead = queries.prepareRead;
+      return createRecordChoiceReader({
+        run: async (session, selection, command) => {
+          const prepared = prepareRead(session, selection, {
+            ...command,
+            pageSize: 1,
+            exactRecordIds: [record.data],
+          });
+          return prepared.kind === "final"
+            ? prepared.result
+            : { kind: "available", value: await prepared.read(bound.transaction, bound.scope) };
+        },
+      }).read(bound.session, bound.selection, { ...parsed.data, targets, pageSize: 1 });
+    },
     async read(
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,

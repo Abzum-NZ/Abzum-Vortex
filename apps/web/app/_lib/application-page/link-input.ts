@@ -11,6 +11,7 @@ import {
   type RecordLinkResolver,
   type InstalledRuntimeContext,
   readRecordTypeVisibleFieldIds,
+  flowPlansOf,
 } from "@vortex/platform/server";
 import {
   isRecord,
@@ -22,8 +23,11 @@ import {
   type IdentitySession,
   recordChoicePageSchema,
   optionsSourceNarrowing,
+  compiledPageShellId,
+  type PageDefinition,
 } from "@vortex/platform/schema";
 import { getQueryContinuationKey } from "../query-continuation-key";
+import { requestDependencies } from "./installed-context";
 import {
   prepareRuntimePreviewChoices,
   type RuntimePreviewDemandResult,
@@ -37,6 +41,7 @@ import {
 } from "./placement-helpers";
 import { projectReferenceChoicePage, type ReferenceChoiceAddress } from "./reference-choice";
 import type { PageDataState, SearchParameters } from "./types";
+import { withContributedFormPlacements, withContributedPlacements } from "./contributed-placements";
 
 /** What a viewer may see of a linked record's title. */
 const titleOf = (
@@ -202,6 +207,97 @@ const installedLinkField = (
   return undefined;
 };
 
+/** The addressed page's installed picker targets and dependency parents for preview preparation. */
+export const previewLinkChoiceTypeIds = (
+  context: InstalledRuntimeContext,
+  page: PageDefinition,
+): readonly string[] => {
+  let raw: Readonly<Record<string, unknown>> = withContributedPlacements(
+    { composition: page.composition },
+    context,
+    page,
+  );
+  const plans = flowPlansOf(context.releaseSet);
+  for (const [tableId, forms] of plans.rowFormsByTable) {
+    const table = collectPlacements(raw).find((placement) =>
+      sameId(placement.placementId, tableId),
+    );
+    const queryId = table?.vortex.queryId;
+    if (typeof queryId !== "string") continue;
+    for (const module of context.releaseSet.modules) {
+      const query = module.content.queries.find((candidate) =>
+        sameId(String(candidate.queryId), queryId),
+      );
+      if (query?.recordType.state !== "resolved") continue;
+      for (const formId of forms)
+        raw = withContributedFormPlacements(raw, context, query.recordType, formId);
+    }
+  }
+  const shellId = compiledPageShellId(page.composition);
+  const shell = context.releaseSet.application.content.shells.find(
+    (item) => shellId !== null && sameId(String(item.shellId), shellId),
+  );
+  const placements = [
+    ...collectPlacements(raw),
+    ...(shell === undefined ? [] : collectPlacements({ composition: shell.layout })),
+  ];
+  const types = new Set<string>();
+  for (const placement of placements) {
+    if (!isLinkInputPlacement(placement)) continue;
+    for (const target of linkInputTargets(placement.settings)) types.add(target.recordTypeId);
+    let fieldId = isRecord(placement.settings.field) ? placement.settings.field.fieldId : undefined;
+    const seen = new Set<string>();
+    while (typeof fieldId === "string" && !seen.has(fieldId.toLowerCase())) {
+      seen.add(fieldId.toLowerCase());
+      const field = installedLinkField(context, fieldId);
+      if (field === undefined) break;
+      types.add(field.recordTypeId);
+      if (field.dependency?.parentTarget !== undefined)
+        types.add(field.dependency.parentTarget.recordTypeId);
+      fieldId = field.dependency?.parentFieldId;
+    }
+  }
+  return [...types];
+};
+
+/** Finds the projected parent control of a dependent link input from the installed field. */
+const projectedLinkParentControl = (
+  context: InstalledRuntimeContext,
+  page: Readonly<Record<string, unknown>>,
+  placementId: string,
+):
+  | Readonly<{ kind: "none" }>
+  | Readonly<{ kind: "parent"; placementId: string; recordTypeId: string }>
+  | Readonly<{ kind: "unavailable" }> => {
+  const placements = collectPlacements(page);
+  const child = placements.find((placement) => sameId(placement.placementId, placementId));
+  if (child === undefined) return { kind: "unavailable" };
+  const field = isRecord(child.settings.field) ? child.settings.field.fieldId : undefined;
+  const dependency =
+    typeof field === "string" ? installedLinkField(context, field)?.dependency : undefined;
+  if (dependency === undefined) return { kind: "none" };
+  if (dependency.parentTarget === undefined) return { kind: "unavailable" };
+  const parents = placements.filter((placement) => {
+    const parentField = isRecord(placement.settings.field)
+      ? placement.settings.field.fieldId
+      : undefined;
+    return (
+      typeof parentField === "string" &&
+      sameId(parentField, dependency.parentFieldId) &&
+      (child.formId === undefined
+        ? placement.formId === undefined
+        : placement.formId !== undefined && sameId(placement.formId, child.formId))
+    );
+  });
+  return parents.length === 1
+    ? {
+        kind: "parent",
+        placementId: parents[0]!.placementId,
+        recordTypeId: dependency.parentTarget.recordTypeId,
+      }
+    : { kind: "unavailable" };
+};
+
 /**
  * The record type a Records table's link picker on `fieldId` may offer, for one purpose. A filter
  * needs the field declared by the table's Column filters feature; an edit needs it declared by the
@@ -246,34 +342,44 @@ type RecordChoicePageResult =
   | Readonly<{ kind: "refused"; cause: string }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
-/**
- * One page of the records a link field on the viewer's current page may point at. The page is
- * projected again under the viewer and the exact installed release, so only a link input the
- * viewer can use on that page is read for, and only its declared record types.
- */
-export const loadRecordChoicePage = async (
+type RecordChoicePageRequest = Readonly<{
+  placementId: string;
+  /** For a Records table's link picker: the declared field whose targets are offered. */
+  fieldId?: string;
+  /** Present exactly with `fieldId`: filtering by the records, or editing a cell. */
+  purpose?: "filter" | "edit";
+  installationRevision: number;
+  releaseKey: string;
+  subjectRecordId?: string;
+  /** For a dependent link field: the record chosen in the field it depends on, in the editor's draft. */
+  parentRecordId?: string;
+  search?: string;
+  pageSize?: number;
+  continuationToken?: string;
+}>;
+
+type ProjectedChoicePage = Extract<
+  Awaited<ReturnType<typeof projectReferenceChoicePage>>,
+  { kind: "available" }
+>;
+
+/** Derives the same installed targets and dependent narrowing for a picker or its exact recheck. */
+const prepareLinkChoiceDescriptor = async (
   session: IdentitySession,
-  address: ReferenceChoiceAddress,
-  request: Readonly<{
-    placementId: string;
-    /** For a Records table's link picker: the declared field whose targets are offered. */
-    fieldId?: string;
-    /** Present exactly with `fieldId`: filtering by the records, or editing a cell. */
-    purpose?: "filter" | "edit";
-    installationRevision: number;
-    releaseKey: string;
-    subjectRecordId?: string;
-    /** For a dependent link field: the record chosen in the field it depends on, in the editor's draft. */
-    parentRecordId?: string;
-    search?: string;
-    pageSize?: number;
-    continuationToken?: string;
-  }>,
-): Promise<RecordChoicePageResult> => {
-  const projected = await projectReferenceChoicePage(session, address, request);
-  if (projected.kind === "reload" || projected.kind === "temporarily_unavailable") return projected;
-  if (projected.kind !== "available") return { kind: "refused", cause: "page_not_projected" };
-  const { context, selection, dependencies } = projected;
+  projected: Pick<ProjectedChoicePage, "context" | "selection" | "page">,
+  request: Pick<RecordChoicePageRequest, "placementId" | "fieldId" | "purpose" | "parentRecordId">,
+  requests: ReturnType<typeof createHumanOrganizationRequestService>,
+  queries: ReturnType<typeof createProtectedQueryService>,
+  prepareDemand: typeof prepareRuntimePreviewChoices = prepareRuntimePreviewChoices,
+): Promise<
+  | Readonly<{
+      kind: "ready";
+      targets: RecordChoiceCommand["targets"];
+      narrowedBy?: RecordChoiceCommand["narrowedBy"];
+    }>
+  | Extract<RecordChoicePageResult, { kind: "refused" | "temporarily_unavailable" }>
+> => {
+  const { context, selection } = projected;
   const placements = collectPlacements(projected.page);
   const placement = placements.find((entry) => sameId(entry.placementId, request.placementId));
   if (placement === undefined) return { kind: "refused", cause: "placement_not_found" };
@@ -313,10 +419,8 @@ export const loadRecordChoicePage = async (
       };
     if (projectedUseAvailability(placement) !== "available")
       return { kind: "refused", cause: "placement_unavailable" };
-    const readable = await createHumanOrganizationRequestService(dependencies).run(
-      session,
-      selection,
-      (transaction) => readRecordTypeVisibleFieldIds(transaction, filtered.sourceRecordTypeId),
+    const readable = await requests.run(session, selection, (transaction) =>
+      readRecordTypeVisibleFieldIds(transaction, filtered.sourceRecordTypeId),
     );
     if (readable.kind === "temporarily_unavailable") return readable;
     if (readable.kind !== "available" || !readable.value.has(request.fieldId.toLowerCase()))
@@ -345,10 +449,8 @@ export const loadRecordChoicePage = async (
     const bound = isRecord(placement.settings.field) ? placement.settings.field.fieldId : undefined;
     const boundField = typeof bound === "string" ? installedLinkField(context, bound) : undefined;
     if (boundField?.dependency !== undefined) {
-      const readable = await createHumanOrganizationRequestService(dependencies).run(
-        session,
-        selection,
-        (transaction) => readRecordTypeVisibleFieldIds(transaction, boundField.sourceRecordTypeId),
+      const readable = await requests.run(session, selection, (transaction) =>
+        readRecordTypeVisibleFieldIds(transaction, boundField.sourceRecordTypeId),
       );
       if (readable.kind === "temporarily_unavailable") return readable;
       if (readable.kind !== "available") return { kind: "refused", cause: "link_field_withheld" };
@@ -376,7 +478,7 @@ export const loadRecordChoicePage = async (
     });
   }
   if (targets.length === 0) return { kind: "refused", cause: "no_targets" };
-  const demand = await prepareRuntimePreviewChoices(session, context, [
+  const demand = await prepareDemand(session, context, [
     ...targets.map((target) => target.recordTypeId),
     ...(dependency?.link.parentTarget === undefined
       ? []
@@ -387,10 +489,6 @@ export const loadRecordChoicePage = async (
       ? { kind: "temporarily_unavailable" }
       : { kind: "refused", cause: "preview_demand_refused" };
 
-  const queries = createProtectedQueryService({
-    ...dependencies,
-    continuationKey: getQueryContinuationKey(),
-  });
   let narrowedBy: RecordChoiceCommand["narrowedBy"];
   if (dependency !== undefined && dependency.link.parentTarget !== undefined) {
     const parentTarget = dependency.link.parentTarget;
@@ -432,6 +530,146 @@ export const loadRecordChoicePage = async (
       recordId: dependency.parentRecordId,
     } as RecordChoiceCommand["narrowedBy"];
   }
+  return { kind: "ready", targets, ...(narrowedBy === undefined ? {} : { narrowedBy }) };
+};
+
+/** Rechecks a selected link using the same picker descriptor and the gate's transaction. */
+export const validateProjectedLinkChoice = async (
+  bound: Parameters<ReturnType<typeof createRecordChoiceReader>["resolveExactInTransaction"]>[0],
+  context: InstalledRuntimeContext,
+  page: Readonly<Record<string, unknown>>,
+  request: Readonly<{
+    placementId: string;
+    selected: Readonly<{ recordTypeId: string; recordId: string }>;
+    parentRecordId?: string;
+  }>,
+  prepareDemand: typeof prepareRuntimePreviewChoices,
+): Promise<boolean> => {
+  const dependencies = { ...requestDependencies(), boundRequest: bound };
+  const queries = createProtectedQueryService({
+    ...dependencies,
+    continuationKey: getQueryContinuationKey(),
+  });
+  const descriptor = await prepareLinkChoiceDescriptor(
+    bound.session,
+    { context, selection: bound.selection, page },
+    request,
+    createHumanOrganizationRequestService(dependencies),
+    queries,
+    prepareDemand,
+  );
+  if (descriptor.kind !== "ready") return false;
+  const result = await createRecordChoiceReader(queries).resolveExactInTransaction(
+    bound,
+    {
+      targets: descriptor.targets,
+      pageSize: 1,
+      ...(descriptor.narrowedBy === undefined ? {} : { narrowedBy: descriptor.narrowedBy }),
+    },
+    request.selected,
+  );
+  return (
+    result.kind === "available" &&
+    result.value.outcome === "completed" &&
+    result.value.choices.some(
+      (choice) =>
+        sameId(choice.recordTypeId, request.selected.recordTypeId) &&
+        sameId(choice.recordId, request.selected.recordId),
+    )
+  );
+};
+
+/** Proves dependency parents before asking the same picker to prove the selected link. */
+export const validateProjectedLinkControl = async (
+  bound: Parameters<typeof validateProjectedLinkChoice>[0],
+  context: InstalledRuntimeContext,
+  page: Readonly<Record<string, unknown>>,
+  placementId: string,
+  selected: Readonly<{ recordTypeId: string; recordId: string }>,
+  controls: Readonly<Record<string, string>>,
+  prepareDemand: typeof prepareRuntimePreviewChoices,
+): Promise<boolean> => {
+  const active = new Set<string>();
+  const prove = async (
+    control: string,
+    value: Readonly<{ recordTypeId: string; recordId: string }>,
+  ): Promise<boolean> => {
+    const key = control.toLowerCase();
+    if (active.has(key)) {
+      console.error("[flows] link control dependency cycle");
+      return false;
+    }
+    active.add(key);
+    try {
+      const parent = projectedLinkParentControl(context, page, control);
+      if (parent.kind === "unavailable") {
+        console.error("[flows] link control dependency parent unavailable");
+        return false;
+      }
+      let parentRecordId: string | undefined;
+      if (parent.kind === "parent") {
+        const matches = Object.entries(controls).filter(([id]) => sameId(id, parent.placementId));
+        const parsed = matches.length === 1 ? recordIdSchema.safeParse(matches[0]![1]) : undefined;
+        if (parsed === undefined || !parsed.success) {
+          console.error("[flows] link control dependency parent missing or invalid");
+          return false;
+        }
+        parentRecordId = parsed.data;
+        if (
+          !(await prove(parent.placementId, {
+            recordTypeId: parent.recordTypeId,
+            recordId: parentRecordId,
+          }))
+        ) {
+          console.error("[flows] link control dependency parent not offered");
+          return false;
+        }
+      }
+      return validateProjectedLinkChoice(
+        bound,
+        context,
+        page,
+        {
+          placementId: control,
+          selected: value,
+          ...(parentRecordId === undefined ? {} : { parentRecordId }),
+        },
+        prepareDemand,
+      );
+    } finally {
+      active.delete(key);
+    }
+  };
+  return prove(placementId, selected);
+};
+
+/**
+ * One page of the records a link field on the viewer's current page may point at. The page is
+ * projected again under the viewer and the exact installed release, so only a link input the
+ * viewer can use on that page is read for, and only its declared record types.
+ */
+export const loadRecordChoicePage = async (
+  session: IdentitySession,
+  address: ReferenceChoiceAddress,
+  request: RecordChoicePageRequest,
+): Promise<RecordChoicePageResult> => {
+  const projected = await projectReferenceChoicePage(session, address, request);
+  if (projected.kind === "reload" || projected.kind === "temporarily_unavailable") return projected;
+  if (projected.kind !== "available") return { kind: "refused", cause: "page_not_projected" };
+  const { selection, dependencies } = projected;
+  const queries = createProtectedQueryService({
+    ...dependencies,
+    continuationKey: getQueryContinuationKey(),
+  });
+  const descriptor = await prepareLinkChoiceDescriptor(
+    session,
+    projected,
+    request,
+    createHumanOrganizationRequestService(dependencies),
+    queries,
+  );
+  if (descriptor.kind !== "ready") return descriptor;
+  const { targets, narrowedBy } = descriptor;
   const read = await createRecordChoiceReader(queries).read(session, selection, {
     targets,
     ...(narrowedBy === undefined ? {} : { narrowedBy }),

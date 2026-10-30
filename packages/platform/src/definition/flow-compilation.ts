@@ -17,6 +17,7 @@ import {
 import { flowTaskRegistry, type FlowTaskTypeKey } from "../workflows/flow-task-registry";
 import type { FlowValue } from "../workflows/flow-values";
 import { compileFlowPlans, FlowPlanError } from "../workflows/flow-plan";
+import type { FlowFormTypes } from "../workflows/flow-form-types";
 import type { DefinitionProvenanceEntry } from "./definition-provenance";
 import { canonicalJson, compareCanonicalStrings } from "./canonical-json-definition";
 import {
@@ -120,6 +121,8 @@ export type FlowCompilationResolver = Readonly<{
 
 export type FlowCompilationInput = Readonly<{
   flows: readonly SourceFlow[];
+  /** The authored flows before shorthand references and defaults are parsed. */
+  rawFlows?: readonly unknown[];
   resolver: FlowCompilationResolver;
   /** The definition keys this definition declares as dependencies; a flow may reach only these. */
   declaredDefinitionKeys: readonly string[];
@@ -150,6 +153,7 @@ type Context = {
   readonly resolved: { canonicalPath: Path; sourcePath: Path }[];
   /** The one record type every record trigger of the flow names, when they agree. */
   readonly triggerRecordType: string | undefined;
+  readonly rawSource: unknown;
 };
 
 const refusal = (
@@ -173,6 +177,58 @@ const resolveAt = (
   ctx.resolved.push({ canonicalPath: path, sourcePath });
   return identity.identifier;
 };
+
+/** Resolve form references in a validated value or formula without inspecting literal data. */
+export function resolveFlowFormReferences<Value>(
+  value: Value,
+  resolve: (form: string, path: Path) => string,
+  path: Path = [],
+): Value {
+  const walk = (candidate: unknown, current: Path): unknown => {
+    if (Array.isArray(candidate))
+      return candidate.map((entry, index) => walk(entry, [...current, index]));
+    if (typeof candidate !== "object" || candidate === null) return candidate;
+    const record = candidate as Record<string, unknown>;
+    if (record.kind === "literal" || record.op === "literal") return candidate;
+    if (
+      (record.kind === "reference" || record.op === "reference") &&
+      typeof record.reference === "object" &&
+      record.reference !== null &&
+      !Array.isArray(record.reference)
+    ) {
+      const reference = record.reference as Record<string, unknown>;
+      if (reference.source === "form" && typeof reference.form === "string")
+        return {
+          ...record,
+          reference: {
+            ...reference,
+            form: resolve(reference.form, [...current, "reference", "form"]),
+          },
+        };
+    }
+    return Object.fromEntries(
+      Object.entries(record).map(([key, entry]) => [
+        key,
+        record.op === "deadline_passed" && key === "terminalStatusValues"
+          ? entry
+          : walk(entry, [...current, key]),
+      ]),
+    );
+  };
+  return walk(value, path) as Value;
+}
+
+const resolveFormReferences = <Value>(ctx: Context, value: Value, path: Path): Value =>
+  resolveFlowFormReferences(
+    value,
+    (form, referencePath) => {
+      let sourcePath = referencePath;
+      while (sourcePath.length > 0 && !valueAt(ctx.rawSource, sourcePath).found)
+        sourcePath = sourcePath.slice(0, -1);
+      return resolveAt(ctx, ctx.resolver.form(form), referencePath, sourcePath);
+    },
+    path,
+  );
 
 /** `definition.key:record.member` or `record.member`; the member never contains a dot. */
 const splitMemberReference = (ctx: Context, text: string): { record: string; member: string } => {
@@ -368,11 +424,12 @@ const resolveReadFieldsTask = (
     "literal",
     "value",
   ]);
-  const record = resolveProperty(ctx, "record_reference", recordValue, node.properties, false, [
-    ...path,
-    "properties",
-    "record",
-  ]);
+  const recordPath = [...path, "properties", "record"];
+  const record = resolveFormReferences(
+    ctx,
+    resolveProperty(ctx, "record_reference", recordValue, node.properties, false, recordPath),
+    recordPath,
+  );
   if (fieldsValue.kind !== "literal" || fieldsValue.literal.type !== "json")
     throw refusal(ctx, "vortex.definition.workflow_node_values", "invalid_value");
   const projection = flowReadFieldsProjectionSchema.safeParse(fieldsValue.literal.value);
@@ -448,6 +505,7 @@ const resolveTask = (ctx: Context, task: SourceFlowTask, path: Path): unknown =>
       const node = task as Extract<SourceFlowTask, { type: "if" }>;
       return {
         ...node,
+        condition: resolveFormReferences(ctx, node.condition, [...path, "condition"]),
         then: resolveTaskList(ctx, node.then, [...path, "then"]),
         ...(node.else ? { else: resolveTaskList(ctx, node.else, [...path, "else"]) } : {}),
       };
@@ -456,6 +514,7 @@ const resolveTask = (ctx: Context, task: SourceFlowTask, path: Path): unknown =>
       const node = task as Extract<SourceFlowTask, { type: "switch" }>;
       return {
         ...node,
+        value: resolveFormReferences(ctx, node.value, [...path, "value"]),
         cases: node.cases.map((entry, index) => ({
           ...entry,
           tasks: resolveTaskList(ctx, entry.tasks, [...path, "cases", index, "tasks"]),
@@ -465,7 +524,14 @@ const resolveTask = (ctx: Context, task: SourceFlowTask, path: Path): unknown =>
           : {}),
       };
     }
-    case "for_each":
+    case "for_each": {
+      const node = task as Extract<SourceFlowTask, { type: "for_each" }>;
+      return {
+        ...node,
+        items: resolveFormReferences(ctx, node.items, [...path, "items"]),
+        tasks: resolveTaskList(ctx, node.tasks, [...path, "tasks"]),
+      };
+    }
     case "sequential": {
       const node = task as Extract<SourceFlowTask, { tasks: SourceFlowTask[] }>;
       return { ...node, tasks: resolveTaskList(ctx, node.tasks, [...path, "tasks"]) };
@@ -475,6 +541,12 @@ const resolveTask = (ctx: Context, task: SourceFlowTask, path: Path): unknown =>
       return {
         ...node,
         flowId: resolveAt(ctx, ctx.resolver.flow(node.flowId), [...path, "flowId"]),
+        inputs: Object.fromEntries(
+          Object.entries(node.inputs).map(([name, value]) => [
+            name,
+            resolveFormReferences(ctx, value, [...path, "inputs", name]),
+          ]),
+        ),
       };
     }
     case "stop":
@@ -494,13 +566,18 @@ const resolveTask = (ctx: Context, task: SourceFlowTask, path: Path): unknown =>
           : undefined;
         if (declared === undefined)
           throw refusal(ctx, "vortex.definition.workflow_node_values", "unknown_property");
-        properties[name] = resolveProperty(
+        const propertyPath = [...path, "properties", name];
+        properties[name] = resolveFormReferences(
           ctx,
-          declared.type,
-          value,
-          node.properties,
-          definition.transactionScope === "saved_record",
-          [...path, "properties", name],
+          resolveProperty(
+            ctx,
+            declared.type,
+            value,
+            node.properties,
+            definition.transactionScope === "saved_record",
+            propertyPath,
+          ),
+          propertyPath,
         );
       }
       return { ...node, properties };
@@ -533,7 +610,7 @@ const startsWith = (path: Path, prefix: Path): boolean =>
 
 const flowProvenance = (
   canonical: FlowDefinition,
-  source: SourceFlow,
+  source: unknown,
   resolved: Context["resolved"],
   canonicalIndex: number,
   sourceIndex: number,
@@ -591,7 +668,17 @@ const triggerRecordType = (source: SourceFlow): string | undefined => {
   return aliases.size === 1 ? [...aliases][0] : undefined;
 };
 
-export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet {
+/** A binding's page scope, keyed by permanent placement identities. */
+export type CompiledFlowBindingEnvironment = Readonly<{
+  page: string;
+  controls: readonly string[];
+  forms: FlowFormTypes;
+}>;
+
+export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet & {
+  formTypes: ReadonlyMap<string, FlowFormTypes>;
+  bindingEnvironments: ReadonlyMap<string, readonly CompiledFlowBindingEnvironment[]>;
+} {
   const { resolver } = input;
   const declared = new Set(input.declaredDefinitionKeys);
   const reached = new Set<string>();
@@ -620,6 +707,7 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
       transaction: source.execution === "transaction",
       resolved: [],
       triggerRecordType: triggerRecordType(source),
+      rawSource: input.rawFlows?.[sourceIndex] ?? source,
     };
 
     // Structure, run locations, typed references, outputs and error handling, in one pass. Run
@@ -705,7 +793,15 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
       variables: resolveDeclarations(ctx, source.variables, ["variables"]),
       triggers: resolveTriggers(ctx, source),
       tasks: resolveTaskList(ctx, source.tasks, ["tasks"]),
-      outputs: resolveDeclarations(ctx, source.outputs, ["outputs"]),
+      outputs: Object.fromEntries(
+        Object.entries(source.outputs).map(([name, declaration]) => [
+          name,
+          {
+            ...withRecordTypes(ctx, declaration, ["outputs", name]),
+            value: resolveFormReferences(ctx, declaration.value, ["outputs", name, "value"]),
+          },
+        ]),
+      ),
       errors: resolveTaskList(ctx, source.errors, ["errors"]),
       finally: resolveTaskList(ctx, source.finally, ["finally"]),
     };
@@ -737,7 +833,17 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
     const bindings = input.referenceEnvironments?.(input.flows[entry.sourceIndex]!);
     const contexts =
       bindings !== undefined && bindings.length > 0
-        ? bindings.map((binding) => [binding])
+        ? bindings.map((binding) => [
+            {
+              ...binding,
+              forms: Object.fromEntries(
+                Object.entries(binding.forms).map(([alias, fields]) => [
+                  resolver.form(alias).identifier,
+                  fields,
+                ]),
+              ),
+            },
+          ])
         : [bindings];
     const invalid = contexts.flatMap((referenceEnvironments) =>
       validateFlow(entry.flow, {
@@ -767,8 +873,46 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
   }
   // Publication compiles the plan the runtime builds, and refuses a flow it cannot plan, naming
   // the step. The plan itself is never stored.
+  let formTypes: ReadonlyMap<string, FlowFormTypes>;
+  const bindingEnvironments = new Map<string, CompiledFlowBindingEnvironment[]>();
   try {
-    compileFlowPlans(compiled.map(({ flow }) => flow));
+    formTypes = new Map(
+      compiled.map(({ flow, sourceIndex }) => {
+        const forms: Record<string, Record<string, string>> = {};
+        for (const environment of input.referenceEnvironments?.(input.flows[sourceIndex]!) ?? []) {
+          const canonicalForms: Record<string, Record<string, string>> = {};
+          for (const [alias, fields] of Object.entries(environment.forms)) {
+            const identity = resolver.form(alias).identifier;
+            const known = (forms[identity] ??= {});
+            canonicalForms[identity] = { ...fields };
+            for (const [field, type] of Object.entries(fields)) {
+              if (known[field] !== undefined && known[field] !== type)
+                throw new FlowPlanError(
+                  flow.id,
+                  undefined,
+                  `form ${alias} has inconsistent field types`,
+                );
+              known[field] = type;
+            }
+          }
+          const held = bindingEnvironments.get(String(flow.id)) ?? [];
+          held.push({
+            page: environment.page,
+            controls: (environment.controls ?? []).map(
+              (alias) => resolver.placement(alias).identifier,
+            ),
+            forms: canonicalForms,
+          });
+          bindingEnvironments.set(String(flow.id), held);
+        }
+        return [String(flow.id), forms] as const;
+      }),
+    );
+    compileFlowPlans(
+      compiled.map(({ flow }) => flow),
+      new Map(),
+      formTypes,
+    );
   } catch (error) {
     if (!(error instanceof FlowPlanError)) throw error;
     const planned = compiled.find(({ flow }) => flow.id === error.flowId);
@@ -781,7 +925,13 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
     );
   }
   const provenance = compiled.flatMap(({ flow, sourceIndex, resolved }, canonicalIndex) =>
-    flowProvenance(flow, input.flows[sourceIndex]!, resolved, canonicalIndex, sourceIndex),
+    flowProvenance(
+      flow,
+      input.rawFlows?.[sourceIndex] ?? input.flows[sourceIndex]!,
+      resolved,
+      canonicalIndex,
+      sourceIndex,
+    ),
   );
   const result = compiledFlowSetSchema.safeParse({
     flows: compiled.map(({ flow }) => flow),
@@ -793,5 +943,5 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
       "vortex.definition.invalid_compilation_output",
       "invalid_value",
     );
-  return result.data;
+  return { ...result.data, formTypes, bindingEnvironments };
 }

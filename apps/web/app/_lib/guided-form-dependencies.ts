@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHumanInstalledPageBundleContextLoader } from "@vortex/platform/server";
+import { createInstalledContextLoader } from "@vortex/platform/server";
 import type { GuidedFormDependencies } from "@vortex/platform/server";
 import { platformPermissionFor, platformPermissionOwnerId } from "@vortex/definitions";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
@@ -13,17 +13,7 @@ export const guidedFormDependencies = (): GuidedFormDependencies => ({
   identityAuthorityId: getIdentityAuthorityConfiguration().authorityId,
   readContext: async (transaction, scope) => {
     if (scope.applicationRootId === undefined) return undefined;
-    return createHumanInstalledPageBundleContextLoader({
-      transaction,
-      scope: {
-        organizationId: scope.organizationId,
-        organizationAccountId: scope.organizationAccountId,
-        applicationRootId: scope.applicationRootId,
-        ...(scope.previewInstallationId === undefined
-          ? {}
-          : { previewInstallationId: scope.previewInstallationId }),
-      },
-    }).load();
+    return createInstalledContextLoader(transaction, scope).load();
   },
   platformPermissionFor,
   platformPermissionOwnerId,

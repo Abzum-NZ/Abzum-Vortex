@@ -6,6 +6,7 @@ import {
   sessionContextSchema,
   type IdentitySession,
   type OrganizationSelectionCandidate,
+  type SelectedOrganizationScope,
 } from "../access/identity-access";
 import {
   organizationRecordAccessDeclarationSchema,
@@ -61,6 +62,7 @@ import {
 import { resolveInstalledPageIdentity } from "../definition/standard-page-resolution";
 import {
   projectAuthenticatedPageCapability,
+  projectAuthenticatedFormCapability,
   type PageCapabilityEvaluators,
   type FixedAuthenticatedPageCapability,
 } from "./authenticated-page-capability";
@@ -559,12 +561,12 @@ export const createStoredPageCapabilityService = (
     };
   };
 
-  // Projects one loaded page for the viewer's current authority over this exact scope only.
-  const projectStored = (
-    session: IdentitySession,
-    candidate: OrganizationSelectionCandidate,
+  // The same visibility, subject and availability decisions serve a full page or one form.
+  const evaluatorsFor = (
     stored: FixedAuthenticatedPageCapability,
-  ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> => {
+    subjectRecordId: string | undefined,
+    rowSubjectType?: Readonly<{ moduleRootId: string; recordTypeId: string }>,
+  ): PageCapabilityEvaluators => {
     // This cache belongs to one projection transaction, never another page, actor or release.
     let subjectRead:
       | Readonly<{
@@ -654,20 +656,22 @@ export const createStoredPageCapabilityService = (
     const evaluators: PageCapabilityEvaluators = {
       evaluateActionAvailability: async (transaction, scope, page, placementId) => {
         const action = boundActions.get(placementId.toLowerCase());
-        const subjectRecordId = dependencies.selection.subjectRecordId;
+        const selectedType =
+          rowSubjectType ??
+          ((page.type === "detail" ||
+            page.type === "public" ||
+            page.type === "form" ||
+            page.type === "guided_form") &&
+          page.recordType?.state === "resolved"
+            ? page.recordType
+            : undefined);
         // Only the selected page's own subject is previewed; a list or another page has none.
         if (
           action === undefined ||
           subjectRecordId === undefined ||
           !sameId(page.pageId, selectedPageId) ||
-          !(
-            page.type === "detail" ||
-            page.type === "public" ||
-            page.type === "form" ||
-            page.type === "guided_form"
-          ) ||
-          page.recordType?.state !== "resolved" ||
-          !sameId(page.recordType.recordTypeId, action.subjectRecordTypeId) ||
+          selectedType === undefined ||
+          !sameId(selectedType.recordTypeId, action.subjectRecordTypeId) ||
           scope.applicationRootId === undefined ||
           !sameId(scope.organizationId, context.organizationId) ||
           !sameId(scope.applicationRootId, applicationRootId)
@@ -817,16 +821,16 @@ export const createStoredPageCapabilityService = (
             });
 
           // A different destination page cannot borrow the selected page's address subject.
-          const recordType =
-            sameId(page.pageId, selectedPageId) &&
-            (page.type === "detail" ||
-              page.type === "public" ||
-              page.type === "form" ||
-              page.type === "guided_form") &&
-            page.recordType?.state === "resolved"
-              ? page.recordType
-              : undefined;
-          const subjectRecordId = dependencies.selection.subjectRecordId;
+          const recordType = sameId(page.pageId, selectedPageId)
+            ? (rowSubjectType ??
+              ((page.type === "detail" ||
+                page.type === "public" ||
+                page.type === "form" ||
+                page.type === "guided_form") &&
+              page.recordType?.state === "resolved"
+                ? page.recordType
+                : undefined))
+            : undefined;
           if (recordType === undefined || subjectRecordId === undefined) return false;
           const modules = context.releaseSet.modules.filter((module) =>
             sameId(module.rootId, recordType.moduleRootId),
@@ -883,15 +887,36 @@ export const createStoredPageCapabilityService = (
         }
       },
     };
-    return requests.run(session, candidate, async (transaction, scope) => {
-      if (
-        scope.applicationRootId === undefined ||
-        !sameId(scope.organizationId, context.organizationId) ||
-        !sameId(scope.applicationRootId, applicationRootId)
-      )
-        throw new Error("STORED_PAGE_HUMAN_SCOPE_UNAVAILABLE");
-      return projectAuthenticatedPageCapability(transaction, scope, stored, evaluators);
-    });
+    return evaluators;
+  };
+
+  // Projects one loaded page for the viewer's current authority over this exact scope only.
+  const projectStoredInTransaction = (
+    transaction: RequestDatabaseTransaction,
+    scope: SelectedOrganizationScope,
+    stored: FixedAuthenticatedPageCapability,
+  ): Promise<ProjectedPageCapability> => {
+    if (
+      scope.applicationRootId === undefined ||
+      !sameId(scope.organizationId, context.organizationId) ||
+      !sameId(scope.applicationRootId, applicationRootId)
+    )
+      throw new Error("STORED_PAGE_HUMAN_SCOPE_UNAVAILABLE");
+    return projectAuthenticatedPageCapability(
+      transaction,
+      scope,
+      stored,
+      evaluatorsFor(stored, dependencies.selection.subjectRecordId),
+    );
+  };
+  const projectStored = (
+    session: IdentitySession,
+    candidate: OrganizationSelectionCandidate,
+    stored: FixedAuthenticatedPageCapability,
+  ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> => {
+    return requests.run(session, candidate, (transaction, scope) =>
+      projectStoredInTransaction(transaction, scope, stored),
+    );
   };
 
   const project = async (
@@ -962,6 +987,49 @@ export const createStoredPageCapabilityService = (
   return Object.freeze({
     project: (session: IdentitySession, candidate: OrganizationSelectionCandidate) =>
       project(session, candidate),
+    /** Projects inside an already verified request, sharing its authority and transaction. */
+    projectInTransaction: async (
+      transaction: RequestDatabaseTransaction,
+      scope: SelectedOrganizationScope,
+    ): Promise<ProjectedPageCapability> => {
+      const fixed = await load(selectedPageId);
+      return fixed === undefined
+        ? undefined
+        : projectStoredInTransaction(transaction, scope, fixed);
+    },
+    /** The row type must come from a placement query whose membership was admitted in this transaction. */
+    projectFormInTransaction: async (
+      transaction: RequestDatabaseTransaction,
+      scope: SelectedOrganizationScope,
+      projectedPage: Readonly<Record<string, unknown>>,
+      formId: string,
+      subject: Readonly<{ moduleRootId: string; recordTypeId: string; recordId: string }>,
+    ): Promise<Readonly<Record<string, unknown>> | undefined> => {
+      if (
+        scope.applicationRootId === undefined ||
+        !sameId(scope.organizationId, context.organizationId) ||
+        !sameId(scope.applicationRootId, applicationRootId) ||
+        !context.releaseSet.modules.some(
+          (module) =>
+            sameId(module.rootId, subject.moduleRootId) &&
+            module.content.recordTypes.some((record) =>
+              sameId(record.recordTypeId, subject.recordTypeId),
+            ),
+        )
+      )
+        return undefined;
+      const fixed = await load(selectedPageId);
+      return fixed === undefined
+        ? undefined
+        : projectAuthenticatedFormCapability(
+            transaction,
+            scope,
+            fixed,
+            projectedPage,
+            formId,
+            evaluatorsFor(fixed, subject.recordId, subject),
+          );
+    },
     /**
      * Re-checks one declared link target against the viewer's current access at navigation time.
      * The target is definition or record data and grants nothing. An external address is available

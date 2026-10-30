@@ -1,6 +1,8 @@
 /** Closed limits from the architecture decisions, exported so one number governs every consumer. */
 export const flowMaximumTaskCount = 100;
 export const flowMaximumTaskNestingDepth = 5;
+/** A task output may select a bounded sequence of named fields from a JSON output. */
+export const flowMaximumTaskOutputPathDepth = 5;
 
 export const flowMaximumForEachItemsOther = 100;
 export const flowMaximumRunFlowDepth = 3;

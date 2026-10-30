@@ -20,6 +20,7 @@ import {
 } from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import { FlowSurfaceContext } from "../flow-runtime/flow-surface-context";
+import { FlowRuntimeStateContext } from "../flow-runtime/flow-runtime-state-context";
 import { resolveControlContext, type ControlRenderProps } from "./control-context";
 import {
   applicableDraftFeedback,
@@ -190,6 +191,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
 
   const titleId = useId();
   const inFlowSurface = useContext(FlowSurfaceContext);
+  const flowRuntimeState = useContext(FlowRuntimeStateContext);
   const feedbackId = useId();
   const formId = props.placementId;
   const formRef = useRef<HTMLFormElement>(null);
@@ -309,6 +311,10 @@ export function FormContainer(props: FormContainerProps): ReactElement {
 
   const events = context.events;
   const eventsRef = useRef(events);
+  useEffect(
+    () => flowRuntimeState?.registerForm(formId, registry.valueOf),
+    [flowRuntimeState, formId, registry],
+  );
   useEffect(() => {
     eventsRef.current = events;
   }, [events]);
@@ -316,13 +322,19 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   useEffect(() => {
     if (context.inactive || readyRef.current) return;
     readyRef.current = true;
-    eventsRef.current?.form_ready?.({ event: "form_ready" });
+    eventsRef.current?.form_ready?.({ event: "form_ready", gestureId: crypto.randomUUID() });
   }, [context.inactive]);
 
   useEffect(() => {
     resetBaseline();
-    return unsavedWorkRegistry?.registerForm(formId, resetBaseline, setSavedBaseline);
-  }, [formId, generation, resetBaseline, setSavedBaseline, unsavedWorkRegistry]);
+    return unsavedWorkRegistry?.registerForm(
+      formId,
+      resetBaseline,
+      setSavedBaseline,
+      () => baselineRef.current,
+      registry.values,
+    );
+  }, [formId, generation, registry, resetBaseline, setSavedBaseline, unsavedWorkRegistry]);
 
   const resetRef = useRef(false);
   useEffect(() => {
@@ -362,6 +374,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     submission.track(
       events?.form_submit?.({
         event: "form_submit",
+        gestureId: crypto.randomUUID(),
         values: registry.values(),
         ...(selectedOwnerGroupId === undefined ? {} : { selectedOwnerGroupId }),
       }),
@@ -393,7 +406,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     validationAttemptedRef.current = false;
     setValidationErrors({});
     setGeneration((current) => current + 1);
-    events?.form_reset?.({ event: "form_reset" });
+    events?.form_reset?.({ event: "form_reset", gestureId: crypto.randomUUID() });
   };
 
   const title = context.accessibleName;

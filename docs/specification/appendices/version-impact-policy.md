@@ -20,7 +20,7 @@ flowchart LR
     N -- Yes --> R[Order all reasons]
     R --> M[Highest impact wins]
     M --> A[Assign minimum next version]
-    A --> F[Bind result with comparison fingerprint]
+    A --> F[Bind result to draft and published revisions]
     F --> B{Builder confirms current result?}
     B -- Yes --> P[Phase 2 may publish]
     B -- No or stale --> Q[Refuse or cancel]
@@ -188,7 +188,7 @@ The comparator refuses rather than classifies when:
 
 Exact content fingerprints use deterministic canonical JSON with sorted object keys and preserved array order. Comparison normalisation is separate: only the collections explicitly marked unordered above are reordered for semantic comparison.
 
-The comparison fingerprint covers the policy version, definition kind and root, latest revision/version/fingerprint or an empty-history marker, exact candidate content fingerprint, outcome, ordered reasons, impact, and assigned version. Confirmation recomputes the assessment from the current request and accepts only the same subject, fingerprint, and assigned version. A stale result, override, or `no_change` confirmation is refused.
+Confirmation identifies the root and draft revision and carries the assigned version and dependency manifest. Publication locks the root and draft, recomputes the assessment and accepts only the same confirmation. A stale result, override, or `no_change` confirmation is refused.
 
 ## Boundary with later work
 

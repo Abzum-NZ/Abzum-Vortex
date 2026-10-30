@@ -13,28 +13,11 @@ import type {
   RecordsTablePageRequest,
 } from "@vortex/platform/schema";
 import type { PageWebMcpTool } from "./webmcp-projection";
+import type { PlacementFlowBinding } from "@vortex/ui";
 export type { PageWebMcpTool } from "./webmcp-projection";
+export type { PlacementFlowBinding } from "@vortex/ui";
 
 export type PageDataState = Readonly<Record<string, unknown>>;
-
-/** One flow binding a placement holds, described only by identities and the caller inputs it takes. */
-export type PlacementFlowBinding = Readonly<{
-  bindingId: string;
-  eventId: string;
-  event: string;
-  flowId: string;
-  /** The names of the caller inputs the bound flow declares; the surface may fill only these. */
-  callerInputs: readonly string[];
-  /** The whole values input feeds a record-save task in this bound flow. */
-  savesFormValues: boolean;
-  /** The installed record type of this placement's selected row or enclosing form context. */
-  recordTypeId?: string;
-  /** Caller inputs consumed by a declared `record.read_fields` task in this exact flow. */
-  selectedReadInputs?: readonly Readonly<{
-    callerInputName: string;
-    recordTypeId: string;
-  }>[];
-}>;
 
 /** What a read of selected placements returns: the page without the menu and the page tools. */
 export type PlacementReadModel = Readonly<{
@@ -66,6 +49,8 @@ export type PlacementReadModel = Readonly<{
   tableAddress: Readonly<Record<string, string>>;
   /** Each placement's flow bindings, by stable placement identity. */
   bindings: Readonly<Record<string, readonly PlacementFlowBinding[]>>;
+  /** Organisation time zone for page flow formulas, present when the page has bindings. */
+  flowTimeZone?: string;
   /** Data placements to re-read after a write from each installed flow binding. */
   refreshPlacementsByBinding: Readonly<Record<string, readonly string[]>>;
   /** Pending states declared by a protected projection; only displayed values trigger a reread. */
@@ -126,6 +111,7 @@ export type PlacementReadModel = Readonly<{
     pageKey: string;
     installationRevision: number;
     releaseKey: string;
+    flowTimeZone?: string;
   }>;
 }>;
 

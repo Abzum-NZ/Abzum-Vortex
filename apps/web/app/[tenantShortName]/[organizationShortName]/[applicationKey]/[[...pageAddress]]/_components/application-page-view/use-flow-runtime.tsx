@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   type Dispatch,
@@ -11,6 +12,7 @@ import type { useUnsavedWorkGuard, useUnsavedWorkRegistry } from "@vortex/ui";
 import {
   createFlowInvokeClient,
   createFlowRuntime,
+  createFlowRuntimeState,
   createFormBlockRuntime,
   getAccessibleName,
   type FieldInputControlReleaseMap,
@@ -25,11 +27,11 @@ import {
   type FlowIntentHost,
   type FlowInvokeClient,
   type LinkNavigationEnvironment,
-  type ServerFlowResponse,
   type PlatformThemeTokens,
 } from "@vortex/ui";
 import {
   formContinuationAnswerSchema,
+  type ComponentFlowBinding,
   type ReferenceChoiceSelectionEvidenceMap,
   isRecord,
   sameId,
@@ -40,8 +42,8 @@ import { DialogFooter } from "@vortex/ui/components/dialog";
 import { useApplicationFrame } from "../../../_components/application-frame-state";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import type { SubmittedForm, Notice } from "./types";
+import type { ControlDrafts } from "../../../_components/application-frame-state";
 import { formSurfaceComposition, runtimeInputWithFormDefault } from "./form-surface";
-import { requestRecordChoices } from "./record-choices";
 import { unavailableNotice } from "./notices";
 
 export function useFlowRuntime({
@@ -58,6 +60,7 @@ export function useFlowRuntime({
   model,
   platformComponentRegistry,
   runtimeInputsRef,
+  controlDraftsRef,
   choicePayloadFor,
   fieldInputControlReleases,
   setNotice,
@@ -82,6 +85,7 @@ export function useFlowRuntime({
   model: ApplicationPageModel;
   platformComponentRegistry: ReturnType<typeof createPlatformComponentRegistryForReleases>;
   runtimeInputsRef: RefObject<Readonly<Record<string, unknown>>>;
+  controlDraftsRef: RefObject<ControlDrafts> | undefined;
   choicePayloadFor: (placementId: string, formId?: string) => ChoiceInputPayload | undefined;
   fieldInputControlReleases: FieldInputControlReleaseMap;
   setNotice: Dispatch<SetStateAction<Notice | undefined>>;
@@ -110,7 +114,7 @@ export function useFlowRuntime({
    * and the runtime carries out every pause (another form or a confirmation) through a continuation,
    * which is returned exactly as the server issued it.
    */
-  const { flowClient, webMcpClient } = useMemo(() => {
+  const { flowClient, webMcpClient, beginSubmission } = useMemo(() => {
     const options = {
       address: {
         tenantShortName: application.tenantShortName,
@@ -119,62 +123,71 @@ export function useFlowRuntime({
         pageKey: application.pageKey,
         ...(subject === undefined ? {} : { pageRecordId: subject.recordId }),
       },
-      installation: {
-        installationRevision: application.installationRevision,
-        releaseKey: application.releaseKey,
+      pageInputs: () => {
+        const search = new URLSearchParams(window.location.search);
+        const parameters: Record<string, string | string[]> = {};
+        for (const name of search.keys()) {
+          const values = search.getAll(name);
+          parameters[name] = values.length === 1 ? values[0]! : values;
+        }
+        const controls: Record<string, string> = {};
+        const forward = (placementId: string, value: unknown) => {
+          if (value === null) controls[placementId] = "";
+          else if (
+            typeof value === "string" ||
+            typeof value === "number" ||
+            typeof value === "boolean"
+          )
+            controls[placementId] = String(value);
+          else if (isRecord(value) && typeof value.recordId === "string")
+            controls[placementId] = value.recordId;
+        };
+        for (const [placementId, input] of Object.entries(runtimeInputsRef.current)) {
+          if (!isRecord(input) || !isRecord(input.data) || input.data.status !== "ready") continue;
+          const values = input.data.values;
+          if (!isRecord(values)) continue;
+          forward(placementId, values.value);
+        }
+        for (const [placementId, draft] of Object.entries(controlDraftsRef?.current.drafts ?? {}))
+          forward(placementId, draft.value);
+        return { parameters, controls };
       },
       ...(subject === undefined ? {} : { subject }),
     };
-    const recordResponse = (
-      response: ServerFlowResponse,
-      submission: SubmittedForm | undefined,
-    ) => {
-      if (submission === undefined) return;
-      if (response.kind === "intent") {
-        continuingFormsRef.current.set(response.continuation, submission);
-      } else if (
-        response.kind === "result" &&
-        response.failure === undefined &&
-        response.descriptor.commit === "confirmed"
-      ) {
-        // The server has confirmed the submitted values before its Navigate intent is presented.
-        unsavedWorkRegistry?.markSaved(submission.formId, submission.values);
-      }
+    const submissions = new Map<string, SubmittedForm>();
+    const beginSubmission = (bindingId: string, clickId: string) => {
+      const submission = submittedFormsRef.current.get(bindingId);
+      submittedFormsRef.current.delete(bindingId);
+      if (submission !== undefined) submissions.set(clickId, submission);
+      return () => {
+        if (submissions.get(clickId) === submission) submissions.delete(clickId);
+      };
     };
-    const trackedClient = (client: FlowInvokeClient): FlowInvokeClient => ({
-      startBinding: async (binding, callerInputs, clickId, signal, gestureSubject) => {
-        const submission = submittedFormsRef.current.get(binding.bindingId);
-        submittedFormsRef.current.delete(binding.bindingId);
-        const inputs =
-          submission?.choiceEvidence === undefined
-            ? callerInputs
-            : { ...callerInputs, choiceEvidence: submission.choiceEvidence };
-        const response = await client.startBinding(
-          binding,
-          inputs,
-          clickId,
-          signal,
-          gestureSubject,
-        );
-        recordResponse(response, submission);
-        return response;
-      },
-      resume: async (flowId, continuation, answer, evidence, signal) => {
-        if (answer.kind === "cancel") formCancelledRef.current = true;
-        const submission = continuingFormsRef.current.get(continuation);
-        continuingFormsRef.current.delete(continuation);
-        const response = await client.resume(flowId, continuation, answer, evidence, signal);
-        recordResponse(response, submission);
-        return response;
-      },
-    });
+    const wrap = async () => {
+      const { trackFlowInvokeClient } = await import("./tracked-flow-client");
+      return (client: FlowInvokeClient) =>
+        trackFlowInvokeClient(client, {
+          submissions,
+          continuingFormsRef,
+          formCancelledRef,
+          unsavedWorkRegistry,
+          controlDraftsRef,
+        });
+    };
     return {
-      flowClient: trackedClient(createFlowInvokeClient(options)),
-      webMcpClient: trackedClient(
-        createFlowInvokeClient({ ...options, endpoint: "/api/flows/invoke/mcp" }),
-      ),
+      beginSubmission,
+      flowClient: createFlowInvokeClient(options, wrap),
+      webMcpClient: createFlowInvokeClient({ ...options, endpoint: "/api/flows/invoke/mcp" }, wrap),
     };
-  }, [application, formCancelledRef, subject, unsavedWorkRegistry]);
+  }, [
+    application,
+    formCancelledRef,
+    model.pageParameters.controls,
+    runtimeInputsRef,
+    controlDraftsRef,
+    subject,
+    unsavedWorkRegistry,
+  ]);
   const applicationFrame = useApplicationFrame();
   const startPageChange = applicationFrame?.startPageChange;
   const navigation = model.navigation ?? applicationFrame?.navigation;
@@ -311,7 +324,9 @@ export function useFlowRuntime({
         else if (model.linkInputPlacementIds.includes(placementId))
           events.records_requested = (event: ControlSemanticEvent) => {
             if (event.event !== "records_requested") return;
-            return requestRecordChoices(model, placementId, event, () => router.refresh());
+            return import("./record-choices").then(({ requestRecordChoices }) =>
+              requestRecordChoices(model, placementId, event, () => router.refresh()),
+            );
           };
         const modalInput: Record<string, unknown> = {};
         if (input.data !== undefined) modalInput.data = input.data;
@@ -363,6 +378,45 @@ export function useFlowRuntime({
   });
   const committedRef = useRef(committed);
   committedRef.current = committed;
+  const runtimeState = useMemo(() => createFlowRuntimeState(), []);
+  const bindingSettings = useMemo(() => {
+    const bindings = new Map<
+      string,
+      {
+        controlId: string;
+        concurrency: ComponentFlowBinding["settings"]["concurrency"];
+        condition: ComponentFlowBinding["settings"]["condition"];
+      }
+    >(
+      Object.values(model.bindings).flatMap((items) =>
+        items.map(
+          (binding) =>
+            [
+              binding.bindingId,
+              {
+                controlId: binding.controlId,
+                concurrency: binding.settings.concurrency,
+                condition: binding.settings.condition,
+              },
+            ] as const,
+        ),
+      ),
+    );
+    return (bindingId: string) => bindings.get(bindingId);
+  }, [model.bindings]);
+  const browserBindings = useMemo(() => {
+    const bindings = new Map<
+      string,
+      NonNullable<(typeof model.bindings)[string][number]["browser"]>
+    >(
+      Object.values(model.bindings).flatMap((items) =>
+        items.flatMap((binding) =>
+          binding.browser === undefined ? [] : [[binding.bindingId, binding.browser] as const],
+        ),
+      ),
+    );
+    return (bindingId: string) => bindings.get(bindingId);
+  }, [model.bindings]);
   // One flow runtime per host, shared by every event of the page: a gesture dispatches its bound
   // flow once through the one invoke client, and every pause and presentation intent is carried out
   // by the same host before the next answer is sent.
@@ -371,20 +425,56 @@ export function useFlowRuntime({
       createFlowRuntime({
         client: flowClient,
         host,
+        state: runtimeState,
+        bindingSettings,
+        begin: beginSubmission,
+        browserBinding: browserBindings,
+        ...(application.flowTimeZone === undefined ? {} : { timeZone: application.flowTimeZone }),
         committed: (bindingId) => committedRef.current(bindingId),
       }),
-    [flowClient, host],
+    [
+      application.flowTimeZone,
+      beginSubmission,
+      bindingSettings,
+      browserBindings,
+      flowClient,
+      host,
+      runtimeState,
+    ],
   );
   const webMcpRuntime = useMemo(
     () =>
       createFlowRuntime({
         client: webMcpClient,
         host,
+        state: runtimeState,
+        bindingSettings,
+        begin: beginSubmission,
+        ...(application.flowTimeZone === undefined ? {} : { timeZone: application.flowTimeZone }),
         committed: (bindingId) => committedRef.current(bindingId),
       }),
-    [webMcpClient, host],
+    [application.flowTimeZone, beginSubmission, bindingSettings, webMcpClient, host, runtimeState],
   );
+  useEffect(() => {
+    if (
+      !Object.values(model.bindings).some((items) =>
+        items.some((binding) => binding.browser !== undefined),
+      )
+    )
+      return;
+    if (Object.values(currentData).some((entry) => entry.status === "loading")) return;
+    if ("requestIdleCallback" in window) {
+      const handle = window.requestIdleCallback(() => {
+        void flowRuntime.prefetch();
+      });
+      return () => window.cancelIdleCallback(handle);
+    }
+    const handle = globalThis.setTimeout(() => {
+      void flowRuntime.prefetch();
+    }, 0);
+    return () => globalThis.clearTimeout(handle);
+  }, [currentData, flowRuntime, model.bindings]);
   const formBlock = useMemo(() => createFormBlockRuntime(flowRuntime), [flowRuntime]);
 
-  return { formBlock, flowRuntime, webMcpRuntime, intentHostElement };
+  return { formBlock, flowRuntime, webMcpRuntime, runtimeState, intentHostElement };
 }

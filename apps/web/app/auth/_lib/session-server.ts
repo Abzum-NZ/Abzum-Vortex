@@ -105,7 +105,7 @@ const revokeIssuedProviderSession = async (
 export const bootstrapIdentitySession = async (
   signedIn: Extract<VerifiedSignInResult, { ok: true }>,
 ): Promise<IdentitySessionResolution> => {
-  let outcome: IdentitySessionResolution = unavailable();
+  let outcome: IdentitySessionResolution;
   let committed = false;
   try {
     // A fresh sign-in supersedes whatever session cookies the browser still holds. Starting from

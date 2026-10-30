@@ -24,7 +24,7 @@ export {
 } from "./installed-runtime-context";
 export { contributedActionControlIds } from "./installed-record-contributions";
 export {
-  createHumanInstalledPageBundleContextLoader,
+  createInstalledContextLoader,
   isTrustedInstalledPageBundleContext,
   isTrustedInstalledPageComposition,
   matchesInstalledPageBundleIdentity,

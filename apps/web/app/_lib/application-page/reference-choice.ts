@@ -3,16 +3,39 @@ import {
   type PermittedApplicationsRead,
   type PermittedApplication,
   type InstalledRuntimeContext,
+  createReferenceChoiceService,
   createStoredPageCapabilityService,
+  requireProjectedPlacement,
+  CHOICE_INPUT_BLOCK_RELEASE,
+  LINK_INPUT_BLOCK_RELEASE,
+  TEXT_INPUT_BLOCK_RELEASE,
+  DATE_INPUT_BLOCK_RELEASE,
+  FIELD_INPUT_BLOCK_RELEASE,
+  FIELD_INPUT_CONTROL_RELEASES,
+  placementSettings,
+  fieldControl,
+  planChoiceOptionGates,
+  decideChoiceOptionGates,
+  applyChoiceOptionGates,
 } from "@vortex/platform/server";
 import {
   type IdentitySession,
   type OrganizationSelectionCandidate,
+  isRecord,
   sameId,
+  walkPageComposition,
 } from "@vortex/platform/schema";
 import { loadInstalledContext, requestDependencies } from "./installed-context";
+import { getQueryContinuationKey } from "../query-continuation-key";
 import { platformPermissionSource } from "../platform-permission-source";
-import { withContributedPlacements } from "./contributed-placements";
+import { withContributedFormPlacements, withContributedPlacements } from "./contributed-placements";
+import { collectPlacements } from "./placement-helpers";
+import {
+  projectedReferenceChoiceForm,
+  hasReferenceChoiceSource,
+  referenceChoiceFieldForPlacement,
+  type ProjectedReferenceChoiceForm,
+} from "../reference-choices";
 
 export type ReferenceChoicePageResult =
   | Readonly<{ kind: "completed"; values: ReferenceChoiceInputValues }>
@@ -27,6 +50,193 @@ export type ReferenceChoiceAddress = Readonly<{
   /** The installed context this same request's own HUMAN address read authorized. */
   installedContext?: InstalledRuntimeContext;
 }>;
+
+/** Proves one dynamic choice key against its installed source under the gate's transaction. */
+const validateProjectedReferenceChoice = async (
+  bound: Parameters<
+    ReturnType<typeof createReferenceChoiceService>["resolveExactInTransaction"]
+  >[0],
+  context: InstalledRuntimeContext,
+  projectedPage: Readonly<Record<string, unknown>>,
+  placementId: string,
+  key: string,
+): Promise<boolean> => {
+  const match = /^r_([0-9a-f]{32})$/.exec(key);
+  const gate = requireProjectedPlacement(projectedPage, placementId);
+  if (match === null || gate.kind !== "on_page") return false;
+  const descriptor = referenceChoiceFieldForPlacement(gate.placement, context.releaseSet.modules);
+  if (descriptor === undefined) return false;
+  const hex = match[1]!;
+  const recordId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  const service = createReferenceChoiceService({
+    ...requestDependencies(),
+    continuationKey: getQueryContinuationKey(),
+  });
+  const resolved = await service.resolveExactInTransaction(bound, {
+    ...descriptor.command,
+    exactRecordId: recordId,
+  });
+  return (
+    resolved.kind === "available" &&
+    resolved.value.outcome === "completed" &&
+    resolved.value.choices.some((choice) => choice.key === key)
+  );
+};
+
+/** Uses the page's own option gates for a published control value. */
+export const validateProjectedControlOption = async (
+  bound: Parameters<
+    ReturnType<typeof createReferenceChoiceService>["resolveExactInTransaction"]
+  >[0],
+  context: InstalledRuntimeContext,
+  projectedPage: Readonly<Record<string, unknown>>,
+  placementId: string,
+  value: string,
+  parsedValue: unknown,
+  subject: Readonly<{ recordTypeId: string; recordId: string }> | undefined,
+  held: Parameters<typeof applyChoiceOptionGates>[2],
+  validateLink: (
+    placementId: string,
+    selected: Readonly<{ recordTypeId: string; recordId: string }>,
+  ) => Promise<boolean>,
+): Promise<boolean> => {
+  const gate = requireProjectedPlacement(projectedPage, placementId);
+  if (gate.kind !== "on_page") return false;
+  if (hasReferenceChoiceSource(gate.placement))
+    return validateProjectedReferenceChoice(bound, context, projectedPage, placementId, value);
+  const props = structuredClone(gate.placement.props);
+  const placement = {
+    props,
+    vortex: gate.placement.vortex,
+    settings: placementSettings(props),
+  };
+  if (fieldControl(placement) === "choice" || fieldControl(placement) === "several_choices") {
+    const plan = planChoiceOptionGates([placement], context);
+    if (plan === undefined) return false;
+    const allowed = await decideChoiceOptionGates(bound.transaction, plan, subject);
+    applyChoiceOptionGates(plan, allowed, held);
+    return (
+      Array.isArray(props.options) &&
+      props.options.some((option) => isRecord(option) && option.key === value)
+    );
+  }
+  const block = gate.placement.vortex.block;
+  if (
+    fieldControl(placement) === "link" ||
+    (isRecord(block) &&
+      typeof block.blockId === "string" &&
+      sameId(block.blockId, LINK_INPUT_BLOCK_RELEASE.blockId))
+  )
+    return (
+      isRecord(parsedValue) &&
+      typeof parsedValue.recordTypeId === "string" &&
+      typeof parsedValue.recordId === "string" &&
+      (await validateLink(placementId, {
+        recordTypeId: parsedValue.recordTypeId,
+        recordId: parsedValue.recordId,
+      }))
+    );
+  if (
+    isRecord(block) &&
+    typeof block.blockId === "string" &&
+    sameId(block.blockId, CHOICE_INPUT_BLOCK_RELEASE.blockId)
+  )
+    return (
+      Array.isArray(props.options) &&
+      props.options.some((option) => isRecord(option) && option.key === value)
+    );
+  return (
+    fieldControl(placement) === "text" ||
+    (isRecord(block) &&
+      typeof block.blockId === "string" &&
+      (sameId(block.blockId, TEXT_INPUT_BLOCK_RELEASE.blockId) ||
+        sameId(block.blockId, DATE_INPUT_BLOCK_RELEASE.blockId)))
+  );
+};
+
+/** Projects only the admitted row's form, inside the transaction that proved its membership. */
+export const projectRowReferenceChoiceForm = async (
+  transaction: Parameters<
+    ReturnType<typeof createStoredPageCapabilityService>["projectFormInTransaction"]
+  >[0],
+  scope: Parameters<
+    ReturnType<typeof createStoredPageCapabilityService>["projectFormInTransaction"]
+  >[1],
+  context: InstalledRuntimeContext,
+  projectedPage: Readonly<Record<string, unknown>>,
+  pageId: string,
+  formId: string,
+  subject: Readonly<{ moduleRootId: string; recordTypeId: string; recordId: string }>,
+): Promise<
+  | (ProjectedReferenceChoiceForm &
+      Readonly<{
+        visibleFields: ReadonlyMap<string, Readonly<{ placementId: string; kind: string }>>;
+        projectedPage: Readonly<Record<string, unknown>>;
+      }>)
+  | undefined
+> => {
+  const service = createStoredPageCapabilityService({
+    ...requestDependencies(),
+    context,
+    permissions: platformPermissionSource,
+    selection: { pageId },
+  });
+  const form = await service.projectFormInTransaction(
+    transaction,
+    scope,
+    projectedPage,
+    formId,
+    subject,
+  );
+  if (form === undefined) return undefined;
+  const page = structuredClone(projectedPage) as Record<string, unknown>;
+  let replaced = false;
+  walkPageComposition(page.composition, (placement) => {
+    if (sameId(placement.placementId, formId)) {
+      Object.assign(placement.item, structuredClone(form));
+      replaced = true;
+    }
+    return undefined;
+  });
+  if (!replaced) return undefined;
+  const enriched = withContributedFormPlacements(page, context, subject, formId);
+  const projected = projectedReferenceChoiceForm(enriched, context.releaseSet.modules, formId);
+  if (projected === undefined) return undefined;
+  const visibleFields = new Map<string, Readonly<{ placementId: string; kind: string }>>();
+  for (const placement of collectPlacements(enriched)) {
+    if (placement.formId === undefined || !sameId(placement.formId, formId)) continue;
+    const block = placement.vortex.block;
+    const blockId =
+      isRecord(block) && typeof block.blockId === "string" ? block.blockId : undefined;
+    if (
+      blockId === undefined ||
+      (!sameId(blockId, FIELD_INPUT_BLOCK_RELEASE.blockId) &&
+        !Object.values(FIELD_INPUT_CONTROL_RELEASES).some((release) =>
+          sameId(blockId, release.blockId),
+        ))
+    )
+      continue;
+    const name = placement.settings.name;
+    if (
+      !isRecord(name) ||
+      name.kind !== "text" ||
+      typeof name.value !== "string" ||
+      visibleFields.has(name.value)
+    )
+      return undefined;
+    const control = fieldControl(placement);
+    const kind = hasReferenceChoiceSource(placement)
+      ? "dynamic_choice"
+      : (control ??
+        (sameId(blockId, CHOICE_INPUT_BLOCK_RELEASE.blockId)
+          ? "choice"
+          : sameId(blockId, LINK_INPUT_BLOCK_RELEASE.blockId)
+            ? "link"
+            : "other"));
+    visibleFields.set(name.value, { placementId: placement.placementId, kind });
+  }
+  return { ...projected, visibleFields, projectedPage: enriched };
+};
 
 /** Reprojects the current addressed page under the actor and the exact installed release. */
 export const projectReferenceChoicePage = async (

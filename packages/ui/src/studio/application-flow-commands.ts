@@ -1,7 +1,9 @@
 import {
   builderKeySchema,
   flowMaximumTaskCount,
+  flowMaximumForEachItemsOther,
   flowTaskRegistry,
+  flowExecutionRunLocations,
   parseFlowReference,
   sourceFlowTaskSchema,
   validateFlowTaskPlacement,
@@ -10,6 +12,7 @@ import {
   type FlowTaskTypeDefinition,
   type FlowValue,
   type FlowFormula,
+  type FlowLiteral,
   type SourceFlow,
   type SourceFlowTask,
 } from "@vortex/platform/schema";
@@ -87,7 +90,12 @@ export type StudioFlowNewStepSettings = Readonly<{
   message?: string;
   field?: string;
   condition?: FlowFormula;
-  thenTaskType?: string;
+  firstStep?: Readonly<{ type: string; settings: StudioFlowNewStepSettings }>;
+  value?: FlowFormula;
+  caseValue?: FlowLiteral;
+  maximumItems?: number;
+  flowId?: string;
+  inputs?: Readonly<Record<string, FlowValue>>;
 }>;
 
 const staleEdit = (
@@ -171,6 +179,14 @@ const builderChoiceOptions = (
       return draft().pages.map((page) => ({ value: page.key, label: page.label }));
     case "query_id":
       return draft().queries.map((query) => ({ value: query.key, label: query.label }));
+    case "flow_id": {
+      const module = source.body.modules.find((candidate) =>
+        candidate.flows.some((entry) => entry.id === flow.id),
+      );
+      return (module?.flows ?? source.body.flows)
+        .filter((entry) => entry.id !== flow.id)
+        .map((entry) => ({ value: entry.id, label: entry.labels?.name ?? studioWords(entry.key) }));
+    }
     case "record_type_id":
       return flowRecordType(flow) === undefined
         ? draft().recordTypes.map((record) => ({ value: record.key, label: record.label }))
@@ -374,7 +390,31 @@ export type StudioFlowStepType = Readonly<{
 }>;
 
 /** The control steps a person adds from the palette: a decision and an early end. */
-const paletteControls = ["if", "stop"] as const;
+const paletteControls = ["if", "switch", "for_each", "sequential", "run_flow", "stop"] as const;
+
+const supportsPlacement = (
+  definition: FlowTaskTypeDefinition,
+  flow: SourceFlow,
+  location: "page" | "server" | "backend",
+): boolean => {
+  const runLocation =
+    location === "page" ? "browser" : flow.execution === "transaction" ? "transaction" : "server";
+  const allowed = flowExecutionRunLocations[flow.execution] as readonly string[];
+  const actionFlowTask =
+    runLocation === "transaction" &&
+    flow.triggers.length === 0 &&
+    definition.actionFlowTransaction === true;
+  return (
+    (flow.execution === "interactive"
+      ? location !== "backend"
+      : flow.execution === "transaction"
+        ? location === "server"
+        : location === "backend") &&
+    allowed.includes(runLocation) &&
+    (definition.runLocations.includes(runLocation) || actionFlowTask) &&
+    definition.runs[location]
+  );
+};
 
 /** Registered step types the flow's execution kind accepts and that can start from seeds. */
 const registeredTypes = (
@@ -384,6 +424,12 @@ const registeredTypes = (
 ): FlowTaskTypeDefinition[] =>
   Object.values(flowTaskRegistry).filter((definition) => {
     if (definition.category !== "registered") return false;
+    if (
+      !(["page", "server", "backend"] as const).some((location) =>
+        supportsPlacement(definition, flow, location),
+      )
+    )
+      return false;
     const choices = stepBuilderChoices(definition, flow, source, context);
     // The type is offered when each decision has at least one option; the probe only proves the
     // step would be valid, and is never inserted.
@@ -408,7 +454,21 @@ const stepTypes = (
 ): readonly StudioFlowStepType[] => {
   const registered = registeredTypes(flow, source, context);
   const controls =
-    registered.length === 0 ? [] : paletteControls.map((type) => flowTaskRegistry[type]);
+    registered.length === 0
+      ? []
+      : paletteControls
+          .filter(
+            (type) =>
+              !flow.triggers.some((trigger) => trigger.type === "BeforeSave") ||
+              type === "if" ||
+              type === "stop",
+          )
+          .map((type) => flowTaskRegistry[type])
+          .filter((definition) =>
+            (["page", "server", "backend"] as const).some((location) =>
+              supportsPlacement(definition, flow, location),
+            ),
+          );
   return [...registered, ...controls].map((definition) => ({
     type: definition.type,
     title: definition.title,
@@ -460,15 +520,74 @@ const newStep = (
   if (taskType === "if") {
     if (settings.condition === undefined || settings.condition.op === "literal")
       return { kind: "invalid", reason: "Set a comparison before adding an If step." };
-    if (!["rule.warn", "interface.show_message", "stop"].includes(settings.thenTaskType ?? ""))
+    if (settings.firstStep === undefined)
       return { kind: "invalid", reason: "Choose the first step of the Then branch." };
-    const inner = newStep(flow, source, settings.thenTaskType!, used, context, settings);
+    const inner = newStep(
+      flow,
+      source,
+      settings.firstStep.type,
+      used,
+      context,
+      settings.firstStep.settings,
+    );
     if ("kind" in inner && !("id" in inner)) return inner;
     return {
       id: uniqueTaskId("decision", used),
       type: "if",
       condition: settings.condition,
       then: [inner as SourceFlowTask],
+    };
+  }
+  if (taskType === "run_flow") {
+    if (!settings.flowId || settings.inputs === undefined)
+      return { kind: "invalid", reason: "Choose a flow and its required inputs." };
+    return {
+      id: uniqueTaskId("run_flow", used),
+      type: "run_flow",
+      flowId: settings.flowId,
+      inputs: { ...settings.inputs },
+    };
+  }
+  if (taskType === "switch" || taskType === "for_each" || taskType === "sequential") {
+    if (settings.firstStep === undefined)
+      return { kind: "invalid", reason: "Choose the first step." };
+    const inner = newStep(
+      flow,
+      source,
+      settings.firstStep.type,
+      used,
+      context,
+      settings.firstStep.settings,
+    );
+    if ("kind" in inner && !("id" in inner)) return inner;
+    const tasks = [inner as SourceFlowTask];
+    if (taskType === "sequential")
+      return { id: uniqueTaskId("sequential", used), type: "sequential", tasks };
+    if (settings.value === undefined)
+      return { kind: "invalid", reason: "Enter a value expression." };
+    const value: FlowValue = { kind: "formula", formula: settings.value };
+    if (taskType === "switch") {
+      if (settings.caseValue === undefined)
+        return { kind: "invalid", reason: "Enter a case value." };
+      return {
+        id: uniqueTaskId("switch", used),
+        type: "switch",
+        value,
+        cases: [{ key: "case_1", when: settings.caseValue, tasks }],
+      };
+    }
+    if (
+      !Number.isSafeInteger(settings.maximumItems) ||
+      settings.maximumItems! < 1 ||
+      settings.maximumItems! > flowMaximumForEachItemsOther
+    )
+      return { kind: "invalid", reason: "Enter a valid maximum number of items." };
+    return {
+      id: uniqueTaskId("for_each", used),
+      type: "for_each",
+      items: value,
+      maximumItems: settings.maximumItems!,
+      tasks,
     };
   }
   const task =
@@ -564,6 +683,61 @@ export const projectStudioFlowStepTypes = (
 ): readonly StudioFlowStepType[] =>
   projectStudioFlowStepActions(context, selection, null).stepTypes;
 
+/** A step is offered inside a control only where the control and the step share an implementation. */
+export const studioFlowStepTypesUnder = (
+  types: readonly StudioFlowStepType[],
+  flow: SourceFlow,
+  controlTypes: readonly string[],
+): readonly StudioFlowStepType[] => {
+  const controls = controlTypes.map((type) => studioFlowDefinitionOf(type));
+  return types.filter((entry) => {
+    const definition = studioFlowDefinitionOf(entry.type);
+    return (
+      definition !== undefined &&
+      controls.every(
+        (control) =>
+          control !== undefined &&
+          (["page", "server", "backend"] as const).some(
+            (location) =>
+              supportsPlacement(control, flow, location) &&
+              supportsPlacement(definition, flow, location),
+          ),
+      )
+    );
+  });
+};
+
+/**
+ * The step types offered in one list: those every enclosing control can run, and inside a loop
+ * only those its compiled placement can run, as a loop body cannot mix page and server steps.
+ */
+export const studioFlowStepTypesAt = (
+  types: readonly StudioFlowStepType[],
+  flow: SourceFlow,
+  entries: readonly Readonly<{ task: SourceFlowTask; path: StudioFlowPath }>[],
+  listPath: StudioFlowPath,
+  placements: Readonly<Record<string, "page" | "server" | "backend">> | null,
+): readonly StudioFlowStepType[] => {
+  const enclosing = entries.filter(
+    (entry) =>
+      listPath.length > entry.path.length &&
+      samePath(listPath.slice(0, entry.path.length), entry.path),
+  );
+  const offered = studioFlowStepTypesUnder(
+    types,
+    flow,
+    enclosing.map((entry) => entry.task.type),
+  );
+  const loop = enclosing.find((entry) => entry.task.type === "for_each");
+  if (loop === undefined) return offered;
+  const location = placements?.[loop.task.id];
+  if (location === undefined) return [];
+  return offered.filter((entry) => {
+    const definition = studioFlowDefinitionOf(entry.type);
+    return definition !== undefined && supportsPlacement(definition, flow, location);
+  });
+};
+
 // ─── Removing ────────────────────────────────────────────────────────────────────────────────
 
 /** Refuse retained references; never turn deletion into an implicit reference repair. */
@@ -633,9 +807,21 @@ export const applyStudioFlowCommand = (
         : undefined;
 
     /** A Show form step that asks for a new form gets it on the page of the flow's button first. */
-    const stepInputs = (taskType: string, settings: StudioFlowNewStepSettings) => {
+    const stepInputs = (
+      taskType: string,
+      settings: StudioFlowNewStepSettings,
+    ):
+      | { source: Readonly<ApplicationSourceDocument>; settings: StudioFlowNewStepSettings }
+      | { refused: StudioFlowEditResult } => {
+      let source: Readonly<ApplicationSourceDocument> = current.source;
+      if (settings.firstStep !== undefined) {
+        const inner = stepInputs(settings.firstStep.type, settings.firstStep.settings);
+        if ("refused" in inner) return inner;
+        source = inner.source;
+        settings = { ...settings, firstStep: { ...settings.firstStep, settings: inner.settings } };
+      }
       if (taskType !== "interface.show_form" || settings.choices?.form !== studioNewFormChoice)
-        return { source: current.source, settings };
+        return { source, settings };
       const added = addStudioFlowShownForm(
         current.catalogue,
         candidate,
