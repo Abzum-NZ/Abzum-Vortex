@@ -328,7 +328,7 @@ export function useRuntimeInputs({
       const supportsEvent = (eventName: string): boolean => declaredEvents?.has(eventName) === true;
       // Runtime data alone does not identify a display: forms can have projected owner-group data.
       // Give each placement only the display callbacks its own registered release declares.
-      if (data !== undefined && model.guidedForm === undefined) {
+      if (data !== undefined) {
         if (
           launcherPlacements.has(placementId) &&
           supportsEvent("row_action") &&
@@ -673,7 +673,7 @@ export function useRuntimeInputs({
       // An action inside a Record detail (its header actions) acts on the record that detail shows,
       // which is the page subject on a record page and the selected record in a panel.
       const actionBinding = bindingOfEvent(bindings, "action");
-      if (actionBinding !== undefined && model.guidedForm === undefined)
+      if (actionBinding !== undefined)
         events.action = (event: ControlSemanticEvent) => {
           if (event.event !== "action" || event.intent !== "activate") return;
           const detailOwner = recordDetailOwners[placementId];
@@ -796,7 +796,7 @@ export function useRuntimeInputs({
           );
         };
       const readyBinding = bindings.find((binding) => binding.event === "form_ready");
-      if (readyBinding !== undefined && model.guidedForm === undefined)
+      if (readyBinding !== undefined)
         events.form_ready = (event: ControlSemanticEvent) => {
           if (event.event !== "form_ready") return;
           void applyDispatch(
@@ -807,7 +807,7 @@ export function useRuntimeInputs({
           );
         };
       const resetBinding = bindings.find((binding) => binding.event === "form_reset");
-      if (supportsEvent("form_reset") && model.guidedForm === undefined)
+      if (supportsEvent("form_reset"))
         events.form_reset = (event: ControlSemanticEvent) => {
           if (event.event !== "form_reset") return;
           const store = controlDraftsRef?.current;

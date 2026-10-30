@@ -520,24 +520,20 @@ const flowForGuidedForm = (
   if (summaryRoot === undefined) return undefined;
   const summaryForms = formPlacementIdsInTree(summaryRoot, true);
   if (summaryForms.size !== 1) return undefined;
-  const flowIds = new Set<string>();
+  // The draft belongs to the flow the summary form's submit runs; step forms run no submit flow.
   const summaryFlowIds = new Set<string>();
   for (const binding of flowBindings) {
     if (
       binding.event !== "form_submit" ||
       typeof binding.controlId !== "string" ||
-      !forms.has(binding.controlId.toLowerCase()) ||
+      !summaryForms.has(binding.controlId.toLowerCase()) ||
       !isRecord(binding.flow) ||
       typeof binding.flow.flowId !== "string"
     )
       continue;
-    flowIds.add(binding.flow.flowId.toLowerCase());
-    if (summaryForms.has(binding.controlId.toLowerCase()))
-      summaryFlowIds.add(binding.flow.flowId.toLowerCase());
+    summaryFlowIds.add(binding.flow.flowId.toLowerCase());
   }
-  return flowIds.size === 1 && summaryFlowIds.size === 1 && flowIds.has([...summaryFlowIds][0]!)
-    ? [...flowIds][0]
-    : undefined;
+  return summaryFlowIds.size === 1 ? [...summaryFlowIds][0] : undefined;
 };
 
 export const getGuidedFormFlowId = (
