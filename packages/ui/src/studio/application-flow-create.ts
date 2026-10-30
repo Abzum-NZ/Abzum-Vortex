@@ -22,6 +22,7 @@ import {
   type ImmutablePlatformBlockCatalogue,
   type SourceFlow,
   type FlowFormula,
+  type flowStandardEventKindSchema,
 } from "@vortex/platform/schema";
 import {
   studioQueryChoices,
@@ -169,6 +170,18 @@ export type StudioFlowCreateCommand =
       flowKey: string;
       bindingInputs: SourceBinding["inputs"];
       rowActionLabel?: string;
+    }>
+  /**
+   * A back-end flow of a record type: with an event it is a subscriber that runs after every such
+   * change of a record, without one it is a target another flow runs on the back end. It lives in
+   * the module that owns the record type, or among the application's flows when moduleKey is null.
+   */
+  | Readonly<{
+      kind: "background";
+      moduleKey: string | null;
+      recordTypeKey: string;
+      name: string;
+      event: (typeof flowStandardEventKindSchema.options)[number] | null;
     }>
   | Readonly<{
       kind: "before_save";
@@ -587,7 +600,12 @@ const existingRowActionFlow = (
   source: Readonly<ApplicationSourceDocument>,
   command: StudioFlowCreateCommand,
 ): SourceFlow | undefined => {
-  if (command.kind === "before_save" || command.kind === "flow" || command.event !== "row_action")
+  if (
+    command.kind === "before_save" ||
+    command.kind === "flow" ||
+    command.kind === "background" ||
+    command.event !== "row_action"
+  )
     return undefined;
   const wantedOperation =
     command.kind === "action"
@@ -650,7 +668,9 @@ export const applyStudioFlowCreate = (
     const name = uniqueFlowName(
       candidate,
       wantedName,
-      command.kind === "before_save" || command.kind === "flow" ? undefined : command.controlAlias,
+      command.kind === "before_save" || command.kind === "flow" || command.kind === "background"
+        ? undefined
+        : command.controlAlias,
     );
     if (command.kind === "before_save") {
       if (!command.message.trim())
@@ -790,6 +810,70 @@ export const applyStudioFlowCreate = (
         .find((recordType) => recordType.key === command.recordTypeKey)!
         .before_save_rules.push(flow.id);
       return created(candidate, flow, module.key, undefined);
+    }
+    if (command.kind === "background") {
+      const module =
+        command.moduleKey === null
+          ? undefined
+          : body.modules.find((entry) => entry.key === command.moduleKey);
+      if (command.moduleKey !== null && module === undefined)
+        return {
+          kind: "refused",
+          reason: "This application does not own that module, so it cannot hold a flow for it.",
+        };
+      const recordTypeId = command.recordTypeKey;
+      const owned = body.modules.flatMap((entry) => entry.record_types.map((record) => record.key));
+      if (
+        !(module?.record_types ?? []).some((record) => record.key === recordTypeId) &&
+        !owned.includes(recordTypeId)
+      )
+        return { kind: "refused", reason: "That record type is not in this application." };
+      const flows = module === undefined ? body.flows : module.flows;
+      const backgroundKey = keyFrom(name, new Set(flows.flatMap((entry) => [entry.id, entry.key])));
+      if (backgroundKey === undefined)
+        return {
+          kind: "refused",
+          reason: "No free name could be made for this flow. Choose another name.",
+        };
+      const flow: SourceFlow = {
+        id: backgroundKey,
+        key: backgroundKey,
+        labels: { name },
+        execution: "background",
+        runAs: { kind: "initiator" },
+        inputs:
+          command.event === null
+            ? {
+                record: {
+                  type: "record_reference",
+                  required: true,
+                  recordTypeIds: [recordTypeId],
+                  description: "The record the flow runs on.",
+                },
+              }
+            : {},
+        ...(command.event === null ? { recordInput: "record" } : {}),
+        variables: {},
+        outputs: {},
+        errors: [],
+        finally: [],
+        triggers:
+          command.event === null
+            ? []
+            : [
+                {
+                  id: "after_save",
+                  type: "Event",
+                  recordTypeId,
+                  inputs: {},
+                  event: { kind: "standard", eventKind: command.event },
+                  duplicateProtection: "committed_occurrence",
+                },
+              ],
+        tasks: [{ id: "done", type: "stop", outcome: "completed" }],
+      };
+      flows.push(flow);
+      return created(candidate, flow, module?.key ?? null, undefined);
     }
     if (command.kind === "action" && command.event === "card_moved" && command.recordType === null)
       return { kind: "refused", reason: "Choose the board's choice field first." };

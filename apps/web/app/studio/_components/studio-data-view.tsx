@@ -42,6 +42,7 @@ import { StudioModuleActions } from "./studio-module-actions";
 import { StudioModuleExtensionPoints } from "./studio-module-extension-points";
 import { StudioRecordPipelines } from "./studio-record-pipelines";
 import { StudioRecordRules } from "./studio-record-rules";
+import { StudioRecordSubscribers } from "./studio-record-subscribers";
 import { StudioRecordStorageOwnership } from "./studio-record-storage-ownership";
 import { StudioRecordStandardActions } from "./studio-record-standard-actions";
 import { useStudioDraftText } from "./use-studio-draft-text";
@@ -644,14 +645,24 @@ export function StudioDataCentreView({ model }: Readonly<{ model: StudioDataMode
       }
       rules={
         !isOwned || module === undefined || record === undefined ? null : (
-          <StudioRecordRules
-            key={scope}
-            source={source}
-            moduleKey={module.key}
-            recordKey={record.key}
-            disabled={disabled}
-            edit={edit}
-          />
+          <div className="space-y-10">
+            <StudioRecordRules
+              key={scope}
+              source={source}
+              moduleKey={module.key}
+              recordKey={record.key}
+              disabled={disabled}
+              edit={edit}
+            />
+            <StudioRecordSubscribers
+              key={`${scope}-after`}
+              source={source}
+              moduleKey={module.key}
+              recordKey={record.key}
+              disabled={disabled}
+              edit={edit}
+            />
+          </div>
         )
       }
       pipelines={
