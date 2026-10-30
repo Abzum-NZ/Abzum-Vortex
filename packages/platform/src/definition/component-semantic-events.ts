@@ -39,6 +39,15 @@ export const componentSemanticEventKindSchema = z.enum([
 export type ComponentSemanticEventKind = z.infer<typeof componentSemanticEventKindSchema>;
 
 /**
+ * The events the page itself raises, bound with the page as the control: `load` once when the page
+ * opens, `record_loaded` when a record page's record settles. A block never declares them.
+ */
+export const pageSemanticEventKinds = ["load", "record_loaded"] as const satisfies readonly ComponentSemanticEventKind[];
+
+/** The page types that show one record and so raise `record_loaded`. */
+export const recordLoadedPageTypes: ReadonlySet<string> = new Set(["detail", "form"]);
+
+/**
  * How a binding treats a second start while its flow runs: ignore it (no double submit), let the
  * latest start win (the earlier run's pending request is cancelled and a late reply dropped), or
  * queue it behind the running one.

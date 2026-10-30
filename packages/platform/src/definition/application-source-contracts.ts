@@ -958,6 +958,7 @@ export const sourceApplicationBodySchema = z
     // Flow aliases and keys are unique in the collection schema; a binding names its flow by either.
     const flowReferences = new Set(value.flows.flatMap((flow) => [flow.id, flow.key]));
     const placementAliasSet = new Set(placementEntries.map(([alias]) => alias));
+    const pageAliasSet = new Set(value.pages.map((page) => page.id));
     const flowBindingAliases = value.flow_bindings.map((binding) => binding.id);
     if (new Set(flowBindingAliases).size !== flowBindingAliases.length)
       context.addIssue({
@@ -972,7 +973,7 @@ export const sourceApplicationBodySchema = z
           path: ["flow_bindings", bindingIndex, "flow"],
           message: "A flow binding must resolve inside the same application",
         });
-      if (!placementAliasSet.has(binding.control))
+      if (!placementAliasSet.has(binding.control) && !pageAliasSet.has(binding.control))
         context.addIssue({
           code: "custom",
           path: ["flow_bindings", bindingIndex, "control"],

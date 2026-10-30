@@ -207,7 +207,8 @@ function compileOwnedFlowSources(
                 ...sourcePageItems(page.composition),
                 ...(shell === undefined ? [] : sourceItemTree(shell.layout.content)),
               ];
-              if (!items.some((item) => controls.has(item.props.id))) return [];
+              const boundToPage = controls.has(page.id);
+              if (!boundToPage && !items.some((item) => controls.has(item.props.id))) return [];
               const forms: Record<string, Readonly<Record<string, string>>> = {};
               const formRestrictions: Record<
                 string,
@@ -273,6 +274,7 @@ function compileOwnedFlowSources(
                   controls: items
                     .filter((item) => controls.has(item.props.id))
                     .map((item) => item.props.id),
+                  ...(boundToPage ? { pageControl: page.id } : {}),
                   values: Object.fromEntries(
                     Object.entries(page.values ?? {}).map(([key, value]) => [key, value.type]),
                   ),

@@ -356,7 +356,11 @@ export function applicationPageRules(scope: ApplicationScope): void {
     );
     const pageFlowIds = new Set(
       array(content.flowBindings)
-        .filter((binding) => placementById.has(String(binding.controlId).toLowerCase()))
+        .filter(
+          (binding) =>
+            placementById.has(String(binding.controlId).toLowerCase()) ||
+            String(binding.controlId).toLowerCase() === String(page.pageId).toLowerCase(),
+        )
         .map((binding) => String(object(binding.flow).flowId)),
     );
     for (const flow of reachablePageFlows([...pageFlowIds], array(content.flows))) {

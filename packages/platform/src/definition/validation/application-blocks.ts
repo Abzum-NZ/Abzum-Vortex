@@ -8,6 +8,7 @@ import {
 } from "../application-composition/source-composition";
 import type { ApplicationSourceDocument } from "../definition-source";
 import { duplicateFlowBindings } from "../application-contracts";
+import { recordLoadedPageTypes } from "../component-semantic-events";
 import {
   type PreparedValidationContext,
   editSaveSources,
@@ -120,6 +121,7 @@ const pageFlowEvents = new Set([
   "form_ready",
   "form_reset",
   "form_submit",
+  "tab_changed",
 ]);
 
 /** Refuse a binding that the current page wiring cannot dispatch. */
@@ -131,11 +133,16 @@ export function applicationFlowBindingPageEventRule(
     const control = String(binding.control);
     const event = String(binding.event);
     const placement = placed.get(control);
-    if (placement === undefined) return [];
-    const guided = placement.pageType === "guided_form";
+    const page = source.body.pages.find((candidate) => candidate.id === control);
+    if (page !== undefined) {
+      const raised =
+        event === "load" || (event === "record_loaded" && recordLoadedPageTypes.has(page.type));
+      if (raised) return [];
+    } else if (placement === undefined) return [];
+    const guided = placement?.pageType === "guided_form";
     const guidedEvent =
       event === "field_changed" || event === "field_focus_lost" || event === "form_submit";
-    if (pageFlowEvents.has(event) && (!guided || guidedEvent)) return [];
+    if (page === undefined && pageFlowEvents.has(event) && (!guided || guidedEvent)) return [];
     const controlKey = builderKeySchema.safeParse(control);
     const bindingKey = builderKeySchema.safeParse(binding.id);
     return [

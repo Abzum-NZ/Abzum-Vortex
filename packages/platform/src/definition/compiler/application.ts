@@ -590,6 +590,7 @@ function compileApplicationFlowBindings(
   const definitionKey = String(source.key);
   const flowsById = new Map(flows.map((flow) => [String(flow.id), flow]));
   const sourceBindings = compiledSourceFlowBindings(body);
+  const pageAliases = new Set((body.pages as JsonObject[]).map((page) => String(page.id)));
   const inputsByFlow = new Map<
     string,
     Record<string, ReturnType<typeof flowBindingInputSchema.parse>>[]
@@ -657,7 +658,9 @@ function compileApplicationFlowBindings(
       fail("vortex.definition.application_flow_binding_inputs", "invalid_value", location);
     const resolveForm = (form: string) => resolution.id(definitionKey, "block_placement", form);
     const canonicalSettings = resolveFlowFormReferences(settings.data, resolveForm);
-    const controlId = resolution.id(definitionKey, "block_placement", String(binding.control));
+    const controlId = pageAliases.has(String(binding.control))
+      ? resolution.id(definitionKey, "page", String(binding.control), "content")
+      : resolution.id(definitionKey, "block_placement", String(binding.control));
     const canonicalInputs = resolveFlowFormReferences(
       Object.fromEntries(
         Object.entries(inputs).map(([name, value]) => [name, flowBindingInputSchema.parse(value)]),
