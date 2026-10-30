@@ -123,7 +123,7 @@ export const admitPageGesture = async (
       Array.isArray(list) ? list : [],
     );
     bulkRecordIds = chosen.flatMap((entry) =>
-      isRecord(entry) && typeof entry.record === "string" ? [entry.record] : [],
+      Array.isArray(entry) && typeof entry[0] === "string" ? [entry[0]] : [],
     );
   }
   const refusal = await recordsTableBindingRefusal(

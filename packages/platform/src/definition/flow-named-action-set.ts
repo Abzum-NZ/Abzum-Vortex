@@ -24,7 +24,9 @@ const subjectsSchema = z
   .array(
     z.union([
       recordIdSchema.transform((record) => ({ record, revision: undefined })),
-      z.object({ record: recordIdSchema, revision: z.number().int().min(1) }).strict(),
+      z
+        .tuple([recordIdSchema, z.number().int().min(1)])
+        .transform(([record, revision]) => ({ record, revision })),
     ]),
   )
   .min(1)
@@ -32,8 +34,9 @@ const subjectsSchema = z
 
 /**
  * The commands of one named action over the `subjects` of a Call protected operation task: 1 to
- * 200 records, each once, each with the revision the person saw (a record named alone is changed at
- * the revision it holds now). They run as ONE command: every record completes or none does.
+ * 200 records, each once, each as a record id alone (changed at the revision it holds now) or as a
+ * `[record, revision]` pair with the revision the person saw (the pair keeps a 200-record list
+ * within a back-end run's input limit). They run as ONE command: every record completes or none does.
  */
 export const planNamedActionSubjects = async (
   recordChanges: FlowOrchestratorDependencies["recordChanges"],

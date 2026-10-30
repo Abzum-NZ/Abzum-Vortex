@@ -219,6 +219,18 @@ export function useBulkSelection({
     [model],
   );
 
+  /** Reads the table again at intervals while a background run works, unless the person has left. */
+  const followBackgroundRun = useCallback(
+    async (placementId: string, owner: unknown): Promise<void> => {
+      for (let read = 0; read < matchingRefreshReads; read += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, matchingRefreshMilliseconds));
+        if (navigation.current !== owner) return;
+        await refreshPlacements([placementId]);
+      }
+    },
+    [refreshPlacements],
+  );
+
   const runAction = useCallback(
     async (
       placementId: string,
@@ -257,6 +269,7 @@ export function useBulkSelection({
           [placementId]: { status: "running", label, processed: 0 },
         }));
         let last: RecordsTableBulkRunLine | undefined;
+        let background = false;
         try {
           const binding = bindings.find(
             (candidate) =>
@@ -273,10 +286,7 @@ export function useBulkSelection({
               ? {
                   // Few rows run in this request; more are queued to run on the back end.
                   [selection.items.length > recordsTableBulkRequestMaximum ? "queued" : "subjects"]:
-                    selection.items.map((item) => ({
-                      record: item.recordId,
-                      revision: item.revision,
-                    })),
+                    selection.items.map((item) => [item.recordId, item.revision]),
                   [selection.items.length > recordsTableBulkRequestMaximum ? "subjects" : "queued"]:
                     [],
                   selection: "",
@@ -296,69 +306,74 @@ export function useBulkSelection({
           );
           // A run whose outcome the page cannot tell offers its own Retry (the dispatch shows it);
           // the table is read again so the person sees what the run changed.
-          if (!outcome.confirmed && !outcome.changed && outcome.notice === undefined) {
+          if (
+            !outcome.confirmed &&
+            !outcome.completed &&
+            !outcome.changed &&
+            outcome.notice === undefined
+          ) {
             setRuns((current) => without(current, placementId));
             await refreshPlacements([placementId]);
             return;
           }
-          // Every matching record runs on the back end, a page at a time: the table is read again
-          // while it works, so the person watches the rows change until it has had time to end.
-          if (
+          // Every matching record, or more chosen rows than a request holds, runs on the back end a
+          // page at a time: the run only started, so there is nothing to summarise yet; the table is
+          // read again after this ends, while the work goes on.
+          background =
+            outcome.completed &&
             (selection.kind === "matching" ||
-              selection.items.length > recordsTableBulkRequestMaximum) &&
-            outcome.confirmed
-          )
-            for (let read = 0; read < matchingRefreshReads; read += 1) {
-              await new Promise((resolve) =>
-                window.setTimeout(resolve, matchingRefreshMilliseconds),
-              );
-              if (navigation.current !== owner) return;
-              await refreshPlacements([placementId]);
-            }
-          last = {
-            kind: "summary",
-            total: selected,
-            done: outcome.confirmed ? selected : 0,
-            warnings: [],
-            refused: outcome.confirmed
-              ? []
-              : [{ reason: outcome.changed ? "changed" : "refused", count: selected }],
-            notProcessed: outcome.confirmed ? 0 : selected,
-            limited: false,
-          };
+              selection.items.length > recordsTableBulkRequestMaximum);
+          if (!background)
+            last = {
+              kind: "summary",
+              total: selected,
+              done: outcome.confirmed ? selected : 0,
+              warnings: [],
+              refused: outcome.confirmed
+                ? []
+                : [{ reason: outcome.changed ? "changed" : "refused", count: selected }],
+              notProcessed: outcome.confirmed ? 0 : selected,
+              limited: false,
+            };
         } catch (error) {
           console.error("[page] the bulk action did not finish", error);
         }
         // A completed request belongs to the page that started it, even after navigation away.
         if (navigation.current !== owner) return;
-        setRuns((current) => ({
-          ...current,
-          [placementId]:
-            last?.kind === "summary"
-              ? {
-                  status: "finished",
-                  label,
-                  selected,
-                  summary: {
-                    total: last.total,
-                    done: last.done,
-                    warnings: last.warnings,
-                    refused: last.refused,
-                    notProcessed: last.notProcessed,
-                    limited: last.limited,
-                  },
-                }
-              : { status: "failed", label },
-        }));
+        setRuns((current) =>
+          background
+            ? without(current, placementId)
+            : {
+                ...current,
+                [placementId]:
+                  last?.kind === "summary"
+                    ? {
+                        status: "finished",
+                        label,
+                        selected,
+                        summary: {
+                          total: last.total,
+                          done: last.done,
+                          warnings: last.warnings,
+                          refused: last.refused,
+                          notProcessed: last.notProcessed,
+                          limited: last.limited,
+                        },
+                      }
+                    : { status: "failed", label },
+              },
+        );
         // The run ends the selection; the table is read once, through the ordinary read path.
         setSelection((current) => without(current, placementId));
         setScopes((current) => without(current, placementId));
         await refreshPlacements([placementId]);
+        // The person watches the rows change until the background run has had time to end.
+        if (background) void followBackgroundRun(placementId, owner);
       } finally {
         inFlight.current.delete(placementId);
       }
     },
-    [model, refreshPlacements, scopeOf, scopes, setSelection],
+    [followBackgroundRun, model, refreshPlacements, scopeOf, scopes, setSelection],
   );
 
   /** The Bulk actions events of one table's placement. */

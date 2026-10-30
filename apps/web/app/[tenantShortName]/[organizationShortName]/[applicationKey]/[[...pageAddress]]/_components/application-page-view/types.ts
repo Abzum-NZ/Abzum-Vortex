@@ -59,6 +59,8 @@ export type ControlReport = "transient" | "in_place";
 export type DispatchOutcome = Readonly<{
   notice: PageMessageDraft | undefined;
   confirmed: boolean;
+  /** The run ended well, whether or not it committed a change of its own (it may only have started background work). */
+  completed: boolean;
   changed: boolean;
   corrections?: readonly FlowFieldCorrection[];
   /** A pasted, filled or undone batch that stopped before any cell was written: each cell that stopped it. */

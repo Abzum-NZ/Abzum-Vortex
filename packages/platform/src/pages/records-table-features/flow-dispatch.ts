@@ -230,12 +230,13 @@ export const recordsTableBindingRefusal = async (
       value.length <= Math.min(most, declared.maxRecords) &&
       value.every(
         (entry) =>
-          isRecord(entry) &&
-          recordIdSchema.safeParse(entry.record).success &&
-          typeof entry.revision === "number",
+          Array.isArray(entry) &&
+          entry.length === 2 &&
+          recordIdSchema.safeParse(entry[0]).success &&
+          typeof entry[1] === "number",
       ) &&
-      new Set(value.map((entry) => String((entry as { record: string }).record).toLowerCase()))
-        .size === value.length;
+      new Set(value.map((entry) => String((entry as [string, number])[0]).toLowerCase())).size ===
+        value.length;
     const empty = (value: unknown): boolean => Array.isArray(value) && value.length === 0;
     // Exactly one way in: the chosen rows run in the request (few), or queue on the back end
     // (more), or every matching record stands for itself by its sealed selection and runs there.
