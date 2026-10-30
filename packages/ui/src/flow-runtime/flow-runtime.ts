@@ -41,7 +41,11 @@ export type FlowRuntimeOptions = Readonly<{
 }>;
 
 /** State shared by page and agent dispatches, with subscriptions scoped to a component. */
-export function createFlowRuntimeState(declarations: NonNullable<PageDefinition["values"]> = {}) {
+export function createFlowRuntimeState(
+  declarations: NonNullable<PageDefinition["values"]> = {},
+  initialFormTypes: Readonly<Record<string, Readonly<Record<string, string>>>> = {},
+) {
+  let formTypes = initialFormTypes;
   const entries = new Map<
     string,
     { sequence: number; controller?: AbortController; tail?: Promise<void> }
@@ -70,6 +74,15 @@ export function createFlowRuntimeState(declarations: NonNullable<PageDefinition[
   return {
     pageValues,
     messages,
+    setFormTypes: (next: typeof formTypes) => {
+      formTypes = next;
+    },
+    formType: (formId: string, fieldKey: string) =>
+      Object.entries(formTypes).find(([id]) => id.toLowerCase() === formId.toLowerCase())?.[1][
+        fieldKey
+      ],
+    formChanged: (formId: string, fieldKey: string) =>
+      notify(`form:${formId.toLowerCase()}:${fieldKey}`),
     isRunning: (controlId: string) => (running.get(controlId) ?? 0) > 0,
     registerForm: (
       formId: string,
@@ -80,8 +93,14 @@ export function createFlowRuntimeState(declarations: NonNullable<PageDefinition[
       if (forms.has(key)) throw new Error(`Form '${formId}' is registered more than once`);
       const form = { read, write };
       forms.set(key, form);
+      for (const fieldKey of Object.keys(formTypes[formId] ?? {}))
+        notify(`form:${key}:${fieldKey}`);
       return () => {
-        if (forms.get(key) === form) forms.delete(key);
+        if (forms.get(key) === form) {
+          forms.delete(key);
+          for (const fieldKey of Object.keys(formTypes[formId] ?? {}))
+            notify(`form:${key}:${fieldKey}`);
+        }
       };
     },
     readFormValue: (formId: string, fieldKey: string) =>

@@ -14,6 +14,9 @@ export type PageMessage = Readonly<{
     | Readonly<{ kind: "link"; label: string; href: string }>;
   dismissAfterMs?: number;
   refusal?: Extract<FormFlowFeedback, { kind: "refusal" }>;
+  /** Optional located details for a message presented next to a grid. */
+  details?: readonly string[];
+  locations?: readonly Readonly<{ row: number; field?: string | undefined }>[];
 }>;
 export type PageMessageDraft = Omit<PageMessage, "id">;
 

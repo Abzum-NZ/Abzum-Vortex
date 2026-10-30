@@ -302,7 +302,14 @@ function FlowSurfaceHost({
           </>
         }
       >
-        <p role="status">{message.text}</p>
+        <p
+          role={message.severity === "warning" || message.severity === "error" ? "alert" : "status"}
+          aria-live={
+            message.severity === "warning" || message.severity === "error" ? "assertive" : "polite"
+          }
+        >
+          {message.text}
+        </p>
       </FlowDialog>
     );
   }

@@ -227,6 +227,10 @@ const setBasedSteps = new Set([
 
 const leafLocation = (flow: FlowDefinition, task: FlowTask): UnitLocation => {
   if (task.type === "stop") return "neutral";
+  if (flow.execution === "interactive" && (task.type === "data.calculate" || task.type === "data.set_variable"))
+    return flowValueReferences(task).some(
+      (reference) => reference.source === "page" || reference.source === "form",
+    ) ? "page" : "neutral";
   const definition = registered(task);
   if (definition === undefined) throw new FlowPlanError(flow.id, task.id, "unknown step");
   // A save transaction and a back-end flow run every step in one place.

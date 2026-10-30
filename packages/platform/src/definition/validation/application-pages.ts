@@ -35,7 +35,7 @@ import { moduleQueryDefinitionSchema } from "../module-contracts";
 import { queryTotalReferenceProblem } from "../module-query-edit";
 import { queryTotalLabel } from "../module-query-totals";
 import type { ApplicationScope } from "./application-scope";
-import { typedConditionTypesValid } from "./field-types";
+import { typedConditionTypesValid, typedFieldValueType } from "./field-types";
 import { compareExactDecimals, parseExactDecimal } from "../../records/exact-decimal";
 import { isIsoCurrencyCode } from "../../catalogue/currencies";
 import { reachablePageFlows } from "../../workflows/flow-reachability";
@@ -527,6 +527,59 @@ export function applicationPageRules(scope: ApplicationScope): void {
           if (entry.source === "page" || entry.source === "form") live = true;
           if (entry.source === "parameter") parameter = true;
         });
+        if (live) {
+          const currencies = (candidate: unknown): { money: boolean; currency: string } => {
+            const operand = object(candidate);
+            if (operand.source === "page") {
+              const declaration = object(object(page.values)[String(operand.name)]);
+              return {
+                money: declaration.type === "money",
+                currency:
+                  typeof declaration.currency === "string"
+                    ? declaration.currency
+                    : "organisation currency",
+              };
+            }
+            if (operand.source === "form") {
+              const field = formFields
+                .get(String(operand.form).toLowerCase())
+                ?.get(String(operand.field));
+              const currency = object(field?.settings).currency;
+              return {
+                money: typedFieldValueType(field) === "money",
+                currency: typeof currency === "string" ? currency : "organisation currency",
+              };
+            }
+            const value = object(operand.value);
+            return {
+              money: false,
+              currency:
+                typeof value.currency === "string" ? value.currency : "organisation currency",
+            };
+          };
+          walkValues(condition, (entry) => {
+            if (entry.kind !== "comparison" || entry.right === undefined) return;
+            const left = currencies(entry.left);
+            const right = currencies(entry.right);
+            if (
+              (!left.money && !right.money) ||
+              object(entry.left).value === null ||
+              object(entry.right).value === null ||
+              left.currency === right.currency
+            )
+              return;
+            failures.push(
+              placementFailure(
+                output,
+                "vortex.definition.application_block_settings",
+                "invalid_value",
+                undefined,
+                undefined,
+                `Placement ${alias ?? String(placement.props.id)} on page ${String(page.key)} compares money in ${left.currency} and ${right.currency}`,
+              ),
+            );
+          });
+        }
         if (parameter)
           failures.push(
             placementFailure(

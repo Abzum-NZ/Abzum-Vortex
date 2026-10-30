@@ -6,11 +6,13 @@ import {
   conditionValueType,
   semanticTypeForLiteral,
   operatorAcceptsOperands,
+  typedValueMatchesType,
   type OperandInfo,
 } from "../../rules/condition-types";
 import { jsonValueSchema, type JsonValue } from "../../catalogue/common";
 import type { JsonObject } from "./context";
 import { object, array } from "./helpers";
+import { fieldValueMatches } from "../../rules/condition-field-types";
 
 export function fieldDeclaredResultType(field: JsonObject | undefined): string | undefined {
   if (!field) return undefined;
@@ -47,9 +49,8 @@ export {
   typedValueMatchesType,
   conditionValueType as typedSemanticFieldType,
   conditionFieldType as typedFieldValueType,
-  fieldValueMatches,
-  fieldRecordTypeIds,
 } from "../../rules/condition-types";
+export { fieldValueMatches, fieldRecordTypeIds } from "../../rules/condition-field-types";
 
 export const calculationDependencyFieldIds = (expression: JsonObject): string[] =>
   calculationFormulaDependencies(flowFormulaSchema.parse(expression));
@@ -145,7 +146,15 @@ export function typedConditionTypesValid(
       return {
         source: "reference",
         semanticType: conditionValueType(declared.type),
-        ...(declared.field ? { field: declared.field } : {}),
+        ...(declared.field
+          ? {
+              acceptsLiteral: (value: JsonValue) =>
+                fieldValueMatches(value, declared.field, dialect) ||
+                (object(operand).source === "form" &&
+                  declared.type === "money" &&
+                  typedValueMatchesType(value, "money", "flow")),
+            }
+          : {}),
         dialect: object(operand).source === "page" ? "flow" : dialect,
       };
     const candidate = literal(operand);

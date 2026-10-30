@@ -5,6 +5,7 @@ import {
 } from "@vortex/platform/schema";
 import type { NoticeSeverity } from "../components/notice";
 import type { PageMessageTarget } from "./messages";
+import type { FlowSubjectContext } from "./server-flow-client";
 
 /**
  * One typed interface intent, as the shared interpreter produces it in the page or the server
@@ -72,6 +73,8 @@ export type FlowMessageIntent = Readonly<{
   dismissAfterMs?: number;
   originBindingId?: string;
   sourceFlowId?: string;
+  subject?: FlowSubjectContext;
+  sourceTablePlacementId?: string;
 }>;
 /**
  * A confirmation: its question, what it covers line by line, and one optional opt-in that goes with

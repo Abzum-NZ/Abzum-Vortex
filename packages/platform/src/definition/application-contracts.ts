@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { currencyCodeSchema } from "../records/module-field-values";
 import { inspectApplicationPageReplacements } from "../pages/application-page-replacement";
 import {
   applicationDefinitionEnvelopeSchema,
@@ -485,9 +486,16 @@ export const pageValueDeclarationSchema = z
     type: z.enum(["decimal_number", "money", "text", "yes_no", "json"]),
     label: labelSchema,
     initial: jsonValueSchema,
+    currency: currencyCodeSchema.optional(),
   })
   .strict()
   .superRefine((declaration, context) => {
+    if (declaration.type !== "money" && declaration.currency !== undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["currency"],
+        message: "Only money page values declare a currency",
+      });
     if (
       declaration.initial !== null &&
       !typedValueMatchesType(declaration.initial, declaration.type, "flow")

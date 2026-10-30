@@ -596,7 +596,13 @@ export const createStoredPageCapabilityService = (
         : Object.values(resolved.roots.stepContent);
     for (const layout of conditionLayouts)
       for (const item of compiledItemTree(layout.content))
-        collectConditionFields(item.props.vortex.visibilityCondition);
+        for (const condition of [
+          item.props.vortex.visibilityCondition,
+          item.props.vortex.requiredCondition,
+          item.props.vortex.readOnlyCondition,
+          item.props.vortex.enabledCondition,
+        ])
+          collectConditionFields(condition);
     // The page subject, read once, together with the preview of every named action the page's
     // placements are bound to on it: one read decision for the record serves them all.
     const readSubject = (

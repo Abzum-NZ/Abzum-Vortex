@@ -31,6 +31,8 @@ export async function runFlowBinding(
               ...message,
               originBindingId: binding.bindingId,
               sourceFlowId: binding.flowId,
+              ...(subject === undefined ? {} : { subject }),
+              ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
             },
             signal,
           ),

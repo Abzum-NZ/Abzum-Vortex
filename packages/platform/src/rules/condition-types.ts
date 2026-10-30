@@ -1,14 +1,8 @@
-import {
-  exactDecimalTextSchema,
-  sourceExactDecimalTextSchema,
-  moneyValueSchema,
-  sourceMoneyValueSchema,
-  sourceModuleFieldValueSchemas,
-  moduleFieldValueSchemas,
-  recordLinkValueSchema,
-} from "../records/module-field-values";
 import type { JsonValue } from "../catalogue/common";
-import { platformIdSchema } from "../catalogue/identifiers";
+import { isStableId } from "../catalogue/stable-id";
+import { isMoneyValue, isRecordLinkValue } from "../records/module-field-value-predicates";
+import { isCanonicalExactDecimal, currencyCodePattern } from "../records/value-predicates";
+import { parseExactDecimal } from "../records/exact-decimal";
 import { validText, validDate } from "./typed-condition-core";
 import { flowInstantMicros } from "./flow-instant";
 import { flowValueMatchesType } from "./flow-value-shapes";
@@ -29,13 +23,9 @@ export type OperandInfo = Readonly<{
   semanticType: ConditionValueType | undefined;
   literal?: JsonValue;
   source: "reference" | "value";
-  field?: Record<string, unknown>;
+  acceptsLiteral?: (value: JsonValue) => boolean;
   dialect?: ValueDialect;
 }>;
-const object = (value: unknown): Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
 export type ValueDialect = "source" | "canonical" | "flow";
 
 /** Unknown declarations are refused, including on unary conditions. */
@@ -94,12 +84,21 @@ export function typedValueMatchesType(
   if (dialect === "flow") return flowValueMatchesType(value, type);
   switch (type) {
     case "decimal_number":
+      return dialect === "source"
+        ? typeof value === "string" && parseExactDecimal(value) !== undefined
+        : isCanonicalExactDecimal(value);
+    case "money": {
+      if (dialect !== "source") return isMoneyValue(value);
+      if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+      const money = value as Record<string, unknown>;
       return (
-        dialect === "source" ? sourceExactDecimalTextSchema : exactDecimalTextSchema
-      ).safeParse(value).success;
-    case "money":
-      return (dialect === "source" ? sourceMoneyValueSchema : moneyValueSchema).safeParse(value)
-        .success;
+        Object.keys(money).length === 2 &&
+        typeof money.amount === "string" &&
+        parseExactDecimal(money.amount) !== undefined &&
+        typeof money.currency === "string" &&
+        currencyCodePattern.test(money.currency)
+      );
+    }
     case "record_reference":
       if (dialect === "source") {
         const entry = value as Record<string, unknown> | null;
@@ -108,10 +107,10 @@ export function typedValueMatchesType(
           typeof entry === "object" &&
           !Array.isArray(entry) &&
           typeof entry.record_type === "string" &&
-          platformIdSchema.safeParse(entry.record_id).success
+          isStableId(entry.record_id)
         );
       }
-      return recordLinkValueSchema.safeParse(value).success;
+      return isRecordLinkValue(value);
     case "workflow_run_reference":
     case "relationship_reference":
     case "file_reference":
@@ -132,7 +131,7 @@ export const semanticTypeForLiteral = (value: JsonValue): ConditionValueType | u
     if (flowInstantMicros(value) !== undefined) return "date_time";
     return "text";
   }
-  if (recordLinkValueSchema.safeParse(value).success) return "record_reference";
+  if (isRecordLinkValue(value)) return "record_reference";
   return Array.isArray(value) && value.every(validText) ? "text_collection" : "opaque_json";
 };
 export const literalMatchesType = (value: JsonValue, type: ConditionValueType): boolean =>
@@ -154,7 +153,7 @@ const unaryOperators = new Set(["is_empty", "is_not_empty"]);
 const exactNumericLiteral = (value: JsonValue | undefined): boolean =>
   value === null ||
   (typeof value === "number" && Number.isSafeInteger(value)) ||
-  (typeof value === "string" && exactDecimalTextSchema.safeParse(value).success);
+  (typeof value === "string" && isCanonicalExactDecimal(value));
 
 const exactNumericOperand = (operand: OperandInfo): boolean =>
   operand.source === "value"
@@ -239,12 +238,8 @@ export const collectionElementType = (
 
 const literalMatchesOperand = (value: JsonValue, reference: OperandInfo): boolean =>
   value === null ||
-  (reference.field !== undefined
-    ? fieldValueMatches(
-        value,
-        reference.field,
-        reference.dialect === "source" ? "source" : "canonical",
-      )
+  (reference.acceptsLiteral !== undefined
+    ? reference.acceptsLiteral(value)
     : reference.semanticType !== undefined &&
       (literalMatchesType(value, reference.semanticType) ||
         (reference.dialect === "flow" &&
@@ -290,47 +285,3 @@ export const operatorAcceptsOperands = (
     orderableTypes.has(type)
   );
 };
-
-export function fieldValueMatches(
-  value: unknown,
-  field: Record<string, unknown> | undefined,
-  dialect: "source" | "canonical",
-): boolean {
-  if (!field) return false;
-  if (field.type === "calculation" || field.type === "total") {
-    const resultType = conditionFieldType(field);
-    return resultType !== undefined && typedValueMatchesType(value, resultType, dialect);
-  }
-  const schemas = dialect === "source" ? sourceModuleFieldValueSchemas : moduleFieldValueSchemas;
-  const schema = schemas[String(field.type) as keyof typeof schemas];
-  if (schema === undefined || !schema.safeParse(value).success) return false;
-  if (
-    conditionFieldType(field) === "whole_number" &&
-    !typedValueMatchesType(value, "whole_number", dialect)
-  )
-    return false;
-  const expectedRecordTypeIds = fieldRecordTypeIds(field);
-  if (expectedRecordTypeIds === undefined) return true;
-  const actualRecordTypeId = object(value)[dialect === "source" ? "record_type" : "recordTypeId"];
-  return (
-    typeof actualRecordTypeId === "string" && expectedRecordTypeIds.includes(actualRecordTypeId)
-  );
-}
-
-export function fieldRecordTypeIds(
-  field: Record<string, unknown> | undefined,
-): string[] | undefined {
-  if (!field) return undefined;
-  const settings = object(field.settings);
-  if (field.type === "link")
-    return [
-      typeof settings.target === "string"
-        ? settings.target
-        : String(object(settings.target).recordTypeId),
-    ];
-  if (field.type === "link_to_one_of_several")
-    return (Array.isArray(settings.targets) ? settings.targets : []).map((target: unknown) =>
-      typeof target === "string" ? target : String(object(target).recordTypeId),
-    );
-  return undefined;
-}

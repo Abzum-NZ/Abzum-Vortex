@@ -6,6 +6,8 @@ import type { PageDefinition } from "../definition/application-contracts";
 import { TABLE_BLOCK_RELEASE } from "../definition/application-composition-catalogue";
 import type { ResolvedPageComposition } from "./page-composition-resolution";
 import { placementViewShown } from "./projected-navigation";
+import { conditionReadsPageValues } from "../rules/typed-condition-core";
+import type { ConditionNode } from "../definition/module-foundation-contracts";
 
 export type PlacementCapabilityState = Readonly<{
   viewAllowed: boolean;
@@ -14,6 +16,7 @@ export type PlacementCapabilityState = Readonly<{
   operationRequired?: boolean;
   operationBound: boolean;
   conditionAllowed?: boolean;
+  reactions?: Readonly<{ required?: boolean; readOnly?: boolean; enabled?: boolean }>;
   /** The placement's bound action cannot run on the page's subject for the viewer when false. */
   actionAvailable?: boolean;
 }>;
@@ -142,8 +145,17 @@ const projectItems = (
             ...withoutKeys(vortex, [
               "viewPermissionKey",
               "usePermissionKey",
-              "visibilityCondition",
+              ...(vortex.visibilityCondition !== undefined &&
+              conditionReadsPageValues(vortex.visibilityCondition as ConditionNode)
+                ? []
+                : ["visibilityCondition"]),
+              ...(["requiredCondition", "readOnlyCondition", "enabledCondition"] as const).filter(
+                (key) =>
+                  vortex[key] !== undefined &&
+                  !conditionReadsPageValues(vortex[key] as ConditionNode),
+              ),
             ]),
+            ...(state?.reactions === undefined ? {} : { reactions: state.reactions }),
             slotOrders,
             ...placementAvailability(effectiveState, vortex.usePermissionKey !== undefined),
           },

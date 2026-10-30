@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePlacementReactions } from "../flow-runtime/placement-reactions";
 import { builderKeySchema, type BlockPropertyValueContract } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import { getAccessibleName } from "../display/display-state-container";
@@ -72,6 +73,7 @@ export function resolveControlContext<Values>(
   declaredEvents: readonly ControlSemanticEventName[],
 ): ControlContext<Values> {
   const { metadata, placementId, data, events: suppliedEvents, availability } = props;
+  const reactions = usePlacementReactions();
   const location: DefinitionRenderErrorLocation = {
     placementId,
     blockId: metadata.blockId,
@@ -98,7 +100,12 @@ export function resolveControlContext<Values>(
     pending,
     unavailable,
     disabledReason,
-    inactive: unavailable || pending || data?.status === "disabled",
+    inactive:
+      unavailable ||
+      pending ||
+      data?.status === "disabled" ||
+      reactions.enabled === false ||
+      reactions.visible === false,
     events: availability === "available" ? suppliedEvents : undefined,
   };
 }
@@ -186,11 +193,15 @@ export function readControlSettings(
   location: DefinitionRenderErrorLocation,
 ): ControlSettings {
   const { metadata } = props;
+  const reactions = usePlacementReactions();
   const { read, text, boolean } = createDeclaredSettingsReader(props, location);
 
   return {
     text,
-    boolean,
+    boolean: (key) =>
+      boolean(key) ||
+      (key === "required" && reactions.required === true) ||
+      (key === "read_only" && reactions.readOnly === true),
     number: (key) => {
       const value = read(key, "number");
       return value?.kind === "number" ? value.value : undefined;

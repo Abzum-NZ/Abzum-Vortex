@@ -14,6 +14,7 @@ import {
   type createPlatformComponentRegistryForReleases,
   PagePuckRenderer,
   type FlowIntentHost,
+  type ServerDrivenResult,
   type ControlSemanticEvent,
   type ChoiceInputPayload,
   type DisplaySemanticEvent,
@@ -131,9 +132,10 @@ export function ApplicationPageViewContent({
   if (runtimeStateRef.current?.identity !== pageIdentity)
     runtimeStateRef.current = {
       identity: pageIdentity,
-      state: createFlowRuntimeState((model.page as PageDefinition).values),
+      state: createFlowRuntimeState((model.page as PageDefinition).values, model.formTypes),
     };
   const runtimeState = runtimeStateRef.current.state;
+  runtimeState.setFormTypes(model.formTypes);
   useEffect(() => () => runtimeState.messages.dispose(), [runtimeState]);
   // The page address owns every table's query state; the served address only starts it.
   const { address, currentSearch } = usePageAddress({ model, served: searchParams.toString() });
@@ -312,6 +314,9 @@ export function ApplicationPageViewContent({
     requestChoicePageRef,
   });
 
+  const applyMessageActionRef = useRef<
+    (dispatch: Promise<ServerDrivenResult>, bindingId: string) => void
+  >(() => undefined);
   const { formBlock, flowRuntime, webMcpRuntime, intentHostElement, messageBanner } =
     useFlowRuntime({
       application,
@@ -356,6 +361,7 @@ export function ApplicationPageViewContent({
         void refreshPlacements(targets, undefined, { content: true });
       },
       setPanelRef,
+      applyMessageActionRef,
     });
 
   /** A page-level address change (a guided form step) renders the page again on the server. */
@@ -381,6 +387,9 @@ export function ApplicationPageViewContent({
     refreshPlacements,
     refreshTargetsForBinding,
   });
+  applyMessageActionRef.current = (dispatch, bindingId) => {
+    void applyDispatch(dispatch, undefined, undefined, bindingId);
+  };
 
   const invokeWebMcpTool = useCallback(
     async (tool: PageWebMcpTool, input: unknown, signal?: AbortSignal): Promise<unknown> => {

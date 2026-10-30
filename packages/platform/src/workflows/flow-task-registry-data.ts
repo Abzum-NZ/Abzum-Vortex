@@ -74,10 +74,10 @@ export const flowTaskRuns = Object.freeze({
   "operation.call": server,
   "backend.run": nowhere,
   "event.announce": server,
-  "data.calculate": server,
+  "data.calculate": pageAndServer,
   "data.record_link": server,
   "data.set_values": nowhere,
-  "data.set_variable": server,
+  "data.set_variable": pageAndServer,
   "data.format": nowhere,
   "rule.require": server,
   "rule.warn": server,
@@ -100,7 +100,7 @@ type StepsRunning<Where extends keyof FlowStepRuns> = {
 /** The steps with a page implementation, including control tasks handled by the interpreter. */
 export type PageStepType = StepsRunning<"page">;
 /** Registered page steps are dispatched through the page intent implementation map. */
-export type PageIntentStepType = Extract<PageStepType, FlowRegisteredTaskTypeKey>;
+export type PageIntentStepType = Exclude<Extract<PageStepType, FlowRegisteredTaskTypeKey>, "data.calculate" | "data.set_variable">;
 /** The steps with a server implementation; the server's implementation map covers exactly these. */
 export type ServerStepType = StepsRunning<"server">;
 

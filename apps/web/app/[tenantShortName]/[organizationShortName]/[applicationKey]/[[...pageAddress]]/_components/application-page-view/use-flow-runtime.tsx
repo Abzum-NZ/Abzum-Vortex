@@ -19,6 +19,7 @@ import {
   type FlowMessageIntent,
   type FlowRuntimeState,
   type FlowInvokeClient,
+  type ServerDrivenResult,
   type LinkNavigationEnvironment,
   type PlatformThemeTokens,
 } from "@vortex/ui";
@@ -65,6 +66,7 @@ export function useFlowRuntime({
   platformThemeTokens,
   committed,
   setPanelRef,
+  applyMessageActionRef,
 }: Readonly<{
   application: ApplicationPageModel["invocation"];
   runtimeState: FlowRuntimeState;
@@ -103,6 +105,9 @@ export function useFlowRuntime({
   committed: (bindingId: string) => void;
   /** Filled by the page's panel host once it has rendered. */
   setPanelRef: RefObject<FlowIntentHost["setPanel"]>;
+  applyMessageActionRef: RefObject<
+    (dispatch: Promise<ServerDrivenResult>, bindingId: string) => void
+  >;
 }>) {
   /**
    * The one browser flow client and host: a form submit starts the bound flow on the server
@@ -461,7 +466,16 @@ export function useFlowRuntime({
       showPageMessage(unavailableNotice);
       return;
     }
-    void flowRuntime.dispatch(action, message.actionInputs, crypto.randomUUID());
+    applyMessageActionRef.current(
+      flowRuntime.dispatch(
+        action,
+        message.actionInputs,
+        crypto.randomUUID(),
+        message.subject,
+        message.sourceTablePlacementId,
+      ),
+      action.bindingId,
+    );
   };
   const webMcpRuntime = useMemo(
     () =>

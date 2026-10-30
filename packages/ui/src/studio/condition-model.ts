@@ -1,4 +1,5 @@
 import {
+  fieldValueMatches,
   conditionFieldType as semanticTypeForField,
   semanticTypeForLiteral,
   operatorAcceptsOperands,
@@ -429,7 +430,7 @@ export const infoForOperand = (
   return {
     source: "reference",
     semanticType: semanticTypeForField(permission.field),
-    field: permission.field,
+    acceptsLiteral: (value) => fieldValueMatches(value, permission.field, "canonical"),
   };
 };
 

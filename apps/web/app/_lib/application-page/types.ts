@@ -49,6 +49,8 @@ export type PlacementReadModel = Readonly<{
   tableAddress: Readonly<Record<string, string>>;
   /** Each placement's flow bindings, by stable placement identity. */
   bindings: Readonly<Record<string, readonly PlacementFlowBinding[]>>;
+  /** Declared types of fields that remain on this permission-projected page. */
+  formTypes: Readonly<Record<string, Readonly<Record<string, string>>>>;
   /** Organisation time zone for page flow formulas, present when the page has bindings. */
   flowTimeZone?: string;
   /** Data placements to re-read after a write from each installed flow binding. */

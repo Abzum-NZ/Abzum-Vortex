@@ -222,20 +222,24 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   // as already edited past before the person has seen them.
   const refusalRef = useRef(refusalMessage);
   refusalRef.current = refusalMessage;
-  const reportFieldChanged = useCallback(() => {
-    for (const listener of [...listeners.current]) listener();
-    const settled = refusalRef.current;
-    if (settled?.corrections !== undefined)
-      setEditedPastCorrections(JSON.stringify(settled.corrections));
-    if (supplied) setFeedbackTick((current) => current + 1);
-    if (validationAttemptedRef.current) setValidationErrors(registry.validationErrors());
-    const baseline = baselineRef.current;
-    if (baseline !== undefined)
-      unsavedWorkRegistry?.setDirty(
-        formId,
-        !equalFormValue(registry.values(), baseline) || ownerGroupChoice !== undefined,
-      );
-  }, [formId, ownerGroupChoice, registry, supplied, unsavedWorkRegistry]);
+  const reportFieldChanged = useCallback(
+    (fieldKey: string) => {
+      flowRuntimeState?.formChanged(formId, fieldKey);
+      for (const listener of [...listeners.current]) listener();
+      const settled = refusalRef.current;
+      if (settled?.corrections !== undefined)
+        setEditedPastCorrections(JSON.stringify(settled.corrections));
+      if (supplied) setFeedbackTick((current) => current + 1);
+      if (validationAttemptedRef.current) setValidationErrors(registry.validationErrors());
+      const baseline = baselineRef.current;
+      if (baseline !== undefined)
+        unsavedWorkRegistry?.setDirty(
+          formId,
+          !equalFormValue(registry.values(), baseline) || ownerGroupChoice !== undefined,
+        );
+    },
+    [flowRuntimeState, formId, ownerGroupChoice, registry, supplied, unsavedWorkRegistry],
+  );
 
   // Applicability is decided once per render from the fields' current typed
   // values, and the scope changes with it, so every field clears or restores

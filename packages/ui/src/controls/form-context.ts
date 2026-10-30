@@ -5,6 +5,7 @@ import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../de
 import type { FormFieldDraftFeedback } from "./draft-feedback";
 import type { TypedFieldValue } from "./projected-data";
 import type { FlowEventCycle } from "../flow-runtime/flow-cycle";
+import { usePlacementReactions } from "../flow-runtime/placement-reactions";
 
 /** One validated input change, published before its field-change event is dispatched. */
 export type FormFieldSet = Readonly<{
@@ -48,7 +49,7 @@ export type FormScope = Readonly<{
   /** Located draft feedback for one field key, or nothing when none applies now. */
   draftFeedbackFor: (fieldKey: string) => FormFieldDraftFeedback | undefined;
   /** Reports that a field's value or registration changed, so settled feedback is rechecked. */
-  reportFieldChanged: () => void;
+  reportFieldChanged: (fieldKey: string) => void;
   /** The current typed value of one registered field, or undefined while it is not registered. */
   valueOf: (fieldKey: string) => TypedFieldValue | undefined;
   /** Publishes a typed input value before its field-change event starts a flow. */
@@ -148,11 +149,14 @@ export function useFormField(
   setter?: FormFieldSetter,
 ): void {
   const scope = useFormScope();
+  const reactions = usePlacementReactions();
   const register = scope?.register;
   const reportFieldChanged = scope?.reportFieldChanged;
   const valueRef = useRef(value);
   const validateRef = useRef(validate);
   const setterRef = useRef(setter);
+  const reactionsRef = useRef(reactions);
+  reactionsRef.current = reactions;
   const previousRef = useRef(value);
   valueRef.current = value;
   validateRef.current = validate;
@@ -160,7 +164,7 @@ export function useFormField(
   useEffect(() => {
     if (equalFormValue(previousRef.current, value)) return;
     previousRef.current = value;
-    reportFieldChanged?.();
+    reportFieldChanged?.(fieldKey);
   });
   // A field that mounts, remounts on reset or leaves also changes which values
   // settled feedback is compared with.
@@ -170,23 +174,24 @@ export function useFormField(
       read: () => valueRef.current,
       publish: (next) => {
         valueRef.current = next;
-        reportFieldChanged?.();
+        reportFieldChanged?.(fieldKey);
       },
       validate: () => validateRef.current?.(),
       write: (next, cycle) => {
+        if (reactionsRef.current.canWrite?.() === false) return false;
         const change = setterRef.current?.(next, cycle);
         if (change === undefined) return false;
         valueRef.current = change.value;
         change.apply();
-        reportFieldChanged?.();
+        reportFieldChanged?.(fieldKey);
         change.emit();
         return true;
       },
     });
-    reportFieldChanged?.();
+    reportFieldChanged?.(fieldKey);
     return () => {
       unregister?.();
-      reportFieldChanged?.();
+      reportFieldChanged?.(fieldKey);
     };
   }, [register, reportFieldChanged, fieldKey, placementId]);
 }
