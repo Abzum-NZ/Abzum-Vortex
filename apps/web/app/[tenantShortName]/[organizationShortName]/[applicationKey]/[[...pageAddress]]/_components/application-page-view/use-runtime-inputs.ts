@@ -17,6 +17,7 @@ import {
 } from "@vortex/ui";
 import {
   isRecord,
+  guidedFormConfirmationKey,
   projectedLinkTilesSchema,
   mountedRecordPinFrameSchema,
   recordsSelectionMaximumIds,
@@ -734,7 +735,7 @@ export function useRuntimeInputs({
                   prepared = result;
                   if (result === undefined) return undefined;
                   return {
-                    values: { $guidedFormConfirmation: result.proof },
+                    values: { [guidedFormConfirmationKey]: result.proof },
                     ...(event.selectedOwnerGroupId === undefined
                       ? {}
                       : { selectedOwnerGroupId: event.selectedOwnerGroupId }),

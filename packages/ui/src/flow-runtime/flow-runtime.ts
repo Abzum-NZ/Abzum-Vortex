@@ -5,6 +5,11 @@ import type {
   FlowBindingConcurrency,
   FlowFormula,
 } from "@vortex/platform/schema";
+import {
+  guidedFormConfirmationKey,
+  guidedFormConfirmationReference,
+  isRecord,
+} from "@vortex/platform/schema";
 import type { FlowIntentHost } from "./intents";
 import type { ServerDrivenResult } from "./server-driven-run";
 import type { FlowInvokeClient, FlowSubjectContext } from "./server-flow-client";
@@ -92,7 +97,15 @@ export function createFlowRuntimeState() {
       bindingId: string,
       subject: FlowSubjectContext | undefined,
       inputs: Readonly<Record<string, unknown>>,
-    ) => JSON.stringify([bindingId, subject?.recordId ?? null, canonicalInputs(inputs)]),
+    ) => {
+      const values = inputs.values;
+      const guided = guidedFormConfirmationReference(
+        isRecord(values) ? values[guidedFormConfirmationKey] : undefined,
+      );
+      return guided === undefined
+        ? JSON.stringify([bindingId, subject?.recordId ?? null, canonicalInputs(inputs)])
+        : JSON.stringify([bindingId, guided.draftId, guided.revision]);
+    },
     retryId: (key: string, proposed: string) => retries.get(key) ?? proposed,
     rememberResult: (key: string, runId: string, result: ServerDrivenResult) => {
       if (result.kind === "unavailable" || (result.kind === "abandoned" && !result.unanswered))
