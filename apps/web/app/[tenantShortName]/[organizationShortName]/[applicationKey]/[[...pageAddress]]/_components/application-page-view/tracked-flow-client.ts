@@ -42,7 +42,10 @@ export function trackFlowInvokeClient(
         }
       if (Object.values(store.drafts).some((draft) => draft.owner === submission.formId))
         store.baselines[submission.formId] = submission.values;
-      else delete store.baselines[submission.formId];
+      else {
+        delete store.baselines[submission.formId];
+        delete store.baselineFields[submission.formId];
+      }
     }
   };
   return {

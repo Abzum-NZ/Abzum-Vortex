@@ -700,7 +700,14 @@ export function useRuntimeInputs({
               const owner = formOwners[placementId];
               if (owner !== undefined && store.baselines[owner] === undefined) {
                 const baseline = unsavedWorkRegistry?.baselineOf(owner);
-                if (baseline !== undefined) store.baselines[owner] = baseline;
+                if (baseline !== undefined) {
+                  store.baselines[owner] = baseline;
+                  store.baselineFields[owner] = Object.fromEntries(
+                    Object.entries(controls)
+                      .filter(([id]) => formOwners[id] === owner)
+                      .map(([id, field]) => [id, { kind: field.kind, fieldKey: field.fieldKey }]),
+                  );
+                }
               }
               store.drafts[placementId] = {
                 kind: control.kind,
@@ -859,6 +866,7 @@ export function useRuntimeInputs({
                 delete store.restored[id];
               }
             delete store.baselines[placementId];
+            delete store.baselineFields[placementId];
           }
           setFormFeedback((current) => {
             const next = { ...current };

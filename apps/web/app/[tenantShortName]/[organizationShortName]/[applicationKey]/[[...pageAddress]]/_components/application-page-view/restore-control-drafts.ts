@@ -7,6 +7,7 @@ export function restoreDrafts(
   store: ControlDrafts,
   controls: ReturnType<typeof draftControls>,
   data: Readonly<Record<string, unknown>>,
+  formOwners: Readonly<Record<string, string>>,
 ) {
   store.restored = {};
   for (const [id, draft] of Object.entries(store.drafts)) {
@@ -34,5 +35,30 @@ export function restoreDrafts(
     else {
       delete store.drafts[id];
     }
+  }
+  for (const [formId, baseline] of Object.entries(store.baselines)) {
+    if (!Object.values(store.drafts).some((draft) => draft.owner === formId)) {
+      delete store.baselines[formId];
+      delete store.baselineFields[formId];
+      continue;
+    }
+    const oldFields = store.baselineFields[formId] ?? {};
+    const fields = Object.fromEntries(
+      Object.entries(controls).filter(([id]) => formOwners[id] === formId),
+    );
+    store.baselines[formId] = Object.fromEntries(
+      Object.entries(fields).flatMap(([id, field]) => {
+        const old = oldFields[id];
+        return old?.kind === field.kind && Object.hasOwn(baseline, old.fieldKey)
+          ? [[field.fieldKey, baseline[old.fieldKey]]]
+          : [];
+      }),
+    );
+    store.baselineFields[formId] = Object.fromEntries(
+      Object.entries(fields).map(([id, field]) => [
+        id,
+        { kind: field.kind, fieldKey: field.fieldKey },
+      ]),
+    );
   }
 }

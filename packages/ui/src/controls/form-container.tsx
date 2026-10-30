@@ -224,9 +224,18 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     baselineRef.current = registry.values();
   }, [registry]);
   const setSavedBaseline = useCallback(
-    (values: Readonly<Record<string, unknown>>): boolean => {
-      baselineRef.current = values;
-      return !equalFormValue(registry.values(), values);
+    (values: Readonly<Record<string, unknown>>, restore = false): boolean => {
+      const current = registry.values();
+      const baseline = restore
+        ? Object.fromEntries(
+            Object.entries(current).map(([key, value]) => [
+              key,
+              Object.hasOwn(values, key) ? values[key] : value,
+            ]),
+          )
+        : values;
+      baselineRef.current = baseline;
+      return !equalFormValue(current, baseline);
     },
     [registry],
   );

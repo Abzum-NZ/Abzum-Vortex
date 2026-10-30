@@ -24,13 +24,10 @@ export function useNavigationScope({
   }
   const pageSearch = new URLSearchParams(searchWithoutRecordsTableState(currentSearch));
   for (const name of Object.values(model.pageParameters.controls)) pageSearch.delete(name);
+  // A table's query state is shallow: it rereads only that table.
   const addressKey = JSON.stringify([pathname, pageSearch.toString(), model.pageId]);
   const navigationBase = JSON.stringify([
-    pathname,
-    // A table's query state (sort, filter, search, columns, page) is shallow: it rereads only
-    // that table and keeps the frame and the data already read.
-    pageSearch.toString(),
-    model.pageId,
+    addressKey,
     application.installationRevision,
     application.releaseKey,
     serverDataGenerationRef.current,

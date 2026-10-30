@@ -14,7 +14,7 @@ import type { UnsavedWorkGuard } from "../launcher/link-navigation";
 type RegisteredForm = Readonly<{
   dirty: boolean;
   resetBaseline: () => void;
-  setSavedBaseline: (values: Readonly<Record<string, unknown>>) => boolean;
+  setSavedBaseline: (values: Readonly<Record<string, unknown>>, restore?: boolean) => boolean;
   readBaseline: () => Readonly<Record<string, unknown>> | undefined;
   registration: object;
 }>;
@@ -29,6 +29,7 @@ type UnsavedWorkRegistry = Readonly<{
   baselineOf: (formId: string) => Readonly<Record<string, unknown>> | undefined;
   setDirty: (formId: string, dirty: boolean) => void;
   markSaved: (formId: string, values: Readonly<Record<string, unknown>>) => void;
+  restoreBaseline: (formId: string, values: Readonly<Record<string, unknown>>) => void;
   clearAll: () => void;
   hasUnsavedWork: () => boolean;
   subscribe: (listener: () => void) => () => void;
@@ -42,6 +43,18 @@ function createUnsavedWorkRegistry(): UnsavedWorkRegistry {
   const hasUnsavedWork = (): boolean => [...forms.values()].some((form) => form.dirty);
   const notify = (): void => {
     for (const listener of listeners) listener();
+  };
+
+  const setBaseline = (
+    formId: string,
+    values: Readonly<Record<string, unknown>>,
+    restore: boolean,
+  ): void => {
+    const form = forms.get(formId);
+    if (form === undefined) return;
+    const wasDirty = hasUnsavedWork();
+    forms.set(formId, { ...form, dirty: form.setSavedBaseline(values, restore) });
+    if (wasDirty !== hasUnsavedWork()) notify();
   };
 
   return {
@@ -71,13 +84,8 @@ function createUnsavedWorkRegistry(): UnsavedWorkRegistry {
       forms.set(formId, { ...form, dirty });
       if (wasDirty !== hasUnsavedWork()) notify();
     },
-    markSaved: (formId, values) => {
-      const form = forms.get(formId);
-      if (form === undefined) return;
-      const wasDirty = hasUnsavedWork();
-      forms.set(formId, { ...form, dirty: form.setSavedBaseline(values) });
-      if (wasDirty !== hasUnsavedWork()) notify();
-    },
+    markSaved: (formId, values) => setBaseline(formId, values, false),
+    restoreBaseline: (formId, values) => setBaseline(formId, values, true),
     clearAll: () => {
       const wasDirty = hasUnsavedWork();
       for (const [formId, form] of forms) {

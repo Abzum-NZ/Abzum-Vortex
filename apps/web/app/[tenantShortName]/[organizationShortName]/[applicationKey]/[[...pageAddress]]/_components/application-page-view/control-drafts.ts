@@ -15,7 +15,7 @@ export function draftControls(
   registry: ReturnType<typeof createPlatformComponentRegistryForReleases>,
   fieldReleases: FieldInputControlReleaseMap,
 ) {
-  const controls: Record<string, { kind: string; payloadKind: string }> = {};
+  const controls: Record<string, { kind: string; payloadKind: string; fieldKey: string }> = {};
   walkPageComposition(
     content.composition,
     ({ placementId, props, vortex }, available: boolean) => {
@@ -34,24 +34,25 @@ export function draftControls(
       )
         return true;
       let release = registration.metadata;
-      const settings = readCompiledItemSettings(props, release);
       if (release.rendererKey === "platform.renderer.field_input") {
-        const control = settings.control;
+        const control = readCompiledItemSettings(props, release).control;
         if (control?.kind !== "choice") return true;
         release = fieldReleases[control.value as keyof FieldInputControlReleaseMap]!;
         if (release === undefined) return true;
       }
       const payloadKind = release.rendererKey.replace(/^platform\.renderer\./, "");
-      if (
-        !payloadKind.endsWith("_input") ||
-        !(fieldInputControlKeys as readonly string[]).includes(payloadKind.slice(0, -6))
-      )
-        return true;
+      if (!fieldInputControlKeys.some((key) => payloadKind === `${key}_input`)) return true;
       const valueType = release.value_type;
-      const selectedType =
-        valueType?.kind === "boolean_setting" ? settings[valueType.setting] : undefined;
+      const valueKind =
+        valueType?.kind === "boolean_setting"
+          ? props[valueType.setting]
+            ? valueType.when_true
+            : valueType.when_false
+          : valueType?.type;
+      if (typeof props.name !== "string") return true;
       controls[placementId] = {
-        kind: JSON.stringify([payloadKind, valueType, selectedType]),
+        fieldKey: props.name,
+        kind: `${payloadKind}:${valueKind ?? ""}`,
         payloadKind,
       };
       return true;

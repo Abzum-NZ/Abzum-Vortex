@@ -7,7 +7,6 @@ import {
   useState,
   type ReactElement,
   type ReactNode,
-  type RefObject,
 } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -72,7 +71,6 @@ import {
   useApplicationFrame,
   useFramePageState,
   emptyControlDrafts,
-  type ControlDrafts,
 } from "../../../_components/application-frame-state";
 
 /** Every placement id of the page's own content, nested placements and guided step content included. */
@@ -87,7 +85,6 @@ const placementIdsOf = (content: Readonly<Record<string, unknown>>): ReadonlySet
 
 export function ApplicationPageViewContent({
   model,
-  controlDraftsRef,
   content,
   frame,
   guidedFormActions,
@@ -99,7 +96,6 @@ export function ApplicationPageViewContent({
   platformThemeTokens,
 }: Readonly<{
   model: ApplicationPageModel;
-  controlDraftsRef: RefObject<ControlDrafts> | undefined;
   /** The page's own placements, rendered in the frame's outlet. */
   content: Readonly<Record<string, unknown>>;
   /** The frame projected with this page, handed to the application frame around it. */
@@ -158,6 +154,7 @@ export function ApplicationPageViewContent({
     [],
   );
   const applicationFrame = useApplicationFrame();
+  const controlDraftsRef = applicationFrame?.controlDraftsRef;
   const navigation = model.navigation ?? applicationFrame?.navigation;
   // A page rendered without its frame (the layout found none for the address it first loaded)
   // asks the server once for the frame of the address it shows now.
@@ -231,7 +228,6 @@ export function ApplicationPageViewContent({
     controlDraftsRef.current = {
       ...emptyControlDrafts(),
       scope: addressKey,
-      generation: navigationKey,
       model,
     };
 
@@ -515,36 +511,29 @@ export function ApplicationPageViewContent({
     [currentContent, platformComponentRegistry, fieldInputControlReleases],
   );
   const drafts = controlDraftsRef?.current;
-  if (drafts !== undefined && (drafts.generation !== navigationKey || drafts.model !== model)) {
+  if (drafts !== undefined && drafts.model !== model) {
+    drafts.model = model;
     if (Object.keys(drafts.drafts).length === 0) {
       drafts.restored = {};
-      drafts.generation = navigationKey;
-      drafts.model = model;
       delete drafts.pending;
     } else {
-      if (drafts.pending?.generation !== navigationKey || drafts.pending.model !== model) {
-        const promise = import("./restore-control-drafts").then(({ restoreDrafts }) => {
-          if (controlDraftsRef?.current !== drafts || drafts.pending?.promise !== promise) return;
-          restoreDrafts(drafts, controls, tableData);
-          drafts.generation = navigationKey;
-          drafts.model = model;
-          delete drafts.pending;
-        });
-        drafts.pending = { generation: navigationKey, model, promise };
-      }
-      use(drafts.pending.promise);
+      const promise = import("./restore-control-drafts").then(({ restoreDrafts }) => {
+        if (controlDraftsRef?.current !== drafts || drafts.pending !== promise) return;
+        restoreDrafts(drafts, controls, tableData, formOwners);
+        delete drafts.pending;
+      });
+      drafts.pending = promise;
     }
   }
+  if (drafts?.pending !== undefined) use(drafts.pending);
   useEffect(() => {
     const drafts = controlDraftsRef?.current;
     if (drafts === undefined) return;
-    for (const [formId, baseline] of Object.entries(drafts.baselines))
-      if (
-        Object.entries(drafts.drafts).some(
-          ([id, draft]) => draft.owner === formId && Object.hasOwn(drafts.restored, id),
-        )
-      )
-        unsavedWorkRegistry?.markSaved(formId, baseline);
+    for (const [id, draft] of Object.entries(drafts.drafts)) {
+      const baseline = draft.owner === undefined ? undefined : drafts.baselines[draft.owner];
+      if (baseline !== undefined && drafts.restored[id] !== undefined)
+        unsavedWorkRegistry?.restoreBaseline(draft.owner!, baseline);
+    }
   }, [navigationKey, model, controlDraftsRef, unsavedWorkRegistry]);
 
   const fieldFlowEvents = useFieldFlowEvents(navigationKey, runtimeState, runBinding, setNotice);

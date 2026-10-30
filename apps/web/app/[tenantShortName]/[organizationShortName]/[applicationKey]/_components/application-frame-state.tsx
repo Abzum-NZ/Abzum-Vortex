@@ -22,18 +22,18 @@ export type ControlDraft = {
 };
 export type ControlDrafts = {
   scope: string;
-  generation: string;
   model?: object;
-  pending?: { generation: string; model: object; promise: Promise<void> };
+  pending?: Promise<void>;
   drafts: Record<string, ControlDraft>;
   baselines: Record<string, Readonly<Record<string, unknown>>>;
+  baselineFields: Record<string, Record<string, { kind: string; fieldKey: string }>>;
   restored: Record<string, unknown>;
 };
 export const emptyControlDrafts = (): ControlDrafts => ({
   scope: "",
-  generation: "",
   drafts: {},
   baselines: {},
+  baselineFields: {},
   restored: {},
 });
 

@@ -13,7 +13,6 @@ import {
 import type { PlatformBlockRelease, ProjectedApplicationFrame } from "@vortex/platform/schema";
 import type { ApplicationPageModel } from "../../../../../_lib/application-page";
 import type { GuidedFormActions } from "./application-page-view/types";
-import { useApplicationFrame } from "../../_components/application-frame-state";
 import { ApplicationPageViewContent } from "./application-page-view/application-page-content";
 
 /** The page model with one streamed placement's settled state served as ready data. */
@@ -99,7 +98,6 @@ export function ApplicationPageView({
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
 }>): ReactElement {
-  const controlDraftsRef = useApplicationFrame()?.controlDraftsRef;
   const platformComponentRegistry = useMemo(
     () => createPlatformComponentRegistryForReleases(platformBlockReleases),
     [platformBlockReleases],
@@ -109,7 +107,6 @@ export function ApplicationPageView({
   const page = (shown: ApplicationPageModel): ReactElement => (
     <ApplicationPageViewContent
       model={shown}
-      controlDraftsRef={controlDraftsRef}
       content={content}
       frame={frame}
       guidedFormActions={guidedFormActions}
