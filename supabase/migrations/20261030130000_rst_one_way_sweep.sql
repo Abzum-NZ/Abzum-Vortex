@@ -11254,8 +11254,70 @@ begin
   select activation.* into activation_fact
   from vortex_access.organization_role_activations as activation
   where activation.organization_id = context_organization_id
+    and activation.organization_account_id = context_account_id
     and activation.role_activation_id = p_role_activation_id for update;
-  if not found or activation_fact.revision <> p_expected_activation_revision
+  if not found then
+    -- Self-revocation needs no management permission. Before looking up another account's
+    -- activation, admit only a manager with recent MFA in the selected organisation.
+    select evaluated.* into strict decision from vortex_access.evaluate_organization_permission_eligibility(
+      pg_catalog.jsonb_build_object('operationKey', 'platform.organization.role_activations.revoke',
+        'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
+        'target', pg_catalog.jsonb_build_object('kind', 'organization'),
+        'requiredPermission', vortex_access.required_platform_permission('platform.organization.assignments.manage'),
+        'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'multi_factor', 'maximumAgeSeconds', 3600),
+        'authority', pg_catalog.jsonb_build_object('kind', 'permission'))) as evaluated;
+    if decision.outcome = 'refused'
+      and decision.operation_key = 'platform.organization.role_activations.revoke'
+      and decision.target_kind = 'organization'
+      and decision.target_application_root_id is null
+      and decision.organization_id = context_organization_id
+      and decision.organization_account_id = context_account_id
+      and decision.access_version = context_access_version
+      and decision.correlation_id = context_correlation_id
+      and decision.reason_code in ('permission_unavailable', 'permission_not_effective',
+        'authentication_unsatisfied', 'multi_factor_unsatisfied') then
+      activity_result := vortex_record.append_organization_activity_entry(
+        context_organization_id, p_activity_id, decision.checked_at, 'organization_account',
+        context_account_id, 'revoke_role_activation', array[context_organization_id]::uuid[],
+        array[]::uuid[], vortex_platform.channel(), context_correlation_id, 'refused');
+      if activity_result is distinct from 'inserted' then
+        raise exception using errcode = '40001', message = 'Role activation deactivation refusal Activity is stale';
+      end if;
+      return query select 'refused'::text, context_organization_id, null::jsonb,
+        context_access_version, case decision.reason_code
+          when 'authentication_unsatisfied' then 'recent_authentication_required'
+          when 'multi_factor_unsatisfied' then 'multi_factor_required'
+          else 'permission_denied' end;
+      return;
+    end if;
+    if decision.outcome is distinct from 'eligible'
+      or decision.operation_key is distinct from 'platform.organization.role_activations.revoke'
+      or decision.target_kind is distinct from 'organization'
+      or decision.target_application_root_id is not null
+      or decision.organization_id is distinct from context_organization_id
+      or decision.organization_account_id is distinct from context_account_id
+      or decision.access_version is distinct from context_access_version
+      or decision.correlation_id is distinct from context_correlation_id then
+      raise exception using errcode = '42501', message = 'Role activation deactivation is unavailable';
+    end if;
+    select activation.* into activation_fact
+    from vortex_access.organization_role_activations as activation
+    where activation.organization_id = context_organization_id
+      and activation.role_activation_id = p_role_activation_id for update;
+    if not found then
+      activity_result := vortex_record.append_organization_activity_entry(
+        context_organization_id, p_activity_id, decision.checked_at, 'organization_account',
+        context_account_id, 'revoke_role_activation', array[context_organization_id]::uuid[],
+        array[]::uuid[], vortex_platform.channel(), context_correlation_id, 'refused');
+      if activity_result is distinct from 'inserted' then
+        raise exception using errcode = '40001', message = 'Role activation deactivation refusal Activity is stale';
+      end if;
+      return query select 'refused'::text, context_organization_id, null::jsonb,
+        context_access_version, 'activation_not_found'::text;
+      return;
+    end if;
+  end if;
+  if activation_fact.revision <> p_expected_activation_revision
     or activation_fact.state <> 'live' then
     raise exception using errcode = '40001', message = 'Role activation deactivation is stale or unavailable';
   end if;
