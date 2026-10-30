@@ -89,7 +89,6 @@ export function trackFlowInvokeClient(
     ) => {
       if (answer.kind === "cancel") formCancelledRef.current = true;
       const submission = continuingFormsRef.current.get(continuation);
-      continuingFormsRef.current.delete(continuation);
       const response = await client.resume(
         flowId,
         continuation,
@@ -99,6 +98,7 @@ export function trackFlowInvokeClient(
         sourceTablePlacementId,
         carriedValues,
       );
+      if (response.kind !== "unknown") continuingFormsRef.current.delete(continuation);
       recordResponse(response, submission);
       return response;
     },

@@ -249,18 +249,19 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
       return { kind: "refused" };
     }
     const end = options.begin?.(binding.bindingId, clickId);
-    return options.state
-      .run(
+    const execute = (nextSignal?: AbortSignal, resume?: () => Promise<ServerDrivenResult>) =>
+      options.state.run(
         binding.bindingId,
         settings.controlId,
         settings.concurrency,
-        signal,
+        nextSignal,
         async (runSignal) => {
           const releaseCycle = options.state.trackCycle(
             clickId,
             cycle ?? startFlowEventCycle(binding.flowId, settings.controlId),
           );
           try {
+            if (resume !== undefined) return await resume();
             const { runFlowBinding } = await import("./flow-runtime-driver");
             return await runFlowBinding(
               options,
@@ -276,8 +277,24 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
             releaseCycle();
           }
         },
-      )
-      .finally(end);
+      );
+    const keepRetry = (result: ServerDrivenResult): ServerDrivenResult => {
+      if (result.kind !== "unknown") {
+        end?.();
+        return result;
+      }
+      return {
+        ...result,
+        controlId: settings.controlId,
+        retry: async () => keepRetry(await execute(undefined, result.retry)),
+      };
+    };
+    try {
+      return keepRetry(await execute(signal));
+    } catch (error) {
+      end?.();
+      throw error;
+    }
   };
   return Object.freeze({
     prefetch: async () => {

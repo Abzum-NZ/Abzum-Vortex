@@ -32,6 +32,7 @@ import {
 } from "react";
 import type { FlowRuntimeState } from "./flow-runtime/flow-runtime";
 import { FlowRuntimeStateContext } from "./flow-runtime/flow-runtime-state-context";
+import { InlineMessage } from "./flow-runtime/inline-message";
 import {
   PlacementReactionsContext,
   useLivePlacementReactions,
@@ -558,6 +559,7 @@ function PlacementBlock(props: {
                 ? {}
                 : { applicationSearchPageSubject: metadataIn.applicationSearchPageSubject })}
             />
+            <InlineMessage placementId={`retry:${placementId}`} />
           </PlacementReactionsContext.Provider>
         </FlowRuntimeStateContext.Provider>
       ) : null}

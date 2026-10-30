@@ -292,6 +292,37 @@ export function useApplyDispatch({
             });
           return outcome;
         }
+        if (server.kind === "unknown") {
+          if (server.controlId === undefined || server.retry === undefined) {
+            console.error("[flow] unknown outcome has no originating control or retry");
+            showResult(outcomeNotices.uncertain ?? unavailableNotice);
+            return outcome;
+          }
+          const component = `retry:${server.controlId}`;
+          const retry = server.retry;
+          runtimeState.messages.show({
+            id: crypto.randomUUID(),
+            target: "inline",
+            component,
+            severity: "warning",
+            text: "The outcome is unknown. Retry to check it.",
+            action: {
+              kind: "flow",
+              label: "Retry",
+              run: () => {
+                runtimeState.messages.clear("inline", component);
+                void applyDispatch(
+                  retry(),
+                  formPlacementId,
+                  afterAccepted,
+                  sourceBindingId,
+                  reportOnControl,
+                );
+              },
+            },
+          });
+          return outcome;
+        }
         if (server.kind === "skipped") return outcome;
         if (server.kind === "refused") {
           showResult(unavailableNotice);

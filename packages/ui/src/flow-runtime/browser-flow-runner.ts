@@ -134,7 +134,8 @@ export async function runBrowserFlow(
       else if (
         opened.kind === "reload" ||
         opened.kind === "refused" ||
-        opened.kind === "unavailable"
+        opened.kind === "unavailable" ||
+        opened.kind === "unknown"
       )
         return terminal(opened);
       else throw new Error("FLOW_PAGE_RUN_START_INVALID");
@@ -204,7 +205,12 @@ export async function runBrowserFlow(
         },
       );
       if (signal?.aborted) return { kind: "terminal", value: { kind: "abandoned" } };
-      if (result.kind === "reload" || result.kind === "refused" || result.kind === "unavailable")
+      if (
+        result.kind === "reload" ||
+        result.kind === "refused" ||
+        result.kind === "unavailable" ||
+        result.kind === "unknown"
+      )
         return { kind: "terminal", value: terminal(result) };
       if (result.kind !== "result" || result.intents.length !== 0)
         throw new Error("FLOW_PAGE_SEGMENT_RESPONSE_INVALID");
