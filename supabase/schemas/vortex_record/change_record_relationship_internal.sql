@@ -32,9 +32,13 @@ begin
   end if;
   begin
     meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'update');
-    loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'update', p_record_id, p_expected_concurrency_number, null::jsonb
-    );
+    loaded := (vortex_record.load_record_access_facts_internal(
+      'update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordTypeId', p_record_type_id,
+        'recordId', p_record_id,
+        'expectedConcurrencyNumber', p_expected_concurrency_number
+      ))
+    ) -> 0);
     if loaded ->> 'outcome' = 'conflict' then
       return pg_catalog.jsonb_build_object(
         'outcome', 'conflict', 'concurrencyNumber', loaded -> 'concurrencyNumber'
@@ -45,12 +49,13 @@ begin
       refusal_reason := 'record_unavailable';
       raise exception using errcode = 'P4020', message = refusal_reason;
     end if;
-    decision := vortex_access.evaluate_organization_record_access_internal(
-      meta -> 'declaration', p_record_id,
-      (loaded -> 'facts') || pg_catalog.jsonb_build_object(
-        'binding', meta -> 'declaration' -> 'recordBinding'
+    decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'declaration', meta -> 'declaration',
+        'recordId', p_record_id,
+        'facts', (loaded -> 'facts') || pg_catalog.jsonb_build_object( 'binding', meta -> 'declaration' -> 'recordBinding' )
       )
-    );
+    )) -> 0);
     if decision ->> 'outcome' <> 'allowed' then
       refusal_reason := 'record_unavailable';
       raise exception using errcode = 'P4020', message = refusal_reason;

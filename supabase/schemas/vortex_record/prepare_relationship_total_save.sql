@@ -75,9 +75,12 @@ begin
   -- any concrete dependency. A denied update is deferred to the base prepare,
   -- which owns the existing content-free refusal Activity.
   if p_operation = 'update' then
-    access_loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'update', p_record_id, null, null::jsonb
-    );
+    access_loaded := (vortex_record.load_record_access_facts_internal(
+      'update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordTypeId', p_record_type_id,
+        'recordId', p_record_id
+      ))
+    ) -> 0);
     if access_loaded ->> 'outcome' <> 'loaded'
       or pg_catalog.jsonb_typeof(access_loaded -> 'declaration') <> 'object' then
       return pg_catalog.jsonb_build_object('outcome', 'defer');
@@ -87,9 +90,13 @@ begin
         'outcome', 'conflict', 'correlationId', context_value -> 'correlationId'
       );
     end if;
-    access_decision := vortex_access.evaluate_organization_record_access_internal(
-      access_loaded -> 'declaration', p_record_id, access_loaded -> 'facts'
-    );
+    access_decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'declaration', access_loaded -> 'declaration',
+        'recordId', p_record_id,
+        'facts', access_loaded -> 'facts'
+      )
+    )) -> 0);
     if access_decision ->> 'outcome' <> 'allowed' then
       perform vortex_record.append_record_activity_internal(p_activity_id, 'update_record', array[context_organization_id]::uuid[], array[]::uuid[], 'refused');
       return pg_catalog.jsonb_build_object('outcome', 'refused_recorded');
@@ -147,15 +154,23 @@ begin
   end if;
 
   if p_operation = 'update' then
-    access_loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'update', p_record_id, p_expected_concurrency_number, null::jsonb
-    );
+    access_loaded := (vortex_record.load_record_access_facts_internal(
+      'update', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordTypeId', p_record_type_id,
+        'recordId', p_record_id,
+        'expectedConcurrencyNumber', p_expected_concurrency_number
+      ))
+    ) -> 0);
     if access_loaded ->> 'outcome' <> 'loaded' then
       return pg_catalog.jsonb_build_object('outcome', 'restart');
     end if;
-    access_decision := vortex_access.evaluate_organization_record_access_internal(
-      access_loaded -> 'declaration', p_record_id, access_loaded -> 'facts'
-    );
+    access_decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'declaration', access_loaded -> 'declaration',
+        'recordId', p_record_id,
+        'facts', access_loaded -> 'facts'
+      )
+    )) -> 0);
     if access_decision ->> 'outcome' <> 'allowed' then
       return pg_catalog.jsonb_build_object('outcome', 'restart');
     end if;

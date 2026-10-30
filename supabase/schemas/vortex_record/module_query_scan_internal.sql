@@ -286,10 +286,14 @@ begin
             else vortex_definition.read_current_active_installation() end);
         page_shared := page_shared || pg_catalog.jsonb_build_object('plan',
           vortex_record.resolve_installation_access_plan_internal(page_shared -> 'installation'));
-        page_access_loaded := vortex_record.load_record_access_facts_with_plan_internal(
-          record_type_id_value, 'read', scan_record.record_id, null,
-          page_shared -> 'installation', page_shared -> 'plan', scan_record.projection_row
-        );
+        page_access_loaded := (vortex_record.load_record_access_facts_with_plan_internal(
+          'read', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+            'recordTypeId', record_type_id_value,
+            'recordId', scan_record.record_id,
+            'projectionRow', scan_record.projection_row
+          )),
+          page_shared -> 'installation', page_shared -> 'plan'
+        ) -> 0);
         if page_access_loaded ->> 'outcome' = 'loaded'
           and pg_catalog.jsonb_typeof(page_access_loaded -> 'declaration') = 'object' then
           page_declaration := page_access_loaded -> 'declaration';
