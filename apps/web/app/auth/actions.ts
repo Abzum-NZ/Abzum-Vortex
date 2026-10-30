@@ -119,18 +119,19 @@ export async function signIn(formData: FormData): Promise<never> {
 
 export type MfaFormState =
   | { kind: "setup"; error?: string }
-  | { kind: "enrolled"; factorId: string; secret: string; error?: string }
+  | { kind: "enrolled"; factorId: string; error?: string }
   | { kind: "challenge"; factorId: string; error?: string };
 
 export async function completeMfa(
-  previous: MfaFormState,
   formData: FormData,
-): Promise<MfaFormState> {
+): Promise<
+  { kind: "enrolled"; factorId: string; secret: string } | { kind: "error"; error: string }
+> {
   if (formValue(formData, "intent") === "enroll") {
     const enrolled = await enrollMfaFactor();
     return enrolled.kind === "enrolled"
       ? enrolled
-      : { kind: "setup", error: "Two-step verification could not be set up. Try again." };
+      : { kind: "error", error: "Two-step verification could not be set up. Try again." };
   }
   const factorId = formValue(formData, "factor_id");
   const code = formValue(formData, "code");
@@ -139,7 +140,7 @@ export async function completeMfa(
     !/^\d{6}$/u.test(code) ||
     !(await verifyMfaFactor(factorId, code))
   )
-    return { ...previous, error: "The code could not be verified. Check it and try again." };
+    return { kind: "error", error: "The code could not be verified. Check it and try again." };
   const continuation = parseSingleSignInContinuation(formData.getAll("continuation"));
   redirect(continuation === undefined ? "/signed-in" : signInContinuationAddressPath(continuation));
 }
