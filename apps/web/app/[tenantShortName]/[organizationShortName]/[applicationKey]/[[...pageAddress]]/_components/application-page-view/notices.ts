@@ -69,7 +69,7 @@ const notAvailableNotice: PageMessageDraft = {
 const failedUnchangedNotice: PageMessageDraft = {
   target: "banner",
   severity: "error",
-  text: "That did not work, and nothing was changed. Try again.",
+  text: "That did not work, and nothing was saved. Try again.",
 };
 
 /** The notice for a finished run: its safe outcome, unless a task was not available. */
