@@ -73,6 +73,7 @@ type Outputs = Readonly<Record<string, JsonValue>>;
 type ApplicationStoreResult =
   | HumanOrganizationRequestResult<Outputs>
   | "conflict"
+  | "uncertain"
   | Readonly<{
       kind: "confirmed_failure";
       outcome: "refused" | "conflict";
@@ -263,6 +264,16 @@ const commandFailureOf = (error: unknown): ApplicationStoreResult => {
   return commandFailure(classifyInstallationFailure(error));
 };
 
+/**
+ * A failure after the release was activated leaves part of the journey saved, so it is reported as
+ * uncertain: a retry of the same command resumes toward the target. Before activation it is a
+ * plain failure that changed nothing.
+ */
+const afterActivation = (result: ApplicationStoreResult): ApplicationStoreResult =>
+  result !== "conflict" && result !== "uncertain" && result.kind === "temporarily_unavailable"
+    ? "uncertain"
+    : result;
+
 const releaseChanged = (): ApplicationStoreResult => ({
   kind: "confirmed_failure",
   outcome: "conflict",
@@ -405,6 +416,7 @@ const install = async (
     rootId: rootId.data,
     releaseRevision: expected.data.selected.releaseRevision,
   };
+  let activated = false;
   try {
     const reviewed = expected.data as unknown as FirstInstallCandidate["snapshot"];
     let candidate = await readCurrentFirstInstallCandidate(
@@ -414,6 +426,7 @@ const install = async (
       reviewed,
     );
     const state = candidate.snapshot.registrationState;
+    activated = state === "active_exact";
     if (state === "unprepared" || state === "registration_aligned_partial") {
       await createFirstInstallCoordinator(
         environment,
@@ -446,6 +459,7 @@ const install = async (
       receipt === undefined ? undefined : (transaction) => receipt(transaction, reported);
     if (candidate.snapshot.registrationState === "provisioned_inactive") {
       await activateFirstInstall(environment, candidate, choice, complete);
+      activated = true;
       if (choice.kind === "accept") {
         candidate = await readCurrentFirstInstallCandidate(
           environment,
@@ -463,7 +477,8 @@ const install = async (
     } else return "conflict";
     return { kind: "available", value: reported };
   } catch (error) {
-    return commandFailureOf(error);
+    const failure = commandFailureOf(error);
+    return activated ? afterActivation(failure) : failure;
   }
 };
 
@@ -520,6 +535,7 @@ const upgrade = async (
     rootId: rootId.data,
     releaseRevision: expected.data.selected.releaseRevision,
   };
+  let activated = false;
   try {
     const reviewed = expected.data as unknown as UpgradeSnapshot;
     const latest = await readCurrentApplicationLatestRelease(
@@ -540,6 +556,7 @@ const upgrade = async (
     const reviewedDeadline = Date.parse(reviewed.validUntil);
     const currentDeadline = Date.parse(current.snapshot.validUntil);
     const atTarget = current.snapshot.active.releaseRevision === selector.releaseRevision;
+    activated = atTarget;
     // The review deadline guards the confirmation, not the completion: once the claimed receipt
     // records progress (the release is already active), only current authority is re-proved.
     const resumed = receipt !== undefined && atTarget;
@@ -584,6 +601,9 @@ const upgrade = async (
         expected.data.roleRevisions,
         expected.data.latest,
         complete,
+        () => {
+          activated = true;
+        },
       );
     // Every reviewed role is accepted or the journey refused, so the counts are the reviewed ones.
     return { kind: "available", value: reported };
@@ -592,7 +612,8 @@ const upgrade = async (
       classifyInstallationFailure(error);
       return "conflict";
     }
-    return commandFailureOf(error);
+    const failure = commandFailureOf(error);
+    return activated ? afterActivation(failure) : failure;
   }
 };
 

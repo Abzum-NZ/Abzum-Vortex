@@ -126,6 +126,7 @@ export const upgradeWithRoleChanges = async (
   reviewedChanges: readonly unknown[],
   latest: ApplicationLatestRelease,
   complete?: ReceiptStep,
+  onActivated?: () => void,
 ): Promise<UpgradeWithRoleChangesResult> => {
   const listed = await readUpgradeRoleChanges(environment, session, selector, state);
   const reviewed = new Set(reviewedSourceRoleIds.map((id) => id.toLowerCase()));
@@ -180,6 +181,7 @@ export const upgradeWithRoleChanges = async (
       // With no role to accept, activating is the upgrade's last step.
       listed.length === 0 ? complete : undefined,
     );
+  onActivated?.();
   const accessAdministration = accessForInstallationTarget(
     environment,
     { selector, releaseSet: state.selectedReleaseSet, state: "active_exact", latest },

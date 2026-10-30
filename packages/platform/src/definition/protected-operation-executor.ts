@@ -135,6 +135,7 @@ type ProtectedOperationValue = JsonValue;
 type ProtectedOperationFailure =
   | Readonly<{ outcome: "refused" | "validation"; diagnostic?: FlowRefusalFeedback }>
   | Readonly<{ outcome: "conflict"; diagnostic?: FlowRefusalFeedback }>
+  | Readonly<{ outcome: "uncertain" }>
   | Readonly<{ outcome: "failed" }>;
 
 type ProtectedOperationExecution =
@@ -258,7 +259,11 @@ type ConfirmedOperationFailure = Readonly<{
 }>;
 
 type OperationResult =
-  HumanOrganizationRequestResult<Outputs> | "validation" | "conflict" | ConfirmedOperationFailure;
+  | HumanOrganizationRequestResult<Outputs>
+  | "validation"
+  | "conflict"
+  | "uncertain"
+  | ConfirmedOperationFailure;
 
 type OperationRunner = (
   services: ProtectedOperationExecutorDependencies,
@@ -1351,6 +1356,7 @@ export const createProtectedOperationExecutor = (
       );
       if (result === "validation") return { outcome: "validation" };
       if (result === "conflict") return { outcome: "conflict" };
+      if (result === "uncertain") return { outcome: "uncertain" };
       if (result.kind === "confirmed_failure")
         return { outcome: result.outcome, diagnostic: result.diagnostic };
       if (result.kind === "unavailable") {
