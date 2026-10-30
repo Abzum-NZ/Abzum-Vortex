@@ -33,6 +33,8 @@ export type FlowRuntimeOptions = Readonly<{
    * closing messages are shown, so the page can re-read the placements the binding writes.
    */
   committed?: (bindingId: string) => void;
+  /** Keep submission evidence for the entire gesture, including every server segment. */
+  begin?: (bindingId: string, clickId: string) => () => void;
 }>;
 
 /** State shared by page and agent dispatches, with subscriptions scoped to a component. */
@@ -205,33 +207,36 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
       console.error(`[flow] binding ${binding.bindingId} has no projected settings`);
       return { kind: "refused" };
     }
-    return options.state.run(
-      binding.bindingId,
-      settings.controlId,
-      settings.concurrency,
-      signal,
-      async (runSignal) => {
-        const releaseCycle = options.state.trackCycle(
-          clickId,
-          cycle ?? startFlowEventCycle(binding.flowId, settings.controlId),
-        );
-        try {
-          const { runFlowBinding } = await import("./flow-runtime-driver");
-          return await runFlowBinding(
-            options,
-            binding,
-            callerInputs,
+    const end = options.begin?.(binding.bindingId, clickId);
+    return options.state
+      .run(
+        binding.bindingId,
+        settings.controlId,
+        settings.concurrency,
+        signal,
+        async (runSignal) => {
+          const releaseCycle = options.state.trackCycle(
             clickId,
-            runSignal,
-            subject,
-            sourceTablePlacementId,
-            settings,
+            cycle ?? startFlowEventCycle(binding.flowId, settings.controlId),
           );
-        } finally {
-          releaseCycle();
-        }
-      },
-    );
+          try {
+            const { runFlowBinding } = await import("./flow-runtime-driver");
+            return await runFlowBinding(
+              options,
+              binding,
+              callerInputs,
+              clickId,
+              runSignal,
+              subject,
+              sourceTablePlacementId,
+              settings,
+            );
+          } finally {
+            releaseCycle();
+          }
+        },
+      )
+      .finally(end);
   };
   return Object.freeze({
     prefetch: async () => {
