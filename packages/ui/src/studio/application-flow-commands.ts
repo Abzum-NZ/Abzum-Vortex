@@ -491,8 +491,9 @@ const seededTask = (
     if (seed === undefined) return undefined;
     properties[key] = seed;
   }
-  // Set fields changes the record the flow runs for.
-  if (definition.type === "record.set_fields") {
+  // Set fields changes the record the flow runs for; in a transaction it changes the saved record
+  // and may not name it.
+  if (definition.type === "record.set_fields" && flow.execution !== "transaction") {
     const record = seedValue("record_reference", flow, source);
     const recordType = seedValue("record_type_id", flow, source);
     if (record === undefined || recordType === undefined) return undefined;
