@@ -216,6 +216,14 @@ const flowRecordDefinition = (flow: SourceFlow, source: Readonly<ApplicationSour
     : studioDraftRecordType(source, recordType, moduleKey)?.record;
 };
 
+/** The flow's other record input: the target a link or a relationship copy starts with. */
+const flowTargetInput = (flow: SourceFlow): string | undefined => {
+  const recordInput = flowRecordInput(flow);
+  return Object.entries(flow.inputs ?? {}).find(
+    ([name, input]) => input.type === "record_reference" && name !== recordInput,
+  )?.[0];
+};
+
 /** The first relationship of the record type the flow runs for, as a flow names it. */
 const flowFirstRelationship = (
   flow: SourceFlow,
@@ -248,10 +256,11 @@ const seedValue = (
         : { kind: "reference", reference: { source: "input", name: recordInput } };
     }
     case "record_change_list": {
-      // One copy of the run's record's first relationship onto itself; the builder picks the records.
+      // One copy of the run's record's first relationship onto the flow's other record.
       const relationship = flowFirstRelationship(flow, source);
-      if (recordInput === undefined || relationship === undefined) return undefined;
-      const record = { kind: "reference", reference: { source: "input", name: recordInput } };
+      const target = flowTargetInput(flow);
+      if (recordInput === undefined || relationship === undefined || target === undefined)
+        return undefined;
       return {
         kind: "literal",
         literal: {
@@ -260,8 +269,8 @@ const seedValue = (
             {
               kind: "copy_relationships",
               relationshipIds: [relationship],
-              subject: record,
-              target: record,
+              subject: { kind: "reference", reference: { source: "input", name: recordInput } },
+              target: { kind: "reference", reference: { source: "input", name: target } },
             },
           ],
         },
@@ -316,15 +325,58 @@ const seedValue = (
   }
 };
 
-/** Set fields starts with the run's record's first text field the builder may change, empty. */
+/**
+ * Set fields starts with one text field of the run's record that its update permission lets people
+ * change, valid as inserted: it keeps the current value, or an optional field starts empty.
+ */
 const setFieldsSeed = (
   flow: SourceFlow,
   source: Readonly<ApplicationSourceDocument>,
 ): FlowValue | undefined => {
-  const field = flowRecordDefinition(flow, source)?.fields.find(
-    (candidate) => candidate.type === "text" || candidate.type === "long_text",
+  const recordType = flowRecordType(flow);
+  const moduleKey =
+    source.body.modules.find((module) => module.flows.some((candidate) => candidate.id === flow.id))
+      ?.key ?? null;
+  const found =
+    recordType === undefined ? undefined : studioDraftRecordType(source, recordType, moduleKey);
+  if (found === undefined) return undefined;
+  const changeable = new Set(
+    found.module.permissions.flatMap((permission) =>
+      permission.action_kind === "update" && permission.record_type === found.record.key
+        ? (permission.field_policy?.changeable_fields ?? [])
+        : [],
+    ),
   );
+  const fields = found.record.fields.filter(
+    (candidate) =>
+      (candidate.type === "text" || candidate.type === "long_text") &&
+      changeable.has(candidate.key),
+  );
+  // A flow that names its record keeps the field's current value until the builder changes it;
+  // otherwise an optional field starts empty.
+  if (flow.recordInput !== undefined && fields[0] !== undefined)
+    return {
+      kind: "map",
+      entries: {
+        [fields[0].key]: {
+          kind: "reference",
+          reference: { source: "trigger_record", field: fields[0].key },
+        },
+      },
+    };
+  const field = fields.find((candidate) => candidate.required !== true);
   return field === undefined ? undefined : { kind: "map", entries: { [field.key]: text("") } };
+};
+
+/** A number a default formatter can show. */
+const zeroSeed: FlowValue = { kind: "literal", literal: { type: "whole_number", value: 0 } };
+
+/** A link's target: the flow's other record input, so a record is never linked to itself. */
+const targetSeed = (flow: SourceFlow): FlowValue | undefined => {
+  const target = flowTargetInput(flow);
+  return target === undefined
+    ? undefined
+    : { kind: "reference", reference: { source: "input", name: target } };
 };
 
 /** The reason key a new Refuse save step starts with; the builder words its message. */
@@ -380,9 +432,14 @@ const seededTask = (
             ? text("info")
             : definition.type === "data.calculate" && key === "result_type"
               ? text("decimal_number")
-              : definition.type === "record.set_fields" && key === "values"
-                ? setFieldsSeed(flow, source)
-                : seedValue(declaration.type, flow, source, declaration.default);
+              : definition.type === "record.link" && key === "target"
+                ? targetSeed(flow)
+                : definition.type === "data.format" && key === "input"
+                  ? // A number its default formatter can show; the builder points it at a value.
+                    zeroSeed
+                  : definition.type === "record.set_fields" && key === "values"
+                    ? setFieldsSeed(flow, source)
+                    : seedValue(declaration.type, flow, source, declaration.default);
     if (seed === undefined) return undefined;
     properties[key] = seed;
   }
