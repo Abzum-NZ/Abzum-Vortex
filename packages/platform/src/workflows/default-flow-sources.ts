@@ -218,13 +218,17 @@ export const defaultSaveFlowSource = (input: DefaultSaveFlowInput): SourceFlow =
         input.mode === "create" ? "{{ outputs.save.record }}" : "{{ inputs.record }}",
       ),
     ],
-    outputs: {
-      record: {
-        type: "record_reference",
-        recordTypeIds: [input.recordType],
-        value: outputReference("save", "record"),
-      },
-    },
+    // An update that found nothing to change stops before the save, so it returns no record.
+    outputs:
+      input.mode === "create"
+        ? {
+            record: {
+              type: "record_reference",
+              recordTypeIds: [input.recordType],
+              value: outputReference("save", "record"),
+            },
+          }
+        : {},
   });
 
 export type DefaultDeleteFlowInput = DefaultFlowIdentity &
