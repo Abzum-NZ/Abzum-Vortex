@@ -1298,17 +1298,17 @@ begin
           (subject ->> 'recordTypeId')::uuid, subject ->> 'operation'
         ));
       -- The record type's BeforeSave flows are read once here, not again for every record.
-      type_contexts := type_contexts || pg_catalog.jsonb_build_object(cache_key, pg_catalog.jsonb_build_object(
-        'meta', meta_cache -> cache_key,
-        'beforeSaveFlows', case
+      type_contexts := type_contexts || pg_catalog.jsonb_build_object(cache_key,
+        pg_catalog.jsonb_build_object('meta', meta_cache -> cache_key)
+        || case
           when pg_catalog.jsonb_typeof(meta_cache -> cache_key -> 'recordType') = 'object'
             and not (meta_cache -> cache_key -> 'recordType' ? 'systemProjection')
-          then vortex_record.before_save_flows_for_record_type_internal(
+          then pg_catalog.jsonb_build_object('beforeSaveFlows', vortex_record.before_save_flows_for_record_type_internal(
             (meta_cache -> cache_key ->> 'moduleRootId')::uuid,
             (meta_cache -> cache_key ->> 'moduleReleaseRevision')::bigint,
             (subject ->> 'recordTypeId')::uuid
-          ) end
-      ));
+          ))
+          else '{}'::jsonb end);
     end if;
     if subject ->> 'operation' = 'update' and preview_installation is null
       and not (meta_cache -> cache_key -> 'recordType' ? 'systemProjection')
