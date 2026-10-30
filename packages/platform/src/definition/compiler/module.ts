@@ -9,6 +9,7 @@ import {
 import { moduleDraftSchema, isWritableSystemProjection } from "../module-contracts";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "../canonical-json-definition";
 import { DefinitionCompilationError } from "../compilation-error";
+import { actionWritePolicy } from "./action-write-policy";
 import { platformServiceProtectedOperationReference } from "./protected-operation-reference";
 import { dependencyOrder, resolvedDependencies } from "./dependencies";
 import { fieldSettings, validatePersonLinkApplicationAccess } from "./field-settings";
@@ -261,7 +262,15 @@ function compileModule(
         ? { precondition: condition(action.precondition, localField, valueContext) }
         : {}),
       ...(action.flow
-        ? { flowId: resolution.id(definitionKey, "flow", String(action.flow), "content") }
+        ? {
+            flowId: resolution.id(definitionKey, "flow", String(action.flow), "content"),
+            writePolicy: actionWritePolicy(
+              (body.flows as JsonObject[]).find((flow) => flow.id === action.flow),
+              record,
+              qualifiedForRecord,
+              resolution,
+            ),
+          }
         : {}),
     };
   });

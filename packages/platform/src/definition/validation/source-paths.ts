@@ -56,6 +56,20 @@ export const actionFlowOf = (
     subjectTypes[0]!.toLowerCase() !== String(action.subjectRecordTypeId).toLowerCase()
   )
     return undefined;
+  // An action flow is a linear list of record steps, which the write policy is derived from.
+  if (
+    !array(flow.tasks).every((task) =>
+      [
+        "record.set_fields",
+        "record.create",
+        "record.changes",
+        "record.delete",
+        "event.announce",
+        "stop",
+      ].includes(String(task.type)),
+    )
+  )
+    return undefined;
   const declared = array(action.inputs);
   const others = Object.entries(flowInputs).filter(([key]) => key !== recordInput);
   return others.length === declared.length &&

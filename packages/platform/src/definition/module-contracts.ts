@@ -1252,6 +1252,31 @@ export const isSystemRecordProtectedOperation = (
 };
 
 /**
+ * What a named action's flow may write, derived from the flow when the Module is compiled and stored
+ * with the published action: the subject fields it sets, whether it deletes the subject, the record
+ * types it creates (in flow order) with the fields it sets, the relationships it copies and the
+ * Events it announces. The database authorises every write of a run against it.
+ */
+export const actionWritePolicySchema = z
+  .object({
+    subjectFieldIds: z.array(fieldIdSchema),
+    deletesSubject: z.boolean(),
+    creates: z.array(
+      z.object({ recordTypeId: recordTypeIdSchema, fieldIds: z.array(fieldIdSchema) }).strict(),
+    ),
+    relationshipCopies: z.array(
+      z
+        .object({
+          relationshipIds: z.array(containedComponentIdSchema).min(1),
+          targetInputKey: builderKeySchema,
+        })
+        .strict(),
+    ),
+    eventKeys: z.array(namespacedKeySchema),
+  })
+  .strict();
+
+/**
  * A canonical Module action. An action runs one Module flow or targets one registered protected operation,
  * never both. A protected-operation action declares no flow and no identity or revision inputs,
  * because the subject record's identity and revision reach the operation automatically when it
@@ -1272,6 +1297,8 @@ export const actionDefinitionSchema = z
     precondition: conditionNodeSchema.optional(),
     /** The Module flow (transaction execution) that is this action's behaviour. */
     flowId: flowIdSchema.optional(),
+    /** What that flow may write, derived from it at publish; the database checks every write. */
+    writePolicy: actionWritePolicySchema.optional(),
     protectedOperation: protectedOperationReferenceSchema.optional(),
     /** The choice field and option this action sets, so a plain save of that option runs it. */
     setsChoiceFieldId: fieldIdSchema.optional(),
@@ -1323,6 +1350,12 @@ export const actionDefinitionSchema = z
         code: "custom",
         path: ["protectedOperation"],
         message: "An action runs either one Module flow or one registered protected operation",
+      });
+    if ((value.writePolicy !== undefined) !== (value.flowId !== undefined))
+      context.addIssue({
+        code: "custom",
+        path: ["writePolicy"],
+        message: "A flow action carries the write policy derived from its flow",
       });
     if (operation !== undefined && !isSystemRecordProtectedOperation(operation))
       context.addIssue({
