@@ -38,7 +38,7 @@ import {
   applyStudioFlowStepDraft,
   type StudioFlowStepDraft,
 } from "./application-flow-step-form";
-import { studioFlowEventChoices } from "./application-flow-values";
+import { studioDraftRecordType, studioFlowEventChoices } from "./application-flow-values";
 import {
   addStudioFlowShownForm,
   studioFlowCanCreateShownForm,
@@ -205,6 +205,26 @@ const builderChoiceOptions = (
   }
 };
 
+/** The draft definition of the record type the flow runs for, when it runs for one. */
+const flowRecordDefinition = (flow: SourceFlow, source: Readonly<ApplicationSourceDocument>) => {
+  const recordType = flowRecordType(flow);
+  const moduleKey =
+    source.body.modules.find((module) => module.flows.some((candidate) => candidate.id === flow.id))
+      ?.key ?? null;
+  return recordType === undefined
+    ? undefined
+    : studioDraftRecordType(source, recordType, moduleKey)?.record;
+};
+
+/** The first relationship of the record type the flow runs for, as a flow names it. */
+const flowFirstRelationship = (
+  flow: SourceFlow,
+  source: Readonly<ApplicationSourceDocument>,
+): string | undefined => {
+  const relationship = flowRecordDefinition(flow, source)?.relationships.at(0);
+  return relationship === undefined ? undefined : `${flowRecordType(flow)}.${relationship.key}`;
+};
+
 /** The value of a required setting the flow decides itself, or undefined when it has none. */
 const seedValue = (
   type: FlowTaskPropertyType,
@@ -228,10 +248,30 @@ const seedValue = (
         : { kind: "reference", reference: { source: "input", name: recordInput } };
     }
     case "record_change_list": {
-      const input = Object.entries(flow.inputs ?? {}).find(([, input]) => input.type === "json");
-      return input === undefined
+      // One copy of the run's record's first relationship onto itself; the builder picks the records.
+      const relationship = flowFirstRelationship(flow, source);
+      if (recordInput === undefined || relationship === undefined) return undefined;
+      const record = { kind: "reference", reference: { source: "input", name: recordInput } };
+      return {
+        kind: "literal",
+        literal: {
+          type: "json",
+          value: [
+            {
+              kind: "copy_relationships",
+              relationshipIds: [relationship],
+              subject: record,
+              target: record,
+            },
+          ],
+        },
+      };
+    }
+    case "relationship_id": {
+      const relationship = flowFirstRelationship(flow, source);
+      return recordInput === undefined || relationship === undefined
         ? undefined
-        : { kind: "reference", reference: { source: "input", name: input[0] } };
+        : text(relationship);
     }
     case "message_text":
       return text("");
@@ -274,6 +314,17 @@ const seedValue = (
     default:
       return undefined;
   }
+};
+
+/** Set fields starts with the run's record's first text field the builder may change, empty. */
+const setFieldsSeed = (
+  flow: SourceFlow,
+  source: Readonly<ApplicationSourceDocument>,
+): FlowValue | undefined => {
+  const field = flowRecordDefinition(flow, source)?.fields.find(
+    (candidate) => candidate.type === "text" || candidate.type === "long_text",
+  );
+  return field === undefined ? undefined : { kind: "map", entries: { [field.key]: text("") } };
 };
 
 /** The reason key a new Refuse save step starts with; the builder words its message. */
@@ -329,9 +380,19 @@ const seededTask = (
             ? text("info")
             : definition.type === "data.calculate" && key === "result_type"
               ? text("decimal_number")
-              : seedValue(declaration.type, flow, source, declaration.default);
+              : definition.type === "record.set_fields" && key === "values"
+                ? setFieldsSeed(flow, source)
+                : seedValue(declaration.type, flow, source, declaration.default);
     if (seed === undefined) return undefined;
     properties[key] = seed;
+  }
+  // Set fields changes the record the flow runs for.
+  if (definition.type === "record.set_fields") {
+    const record = seedValue("record_reference", flow, source);
+    const recordType = seedValue("record_type_id", flow, source);
+    if (record === undefined || recordType === undefined) return undefined;
+    properties.record_type = recordType;
+    properties.record = record;
   }
   // A dialog is headed by what the person was doing: the flow's name.
   if (definition.type === "interface.show_message")
