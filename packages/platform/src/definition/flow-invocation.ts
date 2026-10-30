@@ -1,3 +1,4 @@
+import { createDetachedSegmentInvoker } from "./flow-detached-invocation";
 import "server-only";
 
 import { createHash } from "node:crypto";
@@ -438,6 +439,7 @@ export async function invokeInstalledFlow(
       canonicalJson(selection) === canonicalJson(boundRequest.selection);
     const admissionHost: AdmissionHost = {
       requests: requestDependencies,
+      continuationKey: dependencies.continuationKey,
       invocation,
       installationOf: installedFlowBindings,
       pageAccess: async (context, bound) => {
@@ -1423,6 +1425,7 @@ export async function invokeInstalledFlow(
         ? undefined
         : adaptSelectedReadInputs(adaptedInputs, resolved);
     },
+    invokeSegment: createDetachedSegmentInvoker(dependencies.continuationKey, orchestratorFor),
     continueForm,
     orchestratorFor,
   });

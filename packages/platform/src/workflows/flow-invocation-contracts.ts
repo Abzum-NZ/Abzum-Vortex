@@ -34,6 +34,7 @@ const bindingInvocationSchema = z
     clickId: z.uuid(),
     seed: z.record(z.string().min(1).max(300), jsonValueSchema),
     iteration: z.string().min(1).max(200),
+    phase: z.enum(["success", "page_failure"]).optional(),
     carriedValues: z.string().min(1).max(65_536).optional(),
     /** The values the surface itself supplies, by the name of the binding's `caller` input. */
     callerInputs: z.record(z.string().min(1).max(100), z.unknown()).default({}),

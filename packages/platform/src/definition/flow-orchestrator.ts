@@ -5,13 +5,16 @@ import { z } from "zod";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
 import { isRecord } from "../catalogue/runtime-primitives";
 import type { ExecuteNamedActionCommand } from "../records/named-actions";
-import type { FlowDefinition } from "../workflows/flow-contracts";
+import type { FlowBindingInput, FlowDefinition } from "../workflows/flow-contracts";
+import { resolveFlowValue } from "../rules/flow-value-runtime";
+import type { FlowRuntimeValues } from "../rules/flow-interpreter";
 import { flowWarningNoticeSchema } from "../workflows/form-continuation-contracts";
 import { collectActionFlowTasks } from "../rules/action-flow-run";
 import {
   continueFlowRun,
   resumeFlowRun,
   startFlowRun,
+  startFlowSegment,
   type FlowLibrary,
   type FlowRunState,
   type FlowRunStep,
@@ -19,7 +22,7 @@ import {
 import { issueFlowContinuation, peekFlowContinuation } from "./flow-continuation-store";
 import { openContinuationReplay, sealContinuationReplay } from "./flow-continuation-replay";
 import { canonicalJson } from "./canonical-json";
-import { runFlowSegmentFromBoundary } from "./flow-segment-run";
+import { runFlowSegment, runFlowSegmentFromBoundary } from "./flow-segment-run";
 import { reportUnexpectedFailure } from "./definition-error";
 import {
   carriesSensitive,
@@ -414,6 +417,164 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
   };
 
   return Object.freeze({
+    /** Admits and executes exactly the server segment selected by the page. */
+    async invokeSegment(
+      request: FlowStartRequest,
+      input: Readonly<{
+        segmentId: string;
+        seed: Readonly<Record<string, unknown>>;
+        pageResolvedInputs: readonly string[];
+        bindingSources: Readonly<Record<string, FlowBindingInput>>;
+        carriedValues: FlowRuntimeValues;
+        runId?: string;
+        entrySegments: readonly Readonly<{ segmentId: string; fingerprint: string }>[];
+      }>,
+    ) {
+      try {
+        const parsed = startRequestSchema.safeParse(request);
+        if (
+          !parsed.success ||
+          !withinPayload(parsed.data.binding.inputs) ||
+          !withinPayload(input.seed)
+        )
+          return refused;
+        const { session, selection, binding, subject, bindingId, gestureId } = parsed.data;
+        const prepared = await prepare(session, selection, binding.flowId);
+        if (prepared === undefined) return refused;
+        const plan = prepared.release.plans.get(binding.flowId);
+        if (plan === undefined) return refused;
+        if (!flowEntrySegmentsMatch(plan, input.entrySegments)) return { kind: "reload" } as const;
+        const segment = plan.segments.find(
+          (part) => part.kind === "server" && part.id === input.segmentId,
+        );
+        if (segment === undefined || segment.kind !== "server") return refused;
+        const actor = await dependencies.resolveActor?.(session, selection);
+        const flow = prepared.library(prepared.flowId);
+        const triggerRecord = await readRunRecord(
+          session,
+          selection,
+          flow,
+          flow?.recordInput === undefined
+            ? undefined
+            : (binding.inputs[flow.recordInput] ?? input.seed[`inputs.${flow.recordInput}`]),
+        );
+        if (triggerRecord === "unavailable") return refused;
+        const run: Run = {
+          authority: { kind: "person", session, selection },
+          origin: "person",
+          originId: session.identityId,
+          flowId: prepared.flowId,
+          bindingId,
+          gestureId,
+          release: prepared.release,
+          library: prepared.library,
+          carriedMilliseconds: 0,
+          segmentStart: clock(),
+          unavailable: [],
+          warnings: [],
+          refusalLoggedTaskIds: [],
+          sensitive: [],
+          selectedRecordReadSeen: false,
+        };
+        const instant = now().toISOString();
+        const resolvedInputs: Record<string, unknown> = { ...binding.inputs };
+        for (const [name, source] of Object.entries(input.bindingSources)) {
+          if (Object.hasOwn(resolvedInputs, name) || input.pageResolvedInputs.includes(name))
+            continue;
+          if (typeof source === "object" && source.kind === "caller") return refused;
+          const value = resolveFlowValue(source, {
+            now: instant,
+            reference: (reference) => {
+              if (reference.source === "execution_now")
+                return { type: "date_time", value: instant };
+              if (reference.source === "execution_actor" && actor !== undefined)
+                return { type: "organization_account_reference", value: actor };
+              if (reference.source === "trigger_record") return triggerRecord?.[reference.field];
+              return undefined;
+            },
+          });
+          if (value === undefined) return refused;
+          resolvedInputs[name] = value.value;
+        }
+        const start = {
+          runId: input.runId ?? newRunId(),
+          flowId: binding.flowId,
+          inputs: resolvedInputs,
+          now: instant,
+          pageResolvedInputs: input.pageResolvedInputs,
+          carriedValues: input.carriedValues,
+          ...(actor === undefined ? {} : { actor }),
+          ...(subject === undefined ? {} : { subject }),
+          ...(triggerRecord === undefined ? {} : { triggerRecord }),
+        };
+        const first = startFlowSegment(plan, segment.id, start, input.seed, run.library);
+        const admitted = await dependencies.admitSegment(
+          run,
+          first.state,
+          segment,
+          async (ports, replay) => {
+            const attempt: Run = {
+              ...run,
+              unavailable: [],
+              warnings: [],
+              refusalLoggedTaskIds: [],
+              sensitive: [],
+            };
+            const initial = startFlowSegment(
+              plan,
+              segment.id,
+              start,
+              input.seed,
+              attempt.library,
+              replay?.effects,
+            );
+            const executed = await runFlowSegment(
+              ports,
+              (nextSession, nextSelection, command) =>
+                runNamedAction(nextSession, nextSelection, command, ports),
+              attempt,
+              segment,
+              initial,
+              replay,
+            );
+            return {
+              value: { step: executed.step, run: attempt },
+              outcome: executed.outcome,
+              effects: executed.effects,
+              warnings: executed.warnings,
+            };
+          },
+        );
+        if (admitted.kind !== "completed") return admitted;
+        const { step, run: attempt } = admitted.value;
+        if ((step.kind !== "boundary" && step.kind !== "finished") || step.result === undefined)
+          return refused;
+        const response = finished(attempt, {
+          kind: "finished",
+          state: step.state,
+          intents: step.kind === "finished" ? step.intents : [],
+          result: step.result,
+        });
+        if (response.kind !== "finished") return response;
+        return {
+          ...response,
+          runId: admitted.runId,
+          ...(step.result.status === "completed"
+            ? {
+                outputs: Object.fromEntries(
+                  Object.entries({ ...step.result.outputs, ...step.result.finalOutputs }).map(
+                    ([name, value]) => [name, value.value],
+                  ),
+                ),
+                carriedOutputs: step.result.carriedOutputs ?? {},
+              }
+            : {}),
+        };
+      } catch (error) {
+        reportUnexpectedFailure("flow segment start", error);
+        return refused;
+      }
+    },
     /**
      * Starts a run from a binding (flow id and typed inputs) for the verified initiator. The run id
      * is issued here. The inputs and the surface's subject are values only: authority,

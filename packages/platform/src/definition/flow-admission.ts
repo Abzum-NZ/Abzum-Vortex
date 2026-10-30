@@ -4,11 +4,13 @@ import type {
   BoundHumanOrganizationRequest,
   HumanOrganizationRequestDependencies,
 } from "../access/human-organization-request";
-import { isRecord, sameId } from "../catalogue/runtime-primitives";
+import { describeFailure, isRecord, sameId } from "../catalogue/runtime-primitives";
 import { continueFlowRun } from "../rules/flow-interpreter";
 import { iterationKey } from "../rules/flow-interpreter-state";
 import type { FlowBindingInvocation } from "../workflows/flow-invocation-contracts";
 import { startFlow } from "../workflows/start";
+import { openFlowCarriedValues } from "../workflows/flow-carried-values";
+import type { QueryContinuationKey } from "../queries/continuation-token";
 import { canonicalJson } from "./canonical-json";
 import { createInstalledContextLoader } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
@@ -19,6 +21,7 @@ import type { FlowRunState } from "../rules/flow-interpreter";
 
 export type AdmissionHost = Readonly<{
   requests: HumanOrganizationRequestDependencies;
+  continuationKey: QueryContinuationKey;
   invocation: FlowBindingInvocation;
   installationOf: (context: InstalledRuntimeContext) => InstalledFlowBindings;
   pageAccess: (
@@ -213,10 +216,58 @@ export const admitFlowSegment = async (
       : undefined;
   const plan = run.release.plans.get(run.flowId);
   if (plan === undefined) return { kind: "refused" };
+  const detached = host.invocation.kind === "binding" ? host.invocation.segment : undefined;
+  if (detached !== undefined && detached.segmentId !== segment.id) return { kind: "refused" };
+  if (detached !== undefined && host.invocation.kind === "binding" && segment.section !== "tasks") {
+    if (selection.applicationRootId === undefined) return { kind: "refused" };
+    let failure: Readonly<{ segmentId: string }> | undefined;
+    try {
+      failure = openFlowCarriedValues(
+        host.invocation.carriedValues,
+        host.continuationKey,
+        {
+          flowId: run.flowId,
+          bindingId: run.bindingId,
+          identityId: run.authority.session.identityId,
+          organizationId: selection.organizationId,
+          applicationRootId: selection.applicationRootId,
+        },
+        segment,
+      ).failure;
+    } catch (error) {
+      console.error(`[flows] invalid phase evidence: ${describeFailure(error)}`);
+      return { kind: "refused" };
+    }
+    const index = plan.segments.findIndex((part) => part.id === segment.id);
+    const serverFailure =
+      failure !== undefined &&
+      plan.segments
+        .slice(0, index)
+        .some((part) => part.kind === "server" && part.id === failure?.segmentId);
+    const pageFailure =
+      host.invocation.phase === "page_failure" &&
+      plan.segments
+        .slice(0, index)
+        .some(
+          (part) => part.kind === "page" && part.section !== "finally" && part.tasks.length > 0,
+        );
+    if (segment.tasks.length === 0 && (serverFailure || pageFailure)) return { kind: "refused" };
+    if (segment.section === "errors" && !serverFailure && !pageFailure) return { kind: "refused" };
+    if (
+      segment.section === "finally" &&
+      !serverFailure &&
+      !pageFailure &&
+      host.invocation.phase !== "success"
+    )
+      return { kind: "refused" };
+    if (failure !== undefined && !serverFailure) return { kind: "refused" };
+  }
   const expectedFingerprint =
-    run.pendingContinuation === undefined
-      ? segment.fingerprint
-      : run.continuationSegments?.[segment.id];
+    detached !== undefined
+      ? detached.fingerprint
+      : run.pendingContinuation === undefined
+        ? segment.fingerprint
+        : run.continuationSegments?.[segment.id];
   if (expectedFingerprint === undefined) return { kind: "reload" };
   return startFlow(
     {
@@ -239,9 +290,18 @@ export const admitFlowSegment = async (
         ? { entrySegments: host.invocation.entrySegments }
         : {}),
       gestureId: run.gestureId,
-      runId: state.runId,
+      ...(detached !== undefined &&
+      segment.tasks.length === 0 &&
+      plan.segments.filter((part) => part.kind === "server").length === 1 &&
+      host.invocation.kind === "binding" &&
+      host.invocation.carriedValues === undefined
+        ? {}
+        : { runId: state.runId }),
       bindingId: run.bindingId,
-      iteration: iterationKey(state),
+      iteration:
+        detached !== undefined && host.invocation.kind === "binding"
+          ? host.invocation.iteration
+          : iterationKey(state),
       ...(run.pendingContinuation === undefined ? {} : { continuation: run.pendingContinuation }),
       ...(run.continuationPlan === undefined ? {} : { continuationPlan: run.continuationPlan }),
       ...(typeof profileAccountId === "string" ? { profileAccountId } : {}),

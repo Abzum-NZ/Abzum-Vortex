@@ -81,6 +81,7 @@ export type FlowInvokeClient = Readonly<{
     segmentValues?: Readonly<{
       seed: Readonly<Record<string, JsonValue>>;
       iteration: string;
+      phase?: "success" | "page_failure";
       segment?: Readonly<{ segmentId: string; fingerprint: string }>;
     }>,
   ) => Promise<ServerFlowResponse>;
@@ -332,6 +333,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
           clickId,
           seed: segmentValues?.seed ?? {},
           iteration: segmentValues?.iteration ?? "0",
+          ...(segmentValues?.phase === undefined ? {} : { phase: segmentValues.phase }),
           callerInputs,
           ...(carriedValues === undefined ? {} : { carriedValues }),
           ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),

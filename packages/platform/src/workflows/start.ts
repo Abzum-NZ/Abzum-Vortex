@@ -483,7 +483,7 @@ export const startFlow = async <Value>(
     }
     if (runId === undefined) return { kind: "refused" };
     const recordOutcome = async (outcome: SegmentExecution<Value>["outcome"]): Promise<void> => {
-      if (!hasCompletion || evidenceState === "closed") return;
+      if (!hasCompletion || evidenceState === "closed" || evidenceState === "failed" || evidenceState === "refused") return;
       const action = segment.tasks.length === 0 && outcome === "succeeded" ? "close" : outcome;
       const updated =
         await transaction.query`select vortex_access.flow_run_evidence(${action}::text, ${runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${action === "close" || evidenceState === "pending" ? commandId : null}::uuid) as result`;

@@ -123,7 +123,7 @@ export type InstalledFlowBindings = Readonly<{
   >;
 }>;
 
-type FlowBindingEndpointDependencies = Readonly<{
+export type FlowBindingEndpointDependencies = Readonly<{
   /** Reads the active installation for the initiator's selection; `undefined` refuses neutrally. */
   readInstallation: (
     session: IdentitySession,
@@ -146,6 +146,16 @@ type FlowBindingEndpointDependencies = Readonly<{
     runId: string,
     installation: InstalledFlowBindings,
   ) => Pick<FlowOrchestrator, "invokeBinding">;
+  invokeSegment?: (
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    binding: ComponentFlowBinding,
+    inputs: Readonly<Record<string, unknown>>,
+    request: Extract<FlowBindingInvocation, { kind: "binding" }>,
+    release: FlowRelease,
+    runId: string,
+    installation: InstalledFlowBindings,
+  ) => Promise<FlowOrchestratorResponse>;
   /**
    * THE SEAM for the form request's submit adapter (`adaptPrivateFormSubmit`): turns what a form
    * submission supplies, and the record the form was rendered for, into the caller inputs of a
@@ -507,6 +517,7 @@ const bindingInputs = (
   binding: ComponentFlowBinding,
   callerInputs: Readonly<Record<string, unknown>>,
   selectedRecordReadInputs: ReadonlyMap<string, string>,
+  detached = false,
 ): Record<string, unknown> | undefined => {
   const inputs: Record<string, unknown> = {};
   const declaredCallerNames = new Set<string>();
@@ -542,7 +553,7 @@ const bindingInputs = (
         // enters Flow's ordinary typed input map.
         inputs[name] = selectedRecord.data.recordId;
       }
-    } else return undefined;
+    } else if (!detached) return undefined;
   }
   // A surface may only fill the caller inputs the binding declares.
   for (const name of Object.keys(callerInputs))
@@ -613,6 +624,7 @@ const finishedResult = (
     runId: response.runId,
     descriptor,
     outputs: descriptor.outputs === "available" ? response.outputs : {},
+    ...(response.carriedValues === undefined ? {} : { carriedValues: response.carriedValues }),
     intents: response.intents,
     unavailable: response.unavailable,
     ...(response.failure === undefined
@@ -886,7 +898,12 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
         const selectedRecordReadInputs =
           installation.selectedRecordReadInputs?.get(String(binding.flow.flowId).toLowerCase()) ??
           new Map<string, string>();
-        const boundInputs = bindingInputs(binding, callerInputs, selectedRecordReadInputs);
+        const boundInputs = bindingInputs(
+          binding,
+          callerInputs,
+          selectedRecordReadInputs,
+          request.segment !== undefined,
+        );
         if (boundInputs === undefined) return refuse("FLOW_INVOKE_CALLER_INPUTS_NOT_BOUND");
         const inputs = referenceInputsAsRecordIds(
           installation.flows.get(String(binding.flow.flowId)),
@@ -901,19 +918,31 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           installation.installationRevision,
           request.clickId,
         );
-        const response = await dependencies
-          .orchestratorFor(release, runId, installation)
-          .invokeBinding(
-            {
-              session: session.data,
-              selection: selection.data,
-              bindingId: binding.bindingId,
-              gestureId: request.clickId,
-              binding: { flowId: binding.flow.flowId, inputs },
-              ...(request.subject === undefined ? {} : { subject: request.subject }),
-            },
-            { releaseKey: installation.releaseKey, entrySegments: request.entrySegments },
-          );
+        const response =
+          request.segment === undefined
+            ? await dependencies.orchestratorFor(release, runId, installation).invokeBinding(
+                {
+                  session: session.data,
+                  selection: selection.data,
+                  bindingId: binding.bindingId,
+                  gestureId: request.clickId,
+                  binding: { flowId: binding.flow.flowId, inputs },
+                  ...(request.subject === undefined ? {} : { subject: request.subject }),
+                },
+                { releaseKey: installation.releaseKey, entrySegments: request.entrySegments },
+              )
+            : dependencies.invokeSegment === undefined
+              ? refused
+              : await dependencies.invokeSegment(
+                  session.data,
+                  selection.data,
+                  binding,
+                  inputs,
+                  request,
+                  release,
+                  runId,
+                  installation,
+                );
         return toResult(response, {
           applicationRootId: installation.applicationRootId,
           installationRevision: installation.installationRevision,
