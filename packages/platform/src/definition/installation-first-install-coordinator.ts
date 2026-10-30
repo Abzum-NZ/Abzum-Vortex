@@ -37,6 +37,7 @@ import {
   requireInstallationAuthority,
   type InstallationHumanContext,
   type InstallationProblemShape,
+  type ReceiptStep,
 } from "./installation-authority";
 import {
   readInstallationBindings,
@@ -277,6 +278,7 @@ export const createFirstInstallCoordinator = (
   expected: FirstInstallExpectation,
   expectedReleaseSet: SystemApplicationBoundReleaseSetResult,
   mode: "prepare" | "activate",
+  completeReceipt?: ReceiptStep,
 ) => {
   let step = 0;
   let preparedRegistration: PreparedFirstInstallRegistration | undefined;
@@ -387,6 +389,10 @@ export const createFirstInstallCoordinator = (
             )
               problem("refused");
           }
+          // The activation is the install's last step: its receipt completes in this transaction,
+          // before the activation, which changes the access version the completion checks.
+          if (mode === "activate" && completeReceipt !== undefined)
+            await completeReceipt(transaction);
           const value = await operation(transaction, scope, issuedAt);
           if (currentStep === 0 && mode === "prepare") {
             if (

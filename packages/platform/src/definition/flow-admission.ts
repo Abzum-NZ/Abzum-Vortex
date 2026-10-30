@@ -12,7 +12,7 @@ import {
 } from "../rules/flow-page-output-state";
 import { iterationKey } from "../rules/flow-interpreter-state";
 import type { FlowBindingInvocation } from "../workflows/flow-invocation-contracts";
-import { startFlow } from "../workflows/start";
+import { startFlow, type FlowReceiptClaim } from "../workflows/start";
 import {
   viewerSafeRecordPinSelectorSchema,
   type ViewerSafeRecordPinSelector,
@@ -67,6 +67,7 @@ export type AdmissionHost = Readonly<{
     installation: InstalledFlowBindings,
     bound?: BoundHumanOrganizationRequest,
     pin?: Readonly<{ target: FlowPinTarget; storedTargetResume: boolean }>,
+    receipt?: FlowReceiptClaim,
   ) => FlowOrchestratorDependencies;
 }>;
 
@@ -147,10 +148,11 @@ const prepareAdmission = (
     ports: (
       bound?: BoundHumanOrganizationRequest,
       pin?: Readonly<{ target: FlowPinTarget; storedTargetResume: boolean }>,
+      receipt?: FlowReceiptClaim,
     ) => {
       if (currentRelease === undefined || currentInstallation === undefined)
         throw new Error("FLOW_ADMISSION_CONTEXT_UNAVAILABLE");
-      return host.portsFor(currentRelease, state.runId, currentInstallation, bound, pin);
+      return host.portsFor(currentRelease, state.runId, currentInstallation, bound, pin, receipt);
     },
   };
 };
@@ -367,12 +369,13 @@ export const admitFlowSegment = async (
           ? { kind: "refused" }
           : { kind: "ready", value: { target, storedTargetResume: resumed } };
       },
-      executeWorkflow: async (replay, prepared) =>
+      executeWorkflow: async (replay, prepared, receipt) =>
         execute(
           admission.ports(
             undefined,
             prepared as
               Readonly<{ target: FlowPinTarget; storedTargetResume: boolean }> | undefined,
+            receipt,
           ),
           replay,
         ),
