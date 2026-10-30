@@ -12,7 +12,7 @@ declare
   v_correlation_id uuid := (context_value ->> 'correlationId')::uuid;
   v_evaluated_at timestamptz;
   v_window_start timestamptz;
-  v_kind text := case when vortex_platform.channel() = 'mcp' then 'mcp' else p_kind end;
+  v_kind text := case when vortex_platform.channel() = 'webmcp' then 'mcp' else p_kind end;
   v_account_limit integer;
   v_organization_limit integer;
   v_account_count integer;

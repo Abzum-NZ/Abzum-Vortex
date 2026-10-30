@@ -99,7 +99,7 @@ begin
     and (
       pg_catalog.jsonb_typeof(candidate -> 'channel') <> 'string'
       or (candidate ->> 'channel') <> all (array[
-        'web', 'webmcp', 'mcp', 'programmatic_interface', 'connection', 'federation',
+        'web', 'webmcp', 'programmatic_interface', 'connection', 'federation',
         'system'
       ])
     ) then

@@ -23,11 +23,10 @@ declare
   channel_value text := vortex_platform.channel();
   agent_channel_value text;
 begin
-  agent_channel_value := case when channel_value in ('webmcp', 'mcp')
-    then channel_value else null end;
+  agent_channel_value := case when channel_value = 'webmcp' then channel_value else null end;
   if p_source is null
     or p_source <> all (array[
-      'web', 'webmcp', 'mcp', 'programmatic_interface', 'connection', 'federation',
+      'web', 'webmcp', 'programmatic_interface', 'connection', 'federation',
       'system'
     ]) then
     raise exception using errcode = '22023', message = 'Activity source channel is invalid';

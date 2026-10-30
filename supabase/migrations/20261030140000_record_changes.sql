@@ -11,9 +11,20 @@ create policy relationship_edges_adapter_update on vortex_record.relationship_ed
 
 alter table vortex_record.organization_activity_entries
   add column agent_channel text,
-  add constraint organization_activity_entries_agent_channel_valid check (agent_channel in ('webmcp', 'mcp'));
+  add constraint organization_activity_entries_agent_channel_valid check (agent_channel = 'webmcp');
+-- The in-page agent records its own channel; no external MCP surface exists. The only
+-- producer of 'mcp' was the in-page agent route, so its entries are rewritten as webmcp.
+alter table vortex_record.organization_activity_entries
+  drop constraint organization_activity_entries_source_valid;
+alter table vortex_record.organization_activity_entries disable trigger organization_activity_entries_immutable;
+update vortex_record.organization_activity_entries set source = 'webmcp' where source = 'mcp';
+alter table vortex_record.organization_activity_entries enable trigger organization_activity_entries_immutable;
+alter table vortex_record.organization_activity_entries
+  add constraint organization_activity_entries_source_valid check (source = any (array[
+    'web', 'webmcp', 'programmatic_interface', 'connection', 'federation', 'durable_workflow', 'system'
+  ]));
 comment on column vortex_record.organization_activity_entries.agent_channel is
-  'Trusted agent channel acting for the unchanged actor; null for work not initiated through WebMCP or MCP.';
+  'Trusted agent channel acting for the unchanged actor: webmcp for an agent in the person''s open page; null otherwise.';
 
 create or replace function vortex_record.append_organization_activity_entry(
   p_organization_id uuid,
@@ -40,11 +51,10 @@ declare
   channel_value text := vortex_platform.channel();
   agent_channel_value text;
 begin
-  agent_channel_value := case when channel_value in ('webmcp', 'mcp')
-    then channel_value else null end;
+  agent_channel_value := case when channel_value = 'webmcp' then channel_value else null end;
   if p_source is null
     or p_source <> all (array[
-      'web', 'webmcp', 'mcp', 'programmatic_interface', 'connection', 'federation',
+      'web', 'webmcp', 'programmatic_interface', 'connection', 'federation',
       'system'
     ]) then
     raise exception using errcode = '22023', message = 'Activity source channel is invalid';
@@ -98,6 +108,10 @@ comment on function vortex_record.append_organization_activity_entry(
   uuid, uuid, timestamptz, text, uuid, text, uuid[], uuid[], text, uuid, text
 ) is
   'Private content-free Activity append over the one channel vocabulary; an exact retry replays and different evidence under one identity is refused.';
+
+alter function vortex_record.append_organization_activity_entry(p_organization_id uuid, p_activity_id uuid, p_occurred_at timestamp with time zone, p_actor_kind text, p_actor_id uuid, p_action text, p_subject_ids uuid[], p_changed_field_ids uuid[], p_source text, p_correlation_id uuid, p_outcome text) owner to vortex_owner;
+
+grant execute on function vortex_record.append_organization_activity_entry(p_organization_id uuid, p_activity_id uuid, p_occurred_at timestamp with time zone, p_actor_kind text, p_actor_id uuid, p_action text, p_subject_ids uuid[], p_changed_field_ids uuid[], p_source text, p_correlation_id uuid, p_outcome text) to postgres;
 
 alter function vortex_record.append_organization_activity_entry(p_organization_id uuid, p_activity_id uuid, p_occurred_at timestamp with time zone, p_actor_kind text, p_actor_id uuid, p_action text, p_subject_ids uuid[], p_changed_field_ids uuid[], p_source text, p_correlation_id uuid, p_outcome text) owner to vortex_owner;
 
@@ -178,7 +192,7 @@ revoke all on function vortex_record.append_record_activity_internal(uuid, text,
 grant execute on function vortex_record.append_record_activity_internal(uuid, text, uuid[], uuid[], text)
   to vortex_owner, vortex_record_adapter;
 comment on function vortex_record.append_record_activity_internal(uuid, text, uuid[], uuid[], text) is
-  'The one Record Activity composer: derives the organisation, account, correlation and channel from the validated request context and appends one entry for a record save, named action, delete, restore, ownership transfer or lifecycle policy change. The append records webmcp or mcp as the agent channel while the actor remains the person.';
+  'The one Record Activity composer: derives the organisation, account, correlation and channel from the validated request context and appends one entry for a record save, named action, delete, restore, ownership transfer or lifecycle policy change. The append records webmcp as the agent channel while the actor remains the person.';
 
 set role vortex_record_adapter;
 
@@ -8288,5 +8302,371 @@ revoke all on function vortex_record.read_record_change_revisions(jsonb)
 grant execute on function vortex_record.read_record_change_revisions(jsonb) to vortex_request;
 comment on function vortex_record.read_record_change_revisions(jsonb) is
   'Locks and returns the current revisions of up to 200 active records of the installed application for one set-based change, one read per record type; the record writer still decides each target''s authority, and no value or capability is returned.';
+
+-- The in-page agent is the one agent channel: webmcp.
+set role vortex_owner;
+
+create or replace function vortex_platform.validated(candidate jsonb)
+returns jsonb
+language plpgsql
+stable
+security invoker
+set search_path = ''
+as $function$
+declare
+  caller_kind text;
+  authentication_strength text;
+  issued_at timestamptz;
+  expires_at timestamptz;
+  access_token_issued_at timestamptz;
+  primary_authenticated_at timestamptz;
+  multi_factor_authenticated_at timestamptz;
+  allowed_keys text[];
+  nested jsonb;
+begin
+  if candidate is null or pg_catalog.jsonb_typeof(candidate) <> 'object' then
+    raise exception using errcode = '22023', message = 'Vortex request context must be an object';
+  end if;
+
+  if not candidate ?& array[
+    'callerKind', 'tenantId', 'organizationId', 'sessionId', 'issuedAt',
+    'expiresAt', 'accessVersion', 'correlationId', 'authenticationStrength'
+  ] then
+    raise exception using errcode = '22023', message = 'Vortex request context is incomplete';
+  end if;
+
+  caller_kind := candidate ->> 'callerKind';
+  authentication_strength := candidate ->> 'authenticationStrength';
+
+  case caller_kind
+    when 'human' then
+      allowed_keys := array[
+        'callerKind', 'identityAuthorityId', 'tenantId', 'organizationId',
+        'applicationRootId', 'sessionId', 'issuedAt', 'expiresAt',
+        'accessVersion', 'correlationId', 'identityId', 'organizationAccountId',
+        'authenticationStrength', 'accessTokenIssuedAt', 'primaryAuthenticatedAt',
+        'multiFactorAuthenticatedAt', 'delegatedContext', 'supportContext',
+        'channel'
+      ];
+      if not candidate ? 'identityAuthorityId'
+        or not vortex_platform.is_non_nil_uuid(candidate ->> 'identityAuthorityId') then
+        raise exception using errcode = '22023', message = 'Authenticated request context requires an Identity Authority';
+      end if;
+      if not candidate ?& array['identityId', 'organizationAccountId']
+        or authentication_strength is null
+        or authentication_strength not in ('single_factor', 'multi_factor', 'recent_multi_factor') then
+        raise exception using errcode = '22023', message = 'Vortex human context has an invalid actor';
+      end if;
+    when 'federated' then
+      allowed_keys := array[
+        'callerKind', 'identityAuthorityId', 'tenantId', 'organizationId',
+        'applicationRootId', 'sessionId', 'issuedAt', 'expiresAt',
+        'accessVersion', 'correlationId', 'identityId', 'organizationAccountId',
+        'authenticationStrength', 'channel'
+      ];
+      if not candidate ? 'identityAuthorityId'
+        or not vortex_platform.is_non_nil_uuid(candidate ->> 'identityAuthorityId') then
+        raise exception using errcode = '22023', message = 'Authenticated request context requires an Identity Authority';
+      end if;
+      if not candidate ?& array['identityId', 'organizationAccountId']
+        or authentication_strength is null
+        or authentication_strength not in ('single_factor', 'multi_factor', 'recent_multi_factor') then
+        raise exception using errcode = '22023', message = 'Vortex federated context has an invalid actor';
+      end if;
+    when 'system' then
+      allowed_keys := array[
+        'callerKind', 'tenantId', 'organizationId', 'applicationRootId',
+        'sessionId', 'issuedAt', 'expiresAt', 'accessVersion', 'correlationId',
+        'systemActorId', 'authenticationStrength', 'supportContext', 'channel'
+      ];
+      if not candidate ? 'systemActorId' or authentication_strength is distinct from 'service' then
+        raise exception using errcode = '22023', message = 'Vortex system context has an invalid actor';
+      end if;
+    when 'public' then
+      allowed_keys := array[
+        'callerKind', 'tenantId', 'organizationId', 'applicationRootId',
+        'sessionId', 'issuedAt', 'expiresAt', 'accessVersion', 'correlationId',
+        'authenticationStrength', 'channel'
+      ];
+      if authentication_strength is distinct from 'anonymous' then
+        raise exception using errcode = '22023', message = 'Vortex public context has an invalid actor';
+      end if;
+    else
+      raise exception using errcode = '22023', message = 'Vortex request context has an unsupported caller kind';
+  end case;
+
+  if exists (
+    select 1
+    from pg_catalog.jsonb_object_keys(candidate) as supplied(key)
+    where not supplied.key = any (allowed_keys)
+  ) then
+    raise exception using errcode = '22023', message = 'Vortex request context has an unknown field';
+  end if;
+
+  if candidate ? 'channel'
+    and (
+      pg_catalog.jsonb_typeof(candidate -> 'channel') <> 'string'
+      or (candidate ->> 'channel') <> all (array[
+        'web', 'webmcp', 'programmatic_interface', 'connection', 'federation',
+        'system'
+      ])
+    ) then
+    raise exception using errcode = '22023', message = 'Vortex request context has an invalid channel';
+  end if;
+
+  if not vortex_platform.is_non_nil_uuid(candidate ->> 'tenantId')
+    or not vortex_platform.is_non_nil_uuid(candidate ->> 'organizationId')
+    or not vortex_platform.is_non_nil_uuid(candidate ->> 'sessionId')
+    or not vortex_platform.is_non_nil_uuid(candidate ->> 'correlationId')
+    or (candidate ? 'applicationRootId' and not vortex_platform.is_non_nil_uuid(candidate ->> 'applicationRootId'))
+    or (candidate ? 'identityId' and not vortex_platform.is_non_nil_uuid(candidate ->> 'identityId'))
+    or (candidate ? 'organizationAccountId' and not vortex_platform.is_non_nil_uuid(candidate ->> 'organizationAccountId'))
+    or (candidate ? 'systemActorId' and not vortex_platform.is_non_nil_uuid(candidate ->> 'systemActorId')) then
+    raise exception using errcode = '22023', message = 'Vortex request context has an invalid identifier';
+  end if;
+
+  if pg_catalog.jsonb_typeof(candidate -> 'accessVersion') <> 'number'
+    or (candidate ->> 'accessVersion') !~ '^[1-9][0-9]*$'
+    or (candidate ->> 'accessVersion')::numeric > 9007199254740991 then
+    raise exception using errcode = '22023', message = 'Vortex request context has an invalid access version';
+  end if;
+
+  if pg_catalog.jsonb_typeof(candidate -> 'issuedAt') <> 'string'
+    or pg_catalog.jsonb_typeof(candidate -> 'expiresAt') <> 'string'
+    or (candidate ->> 'issuedAt') !~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]+)?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$'
+    or (candidate ->> 'expiresAt') !~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]+)?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$' then
+    raise exception using errcode = '22023', message = 'Vortex request context has an invalid time';
+  end if;
+
+  begin
+    issued_at := (candidate ->> 'issuedAt')::timestamptz;
+    expires_at := (candidate ->> 'expiresAt')::timestamptz;
+  exception when others then
+    raise exception using errcode = '22023', message = 'Vortex request context has an invalid time';
+  end;
+
+  if not pg_catalog.isfinite(issued_at)
+    or not pg_catalog.isfinite(expires_at)
+    or expires_at <= issued_at
+    or expires_at <= pg_catalog.statement_timestamp() then
+    raise exception using errcode = '22023', message = 'Vortex request context is expired or inconsistent';
+  end if;
+
+  if caller_kind = 'human' then
+    if (candidate ? 'accessTokenIssuedAt')
+      <> (candidate ? 'primaryAuthenticatedAt' or candidate ? 'multiFactorAuthenticatedAt') then
+      raise exception using errcode = '22023', message = 'Vortex human authentication evidence is incomplete';
+    end if;
+
+    if candidate ? 'accessTokenIssuedAt' then
+      if pg_catalog.jsonb_typeof(candidate -> 'accessTokenIssuedAt') <> 'string'
+        or (candidate ->> 'accessTokenIssuedAt') !~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]+)?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$' then
+        raise exception using errcode = '22023', message = 'Vortex human authentication evidence has an invalid time';
+      end if;
+      begin
+        access_token_issued_at := (candidate ->> 'accessTokenIssuedAt')::timestamptz;
+      exception when others then
+        raise exception using errcode = '22023', message = 'Vortex human authentication evidence has an invalid time';
+      end;
+      if not pg_catalog.isfinite(access_token_issued_at)
+        or access_token_issued_at >= expires_at
+        or access_token_issued_at > issued_at + interval '60 seconds' then
+        raise exception using errcode = '22023', message = 'Vortex human authentication evidence is inconsistent';
+      end if;
+    end if;
+
+    if candidate ? 'primaryAuthenticatedAt' then
+      if pg_catalog.jsonb_typeof(candidate -> 'primaryAuthenticatedAt') <> 'string'
+        or (candidate ->> 'primaryAuthenticatedAt') !~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]+)?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$' then
+        raise exception using errcode = '22023', message = 'Vortex human authentication evidence has an invalid time';
+      end if;
+      begin
+        primary_authenticated_at := (candidate ->> 'primaryAuthenticatedAt')::timestamptz;
+      exception when others then
+        raise exception using errcode = '22023', message = 'Vortex human authentication evidence has an invalid time';
+      end;
+      if not pg_catalog.isfinite(primary_authenticated_at)
+        or primary_authenticated_at > access_token_issued_at
+        or primary_authenticated_at > pg_catalog.statement_timestamp() then
+        raise exception using errcode = '22023', message = 'Vortex human authentication evidence is inconsistent';
+      end if;
+    end if;
+
+    if candidate ? 'multiFactorAuthenticatedAt' then
+      if authentication_strength not in ('multi_factor', 'recent_multi_factor') then
+        raise exception using errcode = '22023', message = 'Vortex human multi-factor evidence conflicts with authentication strength';
+      end if;
+      if pg_catalog.jsonb_typeof(candidate -> 'multiFactorAuthenticatedAt') <> 'string'
+        or (candidate ->> 'multiFactorAuthenticatedAt') !~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]+)?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$' then
+        raise exception using errcode = '22023', message = 'Vortex human authentication evidence has an invalid time';
+      end if;
+      begin
+        multi_factor_authenticated_at := (candidate ->> 'multiFactorAuthenticatedAt')::timestamptz;
+      exception when others then
+        raise exception using errcode = '22023', message = 'Vortex human authentication evidence has an invalid time';
+      end;
+      if not pg_catalog.isfinite(multi_factor_authenticated_at)
+        or multi_factor_authenticated_at > access_token_issued_at
+        or multi_factor_authenticated_at > pg_catalog.statement_timestamp() then
+        raise exception using errcode = '22023', message = 'Vortex human authentication evidence is inconsistent';
+      end if;
+    end if;
+  end if;
+
+  if candidate ? 'delegatedContext' then
+    nested := candidate -> 'delegatedContext';
+    if pg_catalog.jsonb_typeof(nested) <> 'object'
+      or not nested ?& array['delegatedByOrganizationAccountId', 'reason', 'expiresAt']
+      or exists (
+        select 1 from pg_catalog.jsonb_object_keys(nested) as supplied(key)
+        where supplied.key <> all (array['delegatedByOrganizationAccountId', 'reason', 'expiresAt'])
+      )
+      or not vortex_platform.is_non_nil_uuid(nested ->> 'delegatedByOrganizationAccountId')
+      or pg_catalog.jsonb_typeof(nested -> 'reason') <> 'string'
+      or pg_catalog.length(nested ->> 'reason') not between 1 and 500 then
+      raise exception using errcode = '22023', message = 'Vortex delegated context is invalid';
+    end if;
+    if pg_catalog.jsonb_typeof(nested -> 'expiresAt') <> 'string'
+      or (nested ->> 'expiresAt') !~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]+)?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$' then
+      raise exception using errcode = '22023', message = 'Vortex delegated context has an invalid time';
+    end if;
+    begin
+      if not pg_catalog.isfinite((nested ->> 'expiresAt')::timestamptz)
+        or (nested ->> 'expiresAt')::timestamptz > expires_at
+        or (nested ->> 'expiresAt')::timestamptz <= pg_catalog.statement_timestamp() then
+        raise exception using errcode = '22023', message = 'Vortex delegated context is expired or inconsistent';
+      end if;
+    exception when invalid_datetime_format then
+      raise exception using errcode = '22023', message = 'Vortex delegated context has an invalid time';
+    end;
+  end if;
+
+  if candidate ? 'supportContext' then
+    nested := candidate -> 'supportContext';
+    if pg_catalog.jsonb_typeof(nested) <> 'object'
+      or not nested ?& array['supportActorId', 'approvedByOrganizationAccountId', 'reason', 'expiresAt']
+      or exists (
+        select 1 from pg_catalog.jsonb_object_keys(nested) as supplied(key)
+        where supplied.key <> all (array['supportActorId', 'approvedByOrganizationAccountId', 'reason', 'expiresAt'])
+      )
+      or not vortex_platform.is_non_nil_uuid(nested ->> 'supportActorId')
+      or not vortex_platform.is_non_nil_uuid(nested ->> 'approvedByOrganizationAccountId')
+      or pg_catalog.jsonb_typeof(nested -> 'reason') <> 'string'
+      or pg_catalog.length(nested ->> 'reason') not between 1 and 500 then
+      raise exception using errcode = '22023', message = 'Vortex support context is invalid';
+    end if;
+    if pg_catalog.jsonb_typeof(nested -> 'expiresAt') <> 'string'
+      or (nested ->> 'expiresAt') !~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]+)?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$' then
+      raise exception using errcode = '22023', message = 'Vortex support context has an invalid time';
+    end if;
+    begin
+      if not pg_catalog.isfinite((nested ->> 'expiresAt')::timestamptz)
+        or (nested ->> 'expiresAt')::timestamptz > expires_at
+        or (nested ->> 'expiresAt')::timestamptz <= pg_catalog.statement_timestamp() then
+        raise exception using errcode = '22023', message = 'Vortex support context is expired or inconsistent';
+      end if;
+    exception when invalid_datetime_format then
+      raise exception using errcode = '22023', message = 'Vortex support context has an invalid time';
+    end;
+  end if;
+
+  return candidate;
+end
+$function$;
+
+revoke execute on function vortex_platform.validated(jsonb)
+  from public, anon, authenticated, service_role;
+grant execute on function vortex_platform.validated(jsonb)
+  to vortex_runtime, vortex_request;
+
+comment on function vortex_platform.validated(jsonb) is
+  'Validates one trusted request context, including its optional trusted channel, or fails closed.';
+
+alter function vortex_platform.validated(candidate jsonb) owner to vortex_owner;
+
+grant execute on function vortex_platform.validated(candidate jsonb) to postgres;
+
+create or replace function vortex_access.admit_flow_segment_rate(
+  p_kind text
+)
+returns table (admitted boolean, retry_after_seconds integer)
+language plpgsql volatile security definer set search_path = ''
+as $function$
+declare
+  context_value jsonb := vortex_access.validated_human_request_context();
+  v_tenant_id uuid := (context_value ->> 'tenantId')::uuid;
+  v_organization_id uuid := (context_value ->> 'organizationId')::uuid;
+  v_account_id uuid := (context_value ->> 'organizationAccountId')::uuid;
+  v_correlation_id uuid := (context_value ->> 'correlationId')::uuid;
+  v_evaluated_at timestamptz;
+  v_window_start timestamptz;
+  v_kind text := case when vortex_platform.channel() = 'webmcp' then 'mcp' else p_kind end;
+  v_account_limit integer;
+  v_organization_limit integer;
+  v_account_count integer;
+  v_organization_count integer;
+  v_refusal_id uuid;
+begin
+  if p_kind is null or p_kind not in ('change', 'read') then
+    raise exception using errcode = '22023', message = 'Flow segment rate command is invalid';
+  end if;
+  select defaults.account_limit, defaults.organization_limit
+    into strict v_account_limit, v_organization_limit
+  from vortex_access.flow_segment_rate_defaults as defaults
+  where defaults.kind = v_kind;
+
+  -- Lock in the same order for all callers: organisation bucket, then account bucket.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+    pg_catalog.concat_ws(E'\x1f', v_organization_id::text, v_kind), 817
+  ));
+  v_evaluated_at := pg_catalog.clock_timestamp();
+  v_window_start := pg_catalog.date_trunc('minute', v_evaluated_at);
+  delete from vortex_access.flow_segment_rate_buckets as bucket
+  where bucket.organization_id = v_organization_id
+    and bucket.kind = v_kind
+    and bucket.window_start < v_window_start - interval '2 minutes';
+  insert into vortex_access.flow_segment_rate_buckets
+    (organization_id, organization_account_id, kind, window_start, used)
+  values (v_organization_id, null, v_kind, v_window_start, 0),
+    (v_organization_id, v_account_id, v_kind, v_window_start, 0)
+  on conflict (organization_id, organization_account_id, kind, window_start) do nothing;
+
+  select bucket.used into strict v_organization_count
+  from vortex_access.flow_segment_rate_buckets as bucket
+  where bucket.organization_id = v_organization_id and bucket.organization_account_id is null
+    and bucket.kind = v_kind and bucket.window_start = v_window_start;
+  select bucket.used into strict v_account_count
+  from vortex_access.flow_segment_rate_buckets as bucket
+  where bucket.organization_id = v_organization_id and bucket.organization_account_id = v_account_id
+    and bucket.kind = v_kind and bucket.window_start = v_window_start;
+  if v_organization_count >= v_organization_limit or v_account_count >= v_account_limit then
+    v_refusal_id := pg_catalog.gen_random_uuid();
+    perform vortex_access.record_metering_event(
+      v_tenant_id, v_organization_id, 'local', v_refusal_id, 'flow.rate_limit_refused',
+      1, 'segment', 'web', pg_catalog.jsonb_build_object('kind', v_kind, 'channel', vortex_platform.channel()), v_evaluated_at,
+      null, v_refusal_id, v_correlation_id, null, null
+    );
+    return query select false,
+      greatest(1, pg_catalog.ceil(extract(epoch from
+        (v_window_start + interval '1 minute' - v_evaluated_at)))::integer);
+    return;
+  end if;
+  update vortex_access.flow_segment_rate_buckets as bucket
+  set used = bucket.used + 1
+  where bucket.organization_id = v_organization_id and bucket.kind = v_kind
+    and bucket.window_start = v_window_start
+    and (bucket.organization_account_id is null or bucket.organization_account_id = v_account_id);
+  return query select true, 0;
+end
+$function$;
+
+comment on function vortex_access.admit_flow_segment_rate(text) is
+  'Checks and increments current account and organisation flow-segment minute buckets atomically.';
+revoke execute on function vortex_access.admit_flow_segment_rate(text)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+
+grant execute on function vortex_access.admit_flow_segment_rate(text) to vortex_request;
+alter function vortex_access.admit_flow_segment_rate(text) owner to vortex_owner;
+grant execute on function vortex_access.admit_flow_segment_rate(text) to postgres;
 
 reset role;
