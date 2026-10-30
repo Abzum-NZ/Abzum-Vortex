@@ -190,6 +190,10 @@ export function createFlowRuntimeState() {
         ...(formId ? { formId } : {}),
         allowed: new Set(pendingChanges.map((change) => change.job)),
       };
+      const ticket =
+        initialConflict !== undefined && concurrency === "queue"
+          ? scopes.enqueue(scope, job)
+          : undefined;
       let release: (() => void) | undefined;
       if (exclusive !== "none" && (exclusive !== "form" || formId !== undefined)) {
         if (scopes.conflict(scope, job) === undefined) release = scopes.acquire(scope);
@@ -226,14 +230,18 @@ export function createFlowRuntimeState() {
           return { kind: "refused", reason: "This action has no form to lock." };
         if (release === undefined) {
           let held = scopes.conflict(scope, job);
-          while (held !== undefined) {
+          while (held !== undefined || (ticket !== undefined && !ticket.turn())) {
             if (concurrency !== "queue")
-              return { kind: "refused", reason: `${held.name} is still running.` };
+              return {
+                kind: "refused",
+                reason: `${held?.name ?? settings.flowName} is still running.`,
+              };
             await scopes.wait(controller.signal);
             if (controller.signal.aborted) return abandoned;
             held = scopes.conflict(scope, job);
           }
           release = scopes.acquire(scope);
+          ticket?.remove();
         }
         if (settlesForm) {
           const field = await settler.settle(pendingChanges, controller.signal);
@@ -261,6 +269,7 @@ export function createFlowRuntimeState() {
           if (stopWaiting !== undefined)
             controller.signal.removeEventListener("abort", stopWaiting);
           if (timer !== undefined) clearTimeout(timer);
+          ticket?.remove();
           release?.();
           entry.jobs.delete(job);
           changeRunning(controlId, -1);
