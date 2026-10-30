@@ -19,6 +19,7 @@ export * from "./workflows/flow-run-start";
 export * from "./rules/flow-interpreter-core";
 export type { BrowserFlowPlan } from "./workflows/flow-plan";
 export * from "./rules/flow-page-inputs";
+export * from "./rules/form-submit-inputs";
 export { evaluateFlowFormula } from "./rules/flow-formula";
 export * from "./rules/flow-page-output-state";
 export * from "./definition/module-field-shape";

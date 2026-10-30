@@ -3,6 +3,7 @@ import {
   type PermittedApplicationsRead,
   type PermittedApplication,
   type InstalledRuntimeContext,
+  type BoundHumanOrganizationRequest,
   createReferenceChoiceService,
   createStoredPageCapabilityService,
   requireProjectedPlacement,
@@ -243,10 +244,12 @@ export const projectReferenceChoicePage = async (
   session: IdentitySession,
   address: ReferenceChoiceAddress,
   request: Readonly<{ installationRevision: number; releaseKey: string; subjectRecordId?: string }>,
+  bound?: BoundHumanOrganizationRequest,
 ): Promise<
   | Readonly<{
       kind: "available";
       page: Readonly<Record<string, unknown>>;
+      rawPage: Readonly<Record<string, unknown>>;
       context: InstalledRuntimeContext;
       selection: OrganizationSelectionCandidate;
       dependencies: ReturnType<typeof requestDependencies>;
@@ -290,7 +293,7 @@ export const projectReferenceChoicePage = async (
     return { kind: "reload" };
   const pageDefinition = application.content.pages.find((page) => page.key === address.pageKey);
   if (pageDefinition === undefined) return { kind: "refused" };
-  const projected = await createStoredPageCapabilityService({
+  const capability = createStoredPageCapabilityService({
     ...dependencies,
     context,
     permissions: platformPermissionSource,
@@ -300,7 +303,14 @@ export const projectReferenceChoicePage = async (
         ? {}
         : { subjectRecordId: request.subjectRecordId }),
     },
-  }).project(session, selection);
+  });
+  const projected =
+    bound === undefined
+      ? await capability.project(session, selection)
+      : {
+          kind: "available" as const,
+          value: await capability.projectInTransaction(bound.transaction, bound.scope),
+        };
   if (projected.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
   if (projected.kind !== "available" || projected.value === undefined) return { kind: "refused" };
   // The page a form submit is checked against carries the same contributed field inputs the
@@ -308,6 +318,7 @@ export const projectReferenceChoicePage = async (
   return {
     kind: "available",
     page: withContributedPlacements(projected.value, context, pageDefinition),
+    rawPage: projected.value,
     context,
     selection,
     dependencies,

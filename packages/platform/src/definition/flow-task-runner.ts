@@ -774,7 +774,8 @@ export const createFlowTaskRunner = (
         const identity = result.data.identity;
         if (
           !sameId(identity.organizationId, run.authority.selection.organizationId) ||
-          !sameId(identity.recordId, selector.data.recordId)
+          (dependencies.recordPins.storedTargetResume !== true &&
+            !sameId(identity.recordId, selector.data.recordId))
         )
           return { outcome: "refused" };
         run.recordPinReadSeen = true;

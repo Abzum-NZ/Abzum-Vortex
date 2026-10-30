@@ -303,6 +303,7 @@ export const resolveReferenceChoiceFormValues = async (
     projectedFields: ReferenceChoiceFormFieldIndex;
     values: unknown;
     evidence?: unknown;
+    sequential?: boolean;
   }>,
 ): Promise<Readonly<Record<string, JsonValue>> | undefined> => {
   if (!isRecord(args.values)) return undefined;
@@ -342,16 +343,24 @@ export const resolveReferenceChoiceFormValues = async (
     const value = resolveReferenceChoiceSelection(choices, submitted);
     return value === undefined || value === null ? undefined : value;
   };
-  // Each submitted field is rechecked in its own request, all together.
-  const results = await Promise.all(
-    [...fields]
-      .filter(([fieldKey]) => Object.hasOwn(values, fieldKey))
-      .map(async ([fieldKey, field]) => [fieldKey, await resolveField(fieldKey, field)] as const),
-  );
+  const submitted = [...fields].filter(([fieldKey]) => Object.hasOwn(values, fieldKey));
+  // A bound transaction cannot overlap sibling savepoints; ordinary callers keep concurrent reads.
+  const results: Array<readonly [string, unknown]> = [];
+  if (args.sequential === true) {
+    for (const [fieldKey, field] of submitted)
+      results.push([fieldKey, await resolveField(fieldKey, field)]);
+  } else {
+    results.push(
+      ...(await Promise.all(
+        submitted.map(
+          async ([fieldKey, field]) => [fieldKey, await resolveField(fieldKey, field)] as const,
+        ),
+      )),
+    );
+  }
   for (const [fieldKey, result] of results) {
     if (result === undefined) return undefined;
-    if (result === null) continue;
-    resolved[fieldKey] = result;
+    if (result !== null) resolved[fieldKey] = result;
   }
   const parsedValues = jsonValueSchema.safeParse(resolved);
   if (!parsedValues.success || !isRecord(parsedValues.data)) return undefined;
