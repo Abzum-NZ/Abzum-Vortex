@@ -1,4 +1,4 @@
-import { flowFormulaChildren } from "./flow-formula-tree";
+import { flowFormulaChildren, flowRoundingModes } from "./flow-formula-tree";
 import type { FlowFormula } from "./flow-formula-tree";
 export { flowFormulaChildren, flowFormulaHasUnroundedDivide } from "./flow-formula-tree";
 export type { FlowFormula } from "./flow-formula-tree";
@@ -12,15 +12,14 @@ import {
 import type { JsonValue } from "../catalogue/common";
 import { typedValueMatchesType } from "../rules/condition-types";
 import { builderKeySchema, fieldIdSchema } from "../catalogue/identifiers";
+import { flowMaximumTaskOutputPathDepth } from "./flow-limits";
+export { flowMaximumTaskOutputPathDepth } from "./flow-limits";
 
 /**
  * The value language of a flow: closed references, typed literals, formulas and constructed
  * map and array values. `flow-contracts.ts` composes these into declarations, triggers, tasks
  * and the flow itself.
  */
-
-/** A task output may select a bounded sequence of named fields from a JSON output. */
-export const flowMaximumTaskOutputPathDepth = 5;
 
 const templateDelimiterPattern = /\{\{|\{%/;
 const hasTemplateDelimiter = (value: string) => templateDelimiterPattern.test(value);
@@ -170,15 +169,7 @@ export type FlowLiteral = z.infer<typeof flowLiteralSchema>;
 
 // ─── Formula: a typed JSON expression tree over a closed operator catalogue ───────────────────
 
-export const flowRoundingModeSchema = z.enum([
-  "half_up",
-  "half_even",
-  "half_down",
-  "up",
-  "down",
-  "ceiling",
-  "floor",
-]);
+export const flowRoundingModeSchema = z.enum(flowRoundingModes);
 export const flowDateUnitSchema = z.enum(["minutes", "hours", "days", "weeks", "months", "years"]);
 export type FlowRoundingMode = z.infer<typeof flowRoundingModeSchema>;
 export type FlowDateUnit = z.infer<typeof flowDateUnitSchema>;

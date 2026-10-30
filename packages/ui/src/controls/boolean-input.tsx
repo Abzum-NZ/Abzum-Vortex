@@ -18,6 +18,7 @@ import {
   useFieldFeedback,
   useFieldIds,
   useSeededState,
+  fieldFocusLost,
 } from "./field-parts";
 import { useFormField } from "./form-context";
 
@@ -28,7 +29,10 @@ export type BooleanInputProps = ControlRenderProps<BooleanInputPayload>;
  * Space toggles either variant once, and Enter toggles the switch.
  */
 export function BooleanInput(props: BooleanInputProps): ReactElement {
-  const context = resolveControlContext<BooleanInputPayload>(props, ["field_changed"]);
+  const context = resolveControlContext<BooleanInputPayload>(props, [
+    "field_changed",
+    "field_focus_lost",
+  ]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();
@@ -48,13 +52,23 @@ export function BooleanInput(props: BooleanInputProps): ReactElement {
   const change = (next: boolean): void => {
     if (disabled) return;
     setChecked(next);
-    context.events?.field_changed?.({ event: "field_changed", fieldKey, value: next });
+    context.events?.field_changed?.({
+      event: "field_changed",
+      origin: "user",
+      depth: 0,
+      immediate: true,
+      fieldKey,
+      value: next,
+    });
   };
 
   const described = describedBy(ids, help, error, note, draftFeedback);
   return (
     <Field
       orientation="horizontal"
+      onBlur={(event) => {
+        if (!disabled) fieldFocusLost(event, context.events?.field_focus_lost, fieldKey, checked);
+      }}
       data-vortex-control="boolean-input"
       hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}

@@ -13,6 +13,7 @@ import type { IdentitySession, OrganizationSelectionCandidate } from "../access/
 import { jsonValueSchema } from "../catalogue/common";
 import { describeFailure } from "../catalogue/runtime-primitives";
 import { flowRefusalFeedbackCodeSchema } from "./flow-refusal-feedback";
+import { flowNeedsRunStart } from "./flow-run-start";
 import {
   flowEntrySegmentsMatch,
   flowPlanFingerprint,
@@ -172,12 +173,7 @@ export const openFlowAdmissionRun = async (
   }>,
 ): Promise<Readonly<{ kind: "opened"; runId: string }> | Readonly<{ kind: "refused" }>> => {
   const bindingId = z.uuid().safeParse(request.bindingId);
-  const serverSegments = request.plan.segments.filter((part) => part.kind === "server");
-  if (
-    !bindingId.success ||
-    !serverSegments.some((part) => part.tasks.length === 0) ||
-    !serverSegments.some((part) => part.tasks.length > 0)
-  )
+  if (!bindingId.success || !flowNeedsRunStart(request.plan.segments))
     return { kind: "refused" };
   const requests = createHumanOrganizationRequestService(dependencies.requests);
   const result = await requests.run(
@@ -483,7 +479,7 @@ export const startFlow = async <Value>(
     }
     if (runId === undefined) return { kind: "refused" };
     const recordOutcome = async (outcome: SegmentExecution<Value>["outcome"]): Promise<void> => {
-      if (!hasCompletion || evidenceState === "closed") return;
+      if (!hasCompletion || evidenceState === "closed" || evidenceState === "failed" || evidenceState === "refused") return;
       const action = segment.tasks.length === 0 && outcome === "succeeded" ? "close" : outcome;
       const updated =
         await transaction.query`select vortex_access.flow_run_evidence(${action}::text, ${runId}::uuid, ${request.plan.flowId}::uuid, ${bindingId.data!}::uuid, ${action === "close" || evidenceState === "pending" ? commandId : null}::uuid) as result`;

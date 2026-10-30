@@ -1,8 +1,10 @@
 import {
   buildLinkTilesQueryBinding,
   flowEntrySegments,
-  type FlowPlanSet,
+  readOrganizationRuntimeSettings,
+  type HumanOrganizationRequestDependencies,
   type InstalledRuntimeContext,
+  type FlowPlanSet,
 } from "@vortex/platform/server";
 import {
   ATTACHMENT_LIST_BLOCK_RELEASE,
@@ -15,6 +17,8 @@ import {
   recordsTableContractOrLog,
   readRecordDetailContract,
   type FlowTask,
+  type IdentitySession,
+  type OrganizationSelectionCandidate,
   flowTaskChildLists,
   type PageDefinition,
   sameId,
@@ -24,6 +28,25 @@ import type { collectPlacements } from "./placement-helpers";
 import type { PlacementFlowBinding } from "./types";
 import { isEditFieldPlacement, selectedReadInputTypes } from "./placement-helpers";
 import { isTablePlacement, resolvedQueryRecordTypeId } from "@vortex/platform/server";
+import { humanOrganizationRequests } from "../server-composition";
+
+/** Read the bound page's organisation time zone under the same authority as its other reads. */
+export const readFlowOrganizationTimeZone = (
+  input: Readonly<{
+    session: IdentitySession;
+    selection: OrganizationSelectionCandidate;
+    dependencies: HumanOrganizationRequestDependencies;
+  }>,
+) =>
+  humanOrganizationRequests(input.dependencies.identityAuthorityId).run(
+    input.session,
+    input.selection,
+    async (transaction, scope) => {
+      const settings = await readOrganizationRuntimeSettings(transaction);
+      if (settings === undefined) throw new Error("FLOW_ORGANIZATION_TIME_ZONE_UNAVAILABLE");
+      return { timeZone: settings.timeZone, accessVersion: scope.accessVersion };
+    },
+  );
 
 export const projectPlacementRecordTypes = (input: {
   allPlacements: ReturnType<typeof collectPlacements>;
@@ -355,15 +378,27 @@ export const projectPlacementBindings = (
           return flowTaskChildLists(task).some((child) => savesValues(child.tasks));
         });
       const flow = application.content.flows.find((entry) => sameId(entry.id, binding.flow.flowId));
-      const plan = plans.plans.get(String(binding.flow.flowId));
-      if (plan === undefined) throw new Error("FLOW_BINDING_PLAN_UNAVAILABLE");
-      const entrySegments = flowEntrySegments(plan);
+      const fullPlan = plans.plans.get(String(binding.flow.flowId));
+      if (fullPlan === undefined) throw new Error("FLOW_BINDING_PLAN_UNAVAILABLE");
+      const entrySegments = flowEntrySegments(fullPlan);
+      const plan = fullPlan.browser;
+      const pageInputs =
+        plan === undefined
+          ? {}
+          : Object.fromEntries(
+              Object.entries(binding.flow.inputs).filter(([name]) =>
+                Object.hasOwn(plan.inputs, name),
+              ),
+            );
       return {
+        browser: { plan, inputs: pageInputs },
         savesFormValues: flow !== undefined && savesValues(flow.tasks),
         bindingId: binding.bindingId,
+        controlId: binding.controlId,
         eventId: binding.eventId,
         event: binding.event,
         flowId: binding.flow.flowId,
+        settings: binding.settings,
         entrySegments: entrySegments.map((segment) => ({
           segmentId: segment.id,
           fingerprint: segment.fingerprint,

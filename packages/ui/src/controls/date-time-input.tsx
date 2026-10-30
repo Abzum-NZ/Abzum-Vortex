@@ -17,6 +17,7 @@ import {
   useFieldFeedback,
   useFieldIds,
   useSeededState,
+  fieldFocusLost,
 } from "./field-parts";
 import { useRequiredFormField } from "./form-context";
 import { formatterFor, toLocalInputValue, toStoredInstant } from "./date-time-zone";
@@ -28,7 +29,10 @@ type DateTimeInputProps = ControlRenderProps<DateTimeInputPayload>;
  * resolves the person's fallback zone after hydration when no profile zone is stored.
  */
 export function DateTimeInput(props: DateTimeInputProps): ReactElement {
-  const context = resolveControlContext<DateTimeInputPayload>(props, ["field_changed"]);
+  const context = resolveControlContext<DateTimeInputPayload>(props, [
+    "field_changed",
+    "field_focus_lost",
+  ]);
   const settings = readControlSettings(props, context.location);
   const [browserTimeZone, setBrowserTimeZone] = useState<string>();
   useEffect(() => {
@@ -83,12 +87,23 @@ export function DateTimeInput(props: DateTimeInputProps): ReactElement {
           ? null
           : (toStoredInstant(next, timeZone) ?? next);
     setTypedValue(value);
-    context.events?.field_changed?.({ event: "field_changed", fieldKey, value });
+    context.events?.field_changed?.({
+      event: "field_changed",
+      origin: "user",
+      depth: 0,
+      immediate: false,
+      fieldKey,
+      value,
+    });
   };
 
   const onChange = (event: ChangeEvent<HTMLInputElement>): void => commit(event.target.value);
   return (
     <Field
+      onBlur={(event) => {
+        if (!disabled && !readOnly)
+          fieldFocusLost(event, context.events?.field_focus_lost, fieldKey, typedValue);
+      }}
       data-vortex-control="date-time-input"
       hidden={draftFeedback?.hidden === true}
       data-vortex-placement-id={props.placementId}

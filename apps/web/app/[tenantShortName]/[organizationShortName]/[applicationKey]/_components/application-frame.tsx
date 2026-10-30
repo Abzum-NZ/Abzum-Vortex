@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
   type MouseEvent,
@@ -37,6 +38,7 @@ import {
 } from "../frame-actions";
 import {
   ApplicationFrameStateProvider,
+  emptyControlDrafts,
   type ApplicationFramePageState,
   type ApplicationFrameStateValue,
   type FramePageStateOwner,
@@ -71,6 +73,7 @@ export function ApplicationFrame({
   model,
   children,
 }: Readonly<{ model: ApplicationFrameModel; children: ReactNode }>): ReactElement {
+  const controlDraftsRef = useRef(emptyControlDrafts());
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -348,6 +351,7 @@ export function ApplicationFrame({
   const navigation = pageState.navigation ?? model.navigation;
   const frameState = useMemo<ApplicationFrameStateValue>(
     () => ({
+      controlDraftsRef,
       navigation,
       setPageState,
       clearPageState,
