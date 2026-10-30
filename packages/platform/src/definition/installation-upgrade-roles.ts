@@ -2,6 +2,12 @@ import "server-only";
 
 import type { createOrganizationAccessAdministrationService } from "../access/organization-access-administration-access";
 import type { IdentitySession } from "../access/identity-access";
+import type { FirstInstallFlowEnvironment } from "./installation-first-install-app";
+import { accessForInstallationTarget } from "./installation-first-install-roles";
+import {
+  firstInstallLatestReleaseMatches,
+  type ApplicationLatestRelease,
+} from "./installation-first-install";
 import { sameId } from "../catalogue/runtime-primitives";
 import { canonicalJson } from "./canonical-json";
 import { installationProblem } from "./installation-authority";
@@ -35,7 +41,10 @@ const roleChangesJson = (changes: readonly ApplicationRoleChange[]): string =>
 
 /** What an upgrade that accepts role changes needs beyond the upgrade itself. */
 export type UpgradeRoleEnvironment = UpgradeEnvironment &
-  Readonly<{ accessAdministration: AccessAdministration }>;
+  Readonly<{
+    accessAdministration: AccessAdministration;
+    bindAccessAdministration: FirstInstallFlowEnvironment["bindAccessAdministration"];
+  }>;
 
 /**
  * The roles the selected version changes for this organisation, read under the upgrader's
@@ -81,6 +90,7 @@ export const upgradeWithRoleChanges = async (
   session: IdentitySession,
   reviewedSourceRoleIds: readonly string[],
   reviewedChanges: readonly unknown[],
+  latest: ApplicationLatestRelease,
 ): Promise<UpgradeWithRoleChangesResult> => {
   const listed = await readUpgradeRoleChanges(environment, session, selector, state);
   const reviewed = new Set(reviewedSourceRoleIds.map((id) => id.toLowerCase()));
@@ -118,6 +128,7 @@ export const upgradeWithRoleChanges = async (
       state,
       session,
       async (transaction, scope) => {
+        await firstInstallLatestReleaseMatches(transaction, selector, latest);
         const locked = await readInstallationRolesIn(
           transaction,
           scope,
@@ -132,8 +143,14 @@ export const upgradeWithRoleChanges = async (
           installationProblem("upgrade_role_revision_changed", "conflict");
       },
     );
+  const accessAdministration = accessForInstallationTarget(environment, {
+    selector,
+    releaseSet: state.selectedReleaseSet,
+    state: "active_exact",
+    latest,
+  });
   return acceptApplicationRoleChanges(
-    environment,
+    { ...environment, accessAdministration },
     session,
     selector,
     state.selectedReleaseSet,
@@ -157,6 +174,7 @@ export const resumeUpgradeRoleChanges = async (
     registrationRevision: number | null;
   }>[],
   registeredByUpgrade: boolean,
+  latest: ApplicationLatestRelease,
 ): Promise<UpgradeWithRoleChangesResult> => {
   const reviewed = new Set(reviewedSourceRoleIds.map((id) => id.toLowerCase()));
   if (
@@ -222,8 +240,14 @@ export const resumeUpgradeRoleChanges = async (
     state.selectedReleaseSet,
     reviewedSourceRoleIds,
   );
+  const accessAdministration = accessForInstallationTarget(environment, {
+    selector,
+    releaseSet: state.selectedReleaseSet,
+    state: "active_exact",
+    latest,
+  });
   const result = await acceptApplicationRoleChanges(
-    environment,
+    { ...environment, accessAdministration },
     session,
     selector,
     state.selectedReleaseSet,

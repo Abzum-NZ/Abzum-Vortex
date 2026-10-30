@@ -12,9 +12,10 @@ import {
 import { describeFailure } from "../catalogue/runtime-primitives";
 import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
 import { canonicalJson } from "./canonical-json";
-import type {
-  InstallationMemberRoleRefusal,
-  InstallationProblemShape,
+import {
+  InstallationProblem,
+  type InstallationMemberRoleRefusal,
+  type InstallationProblemShape,
 } from "./installation-authority";
 import { maximumApplicationRoles } from "./application-contracts";
 import { classifyInstallationFailure } from "./installation-failure";
@@ -70,7 +71,7 @@ type ApplicationStoreResult =
   | "conflict"
   | Readonly<{
       kind: "confirmed_failure";
-      outcome: "refused";
+      outcome: "refused" | "conflict";
       diagnostic: FlowRefusalFeedback;
     }>;
 
@@ -251,8 +252,18 @@ const commandFailureOf = (error: unknown): ApplicationStoreResult => {
     console.error(`[installation] application command unavailable: ${describeFailure(error)}`);
     return error.reason === "already_installed" ? "conflict" : { kind: "unavailable" };
   }
+  if (error instanceof InstallationProblem && error.code === "first_install_latest_release_moved") {
+    console.error(`[installation] application release changed: ${describeFailure(error)}`);
+    return releaseChanged();
+  }
   return commandFailure(classifyInstallationFailure(error));
 };
+
+const releaseChanged = (): ApplicationStoreResult => ({
+  kind: "confirmed_failure",
+  outcome: "conflict",
+  diagnostic: { code: "application_release_changed" },
+});
 
 const expectedOf = (snapshot: unknown): JsonValue =>
   JSON.parse(canonicalJson(snapshot)) as JsonValue;
@@ -346,6 +357,7 @@ const review = async (
         role_template_ids: changes.map((change) => change.sourceRoleId),
         expected: expectedOf({
           ...authorized.snapshot,
+          latest,
           roleRevisions: changes.map(
             ({ sourceRoleId, roleId, liveRevision, registrationRevision }) => ({
               sourceRoleId,
@@ -443,6 +455,14 @@ const upgradeExpectedSchema = z
   .object({
     selected: z.object({ releaseRevision: z.number().int().positive() }).passthrough(),
     active: z.object({ releaseRevision: z.number().int().positive() }).passthrough(),
+    latest: z
+      .object({
+        definitionKey: z.string().min(1),
+        releaseRevision: z.number().int().positive(),
+        releaseVersion: z.string().min(1),
+        releaseNote: z.string(),
+      })
+      .strict(),
     validUntil: z.string().min(1),
     roleRevisions: z
       .array(
@@ -485,6 +505,17 @@ const upgrade = async (
   };
   try {
     const reviewed = expected.data as unknown as UpgradeSnapshot;
+    const latest = await readCurrentApplicationLatestRelease(
+      environment,
+      session,
+      selector.organizationId,
+      selector.rootId,
+    );
+    if (
+      selector.releaseRevision !== expected.data.latest.releaseRevision ||
+      canonicalJson(latest) !== canonicalJson(expected.data.latest)
+    )
+      return releaseChanged();
     // Reviewing an installed version offers only its role changes still to accept.
     const rolesOnly = reviewed.selected.releaseRevision === reviewed.active.releaseRevision;
     const current = await readUpgradeAuthorizedState(environment, selector, session, true);
@@ -512,6 +543,7 @@ const upgrade = async (
           roleTemplateIds.data,
           expected.data.roleRevisions,
           !rolesOnly,
+          expected.data.latest,
         )
       : await upgradeWithRoleChanges(
           environment,
@@ -520,6 +552,7 @@ const upgrade = async (
           session,
           roleTemplateIds.data,
           expected.data.roleRevisions,
+          expected.data.latest,
         );
     return {
       kind: "available",
@@ -531,6 +564,10 @@ const upgrade = async (
       },
     };
   } catch (error) {
+    if (error instanceof InstallationProblem && error.problem.unavailableReason === "not_newer") {
+      classifyInstallationFailure(error);
+      return "conflict";
+    }
     return commandFailureOf(error);
   }
 };

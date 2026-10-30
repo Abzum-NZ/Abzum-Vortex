@@ -2,7 +2,10 @@ import "server-only";
 
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
-import type { createHumanOrganizationRequestService } from "../access/human-organization-request";
+import type {
+  BoundHumanOrganizationRequest,
+  createHumanOrganizationRequestService,
+} from "../access/human-organization-request";
 import type { createOrganizationAccessAdministrationService } from "../access/organization-access-administration-access";
 import type {
   IdentitySession,
@@ -168,6 +171,9 @@ export type FirstInstallFlowEnvironment = FirstInstallEnvironment &
     requests: ReturnType<typeof createHumanOrganizationRequestService>;
     /** The Access operations that accept the application's roles and assign the member role. */
     accessAdministration: ReturnType<typeof createOrganizationAccessAdministrationService>;
+    bindAccessAdministration: (
+      request: BoundHumanOrganizationRequest,
+    ) => ReturnType<typeof createOrganizationAccessAdministrationService>;
   }>;
 
 /** The current first-install state, proved for one session: the release set, the snapshot and who proved it. */
@@ -270,6 +276,8 @@ export const readCurrentFirstInstallCandidate = async (
   const registrationState = firstInstallState(selector, releaseSet, bindings);
   const snapshot = firstInstallSnapshot(selector, latest, releaseSet, bindings, registrationState);
   if (expected !== undefined) {
+    if (expected.latest !== undefined && !sameContent(expected.latest, snapshot.latest))
+      return installationProblem("first_install_latest_release_moved", "conflict");
     const target = (value: FirstInstallSnapshot) => ({
       organizationId: value.organizationId,
       rootId: value.rootId,

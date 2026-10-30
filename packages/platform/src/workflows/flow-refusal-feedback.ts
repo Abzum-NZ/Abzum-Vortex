@@ -15,6 +15,7 @@ export const flowRefusalFeedbackCodeSchema = z.enum([
   "role_settings_change_required",
   "application_storage_incompatible",
   "application_republish_required",
+  "application_release_changed",
   "application_not_installed",
   "application_not_newer",
   "applications_manage_required",
@@ -42,6 +43,8 @@ export const flowRefusalFeedbackSentences: Readonly<Record<FlowRefusalFeedbackCo
     "This version changes stored fields in a way existing records cannot accept. Keep every existing choice option, do not make a field required or unique, and keep field types and storage settings.",
   application_republish_required:
     "Republish required: this release uses superseded platform definitions. Republish the application, then install or upgrade to the new release.",
+  application_release_changed:
+    "A newer application version was published. Review it before trying again.",
   application_not_installed:
     "This application is not installed in this organisation, so there is nothing to upgrade or remove. Install it first if it is needed here.",
   application_not_newer:
@@ -65,6 +68,7 @@ export const flowRefusalFeedbackSentences: Readonly<Record<FlowRefusalFeedbackCo
  */
 const platformGuidanceCodes: ReadonlySet<string> = new Set<FlowRefusalFeedbackCode>([
   "application_republish_required",
+  "application_release_changed",
   "recent_authentication_required",
   "multi_factor_required",
   "application_storage_incompatible",

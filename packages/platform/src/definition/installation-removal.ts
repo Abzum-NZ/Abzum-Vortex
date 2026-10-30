@@ -96,8 +96,10 @@ export const readApplicationRemoval = async (
           !removed &&
           (revision === null ||
             bindings.moduleBindings.every((binding) => binding.state === "detached"))
-        )
+        ) {
+          if (reviewed !== undefined) installationProblem("removal_changed", "conflict");
           installationProblem("removal_not_installed", "refused", "not_installed");
+        }
         if (
           bindings.moduleBindings.some(
             (binding) =>

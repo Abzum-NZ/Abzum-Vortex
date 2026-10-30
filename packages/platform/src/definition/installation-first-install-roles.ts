@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { IdentitySession } from "../access/identity-access";
+import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
 import {
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
   revokeOrganizationAdministrationRoleAssignmentCommandSchema,
@@ -15,11 +16,21 @@ import type {
   FirstInstallCandidate,
   FirstInstallFlowEnvironment,
 } from "./installation-first-install-app";
-import type { FirstInstallSelector } from "./installation-first-install";
+import type {
+  ApplicationLatestRelease,
+  FirstInstallRegistrationState,
+  FirstInstallSelector,
+} from "./installation-first-install";
 import {
   createFirstInstallCoordinator,
   verifyFirstInstallActivation,
 } from "./installation-first-install-coordinator";
+import { readInstallationBindings } from "./installation-binding-reader";
+import {
+  FirstInstallUnavailable,
+  firstInstallLatestReleaseMatches,
+  firstInstallState,
+} from "./installation-first-install";
 import type { ApplicationInstallationActivationResult } from "./installation-coordinator-contracts";
 import {
   acceptApplicationRoleChanges,
@@ -89,6 +100,78 @@ const assignmentDeclined = async (
   return refusedFor(detail, "access_changed");
 };
 
+/** Bind each Access write to a fresh target check in the same exclusive transaction. */
+export const accessForInstallationTarget = (
+  environment: FirstInstallFlowEnvironment,
+  target: Readonly<{
+    selector: FirstInstallSelector;
+    releaseSet: FirstInstallCandidate["releaseSet"];
+    state: FirstInstallRegistrationState;
+    latest?: ApplicationLatestRelease;
+  }>,
+): FirstInstallFlowEnvironment["accessAdministration"] => {
+  const write = async <Value>(
+    session: IdentitySession,
+    selection: { organizationId: FirstInstallSelector["organizationId"] },
+    operation: (
+      access: FirstInstallFlowEnvironment["accessAdministration"],
+    ) => Promise<HumanOrganizationRequestResult<Value>>,
+  ): Promise<HumanOrganizationRequestResult<Value>> => {
+    let failure: unknown;
+    const result = await environment.requests.runAccessChange(
+      session,
+      selection,
+      async (transaction, scope, issuedAt) => {
+        try {
+          const bindings = await readInstallationBindings(transaction, target.selector.rootId);
+          let state;
+          try {
+            state = firstInstallState(target.selector, target.releaseSet, bindings);
+          } catch (error) {
+            if (
+              error instanceof FirstInstallUnavailable &&
+              (error.reason === "already_installed" || error.reason === "installation_incomplete")
+            )
+              installationProblem("installation_role_target_changed", "conflict");
+            throw error;
+          }
+          if (state !== target.state)
+            installationProblem("installation_role_target_changed", "conflict");
+          if (target.latest !== undefined)
+            await firstInstallLatestReleaseMatches(transaction, target.selector, target.latest);
+          return await operation(
+            environment.bindAccessAdministration({
+              transaction,
+              session,
+              selection,
+              scope,
+              issuedAt,
+              mode: "access_change",
+            }),
+          );
+        } catch (error) {
+          failure = error;
+          throw error;
+        }
+      },
+    );
+    if (failure !== undefined) throw failure;
+    return result.kind === "available" ? result.value : result;
+  };
+  const access = environment.accessAdministration;
+  return {
+    ...access,
+    acceptApplicationRoles: (session, selection, commands) =>
+      write(session, selection, (bound) =>
+        bound.acceptApplicationRoles(session, selection, commands),
+      ),
+    assignRoleAssignment: (session, selection, command) =>
+      write(session, selection, (bound) => bound.assignRoleAssignment(session, selection, command)),
+    revokeRoleAssignment: (session, selection, command) =>
+      write(session, selection, (bound) => bound.revokeRoleAssignment(session, selection, command)),
+  };
+};
+
 /**
  * The roles of a FIRST install, before the activation switch. Every role the release offers
  * becomes an organisation role, accepted under the installer's installation authority alone, so
@@ -109,6 +192,12 @@ const applyFirstInstallRoles = async (
   choice: FirstInstallMemberRoleChoice,
 ): Promise<void> => {
   const { session, selector, releaseSet } = candidate;
+  const accessAdministration = accessForInstallationTarget(environment, {
+    selector,
+    releaseSet,
+    state: candidate.snapshot.registrationState,
+    latest: candidate.snapshot.latest,
+  });
   const memberRole = releaseMemberRole(candidate.snapshot.roles);
   if (choice.kind === "accept" && !sameId(memberRole.sourceRoleId, choice.sourceRoleId))
     installationProblem("first_install_member_role_changed", "conflict");
@@ -146,7 +235,7 @@ const applyFirstInstallRoles = async (
       : member?.installerAssignment?.selfGranted === true;
   if (assignmentNeeded) await proveAssignmentManagement(environment, session, selector);
   const { notAccepted } = await acceptApplicationRoleChanges(
-    environment,
+    { ...environment, accessAdministration },
     session,
     selector,
     releaseSet,
@@ -159,7 +248,7 @@ const applyFirstInstallRoles = async (
   if (choice.kind === "decline") {
     const assignment = member?.installerAssignment;
     if (assignment == null || !assignment.selfGranted) return;
-    const revoked = await environment.accessAdministration.revokeRoleAssignment(
+    const revoked = await accessAdministration.revokeRoleAssignment(
       session,
       selection,
       revokeOrganizationAdministrationRoleAssignmentCommandSchema.parse({
@@ -189,7 +278,7 @@ const applyFirstInstallRoles = async (
     return refusedFor("first_install_member_role_unavailable_role", "role_unavailable");
   if (role.installerAssignment !== null) return;
   const organizationAccountId = after.organizationAccountId;
-  const assignResult = await environment.accessAdministration.assignRoleAssignment(
+  const assignResult = await accessAdministration.assignRoleAssignment(
     session,
     selection,
     assignOrganizationAdministrationRoleAssignmentCommandSchema.parse({
