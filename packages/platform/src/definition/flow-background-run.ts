@@ -216,9 +216,9 @@ export const createBackgroundFlowExecutor =
         ? eventTrigger?.recordTypeId
         : flow.inputs[flow.recordInput]?.recordTypeIds?.[0];
     if (claimed.origin === "event") {
-      if (flow.recordInput !== undefined) inputs[flow.recordInput] = inputs.recordId;
+      // The occurrence supplies the record, never an input the flow did not declare.
       delete inputs.occurrenceId;
-      if (flow.recordInput !== undefined) delete inputs.recordId;
+      delete inputs.recordId;
     }
     const recordId =
       claimed.origin === "event"
