@@ -6,6 +6,7 @@ import type { FlowRefusalFeedbackCode } from "./flow-refusal-feedback";
  */
 const platformGuidanceCodes: ReadonlySet<string> = new Set<FlowRefusalFeedbackCode>([
   "application_republish_required",
+  "application_release_changed",
   "recent_authentication_required",
   "multi_factor_required",
   "application_storage_incompatible",

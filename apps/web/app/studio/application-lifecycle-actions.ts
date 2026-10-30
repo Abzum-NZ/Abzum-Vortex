@@ -117,6 +117,12 @@ export async function runStudioApplicationLifecycle(organizationId: string, cand
         message:
           "The application or its roles changed since the review. Review it again before confirming.",
       };
+    if (result === "uncertain")
+      return {
+        outcome: "unavailable",
+        message:
+          "Part of this was saved. Review the application's current state, then retry the same request.",
+      };
     if (result.kind === "available" && result.value.change === "unavailable")
       return {
         outcome: "unavailable",

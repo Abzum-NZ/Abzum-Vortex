@@ -152,8 +152,12 @@ export const readQueryBindings = (settings: SettingsRecord): QueryBindingsRead =
 /** The address parameter a record page's subject is named by. */
 export const PAGE_SUBJECT_PARAMETER = "record_id";
 
-/** Address names the platform keeps for itself: the page subject and a guided form's step. */
-const reservedPageParameters: ReadonlySet<string> = new Set([PAGE_SUBJECT_PARAMETER, "step"]);
+/** Address names the platform keeps for the page subject, guided step and adoption feedback. */
+const reservedPageParameters: ReadonlySet<string> = new Set([
+  PAGE_SUBJECT_PARAMETER,
+  "step",
+  "adoption",
+]);
 
 /**
  * A page parameter name: a lower-case key, so it never collides with a block's own address state

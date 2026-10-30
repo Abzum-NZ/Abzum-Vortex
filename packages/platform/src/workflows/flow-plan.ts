@@ -250,7 +250,7 @@ const unitLocation = (
   if (containsBackendRun(task)) return "mixed";
   if (
     allSteps(flowTaskChildLists(task).flatMap((list) => list.tasks)).some((child) =>
-      isCrossApplicationPin(child, applicationKey),
+      isIsolatedWorkflow(flow, child, applicationKey),
     )
   )
     return "mixed";
@@ -349,7 +349,11 @@ const outputTypes = (steps: readonly FlowTask[]): Record<string, string> =>
         }
         return [`outputs.${step.id}.${output.key}`, output.type];
       });
-      if (entry?.effect === "read" || entry?.effect === "change" || entry?.effect === "background_start")
+      if (
+        entry?.effect === "read" ||
+        entry?.effect === "change" ||
+        entry?.effect === "background_start"
+      )
         outputs.push([`outputs.${step.id}.outcome`, "text"]);
       return outputs;
     }),
@@ -392,7 +396,10 @@ const inputTypes = (
         const producer = allSteps([...flow.tasks, ...flow.errors, ...flow.finally]).find(
           (step) => step.id === reference.task,
         );
-        types[key] = reference.key === "outcome" ? "text" : ((producer === undefined ? undefined : outputTypes([producer])[key]) ?? "json");
+        types[key] =
+          reference.key === "outcome"
+            ? "text"
+            : ((producer === undefined ? undefined : outputTypes([producer])[key]) ?? "json");
         break;
       }
       // A For each runs inside one segment, so its item never crosses a segment boundary.
@@ -475,12 +482,14 @@ const cut = (
   ) => {
     const current = drafts.at(-1);
     const kind =
-      location === "neutral" ? (current?.kind ?? (flow.execution === "interactive" ? "page" : "server")) : (location as "page" | "server");
-    const isolatedPin = isCrossApplicationPin(task, applicationKey);
+      location === "neutral"
+        ? (current?.kind ?? (flow.execution === "interactive" ? "page" : "server"))
+        : (location as "page" | "server");
+    const isolatedWorkflow = isIsolatedWorkflow(flow, task, applicationKey);
     if (
       current !== undefined &&
       !current.closed &&
-      !isolatedPin &&
+      !isolatedWorkflow &&
       current.kind === kind &&
       current.lastTaskIndex + 1 === index &&
       current.listPath.length === listPath.length &&
@@ -500,7 +509,7 @@ const cut = (
         lastTaskIndex: index,
         closed: false,
       });
-    if (task.type === "backend.run" || isolatedPin) drafts.at(-1)!.closed = true;
+    if (task.type === "backend.run" || isolatedWorkflow) drafts.at(-1)!.closed = true;
   };
   const walk = (
     list: readonly FlowTask[],
@@ -611,6 +620,15 @@ const isCrossApplicationPin = (step: FlowTask, applicationKey: string | undefine
   );
 };
 
+/** A multi-transaction workflow must run alone, after its admission transaction commits. */
+const isIsolatedWorkflow = (
+  flow: FlowDefinition,
+  step: FlowTask,
+  applicationKey: string | undefined,
+): boolean =>
+  isCrossApplicationPin(step, applicationKey) ||
+  operationOf(flow, step)?.workflow === "multi_transaction";
+
 /** Compiles one validated flow into its plan. Throws `FlowPlanError` naming the step it refuses. */
 export const compileFlowPlan = (
   flow: FlowDefinition,
@@ -631,6 +649,15 @@ export const compileFlowPlan = (
           flow.id,
           pin.id,
           `Cross-application pin ${pin.id} cannot run inside For each ${step.id}`,
+        );
+      const workflow = allSteps(flowTaskChildLists(step).flatMap((list) => list.tasks)).find(
+        (child) => operationOf(flow, child)?.workflow === "multi_transaction",
+      );
+      if (workflow !== undefined)
+        throw new FlowPlanError(
+          flow.id,
+          workflow.id,
+          `Multi-transaction step ${workflow.id} cannot run inside For each ${step.id}`,
         );
     }
     if (step.type !== "switch") continue;
@@ -763,16 +790,24 @@ export const compileFlowPlan = (
         : [],
     ),
   );
-  const bindingFormInputs = inputTypes(flow, bindingFormReferences.map((reference) => ({ kind: "reference", reference })), new Set(), "binding", formTypes);
+  const bindingFormInputs = inputTypes(
+    flow,
+    bindingFormReferences.map((reference) => ({ kind: "reference", reference })),
+    new Set(),
+    "binding",
+    formTypes,
+  );
   const segments = classifyFlowSegments(
     flow,
     unclassifiedSegments.map((segment, index) => {
       if (segment.kind !== "server" || segment.section === "tasks") return segment;
-      const precedingPageGuards = unclassifiedSegments.slice(0, index).flatMap((part) =>
-        part.kind === "page" && part.section !== "finally" && part.tasks.length > 0
-          ? part.guard
-          : [],
-      );
+      const precedingPageGuards = unclassifiedSegments
+        .slice(0, index)
+        .flatMap((part) =>
+          part.kind === "page" && part.section !== "finally" && part.tasks.length > 0
+            ? part.guard
+            : [],
+        );
       return {
         ...segment,
         inputs: {
@@ -864,7 +899,8 @@ export const compileFlowPlan = (
     if (segment.kind !== "server") continue;
     for (const key of Object.keys(segment.inputs)) {
       const [source, name] = key.split(".");
-      if (source === "vars" && name !== undefined && !Object.hasOwn(segment.carriedInputs, key)) pageVariables.add(name);
+      if (source === "vars" && name !== undefined && !Object.hasOwn(segment.carriedInputs, key))
+        pageVariables.add(name);
     }
   }
   const pageTaskOutputs = new Set(
@@ -1065,7 +1101,17 @@ export const compileFlowPlans = (
   for (const flow of flows) {
     const id = String(flow.id);
     if (plans.has(id)) throw new FlowPlanError(id, undefined, "two flows share one identity");
-    plans.set(id, compileFlowPlan(flow, bindings.get(id), formTypes.get(id), conditions.get(id), applicationKey, (childId) => flowLookup.get(childId)));
+    plans.set(
+      id,
+      compileFlowPlan(
+        flow,
+        bindings.get(id),
+        formTypes.get(id),
+        conditions.get(id),
+        applicationKey,
+        (childId) => flowLookup.get(childId),
+      ),
+    );
   }
   const link = linkFlowPlans(plans, applicationKey);
   return planSet(new Map([...plans.keys()].map((id) => [id, link(id)])));
@@ -1280,7 +1326,10 @@ export const flowPlansOf = (releaseSet: PlannedReleaseSet): FlowPlanSet => {
     }
   }
   let formTypes: FlowFormTypes | undefined;
-  const allFlows = [...releaseSet.application.content.flows, ...modules.flatMap((content) => content.flows)];
+  const allFlows = [
+    ...releaseSet.application.content.flows,
+    ...modules.flatMap((content) => content.flows),
+  ];
   const flowLookup = new Map(allFlows.map((flow) => [String(flow.id), flow]));
   for (const flow of allFlows) {
     const id = String(flow.id);
