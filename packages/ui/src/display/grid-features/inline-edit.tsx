@@ -69,9 +69,8 @@ const asResult = (value: unknown): DisplayInlineEditResult => {
  * click on the value), then holds a draft in the field's own control. Enter or leaving the control
  * commits it once; Escape cancels; Tab completes the edit and returns to grid navigation. The
  * commit is one `inline_edit` event carrying the record, the field, the revision the row was
- * displayed at, the new stored value and one command identity. Nothing is shown as saved until the
- * server confirmed it; a refusal stays on the cell with the draft, and a record that changed under
- * the person keeps the draft until they reload and retry against the refreshed revision.
+ * displayed at, the new stored value and one command identity. The submitted value appears while
+ * the request runs; a refusal restores the stored value and shows the reason beside the cell.
  */
 function EditableCell({
   eventId,
@@ -142,7 +141,13 @@ function EditableCell({
   const [accepted, setAccepted] = useState<
     Readonly<{ revision: number; value: JsonValue; draft: EditDraft }> | undefined
   >(undefined);
-  const pending = accepted?.revision === row.revision ? accepted : undefined;
+  const [submitted, setSubmitted] = useState<typeof accepted>(undefined);
+  const pending =
+    submitted?.revision === row.revision
+      ? submitted
+      : accepted?.revision === row.revision
+        ? accepted
+        : undefined;
   const currentStored = pending === undefined ? stored : pending.value;
   const currentDraft = (): EditDraft =>
     pending === undefined ? startEditDraft(editor, stored, zone) : pending.draft;
@@ -226,6 +231,7 @@ function EditableCell({
       return;
     }
     committing.current = true;
+    setSubmitted({ revision: row.revision, value: reading.value, draft: next });
     setPhase("saving");
     setMessage(undefined);
     let result: DisplayInlineEditResult;
@@ -247,6 +253,7 @@ function EditableCell({
       committing.current = false;
     }
     if (!mounted.current) return;
+    setSubmitted(undefined);
     if (result.kind === "saved") {
       setSaved(true);
       setAccepted({ revision: row.revision, value: reading.value, draft: next });
@@ -259,7 +266,8 @@ function EditableCell({
     }
     setMessage(result.message);
     setChangedFrom(result.changed ? row.revision : undefined);
-    setPhase("editing");
+    restoreFocus.current = true;
+    setPhase("idle");
   };
 
   const leave = (): void => {
@@ -341,7 +349,7 @@ function EditableCell({
   );
 
   if (editor.kind === "yes_no") {
-    const checked = phase === "saving" ? draft === true : currentStored === true;
+    const checked = currentStored === true;
     return (
       <span
         className="flex flex-col"
@@ -371,40 +379,45 @@ function EditableCell({
     );
   }
 
-  if (phase === "idle")
+  if (phase !== "editing")
     return (
       <>
-        <button
-          ref={trigger}
-          type="button"
-          data-inline-edit={field}
-          className="block w-full min-w-0 cursor-text truncate [text-align:inherit] outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-          onClick={(event) => {
-            event.stopPropagation();
-            start();
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") return;
-            event.stopPropagation();
-            if (event.key === "F2" || event.key === "Enter") {
-              event.preventDefault();
+        {withNotice(
+          <button
+            ref={trigger}
+            type="button"
+            disabled={phase === "saving"}
+            aria-busy={phase === "saving" ? true : undefined}
+            aria-describedby={describedBy}
+            data-inline-edit={field}
+            className="block w-full min-w-0 cursor-text truncate [text-align:inherit] outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            onClick={(event) => {
+              event.stopPropagation();
               start();
-            }
-          }}
-        >
-          {pending === undefined ? (
-            children
-          ) : (
-            <DisplayCellView
-              value={projectInlineEditedCell(
-                pending.value,
-                format,
-                editor,
-                typeof pending.draft === "object" ? pending.draft?.title : undefined,
-              )}
-            />
-          )}
-        </button>
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") return;
+              event.stopPropagation();
+              if (event.key === "F2" || event.key === "Enter") {
+                event.preventDefault();
+                start();
+              }
+            }}
+          >
+            {pending === undefined ? (
+              children
+            ) : (
+              <DisplayCellView
+                value={projectInlineEditedCell(
+                  pending.value,
+                  format,
+                  editor,
+                  typeof pending.draft === "object" ? pending.draft?.title : undefined,
+                )}
+              />
+            )}
+          </button>,
+        )}
         {status}
       </>
     );
@@ -423,14 +436,14 @@ function EditableCell({
         setDraft(next);
         if (final) void commit(next);
       }}
-      disabled={phase === "saving"}
+      disabled={false}
       invalid={message !== undefined}
       describedBy={describedBy}
       events={events}
       current={editor.kind === "link" ? linkedRecordTitle(row, field) : undefined}
       parent={parent}
       inline
-      busy={phase === "saving"}
+      busy={false}
       autoOpenPicker
       controlRef={(element) => {
         editing.current = element;

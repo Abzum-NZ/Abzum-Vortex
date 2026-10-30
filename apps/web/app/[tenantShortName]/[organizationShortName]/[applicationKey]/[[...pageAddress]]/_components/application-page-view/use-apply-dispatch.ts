@@ -278,9 +278,9 @@ export function useApplyDispatch({
               server.descriptor.commit === "partial")
           )
             setCompletedGuidedNavigationKey(navigationKey);
-          // A committed run already re-read the bound placements before its closing messages (the
-          // flow runtime's committed hook). A refusal because the record changed under the person
-          // leaves their view stale, so the bound placements are re-read to show it as it now is.
+          // A committed run's reply already carried the bound placements' rows. A refusal because
+          // the record changed under the person leaves their view stale, so the bound placements
+          // are re-read to show it as it now is.
           if (
             changedUnderPerson &&
             server.descriptor.commit !== "confirmed" &&
@@ -325,7 +325,11 @@ export function useApplyDispatch({
         }
         if (server.kind === "skipped") return outcome;
         if (server.kind === "refused") {
-          showResult(unavailableNotice);
+          showResult(
+            server.reason === undefined
+              ? unavailableNotice
+              : { target: "banner", severity: "error", text: server.reason },
+          );
           return outcome;
         }
         if (server.kind === "abandoned") {

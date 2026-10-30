@@ -412,7 +412,7 @@ export type FlowOrchestratorResponse = (
   | Readonly<{ kind: "already_answered" }>
   | Readonly<{ kind: "refused" }>
 ) &
-  Readonly<{ committedNow: boolean }>;
+  Readonly<{ committedNow: boolean; replayedCommitted?: true }>;
 
 type RunAuthority = Readonly<{
   kind: "person";

@@ -2,6 +2,8 @@ import type { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
   flowBindingInvocationSchema,
+  guidedFormConfirmationKey,
+  guidedFormConfirmationReference,
   logRefusal,
   recordIdSchema,
   sameId,
@@ -26,8 +28,6 @@ import { applicationStoreService } from "../../../_lib/application-store-service
 import {
   getGuidedFormControlIds,
   getGuidedFormFlowId,
-  guidedFormConfirmationKey,
-  guidedFormConfirmationReference,
   verifiesGuidedFormConfirmation,
 } from "@vortex/platform/server";
 import { getQueryContinuationKey } from "../../../_lib/query-continuation-key";
@@ -58,6 +58,12 @@ import {
   requestDependencies,
 } from "../../../_lib/application-page/installed-context";
 import { prepareRuntimePreviewChoices } from "../../../_lib/runtime-preview-demand";
+import {
+  boardReadsSchema,
+  placementIdsSchema,
+  placementRefreshAddressSchema,
+  rereadApplicationPlacements,
+} from "../../../_lib/placement-refresh";
 
 const maximumRequestBodyLength = 131_072;
 const requestSchema = z
@@ -77,6 +83,14 @@ const requestSchema = z
       })
       .strict(),
     invocation: flowBindingInvocationSchema,
+    refresh: z
+      .object({
+        address: placementRefreshAddressSchema,
+        placementIds: placementIdsSchema,
+        boardReads: boardReadsSchema,
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -88,6 +102,31 @@ class RolledBackInvocation extends Error {
     super("FLOW_INVOCATION_ROLLBACK");
   }
 }
+
+/**
+ * True when every segment this request may have run is guaranteed to reach a Navigate on success,
+ * so the page leaves and the refreshed rows would be thrown away. Anything uncertain (a
+ * continuation, a failed or partial outcome, an unknown plan) keeps the rows.
+ */
+const navigatesAfterSuccess = (
+  invocation: z.infer<typeof requestSchema>["invocation"],
+  result: Readonly<{ kind: "result" | "intent"; descriptor?: Readonly<{ outcome: string }> }>,
+  releaseSet: Parameters<typeof flowPlansOf>[0] | undefined,
+): boolean => {
+  if (result.kind !== "result" || invocation.kind === "continuation" || releaseSet === undefined)
+    return false;
+  if (result.descriptor?.outcome !== "completed" && result.descriptor?.outcome !== "committed")
+    return false;
+  const ids =
+    invocation.kind === "binding" && invocation.segment !== undefined
+      ? [invocation.segment.segmentId]
+      : invocation.entrySegments.map((entry) => entry.segmentId);
+  const stubs = flowPlansOf(releaseSet).plans.get(String(invocation.flowId))?.browser.segments;
+  if (ids.length === 0 || stubs === undefined) return false;
+  return ids.every((id) =>
+    stubs.some((stub) => stub.kind === "server" && stub.id === id && stub.navigatesOnSuccess),
+  );
+};
 
 /** Cookie-backed starts must originate from this site's JSON client. */
 const fromOwnSite = (request: NextRequest): boolean => {
@@ -128,7 +167,17 @@ export const createFlowInvocationHandler =
         return refusedResponse();
       }
       const body = parsedBody.data;
+      if (
+        body.refresh !== undefined &&
+        (body.refresh.address.tenantShortName !== body.tenantShortName ||
+          body.refresh.address.organizationShortName !== body.organizationShortName ||
+          body.refresh.address.applicationKey !== body.applicationKey ||
+          body.refresh.address.pageKey !== body.pageKey)
+      )
+        return refusedResponse();
       let scopedRequestCompleted = false;
+      // Refresh rows are read after the invocation's transaction has committed.
+      let refreshAfterCommit: (() => Promise<NextResponse>) | undefined;
       const outcome = await withRuntimeTransaction(
         async (transaction) => {
           const identity = await resolveIdentitySession(transaction);
@@ -264,6 +313,26 @@ export const createFlowInvocationHandler =
               response.headers.set("Retry-After", String(result.retryAfterSeconds));
               return response;
             }
+            const refresh = body.refresh;
+            if (
+              refresh !== undefined &&
+              (result.kind === "result" || result.kind === "intent") &&
+              (result.committedNow || result.replayedCommitted === true) &&
+              !navigatesAfterSuccess(body.invocation, result, address.installedContext?.releaseSet)
+            )
+              refreshAfterCommit = async () => {
+                const rows = await rereadApplicationPlacements(
+                  refresh.address,
+                  refresh.placementIds,
+                  refresh.boardReads,
+                  undefined,
+                  true,
+                );
+                return privateResponse(
+                  { ...result, refresh: rows.kind === "available" ? rows : { kind: "reload" } },
+                  200,
+                );
+              };
             return privateResponse(result, result.kind === "reload" ? 409 : 200);
           };
 
@@ -365,7 +434,8 @@ export const createFlowInvocationHandler =
         },
         { notifyRequestCommit: () => scopedRequestCompleted },
       );
-      return typeof outcome === "function" ? await outcome() : outcome;
+      const response = typeof outcome === "function" ? await outcome() : outcome;
+      return refreshAfterCommit === undefined ? response : await refreshAfterCommit();
     } catch (error) {
       if (error instanceof RolledBackInvocation) return error.response;
       return mapWebError(error, {

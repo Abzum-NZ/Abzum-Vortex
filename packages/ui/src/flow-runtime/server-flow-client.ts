@@ -95,6 +95,7 @@ export type FlowInvokeClient = Readonly<{
     signal?: AbortSignal,
     sourceTablePlacementId?: string,
     carriedValues?: string,
+    bindingId?: string,
   ) => Promise<ServerFlowResponse>;
 }>;
 
@@ -113,6 +114,13 @@ export type FlowInvokeClientOptions = Readonly<{
   }>;
   subject?: FlowSubjectContext;
   endpoint?: string;
+  /** Snapshot the visible placements for this request and apply its reply before flow intents. */
+  prepareRefresh?: (bindingId: string) =>
+    | Readonly<{
+        request: unknown;
+        apply: (result: unknown) => void;
+      }>
+    | undefined;
   fetchImplementation?: typeof fetch;
 }>;
 
@@ -274,9 +282,11 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
   const send = async (
     invocation: FlowBindingInvocation,
     signal?: AbortSignal,
+    bindingId?: string,
   ): Promise<ServerFlowResponse> => {
     if (signal?.aborted) return unavailable;
     try {
+      const refresh = bindingId === undefined ? undefined : options.prepareRefresh?.(bindingId);
       const response = await (options.fetchImplementation ?? fetch)(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -294,12 +304,21 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
             ? {}
             : { pageRecordId: options.address.pageRecordId }),
           pageInputs: options.pageInputs?.() ?? { parameters: {}, controls: {} },
+          ...(refresh === undefined ? {} : { refresh: refresh.request }),
           invocation,
         }),
       });
       if (response.status === 401 || response.status === 403 || response.status === 413)
         return refused;
-      return parseServerFlowResponse(await response.json());
+      const body: unknown = await response.json();
+      if (signal?.aborted) return unavailable;
+      const parsed = parseServerFlowResponse(body);
+      if (isRecord(body) && body.refresh !== undefined) {
+        if (refresh === undefined || (parsed.kind !== "result" && parsed.kind !== "intent"))
+          return invalidServerResponse();
+        refresh.apply(body.refresh);
+      }
+      return parsed;
     } catch (error) {
       if (signal?.aborted) return unavailable;
       console.error(`[flow] invoke request failed: ${describeFailure(error)}`);
@@ -348,6 +367,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
             : { subject: subject ?? options.subject }),
         },
         signal,
+        binding.bindingId,
       ),
     resume: (
       flowId,
@@ -357,6 +377,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
       signal,
       sourceTablePlacementId,
       carriedValues,
+      bindingId,
     ) =>
       send(
         {
@@ -370,6 +391,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
           ...(evidence.receipt === undefined ? {} : { receipt: evidence.receipt }),
         },
         signal,
+        bindingId,
       ),
   });
 }

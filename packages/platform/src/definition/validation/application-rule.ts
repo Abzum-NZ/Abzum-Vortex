@@ -243,13 +243,6 @@ export function applicationRule(context: PreparedValidationContext): DefinitionR
           failure(output, "vortex.definition.application_identity_unique", "duplicate_key"),
         );
     }
-    const flowBindingKeys = array(content.flowBindings).map(
-      (binding) => `${binding.controlId}\0${binding.eventId}`,
-    );
-    if (new Set(flowBindingKeys).size !== flowBindingKeys.length)
-      failures.push(
-        failure(output, "vortex.definition.application_identity_unique", "duplicate_key"),
-      );
     const flowBindingIds = array(content.flowBindings).map((binding) => String(binding.bindingId));
     if (new Set(flowBindingIds).size !== flowBindingIds.length)
       failures.push(

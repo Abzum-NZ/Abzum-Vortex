@@ -80,7 +80,7 @@ export type ControlSemanticEvent =
       event: "action";
       intent: "activate" | "dismiss";
       /** An action button inside a form reports the form's current typed field values. */
-      values?: Readonly<Record<string, TypedFieldValue>>;
+      readValues?: () => Readonly<Record<string, TypedFieldValue>>;
     }>
   | Readonly<{
       event: "field_changed";
@@ -118,7 +118,7 @@ export type ControlSemanticEvent =
   | Readonly<{
       event: "form_submit";
       gestureId: string;
-      values: Readonly<Record<string, TypedFieldValue>>;
+      readValues: () => Readonly<Record<string, TypedFieldValue>>;
       selectedOwnerGroupId?: string;
     }>
   | Readonly<{ event: "tab_changed"; tabKey: string }>;

@@ -1,14 +1,12 @@
 import { isRecord } from "@vortex/platform/schema";
 import { useCallback, useMemo, type Dispatch, type SetStateAction, type RefObject } from "react";
 import type { useRouter, useSearchParams } from "next/navigation";
-import type { createFormBlockRuntime, useUnsavedWorkRegistry } from "@vortex/ui";
-import type { ServerDrivenResult } from "@vortex/ui";
+import type { useUnsavedWorkRegistry } from "@vortex/ui";
 import type {
   ApplicationPageModel,
   PlacementFlowBinding,
 } from "../../../../../../_lib/application-page";
 import type { PageMessageDraft, GuidedFormActions } from "./types";
-import { asComponentBinding } from "./event-values";
 import { placementIdsInLayout } from "./placement-helpers";
 import { unavailableNotice } from "./notices";
 
@@ -28,8 +26,6 @@ export function useGuidedFormSteps({
   requestedStepId,
   guidedSubmitInFlight,
   unsavedWorkRegistry,
-  formBlock,
-  applyDispatch,
 }: Readonly<{
   model: ApplicationPageModel;
   formOwners: Readonly<Record<string, string>>;
@@ -46,13 +42,6 @@ export function useGuidedFormSteps({
   requestedStepId: RefObject<string | undefined>;
   guidedSubmitInFlight: RefObject<boolean>;
   unsavedWorkRegistry: ReturnType<typeof useUnsavedWorkRegistry>;
-  formBlock: ReturnType<typeof createFormBlockRuntime>;
-  applyDispatch: (
-    dispatch: Promise<ServerDrivenResult | undefined>,
-    formPlacementId?: string,
-    afterAccepted?: () => Promise<PageMessageDraft | undefined>,
-    sourceBindingId?: string,
-  ) => Promise<unknown>;
 }>) {
   const guidedActivePlacementIds = useMemo(() => {
     const guidedForm = model.guidedForm;
@@ -205,13 +194,11 @@ export function useGuidedFormSteps({
     ],
   );
 
-  const submitGuidedSummary = useCallback(
+  const prepareGuidedSummary = useCallback(
     async (
       placementId: string,
       binding: PlacementFlowBinding,
       submittedValues: Readonly<Record<string, unknown>>,
-      selectedOwnerGroupId: string | undefined,
-      gestureId: string,
     ) => {
       const guidedForm = model.guidedForm;
       if (
@@ -227,6 +214,7 @@ export function useGuidedFormSteps({
       guidedSubmitInFlight.current = true;
       setBusy(true);
       showPageMessage(undefined);
+      let handedOff = false;
       try {
         const confirmed = await guidedFormActions.confirm({
           address: guidedAddress,
@@ -262,25 +250,26 @@ export function useGuidedFormSteps({
                 text: "The submission finished, but the saved draft could not be cleared. Refresh before submitting again.",
               };
         };
-        const dispatch = formBlock.submit(
-          asComponentBinding(placementId, binding),
-          { $guidedFormConfirmation: confirmed.proof },
-          selectedOwnerGroupId,
-          undefined,
-          gestureId,
-        );
-        await applyDispatch(dispatch, placementId, afterAccepted, binding.bindingId);
+        handedOff = true;
+        return {
+          proof: confirmed.proof,
+          afterAccepted,
+          finish: () => {
+            guidedSubmitInFlight.current = false;
+            setBusy(false);
+          },
+        };
       } catch {
         showPageMessage(unavailableNotice);
       } finally {
-        guidedSubmitInFlight.current = false;
-        setBusy(false);
+        if (!handedOff) {
+          guidedSubmitInFlight.current = false;
+          setBusy(false);
+        }
       }
     },
     [
-      applyDispatch,
       busy,
-      formBlock,
       guidedAddress,
       guidedFormActions,
       guidedFormCompleted,
@@ -296,7 +285,7 @@ export function useGuidedFormSteps({
     guidedActiveFormIds,
     guidedActivePlacementIds,
     guidedSummaryStepId,
-    submitGuidedSummary,
+    prepareGuidedSummary,
     advanceGuidedStep,
     guidedPreviousStepId,
     requestGuidedStep,

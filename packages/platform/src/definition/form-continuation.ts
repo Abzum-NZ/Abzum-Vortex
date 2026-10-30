@@ -126,6 +126,7 @@ export const createFormContinuationService = (
       return {
         kind: "form_requested",
         committedNow: response.committedNow,
+        ...(response.replayedCommitted === true ? { replayedCommitted: true as const } : {}),
         runId: response.runId,
         receipt: { runId: response.runId, committedEffects: response.committedEffects },
         target,
@@ -141,6 +142,7 @@ export const createFormContinuationService = (
     return {
       kind: "finished",
       committedNow: response.committedNow,
+      ...(response.replayedCommitted === true ? { replayedCommitted: true as const } : {}),
       warnings: [...response.warnings],
       runId: response.runId,
       receipt: { runId: response.runId, committedEffects: response.committedEffects },

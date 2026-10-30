@@ -64,7 +64,7 @@ export function useFlowRuntime({
   currentData,
   dialogFormRef,
   platformThemeTokens,
-  committed,
+  prepareRefresh,
   setPanelRef,
   applyMessageActionRef,
 }: Readonly<{
@@ -101,8 +101,9 @@ export function useFlowRuntime({
   currentData: ApplicationPageModel["data"];
   dialogFormRef: RefObject<HTMLDivElement | null>;
   platformThemeTokens: PlatformThemeTokens;
-  /** Re-reads what a binding writes once one of its server runs committed. */
-  committed: (bindingId: string) => void;
+  prepareRefresh: (
+    bindingId: string,
+  ) => Readonly<{ request: unknown; apply: (result: unknown) => void }> | undefined;
   /** Filled by the page's panel host once it has rendered. */
   setPanelRef: RefObject<FlowIntentHost["setPanel"]>;
   applyMessageActionRef: RefObject<
@@ -114,6 +115,8 @@ export function useFlowRuntime({
    * and the runtime carries out every pause (another form or a confirmation) through a continuation,
    * which is returned exactly as the server issued it.
    */
+  const prepareRefreshRef = useRef(prepareRefresh);
+  prepareRefreshRef.current = prepareRefresh;
   const { flowClient, webMcpClient, beginSubmission } = useMemo(() => {
     const options = {
       address: {
@@ -123,6 +126,7 @@ export function useFlowRuntime({
         pageKey: application.pageKey,
         ...(subject === undefined ? {} : { pageRecordId: subject.recordId }),
       },
+      prepareRefresh: (bindingId: string) => prepareRefreshRef.current(bindingId),
       pageInputs: () => {
         const search = new URLSearchParams(window.location.search);
         const parameters: Record<string, string | string[]> = {};
@@ -306,18 +310,16 @@ export function useFlowRuntime({
         if (placementId.toLowerCase() === form.formId.toLowerCase())
           events.form_submit = (event: ControlSemanticEvent) => {
             if (event.event !== "form_submit") return;
+            const values = event.readValues();
             const answer = formContinuationAnswerSchema.safeParse({
               kind: "submit",
-              values: event.values,
+              values,
             });
             if (!answer.success || answer.data.kind !== "submit") {
               showPageMessage(unavailableNotice);
               return;
             }
-            controls.submit(
-              answer.data.values,
-              choiceEvidenceFor(form.formId, event.values, "dialog"),
-            );
+            controls.submit(answer.data.values, choiceEvidenceFor(form.formId, values, "dialog"));
           };
         else if (isReferenceChoice)
           events.choices_requested = (event: ControlSemanticEvent) => {
@@ -374,8 +376,6 @@ export function useFlowRuntime({
     },
     [choiceEvidenceFor, choicePayloadFor, currentData, model, navigation, resolvePageHref, router],
   );
-  const committedRef = useRef(committed);
-  committedRef.current = committed;
   const messageActionRef = useRef<(message: FlowMessageIntent) => void>(() => undefined);
   const {
     host,
@@ -395,6 +395,13 @@ export function useFlowRuntime({
         controlId: string;
         concurrency: ComponentFlowBinding["settings"]["concurrency"];
         condition: ComponentFlowBinding["settings"]["condition"];
+        debounceMs: number;
+        exclusive: ComponentFlowBinding["settings"]["exclusive"];
+        timeoutMs: number | null;
+        event: string;
+        flowName: string;
+        controlName: string;
+        formId?: string;
       }
     >(
       Object.values(model.bindings).flatMap((items) =>
@@ -406,6 +413,13 @@ export function useFlowRuntime({
                 controlId: binding.controlId,
                 concurrency: binding.settings.concurrency,
                 condition: binding.settings.condition,
+                debounceMs: binding.settings.debounceMs,
+                exclusive: binding.settings.exclusive,
+                timeoutMs: binding.settings.timeoutMs,
+                event: binding.event,
+                flowName: binding.flowName,
+                controlName: binding.controlName,
+                ...(binding.formId === undefined ? {} : { formId: binding.formId }),
               },
             ] as const,
         ),
@@ -440,7 +454,6 @@ export function useFlowRuntime({
         browserBinding: browserBindings,
         ...(subject === undefined ? {} : { subject }),
         ...(application.flowTimeZone === undefined ? {} : { timeZone: application.flowTimeZone }),
-        committed: (bindingId) => committedRef.current(bindingId),
       }),
     [
       application.flowTimeZone,
@@ -491,7 +504,6 @@ export function useFlowRuntime({
         bindingSettings,
         begin: beginSubmission,
         ...(application.flowTimeZone === undefined ? {} : { timeZone: application.flowTimeZone }),
-        committed: (bindingId) => committedRef.current(bindingId),
       }),
     [application.flowTimeZone, beginSubmission, bindingSettings, webMcpClient, host, runtimeState],
   );

@@ -226,7 +226,7 @@ export type FlowBindingEndpointResult = (
   /** Unknown, not installed, foreign, expired or not permitted: one neutral result. */
   | Readonly<{ kind: "refused"; reason?: "this step was already answered" }>
 ) &
-  Readonly<{ committedNow: boolean }>;
+  Readonly<{ committedNow: boolean; replayedCommitted?: true }>;
 
 const refused: FlowBindingEndpointResult = Object.freeze({ kind: "refused", committedNow: false });
 
@@ -628,6 +628,7 @@ const finishedResult = (
   return {
     kind: "result",
     committedNow: response.committedNow,
+    ...(response.replayedCommitted === true ? { replayedCommitted: true as const } : {}),
     warnings: response.warnings,
     runId: response.runId,
     descriptor,
@@ -722,6 +723,7 @@ const toResult = (
       return {
         kind: "intent",
         committedNow: response.committedNow,
+        ...(response.replayedCommitted === true ? { replayedCommitted: true as const } : {}),
         runId: response.runId,
         awaiting: response.awaiting,
         intents: response.intents,
@@ -763,6 +765,7 @@ const continuationResult = (
       return {
         kind: "result",
         committedNow: outcome.committedNow,
+        ...(outcome.replayedCommitted === true ? { replayedCommitted: true as const } : {}),
         warnings: outcome.warnings,
         runId: outcome.runId,
         descriptor: outcome.presentation,
@@ -784,6 +787,7 @@ const continuationResult = (
       return {
         kind: "intent",
         committedNow: outcome.committedNow,
+        ...(outcome.replayedCommitted === true ? { replayedCommitted: true as const } : {}),
         runId: outcome.runId,
         awaiting: outcome.target.awaiting,
         intents: outcome.intents as SafeIntents,
