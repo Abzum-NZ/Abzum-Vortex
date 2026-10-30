@@ -181,6 +181,7 @@ const correctionsFor = (
   }>[],
   readableFieldIds: ReadonlySet<string>,
   operation: "create" | "update",
+  submittedFieldIds: ReadonlySet<string>,
 ): readonly RecordSaveFieldCorrection[] | undefined => {
   const corrections = new Map<string, RecordSaveFieldCorrection>();
   for (const issue of issues) {
@@ -188,11 +189,14 @@ const correctionsFor = (
     const code = correctionCode(issue.code);
     // A create has no readable bounds before the row exists, and the caller is shown the whole
     // form, so naming a required field whose value is missing, or a value the person submitted,
-    // discloses nothing new.
+    // discloses nothing new. A BeforeSave rule's issue carries the path ["rules"], so a rule that
+    // refuses a field the person filled in is told apart by the field id.
     const visible =
       readableFieldIds.has(issue.fieldId) ||
       (operation === "create" &&
-        (code === "required_value" || issue.path[0] === "submittedValues"));
+        (code === "required_value" ||
+          issue.path[0] === "submittedValues" ||
+          (issue.code === beforeSaveRuleRefusedIssueCode && submittedFieldIds.has(issue.fieldId))));
     if (!visible) return undefined;
     // The nested path is whatever follows the field id, wherever the issue's path root puts it.
     const fieldPosition = issue.path.indexOf(issue.fieldId);
@@ -628,6 +632,7 @@ export const finalizeCalculatedValues = async (
         })),
       prepared.readableFieldIds,
       command.operation,
+      new Set(Object.keys(command.submittedValues)),
     );
     if (corrections === undefined || corrections.length === 0) {
       // A rule's authored refusal is the one reason safe to show; every other cause stays in the log.
