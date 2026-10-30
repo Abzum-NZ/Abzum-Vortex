@@ -9,6 +9,7 @@ import {
   type FieldInputControlReleaseMap,
   type createPlatformComponentRegistryForReleases,
   PagePuckRenderer,
+  scopeFlowRuntimeForms,
   UnsavedWorkProvider,
   useFlowIntentHost,
   type ControlSemanticEvent,
@@ -229,6 +230,19 @@ export function useFlowRuntime({
     }),
     [basePath, model.pages, resolvePageHref, router, showPageMessage, startPageChange, unsavedWork],
   );
+  // A dialog's form registers in its own scope: the form's placement and the dialog's run.
+  const dialogStatesRef = useRef(new Map<string, FlowRuntimeState>());
+  const dialogState = useCallback(
+    (form: FlowFormIntent): FlowRuntimeState => {
+      const scope = `dialog:${form.formId}:${form.taskId}`;
+      const held = dialogStatesRef.current.get(scope);
+      if (held !== undefined) return held;
+      const created = scopeFlowRuntimeForms(runtimeState, scope);
+      dialogStatesRef.current.set(scope, created);
+      return created;
+    },
+    [runtimeState],
+  );
   const renderForm = useCallback(
     (
       form: FlowFormIntent,
@@ -356,6 +370,7 @@ export function useFlowRuntime({
                   resolvePageHref={resolvePageHref}
                   currentPageId={model.pageId}
                   runtimeInputs={scopedInputs}
+                  runtimeState={dialogState(form)}
                 />
               </UnsavedWorkProvider>
               <DialogFooter>
@@ -374,7 +389,16 @@ export function useFlowRuntime({
         ),
       };
     },
-    [choiceEvidenceFor, choicePayloadFor, currentData, model, navigation, resolvePageHref, router],
+    [
+      choiceEvidenceFor,
+      choicePayloadFor,
+      currentData,
+      dialogState,
+      model,
+      navigation,
+      resolvePageHref,
+      router,
+    ],
   );
   const messageActionRef = useRef<(message: FlowMessageIntent) => void>(() => undefined);
   const {

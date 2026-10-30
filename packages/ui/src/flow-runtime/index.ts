@@ -15,6 +15,7 @@ export {
 export {
   createFlowRuntime,
   createFlowRuntimeState,
+  scopeFlowRuntimeForms,
   type FlowBindingReference,
   type PlacementFlowBinding,
   type FlowRuntime,

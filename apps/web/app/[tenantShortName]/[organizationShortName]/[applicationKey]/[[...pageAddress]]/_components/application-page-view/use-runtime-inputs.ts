@@ -773,24 +773,6 @@ export function useRuntimeInputs({
                         !Object.hasOwn(baseline, name) || !equalFormValue(value, baseline[name]),
                     ),
                   );
-            const recordSubmission =
-              submitBinding.savesFormValues &&
-              submitBinding.callerInputs.every((name) => name === "values" || name === "record");
-            if (
-              baseline !== undefined &&
-              recordSubmission &&
-              Object.keys(recordValues).length === 0
-            ) {
-              showPageMessage(undefined);
-              runtimeState.messages.show({
-                id: crypto.randomUUID(),
-                target: "inline",
-                component: placementId,
-                severity: "success",
-                text: "No changes to save.",
-              });
-              return;
-            }
             const choiceEvidence = choiceEvidenceFor(placementId, values);
             submittedFormsRef.current.set(submitBinding.bindingId, {
               formId: placementId,

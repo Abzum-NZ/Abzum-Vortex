@@ -1,12 +1,14 @@
 import {
-  isPageParameterName,
+  defaultNewDialogFlowSource,
+  sourceItemTree,
   sourcePageItems,
   type ApplicationSourceDocument,
   type RecordsTableBoardMode,
-  type SourceFlow,
+  type SourceItem,
 } from "@vortex/platform/schema";
 import { applyStudioFlowCreate } from "./application-flow-create";
-import { companions } from "./application-record-pages";
+import { companions, placed } from "./application-record-pages";
+import { takenIds } from "./application-record-page-kinds";
 
 type QuickAddResult =
   | Readonly<{ kind: "applied"; source: ApplicationSourceDocument }>
@@ -14,31 +16,25 @@ type QuickAddResult =
 
 /** The flow input that carries the column's stage. */
 const stageInputName = "stage";
-const stageValue = `{{ inputs.${stageInputName} }}`;
 
-type NavigateProperties = Record<string, unknown> & {
-  page?: { kind?: unknown; literal?: { value?: unknown } };
-  parameters?: { kind?: unknown; entries?: Record<string, unknown> };
-};
+const formContainerType = "platform.renderer.form_container";
 
-/** The one Navigate task of a flow that only opens this page, if the flow is one. */
-const openPageTask = (flow: SourceFlow, pageKey: string): NavigateProperties | undefined => {
-  if (flow.execution !== "interactive" || flow.recordInput !== undefined || flow.tasks.length !== 1)
-    return undefined;
-  const task = flow.tasks[0] as { type?: unknown; properties?: NavigateProperties };
-  const page = task.properties?.page;
-  return task.type === "interface.navigate" &&
-    page?.kind === "literal" &&
-    page.literal?.value === pageKey
-    ? task.properties
-    : undefined;
+/** A fresh alias for a copied placement, unique among every id of the draft. */
+const freshId = (base: string, taken: Set<string>): string => {
+  for (let n = 1; ; n += 1) {
+    const candidate = n === 1 ? base : `${base}_${n}`;
+    if (!taken.has(candidate)) {
+      taken.add(candidate);
+      return candidate;
+    }
+  }
 };
 
 /**
- * Quick add on a board: each column a new record may start in opens the record type's existing
- * create form with that stage chosen. The create form's stage input publishes the page parameter,
- * and the one flow that opens the create form takes the stage as an optional input and is bound to
- * the board's card additions; when the draft has no such flow, one is made. Everything is ordinary
+ * Quick add on a board: each column a new record may start in opens a small form in a dialog with
+ * that stage chosen, and the form's answers create the card. The dialog form is a copy of the
+ * record type's create form fields, placed beside the board and hidden from the page itself; the
+ * one default flow shows it, saves the record, says "Saved" and refreshes. Everything is ordinary
  * source, edited like any other; the binding stays when quick add is switched off and is reused
  * when it is switched on. Nothing already authored is overwritten: a conflict is refused.
  */
@@ -58,15 +54,35 @@ export const ensureStudioBoardQuickAdd = (
   const columnField = board.columnField;
   const separator = columnField.lastIndexOf(".");
   const recordType = columnField.slice(0, separator);
+  const stageFieldKey = columnField.slice(separator + 1);
   const create = companions(source, recordType).create;
   if (create === undefined)
     return {
       kind: "refused",
       reason:
-        "Adding from a column opens the create form of this record type, and it has none yet. Add a create form first.",
+        "Adding from a column shows the fields of the create form of this record type in a dialog, and it has none yet. Add a create form first.",
     };
-  const items = sourcePageItems(create.composition);
-  const stageInput = items.find(
+  const createForm = sourcePageItems(create.composition).find(
+    (item) => item.type === formContainerType,
+  );
+  if (createForm === undefined)
+    return {
+      kind: "refused",
+      reason: `The create form ${create.name} has no form to copy. Add its form first.`,
+    };
+  const modules = source.body.modules;
+  const record = modules
+    .flatMap((module) => module.record_types.map((entry) => ({ module, entry })))
+    .find(({ module, entry }) => `${module.key}:${entry.key}` === recordType)?.entry;
+  if (record?.ownership_mode === "group")
+    return {
+      kind: "refused",
+      reason: `${record.name} records belong to a Group the person chooses, so a column cannot add them in a dialog. Use the create form.`,
+    };
+  const fieldInputs = sourceItemTree([createForm]).filter(
+    (item) => item !== createForm && typeof item.props["field"] === "string",
+  );
+  const stageInput = fieldInputs.find(
     (item) =>
       typeof item.props["field"] === "string" &&
       item.props["field"].toLowerCase() === columnField.toLowerCase(),
@@ -77,127 +93,62 @@ export const ensureStudioBoardQuickAdd = (
       reason: `The create form ${create.name} has no input for the board's stage field. Add it to the form first.`,
     };
 
-  // The stage input publishes the page parameter the flow fills: the one it already publishes, or
-  // one named after the stage field that no other input of the form publishes.
-  const stageLabel =
-    typeof stageInput.props["label"] === "string" ? stageInput.props["label"] : "Stage";
-  const published = stageInput.props["publishes_parameter"];
-  const parameter =
-    typeof published === "string"
-      ? published
-      : columnField
-          .slice(separator + 1)
-          .toLowerCase()
-          .slice(0, 40);
-  if (typeof published !== "string") {
-    if (!isPageParameterName(parameter))
-      return {
-        kind: "refused",
-        reason: `The stage field's name cannot be a page address name, so ${create.name} cannot take the column's stage. Make its stage input publish a page parameter first.`,
-      };
-    if (
-      items.some((item) => item !== stageInput && item.props["publishes_parameter"] === parameter)
-    )
-      return {
-        kind: "refused",
-        reason: `Another input of ${create.name} already uses the address value needed by ${stageLabel}. Give ${stageLabel} its own address value first.`,
-      };
-  }
-
   const candidate = structuredClone(source);
-  if (typeof published !== "string") {
-    const candidateInput = sourcePageItems(
-      candidate.body.pages.find((page) => page.id === create.id)!.composition,
-    ).find((item) => item.props.id === stageInput.props.id)!;
-    candidateInput.props["publishes_parameter"] = parameter;
-  }
+  const holder = placed(candidate, controlAlias);
+  if (holder === undefined)
+    return { kind: "refused", reason: "The board is no longer on the page." };
 
-  // The flow that opens the create form also opens it from a column: it takes the stage as an
-  // optional input, so a control that opens the form without a stage keeps working.
-  const opening = candidate.body.flows.find((flow) => openPageTask(flow, create.key) !== undefined);
-  if (opening !== undefined) {
-    const properties = openPageTask(opening, create.key)!;
-    const declared = opening.inputs[stageInputName];
-    if (declared !== undefined && declared.type !== "text")
-      return {
-        kind: "refused",
-        reason: `The flow ${opening.labels.name} already has an input for ${stageLabel} that is not text. Rename that input, then add from a column.`,
-      };
-    if (
-      Object.entries(opening.inputs).some(
-        ([name, input]) => name !== stageInputName && input.required,
-      )
-    )
-      return {
-        kind: "refused",
-        reason: `The flow ${opening.labels.name} needs inputs a column cannot give. Make them optional, then add from a column.`,
-      };
-    const parameters = properties.parameters;
-    if (parameters !== undefined && parameters.kind !== "map")
-      return {
-        kind: "refused",
-        reason: `The flow ${opening.labels.name} fills the page parameters of ${create.name} another way. Fill them one by one, then add from a column.`,
-      };
-    const filled = parameters?.entries?.[parameter];
-    if (filled !== undefined && filled !== stageValue)
-      return {
-        kind: "refused",
-        reason: `The flow ${opening.labels.name} already fills ${stageLabel} with another value. Change it to the column's stage, then add from a column.`,
-      };
-    if (declared === undefined)
-      opening.inputs[stageInputName] = {
-        type: "text",
-        required: false,
-      } as SourceFlow["inputs"][string];
-    if (filled === undefined)
-      properties.parameters = {
-        kind: "map",
-        entries: { ...parameters?.entries, [parameter]: stageValue },
-      };
-    const bound = applyStudioFlowCreate(
-      candidate,
-      {
-        kind: "bind",
-        controlAlias,
-        event: "card_added",
-        flowKey: opening.key,
-        bindingInputs: { [stageInputName]: { kind: "caller", name: "value" } },
-      },
-      null,
-    );
-    return bound.kind === "applied"
-      ? { kind: "applied", source: bound.source }
-      : { kind: "refused", reason: bound.reason };
+  // The dialog form: the create form's field inputs, hidden on the page, each named by its field.
+  const taken = takenIds(candidate);
+  const formAlias = freshId(`${controlAlias}_quick_add_form`, taken);
+  const copy = structuredClone(createForm) as SourceItem;
+  copy.props.id = formAlias;
+  copy.props.title = `New ${record?.name.toLowerCase() ?? "card"}`.slice(0, 120);
+  const vortex = copy.props.vortex as {
+    responsive?: { desktop?: Record<string, unknown> };
+  };
+  vortex.responsive = {
+    ...vortex.responsive,
+    desktop: { ...vortex.responsive?.desktop, visible: false },
+  };
+  copy.props.content = (copy.props.content as SourceItem[]).filter(
+    (item) => typeof item.props["field"] === "string",
+  );
+  for (const item of sourceItemTree([copy])) {
+    if (item === copy) continue;
+    item.props.id = freshId(`${formAlias}_${String(item.props.id)}`, taken);
+    const field = String(item.props["field"]);
+    item.props["name"] = field.slice(field.lastIndexOf(".") + 1);
+    // The dialog is not a page: its inputs never publish an address value.
+    delete item.props["publishes_parameter"];
   }
+  holder.siblings.splice(holder.siblings.indexOf(holder.item) + 1, 0, copy);
 
-  const flow = applyStudioFlowCreate(
+  const flow = defaultNewDialogFlowSource({
+    id: "quick_add",
+    key: "quick_add",
+    recordType,
+    ownershipMode: (record?.ownership_mode ?? "none") as
+      "none" | "organization_account" | "inherited",
+    form: formAlias,
+    prefill: { input: stageInputName, field: stageFieldKey },
+  });
+  const made = applyStudioFlowCreate(
     candidate,
     {
       kind: "control",
       controlAlias,
       event: "card_added",
-      name: `Open ${create.name}`,
-      description: `Opens ${create.name}, with the stage chosen when one is given.`,
-      inputs: {
-        [stageInputName]: { type: "text", required: false },
-      } as unknown as SourceFlow["inputs"],
-      tasks: [
-        {
-          id: "open_page",
-          type: "interface.navigate",
-          version: "1.0.0",
-          properties: {
-            page: { kind: "literal", literal: { type: "text", value: create.key } },
-            parameters: { kind: "map", entries: { [parameter]: stageValue } },
-          },
-        },
-      ] as unknown as SourceFlow["tasks"],
-      outputs: {},
+      name: `Add ${record?.name.toLowerCase() ?? "card"} from a column`,
+      description: `Asks for the ${record?.name.toLowerCase() ?? "card"} in a dialog, with the stage of the column chosen, and creates it.`,
+      inputs: flow.inputs,
+      tasks: flow.tasks,
+      outputs: flow.outputs,
       bindingInputs: { [stageInputName]: { kind: "caller", name: "value" } },
     },
     null,
   );
-  return flow.kind === "applied"
-    ? { kind: "applied", source: flow.source }
-    : { kind: "refused", reason: flow.reason };
+  return made.kind === "applied"
+    ? { kind: "applied", source: made.source }
+    : { kind: "refused", reason: made.reason };
 };
