@@ -76,10 +76,9 @@ import { openFlowCarriedValues, sealFlowCarriedValues } from "../workflows/flow-
 import { createInstalledContextLoader } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
 import { installedNamedActionDescriptors, installedNamedActions } from "./installed-named-actions";
-import { runtimeContextSelection } from "./runtime-preview";
 import { createProtectedOperationExecutor } from "./protected-operation-executor";
 import type { ApplicationStoreService } from "./installation-application-store";
-import { createViewerSafeRecordLinkService } from "./viewer-safe-record-link";
+import { createViewerSafeRecordLinkService, type FlowPinTarget } from "./viewer-safe-record-link";
 import type { QueryContinuationKey } from "../queries/continuation-token";
 import {
   createFlowBindingEndpoint,
@@ -91,7 +90,10 @@ type ProjectedFormField = Readonly<{
   fieldKey: string;
   command: RecordReferenceChoiceCommand;
 }>;
-type ProjectedForm = Readonly<{ fields: ReadonlyMap<string, ProjectedFormField> }>;
+type ProjectedForm = Readonly<{
+  fields: ReadonlyMap<string, ProjectedFormField>;
+  projectedPage?: Readonly<Record<string, unknown>>;
+}>;
 type GuidedControl = Readonly<{
   pageKey: string;
   pageId: string;
@@ -115,7 +117,6 @@ type GuidedInvocationPage = Readonly<{
     computedStepId: string;
     values: Readonly<Record<string, JsonValue>>;
   }>;
-  invocation: Readonly<{ installationRevision: number; releaseKey: string }>;
   subject?: Readonly<{ recordId: string; revision: number }>;
   bindings: Readonly<Record<string, readonly Readonly<{ event: string; bindingId: string }>[]>>;
 }>;
@@ -133,6 +134,7 @@ export type FlowControlOptionRequest = Readonly<{
 }>;
 
 export type InvocationDependencies = Readonly<{
+  boundRequest?: BoundHumanOrganizationRequest;
   authorityId: IdentityAuthorityId;
   /** The application catalogue's install and upgrade journeys, run under the initiator's authority. */
   applicationStore: ApplicationStoreService;
@@ -194,6 +196,7 @@ export type InvocationDependencies = Readonly<{
       modules: readonly ModuleDefinitionConsumerReadResult[];
       formId: string;
       projectedFields: ReadonlyMap<string, ProjectedFormField>;
+      sequential?: boolean;
       values: unknown;
       evidence?: unknown;
     }>,
@@ -288,6 +291,7 @@ export async function invokeInstalledFlow(
     identityAuthorityId: authorityId,
     telemetry,
     channel: dependencies.channel,
+    ...(dependencies.boundRequest === undefined ? {} : { boundRequest: dependencies.boundRequest }),
   };
   const requests = createHumanOrganizationRequestService({
     ...requestDependencies,
@@ -428,6 +432,7 @@ export async function invokeInstalledFlow(
     runId: string | undefined,
     installation: InstalledFlowBindings,
     boundRequest?: BoundHumanOrganizationRequest,
+    pin?: Readonly<{ target: FlowPinTarget; storedTargetResume: boolean }>,
   ): FlowOrchestratorDependencies => {
     const scopedDependencies = {
       ...requestDependencies,
@@ -443,21 +448,21 @@ export async function invokeInstalledFlow(
       requests: requestDependencies,
       continuationKey: dependencies.continuationKey,
       invocation,
+      ...(dependencies.boundRequest === undefined || address.installedContext === undefined
+        ? {}
+        : {
+            boundContext: { request: dependencies.boundRequest, context: address.installedContext },
+          }),
       installationOf: installedFlowBindings,
       pageAccess: async (context, bound) => {
-        const page = context.releaseSet.application.content.pages.find(
-          (candidate) => candidate.key === body.pageKey,
-        );
-        if (page === undefined) return false;
-        const capability = createStoredPageCapabilityService({
-          ...requestDependencies,
-          context,
-          permissions: dependencies.releaseCatalogue.permissions,
-          selection: { pageId: String(page.pageId) },
-        });
-        return (
-          (await capability.projectInTransaction(bound.transaction, bound.scope)) !== undefined
-        );
+        const binding =
+          invocation.kind === "binding"
+            ? context.releaseSet.application.content.flowBindings.find((candidate) =>
+                sameId(candidate.bindingId, invocation.bindingId),
+              )
+            : undefined;
+        if (invocation.kind === "binding" && binding === undefined) return false;
+        return gateBindingToAddressedPage(context, binding?.controlId, bound);
       },
       pageGate: async (context, binding, bound, currentInstallation, state) => {
         if (!(await gateBindingToAddressedPage(context, binding.controlId, bound))) return false;
@@ -496,12 +501,13 @@ export async function invokeInstalledFlow(
           state,
         );
       },
+      bindPin: (bound, input) => recordPinService.bindFlowPinInRequest(bound.transaction, input),
       portsFor: dependenciesFor,
     };
     return {
       continuationKey: dependencies.continuationKey,
-      admitSegment: (run, state, segment, execute) =>
-        admitFlowSegment(admissionHost, installation, run, state, segment, execute),
+      admitSegment: (run, state, segment, execute, entry) =>
+        admitFlowSegment(admissionHost, installation, run, state, segment, execute, entry),
       admitContinuation: (run, state, execute, openReplay) =>
         admitFlowContinuation(admissionHost, installation, run, state, execute, openReplay),
       admitPageStart: (run, state) => admitFlowPageStart(admissionHost, installation, run, state),
@@ -547,6 +553,7 @@ export async function invokeInstalledFlow(
         identityId: identity.session.identityId,
       }),
       recordPins: {
+        storedTargetResume: pin?.storedTargetResume === true,
         acquireIdentity: async (session, selection, selector) => {
           if (
             canonicalJson(session) !== canonicalJson(identity.session) ||
@@ -595,6 +602,8 @@ export async function invokeInstalledFlow(
             );
           });
           if (checked.kind !== "available" || !checked.value) return { outcome: "unavailable" };
+          if (pin !== undefined && runId !== undefined)
+            return recordPinService.acquireFlowPin(session, selection, runId, pin.target);
           if (boundRequest === undefined)
             return recordPinService.acquireIdentity(session, selection, selector);
           if (selector.applicationKey !== address.application.key)
@@ -934,7 +943,7 @@ export async function invokeInstalledFlow(
     const installed = await readInstalled(session, selection);
     if (installed === undefined) {
       logFlowRefusal("FORM_CONTINUATION_INSTALLATION_NOT_CURRENT");
-      return { kind: "refused", reason: "unavailable" } as const;
+      return { kind: "refused", reason: "unavailable", committedNow: false } as const;
     }
     const release: FlowRelease = {
       releaseKey: installed.releaseKey,
@@ -975,7 +984,7 @@ export async function invokeInstalledFlow(
     if (request.target.awaiting !== "form") {
       if (answer.kind !== "submit") return formContinuation.continue(session, selection, request);
       logFlowRefusal("FORM_CONTINUATION_SUBMIT_WITHOUT_FORM_PAUSE");
-      return { kind: "refused", reason: "unavailable" };
+      return { kind: "refused", reason: "unavailable", committedNow: false };
     }
 
     const trustedFormId = request.target.formId;
@@ -989,7 +998,7 @@ export async function invokeInstalledFlow(
       })
     ) {
       logFlowRefusal("FORM_CONTINUATION_TARGET_NOT_CURRENT");
-      return { kind: "refused", reason: "unavailable" };
+      return { kind: "refused", reason: "unavailable", committedNow: false };
     }
     if (
       installed.applicationContent === undefined ||
@@ -997,7 +1006,7 @@ export async function invokeInstalledFlow(
       !dependencies.hasAuthoredForm(installed.applicationContent, trustedFormId)
     ) {
       logFlowRefusal("FORM_CONTINUATION_FORM_NOT_AUTHORED");
-      return { kind: "refused", reason: "unavailable" };
+      return { kind: "refused", reason: "unavailable", committedNow: false };
     }
     const projectedForm = await dependencies.projectForm(session, {
       installationRevision: installed.installationRevision,
@@ -1006,7 +1015,7 @@ export async function invokeInstalledFlow(
     });
     if (projectedForm === undefined) {
       logFlowRefusal("FORM_CONTINUATION_FORM_NOT_PROJECTED");
-      return { kind: "refused", reason: "unavailable" };
+      return { kind: "refused", reason: "unavailable", committedNow: false };
     }
     if (answer.kind !== "submit") return formContinuation.continue(session, selection, request);
     const values = await dependencies.resolveFormValues({
@@ -1017,12 +1026,13 @@ export async function invokeInstalledFlow(
       modules: installed.modules,
       formId: trustedFormId,
       projectedFields: projectedForm.fields,
+      ...(dependencies.boundRequest === undefined ? {} : { sequential: true }),
       values: answer.values,
       ...(answer.choiceEvidence === undefined ? {} : { evidence: answer.choiceEvidence }),
     });
     if (values === undefined) {
       logFlowRefusal("FORM_CONTINUATION_VALUES_NOT_RESOLVED");
-      return { kind: "refused", reason: "unavailable" };
+      return { kind: "refused", reason: "unavailable", committedNow: false };
     }
     return formContinuation.continue(session, selection, {
       ...request,
@@ -1044,8 +1054,8 @@ export async function invokeInstalledFlow(
    */
   const gateBindingToAddressedPage = async (
     context: InstalledRuntimeContext,
-    controlId: string,
-    bound?: BoundHumanOrganizationRequest,
+    controlId: string | undefined,
+    bound: BoundHumanOrganizationRequest,
   ): Promise<boolean> => {
     const page = context.releaseSet.application.content.pages.find(
       (candidate) => candidate.key === body.pageKey,
@@ -1066,7 +1076,6 @@ export async function invokeInstalledFlow(
       },
     });
     if (
-      bound !== undefined &&
       admittedProjection !== undefined &&
       (admittedProjection.accessVersion !== bound.scope.accessVersion ||
         admittedProjection.installationRevision !== context.applicationReleaseRevision)
@@ -1075,25 +1084,20 @@ export async function invokeInstalledFlow(
       return false;
     }
     const projected =
-      bound === undefined
-        ? await capability.project(identity.session, runtimeContextSelection(context))
-        : {
-            kind: "available" as const,
-            value:
-              admittedProjection?.page ??
-              (await capability.projectInTransaction(bound.transaction, bound.scope)),
-          };
-    if (projected.kind !== "available" || projected.value === undefined) {
-      logFlowRefusal(`BINDING_CONTROL_NOT_ON_PAGE page_projection_${projected.kind}`);
+      admittedProjection?.page ??
+      (await capability.projectInTransaction(bound.transaction, bound.scope));
+    if (projected === undefined) {
+      logFlowRefusal("BINDING_CONTROL_NOT_ON_PAGE page_projection_unavailable");
       return false;
     }
-    if (bound !== undefined && admittedProjection === undefined)
+    if (admittedProjection === undefined)
       admittedProjection = {
         accessVersion: bound.scope.accessVersion,
         installationRevision: context.applicationReleaseRevision,
-        page: projected.value,
+        page: projected,
       };
-    const gate = requireProjectedPlacement(projected.value, controlId);
+    if (controlId === undefined) return true;
+    const gate = requireProjectedPlacement(projected, controlId);
     if (gate.kind === "refused") {
       logFlowRefusal(`BINDING_CONTROL_NOT_ON_PAGE ${gate.reason}`);
       return false;
@@ -1118,14 +1122,15 @@ export async function invokeInstalledFlow(
   if (invocation.kind === "binding") {
     if (bindingContext === undefined || bindingInstallation === undefined) {
       logFlowRefusal("BINDING_INSTALLATION_NOT_CURRENT");
-      return { kind: "refused" };
+      return { kind: "refused", committedNow: false };
     }
     if (invocation.segment !== undefined) {
       const plan = bindingInstallation.plans.get(String(invocation.flowId));
       const segment = plan?.segments.find(
         (part) => part.kind === "server" && part.id === invocation.segment?.segmentId,
       );
-      if (segment === undefined || segment.kind !== "server") return { kind: "refused" };
+      if (segment === undefined || segment.kind !== "server")
+        return { kind: "refused", committedNow: false };
       try {
         openFlowCarriedValues(
           invocation.carriedValues,
@@ -1141,7 +1146,7 @@ export async function invokeInstalledFlow(
         );
       } catch (error) {
         logFlowRefusal(`BINDING_CARRIED_VALUES_INVALID ${describeFailure(error)}`);
-        return { kind: "refused" };
+        return { kind: "refused", committedNow: false };
       }
     }
     const binding = bindingsWithMessageActions(bindingInstallation.bindings, [
@@ -1149,13 +1154,6 @@ export async function invokeInstalledFlow(
     ]).find(
       (candidate) => candidate.bindingId.toLowerCase() === invocation.bindingId.toLowerCase(),
     );
-    // The control must be on the addressed page as projected for this person now: a binding of
-    // another page, or of a control a visibility condition or permission removed for them, never
-    // runs from this page's address.
-    if (binding !== undefined) {
-      if (!(await gateBindingToAddressedPage(bindingContext, binding.controlId)))
-        return { kind: "refused" };
-    }
     const guided =
       binding === undefined ? undefined : guidedControls.get(binding.controlId.toLowerCase());
     if (
@@ -1163,7 +1161,7 @@ export async function invokeInstalledFlow(
       (guided === null || !guided.summary || binding?.event !== "form_submit")
     ) {
       logFlowRefusal("BINDING_GUIDED_CONTROL_NOT_CONFIRMED");
-      return { kind: "refused" };
+      return { kind: "refused", committedNow: false };
     }
     // A Records table row, bulk or inline-edit command runs only for a command the installed
     // placement declares (a grid feature only while it is on) and rows the viewer may use now.
@@ -1180,7 +1178,7 @@ export async function invokeInstalledFlow(
     if (featureRefusal !== undefined) {
       logRecordsTableRequestRefusal(featureRefusal, "flow_dispatch");
       logFlowRefusal("BINDING_GRID_FEATURE_NOT_PROJECTED");
-      return { kind: "refused" };
+      return { kind: "refused", committedNow: false };
     }
   }
 
@@ -1261,6 +1259,17 @@ export async function invokeInstalledFlow(
           ...(subject === undefined ? {} : { subjectRecordId: subject.recordId }),
         });
         if (projectedForm === undefined) return undefined;
+        if (
+          dependencies.boundRequest !== undefined &&
+          projectedForm.projectedPage !== undefined &&
+          subject?.recordId === body.pageRecordId &&
+          admittedProjection === undefined
+        )
+          admittedProjection = {
+            accessVersion: dependencies.boundRequest.scope.accessVersion,
+            installationRevision: installation.installationRevision,
+            page: projectedForm.projectedPage,
+          };
         const resolvedValues = await dependencies.resolveFormValues({
           service: referenceChoices,
           session: identity.session,
@@ -1269,6 +1278,7 @@ export async function invokeInstalledFlow(
           modules: installation.modules,
           formId: binding.controlId,
           projectedFields: projectedForm.fields,
+          ...(dependencies.boundRequest === undefined ? {} : { sequential: true }),
           values,
           ...(callerInputs.choiceEvidence === undefined
             ? {}

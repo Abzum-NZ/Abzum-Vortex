@@ -5,6 +5,7 @@ import {
   createReferenceChoiceService,
   projectReferenceChoiceInputValues,
   readyControlData,
+  type BoundHumanOrganizationRequest,
 } from "@vortex/platform/server";
 import type {
   IdentitySession,
@@ -61,16 +62,22 @@ export const loadProjectedReferenceChoiceForm = async (
     formId: string;
     subjectRecordId?: string;
   }>,
-): Promise<ProjectedReferenceChoiceForm | undefined> => {
+  bound?: BoundHumanOrganizationRequest,
+): Promise<
+  | (ProjectedReferenceChoiceForm & Readonly<{ projectedPage?: Readonly<Record<string, unknown>> }>)
+  | undefined
+> => {
   try {
-    const projected = await projectReferenceChoicePage(session, address, request);
-    return projected.kind === "available"
-      ? projectedReferenceChoiceForm(
-          projected.page,
-          projected.context.releaseSet.modules,
-          request.formId,
-        )
-      : undefined;
+    const projected = await projectReferenceChoicePage(session, address, request, bound);
+    if (projected.kind !== "available") return undefined;
+    const form = projectedReferenceChoiceForm(
+      projected.page,
+      projected.context.releaseSet.modules,
+      request.formId,
+    );
+    return form === undefined
+      ? undefined
+      : { ...form, ...(bound === undefined ? {} : { projectedPage: projected.rawPage }) };
   } catch (cause) {
     logRefusal("reference-choices", "project form", "reference_choice_form_unavailable", cause);
     return undefined;

@@ -13,6 +13,12 @@ import {
 import { iterationKey } from "../rules/flow-interpreter-state";
 import type { FlowBindingInvocation } from "../workflows/flow-invocation-contracts";
 import { startFlow } from "../workflows/start";
+import {
+  viewerSafeRecordPinSelectorSchema,
+  type ViewerSafeRecordPinSelector,
+} from "../records/record-links";
+import { carriesSensitive } from "./flow-orchestrator-support";
+import type { FlowPinTarget } from "./viewer-safe-record-link";
 import { openFlowCarriedValues } from "../workflows/flow-carried-values";
 import type { QueryContinuationKey } from "../queries/continuation-token";
 import { canonicalJson } from "./canonical-json";
@@ -28,6 +34,10 @@ export type AdmissionHost = Readonly<{
   requests: HumanOrganizationRequestDependencies;
   continuationKey: QueryContinuationKey;
   invocation: FlowBindingInvocation;
+  boundContext?: Readonly<{
+    request: BoundHumanOrganizationRequest;
+    context: InstalledRuntimeContext;
+  }>;
   installationOf: (context: InstalledRuntimeContext) => InstalledFlowBindings;
   pageAccess: (
     context: InstalledRuntimeContext,
@@ -40,11 +50,23 @@ export type AdmissionHost = Readonly<{
     installation: InstalledFlowBindings,
     state: FlowRunState,
   ) => Promise<boolean>;
+  bindPin: (
+    bound: BoundHumanOrganizationRequest,
+    input: Readonly<{
+      commandId: string;
+      runId: string;
+      taskPath: string;
+      iteration: string;
+      selector: ViewerSafeRecordPinSelector;
+      replay: boolean;
+    }>,
+  ) => Promise<FlowPinTarget | undefined>;
   portsFor: (
     release: FlowRelease,
     runId: string,
     installation: InstalledFlowBindings,
     bound?: BoundHumanOrganizationRequest,
+    pin?: Readonly<{ target: FlowPinTarget; storedTargetResume: boolean }>,
   ) => FlowOrchestratorDependencies;
 }>;
 
@@ -68,7 +90,16 @@ const prepareAdmission = (
   return {
     authorizeBinding: async (bound: BoundHumanOrganizationRequest) => {
       if (bound.scope.applicationRootId === undefined) return false;
-      const current = await createInstalledContextLoader(bound.transaction, bound.scope).load();
+      const captured = host.boundContext;
+      const current =
+        captured !== undefined &&
+        sameId(captured.request.scope.organizationId, bound.scope.organizationId) &&
+        captured.request.scope.applicationRootId !== undefined &&
+        bound.scope.applicationRootId !== undefined &&
+        sameId(captured.request.scope.applicationRootId, bound.scope.applicationRootId) &&
+        captured.request.scope.accessVersion === bound.scope.accessVersion
+          ? captured.context
+          : await createInstalledContextLoader(bound.transaction, bound.scope).load();
       currentContext = current;
       currentInstallation = host.installationOf(current);
       const matches = bindingsWithMessageActions(currentInstallation.bindings, [
@@ -113,10 +144,13 @@ const prepareAdmission = (
           .authorizeInvocation?.(run.authority.session, selection, flow)) === true
       );
     },
-    ports: (bound?: BoundHumanOrganizationRequest) => {
+    ports: (
+      bound?: BoundHumanOrganizationRequest,
+      pin?: Readonly<{ target: FlowPinTarget; storedTargetResume: boolean }>,
+    ) => {
       if (currentRelease === undefined || currentInstallation === undefined)
         throw new Error("FLOW_ADMISSION_CONTEXT_UNAVAILABLE");
-      return host.portsFor(currentRelease, state.runId, currentInstallation, bound);
+      return host.portsFor(currentRelease, state.runId, currentInstallation, bound, pin);
     },
   };
 };
@@ -136,7 +170,7 @@ export const admitFlowContinuation = async (
     run.pendingContinuation === undefined ||
     run.continuationPlan === undefined
   )
-    return { kind: "refused" };
+    return { kind: "refused", committedNow: false };
   return startFlow(
     {
       requests: host.requests,
@@ -175,7 +209,7 @@ export const admitFlowPageStart = async (
   const admission = prepareAdmission(host, installation, run, state);
   const plan = run.release.plans.get(run.flowId);
   if (admission === undefined || plan === undefined || host.invocation.kind !== "binding")
-    return { kind: "refused" } as const;
+    return { kind: "refused", committedNow: false } as const;
   return startFlow(
     {
       requests: host.requests,
@@ -205,13 +239,13 @@ export const admitFlowSegment = async (
   installation: InstalledFlowBindings,
   ...args: Parameters<FlowOrchestratorDependencies["admitSegment"]>
 ): ReturnType<FlowOrchestratorDependencies["admitSegment"]> => {
-  const [run, state, segment, execute] = args;
+  const [run, state, segment, execute, entry] = args;
   const admission = prepareAdmission(host, installation, run, state);
-  if (admission === undefined) return { kind: "refused" };
+  if (admission === undefined) return { kind: "refused", committedNow: false };
   const selection = run.authority.selection;
   const first =
     segment.preScopeLock === "organization_account"
-      ? continueFlowRun(state, run.library, segment)
+      ? (entry ?? continueFlowRun(state, run.library, segment))
       : undefined;
   const inputs = first?.kind === "protected_task" ? first.call.properties.inputs?.value : undefined;
   const profileAccountId = isRecord(inputs)
@@ -220,11 +254,12 @@ export const admitFlowSegment = async (
       ? first.call.flowInputs.organization_account_id?.value
       : undefined;
   const plan = run.release.plans.get(run.flowId);
-  if (plan === undefined) return { kind: "refused" };
+  if (plan === undefined) return { kind: "refused", committedNow: false };
   const detached = host.invocation.kind === "binding" ? host.invocation.segment : undefined;
-  if (detached !== undefined && detached.segmentId !== segment.id) return { kind: "refused" };
+  if (detached !== undefined && detached.segmentId !== segment.id)
+    return { kind: "refused", committedNow: false };
   if (detached !== undefined && host.invocation.kind === "binding" && segment.section !== "tasks") {
-    if (selection.applicationRootId === undefined) return { kind: "refused" };
+    if (selection.applicationRootId === undefined) return { kind: "refused", committedNow: false };
     let failure: Readonly<{ segmentId: string }> | undefined;
     try {
       failure = openFlowCarriedValues(
@@ -241,7 +276,7 @@ export const admitFlowSegment = async (
       ).failure;
     } catch (error) {
       console.error(`[flows] invalid phase evidence: ${describeFailure(error)}`);
-      return { kind: "refused" };
+      return { kind: "refused", committedNow: false };
     }
     const index = plan.segments.findIndex((part) => part.id === segment.id);
     const serverFailure =
@@ -267,19 +302,21 @@ export const admitFlowSegment = async (
         });
       } catch (error) {
         console.error(`[flows] invalid page failure path: ${describeFailure(error)}`);
-        return { kind: "refused" };
+        return { kind: "refused", committedNow: false };
       }
     }
-    if (segment.tasks.length === 0 && (serverFailure || pageFailure)) return { kind: "refused" };
-    if (segment.section === "errors" && !serverFailure && !pageFailure) return { kind: "refused" };
+    if (segment.tasks.length === 0 && (serverFailure || pageFailure))
+      return { kind: "refused", committedNow: false };
+    if (segment.section === "errors" && !serverFailure && !pageFailure)
+      return { kind: "refused", committedNow: false };
     if (
       segment.section === "finally" &&
       !serverFailure &&
       !pageFailure &&
       host.invocation.phase !== "success"
     )
-      return { kind: "refused" };
-    if (failure !== undefined && !serverFailure) return { kind: "refused" };
+      return { kind: "refused", committedNow: false };
+    if (failure !== undefined && !serverFailure) return { kind: "refused", committedNow: false };
   }
   const expectedFingerprint =
     detached !== undefined
@@ -287,7 +324,7 @@ export const admitFlowSegment = async (
       : run.pendingContinuation === undefined
         ? segment.fingerprint
         : run.continuationSegments?.[segment.id];
-  if (expectedFingerprint === undefined) return { kind: "reload" };
+  if (expectedFingerprint === undefined) return { kind: "reload", committedNow: false };
   return startFlow(
     {
       requests: host.requests,
@@ -298,7 +335,47 @@ export const admitFlowSegment = async (
       execute: async (bound, _part, replay) => {
         return execute(admission.ports(bound), replay);
       },
-      executeWorkflow: async (replay) => execute(admission.ports(), replay),
+      prepareWorkflow: async (bound, part, commandId, runId, resumed, replay) => {
+        const first = entry ?? continueFlowRun(state, run.library, part);
+        if (first.kind !== "protected_task" || first.call.taskType !== "record.pin_identity")
+          return { kind: "ready" };
+        const call = first.call;
+        if (
+          call.taskVersion !== "1.0.0" ||
+          Object.keys(call.properties).length !== 3 ||
+          call.properties.application_key?.type !== "text" ||
+          call.properties.record_type_key?.type !== "text" ||
+          call.properties.record_id?.type !== "text"
+        )
+          return { kind: "refused" };
+        const selector = viewerSafeRecordPinSelectorSchema.safeParse({
+          applicationKey: call.properties.application_key.value,
+          recordTypeKey: call.properties.record_type_key.value,
+          recordId: call.properties.record_id.value,
+        });
+        if (!selector.success || carriesSensitive(selector.data, run.sensitive))
+          return { kind: "refused" };
+        const target = await host.bindPin(bound, {
+          commandId,
+          runId,
+          taskPath: call.taskPath,
+          iteration: call.iteration,
+          selector: selector.data,
+          replay,
+        });
+        return target === undefined
+          ? { kind: "refused" }
+          : { kind: "ready", value: { target, storedTargetResume: resumed } };
+      },
+      executeWorkflow: async (replay, prepared) =>
+        execute(
+          admission.ports(
+            undefined,
+            prepared as
+              Readonly<{ target: FlowPinTarget; storedTargetResume: boolean }> | undefined,
+          ),
+          replay,
+        ),
     },
     {
       session: run.authority.session,

@@ -61,6 +61,7 @@ type FormContinuationServiceDependencies = Readonly<{
 const refuse = (reason: FormContinuationRefusalReason): FormContinuationOutcome => ({
   kind: "refused",
   reason,
+  committedNow: false,
 });
 
 /**
@@ -100,9 +101,17 @@ export const createFormContinuationService = (
       draft?: Extract<FormContinuationOutcome, { kind: "finished" }>["draft"];
     }>,
   ): FormContinuationOutcome => {
-    if (response.kind === "refused") return refuse("not_resumable");
-    if (response.kind === "already_answered") return refuse("already_answered");
-    if (response.kind === "reload" || response.kind === "rate_limited") return response;
+    if (response.kind === "refused")
+      return { ...refuse("not_resumable"), committedNow: response.committedNow };
+    if (response.kind === "already_answered")
+      return { ...refuse("already_answered"), committedNow: response.committedNow };
+    if (response.kind === "reload") return { kind: "reload", committedNow: response.committedNow };
+    if (response.kind === "rate_limited")
+      return {
+        kind: "rate_limited",
+        retryAfterSeconds: response.retryAfterSeconds,
+        committedNow: response.committedNow,
+      };
 
     if (response.kind === "suspended") {
       const formId = response.awaiting === "form" ? formIdOf(response) : undefined;
@@ -116,6 +125,7 @@ export const createFormContinuationService = (
       };
       return {
         kind: "form_requested",
+        committedNow: response.committedNow,
         runId: response.runId,
         receipt: { runId: response.runId, committedEffects: response.committedEffects },
         target,
@@ -130,6 +140,7 @@ export const createFormContinuationService = (
     const result = finishedResult(response.outcome, response.committedEffects);
     return {
       kind: "finished",
+      committedNow: response.committedNow,
       warnings: [...response.warnings],
       runId: response.runId,
       receipt: { runId: response.runId, committedEffects: response.committedEffects },

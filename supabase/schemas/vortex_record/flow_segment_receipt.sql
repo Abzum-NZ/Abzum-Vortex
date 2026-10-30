@@ -29,6 +29,6 @@ $function$;
 alter function vortex_record.flow_segment_receipt(uuid, boolean) owner to vortex_record_adapter;
 revoke all on function vortex_record.flow_segment_receipt(uuid, boolean)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.flow_segment_receipt(uuid, boolean) to vortex_request, postgres;
+grant execute on function vortex_record.flow_segment_receipt(uuid, boolean) to vortex_request, vortex_owner, postgres;
 comment on function vortex_record.flow_segment_receipt(uuid, boolean) is
   'Looks up or claims a flow segment command in the current human request scope.';

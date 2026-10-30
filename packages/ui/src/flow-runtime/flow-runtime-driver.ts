@@ -20,6 +20,7 @@ export async function runFlowBinding(
     const result = await startBrowserFlow({
       plan: browser.plan,
       bindings: browser.inputs,
+      event: binding.event,
       caller: callerInputs ?? {},
       runId: clickId,
       timeZone: options.timeZone,
@@ -49,7 +50,9 @@ export async function runFlowBinding(
       server: {
         client: options.client,
         binding,
-        ...(subject === undefined ? {} : { subject }),
+        ...((subject ?? options.subject) === undefined
+          ? {}
+          : { subject: subject ?? options.subject }),
         ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
         ...(options.committed === undefined
           ? {}

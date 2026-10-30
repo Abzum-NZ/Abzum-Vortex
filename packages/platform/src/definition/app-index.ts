@@ -6,6 +6,7 @@ export {
   isReservedTenantSegment,
   readAddressedApplicationAtAddress,
   readAddressedApplicationFromInstalledBundleAtAddress,
+  readAddressedApplicationForFlowInRequest,
   readPermittedApplicationsAtAddress,
   resolvePermittedApplicationAddress,
   type AddressedApplicationRead,
@@ -59,7 +60,10 @@ export {
   runtimePreviewOf,
   type RuntimePreview,
 } from "./runtime-preview";
-export { previewApplicationKey } from "./preview-application-key";
+export {
+  previewApplicationKey,
+  previewInstallationIdOfApplicationKey,
+} from "./preview-application-key";
 
 export { createProtectedOperationExecutor } from "./protected-operation-executor";
 

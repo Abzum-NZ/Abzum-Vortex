@@ -40,7 +40,10 @@ import {
   type HumanInstalledRuntimeScope,
   type InstalledRuntimeContext,
 } from "./installed-runtime-context";
-import { readInstalledRecordContributions } from "./installed-record-contributions";
+import {
+  parseInstalledRecordContributions,
+  type InstalledRecordContributions,
+} from "./installed-record-contributions";
 import { flowPlansOf } from "../workflows/flow-plan";
 
 type InstalledPageBundleIdentityEvidence = Readonly<{
@@ -292,10 +295,15 @@ const activeBundleFailure = (
 /** Reads the active format-2 bundle state under the verified HUMAN request transaction. */
 const readActiveInstallationBundleState = async (
   transaction: RequestDatabaseTransaction,
-): Promise<ActiveInstallationBundleState> => {
+): Promise<
+  Readonly<{ state: ActiveInstallationBundleState; contributions: InstalledRecordContributions }>
+> => {
   try {
-    const rows = await transaction.query<ActiveBundleStateRow>`
-      select vortex_definition.read_active_installation_bundle_identity() as bundle_state
+    const rows = await transaction.query<
+      ActiveBundleStateRow & { readonly contributions: unknown }
+    >`
+      select vortex_definition.read_active_installation_bundle_identity() as bundle_state,
+        vortex_record.read_installed_record_contributions() as contributions
     `;
     if (rows.length !== 1 || rows[0] === undefined)
       throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_UNAVAILABLE");
@@ -315,7 +323,10 @@ const readActiveInstallationBundleState = async (
       )
     )
       throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
-    return parsed.data;
+    return {
+      state: parsed.data,
+      contributions: parseInstalledRecordContributions(rows[0].contributions),
+    };
   } catch (error) {
     throw activeBundleFailure(error);
   }
@@ -420,17 +431,14 @@ const createHumanInstalledPageBundleContextLoader = (
         const { loadHumanPreviewRuntimeContext } = await import("./preview-runtime-context");
         return loadHumanPreviewRuntimeContext(dependencies.transaction, dependencies.scope);
       }
-      const statePromise = readActiveInstallationBundleState(dependencies.transaction);
-      // The installed bundle is immutable, but what other installed Modules contribute to its
-      // record types changes with their installations, so it is read with every request. It does
-      // not depend on the bundle, so it is sent with the bundle state and consulted after it.
-      const contributionsRead = readInstalledRecordContributions(dependencies.transaction);
-      void contributionsRead.catch(() => undefined);
+      // Both protected reads share one request scope and are independent.
+      const { state, contributions } = await readActiveInstallationBundleState(
+        dependencies.transaction,
+      );
       const installation = await readHumanActiveInstallation(
-        statePromise.then(activeInstallationEvidence),
+        Promise.resolve(activeInstallationEvidence(state)),
         dependencies.scope,
       );
-      const state = await statePromise;
       const bundleIndex = state.bundleIndex;
       if (bundleIndex === null) throw new Error("INSTALLED_PAGE_BUNDLE_INDEX_UNAVAILABLE");
       const key = installedPageBundleKey(state.identity);
@@ -448,7 +456,6 @@ const createHumanInstalledPageBundleContextLoader = (
         bundle = cached.bundle;
         retainInstalledPageBundle(key, bundle, cached.size);
       }
-      const contributions = await contributionsRead;
       const context = assembleHumanInstalledRuntimeContext(
         installation,
         withCorrelation(bundle.releaseSet, state.identity.correlationId),

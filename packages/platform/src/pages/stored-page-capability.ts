@@ -710,26 +710,21 @@ export const createStoredPageCapabilityService = (
       },
       validateAccessEligibilityUntil: async (transaction, scope, validUntil) => {
         try {
-          // The installed bundle identity, the request context and the database clock are
-          // independent reads of this one transaction, so they are sent together (one round trip
-          // instead of three) and still checked in their original order.
-          const bundleRead = isTrustedInstalledPageBundleContext(context)
-            ? transaction.query<{
-                readonly bundle_state: unknown;
-              }>`
-                select vortex_definition.read_active_installation_bundle_identity() as bundle_state
-              `
-            : undefined;
-          const contextRead = transaction.query<{
+          // Check the same bundle, request context and database clock in one statement.
+          const trustedBundle = isTrustedInstalledPageBundleContext(context);
+          const contextRows = await transaction.query<{
+            readonly bundle_state: unknown;
             readonly request_context: unknown;
             readonly observed_at: unknown;
           }>`
             select
+              case when ${trustedBundle}::boolean
+                then vortex_definition.read_active_installation_bundle_identity() else null end as bundle_state,
               vortex_access.validated_human_request_context() - 'channel' as request_context,
               clock_timestamp() as observed_at
           `;
-          const [bundleRows, contextRows] = await Promise.all([bundleRead, contextRead]);
-          if (bundleRows !== undefined) {
+          if (trustedBundle) {
+            const bundleRows = contextRows;
             const bundleState = activeInstallationBundleStateSchema.safeParse(
               bundleRows[0]?.bundle_state,
             );
