@@ -55,6 +55,10 @@ const StandardPageAdoption = dynamic(
   () => import("./standard-page-adoption").then((module) => module.StandardPageAdoption),
   { loading: () => <p role="status">Loading page adoption…</p> },
 );
+const StudioBackendRuns = dynamic(
+  () => import("./studio-backend-runs").then((module) => module.StudioBackendRuns),
+  { loading: () => <p role="status">Loading the back-end runs�</p> },
+);
 const StudioHistoryTab = dynamic(
   () => import("./studio-history-tab").then((module) => module.StudioHistoryTab),
   { loading: () => <p role="status">Loading the published versions…</p> },
@@ -562,6 +566,13 @@ export function useStudioReleasesTab({
                 ),
               );
           }}
+        />
+      )}
+      {!hidden && section === "backend-runs" && (
+        <StudioBackendRuns
+          organizationId={organizationId}
+          rootId={draft.state.rootId}
+          savedRevision={draft.saved.draftRevision}
         />
       )}
       {!hidden && section === "page-adoption" && (

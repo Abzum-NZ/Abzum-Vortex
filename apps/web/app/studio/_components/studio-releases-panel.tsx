@@ -7,6 +7,7 @@ import { studioReleasesSections, type StudioReleasesSection } from "./studio-rai
 
 const sectionIcons: Record<StudioReleasesSection, VortexIconName> = {
   history: "history",
+  "backend-runs": "workflow",
   "page-adoption": "blocks",
   import: "arrow-up",
 };
