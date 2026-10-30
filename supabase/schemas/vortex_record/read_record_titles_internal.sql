@@ -126,9 +126,13 @@ begin
         if requested_id = nil_uuid then
           continue;
         end if;
-        loaded := vortex_record.load_record_access_facts_with_plan_internal(
-          target_type_id, 'read', requested_id, null, installation, plan, null::jsonb
-        );
+        loaded := (vortex_record.load_record_access_facts_with_plan_internal(
+          'read', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+            'recordTypeId', target_type_id,
+            'recordId', requested_id
+          )),
+          installation, plan
+        ) -> 0);
         if loaded ->> 'outcome' = 'loaded'
           and pg_catalog.jsonb_typeof(loaded -> 'declaration') = 'object' then
           page_declaration := loaded -> 'declaration';

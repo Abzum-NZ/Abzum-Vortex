@@ -66,15 +66,24 @@ begin
     if p_page ? 'installation' then
       -- The installation and access plan this invocation's caller read,
       -- validated and resolved once for the whole page.
-      loaded := vortex_record.load_record_access_facts_with_plan_internal(
-        p_record_type_id, 'read', p_record_id, null, p_page -> 'installation', p_page -> 'plan',
-        p_projection_row, case when requested_field_ids is null then null else '[]'::jsonb end
-      );
+      loaded := (vortex_record.load_record_access_facts_with_plan_internal(
+        'read', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+          'recordTypeId', p_record_type_id,
+          'recordId', p_record_id,
+          'projectionRow', p_projection_row,
+          'requestedFieldIds', case when requested_field_ids is null then null else '[]'::jsonb end
+        )),
+        p_page -> 'installation', p_page -> 'plan'
+      ) -> 0);
     else
-      loaded := vortex_record.load_record_access_facts_internal(
-        p_record_type_id, 'read', p_record_id, null, p_projection_row,
-        case when requested_field_ids is null then null else '[]'::jsonb end
-      );
+      loaded := (vortex_record.load_record_access_facts_internal(
+        'read', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+          'recordTypeId', p_record_type_id,
+          'recordId', p_record_id,
+          'projectionRow', p_projection_row,
+          'requestedFieldIds', case when requested_field_ids is null then null else '[]'::jsonb end
+        ))
+      ) -> 0);
     end if;
   end if;
   shared := case when compact then p_page -> 'envelope' else loaded end;
@@ -145,9 +154,13 @@ begin
           p_validated_record_types
         );
       else
-        decision := vortex_access.evaluate_organization_record_access_internal(
-          loaded -> 'declaration', p_record_id, loaded -> 'facts'
-        );
+        decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            'declaration', loaded -> 'declaration',
+            'recordId', p_record_id,
+            'facts', loaded -> 'facts'
+          )
+        )) -> 0);
       end if;
     end if;
     if decision ->> 'outcome' <> 'allowed' then
@@ -174,9 +187,14 @@ begin
   if requested_field_ids is not null and not compact then
     if (loaded ->> 'isSystemProjection')::boolean then
       -- Protected projections keep their bounded reader; never scan their composite view.
-      selected_loaded := vortex_record.load_record_access_facts_internal(
-        p_record_type_id, 'read', p_record_id, null, p_projection_row, projected_field_ids
-      );
+      selected_loaded := (vortex_record.load_record_access_facts_internal(
+        'read', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+          'recordTypeId', p_record_type_id,
+          'recordId', p_record_id,
+          'projectionRow', p_projection_row,
+          'requestedFieldIds', projected_field_ids
+        ))
+      ) -> 0);
       if selected_loaded ->> 'concurrencyNumber' is distinct from loaded ->> 'concurrencyNumber' then
         projection := pg_catalog.jsonb_build_object('outcome', 'refused');
         return next;
