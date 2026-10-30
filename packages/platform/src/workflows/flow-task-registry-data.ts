@@ -465,11 +465,16 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     properties: { target: required("builder_key"), component: optional("placement_id") },
   },
   "interface.set_value": {
-    title: "Set page value",
-    summary: "Sets a declared page value; the page shows and reads it, the server never trusts it.",
+    title: "Set value",
+    summary: "Sets a declared page value or a field in a form on the page.",
     runLocations: ["browser"],
     effect: "interface",
-    properties: { value: required("builder_key"), to: required("any_value") },
+    properties: {
+      value: optional("builder_key"),
+      form: optional("form_id"),
+      field: optional("builder_key"),
+      to: required("any_value"),
+    },
   },
   "interface.validate_form": {
     title: "Validate form",

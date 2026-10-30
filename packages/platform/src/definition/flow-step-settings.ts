@@ -130,7 +130,16 @@ export const flowStepSettingIssues = (
       else if (properties.action_flow !== undefined)
         notYet([...path, "action_flow"], "Show message: a message action cannot run yet");
     } else if (type === "interface.clear_message") checkTarget(properties, path, "Clear message");
-    else if (type === "backend.run") {
+    else if (type === "interface.set_value") {
+      const page = properties.value !== undefined;
+      const form = properties.form !== undefined;
+      const field = properties.field !== undefined;
+      if ((page && (form || field)) || (!page && !(form && field)))
+        invalid(path, "Set value: choose either a page value or both a form and field");
+      for (const key of ["value", "form", "field"] as const)
+        if (properties[key] !== undefined && literalText(properties[key]) === undefined)
+          invalid([...path, key], `Set value: ${key} must be a literal`);
+    } else if (type === "backend.run") {
       const mode = literalText(properties.mode);
       if (mode !== "await" && mode !== "start")
         invalid([...path, "mode"], "Run on back end: choose await (use its outputs) or start");
