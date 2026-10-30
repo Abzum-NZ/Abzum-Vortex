@@ -15,11 +15,8 @@ security definer
 set search_path = ''
 as $function$
 declare
-  meta jsonb;
-  loaded jsonb;
   context_value jsonb;
   preview_installation jsonb;
-  preview_bounds jsonb;
   effective_command_id uuid;
   organization_id_value uuid;
   application_root_id_value uuid;
@@ -27,8 +24,6 @@ declare
   correlation_id_value uuid;
   receipt_claim jsonb;
   projection jsonb;
-  decision jsonb;
-  bounds jsonb;
   failure_sqlstate text;
   failure_message text;
 begin
@@ -107,149 +102,9 @@ begin
     );
   end if;
 
-  meta := vortex_record.resolve_record_action_context_internal(
-    p_record_type_id, p_operation
-  );
-  if pg_catalog.jsonb_typeof(meta -> 'recordType') is distinct from 'object'
-    or (preview_installation is not null and meta ? 'recordType'
-      and meta -> 'recordType' ? 'systemProjection') then
-    return pg_catalog.jsonb_build_object('outcome', 'refused');
-  end if;
-  -- Ordinary saves require the explicit operation; named actions use their own preparation.
-  if not coalesce((meta #> '{recordType,standardActions}') ? p_operation, false) then
-    raise log 'Record save preparation refused: standard operation % is not declared', p_operation;
-    return pg_catalog.jsonb_build_object(
-      'outcome', 'refused', 'correlationId', correlation_id_value
-    );
-  end if;
-  if meta -> 'recordType' ? 'systemProjection' then
-    if p_operation <> 'update'
-      or meta #>> '{recordType,systemProjection,protectedView}' <>
-        'organization_runtime_settings'
-      or not coalesce(
-        (meta #> '{recordType,standardActions}') ? 'update', false
-      )
-      or not vortex_definition.is_platform_system_module_internal(
-        (meta ->> 'moduleRootId')::uuid, organization_id_value
-      )
-      or p_record_id is distinct from
-        (meta -> 'context' ->> 'organizationId')::uuid then
-      return pg_catalog.jsonb_build_object('outcome', 'refused');
-    end if;
-
-    -- Do not execute application before-save rules for this projection until
-    -- the platform settings-manage permission has passed its own current check.
-    if not vortex_access.organization_runtime_settings_manage_is_current() then
-      perform vortex_record.append_record_activity_internal(p_activity_id, 'update_record', array[organization_id_value]::uuid[], array[]::uuid[], 'refused');
-      return pg_catalog.jsonb_build_object(
-        'outcome', 'refused_recorded',
-        'correlationId', correlation_id_value
-      );
-    end if;
-
-    -- The writable system projection is prepared through its protected read
-    -- model. Its final write remains inside apply_record_changes.
-    loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'read', p_record_id, null, null::jsonb
-    );
-    if loaded ->> 'outcome' <> 'loaded' then
-      return pg_catalog.jsonb_build_object('outcome', 'refused');
-    end if;
-    if (loaded ->> 'concurrencyNumber')::bigint <> p_expected_concurrency_number then
-      return pg_catalog.jsonb_build_object(
-        'outcome', 'conflict',
-        'concurrencyNumber', loaded -> 'concurrencyNumber',
-        'correlationId', meta -> 'context' -> 'correlationId'
-      );
-    end if;
-    if preview_installation is null then
-      decision := vortex_access.evaluate_organization_record_access_internal(
-        loaded -> 'declaration', p_record_id, loaded -> 'facts'
-      );
-      if decision ->> 'outcome' <> 'allowed' then
-        perform vortex_record.append_record_activity_internal(p_activity_id, 'update_record', array[organization_id_value]::uuid[], array[]::uuid[], 'refused');
-        return pg_catalog.jsonb_build_object(
-          'outcome', 'refused_recorded',
-          'correlationId', correlation_id_value
-        );
-      end if;
-      bounds := vortex_record.decide_record_field_bounds_internal(decision);
-    else
-      preview_bounds := vortex_record.preview_record_field_bounds_internal(
-        p_record_type_id, (meta ->> 'storageContractId')::uuid,
-        meta -> 'recordType'
-      );
-      if preview_bounds is null then
-        return pg_catalog.jsonb_build_object('outcome', 'refused');
-      end if;
-      bounds := preview_bounds;
-    end if;
-    return pg_catalog.jsonb_build_object(
-      'outcome', 'prepared',
-      'recordType', meta -> 'recordType',
-      'beforeSaveFlows', vortex_record.before_save_flows_for_record_type_internal(
-        (meta ->> 'moduleRootId')::uuid,
-        (meta ->> 'moduleReleaseRevision')::bigint,
-        p_record_type_id
-      ),
-      'correlationId', correlation_id_value,
-      'readableFieldIds', bounds -> 'readableFieldIds',
-      'existingValues', loaded -> 'fieldValues'
-    );
-  end if;
-
-  if p_operation = 'update' then
-    loaded := vortex_record.load_record_access_facts_internal(
-      p_record_type_id, 'update', p_record_id, p_expected_concurrency_number, null::jsonb
-    );
-    if loaded ->> 'outcome' = 'conflict' then
-      return pg_catalog.jsonb_build_object(
-        'outcome', 'conflict',
-        'concurrencyNumber', loaded -> 'concurrencyNumber',
-        'correlationId', meta -> 'context' -> 'correlationId'
-      );
-    end if;
-    if loaded ->> 'outcome' <> 'loaded' then
-      return pg_catalog.jsonb_build_object('outcome', 'refused');
-    end if;
-    if loaded ? 'previewInstallationId' then
-      preview_bounds := vortex_record.preview_record_field_bounds_internal(
-        p_record_type_id, (meta ->> 'storageContractId')::uuid,
-        meta -> 'recordType'
-      );
-      if preview_bounds is null then
-        return pg_catalog.jsonb_build_object('outcome', 'refused');
-      end if;
-      bounds := preview_bounds;
-    else
-      decision := vortex_access.evaluate_organization_record_access_internal(
-        loaded -> 'declaration', p_record_id, loaded -> 'facts'
-      );
-      if decision ->> 'outcome' <> 'allowed' then
-        perform vortex_record.append_record_activity_internal(p_activity_id, 'update_record', array[organization_id_value]::uuid[], array[]::uuid[], 'refused');
-        return pg_catalog.jsonb_build_object(
-          'outcome', 'refused_recorded',
-          'correlationId', correlation_id_value
-        );
-      end if;
-      bounds := vortex_record.decide_record_field_bounds_internal(decision);
-    end if;
-  end if;
-
-  return pg_catalog.jsonb_build_object(
-    'outcome', 'prepared',
-    'recordType', meta -> 'recordType',
-    -- The owning Module release's BeforeSave flows for this record type, run by Record.
-    'beforeSaveFlows', vortex_record.before_save_flows_for_record_type_internal(
-      (meta ->> 'moduleRootId')::uuid,
-      (meta ->> 'moduleReleaseRevision')::bigint,
-      p_record_type_id
-    ),
-    'correlationId', meta -> 'context' -> 'correlationId',
-    'readableFieldIds', case when p_operation = 'update'
-      then bounds -> 'readableFieldIds' else '[]'::jsonb end,
-    'existingValues', case when p_operation = 'update'
-      then loaded -> 'fieldValues' else '{}'::jsonb end
+  return vortex_record.prepare_record_values_internal(
+    p_operation, p_record_type_id, p_record_id, p_expected_concurrency_number,
+    p_submitted_values, p_selected_group_id, p_activity_id
   );
 exception
   when no_data_found or too_many_rows or insufficient_privilege
