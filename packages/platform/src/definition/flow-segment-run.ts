@@ -55,23 +55,38 @@ export const runFlowSegment = async (
   > = {};
   const warnings: Record<string, readonly BeforeSaveRuleWarning[]> = {};
   let step = first;
-  while (step.kind === "protected_task") {
-    const key = JSON.stringify([step.call.taskPath, step.call.iteration]);
+  while (step.kind === "protected_task" || step.kind === "protected_set") {
+    const key =
+      step.kind === "protected_set"
+        ? JSON.stringify([step.taskPath, step.iteration])
+        : JSON.stringify([step.call.taskPath, step.call.iteration]);
     let result: Extract<FlowRunResume, { kind: "task_result" }>;
     if (step.replay !== undefined) {
       if (step.replay.kind !== "task_result" || receipt === undefined)
         throw new Error("FLOW_SEGMENT_REPLAY_INVALID");
-      const replay = await runner.replaySegmentTask(
-        run,
-        step.state,
-        step.call,
-        step.replay,
-        receipt.warnings[key] ?? [],
-      );
+      const replay =
+        step.kind === "protected_set"
+          ? await runner.replaySegmentSet(
+              run,
+              step.state,
+              step,
+              step.replay,
+              receipt.warnings[key] ?? [],
+            )
+          : await runner.replaySegmentTask(
+              run,
+              step.state,
+              step.call,
+              step.replay,
+              receipt.warnings[key] ?? [],
+            );
       if (replay?.kind !== "task_result") throw new Error("FLOW_SEGMENT_REPLAY_UNAVAILABLE");
       result = replay;
     } else {
-      const executed = await runner.runSegmentTask(run, step.state, step.call);
+      const executed =
+        step.kind === "protected_set"
+          ? await runner.runSegmentSet(run, step.state, step)
+          : await runner.runSegmentTask(run, step.state, step.call);
       result = { kind: "task_result", ...executed.result };
       if (executed.replay !== undefined) {
         if (receipt !== undefined) throw new Error("FLOW_SEGMENT_REPLAY_RAN_EFFECT");

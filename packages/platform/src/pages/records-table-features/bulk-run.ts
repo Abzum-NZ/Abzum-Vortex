@@ -394,12 +394,8 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
       const allOrNothing = request.selection.kind === "ids";
       for (let start = 0; start < targets.length; start += namedActionBatchMaximum) {
         const batch = targets.slice(start, start + namedActionBatchMaximum);
-        const commandIds = new Map(
-          batch.map((target) => [
-            target.recordId,
-            recordCommandId("records.bulk", request.commandId, target.recordId),
-          ]),
-        );
+        // One command per batch: a resubmitted gesture replays the batch it already completed.
+        const batchCommandId = recordCommandId("records.bulk", request.commandId, `batch:${start}`);
         // ONE call decides every record of the batch under current access.
         const decided = await requests.run(session, selection, (transaction, _scope, issuedAt) =>
           readNamedActionEligibility(
@@ -408,7 +404,7 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
             [{ action: named.action, run: runner }],
             batch.map((target) => ({
               recordId: target.recordId,
-              commandId: commandIds.get(target.recordId)!,
+              commandId: batchCommandId,
             })),
             issuedAt,
           ).then((rows) =>
@@ -456,7 +452,7 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
             selection,
             runnable.map((target) => ({
               contractVersion: "2.0.0",
-              commandId: commandIds.get(target.recordId),
+              commandId: batchCommandId,
               action: named.action,
               recordTypeId: placement.recordTypeId,
               recordId: target.recordId,

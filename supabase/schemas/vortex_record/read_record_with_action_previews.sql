@@ -21,7 +21,6 @@ begin
       select 1 from pg_catalog.jsonb_array_elements(p_actions) as item(value)
       where pg_catalog.jsonb_typeof(item.value) is distinct from 'object'
         or not pg_catalog.pg_input_is_valid(item.value ->> 'commandId', 'uuid')
-        or not pg_catalog.pg_input_is_valid(item.value ->> 'activityId', 'uuid')
         or not pg_catalog.pg_input_is_valid(item.value ->> 'ownerId', 'uuid')
         or not pg_catalog.pg_input_is_valid(item.value ->> 'actionId', 'uuid')
         or not pg_catalog.pg_input_is_valid(item.value ->> 'releaseRevision', 'bigint')
@@ -46,12 +45,12 @@ begin
     loop
       previews := previews || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
         'actionId', action_item -> 'actionId',
-        'preview', vortex_record.prepare_named_action_set_announce_internal(
-          true, (action_item ->> 'commandId')::uuid, action_item ->> 'ownerKind',
+        'preview', vortex_record.preview_named_action_internal(
+          (action_item ->> 'commandId')::uuid, action_item ->> 'ownerKind',
           (action_item ->> 'ownerId')::uuid, (action_item ->> 'releaseRevision')::bigint,
           (action_item ->> 'actionId')::uuid, p_record_type_id, p_record_id,
           (read_row.projection ->> 'concurrencyNumber')::bigint, '{}'::jsonb,
-          (action_item ->> 'activityId')::uuid, read_row.read_facts, null::jsonb
+          read_row.read_facts, null::jsonb
         )
       ));
     end loop;
@@ -74,4 +73,4 @@ revoke all on function vortex_record.read_record_with_action_previews(uuid, uuid
 grant execute on function vortex_record.read_record_with_action_previews(uuid, uuid, jsonb, jsonb) to vortex_request;
 
 comment on function vortex_record.read_record_with_action_previews(uuid, uuid, jsonb, jsonb) is
-  'Fixed record adapter for a page subject and the named actions its placements are bound to: from one read decision under the caller''s current authority, the readable projection (record) and capabilities vortex_record.read_record returns, and, only when the record is readable, each action''s preview exactly as vortex_record.preview_named_action_set_announce returns it for the record''s current concurrency number and no inputs (previews, in the order given), writing nothing.';
+  'Fixed record adapter for a page subject and the named actions its placements are bound to: from one read decision under the caller''s current authority, the readable projection (record) and capabilities vortex_record.read_record returns, and, only when the record is readable, each action''s preview exactly as vortex_record.preview_named_action_internal returns it for the record''s current concurrency number and no inputs (previews, in the order given), writing nothing.';

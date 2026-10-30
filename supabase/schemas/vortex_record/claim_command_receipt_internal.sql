@@ -65,8 +65,7 @@ begin
   end if;
   return pg_catalog.jsonb_build_object(
     'status', 'completed',
-    'recordId', receipt.result -> 'recordId',
-    'concurrencyNumber', receipt.result -> 'concurrencyNumber'
+    'result', receipt.result
   );
 end
 $function$;

@@ -177,7 +177,10 @@ export function useFlowRuntime({
     return {
       beginSubmission,
       flowClient: createFlowInvokeClient(options, wrap),
-      webMcpClient: createFlowInvokeClient({ ...options, endpoint: "/api/flows/invoke/mcp" }, wrap),
+      webMcpClient: createFlowInvokeClient(
+        { ...options, endpoint: "/api/flows/invoke/webmcp" },
+        wrap,
+      ),
     };
   }, [
     application,

@@ -7,9 +7,9 @@ begin
   -- reloads the record facts, locks the target and requires the caller's expected concurrency
   -- number before it mutates anything.
   begin
-    return vortex_record.apply_record_changes(
-      p_command_id, 'transfer_ownership', p_record_type_id, p_record_id,
-      p_expected_concurrency_number, '{}'::jsonb, null,
+    return vortex_record.apply_record_mutations_internal(
+      p_command_id, p_record_type_id, p_record_id,
+      p_expected_concurrency_number,
       pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
         'kind', 'offboarding_transfer',
         'targetKind', p_target_kind,
