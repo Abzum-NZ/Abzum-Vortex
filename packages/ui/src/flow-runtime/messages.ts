@@ -42,7 +42,9 @@ export function createPageMessages(notify: (key: string) => void) {
     timers.delete(key);
     if (values.delete(key)) notify(key);
   };
-  let adopted: readonly PageMessage[] | undefined;
+  const createdAt = Date.now();
+  let lastToastId: string | undefined;
+  let adopted: Readonly<{ at: number; toasts: readonly PageMessage[] }> | undefined;
   const api = {
     read: (target: PageMessageTarget, component?: string) => values.get(keyOf(target, component)),
     key: keyOf,
@@ -53,6 +55,7 @@ export function createPageMessages(notify: (key: string) => void) {
     },
     show: (message: PageMessage) => {
       const key = keyOf(message.target, message.component);
+      if (message.target === "toast") lastToastId = message.id;
       const timer = timers.get(key);
       if (timer !== undefined) clearTimeout(timer);
       timers.delete(key);
@@ -68,16 +71,27 @@ export function createPageMessages(notify: (key: string) => void) {
       notify(key);
     },
     /**
-     * Shows the toasts the page change that opened this page carried. They are taken once; the
-     * page showing them again (development re-mounts) shows the same ones, never a later carry.
+     * Shows the toasts the page change that opened this page carried. They are taken once. The
+     * address of a page settles in a moment (the record joins it), and each settling clears the
+     * page's messages, so the same toasts are shown again while nothing newer has taken their place.
      */
     adoptCarried: () => {
-      if (adopted === undefined) {
-        adopted =
-          carried !== undefined && Date.now() - carried.at <= carryLifetimeMs ? carried.toasts : [];
+      const now = Date.now();
+      // Only the page made after the carry (by that flow's navigate step) takes it: the page the
+      // flow ran on is still mounted while the address changes and must not.
+      if (
+        carried !== undefined &&
+        carried.at <= createdAt &&
+        (adopted === undefined || carried.at > adopted.at)
+      ) {
+        adopted = {
+          at: carried.at,
+          toasts: now - carried.at <= carryLifetimeMs ? carried.toasts : [],
+        };
         carried = undefined;
-      }
-      for (const message of adopted) api.show(message);
+      } else if (adopted === undefined) adopted = { at: now, toasts: [] };
+      else if (adopted.toasts.at(-1)?.id !== lastToastId) return;
+      for (const message of adopted.toasts) api.show(message);
     },
     /** Keeps this page's toasts for the page about to open. */
     carryToasts: () => {
