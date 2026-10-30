@@ -75,8 +75,9 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const explicitlyDisabled =
     context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
   const baseOptions = context.values?.options ?? settings.options("options");
-  // The options a field whose source the page runs are the page's answers; until the first one the
-  // field offers its declared list.
+  // The options of a field whose source the page runs are the page's answers; until the first one
+  // the field offers only what it holds, never the declared list the source may narrow.
+  const remoteOptions = context.events?.options_requested !== undefined;
   const [remote, setRemote] = useState<
     Readonly<{ options: readonly ChoiceOption[]; next?: string }> | undefined
   >(undefined);
@@ -87,7 +88,11 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const heldOption = baseOptions.find((option) => option.key === selected);
   const declaredOptions =
     remote === undefined
-      ? baseOptions
+      ? remoteOptions
+        ? heldOption === undefined
+          ? []
+          : [heldOption]
+        : baseOptions
       : heldOption === undefined || remote.options.some((option) => option.key === selected)
         ? remote.options
         : [heldOption, ...remote.options];
@@ -201,7 +206,6 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
     });
   };
 
-  const remoteOptions = context.events?.options_requested !== undefined;
   const optionsRequested = useRef(context.events?.options_requested);
   optionsRequested.current = context.events?.options_requested;
   const requestChoices = useRef<(search: string, continuationToken?: string) => void>(
