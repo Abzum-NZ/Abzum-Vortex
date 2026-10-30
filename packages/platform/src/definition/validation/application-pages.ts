@@ -3,6 +3,7 @@ import {
   FORM_CONTAINER_BLOCK_RELEASE,
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
+  CONTROL_BLOCK_RELEASES,
   placementSettings,
 } from "../application-composition-catalogue";
 import { registeredBlockReleases, type JsonObject } from "./context";
@@ -35,6 +36,10 @@ import { moduleQueryDefinitionSchema } from "../module-contracts";
 import { queryTotalReferenceProblem } from "../module-query-edit";
 import { queryTotalLabel } from "../module-query-totals";
 import type { ApplicationScope } from "./application-scope";
+import { typedConditionTypesValid, typedFieldValueType } from "./field-types";
+import { compareExactDecimals, parseExactDecimal } from "../../records/exact-decimal";
+import { isIsoCurrencyCode } from "../../catalogue/currencies";
+import { reachablePageFlows } from "../../workflows/flow-reachability";
 
 export function applicationPageRules(scope: ApplicationScope): void {
   const {
@@ -346,6 +351,44 @@ export function applicationPageRules(scope: ApplicationScope): void {
         `${String(block.blockId)}:${String(block.releaseVersion)}`,
       );
     };
+    const placementById = new Map(
+      placementEntries.map(([id, placement]) => [id.toLowerCase(), placement]),
+    );
+    const pageFlowIds = new Set(
+      array(content.flowBindings)
+        .filter((binding) => placementById.has(String(binding.controlId).toLowerCase()))
+        .map((binding) => String(object(binding.flow).flowId)),
+    );
+    for (const flow of reachablePageFlows([...pageFlowIds], array(content.flows))) {
+      walkValues(flow, (step) => {
+        if (step.type !== "interface.show_message" && step.type !== "interface.clear_message")
+          return;
+        const properties = object(step.properties ?? {});
+        const target = object(object(properties.target ?? {}).literal ?? {}).value;
+        if (target !== "inline" && target !== "slot") return;
+        const component = object(object(properties.component ?? {}).literal ?? {}).value;
+        const placement = placementById.get(String(component).toLowerCase());
+        const release = placement === undefined ? undefined : releaseOf(placement);
+        const key = release?.key;
+        const allowed =
+          target === "slot"
+            ? key === "platform.display.notice"
+            : key === "platform.layout.container" ||
+              (key?.startsWith("platform.form.") === true &&
+                key !== "platform.form.validation_message");
+        if (!allowed)
+          failures.push(
+            failure(
+              output,
+              "vortex.definition.application_block_settings",
+              "broken_reference",
+              { kind: "page", key: String(page.key) },
+              undefined,
+              `Step ${String(step.id)} names an invalid ${String(target)} message target on page ${String(page.key)}`,
+            ),
+          );
+      });
+    }
     // Every query-bound block binds each input of its query explicitly, from a source this page
     // offers; publication refuses with the same sentence Studio shows beside the input.
     const bindingFacts = compiledPageBindingFacts(
@@ -371,7 +414,12 @@ export function applicationPageRules(scope: ApplicationScope): void {
     // form holds one input per field: the form keeps one draft value per field.
     const formInputs = new Map<
       string,
-      { names: Set<string>; repeated: Set<string>; dependents: [string, string][] }
+      {
+        names: Set<string>;
+        repeated: Set<string>;
+        dependents: [string, string][];
+        types: Map<string, string>;
+      }
     >();
     walkPageComposition<string>(
       page.composition,
@@ -387,11 +435,29 @@ export function applicationPageRules(scope: ApplicationScope): void {
           names: new Set<string>(),
           repeated: new Set<string>(),
           dependents: [],
+          types: new Map<string, string>(),
         };
         formInputs.set(owner, entry);
         if (name.kind === "text") {
           if (entry.names.has(String(name.value))) entry.repeated.add(String(name.value));
           entry.names.add(String(name.value));
+          const release = CONTROL_BLOCK_RELEASES.find(
+            (candidate) =>
+              String(candidate.blockId) === blockId &&
+              candidate.releaseVersion === String(object(vortex.block).releaseVersion),
+          );
+          const declared = release?.value_type;
+          const setting =
+            declared?.kind === "boolean_setting" ? object(settings[declared.setting]) : undefined;
+          const type =
+            declared?.kind === "fixed"
+              ? declared.type
+              : declared?.kind === "boolean_setting"
+                ? setting?.kind === "boolean" && setting.value === true
+                  ? declared.when_true
+                  : declared.when_false
+                : undefined;
+          if (type !== undefined) entry.types.set(String(name.value), type);
         }
         const parent = object(dependsOn.field ?? {});
         const label = object(dependsOn.label ?? {});
@@ -426,6 +492,34 @@ export function applicationPageRules(scope: ApplicationScope): void {
             ),
           );
     }
+    const pageValues = new Map(
+      Object.entries(object(page.values ?? {})).map(([key, declaration]) => [
+        key,
+        String(object(declaration).type),
+      ]),
+    );
+    const recordFields = array(pageRecord?.fields ?? []);
+    const formFields = new Map(
+      [...formInputs].map(([form, inputs]) => [
+        form,
+        new Map([
+          ...[...inputs.types].map(([name, type]) => [name, { type }] as const),
+          ...recordFields
+            .filter((field) => inputs.names.has(String(field.key)))
+            .map((field) => [String(field.key), field] as const),
+        ]),
+      ]),
+    );
+    if (page.type === "guided_form") {
+      const fields = formFields.get("page");
+      if (fields !== undefined)
+        for (const [id, placement] of placementEntries)
+          if (
+            String(object(placement.vortex.block).blockId) ===
+            String(FORM_CONTAINER_BLOCK_RELEASE.blockId)
+          )
+            formFields.set(id.toLowerCase(), fields);
+    }
     // A Records table or Record detail may map only fields its bound Module query selects, and
     // may order only by fields the query can order (a grouped or aggregating query orders by its
     // grouping fields). The default sort must be the query's leading sort, the order the Query
@@ -444,6 +538,104 @@ export function applicationPageRules(scope: ApplicationScope): void {
           code,
           sentence,
         );
+      for (const condition of [
+        placement.vortex.visibilityCondition,
+        placement.vortex.requiredCondition,
+        placement.vortex.readOnlyCondition,
+        placement.vortex.enabledCondition,
+      ]) {
+        let stored = false;
+        let live = false;
+        let parameter = false;
+        walkValues(condition, (entry) => {
+          if (entry.source === "field") stored = true;
+          if (entry.source === "page" || entry.source === "form") live = true;
+          if (entry.source === "parameter") parameter = true;
+        });
+        if (live) {
+          const currencies = (candidate: unknown): { money: boolean; currency: string } => {
+            const operand = object(candidate);
+            if (operand.source === "page") {
+              const declaration = object(object(page.values)[String(operand.name)]);
+              return {
+                money: declaration.type === "money",
+                currency:
+                  typeof declaration.currency === "string"
+                    ? declaration.currency
+                    : "organisation currency",
+              };
+            }
+            if (operand.source === "form") {
+              const field = formFields
+                .get(String(operand.form).toLowerCase())
+                ?.get(String(operand.field));
+              const currency = object(field?.settings).currency;
+              return {
+                money: typedFieldValueType(field) === "money",
+                currency: typeof currency === "string" ? currency : "organisation currency",
+              };
+            }
+            const value = object(operand.value);
+            return {
+              money: false,
+              currency:
+                typeof value.currency === "string" ? value.currency : "organisation currency",
+            };
+          };
+          walkValues(condition, (entry) => {
+            if (entry.kind !== "comparison" || entry.right === undefined) return;
+            const left = currencies(entry.left);
+            const right = currencies(entry.right);
+            if (
+              (!left.money && !right.money) ||
+              object(entry.left).value === null ||
+              object(entry.right).value === null ||
+              left.currency === right.currency
+            )
+              return;
+            failures.push(
+              placementFailure(
+                output,
+                "vortex.definition.application_block_settings",
+                "invalid_value",
+                undefined,
+                undefined,
+                `Placement ${alias ?? String(placement.props.id)} on page ${String(page.key)} compares money in ${left.currency} and ${right.currency}`,
+              ),
+            );
+          });
+        }
+        if (parameter)
+          failures.push(
+            placementFailure(
+              output,
+              "vortex.definition.application_block_settings",
+              "invalid_value",
+              undefined,
+              undefined,
+              `Placement ${alias ?? String(placement.props.id)} on page ${String(page.key)} cannot use a parameter in a condition`,
+            ),
+          );
+        if (
+          live &&
+          !parameter &&
+          (stored ||
+            !typedConditionTypesValid(condition, new Map(), new Map(), "canonical", {
+              values: pageValues,
+              forms: formFields,
+            }))
+        )
+          failures.push(
+            placementFailure(
+              output,
+              "vortex.definition.application_block_settings",
+              "invalid_value",
+              undefined,
+              undefined,
+              `Placement ${alias ?? String(placement.props.id)} on page ${String(page.key)} has an invalid live condition; stored fields cannot be mixed with page or form values`,
+            ),
+          );
+      }
       const bound =
         placement.vortex.queryId === undefined
           ? undefined
@@ -453,6 +645,89 @@ export function applicationPageRules(scope: ApplicationScope): void {
         `${String(block.blockId)}:${String(block.releaseVersion)}`,
       );
       const blockKey = release?.key;
+      if (blockKey === "platform.display.text" || blockKey === "platform.display.summary_values") {
+        const settings = object(placement.settings);
+        const sourceValues =
+          blockKey === "platform.display.text"
+            ? [settings.value_source]
+            : array(object(settings.value_sources).items).map(
+                (item) => object(object(item).properties).value_source,
+              );
+        const itemKeys =
+          blockKey === "platform.display.summary_values"
+            ? array(object(settings.value_sources).items).map((item) =>
+                String(object(object(item.properties).key).value),
+              )
+            : [];
+        let invalid = new Set(itemKeys).size !== itemKeys.length;
+        for (const sourceValue of sourceValues) {
+          const source = object(object(sourceValue).properties);
+          const kind = object(source.source).value;
+          const format = object(source.format).value;
+          if (blockKey === "platform.display.summary_values" && kind === "projection") {
+            const projectionKey =
+              source.projection_key === undefined ? undefined : object(source.projection_key).value;
+            if (
+              projectionKey === undefined ||
+              !array(bound?.aggregates ?? []).some((aggregate) => aggregate.alias === projectionKey)
+            )
+              invalid = true;
+          }
+          if (
+            format === "money" &&
+            (source.currency === undefined ||
+              !isIsoCurrencyCode(String(object(source.currency).value)))
+          )
+            invalid = true;
+          if (format === "unit" && source.unit === undefined) invalid = true;
+          const thresholds = array(object(source.thresholds).items);
+          if (
+            kind === "projection" &&
+            (format !== "plain" ||
+              thresholds.length > 0 ||
+              source.places !== undefined ||
+              source.unit !== undefined ||
+              source.currency !== undefined)
+          )
+            invalid = true;
+          if (kind === "page_value") {
+            const name = String(
+              source.page_value === undefined ? "" : object(source.page_value).value,
+            );
+            const type = pageValues.get(name);
+            if (
+              type === undefined ||
+              (["number", "percent", "unit"].includes(String(format)) &&
+                type !== "decimal_number") ||
+              (format === "money" && type !== "money" && type !== "decimal_number") ||
+              (thresholds.length > 0 && type !== "money" && type !== "decimal_number")
+            )
+              invalid = true;
+          }
+          let previous: ReturnType<typeof parseExactDecimal>;
+          for (const threshold of thresholds) {
+            const properties = object(threshold.properties);
+            const minimum = parseExactDecimal(object(properties.minimum).value);
+            if (
+              minimum === undefined ||
+              (previous !== undefined && compareExactDecimals(previous, minimum) >= 0)
+            )
+              invalid = true;
+            previous = minimum;
+          }
+        }
+        if (invalid)
+          failures.push(
+            placementFailure(
+              output,
+              "vortex.definition.application_block_settings",
+              "invalid_value",
+              undefined,
+              undefined,
+              `Placement ${alias ?? String(placement.props.id)} on page ${String(page.key)} has an invalid value source, format or threshold`,
+            ),
+          );
+      }
       const totalRecord =
         bound === undefined
           ? undefined

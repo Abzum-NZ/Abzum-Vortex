@@ -1,7 +1,6 @@
 import {
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
   type FormDraftFeedbackSupply,
-  type FormFlowFeedback,
 } from "@vortex/platform/schema";
 import {
   createPayloadParser,
@@ -51,8 +50,6 @@ const FORM_PAYLOAD_PARSER: PlatformComponentPayloadParser = createPayloadParser(
   events: (value, location) => parseControlEventHandlers(value, location),
   draftFeedback: (value, location) =>
     readControlSupply<FormDraftFeedbackSupply>(value, "Draft feedback is invalid", location),
-  flowFeedback: (value, location) =>
-    readControlSupply<FormFlowFeedback>(value, "Flow feedback is invalid", location),
 });
 
 /** Exact registrations pairing each control block release with its React renderer. */

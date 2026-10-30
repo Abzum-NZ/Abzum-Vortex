@@ -702,6 +702,7 @@ const triggerRecordType = (source: SourceFlow): string | undefined => {
 export type CompiledFlowBindingEnvironment = Readonly<{
   page: string;
   controls: readonly string[];
+  values: Readonly<Record<string, string>>;
   forms: FlowFormTypes;
 }>;
 
@@ -872,6 +873,16 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
                   fields,
                 ]),
               ),
+              ...(binding.formRestrictions === undefined
+                ? {}
+                : {
+                    formRestrictions: Object.fromEntries(
+                      Object.entries(binding.formRestrictions).map(([alias, fields]) => [
+                        resolver.form(alias).identifier,
+                        fields,
+                      ]),
+                    ),
+                  }),
             },
           ])
         : [bindings];
@@ -931,6 +942,7 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
             controls: (environment.controls ?? []).map(
               (alias) => resolver.placement(alias).identifier,
             ),
+            values: environment.values,
             forms: canonicalForms,
           });
           bindingEnvironments.set(String(flow.id), held);

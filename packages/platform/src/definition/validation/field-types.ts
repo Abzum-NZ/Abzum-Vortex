@@ -6,11 +6,13 @@ import {
   conditionValueType,
   semanticTypeForLiteral,
   operatorAcceptsOperands,
+  typedValueMatchesType,
   type OperandInfo,
 } from "../../rules/condition-types";
 import { jsonValueSchema, type JsonValue } from "../../catalogue/common";
 import type { JsonObject } from "./context";
 import { object, array } from "./helpers";
+import { fieldValueMatches } from "../../rules/condition-field-types";
 
 export function fieldDeclaredResultType(field: JsonObject | undefined): string | undefined {
   if (!field) return undefined;
@@ -47,9 +49,8 @@ export {
   typedValueMatchesType,
   conditionValueType as typedSemanticFieldType,
   conditionFieldType as typedFieldValueType,
-  fieldValueMatches,
-  fieldRecordTypeIds,
 } from "../../rules/condition-types";
+export { fieldValueMatches, fieldRecordTypeIds } from "../../rules/condition-field-types";
 
 export const calculationDependencyFieldIds = (expression: JsonObject): string[] =>
   calculationFormulaDependencies(flowFormulaSchema.parse(expression));
@@ -59,6 +60,10 @@ export function typedConditionTypesValid(
   fields: ReadonlyMap<string, JsonObject>,
   parameters: ReadonlyMap<string, string> = new Map(),
   dialect: ModuleValueDialect = "canonical",
+  pageReferences?: Readonly<{
+    values: ReadonlyMap<string, string>;
+    forms: ReadonlyMap<string, ReadonlyMap<string, JsonObject>>;
+  }>,
 ): boolean {
   if (value === null || value === undefined) return true;
   const condition = object(value);
@@ -82,13 +87,13 @@ export function typedConditionTypesValid(
         : undefined;
   if (all)
     return array(all).every((entry) =>
-      typedConditionTypesValid(entry, fields, parameters, dialect),
+      typedConditionTypesValid(entry, fields, parameters, dialect, pageReferences),
     );
   if (any)
     return array(any).every((entry) =>
-      typedConditionTypesValid(entry, fields, parameters, dialect),
+      typedConditionTypesValid(entry, fields, parameters, dialect, pageReferences),
     );
-  if (not) return typedConditionTypesValid(not, fields, parameters, dialect);
+  if (not) return typedConditionTypesValid(not, fields, parameters, dialect, pageReferences);
   if (dialect === "canonical" && condition.kind !== "comparison") return false;
 
   const authoredLeft =
@@ -117,6 +122,17 @@ export function typedConditionTypesValid(
       const semanticType = typedSemanticFieldType(type);
       return semanticType === undefined ? undefined : { type: semanticType };
     }
+    if (operand.source === "page") {
+      const type = pageReferences?.values.get(String(operand.name));
+      return type === undefined ? undefined : { type };
+    }
+    if (operand.source === "form") {
+      const field = pageReferences?.forms
+        .get(String(operand.form).toLowerCase())
+        ?.get(String(operand.field));
+      const type = field === undefined ? undefined : typedFieldValueType(field);
+      return field === undefined || type === undefined ? undefined : { field, type };
+    }
     return operand.source === "value" ? {} : undefined;
   };
   const literal = (operandValue: unknown): unknown => {
@@ -130,8 +146,16 @@ export function typedConditionTypesValid(
       return {
         source: "reference",
         semanticType: conditionValueType(declared.type),
-        ...(declared.field ? { field: declared.field } : {}),
-        dialect,
+        ...(declared.field
+          ? {
+              acceptsLiteral: (value: JsonValue) =>
+                fieldValueMatches(value, declared.field, dialect) ||
+                (object(operand).source === "form" &&
+                  declared.type === "money" &&
+                  typedValueMatchesType(value, "money", "flow")),
+            }
+          : {}),
+        dialect: object(operand).source === "page" ? "flow" : dialect,
       };
     const candidate = literal(operand);
     if (!jsonValueSchema.safeParse(candidate).success) return undefined;

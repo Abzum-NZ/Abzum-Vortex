@@ -3,6 +3,9 @@ import {
   type FormContinuationAnswer,
   type JsonValue,
 } from "@vortex/platform/schema";
+import type { NoticeSeverity } from "../components/notice";
+import type { PageMessageTarget } from "./messages";
+import type { FlowSubjectContext } from "./server-flow-client";
 
 /**
  * One typed interface intent, as the shared interpreter produces it in the page or the server
@@ -10,7 +13,15 @@ import {
  */
 export type FlowIntent = Readonly<{
   kind:
-    "show_message" | "show_form" | "confirm" | "navigate" | "refresh" | "set_panel" | "set_filter";
+    | "show_message"
+    | "clear_message"
+    | "show_form"
+    | "confirm"
+    | "navigate"
+    | "refresh"
+    | "set_panel"
+    | "set_filter"
+    | "set_value";
   taskId: string;
   properties: Readonly<Record<string, JsonValue>>;
 }>;
@@ -19,12 +30,14 @@ export type FlowIntentKind = FlowIntent["kind"];
 
 export const FLOW_INTENT_KINDS: readonly FlowIntentKind[] = Object.freeze([
   "show_message",
+  "clear_message",
   "show_form",
   "confirm",
   "navigate",
   "refresh",
   "set_panel",
   "set_filter",
+  "set_value",
 ]);
 
 /**
@@ -46,11 +59,22 @@ export const surfaceCancellationError = (): Error => {
 export const isSurfaceCancellation = (error: unknown): boolean =>
   error instanceof Error && error.name === "AbortError";
 
-/** A message the page shows in a dialog: its text, severity and heading. */
+/** A message's evaluated presentation and optional action. */
 export type FlowMessageIntent = Readonly<{
+  taskId?: string;
+  target: PageMessageTarget;
+  component?: string;
   text: string;
-  severity: string | undefined;
-  title: string;
+  severity: NoticeSeverity;
+  title?: string;
+  actionLabel?: string;
+  actionFlow?: string;
+  actionInputs?: Readonly<Record<string, JsonValue>>;
+  dismissAfterMs?: number;
+  originBindingId?: string;
+  sourceFlowId?: string;
+  subject?: FlowSubjectContext;
+  sourceTablePlacementId?: string;
 }>;
 /**
  * A confirmation: its question, what it covers line by line, and one optional opt-in that goes with
@@ -94,13 +118,48 @@ export const isFlowIntent = (candidate: unknown): candidate is FlowIntent => {
   );
 };
 
-/** Undefined when the intent lacks its required, bounded message text or title. */
+/** Undefined when a platform-produced intent does not match the message contract. */
 export const readMessageIntent = (intent: FlowIntent): FlowMessageIntent | undefined => {
   const message = text(intent.properties.message);
   const title = text(intent.properties.title);
-  return message === undefined || title === undefined
-    ? undefined
-    : { text: message, severity: text(intent.properties.severity), title };
+  const target = text(intent.properties.target);
+  const severity = text(intent.properties.severity);
+  const component = text(intent.properties.component);
+  const actionLabel = text(intent.properties.action_label);
+  const actionFlow = text(intent.properties.action_flow);
+  const actionInputs = intent.properties.action_inputs;
+  const dismissAfterMs = intent.properties.dismiss_after_ms;
+  if (
+    message === undefined ||
+    !["toast", "banner", "dialog", "inline", "slot"].includes(target ?? "") ||
+    !["info", "success", "warning", "error"].includes(severity ?? "") ||
+    ((target === "inline" || target === "slot") && component === undefined) ||
+    (actionLabel === undefined) !== (actionFlow === undefined) ||
+    (actionInputs !== undefined &&
+      (typeof actionInputs !== "object" || actionInputs === null || Array.isArray(actionInputs))) ||
+    (dismissAfterMs !== undefined &&
+      (typeof dismissAfterMs !== "number" ||
+        !Number.isInteger(dismissAfterMs) ||
+        dismissAfterMs < 2_000 ||
+        dismissAfterMs > 30_000 ||
+        (target !== "toast" && target !== "banner") ||
+        (severity !== "info" && severity !== "success")))
+  )
+    return undefined;
+  return {
+    taskId: intent.taskId,
+    target: target as PageMessageTarget,
+    text: message,
+    severity: severity as NoticeSeverity,
+    ...(title === undefined ? {} : { title }),
+    ...(component === undefined ? {} : { component }),
+    ...(actionLabel === undefined ? {} : { actionLabel }),
+    ...(actionFlow === undefined ? {} : { actionFlow }),
+    ...(actionInputs === undefined
+      ? {}
+      : { actionInputs: actionInputs as Readonly<Record<string, JsonValue>> }),
+    ...(dismissAfterMs === undefined ? {} : { dismissAfterMs: dismissAfterMs as number }),
+  };
 };
 
 /**
@@ -161,6 +220,7 @@ export const readFormIntent = (intent: FlowIntent): FlowFormIntent | undefined =
  */
 export type FlowIntentHost = Readonly<{
   showMessage: (message: FlowMessageIntent, signal?: AbortSignal) => void | Promise<void>;
+  clearMessage?: (target: PageMessageTarget, component?: string) => void;
   /** Resolves with the person's answer; a surface that went away (`isSurfaceCancellation`) abandons the run unanswered. */
   showForm: (form: FlowFormIntent, signal?: AbortSignal) => Promise<FlowFormAnswer>;
   confirm: (confirmation: FlowConfirmIntent, signal?: AbortSignal) => Promise<FlowConfirmAnswer>;
@@ -172,6 +232,8 @@ export type FlowIntentHost = Readonly<{
     field: string,
     value: JsonValue | undefined,
   ) => void | Promise<void>;
+  setPageValues?: (values: Readonly<Record<string, JsonValue>>) => void;
+  setFormValue?: (form: string, field: string, value: JsonValue) => boolean;
 }>;
 
 /** Carries out one non-blocking intent (never a form or confirmation). */
@@ -184,7 +246,21 @@ export async function performPresentationIntent(
   switch (intent.kind) {
     case "show_message": {
       const message = readMessageIntent(intent);
-      if (message !== undefined) await host.showMessage(message, signal);
+      if (message === undefined) throw new Error("FLOW_MESSAGE_INTENT_INVALID");
+      await host.showMessage(message, signal);
+      return;
+    }
+    case "clear_message": {
+      const target = text(intent.properties.target);
+      const component = text(intent.properties.component);
+      if (
+        !target ||
+        !["toast", "banner", "dialog", "inline", "slot"].includes(target) ||
+        ((target === "inline" || target === "slot") && component === undefined) ||
+        host.clearMessage === undefined
+      )
+        throw new Error("FLOW_CLEAR_MESSAGE_INTENT_INVALID");
+      host.clearMessage(target as PageMessageTarget, component);
       return;
     }
     case "navigate":
@@ -204,6 +280,25 @@ export async function performPresentationIntent(
       const field = text(intent.properties.field);
       if (component !== undefined && field !== undefined)
         await host.setFilter?.(component, field, intent.properties.value);
+      return;
+    }
+    case "set_value": {
+      const form = text(intent.properties.form);
+      const field = text(intent.properties.field);
+      if (form !== undefined && field !== undefined && Object.hasOwn(intent.properties, "to")) {
+        if (host.setFormValue?.(form, field, intent.properties.to!) !== true)
+          throw new Error("FLOW_FORM_FIELD_WRITE_REFUSED");
+        return;
+      }
+      const values = intent.properties.values;
+      if (
+        typeof values !== "object" ||
+        values === null ||
+        Array.isArray(values) ||
+        host.setPageValues === undefined
+      )
+        throw new Error("FLOW_PAGE_VALUES_UNAVAILABLE");
+      host.setPageValues(values);
       return;
     }
     default:

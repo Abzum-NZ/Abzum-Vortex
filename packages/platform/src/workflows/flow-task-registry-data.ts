@@ -75,17 +75,17 @@ export const flowTaskRuns = Object.freeze({
   "operation.call": serverAndBackend,
   "backend.run": server,
   "event.announce": server,
-  "data.calculate": serverAndBackend,
+  "data.calculate": everywhere,
   "data.record_link": serverAndBackend,
   "data.set_values": nowhere,
-  "data.set_variable": serverAndBackend,
+  "data.set_variable": everywhere,
   "data.format": serverAndBackend,
   "rule.require": server,
   "rule.warn": server,
   "rule.refuse": server,
   "interface.show_message": page,
-  "interface.clear_message": nowhere,
-  "interface.set_value": nowhere,
+  "interface.clear_message": page,
+  "interface.set_value": page,
   "interface.validate_form": nowhere,
   "interface.show_form": page,
   "interface.confirm": page,
@@ -101,7 +101,7 @@ type StepsRunning<Where extends keyof FlowStepRuns> = {
 /** The steps with a page implementation, including control tasks handled by the interpreter. */
 export type PageStepType = StepsRunning<"page">;
 /** Registered page steps are dispatched through the page intent implementation map. */
-export type PageIntentStepType = Extract<PageStepType, FlowRegisteredTaskTypeKey>;
+export type PageIntentStepType = Exclude<Extract<PageStepType, FlowRegisteredTaskTypeKey>, "data.calculate" | "data.set_variable">;
 /** The steps with a server implementation; the server's implementation map covers exactly these. */
 export type ServerStepType = StepsRunning<"server">;
 
@@ -458,6 +458,9 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       /** One action the message offers, bound to a flow ("Undo"). */
       action_label: optional("message_text"),
       action_flow: optional("flow_id"),
+      action_inputs: optional("input_map"),
+      /** A short-lived informational toast or banner, in milliseconds. */
+      dismiss_after_ms: optional("whole_number"),
     },
   },
   "interface.clear_message": {
@@ -468,11 +471,16 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     properties: { target: required("builder_key"), component: optional("placement_id") },
   },
   "interface.set_value": {
-    title: "Set page value",
-    summary: "Sets a declared page value; the page shows and reads it, the server never trusts it.",
+    title: "Set value",
+    summary: "Sets a declared page value or a field in a form on the page.",
     runLocations: ["browser"],
     effect: "interface",
-    properties: { value: required("builder_key"), to: required("any_value") },
+    properties: {
+      value: optional("builder_key"),
+      form: optional("form_id"),
+      field: optional("builder_key"),
+      to: required("any_value"),
+    },
   },
   "interface.validate_form": {
     title: "Validate form",

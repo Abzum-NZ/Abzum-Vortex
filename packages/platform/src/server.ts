@@ -18,3 +18,5 @@ export * from "./theme/index";
 export * from "./catalogue/platform-service-operation-catalogue";
 export * from "./workflows/flow-plan";
 export * from "./workflows/backend-adapters";
+export * from "./workflows/flow-form-types";
+export * from "./definition/message-action-bindings";

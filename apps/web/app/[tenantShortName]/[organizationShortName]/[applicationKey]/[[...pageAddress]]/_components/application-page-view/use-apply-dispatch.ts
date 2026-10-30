@@ -1,15 +1,20 @@
 import { useCallback, type Dispatch, type SetStateAction, type RefObject } from "react";
-import { toast } from "@vortex/ui/components/sonner";
 import type { useRouter } from "next/navigation";
 import type {
   createPlatformComponentRegistryForReleases,
   ServerDrivenResult,
   FormFlowFeedback,
+  FlowRuntimeState,
 } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import { applicationPageAddressPath } from "../../../../../../_lib/address-paths";
 import type { ComponentRequestGeneration } from "@vortex/platform/schema";
-import type { ControlReport, DispatchOutcome, Notice, TableContinuationTarget } from "./types";
+import type {
+  ControlReport,
+  DispatchOutcome,
+  PageMessageDraft,
+  TableContinuationTarget,
+} from "./types";
 import {
   unavailableNotice,
   finishedNotice,
@@ -23,8 +28,8 @@ import { formSurfaceComposition, visibleOwningFormFieldLabel } from "./form-surf
 export function useApplyDispatch({
   placementRequestsRef,
   navigationKey,
-  setNotice,
-  setFormFeedback,
+  showPageMessage,
+  runtimeState,
   router,
   model,
   platformComponentRegistry,
@@ -38,8 +43,8 @@ export function useApplyDispatch({
     generations: Map<string, ComponentRequestGeneration>;
   }>;
   navigationKey: string;
-  setNotice: Dispatch<SetStateAction<Notice | undefined>>;
-  setFormFeedback: Dispatch<SetStateAction<Readonly<Record<string, FormFlowFeedback>>>>;
+  showPageMessage: (message: PageMessageDraft | undefined) => void;
+  runtimeState: FlowRuntimeState;
   router: ReturnType<typeof useRouter>;
   model: ApplicationPageModel;
   platformComponentRegistry: ReturnType<typeof createPlatformComponentRegistryForReleases>;
@@ -62,23 +67,17 @@ export function useApplyDispatch({
     async (
       dispatch: Promise<ServerDrivenResult | undefined>,
       formPlacementId?: string,
-      afterAccepted?: () => Promise<Notice | undefined>,
+      afterAccepted?: () => Promise<PageMessageDraft | undefined>,
       sourceBindingId?: string,
       /** The control reports its outcome; what must not vanish with it also stays on the page. */
       reportOnControl?: ControlReport,
     ): Promise<DispatchOutcome> => {
       let outcome: DispatchOutcome = { notice: undefined, confirmed: false, changed: false };
       const isCurrentNavigation = (): boolean => placementRequestsRef.current.key === navigationKey;
-      setNotice(undefined);
-      if (formPlacementId !== undefined)
-        setFormFeedback((current) => {
-          if (!Object.hasOwn(current, formPlacementId)) return current;
-          const next = { ...current };
-          delete next[formPlacementId];
-          return next;
-        });
+      showPageMessage(undefined);
+      if (formPlacementId !== undefined) runtimeState.messages.clear("inline", formPlacementId);
       const showResult = (
-        resultNotice: Notice,
+        resultNotice: PageMessageDraft,
         refusalFeedback?: Extract<FormFlowFeedback, { kind: "refusal" }>,
       ): void => {
         outcome = { ...outcome, notice: resultNotice };
@@ -86,8 +85,8 @@ export function useApplyDispatch({
         // stay visible and actionable on the page.
         if (
           reportOnControl !== undefined &&
-          resultNotice.link === undefined &&
-          (reportOnControl === "in_place" || resultNotice.tone !== "problem")
+          resultNotice.action === undefined &&
+          (reportOnControl === "in_place" || resultNotice.severity !== "error")
         )
           return;
         // A form on the page shows its own outcome where the person is looking; the page repeats
@@ -101,29 +100,24 @@ export function useApplyDispatch({
             formPlacementId,
             platformComponentRegistry,
           ) !== undefined;
-        if (formOnPage && resultNotice.link === undefined) setNotice(undefined);
-        else
-          setNotice((current) => {
-            // A client intent can refuse after the server has completed (for example, a page the
-            // viewer cannot open). A successful run must not erase that more specific refusal.
-            if (current?.tone === "problem" && resultNotice.tone !== "problem") return current;
-            return formPlacementId === undefined || resultNotice.tone === "problem"
-              ? resultNotice
-              : undefined;
+        if (
+          formOnPage &&
+          resultNotice.action === undefined &&
+          refusalFeedback?.corrections !== undefined
+        ) {
+          runtimeState.messages.show({
+            id: crypto.randomUUID(),
+            target: "inline",
+            component: formPlacementId,
+            severity: "error",
+            text: resultNotice.text,
+            refusal: refusalFeedback,
           });
-        // A confirmed change is announced once, in the notifications region, which stays while
-        // the page moves on (a saved form usually opens what it saved).
-        if (resultNotice.tone !== "problem" && formOnPage) return;
-        if (formPlacementId !== undefined) {
-          setFormFeedback((current) => ({
-            ...current,
-            [formPlacementId]: refusalFeedback ?? {
-              kind: "message",
-              tone: resultNotice.tone === "problem" ? "problem" : "success",
-              text: resultNotice.text,
-            },
-          }));
-        }
+        } else if (
+          runtimeState.messages.read("banner")?.severity !== "error" ||
+          resultNotice.severity === "error"
+        )
+          showPageMessage(resultNotice);
       };
       try {
         const server = await dispatch;
@@ -167,6 +161,19 @@ export function useApplyDispatch({
             ]),
           ];
           const ruleMessages = authoredMessages.length > 0 ? authoredMessages : undefined;
+          const corrections =
+            diagnostic?.corrections ??
+            (fieldLabel !== undefined &&
+            diagnostic?.submittedField !== undefined &&
+            diagnostic.ruleRefusal !== undefined
+              ? [
+                  {
+                    field: diagnostic.submittedField,
+                    code: "field_refused" as const,
+                    message: diagnostic.ruleRefusal.message,
+                  },
+                ]
+              : undefined);
           const refusalFeedback: Extract<FormFlowFeedback, { kind: "refusal" }> | undefined =
             diagnostic === undefined
               ? undefined
@@ -174,24 +181,23 @@ export function useApplyDispatch({
                   kind: "refusal" as const,
                   code: diagnostic.code,
                   ...(fieldLabel === undefined ? {} : { fieldLabel }),
-                  ...(diagnostic.corrections === undefined
-                    ? {}
-                    : { corrections: diagnostic.corrections }),
+                  ...(corrections === undefined ? {} : { corrections }),
                   ...(ruleMessages === undefined ? {} : { ruleMessages }),
                   ...(recovery === undefined ? {} : { recovery }),
                 };
           if (diagnostic !== undefined) {
-            const reason: Notice =
+            const reason: PageMessageDraft =
               ruleMessages === undefined
                 ? refusalNotices[diagnostic.code]
-                : { tone: "problem", text: ruleMessages.join(" ") };
+                : { target: "banner", severity: "error", text: ruleMessages.join(" ") };
             const presentation = diagnostic.presentation;
             resultNotice = {
               ...reason,
               ...(presentation === undefined
                 ? {}
                 : {
-                    link: {
+                    action: {
+                      kind: "link" as const,
                       label: presentation.link_label,
                       href: applicationPageAddressPath(
                         model.invocation.tenantShortName,
@@ -208,15 +214,17 @@ export function useApplyDispatch({
             };
           }
           // Signing in again, or verifying, comes back to this page and record, where the person can retry.
+          const recoveryAction =
+            resultNotice.action?.kind === "link" ? resultNotice.action : undefined;
           if (
-            resultNotice.link?.href === reauthenticationPath ||
-            resultNotice.link?.href === multiFactorPath
+            recoveryAction?.href === reauthenticationPath ||
+            recoveryAction?.href === multiFactorPath
           )
             resultNotice = {
               ...resultNotice,
-              link: {
-                ...resultNotice.link,
-                href: `${resultNotice.link.href}&${new URLSearchParams({
+              action: {
+                ...recoveryAction,
+                href: `${recoveryAction.href}&${new URLSearchParams({
                   continuation: JSON.stringify({
                     kind: "application_page",
                     tenantShortName: model.invocation.tenantShortName,
@@ -253,15 +261,6 @@ export function useApplyDispatch({
             server.descriptor.commit === "confirmed" &&
             ["completed", "committed"].includes(server.descriptor.outcome) &&
             server.failure === undefined;
-          // A saved form usually opens what it saved: its confirmation is a toast that outlives
-          // this page (other gestures confirm through the page notice's own toast).
-          if (
-            confirmed &&
-            formPlacementId !== undefined &&
-            resultNotice.tone !== "problem" &&
-            resultNotice.link === undefined
-          )
-            toast.success(resultNotice.text);
           outcome = {
             ...outcome,
             confirmed,
@@ -291,6 +290,37 @@ export function useApplyDispatch({
             void refreshPlacements(refreshTargetsForBinding(sourceBindingId), undefined, {
               content: true,
             });
+          return outcome;
+        }
+        if (server.kind === "unknown") {
+          if (server.controlId === undefined || server.retry === undefined) {
+            console.error("[flow] unknown outcome has no originating control or retry");
+            showResult(outcomeNotices.uncertain ?? unavailableNotice);
+            return outcome;
+          }
+          const component = `retry:${server.controlId}`;
+          const retry = server.retry;
+          runtimeState.messages.show({
+            id: crypto.randomUUID(),
+            target: "inline",
+            component,
+            severity: "warning",
+            text: "The outcome is unknown. Retry to check it.",
+            action: {
+              kind: "flow",
+              label: "Retry",
+              run: () => {
+                runtimeState.messages.clear("inline", component);
+                void applyDispatch(
+                  retry(),
+                  formPlacementId,
+                  afterAccepted,
+                  sourceBindingId,
+                  reportOnControl,
+                );
+              },
+            },
+          });
           return outcome;
         }
         if (server.kind === "skipped") return outcome;
@@ -324,6 +354,7 @@ export function useApplyDispatch({
       navigationKey,
       refreshPlacements,
       refreshTargetsForBinding,
+      runtimeState,
       router,
     ],
   );

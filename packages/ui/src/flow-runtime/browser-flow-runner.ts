@@ -18,6 +18,7 @@ import {
   type FlowProgram,
   type FlowRunStart,
   type FlowRunState,
+  type FlowRuntimeValues,
   type JsonValue,
 } from "@vortex/platform/schema";
 import { drivePageFlowSegment } from "./page-flow-segment";
@@ -45,6 +46,7 @@ export async function runBrowserFlow(
     plan: BrowserFlowPlan;
     start: FlowRunStart;
     host: FlowIntentHost;
+    readPageValues: () => FlowRuntimeValues;
     resolveForm?: FlowFormReferenceResolver;
     condition?: FlowFormula | null;
     signal?: AbortSignal;
@@ -91,11 +93,12 @@ export async function runBrowserFlow(
   const page = async (tasks: FlowProgram["tasks"]) => {
     const result = await drivePageFlowSegment({
       program: program(tasks),
-      start,
+      start: { ...start, pageValues: input.readPageValues() },
       ...(state === undefined ? {} : { previous: state }),
       resolveMember: members,
       ...(resolveForm === undefined ? {} : { resolveForm }),
       host,
+      readPageValues: input.readPageValues,
       ...(signal === undefined ? {} : { signal }),
     });
     if (result.kind === "finished") state = result.state;
@@ -132,7 +135,8 @@ export async function runBrowserFlow(
       else if (
         opened.kind === "reload" ||
         opened.kind === "refused" ||
-        opened.kind === "unavailable"
+        opened.kind === "unavailable" ||
+        opened.kind === "unknown"
       )
         return terminal(opened);
       else throw new Error("FLOW_PAGE_RUN_START_INVALID");
@@ -146,7 +150,15 @@ export async function runBrowserFlow(
       | { kind: "terminal"; value: BrowserFlowResult }
     > => {
       if (state === undefined) throw new Error("FLOW_PAGE_STATE_UNAVAILABLE");
-      if (!pageFlowGuardMatches(segment.guard, state, program([]), members, resolveForm))
+      if (
+        !pageFlowGuardMatches(
+          segment.guard,
+          { ...state, pageValues: input.readPageValues() },
+          program([]),
+          members,
+          resolveForm,
+        )
+      )
         return { kind: "done" };
       if (segment.kind === "page") {
         const result = await page(segment.tasks);
@@ -194,7 +206,12 @@ export async function runBrowserFlow(
         },
       );
       if (signal?.aborted) return { kind: "terminal", value: { kind: "abandoned" } };
-      if (result.kind === "reload" || result.kind === "refused" || result.kind === "unavailable")
+      if (
+        result.kind === "reload" ||
+        result.kind === "refused" ||
+        result.kind === "unavailable" ||
+        result.kind === "unknown"
+      )
         return { kind: "terminal", value: terminal(result) };
       if (result.kind !== "result" || result.intents.length !== 0)
         throw new Error("FLOW_PAGE_SEGMENT_RESPONSE_INVALID");
@@ -206,6 +223,7 @@ export async function runBrowserFlow(
           await host.showMessage(
             {
               title: "Saved, with a warning",
+              target: "dialog",
               text: result.warnings.map((warning) => warning.message).join(" "),
               severity: "warning",
             },
@@ -271,7 +289,14 @@ export async function runBrowserFlow(
     if (state === undefined) throw new Error("FLOW_PAGE_STATE_UNAVAILABLE");
     return {
       kind: "completed",
-      outputs: pageFlowFinalOutputs(state, program([]), plan, completion, members, resolveForm),
+      outputs: pageFlowFinalOutputs(
+        { ...state, pageValues: input.readPageValues() },
+        program([]),
+        plan,
+        completion,
+        members,
+        resolveForm,
+      ),
       ...(committed ? { committed: true } : {}),
     };
   } catch (error) {
@@ -292,6 +317,7 @@ export async function startBrowserFlow(
     timeZone: string;
     host: FlowIntentHost;
     readFormValue: (formId: string, fieldKey: string) => unknown;
+    readPageValues: () => FlowRuntimeValues;
     condition?: FlowFormula | null;
     signal?: AbortSignal;
     server?: Readonly<{
@@ -322,14 +348,17 @@ export async function startBrowserFlow(
       reference: (reference) =>
         reference.source === "form"
           ? resolveForm(reference)
-          : reference.source === "execution_now"
-            ? { type: "date_time", value: clock.now }
-            : undefined,
+          : reference.source === "page"
+            ? input.readPageValues()[reference.name]
+            : reference.source === "execution_now"
+              ? { type: "date_time", value: clock.now }
+              : undefined,
     });
     return await runBrowserFlow({
       plan: input.plan,
       start: { runId: input.runId, flowId: input.plan.flowId, inputs, ...clock },
       host: input.host,
+      readPageValues: input.readPageValues,
       resolveForm,
       ...(input.condition === undefined ? {} : { condition: input.condition }),
       ...(input.signal === undefined ? {} : { signal: input.signal }),

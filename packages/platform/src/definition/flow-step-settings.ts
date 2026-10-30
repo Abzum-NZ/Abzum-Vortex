@@ -17,8 +17,6 @@ import {
 /** Where a message shows. `dialog` blocks until read; the others are part of the page. */
 const flowMessageTargets = ["dialog", "toast", "banner", "inline", "slot"] as const;
 const flowMessageSeverities = ["info", "success", "warning", "error"] as const;
-/** The message targets the page shows today. */
-const runnableMessageTargets: ReadonlySet<string> = new Set(["dialog"]);
 
 export type FlowStepSettingIssue = Readonly<{
   path: (string | number)[];
@@ -43,8 +41,6 @@ export const flowStepSettingIssues = (
   const issues: FlowStepSettingIssue[] = [];
   const invalid = (path: (string | number)[], message: string) =>
     issues.push({ path, message, notYetRunnable: false });
-  const notYet = (path: (string | number)[], message: string) =>
-    issues.push({ path, message, notYetRunnable: true });
   const visit = (tasks: readonly FlowTask[], base: (string | number)[]) =>
     tasks.forEach((task, index) => {
       const path = [...base, index];
@@ -91,22 +87,46 @@ export const flowStepSettingIssues = (
           [...path, "severity"],
           `Show message: choose its severity (${flowMessageSeverities.join(", ")})`,
         );
-      if (target === "dialog" && properties.title === undefined)
-        invalid([...path, "title"], "Show message: a dialog needs a title");
-      if (target !== undefined && !runnableMessageTargets.has(target))
-        notYet(
-          [...path, "target"],
-          `Show message: a ${target} message cannot show yet; use a dialog`,
-        );
+      const dismiss = properties.dismiss_after_ms;
+      if (dismiss !== undefined) {
+        const milliseconds = dismiss.kind === "literal" ? dismiss.literal.value : undefined;
+        if (
+          dismiss.kind !== "literal" ||
+          dismiss.literal.type !== "whole_number" ||
+          typeof milliseconds !== "number" ||
+          !Number.isInteger(milliseconds) ||
+          milliseconds < 2_000 ||
+          milliseconds > 30_000
+        )
+          invalid(
+            [...path, "dismiss_after_ms"],
+            "Show message: auto-dismiss must be a literal between 2,000 and 30,000 milliseconds",
+          );
+        if (
+          (target !== "toast" && target !== "banner") ||
+          (severity !== "info" && severity !== "success")
+        )
+          invalid(
+            [...path, "dismiss_after_ms"],
+            "Show message: auto-dismiss is available only for an info or success toast or banner",
+          );
+      }
       if ((properties.action_label === undefined) !== (properties.action_flow === undefined))
         invalid(
           [...path, "action_label"],
           "Show message: an action needs both its label and its flow",
         );
-      else if (properties.action_flow !== undefined)
-        notYet([...path, "action_flow"], "Show message: a message action cannot run yet");
     } else if (type === "interface.clear_message") checkTarget(properties, path, "Clear message");
-    else if (type === "backend.run") {
+    else if (type === "interface.set_value") {
+      const page = properties.value !== undefined;
+      const form = properties.form !== undefined;
+      const field = properties.field !== undefined;
+      if ((page && (form || field)) || (!page && !(form && field)))
+        invalid(path, "Set value: choose either a page value or both a form and field");
+      for (const key of ["value", "form", "field"] as const)
+        if (properties[key] !== undefined && literalText(properties[key]) === undefined)
+          invalid([...path, key], `Set value: ${key} must be a literal`);
+    } else if (type === "backend.run") {
       const mode = literalText(properties.mode);
       if (mode !== "await" && mode !== "start")
         invalid([...path, "mode"], "Run on back end: choose await (use its outputs) or start");

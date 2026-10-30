@@ -4,10 +4,11 @@ import {
   type PlatformBlockRelease,
   type BlockPropertyValueContract,
 } from "@vortex/platform/schema";
-import type { ReactElement } from "react";
+import { useContext, useSyncExternalStore, type ReactElement } from "react";
 import { Notice, type NoticeContentPart, type NoticeSeverity } from "../components/notice";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import type { DisplayRenderProps } from "./context";
+import { FlowRuntimeStateContext } from "../flow-runtime/flow-runtime-state-context";
 
 const NOTICE_SEVERITIES = [
   "info",
@@ -111,6 +112,14 @@ function readDismissible(
 
 /** Thin browser-safe adapter from this exact authored release to the unchanged Notice primitive. */
 export function NoticeBlock(props: DisplayRenderProps<never>): ReactElement {
+  const runtime = useContext(FlowRuntimeStateContext);
+  const message = useSyncExternalStore(
+    (listener) =>
+      runtime?.subscribe(`message:${runtime.messages.key("slot", props.placementId)}`, listener) ??
+      (() => undefined),
+    () => runtime?.messages.read("slot", props.placementId),
+    () => undefined,
+  );
   const location = noticeLocation(props);
   const metadata = props.metadata;
   if (
@@ -157,6 +166,18 @@ export function NoticeBlock(props: DisplayRenderProps<never>): ReactElement {
   );
 
   const title = readTextSetting(settings, "title", location, false);
+  if (message !== undefined)
+    return (
+      <Notice
+        key={message.id}
+        severity={message.severity}
+        content={message.text}
+        dismissible
+        onDismiss={() => runtime?.messages.clear("slot", props.placementId, message.id)}
+        {...(message.title === undefined ? {} : { title: message.title })}
+        {...(message.action === undefined ? {} : { action: message.action })}
+      />
+    );
   return (
     <Notice
       severity={severity}
