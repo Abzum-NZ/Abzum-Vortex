@@ -63,6 +63,18 @@ import type { draftControls } from "./control-drafts";
 import type { ControlDrafts } from "../../../_components/application-frame-state";
 import type { useFieldFlowEvents } from "./use-field-flow-events";
 
+/** The grid events whose built-in table change stays and whose bound flow runs after it. */
+const gridStateFlowEvents = [
+  "refresh",
+  "filter_changed",
+  "search_changed",
+  "sort_changed",
+  "columns_changed",
+  "row_expanded",
+  "page_changed",
+  "selection_changed",
+] as const;
+
 export function useRuntimeInputs({
   currentData,
   model,
@@ -577,6 +589,17 @@ export function useRuntimeInputs({
             tableData?.features?.tree !== undefined)
         )
           events.row_expanded = rowDetailHandlers(placementId);
+        // A flow the builder bound to one of these grid events runs after the built-in change.
+        for (const kind of gridStateFlowEvents) {
+          const binding = bindingOfEvent(bindings, kind);
+          const builtIn = events[kind] as ((event: DisplaySemanticEvent) => unknown) | undefined;
+          if (binding === undefined || builtIn === undefined || !supportsEvent(kind)) continue;
+          events[kind] = (event: DisplaySemanticEvent) => {
+            const result = builtIn(event);
+            void runBinding(placementId, binding, suppliedValues(event));
+            return result as void;
+          };
+        }
       }
       // A field's picker asks for its options; the page reads them under the person's access.
       if (model.optionPlacementIds.includes(placementId))

@@ -1111,6 +1111,17 @@ export async function invokeInstalledFlow(
           );
     if (featureRefusal !== undefined) {
       logRecordsTableRequestRefusal(featureRefusal, "flow_dispatch");
+      // A row shown at another revision than the stored one: the person reloads and sees the
+      // fresh row, rather than a neutral refusal.
+      if (
+        featureRefusal.reason === "displayed_revision_not_current" &&
+        bindingContext !== undefined
+      )
+        return {
+          kind: "reload",
+          installationRevision: bindingContext.applicationReleaseRevision,
+          committedNow: false,
+        };
       logFlowRefusal("BINDING_GRID_FEATURE_NOT_PROJECTED");
       return { kind: "refused", committedNow: false };
     }
