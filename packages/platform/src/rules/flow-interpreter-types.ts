@@ -92,7 +92,14 @@ type Awaiting =
 
 export type FlowInterfaceIntent = Readonly<{
   kind:
-    "show_message" | "show_form" | "confirm" | "navigate" | "refresh" | "set_panel" | "set_filter";
+    | "show_message"
+    | "show_form"
+    | "confirm"
+    | "navigate"
+    | "refresh"
+    | "set_panel"
+    | "set_filter"
+    | "set_value";
   taskId: string;
   properties: FlowRuntimeValues;
 }>;
@@ -121,6 +128,10 @@ export type FlowRunState = Readonly<{
   /** The record as stored before a save, keyed by field key, for `trigger.previous.<field>` reads. */
   previousRecord?: FlowRuntimeValues;
   forms?: Readonly<Record<string, FlowRuntimeValues>>;
+  /** Browser-owned page values at the start of the current page segment. */
+  pageValues?: FlowRuntimeValues;
+  /** Page values changed since the last intent delivery. */
+  pageWrites?: FlowRuntimeValues;
   /** Warnings and requirements the save rule tasks reported, in the order they ran. */
   ruleFeedback?: readonly FlowRuleFeedback[];
   activations: readonly Activation[];
@@ -238,6 +249,8 @@ export type FlowRunStart = Readonly<{
   runId: string;
   flowId: string;
   inputs: Readonly<Record<string, unknown>>;
+  /** Present only for a page run; never trusted as server authority. */
+  pageValues?: FlowRuntimeValues;
   now: string;
   /** The date at this instant in the organisation's time zone, for date deadlines. */
   organizationLocalDate?: string;

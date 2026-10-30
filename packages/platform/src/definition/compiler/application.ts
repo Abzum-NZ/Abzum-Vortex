@@ -686,6 +686,18 @@ function compileApplicationFlowBindings(
         return type;
       }
       if (reference.source === "execution_now") return "date_time";
+      if (reference.source === "page") {
+        const types = environments.map((environment) => environment.values[reference.name]);
+        if (types.length === 0 || types.some((candidate) => candidate === undefined)) {
+          problem ??= `Page value ${reference.name} is not available on every bound page`;
+          return undefined;
+        }
+        if (types.some((candidate) => candidate !== types[0])) {
+          problem ??= `Page value ${reference.name} has inconsistent types`;
+          return undefined;
+        }
+        return types[0];
+      }
       if (reference.source === "form") {
         const types = environments.map(
           (environment) => environment.forms[reference.form]?.[reference.field],
@@ -723,12 +735,13 @@ function compileApplicationFlowBindings(
     for (const [name, value] of Object.entries(canonicalInputs)) {
       if (value.kind === "caller") continue;
       const references = flowValueReferences(value);
-      if (references.some((reference) => reference.source === "page"))
-        refuse(`Input ${name} reads a page value, which cannot run yet`);
       // Server-resolved binding inputs are checked by their own protected runtime path.
       if (
         references.some(
-          (reference) => reference.source !== "form" && reference.source !== "execution_now",
+          (reference) =>
+            reference.source !== "form" &&
+            reference.source !== "page" &&
+            reference.source !== "execution_now",
         )
       )
         continue;

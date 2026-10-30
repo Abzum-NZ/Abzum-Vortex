@@ -27,6 +27,7 @@ export const initialState = (start: FlowRunStart): FlowRunState => ({
   committedEffects: 0,
   steps: 0,
   pendingIntents: [],
+  ...(start.pageValues === undefined ? {} : { pageValues: start.pageValues }),
   ...(start.triggerRecord === undefined ? {} : { triggerRecord: start.triggerRecord }),
   ...(start.previousRecord === undefined ? {} : { previousRecord: start.previousRecord }),
 });

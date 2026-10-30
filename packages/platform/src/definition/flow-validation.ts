@@ -766,6 +766,57 @@ export function validateFlow(
     where: Where,
     path: Path,
   ) => {
+    if (task.type === "interface.set_value" && name === "to") {
+      const pageValue = task.properties.value;
+      const form = task.properties.form;
+      const field = task.properties.field;
+      const targetName = (candidate: FlowValue | undefined) =>
+        candidate?.kind === "literal" && typeof candidate.literal.value === "string"
+          ? candidate.literal.value
+          : undefined;
+      const pageName = targetName(pageValue);
+      const formName = targetName(form);
+      const fieldName = targetName(field);
+      const environments = options.referenceEnvironments ?? [];
+      const types = environments.map((environment) => {
+        const type =
+          pageName !== undefined
+            ? environment.values[pageName]
+            : formName !== undefined && fieldName !== undefined
+              ? environment.forms[formName]?.[fieldName]
+              : undefined;
+        if (
+          type === undefined &&
+          (pageName !== undefined || (formName !== undefined && fieldName !== undefined))
+        )
+          add(
+            path,
+            "vortex.definition.workflow_node_references",
+            "broken_reference",
+            `Set value step ${task.id}: target is unavailable on page ${environment.page}`,
+          );
+        return type;
+      });
+      if (environments.length === 0)
+        add(
+          path,
+          "vortex.definition.workflow_node_references",
+          "broken_reference",
+          `Set value step ${task.id} requires a bound page`,
+        );
+      const type = types[0];
+      if (type !== undefined && types.every((candidate) => candidate === type))
+        checkValue(value, [type], where, path);
+      else valueType(value, where, path);
+      if (types.some((candidate) => candidate !== undefined && candidate !== type))
+        add(
+          path,
+          "vortex.definition.source_type_compatibility",
+          "invalid_value",
+          `Set value step ${task.id}: target types differ across pages`,
+        );
+      return;
+    }
     if (task.type === "data.calculate" && name === "result_type" && value.kind !== "literal")
       add(
         path,

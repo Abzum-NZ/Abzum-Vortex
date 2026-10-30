@@ -23,8 +23,9 @@ export async function runFlowBinding(
       caller: callerInputs ?? {},
       runId: clickId,
       timeZone: options.timeZone,
-      host: options.host,
+      host: { ...options.host, setPageValues: options.state.pageValues.write },
       readFormValue: options.state.readFormValue,
+      readPageValues: options.state.pageValues.snapshot,
       condition: settings.condition,
       signal: runSignal,
       server: {

@@ -10,7 +10,14 @@ import {
  */
 export type FlowIntent = Readonly<{
   kind:
-    "show_message" | "show_form" | "confirm" | "navigate" | "refresh" | "set_panel" | "set_filter";
+    | "show_message"
+    | "show_form"
+    | "confirm"
+    | "navigate"
+    | "refresh"
+    | "set_panel"
+    | "set_filter"
+    | "set_value";
   taskId: string;
   properties: Readonly<Record<string, JsonValue>>;
 }>;
@@ -25,6 +32,7 @@ export const FLOW_INTENT_KINDS: readonly FlowIntentKind[] = Object.freeze([
   "refresh",
   "set_panel",
   "set_filter",
+  "set_value",
 ]);
 
 /**
@@ -172,6 +180,7 @@ export type FlowIntentHost = Readonly<{
     field: string,
     value: JsonValue | undefined,
   ) => void | Promise<void>;
+  setPageValues?: (values: Readonly<Record<string, JsonValue>>) => void;
 }>;
 
 /** Carries out one non-blocking intent (never a form or confirmation). */
@@ -204,6 +213,18 @@ export async function performPresentationIntent(
       const field = text(intent.properties.field);
       if (component !== undefined && field !== undefined)
         await host.setFilter?.(component, field, intent.properties.value);
+      return;
+    }
+    case "set_value": {
+      const values = intent.properties.values;
+      if (
+        typeof values !== "object" ||
+        values === null ||
+        Array.isArray(values) ||
+        host.setPageValues === undefined
+      )
+        throw new Error("FLOW_PAGE_VALUES_UNAVAILABLE");
+      host.setPageValues(values);
       return;
     }
     default:
