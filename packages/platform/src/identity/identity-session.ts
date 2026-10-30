@@ -7,6 +7,7 @@ import {
   type VerifiedIdentity,
 } from "../access/identity-access";
 import type { CorrelationId } from "../catalogue/common";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import { describeFailure } from "../catalogue/runtime-primitives";
 import {
   IdentityVerificationError,
@@ -105,12 +106,13 @@ export const createIdentitySessionService = (verifier: IdentityVerifier) => {
 
   const resolveVerified = async (
     accessToken: string,
+    transaction?: RequestDatabaseTransaction,
   ): Promise<Readonly<{ resolution: IdentitySessionResolution; identity?: VerifiedIdentity }>> => {
     const verified = await verify(accessToken);
     if (!verified.ok) return { resolution: verified.result };
     try {
       verifier.checkpoint?.();
-      const projection = await readIdentityProjection(verified.identity);
+      const projection = await readIdentityProjection(verified.identity, transaction);
       verifier.checkpoint?.();
       const resolution = activeResult(verified.identity, projection, clock);
       return resolution.kind === "active"

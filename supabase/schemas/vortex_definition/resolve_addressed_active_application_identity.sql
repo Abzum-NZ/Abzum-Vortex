@@ -14,7 +14,6 @@ begin
   end if;
   checked_context:=vortex_access.validated_human_request_context();
   if checked_context ->> 'callerKind' is distinct from 'human'
-    or checked_context ? 'applicationRootId'
     or pg_catalog.clock_timestamp()>=(checked_context ->> 'expiresAt')::timestamptz
     or (checked_context ? 'delegatedContext' and
       pg_catalog.clock_timestamp()>=(checked_context #>> '{delegatedContext,expiresAt}')::timestamptz)
@@ -25,6 +24,10 @@ begin
   select root.root_id into strict selected_root from vortex_definition.roots as root
   where root.organization_id=(checked_context ->> 'organizationId')::uuid
     and root.kind='application' and root.key=p_application_key;
+  if checked_context ? 'applicationRootId'
+    and (checked_context ->> 'applicationRootId')::uuid is distinct from selected_root then
+    raise exception using errcode='42501', message='Application address is unavailable';
+  end if;
   installation:=vortex_definition.read_active_installation_for_scope_internal(
     (checked_context ->> 'organizationId')::uuid,selected_root);
   select snapshot.* into strict registered_app
@@ -55,4 +58,4 @@ alter function vortex_definition.resolve_addressed_active_application_identity(t
 revoke all on function vortex_definition.resolve_addressed_active_application_identity(text)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_definition.resolve_addressed_active_application_identity(text) to vortex_owner, vortex_request;
-comment on function vortex_definition.resolve_addressed_active_application_identity(text) is 'Returns one exact active Application address under the current HUMAN organization request, without a Page grant.';
+comment on function vortex_definition.resolve_addressed_active_application_identity(text) is 'Returns one exact active Application address under the current HUMAN organization or matching application request, without a Page grant.';

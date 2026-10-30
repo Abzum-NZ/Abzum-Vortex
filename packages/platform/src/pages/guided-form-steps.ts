@@ -70,6 +70,7 @@ import {
  */
 export type GuidedFormDependencies = Readonly<{
   identityAuthorityId: PrivateFormDraftServiceDependencies["identityAuthorityId"];
+  boundRequest?: PrivateFormDraftServiceDependencies["boundRequest"];
   readContext: (
     transaction: RequestDatabaseTransaction,
     scope: SelectedOrganizationScope,
@@ -686,6 +687,7 @@ const guidedFormAuthorityLoader =
 export const createGuidedFormDraftService = (dependencies: GuidedFormDependencies) => {
   const serviceDependencies: PrivateFormDraftServiceDependencies = {
     identityAuthorityId: dependencies.identityAuthorityId,
+    ...(dependencies.boundRequest === undefined ? {} : { boundRequest: dependencies.boundRequest }),
     loadAuthority: guidedFormAuthorityLoader(dependencies),
   };
   return createPrivateFormDraftService(serviceDependencies);
