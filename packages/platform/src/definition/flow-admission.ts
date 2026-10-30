@@ -238,7 +238,7 @@ export const admitFlowSegment = async (
   installation: InstalledFlowBindings,
   ...args: Parameters<FlowOrchestratorDependencies["admitSegment"]>
 ): ReturnType<FlowOrchestratorDependencies["admitSegment"]> => {
-  const [run, state, segment, execute] = args;
+  const [run, state, segment, execute, entry] = args;
   const admission = prepareAdmission(host, installation, run, state);
   if (admission === undefined) return { kind: "refused", committedNow: false };
   const selection = run.authority.selection;
@@ -335,7 +335,7 @@ export const admitFlowSegment = async (
         return execute(admission.ports(bound), replay);
       },
       prepareWorkflow: async (bound, part, commandId, runId, resumed, replay) => {
-        const first = continueFlowRun(state, run.library, part);
+        const first = entry ?? continueFlowRun(state, run.library, part);
         if (first.kind !== "protected_task" || first.call.taskType !== "record.pin_identity")
           return { kind: "ready" };
         const call = first.call;

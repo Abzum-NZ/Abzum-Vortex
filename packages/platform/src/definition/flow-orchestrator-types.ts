@@ -196,6 +196,8 @@ export type FlowOrchestratorDependencies = Readonly<{
       boundPorts: FlowOrchestratorDependencies,
       replay: FlowSegmentReceipt | undefined,
     ) => Promise<SegmentExecution<Readonly<{ step: FlowRunStep; run: Run }>>>,
+    /** The step a detached segment start already took, when the segment is not entered from a boundary. */
+    entry?: FlowRunStep,
   ) => Promise<StartFlowResult<Readonly<{ step: FlowRunStep; run: Run }>>>;
   /** Admits a continuation that reaches another page intent or finishes without a segment. */
   admitContinuation: (

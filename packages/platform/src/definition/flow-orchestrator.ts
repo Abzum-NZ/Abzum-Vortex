@@ -568,6 +568,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
               warnings: executed.warnings,
             };
           },
+          first,
         );
         if (admitted.kind !== "completed") return admitted;
         const { step, run: attempt } = admitted.value;

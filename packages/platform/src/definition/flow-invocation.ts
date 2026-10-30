@@ -505,8 +505,8 @@ export async function invokeInstalledFlow(
     };
     return {
       continuationKey: dependencies.continuationKey,
-      admitSegment: (run, state, segment, execute) =>
-        admitFlowSegment(admissionHost, installation, run, state, segment, execute),
+      admitSegment: (run, state, segment, execute, entry) =>
+        admitFlowSegment(admissionHost, installation, run, state, segment, execute, entry),
       admitContinuation: (run, state, execute, openReplay) =>
         admitFlowContinuation(admissionHost, installation, run, state, execute, openReplay),
       admitPageStart: (run, state) => admitFlowPageStart(admissionHost, installation, run, state),
