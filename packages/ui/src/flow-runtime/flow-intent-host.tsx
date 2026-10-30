@@ -365,6 +365,7 @@ export function useFlowIntentHost(
             ? {}
             : {
                 action: {
+                  kind: "flow" as const,
                   label: message.actionLabel,
                   run: () => optionsRef.current.onMessageAction(message),
                 },

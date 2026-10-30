@@ -28,7 +28,11 @@ export function InlineMessage({ placementId }: Readonly<{ placementId: string }>
         <>
           {message.title === undefined ? null : <strong>{message.title}: </strong>}
           {message.text}
-          {message.action === undefined ? null : (
+          {message.action === undefined ? null : message.action.kind === "link" ? (
+            <a className="underline" href={message.action.href}>
+              {message.action.label}
+            </a>
+          ) : (
             <Button type="button" variant="ghost" size="xs" onClick={message.action.run}>
               {message.action.label}
             </Button>

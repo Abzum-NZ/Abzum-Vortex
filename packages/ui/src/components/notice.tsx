@@ -28,7 +28,9 @@ export interface NoticeProps {
   title?: string;
   dismissible?: boolean;
   onDismiss?: () => void;
-  action?: Readonly<{ label: string; run: () => void }>;
+  action?:
+    | Readonly<{ kind: "flow"; label: string; run: () => void }>
+    | Readonly<{ kind: "link"; label: string; href: string }>;
 }
 
 const NOTICE_BASE_ORIGIN = "https://vortex.invalid";
@@ -126,7 +128,11 @@ export function Notice({
         </div>
         {dismissible || action !== undefined ? (
           <AlertAction>
-            {action === undefined ? null : (
+            {action === undefined ? null : action.kind === "link" ? (
+              <a className="underline" href={safeNoticeHref(action.href)}>
+                {action.label}
+              </a>
+            ) : (
               <Button type="button" variant="ghost" size="xs" onClick={action.run}>
                 {action.label}
               </Button>

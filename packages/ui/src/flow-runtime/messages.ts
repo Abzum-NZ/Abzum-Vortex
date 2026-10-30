@@ -8,7 +8,9 @@ export type PageMessage = Readonly<{
   severity: NoticeSeverity;
   text: string;
   title?: string;
-  action?: Readonly<{ label: string; run: () => void }>;
+  action?:
+    | Readonly<{ kind: "flow"; label: string; run: () => void }>
+    | Readonly<{ kind: "link"; label: string; href: string }>;
   dismissAfterMs?: number;
 }>;
 

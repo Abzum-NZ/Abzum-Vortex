@@ -7,6 +7,8 @@ import {
   useState,
   type ReactElement,
   type ReactNode,
+  type Dispatch,
+  type SetStateAction,
 } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -24,11 +26,13 @@ import {
   isClientPageChange,
   pageHoldFor,
   primaryStreamedPlacement,
+  createFlowRuntimeState,
 } from "@vortex/ui";
 import {
   describeFailure,
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
   type ProjectedApplicationFrame,
+  type PageDefinition,
   isRecord,
   walkPageComposition,
   readCompiledItemSettings,
@@ -37,7 +41,6 @@ import Link from "next/link";
 import { Button } from "@vortex/ui/components/button";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { FirstRecordTypeEmptyState } from "../../../../../../_components/first-record-type-empty-state";
-import { toast } from "@vortex/ui/components/sonner";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import type { PageWebMcpTool } from "../../../../../../_lib/application-page";
 import type {
@@ -123,6 +126,18 @@ export function ApplicationPageViewContent({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const runtimeStateRef = useRef<{
+    identity: string;
+    state: ReturnType<typeof createFlowRuntimeState>;
+  } | null>(null);
+  const pageIdentity = `${model.pageId}:${model.invocation.releaseKey}`;
+  if (runtimeStateRef.current?.identity !== pageIdentity)
+    runtimeStateRef.current = {
+      identity: pageIdentity,
+      state: createFlowRuntimeState((model.page as PageDefinition).values),
+    };
+  const runtimeState = runtimeStateRef.current.state;
+  useEffect(() => () => runtimeState.messages.dispose(), [runtimeState]);
   // The page address owns every table's query state; the served address only starts it.
   const { address, currentSearch } = usePageAddress({ model, served: searchParams.toString() });
   const [selection, setSelection] = useState<PageSelection>({});
@@ -136,17 +151,34 @@ export function ApplicationPageViewContent({
   const [refreshedPlacementData, setRefreshedPlacementData] = useState<
     RefreshedPlacementData | undefined
   >(undefined);
-  const [notice, setNotice] = useState<Notice | undefined>(undefined);
-  // A confirmation is a transient toast; a problem stays on the page as an alert until dismissed
-  // by the next action, so it is never missed.
-  useEffect(() => {
-    if (notice?.tone !== "info") return;
-    const toastId = toast.success(notice.text);
-    // A previous gesture's confirmation must not outlive the notice it describes.
-    return () => {
-      toast.dismiss(toastId);
-    };
-  }, [notice]);
+  const setNotice = useCallback<Dispatch<SetStateAction<Notice | undefined>>>(
+    (change) => {
+      const held = runtimeState.messages.read("banner") ?? runtimeState.messages.read("toast");
+      const previous: Notice | undefined =
+        held === undefined
+          ? undefined
+          : {
+              tone: held.severity === "error" || held.severity === "warning" ? "problem" : "info",
+              text: held.text,
+              ...(held.action?.kind === "link"
+                ? { link: { label: held.action.label, href: held.action.href } }
+                : {}),
+            };
+      const next = typeof change === "function" ? change(previous) : change;
+      if (next === previous) return;
+      runtimeState.messages.clear("banner");
+      runtimeState.messages.clear("toast");
+      if (next !== undefined)
+        runtimeState.messages.show({
+          id: crypto.randomUUID(),
+          target: next.tone === "info" ? "toast" : "banner",
+          severity: next.tone === "info" ? "success" : "error",
+          text: next.text,
+          ...(next.link === undefined ? {} : { action: { kind: "link", ...next.link } }),
+        });
+    },
+    [runtimeState],
+  );
   const [formFeedback, setFormFeedback] = useState<Readonly<Record<string, FormFlowFeedback>>>({});
   const [webMcpShellState, setWebMcpShellState] = useState<ApplicationWebMcpRuntime>();
   const reportWebMcpShellState = useCallback(
@@ -303,9 +335,10 @@ export function ApplicationPageViewContent({
     requestChoicePageRef,
   });
 
-  const { formBlock, flowRuntime, webMcpRuntime, runtimeState, intentHostElement, messageBanner } =
+  const { formBlock, flowRuntime, webMcpRuntime, intentHostElement, messageBanner } =
     useFlowRuntime({
       application,
+      runtimeState,
       subject,
       continuingFormsRef,
       formCancelledRef,
@@ -687,26 +720,6 @@ export function ApplicationPageViewContent({
               ) : (
                 <Alert role="status" aria-live="polite">
                   <AlertDescription>No page content is available.</AlertDescription>
-                </Alert>
-              )}
-              {notice === undefined || notice.tone === "info" ? null : (
-                <Alert
-                  variant={notice.tone === "problem" ? "destructive" : "default"}
-                  role={notice.tone === "problem" ? "alert" : "status"}
-                  aria-live="polite"
-                  data-vortex-notice={notice.tone}
-                >
-                  <AlertDescription>
-                    {notice.text}
-                    {notice.link === undefined ? null : (
-                      <>
-                        {" "}
-                        <a className="underline" href={notice.link.href}>
-                          {notice.link.label}
-                        </a>
-                      </>
-                    )}
-                  </AlertDescription>
                 </Alert>
               )}
             </>

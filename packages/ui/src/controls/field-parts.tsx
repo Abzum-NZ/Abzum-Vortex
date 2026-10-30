@@ -177,7 +177,11 @@ export function FieldMessages({
         >
           {ids.message.title === undefined ? null : <strong>{ids.message.title}: </strong>}
           {ids.message.text}
-          {ids.message.action === undefined ? null : (
+          {ids.message.action === undefined ? null : ids.message.action.kind === "link" ? (
+            <a className="underline" href={ids.message.action.href}>
+              {ids.message.action.label}
+            </a>
+          ) : (
             <Button type="button" variant="ghost" size="xs" onClick={ids.message.action.run}>
               {ids.message.action.label}
             </Button>

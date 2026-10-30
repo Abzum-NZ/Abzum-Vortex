@@ -12,7 +12,6 @@ import type { useUnsavedWorkGuard, useUnsavedWorkRegistry } from "@vortex/ui";
 import {
   createFlowInvokeClient,
   createFlowRuntime,
-  createFlowRuntimeState,
   createFormBlockRuntime,
   getAccessibleName,
   type FieldInputControlReleaseMap,
@@ -26,6 +25,7 @@ import {
   type FlowFormIntent,
   type FlowIntentHost,
   type FlowMessageIntent,
+  type FlowRuntimeState,
   type FlowInvokeClient,
   type LinkNavigationEnvironment,
   type PlatformThemeTokens,
@@ -33,7 +33,6 @@ import {
 import {
   formContinuationAnswerSchema,
   type ComponentFlowBinding,
-  type PageDefinition,
   type ReferenceChoiceSelectionEvidenceMap,
   isRecord,
   sameId,
@@ -50,6 +49,7 @@ import { unavailableNotice } from "./notices";
 
 export function useFlowRuntime({
   application,
+  runtimeState,
   subject,
   continuingFormsRef,
   formCancelledRef,
@@ -75,6 +75,7 @@ export function useFlowRuntime({
   setPanelRef,
 }: Readonly<{
   application: ApplicationPageModel["invocation"];
+  runtimeState: FlowRuntimeState;
   subject: ApplicationPageModel["subject"];
   continuingFormsRef: RefObject<Map<string, SubmittedForm>>;
   formCancelledRef: RefObject<boolean>;
@@ -375,18 +376,6 @@ export function useFlowRuntime({
   );
   const committedRef = useRef(committed);
   committedRef.current = committed;
-  const runtimeStateRef = useRef<{
-    identity: string;
-    state: ReturnType<typeof createFlowRuntimeState>;
-  } | null>(null);
-  const pageIdentity = `${model.pageId}:${application.releaseKey}`;
-  if (runtimeStateRef.current?.identity !== pageIdentity)
-    runtimeStateRef.current = {
-      identity: pageIdentity,
-      state: createFlowRuntimeState((model.page as PageDefinition).values),
-    };
-  const runtimeState = runtimeStateRef.current.state;
-  useEffect(() => () => runtimeState.messages.dispose(), [runtimeState]);
   const messageActionRef = useRef<(message: FlowMessageIntent) => void>(() => undefined);
   const {
     host,
@@ -516,5 +505,5 @@ export function useFlowRuntime({
   }, [currentData, flowRuntime, model.bindings]);
   const formBlock = useMemo(() => createFormBlockRuntime(flowRuntime), [flowRuntime]);
 
-  return { formBlock, flowRuntime, webMcpRuntime, runtimeState, intentHostElement, messageBanner };
+  return { formBlock, flowRuntime, webMcpRuntime, intentHostElement, messageBanner };
 }
