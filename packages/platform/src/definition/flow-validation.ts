@@ -1231,6 +1231,35 @@ export function validateFlow(
           if (definition === undefined) valueType(value, where, propertyPath);
           else checkProperty(node, definition, name, value, where, propertyPath);
         }
+        if (node.type === "interface.show_message") {
+          const action = node.properties.action_flow;
+          const inputs = node.properties.action_inputs;
+          if (action !== undefined && isTextLiteral(action)) {
+            const target = findFlow(
+              String((action as Extract<FlowValue, { kind: "literal" }>).literal.value),
+            );
+            if (inputs !== undefined && inputs.kind !== "map")
+              add(
+                [...path, "properties", "action_inputs"],
+                "vortex.definition.workflow_node_values",
+                "invalid_value",
+                "Message action inputs must be a map of named values",
+              );
+            else
+              checkInputMap(inputs?.kind === "map" ? inputs.entries : {}, target, where, [
+                ...path,
+                "properties",
+                "action_inputs",
+                "entries",
+              ]);
+          } else if (inputs !== undefined)
+            add(
+              [...path, "properties", "action_inputs"],
+              "vortex.definition.workflow_node_values",
+              "invalid_value",
+              "Message action inputs require an action flow",
+            );
+        }
         if (node.type === "data.record_link") checkRecordLinkTask(node, path);
       }
     }
