@@ -71,7 +71,6 @@ export function useFlowRuntime({
   dialogFormRef,
   platformThemeTokens,
   prepareRefresh,
-  committed,
   setPanelRef,
 }: Readonly<{
   application: ApplicationPageModel["invocation"];
@@ -110,8 +109,6 @@ export function useFlowRuntime({
   prepareRefresh: (
     bindingId: string,
   ) => Readonly<{ request: unknown; apply: (result: unknown) => void }> | undefined;
-  /** Re-reads what a binding writes once one of its server runs committed. */
-  committed: (bindingId: string) => void;
   /** Filled by the page's panel host once it has rendered. */
   setPanelRef: RefObject<FlowIntentHost["setPanel"]>;
 }>) {
@@ -383,8 +380,6 @@ export function useFlowRuntime({
     navigation: navigationEnvironment,
     setPanel: (panel, state) => setPanelRef.current?.(panel, state),
   });
-  const committedRef = useRef(committed);
-  committedRef.current = committed;
   const runtimeState = useMemo(() => createFlowRuntimeState(), [flowScopeKey]);
   useEffect(() => () => runtimeState.dispose(), [runtimeState]);
   const bindingSettings = useMemo(() => {
@@ -453,7 +448,6 @@ export function useFlowRuntime({
         browserBinding: browserBindings,
         ...(subject === undefined ? {} : { subject }),
         ...(application.flowTimeZone === undefined ? {} : { timeZone: application.flowTimeZone }),
-        committed: (bindingId) => committedRef.current(bindingId),
       }),
     [
       application.flowTimeZone,
@@ -475,7 +469,6 @@ export function useFlowRuntime({
         bindingSettings,
         begin: beginSubmission,
         ...(application.flowTimeZone === undefined ? {} : { timeZone: application.flowTimeZone }),
-        committed: (bindingId) => committedRef.current(bindingId),
       }),
     [application.flowTimeZone, beginSubmission, bindingSettings, webMcpClient, host, runtimeState],
   );

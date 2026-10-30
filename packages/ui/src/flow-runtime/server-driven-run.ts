@@ -51,8 +51,7 @@ const refuseInvalidServerFlowState = (stage: string): Readonly<{ kind: "refused"
  * intents and sends back only the continuation exactly as issued together with the person's
  * answer. It never chooses a path, never reuses a continuation and never resumes a run whose intent
  * does not match what the server said it awaits; the server re-checks everything on resume. When
- * the run committed, `committed` is told before the closing messages are shown, so the page re-reads
- * what it displays while the person reads the result.
+ * the run committed, the reply itself carries the refreshed rows (see the client's refresh).
  */
 export async function driveServerFlow(
   client: FlowInvokeClient,
@@ -60,7 +59,6 @@ export async function driveServerFlow(
   first: ServerFlowResponse,
   host: FlowIntentHost,
   signal?: AbortSignal,
-  committed?: () => void,
   sourceTablePlacementId?: string,
   bindingId?: string,
 ): Promise<ServerDrivenResult> {
@@ -82,11 +80,6 @@ export async function driveServerFlow(
         case "unavailable":
           return response;
         case "result": {
-          if (
-            response.descriptor.commit === "confirmed" ||
-            response.descriptor.commit === "partial"
-          )
-            committed?.();
           if (
             response.warnings.length > 0 &&
             (response.descriptor.commit === "confirmed" || response.descriptor.commit === "partial")

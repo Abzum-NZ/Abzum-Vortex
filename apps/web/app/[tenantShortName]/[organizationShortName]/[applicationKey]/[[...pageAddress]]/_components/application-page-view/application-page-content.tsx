@@ -351,22 +351,6 @@ export function ApplicationPageViewContent({
         }
         return prepareFlowRefresh(targets);
       },
-      committed: (bindingId) => {
-        let targets = refreshTargetsForBinding(bindingId);
-        if (targets.length === 0) {
-          const displayed = new Set(
-            Array.from(
-              compositionRootRef.current?.querySelectorAll<HTMLElement>(
-                "[data-vortex-placement-id]",
-              ) ?? [],
-            )
-              .filter((element) => element.getClientRects().length > 0)
-              .map((element) => element.dataset.vortexPlacementId?.toLowerCase()),
-          );
-          targets = Object.keys(currentData).filter((id) => displayed.has(id.toLowerCase()));
-        }
-        void refreshPlacements(targets, undefined, { content: true });
-      },
       setPanelRef,
     },
   );

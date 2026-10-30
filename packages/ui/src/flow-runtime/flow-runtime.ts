@@ -61,11 +61,6 @@ export type FlowRuntimeOptions = Readonly<{
         formId?: string;
       }>
     | undefined;
-  /**
-   * Told, with the binding's identity, when a server run of that binding committed and before its
-   * closing messages are shown, so the page can re-read the placements the binding writes.
-   */
-  committed?: (bindingId: string) => void;
   /** Keep submission evidence for the entire gesture, including every server segment. */
   begin?: (bindingId: string, clickId: string) => () => void;
 }>;
