@@ -13,7 +13,6 @@ import {
   typedSemanticFieldType,
   typedValueMatchesType,
 } from "./field-types";
-import { actionValueCompatible } from "./action-values";
 
 function totalFilterFieldsFilterable(
   value: unknown,

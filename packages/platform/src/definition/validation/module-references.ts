@@ -34,11 +34,7 @@ import {
   actionFlowOf,
   actionFlowSetFields,
 } from "./source-paths";
-import {
-  actionValueCompatible,
-  actionValueReferenceEntry,
-  actionFieldByKey,
-} from "./action-values";
+import {} from "./action-values";
 import { evaluateSavedSharingCondition } from "./saved-conditions";
 import { queryGroupFieldTypes } from "../module-query-edit";
 import { linkDependencyProblem, type LinkDependencyField } from "../module-link-dependencies";
@@ -289,7 +285,6 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
     const actionsById = new Map(
       array(content.actions).map((action) => [String(action.actionId), action]),
     );
-    const events = new Set(array(content.events).map((event) => String(event.key)));
     const relationships = new Map(
       [...moduleRecords.values()].flatMap((record) =>
         array(record.relationships).map(
@@ -610,13 +605,7 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
         subject ? array(subject.fields).map((field) => [String(field.fieldId), field]) : [],
       );
       const fields = new Set(fieldMap.keys());
-      const relationships = new Set(
-        subject
-          ? array(subject.relationships).map((relationship) => String(relationship.relationshipId))
-          : [],
-      );
       const inputMap = new Map(array(action.inputs).map((input) => [String(input.key), input]));
-      const inputKeys = new Set(inputMap.keys());
       const inputTypes = new Map(
         [...inputMap].map(([key, input]) => [key, typedSemanticFieldType(input.type) ?? ""]),
       );

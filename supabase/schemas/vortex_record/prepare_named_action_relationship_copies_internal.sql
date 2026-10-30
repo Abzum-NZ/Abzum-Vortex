@@ -44,12 +44,9 @@ begin
   end if;
   -- The caller resolved this exact installed action once for its whole step.
   action_context := p_action_context;
-  if not exists (
-    select 1 from pg_catalog.jsonb_array_elements(
-      action_context -> 'action' -> 'tasks'
-    ) item(value)
-    where item.value ->> 'type' = 'record.changes'
-  ) then
+  if pg_catalog.jsonb_array_length(
+    coalesce(action_context #> '{action,writePolicy,relationshipCopies}', '[]'::jsonb)
+  ) = 0 then
     return null;
   end if;
   context_value := vortex_access.validated_human_request_context();
@@ -87,14 +84,10 @@ begin
   -- Discover every target and copy first, then lock: a target row lock is the
   -- first lock class, so it is taken as soon as the target is known.
   for change_value, task_ordinal in
-    select change.value, task.ordinality
-    from pg_catalog.jsonb_array_elements(action_context -> 'action' -> 'tasks')
-      with ordinality as task(value, ordinality)
-    cross join lateral pg_catalog.jsonb_array_elements(
-      task.value -> 'properties' -> 'changes'
-    ) with ordinality as change(value, ordinality)
-    where task.value ->> 'type' = 'record.changes'
-    order by task.ordinality, change.ordinality
+    select change.value, change.ordinality
+    from pg_catalog.jsonb_array_elements(action_context #> '{action,writePolicy,relationshipCopies}')
+      with ordinality as change(value, ordinality)
+    order by change.ordinality
   loop
     -- The target is the declared `record_reference` input's record link, the
     -- one value shape that input accepts.
@@ -157,19 +150,14 @@ begin
             pg_catalog.lower(relationship_value ->> 'fromFieldId')
         )
         -- The plan copies the subject's edge as it stands before this command
-        -- writes the subject, which is only the authored order's edge when no
-        -- earlier record.set_fields task sets that same link.
+        -- writes the subject, so the action's flow may not also set that same link.
         or exists (
           select 1
-          from pg_catalog.jsonb_array_elements(action_context -> 'action' -> 'tasks')
-            with ordinality as earlier(value, ordinality)
-          cross join lateral pg_catalog.jsonb_object_keys(
-            earlier.value -> 'properties' -> 'values'
-          ) key(field_key)
-          where earlier.ordinality < task_ordinal
-            and earlier.value ->> 'type' = 'record.set_fields'
-            and pg_catalog.lower(key.field_key) =
-              pg_catalog.lower(relationship_value ->> 'fromFieldId')
+          from pg_catalog.jsonb_array_elements_text(
+            action_context #> '{action,writePolicy,subjectFieldIds}'
+          ) as key(field_key)
+          where pg_catalog.lower(key.field_key) =
+            pg_catalog.lower(relationship_value ->> 'fromFieldId')
         ) then
         return pg_catalog.jsonb_build_object(
           'outcome', 'refused', 'reasonCode', 'relationship_copy_unavailable'

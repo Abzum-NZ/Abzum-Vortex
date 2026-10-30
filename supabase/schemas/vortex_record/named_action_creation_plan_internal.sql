@@ -43,23 +43,26 @@ begin
   -- creation's counters and every affected data version before the subject
   -- writer runs.
 
+  -- The creations the action may make are the write policy derived from its flow, in flow order.
   for task_value, task_ordinal in
-    select item.value, (item.ordinality - 1)::integer
-    from pg_catalog.jsonb_array_elements(action_context -> 'action' -> 'tasks')
-      with ordinality as item(value, ordinality)
+    select pg_catalog.jsonb_build_object(
+        'recordTypeId', item.value -> 'recordTypeId',
+        'values', coalesce((
+          select pg_catalog.jsonb_object_agg(field.value, 'null'::jsonb)
+          from pg_catalog.jsonb_array_elements_text(item.value -> 'fieldIds') as field(value)
+        ), '{}'::jsonb)
+      ), (item.ordinality - 1)::integer
+    from pg_catalog.jsonb_array_elements(
+      coalesce(action_context #> '{action,writePolicy,creates}', '[]'::jsonb)
+    ) with ordinality as item(value, ordinality)
     order by item.ordinality
   loop
-    if task_value ->> 'type' <> 'record.create' then continue; end if;
-    if task_value #>> '{properties,recordType,state}' is distinct from 'resolved'
-      or not pg_catalog.pg_input_is_valid(
-        task_value #>> '{properties,recordType,recordTypeId}', 'uuid'
-      )
-      or pg_catalog.jsonb_typeof(task_value -> 'properties' -> 'values') <> 'object' then
+    if not pg_catalog.pg_input_is_valid(task_value ->> 'recordTypeId', 'uuid') then
       return pg_catalog.jsonb_build_object(
         'outcome', 'unsupported', 'reasonCode', 'create_target_unresolved'
       );
     end if;
-    target_type_id := (task_value #>> '{properties,recordType,recordTypeId}')::uuid;
+    target_type_id := (task_value ->> 'recordTypeId')::uuid;
     target_meta := vortex_record.resolve_record_action_context_internal(
       target_type_id, 'create'
     );
@@ -133,7 +136,7 @@ begin
           'outcome', 'unsupported', 'reasonCode', 'create_target_relationship_unsupported'
         );
       end if;
-      if not (task_value -> 'properties' -> 'values') ? ownership_field_id then
+      if not (task_value -> 'values') ? ownership_field_id then
         return pg_catalog.jsonb_build_object(
           'outcome', 'unsupported', 'reasonCode', 'create_target_owner_relationship_missing'
         );
@@ -142,7 +145,7 @@ begin
 
     for field_key in
       select pg_catalog.lower(item.value)
-      from pg_catalog.jsonb_object_keys(task_value -> 'properties' -> 'values') item(value)
+      from pg_catalog.jsonb_object_keys(task_value -> 'values') item(value)
     loop
       select item.value into field_value
       from pg_catalog.jsonb_array_elements(target_type -> 'fields') item(value)
@@ -196,7 +199,7 @@ begin
         'recordTypeId', pg_catalog.lower(target_type_id::text),
         'valueFieldIds', coalesce((
           select pg_catalog.jsonb_agg(pg_catalog.lower(item.value) order by pg_catalog.lower(item.value) collate "C")
-          from pg_catalog.jsonb_object_keys(task_value -> 'properties' -> 'values') item(value)
+          from pg_catalog.jsonb_object_keys(task_value -> 'values') item(value)
         ), '[]'::jsonb)
       )
     );

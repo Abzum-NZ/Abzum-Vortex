@@ -11,7 +11,6 @@ import {
   type JsonObject,
 } from "./context";
 import { object, array } from "./helpers";
-import { actionValueReferenceEntry } from "./action-values";
 import { sourceTranslationContext } from "./source-paths";
 import { moduleDependencies } from "../module-dependencies";
 
@@ -42,7 +41,6 @@ export function sourceLocalReferenceRule(
       const sharingConditions = new Map(
         array(body.sharing_conditions).map((condition) => [String(condition.key), condition]),
       );
-      const events = new Set(array(body.events).map((event) => String(event.key)));
       const qualifiedRecordValid = (qualified: unknown): boolean => {
         const value = String(qualified);
         const split = value.lastIndexOf(":");
@@ -178,9 +176,6 @@ export function sourceLocalReferenceRule(
         const record = records.get(String(action.record_type));
         const fields = new Set(
           record ? array(record.fields).map((field) => String(field.key)) : [],
-        );
-        const relationships = new Set(
-          record ? array(record.relationships).map((relationship) => String(relationship.key)) : [],
         );
         const inputs = new Map(
           array(action.inputs).map((input) => [String(input.key), String(input.type)]),

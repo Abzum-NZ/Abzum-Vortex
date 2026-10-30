@@ -48,14 +48,7 @@ begin
     p_action_owner_kind, p_action_owner_id, p_action_release_revision,
     p_action_id, p_record_type_id
   ));
-  if pg_catalog.jsonb_typeof(action_context -> 'action' -> 'tasks') is distinct from 'array'
-    or pg_catalog.jsonb_array_length(action_context -> 'action' -> 'tasks') not between 1 and 10
-    or exists (
-      select 1 from pg_catalog.jsonb_array_elements(
-        action_context -> 'action' -> 'tasks'
-      ) item(value)
-      where item.value ->> 'type' not in ('record.set_fields', 'record.create', 'record.changes', 'record.delete', 'event.announce')
-    ) then
+  if pg_catalog.jsonb_typeof(action_context -> 'action' -> 'writePolicy') is distinct from 'object' then
     return pg_catalog.jsonb_build_object(
       'outcome', 'unsupported', 'correlationId', context_value -> 'correlationId'
     );

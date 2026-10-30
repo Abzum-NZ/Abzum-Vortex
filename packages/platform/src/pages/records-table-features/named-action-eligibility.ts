@@ -41,7 +41,6 @@ export const readNamedActionEligibility = async (
   recordTypeId: string,
   actions: readonly NamedActionEligibilityAction[],
   targets: readonly NamedActionEligibilityTarget[],
-  issuedAt: string,
 ): Promise<readonly NamedActionRecordEligibility[]> => {
   if (targets.length === 0) return [];
   if (targets.length > 200) throw new Error("NAMED_ACTION_ELIGIBILITY_BATCH_TOO_LARGE");

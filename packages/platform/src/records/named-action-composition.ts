@@ -383,7 +383,7 @@ const relationshipCopy = (
   normalizedInputs: Readonly<Record<string, JsonValue>>,
   ordinal: number,
   authored: Readonly<{ targetInputKey: string; relationshipIds: readonly string[] }>,
-  earlierSetFieldIds: ReadonlySet<string>,
+  setFieldIds: ReadonlySet<string>,
 ): NamedActionRelationshipCopy | undefined => {
   if (!hasOwn(normalizedInputs, authored.targetInputKey)) return undefined;
   const target = recordLinkValueSchema.safeParse(normalizedInputs[authored.targetInputKey]);
@@ -414,7 +414,7 @@ const relationshipCopy = (
         prepared.recordType.recordTypeId.toLowerCase() ||
       relationship.cardinality !== "many_to_one" ||
       !readable.has(relationship.fromFieldId.toLowerCase()) ||
-      earlierSetFieldIds.has(relationship.fromFieldId.toLowerCase())
+      setFieldIds.has(relationship.fromFieldId.toLowerCase())
     )
       return undefined;
     selected.add(key);
@@ -441,6 +441,7 @@ export const composeFlowEffects = (
   const submittedValues: Record<string, JsonValue | null> = {};
   const creations: NamedActionCreation[] = [];
   const relationshipCopies: NamedActionRelationshipCopy[] = [];
+  const authoredCopies: { targetInputKey: string; relationshipIds: string[] }[] = [];
   const setFieldIds = new Set<string>();
   let softDeletesSubject = false;
   const announcedEventKeys: string[] = [];
@@ -483,20 +484,12 @@ export const composeFlowEffects = (
           typeof reference.name !== "string"
         )
           return undefined;
-        const copy = relationshipCopy(
-          prepared,
-          normalizedInputs,
-          relationshipCopies.length,
-          {
-            targetInputKey: reference.name,
-            relationshipIds: change.relationshipIds.filter(
-              (item): item is string => typeof item === "string",
-            ),
-          },
-          setFieldIds,
-        );
-        if (copy === undefined) return undefined;
-        relationshipCopies.push(copy);
+        authoredCopies.push({
+          targetInputKey: reference.name,
+          relationshipIds: change.relationshipIds.filter(
+            (item): item is string => typeof item === "string",
+          ),
+        });
       }
       continue;
     }
@@ -522,6 +515,19 @@ export const composeFlowEffects = (
       setFieldIds.add(fieldId.toLowerCase());
       submittedValues[fieldId] = value;
     }
+  }
+  // A copy reads the subject's edge as it stands before the command writes the subject, so no
+  // field the flow sets may be one of the copied links.
+  for (const authored of authoredCopies) {
+    const copy = relationshipCopy(
+      prepared,
+      normalizedInputs,
+      relationshipCopies.length,
+      authored,
+      setFieldIds,
+    );
+    if (copy === undefined) return undefined;
+    relationshipCopies.push(copy);
   }
   if (creations.length !== prepared.createTargets.length) return undefined;
   // The delete runs against the subject revision the command names, so a deleting action may only

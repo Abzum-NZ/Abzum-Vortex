@@ -398,7 +398,7 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
         // One command per batch: a resubmitted gesture replays the batch it already completed.
         const batchCommandId = recordCommandId("records.bulk", request.commandId, `batch:${start}`);
         // ONE call decides every record of the batch under current access.
-        const decided = await requests.run(session, selection, (transaction, _scope, issuedAt) =>
+        const decided = await requests.run(session, selection, (transaction) =>
           readNamedActionEligibility(
             transaction,
             placement.recordTypeId,
@@ -407,7 +407,6 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
               recordId: target.recordId,
               commandId: batchCommandId,
             })),
-            issuedAt,
           ).then((rows) =>
             rows.map(({ actions, ...row }) => ({ ...row, eligibility: actions[0]!.eligibility })),
           ),

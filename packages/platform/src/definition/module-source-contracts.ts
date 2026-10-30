@@ -684,7 +684,8 @@ const moduleSourceActionSchema = z
       context.addIssue({
         code: "custom",
         path: ["protected_operation"],
-        message: "An action runs either one flow of its Module or one registered protected operation",
+        message:
+          "An action runs either one flow of its Module or one registered protected operation",
       });
     if ((value.sets_choice_field === undefined) !== (value.sets_choice_option === undefined))
       context.addIssue({

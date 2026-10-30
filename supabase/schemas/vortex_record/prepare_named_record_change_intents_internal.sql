@@ -83,24 +83,20 @@ begin
   ) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'action_inputs_invalid');
   end if;
-  if exists (select 1 from pg_catalog.jsonb_array_elements(action_context #> '{action,tasks}') as task(value)
-    where task.value ->> 'type' not in ('record.set_fields', 'record.create', 'record.changes', 'record.delete', 'event.announce')) then
+  if pg_catalog.jsonb_typeof(action_context #> '{action,writePolicy}') is distinct from 'object' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'action_effects_invalid');
   end if;
+  -- What the action may write is the write policy derived from its published flow.
   select coalesce(pg_catalog.jsonb_agg(distinct field.key order by field.key), '[]'::jsonb)
   into root_fields
-  from pg_catalog.jsonb_array_elements(action_context #> '{action,tasks}') as task(value)
-  cross join lateral pg_catalog.jsonb_object_keys(task.value #> '{properties,values}') as field(key)
-  where task.value ->> 'type' = 'record.set_fields';
-  root_delete := exists (select 1 from pg_catalog.jsonb_array_elements(action_context #> '{action,tasks}') as task(value)
-    where task.value ->> 'type' = 'record.delete');
+  from pg_catalog.jsonb_array_elements_text(action_context #> '{action,writePolicy,subjectFieldIds}') as field(key);
+  root_delete := (action_context #>> '{action,writePolicy,deletesSubject}')::boolean;
   if root_delete and pg_catalog.jsonb_array_length(root_fields) > 0 then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'action_effects_invalid');
   end if;
   select coalesce(pg_catalog.jsonb_agg(task.value || pg_catalog.jsonb_build_object('ordinal', task.ordinality - 1)
     order by task.ordinality), '[]'::jsonb) into creation_tasks
-  from pg_catalog.jsonb_array_elements(action_context #> '{action,tasks}') with ordinality as task(value, ordinality)
-  where task.value ->> 'type' = 'record.create';
+  from pg_catalog.jsonb_array_elements(action_context #> '{action,writePolicy,creates}') with ordinality as task(value, ordinality);
   copy_plan := vortex_record.prepare_named_action_relationship_copies_internal(
     action_reference ->> 'ownerKind', (action_reference ->> 'ownerId')::uuid,
     (action_reference ->> 'releaseRevision')::bigint, (action_reference ->> 'actionId')::uuid,
@@ -119,12 +115,12 @@ begin
     into supplied_fields from pg_catalog.jsonb_object_keys(subject -> 'submittedValues') as field(key);
     if subject ->> 'operation' = 'create' then
       creation_task := creation_tasks -> creation_index;
-      if creation_task is null or subject -> 'recordTypeId' is distinct from creation_task #> '{properties,recordType,recordTypeId}'
+      if creation_task is null or subject -> 'recordTypeId' is distinct from creation_task -> 'recordTypeId'
         or subject -> 'selectedGroupId' is distinct from 'null'::jsonb then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'creation_plan_mismatch');
       end if;
       select coalesce(pg_catalog.jsonb_agg(field.key order by field.key), '[]'::jsonb)
-      into expected_fields from pg_catalog.jsonb_object_keys(creation_task #> '{properties,values}') as field(key);
+      into expected_fields from pg_catalog.jsonb_array_elements_text(creation_task -> 'fieldIds') as field(key);
       if supplied_fields is distinct from expected_fields then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'creation_plan_mismatch');
       end if;

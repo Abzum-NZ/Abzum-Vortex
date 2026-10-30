@@ -79,7 +79,6 @@ export const projectRowActionAvailability = async (
   placementId: string,
   recordTypeId: string,
   projection: RowActions,
-  issuedAt: string,
 ): Promise<RowActions> => {
   const named = projection.actions.flatMap((declaration) => {
     const action = namedActionFor(installed, placementId, declaration.eventId);
@@ -94,7 +93,6 @@ export const projectRowActionAvailability = async (
     recordTypeId,
     projection.availability.map(({ recordId, revision }) => ({ recordId, revision })),
     named,
-    issuedAt,
   );
   const namedKeys = new Set(named.map((action) => action.key));
   const byRecord = new Map(availability.map((row) => [row.recordId.toLowerCase(), row]));

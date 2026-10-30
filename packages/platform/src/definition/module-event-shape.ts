@@ -77,16 +77,16 @@ export const saveInlineModuleEvent = (
   const issues: string[] = [];
   if (existing !== undefined && existing.record_type !== record.key) {
     const referenced = [source.body, ...source.body.modules].some((owner) =>
-        owner.flows.some(
-          (flow) =>
-            flow.triggers.some(
-              (trigger) =>
-                trigger.type === "Event" &&
-                trigger.event.kind === "declared" &&
-                trigger.event.eventKey === existing.key,
-            ) || tasksAnnounce([...flow.tasks, ...flow.errors, ...flow.finally], existing.key),
-        ),
-      );
+      owner.flows.some(
+        (flow) =>
+          flow.triggers.some(
+            (trigger) =>
+              trigger.type === "Event" &&
+              trigger.event.kind === "declared" &&
+              trigger.event.eventKey === existing.key,
+          ) || tasksAnnounce([...flow.tasks, ...flow.errors, ...flow.finally], existing.key),
+      ),
+    );
     if (referenced)
       return {
         kind: "invalid",

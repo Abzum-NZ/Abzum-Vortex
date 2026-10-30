@@ -11,12 +11,7 @@ import {
   actionDeleteEffectsSupported,
   actionFlowOf,
 } from "./source-paths";
-import {
-  applicationActionValueCompatible,
-  actionValueReferenceEntry,
-  actionFieldByKey,
-  applicationFieldType,
-} from "./action-values";
+import { applicationFieldType } from "./action-values";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "../canonical-json-definition";
 import { versionRequirementAccepts } from "./publication-rules";
 import { readFieldsTypeMapsValid } from "./permission-scopes";
@@ -36,7 +31,6 @@ export function applicationRule(context: PreparedValidationContext): DefinitionR
       request,
       recordTypes,
       records,
-      boundRecordTypeIds,
       allFields,
       fieldValuePairs,
       permissionEntries,
@@ -48,7 +42,6 @@ export function applicationRule(context: PreparedValidationContext): DefinitionR
       standardActionKeysByRecordAction,
       executableActionKeys,
       commitActionRecordType,
-      events,
       pages,
       shells,
       collectPlacementEntries,
@@ -62,18 +55,11 @@ export function applicationRule(context: PreparedValidationContext): DefinitionR
     const flowsById = new Map(flows.map((flow) => [String(flow.id), flow]));
     for (const action of array(content.actions)) {
       const subject = records.get(String(action.subjectRecordTypeId));
-      const subjectModuleBound = boundRecordTypeIds.has(String(action.subjectRecordTypeId));
       const fieldMap = new Map(
         subject ? array(subject.fields).map((field) => [String(field.fieldId), field]) : [],
       );
       const fields = new Set(fieldMap.keys());
-      const relationships = new Set(
-        subject
-          ? array(subject.relationships).map((relationship) => String(relationship.relationshipId))
-          : [],
-      );
       const inputMap = new Map(array(action.inputs).map((input) => [String(input.key), input]));
-      const inputs = new Set(inputMap.keys());
       const inputTypes = new Map(
         [...inputMap].map(([key, input]) => [key, typedSemanticFieldType(input.type) ?? ""]),
       );
