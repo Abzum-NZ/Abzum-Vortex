@@ -13,7 +13,7 @@ returns table (
   finished_at timestamptz
 )
 language plpgsql
-stable
+volatile
 security definer
 set search_path = ''
 as $function$
@@ -23,6 +23,9 @@ begin
   -- The caller must be a human whose organisation grants definition-draft management, the
   -- authority Studio uses to open an application; the organisation comes from that context.
   checked_context := vortex_definition.validated_builder_read_context_internal();
+  if checked_context ->> 'callerKind' is distinct from 'human' then
+    raise exception using errcode = '42501', message = 'Back-end run history is unavailable';
+  end if;
   if p_application_root_id is null
     or not vortex_platform.is_non_nil_uuid(p_application_root_id::text)
     or p_limit is null or p_limit not between 1 and 200 then
