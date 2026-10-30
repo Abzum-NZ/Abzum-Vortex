@@ -5,11 +5,14 @@
 } from "./server-flow-client";
 
 /** Loads the protected-flow client only when a request needs it. */
-export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowInvokeClient {
+export function createFlowInvokeClient(
+  options: FlowInvokeClientOptions,
+  wrap: () => Promise<(client: FlowInvokeClient) => FlowInvokeClient>,
+): FlowInvokeClient {
   let pending: Promise<FlowInvokeClient> | undefined;
   const client = () => {
-    pending ??= import("./server-flow-client")
-      .then((module) => module.createFlowInvokeClient(options))
+    pending ??= Promise.all([import("./server-flow-client"), wrap()])
+      .then(([module, track]) => track(module.createFlowInvokeClient(options)))
       .catch((error: unknown) => {
         pending = undefined;
         throw error;
