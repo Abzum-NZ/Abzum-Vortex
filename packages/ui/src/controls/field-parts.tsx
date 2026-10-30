@@ -10,8 +10,8 @@ import {
 } from "react";
 import type { TypedFieldValue } from "@vortex/platform/schema";
 import { FieldDescription, FieldError } from "../components/field";
-import { Button } from "../components/button";
 import { FlowRuntimeStateContext } from "../flow-runtime/flow-runtime-state-context";
+import { InlineMessageContent, inlineMessageLive } from "../flow-runtime/inline-message";
 import type { PageMessage } from "../flow-runtime/messages";
 import type { ControlContext } from "./control-context";
 import { FieldDraftFeedback, type FormFieldDraftFeedback } from "./draft-feedback";
@@ -161,31 +161,8 @@ export function FieldMessages({
       {note === undefined ? null : <FieldDescription id={ids.note}>{note}</FieldDescription>}
       <FieldDraftFeedback id={ids.feedback} feedback={draftFeedback} />
       {ids.message === undefined ? null : (
-        <div
-          id={ids.inline}
-          role={
-            ids.message.severity === "warning" || ids.message.severity === "error"
-              ? "alert"
-              : "status"
-          }
-          aria-live={
-            ids.message.severity === "warning" || ids.message.severity === "error"
-              ? "assertive"
-              : "polite"
-          }
-          className="text-sm"
-        >
-          {ids.message.title === undefined ? null : <strong>{ids.message.title}: </strong>}
-          {ids.message.text}
-          {ids.message.action === undefined ? null : ids.message.action.kind === "link" ? (
-            <a className="underline" href={ids.message.action.href}>
-              {ids.message.action.label}
-            </a>
-          ) : (
-            <Button type="button" variant="ghost" size="xs" onClick={ids.message.action.run}>
-              {ids.message.action.label}
-            </Button>
-          )}
+        <div id={ids.inline} className="text-sm" {...inlineMessageLive(ids.message)}>
+          <InlineMessageContent message={ids.message} />
         </div>
       )}
     </>
