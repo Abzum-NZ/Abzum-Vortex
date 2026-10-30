@@ -757,11 +757,24 @@ export const compileFlowPlan = (
     };
   });
   const serverInputs = serverResolvedInputs(bindings);
+  // A shared server-only input can still be supplied by a different binding from a live form.
+  // Its server-side expression needs those typed form values at every detached segment.
+  const bindingFormReferences = bindings.flatMap((inputs) =>
+    Object.entries(inputs).flatMap(([name, input]) =>
+      serverInputs.has(name)
+        ? flowValueReferences(input).filter((reference) => reference.source === "form")
+        : [],
+    ),
+  );
+  const bindingFormInputs = inputTypes(flow, bindingFormReferences.map((reference) => ({ kind: "reference", reference })), new Set(), "binding", formTypes);
   const segments = classifyFlowSegments(
-    flow, unclassifiedSegments, flowValueReferences,
+    flow,
+    unclassifiedSegments,
+    flowValueReferences,
     (reference) => serverOnlyReference(reference, serverInputs),
     (values, produced, id) => inputTypes(flow, values, produced, id, formTypes),
     lookupFlow,
+    bindingFormInputs,
   );
   // A declaration belongs in the page only when a page step, a path guard, or a final output
   // reads it. Server-only declarations stay with the server even when the same flow is bound to

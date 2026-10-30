@@ -7,6 +7,7 @@ import { isRecord } from "../catalogue/runtime-primitives";
 import type { ExecuteNamedActionCommand } from "../records/named-actions";
 import type { FlowBindingInput, FlowDefinition } from "../workflows/flow-contracts";
 import { resolveFlowValue } from "../rules/flow-value-runtime";
+import { parseFlowSegmentSeed } from "../rules/flow-segment-seed";
 import type { FlowRuntimeValues } from "../rules/flow-interpreter";
 import { flowWarningNoticeSchema } from "../workflows/form-continuation-contracts";
 import { collectActionFlowTasks } from "../rules/action-flow-run";
@@ -477,6 +478,16 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           selectedRecordReadSeen: false,
         };
         const instant = now().toISOString();
+        let formValues: ReturnType<typeof parseFlowSegmentSeed>["forms"];
+        try {
+          formValues = parseFlowSegmentSeed(plan.definition, segment, input.seed, {
+            pageResolvedInputs: input.pageResolvedInputs,
+            carriedValues: input.carriedValues,
+          }).forms;
+        } catch (error) {
+          console.error("[flows] invalid detached segment seed", error);
+          return refused;
+        }
         const resolvedInputs: Record<string, unknown> = { ...binding.inputs };
         for (const [name, source] of Object.entries(input.bindingSources)) {
           if (Object.hasOwn(resolvedInputs, name) || input.pageResolvedInputs.includes(name))
@@ -490,6 +501,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
               if (reference.source === "execution_actor" && actor !== undefined)
                 return { type: "organization_account_reference", value: actor };
               if (reference.source === "trigger_record") return triggerRecord?.[reference.field];
+              if (reference.source === "form") return formValues[reference.form]?.[reference.field];
               return undefined;
             },
           });

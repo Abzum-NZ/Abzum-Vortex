@@ -22,6 +22,7 @@ export const classifyFlowSegments = (
   serverOnly: (reference: FlowReference) => boolean,
   inputTypes: (values: readonly unknown[], produced: ReadonlySet<string>, id: string) => Record<string, string>,
   lookupFlow: (id: string) => FlowDefinition | undefined,
+  bindingFormInputs: Readonly<Record<string, string>>,
 ): FlowPlanSegment[] => {
   const completionExpressions = Object.fromEntries(
     (flow.execution === "interactive" ? Object.entries(flow.outputs) : [])
@@ -85,7 +86,7 @@ export const classifyFlowSegments = (
   });
   return segments.map((segment, index): FlowPlanSegment => {
     if (segment.kind !== "server") return segment;
-    const inputs: Record<string, string> = { ...segment.inputs };
+    const inputs: Record<string, string> = { ...segment.inputs, ...bindingFormInputs };
     for (const name of Object.keys(inputs)) inputs[name] = childOutputType(name) ?? inputs[name]!;
     // A conditional variable write retains the previous value even if this segment has no explicit read.
     for (const [name, type] of Object.entries(writes[index]!))
