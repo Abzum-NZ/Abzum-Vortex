@@ -330,6 +330,14 @@ export function useRuntimeInputs({
       const supportsEvent = (eventName: string): boolean => declaredEvents?.has(eventName) === true;
       const flowFeedback =
         formOwners[placementId] === placementId ? formFeedback[placementId] : undefined;
+      const displayFlowContext = () => ({
+        placementId,
+        bindings,
+        runBinding,
+        refreshPlacements,
+        setNotice,
+        formCancelledRef,
+      });
       // Runtime data alone does not identify a display: forms can have projected owner-group data.
       // Give each placement only the display callbacks its own registered release declares.
       if (data !== undefined && model.guidedForm === undefined) {
@@ -387,14 +395,7 @@ export function useRuntimeInputs({
               event: DisplaySemanticEvent,
             ): Promise<DisplayInlineEditResult> => {
               const { runInlineEdit } = await import("./display-flow-events");
-              return runInlineEdit(event, editEvent, {
-                placementId,
-                bindings,
-                runBinding,
-                refreshPlacements,
-                setNotice,
-                formCancelledRef,
-              });
+              return runInlineEdit(event, editEvent, displayFlowContext());
             };
         // A moved card saves the record's choice field through the bound flow. The handler reports
         // whether the server accepted the move, so the board keeps the card pending until the
@@ -406,14 +407,7 @@ export function useRuntimeInputs({
         )
           events.card_moved = async (event: DisplaySemanticEvent): Promise<boolean> => {
             const { runCardMove } = await import("./display-flow-events");
-            return runCardMove(event, {
-              placementId,
-              bindings,
-              runBinding,
-              refreshPlacements,
-              setNotice,
-              formCancelledRef,
-            });
+            return runCardMove(event, displayFlowContext());
           };
         // Adding a card from a column runs the bound flow with the column's stage; the create form
         // it opens saves through the normal record save, so nothing is written here.
@@ -424,14 +418,7 @@ export function useRuntimeInputs({
         )
           events.card_added = async (event: DisplaySemanticEvent): Promise<boolean> => {
             const { runCardAdd } = await import("./display-flow-events");
-            return runCardAdd(event, {
-              placementId,
-              bindings,
-              runBinding,
-              refreshPlacements,
-              setNotice,
-              formCancelledRef,
-            });
+            return runCardAdd(event, displayFlowContext());
           };
         if (boardData !== undefined && supportsEvent("page_changed"))
           events.page_changed = (event: DisplaySemanticEvent) =>
