@@ -468,7 +468,7 @@ type PageReach = "fall" | "navigate" | "stop";
 
 /** Possible first exits from a page-only task list along successful execution paths. */
 const pageReach = (tasks: readonly FlowTask[]): Set<PageReach> => {
-  let exits = new Set<PageReach>(["fall"]);
+  const exits = new Set<PageReach>(["fall"]);
   for (const task of tasks) {
     if (!exits.has("fall")) break;
     exits.delete("fall");
