@@ -18,14 +18,10 @@ declare
   result_value jsonb;
   correlation_id_value uuid;
 begin
-  -- Closed lifecycle entry to apply_record_changes. Delete alone accepts null
-  -- mutations to begin its traversal; the second call supplies calculated parent
-  -- mutations and finalises the same command in the same request transaction. An account
-  -- offboarding transfer enters only through transfer_offboarding_owned_record.
-  if p_operation is null
-    or p_operation not in ('delete', 'restore', 'transfer_ownership')
-    or (pg_catalog.jsonb_typeof(p_mutations) is distinct from 'array'
-      and not (p_operation = 'delete' and p_mutations is null))
+  -- Ownership transfer is an Access command with its own exact authority.
+  -- Record deletion and restore enter only through the common record writer.
+  if p_operation is distinct from 'transfer_ownership'
+    or pg_catalog.jsonb_typeof(p_mutations) is distinct from 'array'
     or coalesce(pg_catalog.jsonb_path_exists(
       p_mutations, '$[*] ? (@.kind == "offboarding_transfer")'
     ), false) then
@@ -34,15 +30,10 @@ begin
     );
   end if;
 
-  result_value := vortex_record.apply_record_changes(
-    p_command_id, p_operation, p_record_type_id, p_record_id,
-    p_expected_concurrency_number, '{}'::jsonb, null,
-    p_mutations, p_activity_id, p_occurrence_id
+  result_value := vortex_record.apply_record_mutations_internal(
+    p_command_id, p_record_type_id, p_record_id,
+    p_expected_concurrency_number, p_mutations, p_activity_id, p_occurrence_id
   );
-  if p_operation <> 'transfer_ownership' then
-    return result_value;
-  end if;
-
   if result_value ->> 'outcome' = 'saved' then
     return result_value - array['values', 'backgroundDelivery']::text[]
       || pg_catalog.jsonb_build_object('outcome', 'transferred');
@@ -67,4 +58,4 @@ grant execute on function vortex_record.apply_lifecycle_record_changes(
 comment on function vortex_record.apply_lifecycle_record_changes(
   uuid, text, uuid, uuid, bigint, jsonb, uuid, uuid
 ) is
-  'The request role''s closed entry to delete preparation and finalisation, restore and ownership-transfer record-change writes: it refuses any other operation and an account offboarding transfer, and delegates once to the one protected apply_record_changes operation.';
+  'Protected ownership-transfer entry: refuses record commands and account offboarding transfers, and delegates to the shared mutation core under the transfer authority.';

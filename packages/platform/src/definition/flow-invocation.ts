@@ -49,6 +49,8 @@ import { createRecordSaveService } from "../records/save-record";
 import type { createDatabaseApplicationBoundReleaseSetService } from "./application-bound-release-set";
 import { readPermittedApplicationsAtAddress } from "./application-address";
 import { createFlowCurrentRecordReader } from "./flow-current-record";
+import { createFlowQueryReader } from "./flow-query-reader";
+import { createFlowRecordChangePort, flowRecordTypeRelationships } from "./flow-record-changes";
 import { createFlowOrchestrator } from "./flow-orchestrator";
 import type {
   FlowNamedAction,
@@ -517,6 +519,9 @@ export async function invokeInstalledFlow(
         admitFlowContinuation(admissionHost, installation, run, state, execute, openReplay),
       admitPageStart: (run, state) => admitFlowPageStart(admissionHost, installation, run, state),
       executor: executorFor(boundRequest, receipt),
+      ...(boundRequest === undefined
+        ? {}
+        : { recordChanges: createFlowRecordChangePort(boundRequest) }),
       records:
         boundRequest === undefined
           ? records
@@ -547,10 +552,18 @@ export async function invokeInstalledFlow(
                   : { kind: "unavailable" },
             },
       subjects: {
-        read: async (session, selection, subject) =>
-          (await subjectReader.read(session, selection, subject)).kind,
+        read: async (session, selection, subject) => {
+          const result = await subjectReader.read(session, selection, subject);
+          if (result.kind === "read" && result.row.revision === undefined)
+            throw new Error("FLOW_RECORD_REVISION_MISSING");
+          return result.kind === "read" ? { kind: "read", revision: result.row.revision! } : result;
+        },
       },
       selectedRecordReads: selectedRecordReadsFor(installation, requests),
+      queryRecords: createFlowQueryReader(
+        { ...scopedDependencies, continuationKey: dependencies.continuationKey },
+        installation,
+      ),
       currentRecords: createFlowCurrentRecordReader({
         requests,
         reader: selectedRecordReader,
@@ -872,7 +885,11 @@ export async function invokeInstalledFlow(
         linked.set(setsChoice.option, named);
         optionActions.set(setsChoice.fieldId.toLowerCase(), linked);
       }
-      recordTypes.set(String(recordType.recordTypeId).toLowerCase(), { fieldIds, optionActions });
+      recordTypes.set(String(recordType.recordTypeId).toLowerCase(), {
+        fieldIds,
+        optionActions,
+        relationships: flowRecordTypeRelationships(recordType),
+      });
     }
     const namedActions = installedNamedActions(
       application,

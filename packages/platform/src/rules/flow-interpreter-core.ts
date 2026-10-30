@@ -15,22 +15,29 @@ import {
   observe,
   initialState,
   flowRunStateVersion,
+  advanceFrame,
+  declaredOutputs,
+  failActivation,
+  pushFrame,
+  storeTaskOutputs,
+  stringOutcomeOutputs,
+  withFrames,
 } from "./flow-interpreter-state";
+import { serverRuns } from "./flow-server-step-runners";
+import { formattedTaskValue } from "./flow-data-tasks";
+import { evaluateRecordChangeValues } from "./flow-record-change-values";
+import { findTask, validReadFieldsResume } from "./flow-read-fields-resume";
 export { flowRunStateVersion } from "./flow-interpreter-state";
 import { flowValueMatchesType } from "./flow-value-shapes";
 import type { JsonValue } from "../catalogue/common";
 import { isRecordLinkValue } from "../records/module-field-value-predicates";
 import { calculateFlowValue } from "./flow-calculate";
 import type { FlowTask } from "../workflows/flow-contracts";
-import { isFlowReadFieldsProjection, isFlowReadFieldsTypeMap } from "../workflows/flow-read-fields";
+import { isFlowReadFieldsTypeMap } from "../workflows/flow-read-fields";
 import { flowTaskChildLists } from "../workflows/flow-task-tree";
 import { refusalKeepsPlatformGuidance } from "../workflows/flow-refusal-guidance";
-import {
-  flowTaskRegistry,
-  type PageIntentStepType,
-  type ServerStepType,
-} from "../workflows/flow-task-registry-data";
-import type { FlowReference, FlowValue } from "../workflows/flow-values";
+import { flowTaskRegistry, type PageIntentStepType } from "../workflows/flow-task-registry-data";
+import { flowListItemType, type FlowReference, type FlowValue } from "../workflows/flow-values";
 import {
   evaluateFlowFormula,
   flowRuntimeValuesEqual,
@@ -41,6 +48,7 @@ import { resolveFlowValue } from "./flow-value-runtime";
 import {
   flowMaximumForEachItemsOther,
   flowMaximumProtectedOperations,
+  flowMaximumSetBasedForEachItems,
   flowMaximumRunFlowDepth,
   flowMaximumTaskOutputPathDepth,
 } from "../workflows/flow-limits";
@@ -115,22 +123,10 @@ export type {
 const maximumSteps = 10_000;
 
 const typed = (type: string, value: JsonValue): FlowRuntimeValue => ({ type, value });
-const text = (value: string): FlowRuntimeValue => typed("text", value);
 
 const clone = <Value>(input: Value): Value => JSON.parse(JSON.stringify(input)) as Value;
 
 const declaredNull = (type: string): FlowRuntimeValue => typed(type, null);
-
-const findTask = (tasks: readonly FlowTask[], taskId: string): FlowTask | undefined => {
-  for (const task of tasks) {
-    if (task.id === taskId) return task;
-    for (const child of flowTaskChildLists(task)) {
-      const found = findTask(child.tasks, taskId);
-      if (found !== undefined) return found;
-    }
-  }
-  return undefined;
-};
 
 const declaredOutputFieldType = (
   state: FlowRunState,
@@ -224,6 +220,28 @@ const scopeOf = (
         return flowValueMatchesType(selected, type)
           ? typed(type, selected as JsonValue)
           : undefined;
+      }
+      case "loop_item": {
+        const loop = [...activation.frames]
+          .reverse()
+          .find((frame) => frame.loop !== undefined)?.loop;
+        const item = loop?.items[loop.iteration];
+        if (loop === undefined || item === undefined) return undefined;
+        if (reference.path === undefined)
+          return item === null ? declaredNull(loop.itemType) : typed(loop.itemType, item);
+        if (loop.itemType !== "json") return undefined;
+        let selected: unknown = item;
+        for (const name of reference.path) {
+          if (
+            selected === null ||
+            typeof selected !== "object" ||
+            Array.isArray(selected) ||
+            !Object.hasOwn(selected, name)
+          )
+            return undefined;
+          selected = (selected as Record<string, unknown>)[name];
+        }
+        return typed("json", selected as JsonValue);
       }
       case "execution_actor":
         return state.actor === undefined
@@ -346,31 +364,6 @@ const replaceTop = (machine: Machine, next: Activation): void => {
 const flowOf = (machine: Machine, activation: Activation): FlowProgram =>
   machine.library(activation.flowId) ?? failed("flow_unavailable", "failed");
 
-const withFrames = (activation: Activation, frames: readonly Frame[]): Activation => ({
-  ...activation,
-  frames,
-});
-
-const advanceFrame = (activation: Activation): Activation =>
-  withFrames(activation, [
-    ...activation.frames.slice(0, -1),
-    {
-      ...activation.frames[activation.frames.length - 1]!,
-      index: activation.frames[activation.frames.length - 1]!.index + 1,
-    },
-  ]);
-
-const pushFrame = (activation: Activation, frame: Frame): Activation =>
-  withFrames(activation, [...activation.frames, frame]);
-
-/** Records the first failure of an activation and leaves the task list. */
-const failActivation = (activation: Activation, failure: FlowFailure): Activation => {
-  const recorded = activation.failure ?? failure;
-  return { ...activation, failure: recorded, frames: [] };
-};
-
-const stringOutcomeOutputs = (outcome: string): FlowRuntimeValues => ({ outcome: text(outcome) });
-
 /**
  * Ends the current phase's task list and starts the next: tasks, then errors (only after a
  * failure), then finally. Returns false when every phase is done.
@@ -439,114 +432,6 @@ const finishActivation = (machine: Machine, activation: Activation): FlowRunResu
     ...(activation.stopped === undefined ? {} : { stopped: activation.stopped }),
   };
 };
-
-const storeTaskOutputs = (
-  activation: Activation,
-  taskId: string,
-  outputs: FlowRuntimeValues,
-): Activation => ({ ...activation, outputs: { ...activation.outputs, [taskId]: outputs } });
-
-const outputTypes = (taskType: string): Readonly<Record<string, string>> =>
-  Object.fromEntries(
-    (flowTaskRegistry[taskType as keyof typeof flowTaskRegistry]?.outputs ?? []).map((output) => [
-      output.key,
-      output.type,
-    ]),
-  );
-
-const declaredOutputs = (
-  taskType: string,
-  produced: Readonly<Record<string, JsonValue>> | undefined,
-): FlowRuntimeValues => {
-  const declared = outputTypes(taskType);
-  const outputs: Record<string, FlowRuntimeValue> = {};
-  for (const [key, type] of Object.entries(declared)) {
-    const value = produced?.[key];
-    if (value === undefined || value === null) continue;
-    if (flowValueMatchesType(value, type)) outputs[key] = typed(type, value);
-  }
-  return outputs;
-};
-
-const validReadFieldsResume = (
-  flow: FlowProgram | undefined,
-  taskId: string,
-  produced: Readonly<Record<string, JsonValue>> | undefined,
-): boolean => {
-  const task =
-    flow === undefined
-      ? undefined
-      : findTask([...flow.tasks, ...flow.errors, ...flow.finally], taskId);
-  if (task?.type !== "record.read_fields") return false;
-  const registered = task as Extract<FlowTask, { properties: unknown }> & {
-    properties: Readonly<Record<string, FlowValue>>;
-    readFieldTypes?: Readonly<Record<string, string>>;
-  };
-  const fields = registered.properties.fields;
-  const projection =
-    fields?.kind === "literal" && fields.literal.type === "json" ? fields.literal.value : undefined;
-  const types = registered.readFieldTypes;
-  if (!isFlowReadFieldsProjection(projection) || !isFlowReadFieldsTypeMap(types)) return false;
-  const declaredAliases = projection.map((field) => field.alias);
-  const typeAliases = Object.keys(types);
-  if (
-    declaredAliases.length !== typeAliases.length ||
-    declaredAliases.some((alias) => !Object.hasOwn(types, alias))
-  )
-    return false;
-  if (
-    produced === undefined ||
-    typeof produced !== "object" ||
-    Array.isArray(produced) ||
-    Object.keys(produced).length !== 1 ||
-    !Object.hasOwn(produced, "values")
-  )
-    return false;
-  const values: unknown = produced.values;
-  if (values === null || typeof values !== "object" || Array.isArray(values)) return false;
-  const actual = values as Record<string, unknown>;
-  const actualAliases = Object.keys(actual);
-  return (
-    actualAliases.length === declaredAliases.length &&
-    declaredAliases.every(
-      (alias) => Object.hasOwn(actual, alias) && flowValueMatchesType(actual[alias], types[alias]!),
-    )
-  );
-};
-
-/**
- * Which server runner executes each step that runs on the server today (`ServerStepType`): this
- * interpreter, the protected task runner (`definition/flow-task-runner.ts`), or a named action's
- * transaction flow (`rules/action-flow-run.ts`, which collects record steps into one change).
- */
-export type ServerStepRunner = "interpreter" | "protected_task" | "action_flow";
-export const serverStepRunners = {
-  if: "interpreter",
-  switch: "interpreter",
-  for_each: "interpreter",
-  sequential: "interpreter",
-  run_flow: "interpreter",
-  stop: "interpreter",
-  "data.calculate": "interpreter",
-  "data.record_link": "interpreter",
-  "data.set_variable": "interpreter",
-  "rule.require": "interpreter",
-  "rule.warn": "interpreter",
-  "rule.refuse": "interpreter",
-  "record.save": "protected_task",
-  "record.read_fields": "protected_task",
-  "record.pin_identity": "protected_task",
-  "operation.call": "protected_task",
-  "record.create": "action_flow",
-  "record.set_fields": "action_flow",
-  "record.delete": "action_flow",
-  "record.changes": "action_flow",
-  "event.announce": "action_flow",
-} as const satisfies Record<ServerStepType, ServerStepRunner>;
-
-/** Whether the server runs this step with the given runner. */
-export const serverRuns = (type: string, runner: ServerStepRunner): boolean =>
-  Object.hasOwn(serverStepRunners, type) && serverStepRunners[type as ServerStepType] === runner;
 
 const branch = (
   machine: Machine,
@@ -626,17 +511,20 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
         machine.resolveForm,
       );
       if (!Array.isArray(items.value)) return failed("value_unresolved", "failed", taskId);
-      if (items.value.length > Math.min(node.maximumItems, flowMaximumForEachItemsOther))
+      const setBased = machine.segment?.setBasedChanges.some((change) => change.taskId === taskId);
+      const maximum = setBased ? flowMaximumSetBasedForEachItems : flowMaximumForEachItemsOther;
+      if (items.value.length > Math.min(node.maximumItems, maximum))
         failed("for_each_limit", "failed", taskId);
+      const loop = {
+        count: items.value.length,
+        iteration: 0,
+        items: items.value as readonly JsonValue[],
+        itemType: flowListItemType(items.type),
+      };
+      if (setBased && loop.count > 0) return suspendSet(machine, node, taskPath, next, loop);
       replaceTop(
         machine,
-        items.value.length === 0
-          ? next
-          : pushFrame(next, {
-              path: [...taskPath, "tasks"],
-              index: 0,
-              loop: { count: items.value.length, iteration: 0 },
-            }),
+        loop.count === 0 ? next : pushFrame(next, { path: [...taskPath, "tasks"], index: 0, loop }),
       );
       return { kind: "continue" };
     }
@@ -682,7 +570,7 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
   const registered = task as Extract<FlowTask, { properties: unknown }>;
   const definition = flowTaskRegistry[registered.type as keyof typeof flowTaskRegistry];
   if (definition === undefined) return failed("task_unknown", "failed", taskId);
-  const properties = evaluateProperties(
+  const evaluatedProperties = evaluateProperties(
     registered.type === "data.calculate"
       ? Object.fromEntries(
           Object.entries(registered.properties).filter(([name]) => name !== "formula"),
@@ -695,9 +583,31 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
     machine.resolveMember,
     machine.resolveForm,
   );
+  // A record change list holds nested values the interpreter evaluates like any other value.
+  const properties =
+    registered.type === "record.changes"
+      ? evaluateRecordChangeValues(evaluatedProperties, (value) =>
+          evaluateValue(
+            value,
+            state,
+            activation,
+            flow,
+            taskId,
+            machine.resolveMember,
+            machine.resolveForm,
+          ),
+        )
+      : evaluatedProperties;
+  if (properties === undefined) return failed("value_unresolved", "failed", taskId);
 
   if (definition.effect === "pure") {
     if (!serverRuns(registered.type, "interpreter")) failed("task_not_available", "failed", taskId);
+    if (registered.type === "data.format") {
+      const value = formattedTaskValue(properties);
+      if (value === undefined) return failed("value_unresolved", "failed", taskId);
+      replaceTop(machine, storeTaskOutputs(next, taskId, { value }));
+      return { kind: "continue" };
+    }
     if (registered.type === "data.record_link") {
       const recordType = registered.properties.record_type;
       const record = registered.properties.record;
@@ -908,6 +818,51 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
 
 const snapshot = (machine: Machine): FlowRunState => clone(machine.state) as FlowRunState;
 
+/**
+ * A set-based For each: each item's record steps are evaluated as they would run in that
+ * iteration, then the run suspends once, as one protected operation, for the host to apply them
+ * all as one change.
+ */
+const suspendSet = (
+  machine: Machine,
+  node: Extract<FlowTask, { type: "for_each" }>,
+  taskPath: readonly PathSegment[],
+  next: Activation,
+  loop: NonNullable<Frame["loop"]>,
+): Executed => {
+  const calls: FlowProtectedTaskCall[] = [];
+  for (let iteration = 0; iteration < loop.count; iteration += 1)
+    node.tasks.forEach((child, index) => {
+      const scratch: Machine = { ...machine, state: clone(machine.state) };
+      const frame = { path: [...taskPath, "tasks"], index, loop: { ...loop, iteration } };
+      replaceTop(scratch, pushFrame(next, frame));
+      const executed = execute(scratch, child, [...taskPath, "tasks", index]);
+      if (executed.kind === "suspend" && executed.step.kind === "protected_task")
+        calls.push(executed.step.call);
+      else failed("task_not_available", "failed", child.id);
+    });
+  if (machine.state.protectedOperations >= flowMaximumProtectedOperations)
+    failed("protected_operation_limit", "failed", node.id);
+  machine.state.protectedOperations += 1;
+  machine.state.awaiting = {
+    kind: "protected_set",
+    taskId: node.id,
+    calls: calls.map(({ taskId, taskType, allowRefusal }) => ({ taskId, taskType, allowRefusal })),
+  };
+  replaceTop(machine, next);
+  const activation = topOf(machine);
+  return {
+    kind: "suspend",
+    step: {
+      kind: "protected_set",
+      state: snapshot(machine),
+      taskPath: `${activation.prefix}${pathKey(taskPath)}`,
+      iteration: iterationKey(machine.state),
+      calls,
+    },
+  };
+};
+
 /** Runs the machine until it needs the host or the run is finished. */
 const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep => {
   for (;;) {
@@ -1019,6 +974,18 @@ const run = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep =>
       const activationCount = machine.state.activations.length;
       const executed = execute(machine, task, taskPath);
       if (executed.kind === "suspend") {
+        if (executed.step.kind === "protected_set" && machine.replay !== undefined) {
+          const replay =
+            machine.replay[JSON.stringify([executed.step.taskPath, executed.step.iteration])];
+          if (replay === undefined || replay === null || replay.kind !== "task_result")
+            return failed(
+              "replay_unavailable",
+              "refused",
+              task.id,
+              "the earlier result cannot be shown again; reload",
+            );
+          return { ...executed.step, replay };
+        }
         if (
           executed.step.kind === "protected_task" &&
           machine.replay !== undefined &&
@@ -1373,6 +1340,57 @@ export const resumeFlowRun = (
   if (awaiting === undefined || previous.version !== flowRunStateVersion) return mismatch();
   delete machine.state.awaiting;
   const activation = topOf(machine);
+
+  if (awaiting.kind === "protected_set") {
+    if (resume.kind !== "task_result") return mismatch();
+    if (resume.outcome === "committed" || resume.outcome === "completed") {
+      // A set's result carries each call's outputs under `set`, in call order.
+      const produced = resume.outputs?.set;
+      if (
+        !Array.isArray(produced) ||
+        produced.length !== awaiting.calls.length ||
+        !produced.every(
+          (entry) => entry !== null && typeof entry === "object" && !Array.isArray(entry),
+        )
+      )
+        return mismatch();
+      if (resume.outcome === "committed") machine.state.committedEffects += 1;
+      replaceTop(
+        machine,
+        awaiting.calls.reduce(
+          (top, call, index) =>
+            storeTaskOutputs(
+              top,
+              call.taskId,
+              declaredOutputs(
+                call.taskType,
+                produced[index] as Readonly<Record<string, JsonValue>>,
+              ),
+            ),
+          activation,
+        ),
+      );
+      return drive(machine, observer);
+    }
+    // A refused set names the call whose change was refused under `task`; it ends as that task.
+    const call = awaiting.calls.find((candidate) => candidate.taskId === resume.outputs?.task);
+    if (call === undefined) return mismatch();
+    return resumeFlowRun(
+      { ...machine.state, awaiting: { kind: "protected_task", ...call } },
+      {
+        kind: "task_result",
+        outcome: resume.outcome,
+        ...(resume.diagnostic === undefined ? {} : { diagnostic: resume.diagnostic }),
+      },
+      library,
+      resolveMember,
+      observer,
+      resolveForm,
+      segment,
+      replay,
+      boundaryBefore,
+    );
+  }
 
   if (awaiting.kind === "protected_task") {
     if (resume.kind !== "task_result") return mismatch();

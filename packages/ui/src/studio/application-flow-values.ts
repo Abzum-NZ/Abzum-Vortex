@@ -72,6 +72,8 @@ export const studioFlowReferenceToken = (reference: FlowReference): string => {
       return `task_output:${reference.task}:${reference.key}${reference.path === undefined ? "" : `:${reference.path.join(".")}`}`;
     case "module_field":
       return `module_field:${reference.fieldId}`;
+    case "loop_item":
+      return `loop_item${reference.path === undefined ? "" : `:${reference.path.join(".")}`}`;
     case "execution_actor":
     case "execution_now":
       return reference.source;

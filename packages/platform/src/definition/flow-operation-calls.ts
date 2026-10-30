@@ -1,3 +1,4 @@
+import { recordChangeListSchema } from "../records/record-change-list";
 import { valueTypesCompatible } from "../catalogue/catalogues";
 import {
   PLATFORM_SERVICE_OPERATIONS,
@@ -119,12 +120,13 @@ export function flowOperationNodeDescriptors(
         const operationId =
           task.type === "record.query" ? literalIdentity(properties.query) : undefined;
         const recordTypeIds =
-          task.type === "record.query" || task.type === "record.link"
+          task.type === "record.query" ||
+          task.type === "record.link" ||
+          task.type === "record.changes"
             ? []
             : [
                 literalIdentity(properties.record_type),
                 ...declaredRecordTypeIds(flow, properties.record),
-                ...declaredChangeListRecordTypeIds(flow, properties.changes),
               ]
                 .filter((recordTypeId): recordTypeId is string => recordTypeId !== undefined)
                 .map((recordTypeId) => recordTypeId.toLowerCase())
@@ -193,45 +195,6 @@ const declaredRecordTypeIds = (flow: FlowDefinition, value: unknown): readonly s
   return [];
 };
 
-/** A compiled change list may carry record-reference inputs for each subject and target. */
-const declaredChangeListRecordTypeIds = (
-  flow: FlowDefinition,
-  value: unknown,
-): readonly string[] => {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    !("kind" in value) ||
-    value.kind !== "literal" ||
-    !("literal" in value) ||
-    typeof value.literal !== "object" ||
-    value.literal === null ||
-    !("type" in value.literal) ||
-    value.literal.type !== "json" ||
-    !("value" in value.literal) ||
-    !Array.isArray(value.literal.value)
-  )
-    return [];
-  const recordTypeIds: string[] = [];
-  for (const change of value.literal.value) {
-    if (
-      typeof change !== "object" ||
-      change === null ||
-      Array.isArray(change) ||
-      !("kind" in change) ||
-      change.kind !== "copy_relationships" ||
-      !("subject" in change) ||
-      !("target" in change)
-    )
-      return [];
-    const subjectIds = declaredRecordTypeIds(flow, change.subject);
-    const targetIds = declaredRecordTypeIds(flow, change.target);
-    if (subjectIds.length === 0 || targetIds.length === 0) return [];
-    recordTypeIds.push(...subjectIds, ...targetIds);
-  }
-  return recordTypeIds;
-};
-
 /** Derives the exact static Record and Query reference set for every protected flow node. */
 export function flowOperationReferencesByNode(
   flows: readonly FlowDefinition[],
@@ -288,13 +251,26 @@ export function flowOperationReferencesByNode(
         if (relatedIds === undefined)
           throw new Error("A published record link has no resolved relationship");
         recordTypeIds.push(...relatedIds);
+      } else if (task.type === "record.changes") {
+        const value = properties.changes;
+        const changes = recordChangeListSchema.parse(
+          value?.kind === "literal" && value.literal.type === "json"
+            ? value.literal.value
+            : undefined,
+        );
+        for (const change of changes)
+          for (const relationshipId of change.relationshipIds) {
+            const relatedIds = lookups.relationshipRecordTypeIdsById.get(
+              relationshipId.toLowerCase(),
+            );
+            if (relatedIds === undefined)
+              throw new Error("A published relationship copy has no resolved relationship");
+            recordTypeIds.push(...relatedIds);
+          }
       } else {
         const recordTypeId = literalIdentity(properties.record_type);
         if (recordTypeId !== undefined) recordTypeIds.push(recordTypeId);
-        recordTypeIds.push(
-          ...declaredRecordTypeIds(flow, properties.record),
-          ...declaredChangeListRecordTypeIds(flow, properties.changes),
-        );
+        recordTypeIds.push(...declaredRecordTypeIds(flow, properties.record));
       }
 
       nodes.push({

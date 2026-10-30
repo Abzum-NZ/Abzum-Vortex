@@ -43,6 +43,8 @@ export const formulaReferenceName = (reference: FlowReference): string => {
       return "execution.now";
     case "module_field":
       return `module.fields.${reference.fieldId}`;
+    case "loop_item":
+      return `loop.item${reference.path === undefined ? "" : `.${reference.path.join(".")}`}`;
   }
 };
 

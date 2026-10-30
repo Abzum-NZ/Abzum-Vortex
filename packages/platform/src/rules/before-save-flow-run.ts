@@ -33,6 +33,7 @@ export type BeforeSaveRuleWarning = Readonly<{
   flowId: string;
   taskPath: readonly (string | number)[];
   messageIsLiteral: boolean;
+  record?: Readonly<{ recordTypeId: string; recordId: string }>;
 }>;
 
 export type BeforeSaveRuleRefusal = Readonly<{

@@ -1,6 +1,5 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
 import type { InstalledNamedActionReference } from "../../records/named-actions";
 import type { RequestDatabaseTransaction } from "../../db/request-transaction";
 import type { ActionFlowRunner } from "../../rules/action-flow-run";
@@ -54,7 +53,6 @@ export const readNamedActionEligibility = async (
     recordId: target.recordId,
     actions: actions.map(({ action }) => ({
       commandId: target.commandId,
-      activityId: randomUUID(),
       ownerKind: action.ownerKind,
       ownerId: action.ownerId,
       releaseRevision: action.releaseRevision,

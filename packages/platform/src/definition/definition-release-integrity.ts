@@ -202,6 +202,7 @@ const exactApplicationFlowTargetsMatch = (
       return false;
     if (
       descriptor.taskType !== "record.link" &&
+      descriptor.taskType !== "record.changes" &&
       descriptor.taskType !== "record.query" &&
       (entry.operations.length !== descriptor.recordTypeIds.length ||
         descriptor.recordTypeIds.some(

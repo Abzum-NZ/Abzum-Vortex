@@ -1,3 +1,4 @@
+import { recordChangeListSchema } from "../records/record-change-list";
 import { valueTypesCompatible, workflowValueTypeSchema } from "../catalogue/catalogues";
 import { isIsoCurrencyCode } from "../catalogue/currencies";
 import { checkFlowFormula } from "../rules/flow-formula-check";
@@ -23,6 +24,7 @@ import {
   type FlowTaskTypeDefinition,
 } from "../workflows/flow-task-registry";
 import {
+  flowListItemType,
   flowMaximumTaskOutputPathDepth,
   flowFormulaHasUnroundedDivide,
   flowRoundingModeSchema,
@@ -306,15 +308,6 @@ export function validateFlow(
     flow.triggers.forEach((trigger, index) => {
       if (Object.keys(trigger.inputs).length > 0)
         unsupported(["triggers", index, "inputs"], "A save trigger supplies only its record");
-      // Not yet runnable: the one record writer applies rules to deletes and restores later.
-      if (trigger.type === "BeforeSave")
-        trigger.operations.forEach((operation, operationIndex) => {
-          if (operation.kind === "delete" || operation.kind === "restore")
-            unsupported(
-              ["triggers", index, "operations", operationIndex],
-              `A rule before a record is ${operation.kind === "delete" ? "deleted" : "restored"} cannot run yet; cover create or update`,
-            );
-        });
     });
   }
 
@@ -353,7 +346,14 @@ export function validateFlow(
   const hasRecord = hasRecordTrigger || flow.recordInput !== undefined;
 
   // ── Typed references. ──
-  type Where = { nowAllowed: boolean; scope: ReadonlyMap<string, FlowTask>; triggerOnly: boolean };
+  type Where = {
+    nowAllowed: boolean;
+    scope: ReadonlyMap<string, FlowTask>;
+    triggerOnly: boolean;
+    /** The item type of the innermost enclosing For each, when there is one. */
+    loopItemType?: string;
+  };
+  const loopItemTypes = new Map<string, string>();
 
   const findFlow = (reference: string): FlowSource | undefined =>
     options.targetFlow?.(reference) as FlowSource | undefined;
@@ -452,6 +452,25 @@ export function validateFlow(
             `The trigger record has no field ${reference.field}`,
           );
         return options.triggerRecordFieldType?.(reference.field);
+      case "loop_item":
+        if (where.loopItemType === undefined) {
+          add(
+            path,
+            "vortex.definition.workflow_node_references",
+            "broken_reference",
+            "Only a step inside a For each can read {{ loop.item }}",
+          );
+          return undefined;
+        }
+        if (reference.path === undefined) return where.loopItemType;
+        if (where.loopItemType !== "json")
+          add(
+            path,
+            "vortex.definition.workflow_node_values",
+            "invalid_value",
+            "Only a For each over JSON items can read a field path of {{ loop.item }}",
+          );
+        return undefined;
       case "execution_actor":
         return "organization_account_reference";
       case "execution_now":
@@ -976,6 +995,31 @@ export function validateFlow(
       valueType(value, where, path);
       return;
     }
+    if (declared.type === "record_change_list") {
+      const changes = recordChangeListSchema.safeParse(
+        value.kind === "literal" && value.literal.type === "json" ? value.literal.value : undefined,
+      );
+      if (!changes.success) {
+        add(
+          path,
+          "vortex.definition.workflow_node_values",
+          "invalid_value",
+          "Changes must list the relationships to copy, their source record and their destination record",
+        );
+        return;
+      }
+      changes.data.forEach((change, index) => {
+        for (const name of ["subject", "target"] as const)
+          checkValue(
+            change[name],
+            ["record_reference"],
+            where,
+            [...path, "literal", "value", index, name],
+            true,
+          );
+      });
+      return;
+    }
     if (declared.type === "formula") {
       if (value.kind !== "formula")
         add(
@@ -1145,8 +1189,13 @@ export function validateFlow(
       );
   };
 
-  const checkTask = (task: FlowTask, path: Path, scope: Scope) => {
-    const where: Where = { nowAllowed: timeAllowed, scope, triggerOnly: false };
+  const checkTask = (task: FlowTask, path: Path, scope: Scope, loopItemType?: string) => {
+    const where: Where = {
+      nowAllowed: timeAllowed,
+      scope,
+      triggerOnly: false,
+      ...(loopItemType === undefined ? {} : { loopItemType }),
+    };
     switch (task.type) {
       case "if": {
         const node = task as Extract<FlowTask, { type: "if" }>;
@@ -1188,6 +1237,7 @@ export function validateFlow(
       case "for_each": {
         const node = task as Extract<FlowTask, { type: "for_each" }>;
         const type = valueType(node.items, where, [...path, "items"]);
+        loopItemTypes.set(node.id, flowListItemType(type));
         if (node.items.kind === "map")
           add(
             [...path, "items"],
@@ -1263,15 +1313,16 @@ export function validateFlow(
    * the lists that enclose it. Tasks inside a branch, iteration or parallel branch are not visible
    * after it, because they have not necessarily run; a sequential group is transparent.
    */
-  const walk = (tasks: readonly FlowTask[], path: Path, scope: Scope) => {
+  const walk = (tasks: readonly FlowTask[], path: Path, scope: Scope, loopItemType?: string) => {
     tasks.forEach((task, index) => {
       const taskPath = [...path, index];
-      checkTask(task, taskPath, scope);
+      checkTask(task, taskPath, scope, loopItemType);
       for (const child of flowTaskChildLists(task)) {
         walk(
           child.tasks,
           [...taskPath, ...child.path],
           task.type === "sequential" ? scope : new Map(scope),
+          task.type === "for_each" ? loopItemTypes.get(task.id) : loopItemType,
         );
       }
       scope.set(task.id, task);

@@ -63,8 +63,13 @@ export type Frame = Readonly<{
   path: readonly PathSegment[];
   /** The next task to run in that list. */
   index: number;
-  /** Present on a For each body: how many times it runs and which run this is. */
-  loop?: Readonly<{ count: number; iteration: number }>;
+  /** Present on a For each body: how many times it runs, which run this is and its items. */
+  loop?: Readonly<{
+    count: number;
+    iteration: number;
+    items: readonly JsonValue[];
+    itemType: string;
+  }>;
 }>;
 
 export type Phase = "tasks" | "errors" | "finally";
@@ -85,8 +90,10 @@ export type Activation = Readonly<{
 }>;
 
 /** What the suspended run is waiting for, so a resume of the wrong kind is refused. */
+type SetCall = Readonly<{ taskId: string; taskType: string; allowRefusal: boolean }>;
 type Awaiting =
   | Readonly<{ kind: "protected_task"; taskId: string; taskType: string; allowRefusal: boolean }>
+  | Readonly<{ kind: "protected_set"; taskId: string; calls: readonly SetCall[] }>
   | Readonly<{ kind: "form"; taskId: string; answerTypes?: Readonly<Record<string, string>> }>
   | Readonly<{ kind: "confirm"; taskId: string }>;
 
@@ -216,6 +223,15 @@ export type FlowRunStep =
       kind: "protected_task";
       state: FlowRunState;
       call: FlowProtectedTaskCall;
+      replay?: FlowRunResume;
+    }>
+  /** A set-based For each: every item's record steps, applied by the host as one change. */
+  | Readonly<{
+      kind: "protected_set";
+      state: FlowRunState;
+      taskPath: string;
+      iteration: string;
+      calls: readonly FlowProtectedTaskCall[];
       replay?: FlowRunResume;
     }>
   | Readonly<{ kind: "boundary"; state: FlowRunState; result?: FlowRunResult; nextTaskId?: string }>

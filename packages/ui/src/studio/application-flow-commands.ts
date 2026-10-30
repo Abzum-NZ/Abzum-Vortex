@@ -2,6 +2,8 @@ import {
   builderKeySchema,
   flowMaximumTaskCount,
   flowMaximumForEachItemsOther,
+  flowMaximumSetBasedForEachItems,
+  isSetBasedForEach,
   flowTaskRegistry,
   flowExecutionRunLocations,
   parseFlowReference,
@@ -36,7 +38,7 @@ import {
   applyStudioFlowStepDraft,
   type StudioFlowStepDraft,
 } from "./application-flow-step-form";
-import { studioFlowEventChoices } from "./application-flow-values";
+import { studioDraftRecordType, studioFlowEventChoices } from "./application-flow-values";
 import {
   addStudioFlowShownForm,
   studioFlowCanCreateShownForm,
@@ -203,26 +205,82 @@ const builderChoiceOptions = (
   }
 };
 
+/** The draft definition of the record type the flow runs for, when it runs for one. */
+const flowRecordDefinition = (flow: SourceFlow, source: Readonly<ApplicationSourceDocument>) => {
+  const recordType = flowRecordType(flow);
+  const moduleKey =
+    source.body.modules.find((module) => module.flows.some((candidate) => candidate.id === flow.id))
+      ?.key ?? null;
+  return recordType === undefined
+    ? undefined
+    : studioDraftRecordType(source, recordType, moduleKey)?.record;
+};
+
+/** The flow's other record input: the target a link or a relationship copy starts with. */
+const flowTargetInput = (flow: SourceFlow): string | undefined => {
+  const recordInput = flowRecordInput(flow);
+  return Object.entries(flow.inputs ?? {}).find(
+    ([name, input]) => input.type === "record_reference" && name !== recordInput,
+  )?.[0];
+};
+
+/** The first relationship of the record type the flow runs for, as a flow names it. */
+const flowFirstRelationship = (
+  flow: SourceFlow,
+  source: Readonly<ApplicationSourceDocument>,
+): string | undefined => {
+  const relationship = flowRecordDefinition(flow, source)?.relationships.at(0);
+  return relationship === undefined ? undefined : `${flowRecordType(flow)}.${relationship.key}`;
+};
+
 /** The value of a required setting the flow decides itself, or undefined when it has none. */
 const seedValue = (
   type: FlowTaskPropertyType,
   flow: SourceFlow,
   source: Readonly<ApplicationSourceDocument>,
+  declaredDefault?: FlowLiteral,
 ): FlowValue | undefined => {
   const modules = source.body.modules;
   const recordInput = flowRecordInput(flow);
   const recordType = flowRecordType(flow);
   switch (type) {
+    case "any_value":
+      return text("");
+    case "builder_key":
+      return declaredDefault === undefined
+        ? undefined
+        : { kind: "literal", literal: declaredDefault };
     case "record_reference": {
       return recordInput === undefined
         ? undefined
         : { kind: "reference", reference: { source: "input", name: recordInput } };
     }
     case "record_change_list": {
-      const input = Object.entries(flow.inputs ?? {}).find(([, input]) => input.type === "json");
-      return input === undefined
+      // One copy of the run's record's first relationship onto the flow's other record.
+      const relationship = flowFirstRelationship(flow, source);
+      const target = flowTargetInput(flow);
+      if (recordInput === undefined || relationship === undefined || target === undefined)
+        return undefined;
+      return {
+        kind: "literal",
+        literal: {
+          type: "json",
+          value: [
+            {
+              kind: "copy_relationships",
+              relationshipIds: [relationship],
+              subject: { kind: "reference", reference: { source: "input", name: recordInput } },
+              target: { kind: "reference", reference: { source: "input", name: target } },
+            },
+          ],
+        },
+      };
+    }
+    case "relationship_id": {
+      const relationship = flowFirstRelationship(flow, source);
+      return recordInput === undefined || relationship === undefined
         ? undefined
-        : { kind: "reference", reference: { source: "input", name: input[0] } };
+        : text(relationship);
     }
     case "message_text":
       return text("");
@@ -265,6 +323,60 @@ const seedValue = (
     default:
       return undefined;
   }
+};
+
+/**
+ * Set fields starts with one text field of the run's record that its update permission lets people
+ * change, valid as inserted: it keeps the current value, or an optional field starts empty.
+ */
+const setFieldsSeed = (
+  flow: SourceFlow,
+  source: Readonly<ApplicationSourceDocument>,
+): FlowValue | undefined => {
+  const recordType = flowRecordType(flow);
+  const moduleKey =
+    source.body.modules.find((module) => module.flows.some((candidate) => candidate.id === flow.id))
+      ?.key ?? null;
+  const found =
+    recordType === undefined ? undefined : studioDraftRecordType(source, recordType, moduleKey);
+  if (found === undefined) return undefined;
+  const changeable = new Set(
+    found.module.permissions.flatMap((permission) =>
+      permission.action_kind === "update" && permission.record_type === found.record.key
+        ? (permission.field_policy?.changeable_fields ?? [])
+        : [],
+    ),
+  );
+  const fields = found.record.fields.filter(
+    (candidate) =>
+      (candidate.type === "text" || candidate.type === "long_text") &&
+      changeable.has(candidate.key),
+  );
+  // A flow that names its record keeps the field's current value until the builder changes it;
+  // otherwise an optional field starts empty.
+  if (flow.recordInput !== undefined && fields[0] !== undefined)
+    return {
+      kind: "map",
+      entries: {
+        [fields[0].key]: {
+          kind: "reference",
+          reference: { source: "trigger_record", field: fields[0].key },
+        },
+      },
+    };
+  const field = fields.find((candidate) => candidate.required !== true);
+  return field === undefined ? undefined : { kind: "map", entries: { [field.key]: text("") } };
+};
+
+/** A number a default formatter can show. */
+const zeroSeed: FlowValue = { kind: "literal", literal: { type: "whole_number", value: 0 } };
+
+/** A link's target: the flow's other record input, so a record is never linked to itself. */
+const targetSeed = (flow: SourceFlow): FlowValue | undefined => {
+  const target = flowTargetInput(flow);
+  return target === undefined
+    ? undefined
+    : { kind: "reference", reference: { source: "input", name: target } };
 };
 
 /** The reason key a new Refuse save step starts with; the builder words its message. */
@@ -320,9 +432,24 @@ const seededTask = (
             ? text("info")
             : definition.type === "data.calculate" && key === "result_type"
               ? text("decimal_number")
-              : seedValue(declaration.type, flow, source);
+              : definition.type === "record.link" && key === "target"
+                ? targetSeed(flow)
+                : definition.type === "data.format" && key === "input"
+                  ? // A number its default formatter can show; the builder points it at a value.
+                    zeroSeed
+                  : definition.type === "record.set_fields" && key === "values"
+                    ? setFieldsSeed(flow, source)
+                    : seedValue(declaration.type, flow, source, declaration.default);
     if (seed === undefined) return undefined;
     properties[key] = seed;
+  }
+  // Set fields changes the record the flow runs for.
+  if (definition.type === "record.set_fields") {
+    const record = seedValue("record_reference", flow, source);
+    const recordType = seedValue("record_type_id", flow, source);
+    if (record === undefined || recordType === undefined) return undefined;
+    properties.record_type = recordType;
+    properties.record = record;
   }
   // A dialog is headed by what the person was doing: the flow's name.
   if (definition.type === "interface.show_message")
@@ -579,7 +706,10 @@ const newStep = (
     if (
       !Number.isSafeInteger(settings.maximumItems) ||
       settings.maximumItems! < 1 ||
-      settings.maximumItems! > flowMaximumForEachItemsOther
+      settings.maximumItems! >
+        (isSetBasedForEach({ type: "for_each", tasks })
+          ? flowMaximumSetBasedForEachItems
+          : flowMaximumForEachItemsOther)
     )
       return { kind: "invalid", reason: "Enter a valid maximum number of items." };
     return {

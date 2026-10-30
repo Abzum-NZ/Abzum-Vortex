@@ -12,6 +12,7 @@ import { flowOperationOutputMembers } from "./flow-operation-output-members";
 import { installedFlowFormTypes, type FlowFormTypes } from "./flow-form-types";
 import type { SystemApplicationBoundReleaseSetResult } from "../definition/definition-consumer-read";
 import type { FlowBindingInput, FlowDefinition, FlowTask } from "./flow-contracts";
+import { isSetBasedForEach } from "./flow-set-based";
 import { flowTaskChildLists, isFlowControlTask } from "./flow-contracts";
 import { flowTaskRegistry, type FlowTaskTypeKey } from "./flow-task-registry";
 import type { FlowFormula, FlowLiteral, FlowReference, FlowValue } from "./flow-values";
@@ -217,14 +218,6 @@ const operationOf = (flow: FlowDefinition, task: FlowTask) => {
   return { key, effect: entry[1].descriptor.effect, ...protectedOperationMetadata[key] };
 };
 
-/** Record steps a named action collects into one change; a For each over them is set-based. */
-const setBasedSteps = new Set([
-  "record.create",
-  "record.set_fields",
-  "record.delete",
-  "record.changes",
-]);
-
 const leafLocation = (flow: FlowDefinition, task: FlowTask): UnitLocation => {
   if (task.type === "stop") return "neutral";
   if (flow.execution === "interactive" && (task.type === "data.calculate" || task.type === "data.set_variable"))
@@ -413,6 +406,9 @@ const inputTypes = (
             : ((producer === undefined ? undefined : outputTypes([producer])[key]) ?? "json");
         break;
       }
+      // A For each runs inside one segment, so its item never crosses a segment boundary.
+      case "loop_item":
+        break;
       case "trigger_record":
         types[`trigger.record.${reference.field}`] = "record_field";
         break;
@@ -445,15 +441,16 @@ const inputTypes = (
 };
 
 const setBasedChanges = (steps: readonly FlowTask[]) =>
-  steps.flatMap((step) => {
-    if (step.type !== "for_each") return [];
-    const body = allSteps(flowTaskChildLists(step).flatMap((list) => list.tasks)).filter(
-      (child) => !isFlowControlTask(child),
-    );
-    return body.length > 0 && body.every((child) => setBasedSteps.has(child.type))
-      ? [{ taskId: step.id, steps: body.map((child) => child.id) }]
-      : [];
-  });
+  allSteps(steps).flatMap((step) =>
+    isSetBasedForEach(step)
+      ? [
+          {
+            taskId: step.id,
+            steps: (step as Extract<FlowTask, { type: "for_each" }>).tasks.map((child) => child.id),
+          },
+        ]
+      : [],
+  );
 
 type Draft = {
   kind: "page" | "server";
