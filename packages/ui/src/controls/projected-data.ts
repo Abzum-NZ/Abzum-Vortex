@@ -86,6 +86,11 @@ export type ControlSemanticEvent =
       event: "field_changed";
       fieldKey: string;
       value: TypedFieldValue;
+      /** Display details already shown to this viewer for an in-memory draft. */
+      draftDisplay?: Readonly<{
+        title?: string;
+        files?: readonly Readonly<{ fileId: string; name: string }>[];
+      }>;
       origin: "user" | "flow";
       depth: number;
       /** Present for a flow-set change, so its next binding can enforce the cycle bound. */

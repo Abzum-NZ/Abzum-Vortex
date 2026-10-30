@@ -71,6 +71,7 @@ export function AttachmentInput(props: ControlRenderProps<AttachmentInputPayload
       immediate: false,
       fieldKey,
       value: next.map((file) => file.fileId),
+      draftDisplay: { files: next },
     });
   };
   const upload = async (selected: FileList | null) => {

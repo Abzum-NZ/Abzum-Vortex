@@ -1,17 +1,23 @@
-import type { FlowInvokeClient, ServerFlowResponse } from "@vortex/ui";
+import { equalFormValue, type FlowInvokeClient, type ServerFlowResponse } from "@vortex/ui";
 import type { SubmittedForm } from "./types";
 import type { useFlowRuntime } from "./use-flow-runtime";
 
 type Tracking = Pick<
   Parameters<typeof useFlowRuntime>[0],
-  "continuingFormsRef" | "formCancelledRef" | "unsavedWorkRegistry"
+  "continuingFormsRef" | "formCancelledRef" | "unsavedWorkRegistry" | "controlDraftsRef"
 > &
   Readonly<{ submissions: Map<string, SubmittedForm> }>;
 
 /** Track form submissions through the existing invocation and continuation client. */
 export function trackFlowInvokeClient(
   client: FlowInvokeClient,
-  { submissions, continuingFormsRef, formCancelledRef, unsavedWorkRegistry }: Tracking,
+  {
+    submissions,
+    continuingFormsRef,
+    formCancelledRef,
+    unsavedWorkRegistry,
+    controlDraftsRef,
+  }: Tracking,
 ): FlowInvokeClient {
   const recordResponse = (response: ServerFlowResponse, submission: SubmittedForm | undefined) => {
     if (submission === undefined) return;
@@ -24,6 +30,20 @@ export function trackFlowInvokeClient(
     ) {
       // The server has confirmed the submitted values before its Navigate intent is presented.
       unsavedWorkRegistry?.markSaved(submission.formId, submission.values);
+      const store = controlDraftsRef?.current;
+      if (store === undefined) return;
+      for (const [id, draft] of Object.entries(store.drafts))
+        if (
+          draft.owner === submission.formId &&
+          Object.hasOwn(submission.values, draft.fieldKey) &&
+          equalFormValue(draft.value, submission.values[draft.fieldKey])
+        ) {
+          delete store.drafts[id];
+          delete store.values[id];
+        }
+      if (Object.values(store.drafts).some((draft) => draft.owner === submission.formId))
+        store.baselines[submission.formId] = submission.values;
+      else delete store.baselines[submission.formId];
     }
   };
   return {

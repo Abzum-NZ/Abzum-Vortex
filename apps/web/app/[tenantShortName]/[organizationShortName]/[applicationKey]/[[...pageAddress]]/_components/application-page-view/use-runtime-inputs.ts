@@ -1,6 +1,11 @@
 import { useMemo, useRef, type Dispatch, type SetStateAction, type RefObject } from "react";
 import type { useRouter } from "next/navigation";
-import type { createFormBlockRuntime, DisplayTablePayload, useUnsavedWorkGuard } from "@vortex/ui";
+import type {
+  createFormBlockRuntime,
+  DisplayTablePayload,
+  useUnsavedWorkGuard,
+  useUnsavedWorkRegistry,
+} from "@vortex/ui";
 import {
   equalFormValue,
   type ControlSemanticEvent,
@@ -56,6 +61,8 @@ import { useBatchUndo } from "./use-batch-undo";
 import { useRangeSummary } from "./use-range-summary";
 import { useRecordsExport } from "./use-records-export";
 import { requestRecordChoices } from "./record-choices";
+import type { draftControls } from "./control-drafts";
+import type { ControlDrafts } from "../../../_components/application-frame-state";
 import type { useFieldFlowEvents } from "./use-field-flow-events";
 
 export function useRuntimeInputs({
@@ -113,6 +120,8 @@ export function useRuntimeInputs({
   requestChoicePage,
   runtimeInputsRef,
   controlDraftsRef,
+  controls,
+  unsavedWorkRegistry,
   setPanelRef,
 }: Readonly<{
   currentData: ApplicationPageModel["data"];
@@ -234,7 +243,9 @@ export function useRuntimeInputs({
     formId?: string,
   ) => Promise<void>;
   runtimeInputsRef: RefObject<Readonly<Record<string, unknown>>>;
-  controlDraftsRef: RefObject<{ scope: string; values: Record<string, unknown> }>;
+  controlDraftsRef: RefObject<ControlDrafts> | undefined;
+  controls: ReturnType<typeof draftControls>;
+  unsavedWorkRegistry: ReturnType<typeof useUnsavedWorkRegistry>;
   setPanelRef: RefObject<FlowIntentHost["setPanel"]>;
 }>) {
   const pageParameters = usePageParameters({
@@ -302,6 +313,7 @@ export function useRuntimeInputs({
     // sets are wired: every placement with data or with a flow binding receives its callbacks.
     const placementIds = new Set([
       ...Object.keys(currentData),
+      ...Object.keys(controls),
       ...Object.keys(model.bindings),
       ...Object.keys(formFeedback),
       ...guidedActiveFormIds,
@@ -313,7 +325,7 @@ export function useRuntimeInputs({
       for (const placementId of placementIds)
         if (!guidedActivePlacementIds.has(placementId)) placementIds.delete(placementId);
     for (const placementId of placementIds) {
-      const data =
+      let data =
         guidedFormCompleted && guidedActiveFormIds.includes(placementId)
           ? ({ status: "disabled", reason: "Refresh to start another form." } as const)
           : publishedControlData(
@@ -323,6 +335,11 @@ export function useRuntimeInputs({
               search,
               titles.current.values,
             );
+      if (
+        controlDraftsRef !== undefined &&
+        Object.hasOwn(controlDraftsRef.current.restored, placementId)
+      )
+        data = controlDraftsRef.current.restored[placementId] as typeof data;
       const bindings = model.bindings[placementId] ?? [];
       const events: EventHandlers = {};
       const boardData = boardPayloadFor(data);
@@ -673,8 +690,25 @@ export function useRuntimeInputs({
           ((event: ControlSemanticEvent) => void) | undefined;
         events.field_changed = (event: ControlSemanticEvent) => {
           fieldChanged?.(event);
-          if (event.event === "field_changed" && controlDraftsRef.current.scope === navigationKey)
-            controlDraftsRef.current.values[placementId] = event.value;
+          if (event.event === "field_changed") {
+            const control = controls[placementId];
+            if (control !== undefined && controlDraftsRef !== undefined) {
+              const store = controlDraftsRef.current;
+              const owner = formOwners[placementId];
+              if (owner !== undefined && store.baselines[owner] === undefined) {
+                const baseline = unsavedWorkRegistry?.baselineOf(owner);
+                if (baseline !== undefined) store.baselines[owner] = baseline;
+              }
+              store.values[placementId] = event.value;
+              store.drafts[placementId] = {
+                kind: control.kind,
+                value: event.value,
+                fieldKey: event.fieldKey,
+                ...(owner === undefined ? {} : { owner }),
+                ...(event.draftDisplay === undefined ? {} : { display: event.draftDisplay }),
+              };
+            }
+          }
           if (publishedParameter !== undefined) pageParameters.change(placementId, event);
         };
       }
@@ -812,21 +846,31 @@ export function useRuntimeInputs({
           );
         };
       const resetBinding = bindings.find((binding) => binding.event === "form_reset");
-      if (resetBinding !== undefined && model.guidedForm === undefined)
+      if (supportsEvent("form_reset") && model.guidedForm === undefined)
         events.form_reset = (event: ControlSemanticEvent) => {
           if (event.event !== "form_reset") return;
+          const store = controlDraftsRef?.current;
+          if (store !== undefined) {
+            for (const [id, draft] of Object.entries(store.drafts))
+              if (draft.owner === placementId) {
+                delete store.drafts[id];
+                delete store.values[id];
+                delete store.restored[id];
+              }
+            delete store.baselines[placementId];
+          }
           setFormFeedback((current) => {
-            if (!Object.hasOwn(current, placementId)) return current;
             const next = { ...current };
             delete next[placementId];
             return next;
           });
-          void applyDispatch(
-            formBlock.reset(asComponentBinding(placementId, resetBinding), event.gestureId),
-            undefined,
-            undefined,
-            resetBinding.bindingId,
-          );
+          if (resetBinding !== undefined)
+            void applyDispatch(
+              formBlock.reset(asComponentBinding(placementId, resetBinding), event.gestureId),
+              undefined,
+              undefined,
+              resetBinding.bindingId,
+            );
         };
       if (data === undefined) {
         if (Object.keys(events).length > 0 || flowFeedback !== undefined)
@@ -903,6 +947,9 @@ export function useRuntimeInputs({
     return inputs;
   }, [
     applyDispatch,
+    controls,
+    controlDraftsRef,
+    unsavedWorkRegistry,
     fieldFlowEvents,
     formBlock,
     formCancelledRef,

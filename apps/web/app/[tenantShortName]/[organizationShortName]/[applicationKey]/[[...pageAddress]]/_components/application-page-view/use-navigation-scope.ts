@@ -24,6 +24,7 @@ export function useNavigationScope({
   }
   const pageSearch = new URLSearchParams(searchWithoutRecordsTableState(currentSearch));
   for (const name of Object.values(model.pageParameters.controls)) pageSearch.delete(name);
+  const addressKey = JSON.stringify([pathname, pageSearch.toString(), model.pageId]);
   const navigationBase = JSON.stringify([
     pathname,
     // A table's query state (sort, filter, search, columns, page) is shallow: it rereads only
@@ -56,6 +57,7 @@ export function useNavigationScope({
   const navigationKey = placementRequestsRef.current.key;
 
   return {
+    addressKey,
     navigationKey,
     placementRequestsRef,
     boardContinuationInFlightRef,

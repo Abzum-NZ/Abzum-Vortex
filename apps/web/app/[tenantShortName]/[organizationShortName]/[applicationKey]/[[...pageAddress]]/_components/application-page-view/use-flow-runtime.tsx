@@ -42,6 +42,7 @@ import { DialogFooter } from "@vortex/ui/components/dialog";
 import { useApplicationFrame } from "../../../_components/application-frame-state";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import type { SubmittedForm, Notice } from "./types";
+import type { ControlDrafts } from "../../../_components/application-frame-state";
 import { formSurfaceComposition, runtimeInputWithFormDefault } from "./form-surface";
 import { requestRecordChoices } from "./record-choices";
 import { unavailableNotice } from "./notices";
@@ -85,7 +86,7 @@ export function useFlowRuntime({
   model: ApplicationPageModel;
   platformComponentRegistry: ReturnType<typeof createPlatformComponentRegistryForReleases>;
   runtimeInputsRef: RefObject<Readonly<Record<string, unknown>>>;
-  controlDraftsRef: RefObject<{ scope: string; values: Record<string, unknown> }>;
+  controlDraftsRef: RefObject<ControlDrafts> | undefined;
   choicePayloadFor: (placementId: string, formId?: string) => ChoiceInputPayload | undefined;
   fieldInputControlReleases: FieldInputControlReleaseMap;
   setNotice: Dispatch<SetStateAction<Notice | undefined>>;
@@ -148,7 +149,7 @@ export function useFlowRuntime({
           if (!isRecord(values)) continue;
           forward(placementId, values.value);
         }
-        for (const [placementId, value] of Object.entries(controlDraftsRef.current.values))
+        for (const [placementId, value] of Object.entries(controlDraftsRef?.current.values ?? {}))
           forward(placementId, value);
         return { parameters, controls };
       },
@@ -171,6 +172,7 @@ export function useFlowRuntime({
           continuingFormsRef,
           formCancelledRef,
           unsavedWorkRegistry,
+          controlDraftsRef,
         });
     };
     return {

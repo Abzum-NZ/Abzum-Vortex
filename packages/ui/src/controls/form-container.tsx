@@ -325,7 +325,12 @@ export function FormContainer(props: FormContainerProps): ReactElement {
 
   useEffect(() => {
     resetBaseline();
-    return unsavedWorkRegistry?.registerForm(formId, resetBaseline, setSavedBaseline);
+    return unsavedWorkRegistry?.registerForm(
+      formId,
+      resetBaseline,
+      setSavedBaseline,
+      () => baselineRef.current,
+    );
   }, [formId, generation, resetBaseline, setSavedBaseline, unsavedWorkRegistry]);
 
   const resetRef = useRef(false);

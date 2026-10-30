@@ -7,6 +7,7 @@ import {
   useState,
   type ReactElement,
   type ReactNode,
+  type RefObject,
 } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -61,6 +62,7 @@ import { usePlacementActions } from "./use-placement-actions";
 import { useTablePageAddress } from "./use-table-page-address";
 import { usePageAddress } from "./page-address";
 import { useRuntimeInputs } from "./use-runtime-inputs";
+import { draftControls, restoreDrafts } from "./control-drafts";
 import { useGridLayout } from "./use-grid-layout";
 import { useRowDetail } from "./use-row-detail";
 import { usePivot } from "./use-pivot";
@@ -69,6 +71,8 @@ import { WebMcpAdapter } from "../../../../../../_components/webmcp-adapter";
 import {
   useApplicationFrame,
   useFramePageState,
+  emptyControlDrafts,
+  type ControlDrafts,
 } from "../../../_components/application-frame-state";
 
 /** Every placement id of the page's own content, nested placements and guided step content included. */
@@ -83,6 +87,7 @@ const placementIdsOf = (content: Readonly<Record<string, unknown>>): ReadonlySet
 
 export function ApplicationPageViewContent({
   model,
+  controlDraftsRef,
   content,
   frame,
   guidedFormActions,
@@ -94,6 +99,7 @@ export function ApplicationPageViewContent({
   platformThemeTokens,
 }: Readonly<{
   model: ApplicationPageModel;
+  controlDraftsRef: RefObject<ControlDrafts> | undefined;
   /** The page's own placements, rendered in the frame's outlet. */
   content: Readonly<Record<string, unknown>>;
   /** The frame projected with this page, handed to the application frame around it. */
@@ -210,6 +216,7 @@ export function ApplicationPageViewContent({
     [model.page, platformComponentRegistry],
   );
   const {
+    addressKey,
     navigationKey,
     placementRequestsRef,
     boardContinuationInFlightRef,
@@ -220,13 +227,12 @@ export function ApplicationPageViewContent({
     currentSearch,
     application,
   });
-  // The flow client sits outside form scopes, so retain the controls' forwarded draft events.
-  const controlDraftsRef = useRef<{ scope: string; values: Record<string, unknown> }>({
-    scope: navigationKey,
-    values: {},
-  });
-  if (controlDraftsRef.current.scope !== navigationKey)
-    controlDraftsRef.current = { scope: navigationKey, values: {} };
+  if (controlDraftsRef !== undefined && controlDraftsRef.current.scope !== addressKey)
+    controlDraftsRef.current = {
+      ...emptyControlDrafts(),
+      scope: addressKey,
+      generation: navigationKey,
+    };
 
   const guidedFormCompleted = completedGuidedNavigationKey === navigationKey;
   const subject =
@@ -503,6 +509,26 @@ export function ApplicationPageViewContent({
     changeTableQuery,
   });
 
+  const controls = useMemo(
+    () => draftControls(currentContent, platformComponentRegistry, fieldInputControlReleases),
+    [currentContent, platformComponentRegistry, fieldInputControlReleases],
+  );
+  if (controlDraftsRef !== undefined && controlDraftsRef.current.generation !== navigationKey) {
+    restoreDrafts(controlDraftsRef.current, controls, tableData);
+    controlDraftsRef.current.generation = navigationKey;
+  }
+  useEffect(() => {
+    const drafts = controlDraftsRef?.current;
+    if (drafts === undefined) return;
+    for (const [formId, baseline] of Object.entries(drafts.baselines))
+      if (
+        Object.entries(drafts.drafts).some(
+          ([id, draft]) => draft.owner === formId && Object.hasOwn(drafts.restored, id),
+        )
+      )
+        unsavedWorkRegistry?.markSaved(formId, baseline);
+  }, [navigationKey, controlDraftsRef, unsavedWorkRegistry]);
+
   const fieldFlowEvents = useFieldFlowEvents(navigationKey, runtimeState, runBinding, setNotice);
   const { runtimeInputs } = useRuntimeInputs({
     currentData: tableData,
@@ -559,6 +585,8 @@ export function ApplicationPageViewContent({
     requestChoicePage,
     runtimeInputsRef,
     controlDraftsRef,
+    controls,
+    unsavedWorkRegistry,
     setPanelRef,
   });
 

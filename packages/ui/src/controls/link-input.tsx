@@ -227,6 +227,7 @@ export function LinkInput(props: LinkInputProps): ReactElement {
       immediate: true,
       fieldKey,
       value: reference,
+      ...(reference === null || item === null ? {} : { draftDisplay: { title: item.title } }),
     });
   };
 
