@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
+import Link from "next/link";
 import { Button } from "../../components/button";
 import { Empty, EmptyHeader, EmptyTitle } from "../../components/empty";
 import { Skeleton } from "../../components/skeleton";
@@ -255,12 +256,12 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
                         <DisplayCellView value={titleValue} />
                       )
                     ) : (
-                      <a
+                      <Link
                         href={related.href}
                         className="underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
                       >
                         {cellValueToText(titleValue) || "Open"}
-                      </a>
+                      </Link>
                     )}
                   </h4>
                 )}
@@ -305,12 +306,12 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
                 return (
                   <TableCell key={column.key} className="max-w-64 truncate py-1.5">
                     {index === 0 && related.href !== undefined ? (
-                      <a
+                      <Link
                         href={related.href}
                         className="font-medium underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
                       >
                         {cellValueToText(cell) || "Open"}
-                      </a>
+                      </Link>
                     ) : (
                       <DisplayCellView value={cell} />
                     )}

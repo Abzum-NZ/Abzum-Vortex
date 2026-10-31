@@ -59,6 +59,13 @@ export type { PageAgentTool } from "./agent/page-tools";
 // Form controls.
 export { equalFormValue } from "./controls/form-context";
 export {
+  RECORD_CHOICE_SEARCH_DELAY_MS,
+  RECORD_CHOICE_SEARCH_LIMIT,
+  useRecordChoicePager,
+  type RecordChoicePager,
+  type RecordChoicePagerPage,
+} from "./controls/use-record-choice-pager";
+export {
   UnsavedWorkProvider,
   useUnsavedWorkGuard,
   useUnsavedWorkRegistry,

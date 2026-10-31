@@ -46,6 +46,7 @@ import {
 } from "./field-parts";
 import { useFormFieldPublisher, useFormFieldValue, useRequiredFormField } from "./form-context";
 import { waitingForParent } from "./dependent-field";
+import { useRecordChoicePager, type RecordChoicePagerPage } from "./use-record-choice-pager";
 
 export type ChoiceInputProps = ControlRenderProps<ChoiceInputPayload>;
 
@@ -78,24 +79,11 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   // The options of a field whose source the page runs are the page's answers; until the first one
   // the field offers only what it holds, never the declared list the source may narrow.
   const remoteOptions = context.events?.options_requested !== undefined;
-  const [remote, setRemote] = useState<
-    Readonly<{ options: readonly ChoiceOption[]; next?: string }> | undefined
-  >(undefined);
   const projected = context.values?.value;
   const [selected, setSelected] = useSeededState<string | null>(projected ?? null);
   // The chosen option stays listed while the page's answer no longer offers it, so the person sees
   // what the field holds and the server refuses a value that is no longer allowed.
   const heldOption = baseOptions.find((option) => option.key === selected);
-  const declaredOptions =
-    remote === undefined
-      ? remoteOptions
-        ? heldOption === undefined
-          ? []
-          : [heldOption]
-        : baseOptions
-      : heldOption === undefined || remote.options.some((option) => option.key === selected)
-        ? remote.options
-        : [heldOption, ...remote.options];
   // A dependent choice offers only the options that belong to what the form's draft holds in its
   // parent field, and waits while that is empty; the server judges the pair again at save.
   const dependsOn = settings.dependsOn();
@@ -106,6 +94,52 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const disabled = explicitlyDisabled || waiting;
   const placeholder =
     waiting && dependsOn !== undefined ? waitingForParent(dependsOn.label) : authoredPlaceholder;
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [comboboxOpen, setComboboxOpen] = useState(false);
+  const [selectOpen, setSelectOpen] = useState(false);
+  const optionsRequested = useRef(context.events?.options_requested);
+  optionsRequested.current = context.events?.options_requested;
+  const readOptions = async (
+    search: string,
+    continuationToken?: string,
+  ): Promise<RecordChoicePagerPage<ChoiceOption> | undefined> => {
+    const handler = optionsRequested.current;
+    if (handler === undefined || disabled) return { items: [] };
+    try {
+      const answer = await Promise.resolve(
+        handler({
+          event: "options_requested",
+          ...(search.trim() === "" ? {} : { search }),
+          ...(continuationToken === undefined ? {} : { continuationToken }),
+        }),
+      );
+      const page = readChoiceOptionsPage(answer, context.location);
+      return {
+        items: page.options,
+        ...(page.nextContinuationToken === undefined ? {} : { next: page.nextContinuationToken }),
+      };
+    } catch (cause) {
+      console.error("[choice-input] options unavailable", cause);
+      return undefined;
+    }
+  };
+  const pager = useRecordChoicePager<ChoiceOption>({
+    open: comboboxOpen,
+    search: searchTerm,
+    read: readOptions,
+    disabled: explicitlyDisabled || waiting,
+  });
+  const declaredOptions =
+    remoteOptions && pager.items.length === 0
+      ? heldOption === undefined
+        ? []
+        : [heldOption]
+      : heldOption === undefined || pager.items.some((option) => option.key === selected)
+        ? remoteOptions
+          ? pager.items
+          : baseOptions
+        : [heldOption, ...pager.items];
   const options =
     optionParents === undefined
       ? declaredOptions
@@ -126,22 +160,13 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
       context.location,
     );
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [comboboxOpen, setComboboxOpen] = useState(false);
-  const [selectOpen, setSelectOpen] = useState(false);
-  const lastRequestedSearch = useRef<string | undefined>(undefined);
-  const [remoteLoading, setRemoteLoading] = useState(false);
-  const [remoteFailed, setRemoteFailed] = useState(false);
-  const choiceRequestGeneration = useRef(0);
   const [previouslyInactive, setPreviouslyInactive] = useState(context.inactive);
   if (context.inactive && !previouslyInactive) {
     setSelected(null);
     setSearchTerm("");
     setComboboxOpen(false);
     setSelectOpen(false);
-    lastRequestedSearch.current = undefined;
-    setRemoteLoading(false);
-    choiceRequestGeneration.current += 1;
+    pager.reset();
   }
   if (previouslyInactive !== context.inactive) setPreviouslyInactive(context.inactive);
 
@@ -171,7 +196,7 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
         };
       },
       options: async (search) => {
-        const offered = remoteOptions ? await requestChoices.current(search ?? "") : options;
+        const offered = remoteOptions ? (await readOptions(search ?? ""))?.items : options;
         return (offered ?? []).map((option) => ({ value: option.key, label: option.label }));
       },
     },
@@ -185,6 +210,7 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
     previousParent.current = parentKey;
     // A parent that was not registered yet (a form starting with its stored values) is no change.
     if (before === undefined || before === parentKey) return;
+    pager.reset();
     if (selected !== null) {
       setSelected(null);
       publish(null);
@@ -214,77 +240,6 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
     });
   };
 
-  const optionsRequested = useRef(context.events?.options_requested);
-  optionsRequested.current = context.events?.options_requested;
-  /** Reads one page of options and answers with them; an older or refused request answers with none. */
-  const requestChoices = useRef<
-    (search: string, continuationToken?: string) => Promise<readonly ChoiceOption[]>
-  >(async () => []);
-  requestChoices.current = (search, continuationToken) => {
-    const handler = optionsRequested.current;
-    if (handler === undefined || disabled) return Promise.resolve([]);
-    const boundedSearch = search.trim().slice(0, 100);
-    setRemoteFailed(false);
-    const event = {
-      event: "options_requested" as const,
-      ...(boundedSearch === "" ? {} : { search: boundedSearch }),
-      ...(continuationToken === undefined ? {} : { continuationToken }),
-    };
-    const request = ++choiceRequestGeneration.current;
-    setRemoteLoading(true);
-    return Promise.resolve(handler(event))
-      .then((answer) => {
-        if (choiceRequestGeneration.current !== request) return [];
-        const page = readChoiceOptionsPage(answer, context.location);
-        setRemote((current) => ({
-          options:
-            continuationToken === undefined || current === undefined
-              ? page.options
-              : [...current.options, ...page.options],
-          ...(page.nextContinuationToken === undefined ? {} : { next: page.nextContinuationToken }),
-        }));
-        return page.options;
-      })
-      .catch((cause: unknown) => {
-        if (choiceRequestGeneration.current === request) {
-          console.error("[choice-input] options unavailable", cause);
-          setRemoteFailed(true);
-        }
-        return [];
-      })
-      .finally(() => {
-        if (choiceRequestGeneration.current === request) setRemoteLoading(false);
-      });
-  };
-  // Opening reads the first page at once; typing reads again once the person pauses.
-  useEffect(() => {
-    // Closing leaves what was read as the previous items; opening reads again, and the page answers
-    // from its cache while the inputs are the same.
-    if (!comboboxOpen) lastRequestedSearch.current = undefined;
-    if (!remoteOptions || !comboboxOpen || optionsRequested.current === undefined) return;
-    const search = searchTerm.trim();
-    if (search === lastRequestedSearch.current) return;
-    const first = lastRequestedSearch.current === undefined;
-    lastRequestedSearch.current = search;
-    if (first) {
-      requestChoices.current(search);
-      return;
-    }
-    const timeout = setTimeout(() => requestChoices.current(search), 200);
-    return () => clearTimeout(timeout);
-  }, [comboboxOpen, remoteOptions, searchTerm]);
-  // A changed parent makes the options read for the old one stale: they are read again on opening.
-  useEffect(() => {
-    setRemote(undefined);
-    lastRequestedSearch.current = undefined;
-    choiceRequestGeneration.current += 1;
-    setRemoteLoading(false);
-  }, [parentKey]);
-  const loadMoreChoices = (): void => {
-    const continuationToken = remote?.next;
-    if (continuationToken !== undefined && !remoteLoading)
-      requestChoices.current(searchTerm.trim(), continuationToken);
-  };
   const searchable = remoteOptions || options.length > SEARCHABLE_OPTION_THRESHOLD;
   const radio = variant === "radio" && !searchable;
   const described = describedBy(ids, help, error, note, draftFeedback);
@@ -389,23 +344,23 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
                 )}
               </ComboboxList>
               <ComboboxEmpty role="status">
-                {remoteLoading
+                {pager.loading
                   ? "Searching choices…"
-                  : remoteFailed
+                  : pager.failed
                     ? "Choices are unavailable. Close and reopen to retry."
                     : "No matching options"}
               </ComboboxEmpty>
-              {remoteOptions && remote?.next !== undefined ? (
+              {remoteOptions && pager.next !== undefined ? (
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  disabled={remoteLoading}
+                  disabled={pager.loading}
                   onMouseDown={(event) => event.preventDefault()}
-                  onClick={loadMoreChoices}
+                  onClick={() => pager.loadMore()}
                   className="w-full justify-start text-muted-foreground"
                 >
-                  {remoteLoading ? "Loading choices…" : "Load more choices"}
+                  {pager.loading ? "Loading choices…" : "Load more choices"}
                 </Button>
               ) : null}
             </ComboboxContent>

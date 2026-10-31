@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type ReactElement,
-  type Ref,
-} from "react";
+import { useRef, useState, type KeyboardEvent, type ReactElement, type Ref } from "react";
 import { Button } from "../../components/button";
 import {
   Combobox,
@@ -19,12 +12,13 @@ import {
 } from "../../components/combobox";
 import { Icon } from "../../icons/icon";
 import { readRecordChoicePage, type RecordChoiceOption } from "../../controls/projected-data";
+import {
+  useRecordChoicePager,
+  type RecordChoicePagerPage,
+} from "../../controls/use-record-choice-pager";
 import type { DisplayEventHandlers, DisplayRow } from "../projected-data";
 import type { LinkDraft } from "./edit-values";
 import { waitingForParent } from "../../controls/dependent-field";
-
-/** A search reads once typing pauses this long, so a typed word is one read, not one per key. */
-const SEARCH_DELAY_MS = 300;
 
 /**
  * The one picker of a Records table's link field, for a column filter and for a cell editor. It
@@ -73,66 +67,46 @@ export function RecordChoicePicker({
 }>): ReactElement {
   const [open, setOpen] = useState(autoOpen === true);
   const [search, setSearch] = useState("");
-  const [choices, setChoices] = useState<readonly RecordChoiceOption[]>([]);
-  const [next, setNext] = useState<string | undefined>(undefined);
-  const [state, setState] = useState<"idle" | "loading" | "failed">("idle");
-  const generation = useRef(0);
   const latestEvents = useRef(events);
   latestEvents.current = events;
 
-  const read = (
-    request: number,
-    text: string,
-    continuationToken: string | undefined,
-    append: boolean,
-  ): void => {
+  const read = async (
+    bounded: string,
+    continuationToken?: string,
+  ): Promise<RecordChoicePagerPage<RecordChoiceOption> | undefined> => {
     const handler = latestEvents.current?.table_records_requested;
-    if (handler === undefined) return;
-    setState("loading");
-    const bounded = text.trim().slice(0, 100);
-    void Promise.resolve(
-      handler({
-        event: "table_records_requested",
-        field: fieldId,
-        purpose,
-        ...(parentRecordId === undefined ? {} : { parentRecordId }),
-        ...(bounded === "" ? {} : { search: bounded }),
-        ...(continuationToken === undefined ? {} : { continuationToken }),
-      }),
-    )
-      .then((answer) => {
-        if (generation.current !== request) return;
-        const page = readRecordChoicePage(answer);
-        setChoices((held) => (append ? [...held, ...page.choices] : page.choices));
-        setNext(page.nextContinuationToken);
-        setState("idle");
-      })
-      .catch((cause: unknown) => {
-        if (generation.current !== request) return;
-        console.error("[record-choice-picker] records unavailable", cause);
-        setState("failed");
-      });
-  };
-
-  useEffect(() => {
-    if (!open) {
-      generation.current += 1;
-      return;
+    if (handler === undefined) return { items: [] };
+    try {
+      const answer = await Promise.resolve(
+        handler({
+          event: "table_records_requested",
+          field: fieldId,
+          purpose,
+          ...(parentRecordId === undefined ? {} : { parentRecordId }),
+          ...(bounded === "" ? {} : { search: bounded }),
+          ...(continuationToken === undefined ? {} : { continuationToken }),
+        }),
+      );
+      const page = readRecordChoicePage(answer);
+      return {
+        items: page.choices,
+        ...(page.nextContinuationToken === undefined ? {} : { next: page.nextContinuationToken }),
+      };
+    } catch (cause) {
+      console.error("[record-choice-picker] records unavailable", cause);
+      return undefined;
     }
-    const request = ++generation.current;
-    const timeout = setTimeout(
-      () => read(request, search, undefined, false),
-      search.trim() === "" ? 0 : SEARCH_DELAY_MS,
-    );
-    return () => {
-      clearTimeout(timeout);
-      generation.current += 1;
-    };
-  }, [open, search, fieldId, purpose, parentRecordId]);
+  };
+  const pager = useRecordChoicePager<RecordChoiceOption>({
+    open,
+    search,
+    read,
+    disabled: disabled === true || maxed === true,
+  });
 
   return (
     <Combobox
-      items={choices}
+      items={pager.items}
       value={null}
       open={open}
       inputValue={search}
@@ -140,9 +114,7 @@ export function RecordChoicePicker({
         setOpen(nextOpen);
         if (!nextOpen) {
           setSearch("");
-          setChoices([]);
-          setNext(undefined);
-          setState("idle");
+          pager.reset();
         }
         onOpenChange?.(nextOpen);
       }}
@@ -154,7 +126,7 @@ export function RecordChoicePicker({
       itemToStringValue={(item: RecordChoiceOption) => item.recordId}
       // The server already searched: the list shows exactly the records it returned, as they
       // arrive, without filtering them again.
-      filteredItems={choices}
+      filteredItems={pager.items}
       filter={null}
     >
       <ComboboxInput
@@ -179,20 +151,20 @@ export function RecordChoicePicker({
           )}
         </ComboboxList>
         <ComboboxEmpty role="status">
-          {state === "loading"
+          {pager.loading
             ? "Searching…"
-            : state === "failed"
+            : pager.failed
               ? "Records could not be loaded. Try again."
               : "No matching records"}
         </ComboboxEmpty>
-        {next === undefined ? null : (
+        {pager.next === undefined ? null : (
           <Button
             type="button"
             variant="ghost"
             size="sm"
             className="w-full"
-            disabled={state === "loading"}
-            onClick={() => read(++generation.current, search, next, true)}
+            disabled={pager.loading}
+            onClick={() => pager.loadMore()}
           >
             Load more
           </Button>

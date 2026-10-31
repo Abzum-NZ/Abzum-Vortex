@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import Link from "next/link";
 import { Badge } from "../components/badge";
 import {
   Table,
@@ -166,9 +167,9 @@ export function DisplayCellView({ value }: Readonly<{ value: DisplayDetailCell }
       return value.href === undefined ? (
         <span className="vortex-cell-text">{value.label}</span>
       ) : (
-        <a className="vortex-cell-link" href={value.href}>
+        <Link className="vortex-cell-link" href={value.href}>
           {value.label}
-        </a>
+        </Link>
       );
     case "restricted":
       return <span className="vortex-cell-restricted">{RESTRICTED_TEXT}</span>;

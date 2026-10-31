@@ -13,6 +13,7 @@ import {
 import { Button } from "../components/button";
 import { Notice } from "../components/notice";
 import { Checkbox } from "../components/checkbox";
+import { toast } from "../components/sonner";
 import { useConfirm } from "../components/confirm-dialog";
 import {
   Dialog,
@@ -262,6 +263,44 @@ function MessageTarget({
   );
 }
 
+/**
+ * Flow toasts go through the one sonner region at the bottom-right, exactly like every other toast
+ * in the product, and never over a page header's actions. The page runtime keeps the message while a
+ * page change carries it, so a carried toast shows once with the same identity and keeps its timer.
+ */
+function FlowToastRegion({ state }: Readonly<{ state: FlowRuntimeState }>): null {
+  const message = useSyncExternalStore(
+    (listener) => state.subscribe(`message:${state.messages.key("toast")}`, listener),
+    () => state.messages.read("toast"),
+    () => undefined,
+  );
+  const messageId = message?.id;
+  useEffect(() => {
+    if (messageId === undefined || message === undefined) return;
+    toast.custom(
+      () => (
+        <Notice
+          severity={message.severity}
+          content={message.text}
+          dismissible
+          onDismiss={() => state.messages.clear("toast", undefined, message.id)}
+          {...(message.title === undefined ? {} : { title: message.title })}
+          {...(message.action === undefined ? {} : { action: message.action })}
+        />
+      ),
+      {
+        id: message.id,
+        duration: message.dismissAfterMs ?? 5_000,
+        dismissible: true,
+      },
+    );
+    return () => {
+      toast.dismiss(message.id);
+    };
+  }, [message, messageId, state]);
+  return null;
+}
+
 /** Only this subtree re-renders when a flow opens or closes a surface. */
 function FlowSurfaceHost({
   queue,
@@ -399,9 +438,7 @@ export function useFlowIntentHost(
   );
   const element = (
     <>
-      <div className="fixed right-4 top-4 z-50">
-        <MessageTarget state={options.state} target="toast" />
-      </div>
+      <FlowToastRegion state={options.state} />
       <FlowSurfaceHost queue={queue} optionsRef={optionsRef} />
     </>
   );

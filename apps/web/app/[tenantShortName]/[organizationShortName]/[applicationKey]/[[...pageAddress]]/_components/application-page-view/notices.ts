@@ -8,7 +8,7 @@ import type { PageMessageDraft } from "./types";
  */
 export const outcomeNotices: Readonly<Record<string, PageMessageDraft>> = {
   completed: { target: "toast", severity: "success", text: "Done." },
-  committed: { target: "toast", severity: "success", text: "Saved." },
+  committed: { target: "toast", severity: "success", text: "Saved.", dismissAfterMs: 5_000 },
   refused: {
     target: "banner",
     severity: "error",

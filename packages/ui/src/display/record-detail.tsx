@@ -92,7 +92,11 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
                   <div className="min-w-0 flex-1 *:mb-0">
                     <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
                   </div>
-                  {actions === undefined ? null : <div className="shrink-0">{actions}</div>}
+                  {actions === undefined ? null : (
+                    <div className="flex shrink-0 flex-row flex-nowrap items-center justify-end gap-2 [&>div]:flex-row [&>div]:flex-nowrap [&>div]:items-center [&>div]:gap-2">
+                      {actions}
+                    </div>
+                  )}
                 </div>
               </CardHeader>
               <Separator />
