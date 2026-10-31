@@ -18,6 +18,7 @@ import { Label } from "@vortex/ui/components/label";
 import { Textarea } from "@vortex/ui/components/textarea";
 import {
   applyStudioFieldPlacements,
+  applyStudioFlowCreate,
   studioFieldPlacements,
   studioRelationshipChoices,
   studioSettingProblems,
@@ -37,6 +38,7 @@ import {
   deleteInlineModuleField,
   deriveFieldKey,
   fieldTypeKeys,
+  isOptionsFlowSource,
   joinTextAccepts,
   linkDependencyCandidates,
   moduleFieldDefaultDeclaration,
@@ -87,7 +89,12 @@ type SourceRecord = Source["body"]["modules"][number]["record_types"][number];
 type SourceField = SourceRecord["fields"][number];
 type Plain = Readonly<Record<string, unknown>>;
 /** The field types that declare where their options come from. */
-const optionsSourceTypes: ReadonlySet<string> = new Set(["choice", "several_choices", "link"]);
+const optionsSourceTypes: ReadonlySet<string> = new Set([
+  "choice",
+  "several_choices",
+  "link",
+  "link_to_one_of_several",
+]);
 
 /** A record type a link may point at: its qualified key, its name, and the label each record is shown by. */
 export type StudioLinkTarget = Readonly<{
@@ -132,6 +139,57 @@ type FormState = Readonly<{
 
 const computedTypes: ReadonlySet<ModuleFieldType> = new Set(["calculation", "total"]);
 const linkTypes: ReadonlySet<string> = new Set(["link", "link_to_one_of_several"]);
+
+/** The inputs a flow of the draft declares. */
+type FlowInputs = ApplicationSourceDocument["body"]["flows"][number]["inputs"];
+
+/** The flow input a declared action or query input feeds, keeping its type and whether it is required. */
+const flowInputOf = (
+  input: Readonly<{
+    key: string;
+    required: boolean;
+    type: string;
+    record_types?: readonly string[] | undefined;
+  }>,
+): FlowInputs[string] => ({
+  ...(input.type === "record_reference"
+    ? { type: "record_reference" as const, recordTypeIds: [...(input.record_types ?? [])] }
+    : { type: input.type as FlowInputs[string]["type"] }),
+  required: input.required,
+});
+
+/**
+ * The inputs a new options flow declares: the ones the field's declared source already reads, so
+ * switching a query or flow source to a new flow keeps every input the field maps.
+ */
+const optionsFlowInputs = (
+  declared: Readonly<Record<string, unknown>> | undefined,
+  module: NonNullable<Source["body"]["modules"][number]>,
+): FlowInputs => {
+  if (declared?.kind === "query" && typeof declared.query === "string") {
+    const query = module.queries.find((entry) => `${module.key}:${entry.key}` === declared.query);
+    return Object.fromEntries((query?.inputs ?? []).map((input) => [input.key, flowInputOf(input)]));
+  }
+  if (declared?.kind === "flow" && typeof declared.flow === "string") {
+    const flow = module.flows.find(
+      (entry) => entry.id === declared.flow || entry.key === declared.flow,
+    );
+    return Object.fromEntries(
+      Object.entries(flow?.inputs ?? {}).map(([key, declaration]) => [
+        key,
+        {
+          type: declaration.type,
+          required: declaration.required,
+          ...(declaration.recordTypeIds === undefined
+            ? {}
+            : { recordTypeIds: declaration.recordTypeIds }),
+        },
+      ]),
+    );
+  }
+  return {};
+};
+
 
 /**
  * The one field editor of the Data tab. Without a field it is the form that adds a field to a
@@ -384,6 +442,29 @@ export function ModuleFieldsEditor({
         : [];
 
   /** One edit of the field: the patch over the field as the draft holds it. */
+  const changeOf = (
+    next: FormState,
+    settings: Plain,
+    defaultValue: unknown,
+  ): Parameters<typeof changeInlineModuleField>[1] => ({
+    moduleKey,
+    recordAlias: record!.id,
+    fieldAlias: existing!.id,
+    label: next.label,
+    helpText: next.helpText,
+    required: next.required,
+    unique: next.unique,
+    filterable: next.filterable,
+    sortable: next.sortable,
+    searchPriority: next.searchPriority,
+    personalData: next.personalData,
+    publicDisplay: next.publicDisplay,
+    type: next.type,
+    settings,
+    defaultValue,
+    cardinality: linkTypes.has(next.type) ? next.cardinality : undefined,
+  });
+
   const commit = (
     patch: Partial<FormState>,
     merge?: string,
@@ -414,37 +495,72 @@ export function ModuleFieldsEditor({
       const problems = studioSettingProblems(next.defaultValue, [defaultModel.declaration]);
       if (problems.length > 0) return problems.join(" ");
     }
+    const defaultValue =
+      defaultModel.kind === "declared"
+        ? writeModuleFieldDefault(next.type, next.defaultValue.default)
+        : storedDefault;
     return studioEditProblem(
       edit(
-        (current) =>
-          changeInlineModuleField(
-            current,
-            {
-              moduleKey,
-              recordAlias: record.id,
-              fieldAlias: existing.id,
-              label: next.label,
-              helpText: next.helpText,
-              required: next.required,
-              unique: next.unique,
-              filterable: next.filterable,
-              sortable: next.sortable,
-              searchPriority: next.searchPriority,
-              personalData: next.personalData,
-              publicDisplay: next.publicDisplay,
-              type: next.type,
-              settings,
-              defaultValue:
-                defaultModel.kind === "declared"
-                  ? writeModuleFieldDefault(next.type, next.defaultValue.default)
-                  : storedDefault,
-              cardinality: linkTypes.has(next.type) ? next.cardinality : undefined,
-            },
-            { publication: context.publication, peopleDirectory: context.peopleDirectory },
-          ),
+        (current) => changeInlineModuleField(current, changeOf(next, settings, defaultValue), {
+          publication: context.publication,
+          peopleDirectory: context.peopleDirectory,
+        }),
         merge === undefined ? {} : { merge },
       ),
     );
+  };
+  /**
+   * Creates the field's options flow in this Module, declares it as the field's source over the
+   * inputs the field already declares, and opens it in the flow editor. One edit of the draft, so a
+   * refused flow never leaves the field pointing at nothing.
+   */
+  const newOptionsFlow = (name: string): string | undefined => {
+    if (existing === undefined || module === undefined) return "Choose a field first.";
+    const flowName = name.trim();
+    if (flowName === "") return "Name the options flow.";
+    const declared = (existing.settings as { options_source?: Plain }).options_source;
+    const inputs = optionsFlowInputs(declared, module);
+    let flowAlias: string | undefined;
+    const problem = studioEditProblem(
+      edit((current) => {
+        const made = applyStudioFlowCreate(
+          current,
+          {
+            kind: "flow",
+            moduleKey: module.key,
+            name: flowName,
+            description: `${existing.label}: the options this field offers.`,
+            inputs,
+            tasks: [{ id: "done", type: "stop", outcome: "completed" }],
+            outputs: {
+              options: { type: "json", value: { kind: "literal", literal: { type: "json", value: [] } } },
+            },
+          },
+          null,
+        );
+        if (made.kind === "refused") return { kind: "invalid", issues: [made.reason] };
+        flowAlias = made.selection.flowAlias;
+        return changeInlineModuleField(
+          made.source,
+          changeOf(
+            stored,
+            {
+              ...(existing.settings as Plain),
+              options_source: { kind: "flow", flow: flowAlias, inputs: {} },
+            },
+            storedDefault,
+          ),
+          { publication: context.publication, peopleDirectory: context.peopleDirectory },
+        );
+      }),
+    );
+    if (problem !== undefined) return problem;
+    if (flowAlias !== undefined)
+      placeOpener.open({
+        label: flowName,
+        open: { kind: "flow", flowAlias, moduleKey: module.key },
+      });
+    return undefined;
   };
   const mergeKey = (part: string) => `field-${part}:${qualifiedRecord}.${fieldKey ?? ""}`;
   const label = useStudioDraftText(existing?.label ?? "", (next) =>
@@ -1045,6 +1161,7 @@ export function ModuleFieldsEditor({
           key={`options-source:${qualifiedRecord}.${fieldKey ?? ""}`}
           link={linkTypes.has(form.type)}
           source={(existing.settings as { options_source?: Plain }).options_source}
+          fieldLabel={existing.label}
           fields={formulaFields.map(({ key, label }) => ({ key, label }))}
           queries={(module?.queries ?? []).map((query) => ({
             reference: `${moduleKey}:${query.key}`,
@@ -1055,18 +1172,21 @@ export function ModuleFieldsEditor({
               required: input.required,
             })),
           }))}
-          flows={(module?.flows ?? []).map((flow) => ({
-            alias: flow.id,
-            label: flow.labels.name ?? flow.key,
-            inputs: Object.entries(flow.inputs).map(([key, declaration]) => ({
-              key,
-              label: key.replaceAll("_", " "),
-              required: declaration.required,
-            })),
-          }))}
+          flows={(module?.flows ?? [])
+            .filter(isOptionsFlowSource)
+            .map((flow) => ({
+              alias: flow.id,
+              label: flow.labels.name ?? flow.key,
+              inputs: Object.entries(flow.inputs).map(([key, declaration]) => ({
+                key,
+                label: key.replaceAll("_", " "),
+                required: declaration.required,
+              })),
+            }))}
           // Which values are offered is behaviour, not stored shape, so it changes after publication.
           disabled={disabled}
           onChange={(next) => commit({}, undefined, next)}
+          onNewFlow={newOptionsFlow}
         />
       )}
       {linkTypes.has(form.type) && (

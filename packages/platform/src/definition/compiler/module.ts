@@ -636,6 +636,8 @@ export function compileParsedModuleRequest(
             error.ruleCode,
             error.family,
             compilerRootLocation(source),
+            error.code,
+            error.sentence,
           );
     return fail("vortex.definition.invalid_compilation_output", "invalid_value");
   }
