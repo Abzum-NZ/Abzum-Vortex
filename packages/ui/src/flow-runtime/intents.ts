@@ -78,6 +78,9 @@ export type FlowMessageIntent = Readonly<{
   subject?: FlowSubjectContext;
   sourceTablePlacementId?: string;
 }>;
+/** One review line, or a group of lines under it (each role, then what it allows). */
+// item 10: CRM-FIX-PLATFORM
+export type FlowConfirmationDetail = string | readonly FlowConfirmationDetail[];
 /**
  * A confirmation: its question, what it covers line by line, and one optional opt-in that goes with
  * a yes. `confirmLabel` names the answering button.
@@ -85,7 +88,7 @@ export type FlowMessageIntent = Readonly<{
 export type FlowConfirmIntent = Readonly<{
   title: string | undefined;
   message: string;
-  details: readonly string[];
+  details: readonly FlowConfirmationDetail[];
   choice: string | undefined;
   confirmLabel: string | undefined;
   destructive: boolean | undefined;
@@ -166,17 +169,39 @@ export const readMessageIntent = (intent: FlowIntent): FlowMessageIntent | undef
 
 /**
  * A bounded number of complete review entries, or none. An entry can describe a role's entire
- * permission set and field changes, so it must not inherit the short message-text limit.
+ * permission set and field changes, so it must not inherit the short message-text limit. A nested
+ * entry groups the lines that belong to the entry above it.
  */
-const detailLines = (candidate: JsonValue | undefined): readonly string[] | undefined => {
+// item 10: CRM-FIX-PLATFORM
+const detailEntries = (
+  candidate: JsonValue | undefined,
+  depth: number,
+): readonly FlowConfirmationDetail[] | undefined => {
   if (candidate === undefined || candidate === null) return [];
-  if (!Array.isArray(candidate) || candidate.length > maximumFlowConfirmationDetailLines)
+  // item 10: CRM-FIX-PLATFORM
+  if (
+    !Array.isArray(candidate) ||
+    candidate.length > maximumFlowConfirmationDetailLines ||
+    depth > 3
+  )
     return undefined;
-  const lines = candidate.map((line) =>
-    typeof line === "string" && line.length > 0 ? line : undefined,
-  );
-  return lines.every((line): line is string => line !== undefined) ? lines : undefined;
+  const lines: FlowConfirmationDetail[] = [];
+  for (const entry of candidate) {
+    if (typeof entry === "string" && entry.length > 0) {
+      lines.push(entry);
+      continue;
+    }
+    // item 10: CRM-FIX-PLATFORM
+    const nested = detailEntries(entry, depth + 1);
+    if (nested === undefined) return undefined;
+    lines.push(nested);
+  }
+  return lines;
 };
+
+const detailLines = (
+  candidate: JsonValue | undefined,
+): readonly FlowConfirmationDetail[] | undefined => detailEntries(candidate, 0);
 
 /** Undefined when the message is missing or the review entries are not a bounded list of texts. */
 export const readConfirmIntent = (intent: FlowIntent): FlowConfirmIntent | undefined => {
