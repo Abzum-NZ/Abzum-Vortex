@@ -153,20 +153,23 @@ export function ApplicationAccountMenu({
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         {source === undefined ? null : releaseAdoption === undefined ? (
-          <DropdownMenuLabel
+          <div
             role="status"
             aria-busy="true"
-            className="font-normal text-muted-foreground"
+            className="px-[var(--vortex-space-md)] py-[var(--vortex-space-sm)] text-sm text-muted-foreground"
           >
             Loading release adoption…
-          </DropdownMenuLabel>
+          </div>
         ) : releaseAdoption.state !== "available" ? (
           <>
-            <DropdownMenuLabel role="status" className="font-normal text-muted-foreground">
+            <div
+              role="status"
+              className="px-[var(--vortex-space-md)] py-[var(--vortex-space-sm)] text-sm text-muted-foreground"
+            >
               {releaseAdoption.state === "temporarily_unavailable"
                 ? "Release adoption temporarily unavailable"
                 : "Release adoption unavailable"}
-            </DropdownMenuLabel>
+            </div>
             <DropdownMenuItem closeOnClick={false} onClick={() => void read()}>
               Retry
             </DropdownMenuItem>

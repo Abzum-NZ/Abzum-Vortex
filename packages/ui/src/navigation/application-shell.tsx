@@ -442,19 +442,25 @@ function ApplicationSwitcher({
           </div>
         ) : switcher.state !== "available" ? (
           <>
-            <DropdownMenuLabel role="status" className="font-normal text-muted-foreground">
+            <div
+              role="status"
+              className="px-[var(--vortex-space-md)] py-[var(--vortex-space-sm)] text-sm text-muted-foreground"
+            >
               {switcher.state === "temporarily_unavailable"
                 ? "Applications temporarily unavailable"
                 : "Applications unavailable"}
-            </DropdownMenuLabel>
+            </div>
             <DropdownMenuItem closeOnClick={false} onClick={() => void read()}>
               Retry
             </DropdownMenuItem>
           </>
         ) : switcher.applications.length === 0 ? (
-          <DropdownMenuLabel role="status" className="font-normal text-muted-foreground">
+          <div
+            role="status"
+            className="px-[var(--vortex-space-md)] py-[var(--vortex-space-sm)] text-sm text-muted-foreground"
+          >
             No other applications
-          </DropdownMenuLabel>
+          </div>
         ) : (
           <DropdownMenuRadioGroup
             value={
