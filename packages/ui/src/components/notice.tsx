@@ -2,7 +2,7 @@
 
 import { safeHttpsUrlMaximumLength, safeHttpsUrlSchema } from "@vortex/platform/schema";
 import { Fragment, useState, type ReactElement, type ReactNode } from "react";
-import { Alert, AlertAction, AlertDescription, AlertTitle } from "./alert";
+import { Alert, AlertDescription, AlertTitle } from "./alert";
 import { Button } from "./button";
 
 export type NoticeSeverity = "info" | "success" | "warning" | "error";
@@ -125,34 +125,34 @@ export function Notice({
           <AlertDescription>
             <p className="m-0">{renderNoticeContent(content)}</p>
           </AlertDescription>
+          {dismissible || action !== undefined ? (
+            <div data-slot="notice-actions" className="mt-2 flex flex-wrap items-center gap-1">
+              {action === undefined ? null : action.kind === "link" ? (
+                <a className="underline" href={safeNoticeHref(action.href)}>
+                  {action.label}
+                </a>
+              ) : (
+                <Button type="button" variant="ghost" size="xs" onClick={action.run}>
+                  {action.label}
+                </Button>
+              )}
+              {dismissible ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  aria-label="Dismiss notice"
+                  onClick={() => {
+                    if (onDismiss === undefined) setDismissed(true);
+                    else onDismiss();
+                  }}
+                >
+                  Dismiss
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
-        {dismissible || action !== undefined ? (
-          <AlertAction>
-            {action === undefined ? null : action.kind === "link" ? (
-              <a className="underline" href={safeNoticeHref(action.href)}>
-                {action.label}
-              </a>
-            ) : (
-              <Button type="button" variant="ghost" size="xs" onClick={action.run}>
-                {action.label}
-              </Button>
-            )}
-            {dismissible ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                aria-label="Dismiss notice"
-                onClick={() => {
-                  if (onDismiss === undefined) setDismissed(true);
-                  else onDismiss();
-                }}
-              >
-                Dismiss
-              </Button>
-            ) : null}
-          </AlertAction>
-        ) : null}
       </Alert>
     </div>
   );
