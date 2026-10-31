@@ -73,7 +73,7 @@ export type FlowIntentHostOptions = Readonly<{
 }>;
 
 /** Flow surface width, the same 36rem the theme's medium dialog scale used. */
-const FLOW_SURFACE_CLASS = "max-h-[calc(100%-2rem)] overflow-y-auto sm:max-w-xl";
+const FLOW_SURFACE_CLASS = "sm:max-w-xl";
 
 /**
  * One modal flow surface on the shadcn Dialog (Base UI), like every other surface in the product.
