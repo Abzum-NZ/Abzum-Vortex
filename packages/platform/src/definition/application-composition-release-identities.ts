@@ -193,7 +193,7 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     key: "platform.form.field_input",
     rendererKey: "platform.renderer.field_input",
     releaseVersion: "1.0.0",
-    contentFingerprint: "sha256:0013eafe2c5856eea262d891d599ad04dbe9ca0a6ab95e2a894b7e12b083132e",
+    contentFingerprint: "sha256:2caeac7404979528f2417ba174a39298805347e00b92e0b7f24ffa9c60d82af4",
   },
   APPLICATION_LAUNCHER_BLOCK_RELEASE: {
     blockId: "b1a7c2e4-5d3f-4a91-8c26-0e7f4b9a1d33",

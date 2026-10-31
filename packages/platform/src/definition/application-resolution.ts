@@ -8,6 +8,7 @@ import type { ModuleField } from "./module-contracts";
 import type { ConditionNode } from "./module-foundation-contracts";
 import type { z } from "zod";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json-definition";
+import { pipelineStageToneSchema, type PipelineStageTone } from "./record-type-pipelines";
 
 export type ApplicationCompositionResolution = Readonly<{
   identity(
@@ -65,7 +66,12 @@ export type FieldInputSourceField = Readonly<{
   maximumSelections?: number | undefined;
   /** A fixed money field's currency, so the money input shows it as a prefix. */
   currency?: string | undefined;
-  choices: readonly Readonly<{ key: string; label: string; parentValues?: readonly string[] }>[];
+  choices: readonly Readonly<{
+    key: string;
+    label: string;
+    tone?: PipelineStageTone;
+    parentValues?: readonly string[];
+  }>[];
   /** The field of the same record type whose chosen value narrows this field's choices. */
   dependsOn?: Readonly<{ fieldKey: string; label: string }> | undefined;
   recordTypes: readonly Readonly<{
@@ -121,6 +127,9 @@ export const fieldInputSourceField = (
       ? (settings.options as FieldInputJson[]).map((option) => ({
           key: String(option.value),
           label: String(option.label),
+          ...(option.tone === undefined
+            ? {}
+            : { tone: pipelineStageToneSchema.parse(option.tone) }),
           ...(Array.isArray(optionParents[String(option.value)])
             ? {
                 parentValues: (optionParents[String(option.value)] as unknown[]).map(String),
