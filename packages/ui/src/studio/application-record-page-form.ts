@@ -28,6 +28,7 @@ import {
   ensureListEdit,
   field,
   ensureListCreate,
+  isFormContainer,
   release,
   resolveRecordType,
   type Field,
@@ -224,9 +225,7 @@ export const ensureFormCancel = (
   plan: Plan,
   page: Page,
 ): boolean => {
-  const forms = sourcePageItems(page.composition).filter(
-    (item) => String(item.type) === "platform.form.container",
-  );
+  const forms = sourcePageItems(page.composition).filter(isFormContainer);
   if (forms.length === 0) return false;
   const bound = new Set(
     plan.source.body.flow_bindings

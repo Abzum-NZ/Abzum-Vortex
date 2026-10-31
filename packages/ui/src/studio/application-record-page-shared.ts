@@ -663,6 +663,10 @@ export const ensureDetailEdit = (
   );
 };
 
+/** A page item is a form container when its renderer is the form block's (the item type is the renderer key, not the release key). */
+export const isFormContainer = (item: SourceItem): boolean =>
+  String(item.type) === "platform.renderer.form_container";
+
 /** Whether a records table shows its rows as a board; a board opens a card through its row click. */
 export const isBoardTable = (table: SourceItem): boolean =>
   (table.props.features as { board?: { enabled?: boolean } } | undefined)?.board?.enabled === true;

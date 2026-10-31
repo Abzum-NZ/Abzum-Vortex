@@ -14,6 +14,7 @@ import {
   ensureDetailEdit,
   ensureListEdit,
   field,
+  isFormContainer,
   keyColumns,
   listQuery,
   openRows,
@@ -195,9 +196,7 @@ export const addList = (
     const form =
       editForm === undefined
         ? undefined
-        : sourcePageItems(editForm.composition).find(
-            (item) => String(item.type) === "platform.form.container",
-          );
+        : sourcePageItems(editForm.composition).find(isFormContainer);
     const save =
       form === undefined
         ? undefined

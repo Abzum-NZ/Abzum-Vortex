@@ -3,6 +3,7 @@ import {
   companions,
   controlOpens,
   isBoardTable,
+  isFormContainer,
   recordTables,
   resolveRecordType,
 } from "./application-record-page-shared";
@@ -26,7 +27,7 @@ export type StudioRecordPageCheck =
   | Readonly<{ kind: "empty_home"; pageAlias: string; label: string }>;
 
 const formContainers = (items: readonly SourceItem[]): SourceItem[] =>
-  items.filter((item) => String(item.type) === "platform.form.container");
+  items.filter(isFormContainer);
 
 /** The record pages a saved draft still needs, in the order Publish lists them. */
 export const studioRecordPageChecks = (source: Source): readonly StudioRecordPageCheck[] => {
