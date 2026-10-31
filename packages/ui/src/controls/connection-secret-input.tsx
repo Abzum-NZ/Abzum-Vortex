@@ -37,18 +37,13 @@ export function ConnectionSecretInput(props: ControlRenderProps<never>): ReactEl
   const [busy, setBusy] = useState(false);
   const [reference, setReference] = useState<string | null>(null);
   const [failure, setFailure] = useState<string>();
-  useFormField(
-    fieldKey,
-    props.placementId,
-    reference,
-    () =>
-      busyRef.current
-        ? "Wait for the secret to be stored."
-        : (failure ??
-          (required && !disabled && !readOnly && reference === null
-            ? `${label} is required.`
-            : undefined)),
-    () => undefined,
+  useFormField(fieldKey, props.placementId, reference, () =>
+    busyRef.current
+      ? "Wait for the secret to be stored."
+      : (failure ??
+        (required && !disabled && !readOnly && reference === null
+          ? `${label} is required.`
+          : undefined)),
   );
   const formError = useFormFieldError(fieldKey);
   const help = settings.text("help_text");

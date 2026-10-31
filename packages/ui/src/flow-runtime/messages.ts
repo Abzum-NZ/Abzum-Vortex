@@ -47,6 +47,8 @@ export function createPageMessages(notify: (key: string) => void) {
   let adopted: Readonly<{ at: number; toasts: readonly PageMessage[] }> | undefined;
   const api = {
     read: (target: PageMessageTarget, component?: string) => values.get(keyOf(target, component)),
+    /** Every message the page shows now. */
+    list: (): readonly PageMessage[] => [...values.values()],
     key: keyOf,
     clear,
     clearAll: () => {

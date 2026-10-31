@@ -30,14 +30,8 @@ import type {
 import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
 import type { BackendRunRequest, BackendRunResult } from "../workflows/backend-adapters";
 import type { FlowPlan, FlowServerSegment } from "../workflows/flow-plan";
-import type {
-  FlowContinuationExecution,
-  FlowSegmentReceipt,
-  SegmentExecution,
-  StartFlowResult,
-} from "../workflows/start";
-import type { FlowWarningNotice } from "../workflows/form-continuation-contracts";
-import { formContinuationAnswerSchema } from "../workflows/form-continuation-answer";
+import type { FlowSegmentReceipt, SegmentExecution, StartFlowResult } from "../workflows/start";
+import type { FlowWarningNotice } from "../workflows/flow-warning-notice";
 import type { RecordSaveServiceResult } from "../records/save-record";
 import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
 import type { QueryContinuationKey } from "../queries/continuation-token";
@@ -48,7 +42,6 @@ import type { BeforeSaveRuleWarning } from "../rules/before-save-flow-run";
 import type {
   FlowFailureCode,
   FlowFailureOutcome,
-  FlowInterfaceIntent,
   FlowLibrary,
   FlowRunState,
   FlowRunStep,
@@ -60,8 +53,7 @@ import { flowIdSchema } from "../catalogue/identifiers";
 
 /**
  * The exact set of compiled flows one run is bound to. `releaseKey` identifies that exact release
- * (for example the installed application's release evidence), so a continuation can only ever
- * resume against the flows it started with.
+ * (for example the installed application's release evidence).
  */
 export type FlowRelease = Readonly<{
   releaseKey: string;
@@ -261,13 +253,6 @@ export type FlowOrchestratorDependencies = Readonly<{
     /** The step a detached segment start already took, when the segment is not entered from a boundary. */
     entry?: FlowRunStep,
   ) => Promise<StartFlowResult<Readonly<{ step: FlowRunStep; run: Run }>>>;
-  /** Admits a continuation that reaches another page intent or finishes without a segment. */
-  admitContinuation: (
-    run: Run,
-    state: FlowRunState,
-    execute: () => Promise<FlowContinuationExecution<FlowOrchestratorResponse>>,
-    openReplay: (payload: string, expiresAt: string) => FlowOrchestratorResponse,
-  ) => Promise<StartFlowResult<FlowOrchestratorResponse>>;
   admitPageStart: (run: Run, state: FlowRunState) => Promise<StartFlowResult<null>>;
   executor: Pick<ProtectedOperationExecutor, "execute">;
   /** Runs named-action flows; without it an action is unavailable. */
@@ -377,7 +362,7 @@ export type FlowOrchestratorDependencies = Readonly<{
   newToken?: () => string;
 }>;
 
-export const subjectSchema = z
+const subjectSchema = z
   .object({
     recordId: recordIdSchema,
     revision: revisionSchema.max(Number.MAX_SAFE_INTEGER - 1),
@@ -401,35 +386,7 @@ export const startRequestSchema = z
   })
   .strict();
 
-export const resumeRequestSchema = z
-  .object({
-    session: identitySessionSchema,
-    selection: organizationSelectionCandidateSchema,
-    flowId: flowIdSchema,
-    continuation: z.string().min(16).max(128),
-    answer: formContinuationAnswerSchema,
-  })
-  .strict();
-
 export type FlowStartRequest = z.input<typeof startRequestSchema>;
-export type FlowResumeRequest = z.input<typeof resumeRequestSchema>;
-
-/**
- * What a caller last saw, compared with trusted server state before a run starts or resumes. It is
- * evidence, never authority: any difference refuses the call. A mismatch found only in the stored
- * run (its node, run id or committed effects) is found after the single-use continuation is
- * consumed, so a stale or forged continuation is spent and the person restarts.
- */
-export type FlowRunExpectation = Readonly<{
-  /** The exact release of the flow set; must equal the release trusted installation state resolves. */
-  releaseKey: string;
-  /** The complete set of possible first server segments shown by the binding. */
-  entrySegments?: readonly Readonly<{ segmentId: string; fingerprint: string }>[];
-  /** The paused node the caller answers; the stored run must be paused at exactly this node. */
-  pausedAt?: Readonly<{ nodeId: string; awaiting: "form" | "confirm" }>;
-  /** The receipt the caller holds; the stored run must be that run with that many committed effects. */
-  receipt?: Readonly<{ runId: string; committedEffects: number }>;
-}>;
 
 /** Why a task did not run: the located, fail-closed capability outcome. */
 export type FlowUnavailableNotice = Readonly<{
@@ -437,12 +394,6 @@ export type FlowUnavailableNotice = Readonly<{
   taskType: string;
   code: "capability_unavailable";
   message: string;
-}>;
-
-export type SafeIntent = Readonly<{
-  kind: FlowInterfaceIntent["kind"];
-  taskId: string;
-  properties: Readonly<Record<string, JsonValue>>;
 }>;
 
 export type FlowOrchestratorResponse = (
@@ -466,26 +417,10 @@ export type FlowOrchestratorResponse = (
       committedEffects: number;
       outputs: Readonly<Record<string, JsonValue>>;
       carriedValues?: string;
-      intents: readonly SafeIntent[];
-      unavailable: readonly FlowUnavailableNotice[];
-    }>
-  | Readonly<{
-      kind: "suspended";
-      runId: string;
-      awaiting: "form" | "confirm";
-      /** The paused node (task id) the continuation resumes, and the release the run is bound to. */
-      nodeId: string;
-      releaseKey: string;
-      committedEffects: number;
-      /** The typed intent for the page or MCP client, ending with the form or confirmation. */
-      intents: readonly SafeIntent[];
-      continuation: string;
-      expiresAt: string;
       unavailable: readonly FlowUnavailableNotice[];
     }>
   | Readonly<{ kind: "reload" }>
   | Readonly<{ kind: "rate_limited"; retryAfterSeconds: number }>
-  | Readonly<{ kind: "already_answered" }>
   | Readonly<{ kind: "refused" }>
 ) &
   Readonly<{ committedNow: boolean; replayedCommitted?: true }>;
@@ -525,14 +460,6 @@ export type Run = {
   flowId: string;
   bindingId: string;
   gestureId: string;
-  continuationPlan?: Readonly<{
-    installationRevision: number;
-    flowId: string;
-    fingerprint: string;
-  }>;
-  /** A peeked answer is spent only in the first transaction that admits its next segment. */
-  pendingContinuation?: Readonly<{ tokenHash: string; releaseKey: string; answerHash: string }>;
-  continuationSegments?: Readonly<Record<string, string>>;
   release: FlowRelease;
   library: FlowLibrary;
   /** Server milliseconds already spent by earlier segments of this run. */

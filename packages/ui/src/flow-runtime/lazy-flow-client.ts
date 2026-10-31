@@ -32,9 +32,5 @@ export function createFlowInvokeClient(
       client()
         .then((loaded) => loaded.startBinding(...args))
         .catch(unavailable),
-    resume: (...args) =>
-      client()
-        .then((loaded) => loaded.resume(...args))
-        .catch(unavailable),
   };
 }

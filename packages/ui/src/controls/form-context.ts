@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useRef, useSyncExternalStore } fr
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import type { FormFieldDraftFeedback } from "./draft-feedback";
 import type { TypedFieldValue } from "./projected-data";
-import type { FlowEventCycle } from "../flow-runtime/flow-cycle";
+import type { FieldWriteCause } from "../flow-runtime/flow-cycle";
 import { usePlacementReactions } from "../flow-runtime/placement-reactions";
 
 /** One validated input change, published before its field-change event is dispatched. */
@@ -13,18 +13,59 @@ type FormFieldSet = Readonly<{
   apply: () => void;
   emit: () => void;
 }>;
-export type FormFieldSetter = (value: unknown, cycle: FlowEventCycle) => FormFieldSet | undefined;
+
+/** Why a field takes no value now: the same answer for a flow's Set value and an agent's set_field. */
+type FieldRefusal = "not_on_page" | "hidden" | "read_only" | "disabled" | "invalid_value";
+export type FieldWriteResult =
+  Readonly<{ kind: "set" }> | Readonly<{ kind: "refused"; reason: FieldRefusal }>;
+
+/** One option a choice or link field offers its viewer now. */
+export type FieldOption = Readonly<{ value: string; label: string }>;
+
+/**
+ * How a field takes a value from outside the person's keystrokes. `refusal` is the field's own
+ * reason to take none now (hidden by its feedback, disabled or read-only); `set` checks and
+ * prepares the value, or answers that it is not one the field accepts.
+ */
+export type FormFieldWriter = Readonly<{
+  label: string;
+  required: boolean;
+  refusal: Exclude<FieldRefusal, "not_on_page" | "invalid_value"> | undefined;
+  set: (value: unknown, cause: FieldWriteCause) => FormFieldSet | "invalid_value";
+  /** The options the field offers, read the way the person's picker reads them. */
+  options?: (search: string | undefined) => Promise<readonly FieldOption[]>;
+}>;
+
+/** What a form tells an agent about one of its fields. */
+export type FormFieldDescription = Readonly<{
+  key: string;
+  /** The field's placement, whose change event an agent's set_field starts. */
+  control: string;
+  label: string;
+  required: boolean;
+  value: TypedFieldValue;
+  /** Why the field takes no value now; absent when it takes one. */
+  refusal?: Exclude<FieldRefusal, "not_on_page" | "invalid_value">;
+  /** The field offers options to choose from. */
+  hasOptions: boolean;
+  /** The field's current problem, as the form shows it. */
+  error?: string;
+}>;
 
 type FormField = Readonly<{
   placementId: string;
   read: () => TypedFieldValue;
   publish: (value: TypedFieldValue) => void;
   validate?: () => string | undefined;
-  write?: (value: unknown, cycle: FlowEventCycle) => boolean;
+  write: (value: unknown, cause: FieldWriteCause) => FieldWriteResult;
+  describe: () => FormFieldDescription | undefined;
+  options: (search: string | undefined) => Promise<readonly FieldOption[]> | undefined;
 }>;
 
 /** The enclosing form's field registry and activation state. */
 export type FormScope = Readonly<{
+  /** The form's placement. */
+  formId: string;
   /** A submission is pending or the form's data is loading; submit cannot be activated. */
   pending: boolean;
   /** The form cannot be submitted or reset for any projected reason. */
@@ -45,6 +86,10 @@ export type FormScope = Readonly<{
   publish: (fieldKey: string, value: TypedFieldValue) => void;
   /** Calls `listener` whenever any field's value or registration changes; returns its removal. */
   subscribe: (listener: () => void) => () => void;
+  /** Submits the form through its one submit path, as its Submit button does. */
+  submit: () => void;
+  /** Resets the form through its one reset path, as its Reset button does. */
+  reset: () => void;
 }>;
 
 /**
@@ -87,7 +132,12 @@ export function createFormFieldRegistry(location: DefinitionRenderErrorLocation)
   valueOf: FormScope["valueOf"];
   publish: FormScope["publish"];
   values: () => Readonly<Record<string, TypedFieldValue>>;
-  write: (fieldKey: string, value: unknown, cycle: FlowEventCycle) => boolean;
+  write: (fieldKey: string, value: unknown, cause: FieldWriteCause) => FieldWriteResult;
+  describe: () => readonly FormFieldDescription[];
+  options: (
+    fieldKey: string,
+    search: string | undefined,
+  ) => Promise<readonly FieldOption[]> | undefined;
   validationErrors: () => Readonly<Record<string, string>>;
 }> {
   const fields = new Map<string, FormField>();
@@ -107,7 +157,14 @@ export function createFormFieldRegistry(location: DefinitionRenderErrorLocation)
     },
     valueOf: (fieldKey) => fields.get(fieldKey)?.read(),
     publish: (fieldKey, value) => fields.get(fieldKey)?.publish(value),
-    write: (fieldKey, value, cycle) => fields.get(fieldKey)?.write?.(value, cycle) ?? false,
+    write: (fieldKey, value, cause) =>
+      fields.get(fieldKey)?.write(value, cause) ?? { kind: "refused", reason: "not_on_page" },
+    describe: () =>
+      [...fields.values()].flatMap((field) => {
+        const description = field.describe();
+        return description === undefined ? [] : [description];
+      }),
+    options: (fieldKey, search) => fields.get(fieldKey)?.options(search),
     values: () =>
       Object.freeze(
         Object.fromEntries([...fields].map(([fieldKey, field]) => [fieldKey, field.read()])),
@@ -135,7 +192,7 @@ export function useFormField(
   placementId: string,
   value: TypedFieldValue,
   validate?: () => string | undefined,
-  setter?: FormFieldSetter,
+  writer?: FormFieldWriter,
 ): void {
   const scope = useFormScope();
   const reactions = usePlacementReactions();
@@ -143,13 +200,13 @@ export function useFormField(
   const reportFieldChanged = scope?.reportFieldChanged;
   const valueRef = useRef(value);
   const validateRef = useRef(validate);
-  const setterRef = useRef(setter);
+  const writerRef = useRef(writer);
   const reactionsRef = useRef(reactions);
   reactionsRef.current = reactions;
   const previousRef = useRef(value);
   valueRef.current = value;
   validateRef.current = validate;
-  setterRef.current = setter;
+  writerRef.current = writer;
   useEffect(() => {
     if (equalFormValue(previousRef.current, value)) return;
     previousRef.current = value;
@@ -166,16 +223,34 @@ export function useFormField(
         reportFieldChanged?.(fieldKey);
       },
       validate: () => validateRef.current?.(),
-      write: (next, cycle) => {
-        if (reactionsRef.current.canWrite?.() === false) return false;
-        const change = setterRef.current?.(next, cycle);
-        if (change === undefined) return false;
+      write: (next, cause) => {
+        const current = writerRef.current;
+        const refusal = reactionsRef.current.refusal?.() ?? current?.refusal;
+        if (current === undefined || refusal !== undefined)
+          return { kind: "refused", reason: refusal ?? "read_only" };
+        const change = current.set(next, cause);
+        if (change === "invalid_value") return { kind: "refused", reason: change };
         valueRef.current = change.value;
         change.apply();
         reportFieldChanged?.(fieldKey);
         change.emit();
-        return true;
+        return { kind: "set" };
       },
+      describe: () => {
+        const current = writerRef.current;
+        if (current === undefined) return undefined;
+        const refusal = reactionsRef.current.refusal?.() ?? current.refusal;
+        return {
+          key: fieldKey,
+          control: placementId,
+          label: current.label,
+          required: current.required,
+          value: valueRef.current,
+          ...(refusal === undefined ? {} : { refusal }),
+          hasOptions: current.options !== undefined,
+        };
+      },
+      options: (search) => writerRef.current?.options?.(search),
     });
     reportFieldChanged?.(fieldKey);
     return () => {
@@ -205,14 +280,14 @@ export function useRequiredFormField(
   placementId: string,
   value: TypedFieldValue,
   requirement: Readonly<{ label: string; missing: boolean }>,
-  setter?: FormFieldSetter,
+  writer?: FormFieldWriter,
 ): string | undefined {
   useFormField(
     fieldKey,
     placementId,
     value,
     requirement.missing ? () => `${requirement.label} is required.` : undefined,
-    setter,
+    writer,
   );
   return useFormFieldError(fieldKey);
 }

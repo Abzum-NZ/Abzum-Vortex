@@ -47,7 +47,6 @@ export const installationRuntimeBundleSections = [
   "theme",
   "component_registry",
   "access_plan",
-  "tool_bundle",
 ] as const;
 
 export const installationRuntimeBundleSectionSchema = z.enum(installationRuntimeBundleSections);
@@ -93,7 +92,7 @@ const moduleConsumerResultFields = moduleDefinitionConsumerReadResultSchema.shap
 // again when a HUMAN release set is reconstructed from the stored sections.
 const installationRuntimeBundleApplicationSourceHeaderSchema = z
   .object(applicationConsumerResultFields)
-  .omit({ content: true, toolBundle: true, correlationId: true })
+  .omit({ content: true, correlationId: true })
   .strict();
 
 const installationRuntimeBundleModuleSourceHeaderSchema = z
@@ -104,7 +103,7 @@ const installationRuntimeBundleModuleSourceHeaderSchema = z
 /*
  * Release content stored in the pages section. It is written from a release set that is already
  * checked, and it is read back only into a release set that the release-set contract checks again
- * as a whole, like the navigation, flows, theme, registry and tool sections: this section's own
+ * as a whole, like the navigation, flows, theme and registry sections: this section's own
  * contract is its envelope (identities, Module order, resolved compositions).
  */
 const installationRuntimeBundleReleaseContentSchema = z.record(z.string(), z.unknown());
@@ -476,7 +475,6 @@ export const installationRuntimeBundleWriteCommandSchema = z
         theme: jsonValueSchema,
         component_registry: jsonValueSchema,
         access_plan: installationRuntimeBundleAccessPlanSectionSchema,
-        tool_bundle: jsonValueSchema,
       })
       .strict(),
   })

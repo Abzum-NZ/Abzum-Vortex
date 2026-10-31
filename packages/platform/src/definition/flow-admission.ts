@@ -157,50 +157,6 @@ const prepareAdmission = (
   };
 };
 
-/** Admits a continuation whose answer reaches no further server segment. */
-export const admitFlowContinuation = async (
-  host: AdmissionHost,
-  installation: InstalledFlowBindings,
-  ...args: Parameters<FlowOrchestratorDependencies["admitContinuation"]>
-): ReturnType<FlowOrchestratorDependencies["admitContinuation"]> => {
-  const [run, state, execute, openReplay] = args;
-  const admission = prepareAdmission(host, installation, run, state);
-  const plan = run.release.plans.get(run.flowId);
-  if (
-    admission === undefined ||
-    plan === undefined ||
-    run.pendingContinuation === undefined ||
-    run.continuationPlan === undefined
-  )
-    return { kind: "refused", committedNow: false };
-  return startFlow(
-    {
-      requests: host.requests,
-      authorizeBinding: admission.authorizeBinding,
-      authorizeGesture: admission.authorizeGesture,
-      currentPlan: admission.currentPlan,
-      authorizeInvocation: admission.authorizeInvocation,
-      execute: async () => {
-        throw new Error("FLOW_CONTINUATION_SEGMENT_UNEXPECTED");
-      },
-      executeContinuation: execute,
-      openContinuationReplay: openReplay,
-    },
-    {
-      session: run.authority.session,
-      selection: run.authority.selection,
-      plan,
-      expected: null,
-      gestureId: run.gestureId,
-      runId: state.runId,
-      bindingId: run.bindingId,
-      iteration: iterationKey(state),
-      continuation: run.pendingContinuation,
-      continuationPlan: run.continuationPlan,
-    },
-  );
-};
-
 /** Admits a start that reaches a page intent or completion before a server segment. */
 export const admitFlowPageStart = async (
   host: AdmissionHost,
@@ -320,13 +276,7 @@ export const admitFlowSegment = async (
       return { kind: "refused", committedNow: false };
     if (failure !== undefined && !serverFailure) return { kind: "refused", committedNow: false };
   }
-  const expectedFingerprint =
-    detached !== undefined
-      ? detached.fingerprint
-      : run.pendingContinuation === undefined
-        ? segment.fingerprint
-        : run.continuationSegments?.[segment.id];
-  if (expectedFingerprint === undefined) return { kind: "reload", committedNow: false };
+  const expectedFingerprint = detached !== undefined ? detached.fingerprint : segment.fingerprint;
   return startFlow(
     {
       requests: host.requests,
@@ -401,8 +351,6 @@ export const admitFlowSegment = async (
         detached !== undefined && host.invocation.kind === "binding"
           ? host.invocation.iteration
           : iterationKey(state),
-      ...(run.pendingContinuation === undefined ? {} : { continuation: run.pendingContinuation }),
-      ...(run.continuationPlan === undefined ? {} : { continuationPlan: run.continuationPlan }),
       ...(typeof profileAccountId === "string" ? { profileAccountId } : {}),
     },
   );

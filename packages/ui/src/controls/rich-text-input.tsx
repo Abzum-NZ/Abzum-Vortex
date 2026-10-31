@@ -4,7 +4,7 @@ import { useState, type ChangeEvent, type ReactElement } from "react";
 import { typedFieldValueSchema } from "@vortex/platform/schema";
 import { Field, FieldLabel } from "../components/field";
 import { Textarea } from "../components/textarea";
-import { flowSetFieldChange } from "../flow-runtime/flow-cycle";
+import { setFieldChange } from "../flow-runtime/flow-cycle";
 import {
   readControlSettings,
   resolveControlContext,
@@ -106,26 +106,37 @@ export function RichTextInput(props: RichTextInputProps): ReactElement {
     props.placementId,
     typed,
     { label, missing: required && !disabled && !readOnly && value.trim() === "" },
-    (next, cycle) => {
-      if (disabled || readOnly || draftFeedback?.hidden === true) return undefined;
-      const parsed = typedFieldValueSchema.safeParse(next);
-      if (!parsed.success) return undefined;
-      const candidate = parsed.data;
-      if (
-        candidate !== null &&
-        (typeof candidate !== "object" || Array.isArray(candidate) || !("blocks" in candidate))
-      )
-        return undefined;
-      const document = candidate;
-      const text = documentText(document);
-      return {
-        value: document,
-        apply: () => {
-          setWritten({ seedKey, text, document });
-          setValue(text);
-        },
-        emit: () => context.events?.field_changed?.(flowSetFieldChange(cycle, fieldKey, document)),
-      };
+    {
+      label,
+      required,
+      refusal:
+        draftFeedback?.hidden === true
+          ? "hidden"
+          : disabled
+            ? "disabled"
+            : readOnly
+              ? "read_only"
+              : undefined,
+      set: (next, cause) => {
+        const parsed = typedFieldValueSchema.safeParse(next);
+        if (!parsed.success) return "invalid_value";
+        const candidate = parsed.data;
+        if (
+          candidate !== null &&
+          (typeof candidate !== "object" || Array.isArray(candidate) || !("blocks" in candidate))
+        )
+          return "invalid_value";
+        const document = candidate;
+        const text = documentText(document);
+        return {
+          value: document,
+          apply: () => {
+            setWritten({ seedKey, text, document });
+            setValue(text);
+          },
+          emit: () => context.events?.field_changed?.(setFieldChange(cause, fieldKey, document)),
+        };
+      },
     },
   );
   const error = projectedError ?? validationError;

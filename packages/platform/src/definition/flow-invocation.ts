@@ -6,16 +6,7 @@ import type { IdentitySession, OrganizationSelectionCandidate } from "../access/
 import type { JsonValue } from "../catalogue/common";
 import { recordIdSchema, type IdentityAuthorityId } from "../catalogue/identifiers";
 import { describeFailure, sameId, isRecord } from "../catalogue/runtime-primitives";
-import {
-  flowTaskChildLists,
-  type FlowDefinition,
-  type FlowTask,
-} from "../workflows/flow-contracts";
 import type { FlowBindingInvocation } from "../workflows/flow-invocation-contracts";
-import type {
-  FormContinuationOutcome,
-  FormContinuationRequest,
-} from "../workflows/form-continuation-contracts";
 import type { ApplicationContent } from "./application-contracts";
 import type { ProtectedOperationChannel } from "./application-flow-bindings";
 import { canonicalJson } from "./canonical-json";
@@ -50,7 +41,6 @@ import type {
   FlowOrchestratorDependencies,
   FlowRelease,
 } from "./flow-orchestrator-types";
-import { createFormContinuationService } from "./form-continuation";
 import { flowEntrySegmentsMatch } from "../workflows/flow-plan";
 import { flowNeedsRunStart } from "../workflows/flow-run-start";
 import {
@@ -58,12 +48,7 @@ import {
   openFlowAdmissionRun,
   type FlowReceiptClaim,
 } from "../workflows/start";
-import {
-  admitFlowContinuation,
-  admitFlowPageStart,
-  admitFlowSegment,
-  type AdmissionHost,
-} from "./flow-admission";
+import { admitFlowPageStart, admitFlowSegment, type AdmissionHost } from "./flow-admission";
 import { admitPageGesture } from "./flow-admission-page";
 import { admitRowForm } from "./flow-row-form-admission";
 import { openFlowCarriedValues, sealFlowCarriedValues } from "../workflows/flow-carried-values";
@@ -157,7 +142,6 @@ export type InvocationDependencies = Readonly<{
     shells?: unknown,
   ) => Readonly<{ all: ReadonlySet<string>; summary?: string }> | undefined;
   guidedFormFlowId: (page: unknown, bindings: unknown, shells?: unknown) => string | undefined;
-  hasAuthoredForm: (application: ApplicationContent, formId: string) => boolean;
   projectForm: (
     session: IdentitySession,
     request: Readonly<{
@@ -216,7 +200,7 @@ export type FlowInvocationRequest = Readonly<{
   invocation: FlowBindingInvocation;
 }>;
 
-/** One log line per form-continuation or guided-binding refusal; the page keeps its neutral outcome. */
+/** One log line per binding refusal; the page keeps its neutral outcome. */
 const logFlowRefusal = (code: string): void => {
   console.error(`[flows] invocation refused ${code}`);
 };
@@ -232,40 +216,6 @@ const guidedClickId = (draftId: string, revision: number, bindingId: string): st
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 };
 
-/**
-/**
- * Whether an installed flow declares the paused node a continuation target names: a task
- * with that id anywhere in the flow and, for a form, a Show form task whose literal form matches
- * or whose dynamic form is checked against the active authored release. The stored run still pins
- * the exact node; this refuses a target the installed flow could never pause at before spending
- * the continuation.
- */
-const declaresPausedNode = (
-  flow: unknown,
-  node: Readonly<{ nodeId: string; formId?: string }>,
-): boolean => {
-  if (typeof flow !== "object" || flow === null) return false;
-  const definition = flow as Partial<Pick<FlowDefinition, "tasks" | "errors" | "finally">>;
-  const find = (tasks: readonly FlowTask[] | undefined): FlowTask | undefined => {
-    for (const task of tasks ?? []) {
-      if (task.id === node.nodeId) return task;
-      for (const child of flowTaskChildLists(task)) {
-        const found = find(child.tasks);
-        if (found !== undefined) return found;
-      }
-    }
-    return undefined;
-  };
-  const task = find(definition.tasks) ?? find(definition.errors) ?? find(definition.finally);
-  if (task === undefined) return false;
-  if (node.formId === undefined) return task.type === "interface.confirm";
-  if (task.type !== "interface.show_form") return false;
-  const form = (task as { properties?: Record<string, unknown> }).properties?.form as
-    Readonly<{ kind?: unknown; literal?: Readonly<{ value?: unknown }> }> | undefined;
-  // A form chosen by a reference or formula is only known at run time; the stored run pins it.
-  if (form?.kind !== "literal") return form !== undefined;
-  return String(form.literal?.value).toLowerCase() === node.formId.toLowerCase();
-};
 export async function invokeInstalledFlow(
   session: IdentitySession,
   body: FlowInvocationRequest,
@@ -427,8 +377,6 @@ export async function invokeInstalledFlow(
         {
           admitSegment: (run, state, segment, execute, entry) =>
             admitFlowSegment(admissionHost, installation, run, state, segment, execute, entry),
-          admitContinuation: (run, state, execute, openReplay) =>
-            admitFlowContinuation(admissionHost, installation, run, state, execute, openReplay),
           admitPageStart: (run, state) =>
             admitFlowPageStart(admissionHost, installation, run, state),
         },
@@ -512,122 +460,6 @@ export async function invokeInstalledFlow(
   };
 
   /** The flow bindings of the trusted active installation for the initiator's own selection. */
-  const readInstalled = async (
-    session: IdentitySession,
-    selection: OrganizationSelectionCandidate,
-  ): Promise<InstalledFlowBindings | undefined> => {
-    const context = await readInstalledContext(session, selection);
-    return context === undefined ? undefined : installedFlowBindings(context);
-  };
-
-  /**
-   * The form continuation interface over a fresh orchestrator bound to the trusted release.
-   * It re-reads the active installation and checks the caller's target against it before the
-   * orchestrator consumes the single-use continuation, so Page never duplicates that validation.
-   */
-  const continueForm = async (
-    session: IdentitySession,
-    selection: OrganizationSelectionCandidate,
-    request: FormContinuationRequest,
-  ): Promise<FormContinuationOutcome> => {
-    const installed = await readInstalled(session, selection);
-    if (installed === undefined) {
-      logFlowRefusal("FORM_CONTINUATION_INSTALLATION_NOT_CURRENT");
-      return { kind: "refused", reason: "unavailable", committedNow: false } as const;
-    }
-    const release: FlowRelease = {
-      releaseKey: installed.releaseKey,
-      installationRevision: installed.installationRevision,
-      flows: installed.flows,
-      plans: installed.plans,
-      ...(installed.recordTypes === undefined ? {} : { recordTypes: installed.recordTypes }),
-      ...(installed.namedActions === undefined ? {} : { namedActions: installed.namedActions }),
-      ...(installed.selectedRecordReadProjections === undefined
-        ? {}
-        : { selectedRecordReadProjections: installed.selectedRecordReadProjections }),
-    };
-    // The exact evidence goes to the form continuation interface unchanged: it is the only place
-    // that compares it with trusted state and consumes the single-use continuation.
-    const formContinuation = createFormContinuationService({
-      orchestrator: orchestratorFor(release, undefined, installed),
-      resolveInstallation: async ({ installation, flowId, node }) => {
-        // Another application is foreign, not stale: it gets the neutral refusal.
-        if (
-          installation.applicationRootId.toLowerCase() !== installed.applicationRootId.toLowerCase()
-        ) {
-          logFlowRefusal("FORM_CONTINUATION_FOREIGN_APPLICATION");
-          return { kind: "unavailable" };
-        }
-        const flow = installed.flows.get(flowId);
-        if (flow === undefined) {
-          logFlowRefusal("FORM_CONTINUATION_FLOW_NOT_INSTALLED");
-          return { kind: "unavailable" };
-        }
-        if (node !== undefined && !declaresPausedNode(flow, node)) {
-          logFlowRefusal("FORM_CONTINUATION_NODE_NOT_DECLARED");
-          return { kind: "unavailable" };
-        }
-        return { kind: "current", releaseKey: installed.releaseKey };
-      },
-    });
-    const answer = request.answer;
-    if (request.target.awaiting !== "form") {
-      if (answer.kind !== "submit") return formContinuation.continue(session, selection, request);
-      logFlowRefusal("FORM_CONTINUATION_SUBMIT_WITHOUT_FORM_PAUSE");
-      return { kind: "refused", reason: "unavailable", committedNow: false };
-    }
-
-    const trustedFormId = request.target.formId;
-    if (
-      trustedFormId === undefined ||
-      request.target.installation.applicationRootId.toLowerCase() !==
-        installed.applicationRootId.toLowerCase() ||
-      !declaresPausedNode(installed.flows.get(request.target.flowId), {
-        nodeId: request.target.nodeId,
-        formId: trustedFormId,
-      })
-    ) {
-      logFlowRefusal("FORM_CONTINUATION_TARGET_NOT_CURRENT");
-      return { kind: "refused", reason: "unavailable", committedNow: false };
-    }
-    if (
-      installed.applicationContent === undefined ||
-      installed.modules === undefined ||
-      !dependencies.hasAuthoredForm(installed.applicationContent, trustedFormId)
-    ) {
-      logFlowRefusal("FORM_CONTINUATION_FORM_NOT_AUTHORED");
-      return { kind: "refused", reason: "unavailable", committedNow: false };
-    }
-    const projectedForm = await dependencies.projectForm(session, {
-      installationRevision: installed.installationRevision,
-      releaseKey: installed.releaseKey,
-      formId: trustedFormId,
-    });
-    if (projectedForm === undefined) {
-      logFlowRefusal("FORM_CONTINUATION_FORM_NOT_PROJECTED");
-      return { kind: "refused", reason: "unavailable", committedNow: false };
-    }
-    if (answer.kind !== "submit") return formContinuation.continue(session, selection, request);
-    const values = await dependencies.resolveFormValues({
-      session,
-      selection,
-      application: installed.applicationContent,
-      modules: installed.modules,
-      formId: trustedFormId,
-      projectedFields: projectedForm.fields,
-      ...(dependencies.boundRequest === undefined ? {} : { sequential: true }),
-      values: answer.values,
-    });
-    if (values === undefined) {
-      logFlowRefusal("FORM_CONTINUATION_VALUES_NOT_RESOLVED");
-      return { kind: "refused", reason: "unavailable", committedNow: false };
-    }
-    return formContinuation.continue(session, selection, {
-      ...request,
-      answer: { kind: "submit", values },
-    });
-  };
-
   const invocation = body.invocation;
   let admittedProjection:
     | Readonly<{
@@ -702,10 +534,7 @@ export async function invokeInstalledFlow(
   };
   // Use the same installed snapshot for this gate and the endpoint. A crafted action on a
   // guided page must not start a flow before its final form submit is confirmed.
-  const bindingContext =
-    invocation.kind !== "continuation"
-      ? await readInstalledContext(identity.session, selection)
-      : undefined;
+  const bindingContext = await readInstalledContext(identity.session, selection);
   const bindingInstallation =
     bindingContext === undefined ? undefined : installedFlowBindings(bindingContext);
   if (invocation.kind === "binding") {
@@ -713,30 +542,28 @@ export async function invokeInstalledFlow(
       logFlowRefusal("BINDING_INSTALLATION_NOT_CURRENT");
       return { kind: "refused", committedNow: false };
     }
-    if (invocation.segment !== undefined) {
-      const plan = bindingInstallation.plans.get(String(invocation.flowId));
-      const segment = plan?.segments.find(
-        (part) => part.kind === "server" && part.id === invocation.segment?.segmentId,
+    const plan = bindingInstallation.plans.get(String(invocation.flowId));
+    const segment = plan?.segments.find(
+      (part) => part.kind === "server" && part.id === invocation.segment.segmentId,
+    );
+    if (segment === undefined || segment.kind !== "server")
+      return { kind: "refused", committedNow: false };
+    try {
+      openFlowCarriedValues(
+        invocation.carriedValues,
+        dependencies.continuationKey,
+        {
+          flowId: String(invocation.flowId),
+          bindingId: String(invocation.bindingId),
+          identityId: identity.session.identityId,
+          organizationId: selection.organizationId,
+          applicationRootId: selection.applicationRootId,
+        },
+        segment,
       );
-      if (segment === undefined || segment.kind !== "server")
-        return { kind: "refused", committedNow: false };
-      try {
-        openFlowCarriedValues(
-          invocation.carriedValues,
-          dependencies.continuationKey,
-          {
-            flowId: String(invocation.flowId),
-            bindingId: String(invocation.bindingId),
-            identityId: identity.session.identityId,
-            organizationId: selection.organizationId,
-            applicationRootId: selection.applicationRootId,
-          },
-          segment,
-        );
-      } catch (error) {
-        logFlowRefusal(`BINDING_CARRIED_VALUES_INVALID ${describeFailure(error)}`);
-        return { kind: "refused", committedNow: false };
-      }
+    } catch (error) {
+      logFlowRefusal(`BINDING_CARRIED_VALUES_INVALID ${describeFailure(error)}`);
+      return { kind: "refused", committedNow: false };
     }
     const binding = bindingsWithMessageActions(bindingInstallation.bindings, [
       ...bindingInstallation.flows.values(),
@@ -784,8 +611,7 @@ export async function invokeInstalledFlow(
   }
 
   const endpoint = createFlowBindingEndpoint({
-    readInstallation:
-      invocation.kind !== "continuation" ? async () => bindingInstallation : readInstalled,
+    readInstallation: async () => bindingInstallation,
     openRun: async (session, selection, binding, installation, request) => {
       const plan = installation.plans?.get(String(binding.flow.flowId));
       if (
@@ -1096,8 +922,6 @@ export async function invokeInstalledFlow(
         : adaptSelectedReadInputs(adaptedInputs, resolved);
     },
     invokeSegment: createDetachedSegmentInvoker(dependencies.continuationKey, orchestratorFor),
-    continueForm,
-    orchestratorFor,
   });
 
   const namedDraft =

@@ -19,7 +19,7 @@ import {
   type FlowMessageIntent,
   type FlowRuntimeState,
   type FlowInvokeClient,
-  type ServerDrivenResult,
+  type FlowDispatchResult,
   type LinkNavigationEnvironment,
   type PlatformThemeTokens,
 } from "@vortex/ui";
@@ -43,7 +43,6 @@ export function useFlowRuntime({
   application,
   runtimeState,
   subject,
-  continuingFormsRef,
   formCancelledRef,
   unsavedWorkRegistry,
   submittedFormsRef,
@@ -67,7 +66,7 @@ export function useFlowRuntime({
   application: ApplicationPageModel["invocation"];
   runtimeState: FlowRuntimeState;
   subject: ApplicationPageModel["subject"];
-  continuingFormsRef: RefObject<Map<string, SubmittedForm>>;
+  /** Set when the person cancels a form a running flow shows; a board move reads it. */
   formCancelledRef: RefObject<boolean>;
   unsavedWorkRegistry: ReturnType<typeof useUnsavedWorkRegistry>;
   submittedFormsRef: RefObject<Map<string, SubmittedForm>>;
@@ -90,17 +89,16 @@ export function useFlowRuntime({
   /** Filled by the page's panel host once it has rendered. */
   setPanelRef: RefObject<FlowIntentHost["setPanel"]>;
   applyMessageActionRef: RefObject<
-    (dispatch: Promise<ServerDrivenResult>, bindingId: string) => void
+    (dispatch: Promise<FlowDispatchResult>, bindingId: string) => void
   >;
 }>) {
   /**
-   * The one browser flow client and host: a form submit starts the bound flow on the server
-   * and the runtime carries out every pause (another form or a confirmation) through a continuation,
-   * which is returned exactly as the server issued it.
+   * The one browser flow client and host: the page runner carries out the flow's page steps
+   * (another form or a confirmation) itself and sends each server segment to the endpoint.
    */
   const prepareRefreshRef = useRef(prepareRefresh);
   prepareRefreshRef.current = prepareRefresh;
-  const { flowClient, webMcpClient, beginSubmission } = useMemo(() => {
+  const { flowClient, agentClient, beginSubmission } = useMemo(() => {
     const options = {
       address: {
         tenantShortName: application.tenantShortName,
@@ -155,8 +153,6 @@ export function useFlowRuntime({
       return (client: FlowInvokeClient) =>
         trackFlowInvokeClient(client, {
           submissions,
-          continuingFormsRef,
-          formCancelledRef,
           unsavedWorkRegistry,
           controlDraftsRef,
         });
@@ -164,14 +160,14 @@ export function useFlowRuntime({
     return {
       beginSubmission,
       flowClient: createFlowInvokeClient(options, wrap),
-      webMcpClient: createFlowInvokeClient(
+      // The agent endpoint marks an agent's runs; the person stays the actor.
+      agentClient: createFlowInvokeClient(
         { ...options, endpoint: "/api/flows/invoke/webmcp" },
         wrap,
       ),
     };
   }, [
     application,
-    formCancelledRef,
     model.pageParameters.controls,
     runtimeInputsRef,
     controlDraftsRef,
@@ -243,6 +239,10 @@ export function useFlowRuntime({
         cancel: () => void;
       }>,
     ) => {
+      const cancel = () => {
+        formCancelledRef.current = true;
+        controls.cancel();
+      };
       const surface = formSurfaceComposition(
         model.page,
         model.pageId,
@@ -254,7 +254,7 @@ export function useFlowRuntime({
           title: "Form unavailable",
           body: (
             <DialogFooter>
-              <Button type="button" variant="secondary" onClick={controls.cancel}>
+              <Button type="button" variant="secondary" onClick={cancel}>
                 Cancel
               </Button>
             </DialogFooter>
@@ -348,7 +348,7 @@ export function useFlowRuntime({
                 />
               </UnsavedWorkProvider>
               <DialogFooter>
-                <Button type="button" variant="secondary" onClick={controls.cancel}>
+                <Button type="button" variant="secondary" onClick={cancel}>
                   Cancel
                 </Button>
                 <Button
@@ -363,7 +363,7 @@ export function useFlowRuntime({
         ),
       };
     },
-    [currentData, dialogState, model, navigation, resolvePageHref, router],
+    [currentData, dialogState, formCancelledRef, model, navigation, resolvePageHref, router],
   );
   const messageActionRef = useRef<(message: FlowMessageIntent) => void>(() => undefined);
   const {
@@ -391,6 +391,7 @@ export function useFlowRuntime({
         flowName: string;
         controlName: string;
         formId?: string;
+        agentConfirmation?: boolean;
       }
     >(
       Object.values(model.bindings).flatMap((items) =>
@@ -409,6 +410,7 @@ export function useFlowRuntime({
                 flowName: binding.flowName,
                 controlName: binding.controlName,
                 ...(binding.formId === undefined ? {} : { formId: binding.formId }),
+                ...(binding.agentConfirmation === true ? { agentConfirmation: true } : {}),
               },
             ] as const,
         ),
@@ -436,6 +438,7 @@ export function useFlowRuntime({
     () =>
       createFlowRuntime({
         client: flowClient,
+        agentClient,
         host,
         state: runtimeState,
         bindingSettings,
@@ -446,6 +449,7 @@ export function useFlowRuntime({
       }),
     [
       application.flowTimeZone,
+      agentClient,
       beginSubmission,
       bindingSettings,
       browserBindings,
@@ -494,18 +498,6 @@ export function useFlowRuntime({
       if (!mountedRef.current) router.refresh();
     });
   };
-  const webMcpRuntime = useMemo(
-    () =>
-      createFlowRuntime({
-        client: webMcpClient,
-        host,
-        state: runtimeState,
-        bindingSettings,
-        begin: beginSubmission,
-        ...(application.flowTimeZone === undefined ? {} : { timeZone: application.flowTimeZone }),
-      }),
-    [application.flowTimeZone, beginSubmission, bindingSettings, webMcpClient, host, runtimeState],
-  );
   useEffect(() => {
     if (
       !Object.values(model.bindings).some((items) =>
@@ -527,5 +519,5 @@ export function useFlowRuntime({
   }, [currentData, flowRuntime, model.bindings]);
   const formBlock = useMemo(() => createFormBlockRuntime(flowRuntime), [flowRuntime]);
 
-  return { formBlock, flowRuntime, webMcpRuntime, intentHostElement, messageBanner };
+  return { formBlock, flowRuntime, host, intentHostElement, messageBanner };
 }

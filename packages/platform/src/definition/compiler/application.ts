@@ -50,7 +50,6 @@ import { validateApplicationSourceCatalogue } from "../application-catalogue-val
 import { settleDefinitionRuleFailures } from "../rule-failure-order";
 import { applicationProvenance } from "./application-provenance";
 import { compiledSourceFlowBindings } from "./application-flow-binding-sources";
-import { compileApplicationToolBundle } from "./application-tools";
 import { dependencyOrder, resolvedDependencies } from "./dependencies";
 import { compileCheckedFlowSources } from "./flow-sources";
 import { derivePersonGrants } from "./person-grants";
@@ -931,13 +930,6 @@ export function compileParsedApplicationRequest(
       dependencyOrder: dependencyOrder(sourceObject),
       resolvedDependencies: resolvedDependencies(sourceObject, resolution),
       resolutionFingerprint: request.resolution.fingerprint,
-      toolBundle: compileApplicationToolBundle(
-        request.catalogueSnapshot.platformBlocks.releases,
-        canonical,
-        sourceObject,
-        resolution,
-        dependencyOutputs,
-      ),
     });
     if (!output.success) {
       console.error("[definition] application compilation output invalid", output.error);

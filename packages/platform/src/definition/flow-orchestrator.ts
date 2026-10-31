@@ -1,16 +1,13 @@
 import "server-only";
 
-import { randomBytes, randomUUID } from "node:crypto";
-import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
-import { isRecord } from "../catalogue/runtime-primitives";
 import type { ExecuteNamedActionCommand } from "../records/named-actions";
 import type { NamedActionBatchResult } from "../records/action-record-port";
 import type { FlowBindingInput, FlowDefinition } from "../workflows/flow-contracts";
 import { resolveFlowValue } from "../rules/flow-value-runtime";
 import { parseFlowSegmentSeed } from "../rules/flow-segment-seed";
 import type { FlowRuntimeValues } from "../rules/flow-interpreter";
-import { flowWarningNoticeSchema } from "../workflows/form-continuation-contracts";
 import { namedActionFlowRunner } from "./flow-action-run";
 import {
   continueFlowRun,
@@ -21,28 +18,15 @@ import {
   type FlowRunState,
   type FlowRunStep,
 } from "../rules/flow-interpreter";
-import { issueFlowContinuation, peekFlowContinuation } from "./flow-continuation-store";
-import { openContinuationReplay, sealContinuationReplay } from "./flow-continuation-replay";
-import { canonicalJson } from "./canonical-json";
 import { runFlowSegment, runFlowSegmentFromBoundary } from "./flow-segment-run";
 import { createFlowTaskRunner } from "./flow-task-runner";
 import { reportUnexpectedFailure } from "./definition-error";
+import { runFlowTargets, withinPayload } from "./flow-orchestrator-support";
 import {
-  carriesSensitive,
-  runFlowTargets,
-  safeIntent,
-  sha256,
-  withinPayload,
-} from "./flow-orchestrator-support";
-import {
-  resumeRequestSchema,
   startRequestSchema,
-  subjectSchema,
   type FlowOrchestratorDependencies,
   type FlowOrchestratorResponse,
   type FlowRelease,
-  type FlowResumeRequest,
-  type FlowRunExpectation,
   type FlowStartRequest,
   type NamedActionExecutionResult,
   type NamedActionRunner,
@@ -50,12 +34,10 @@ import {
   type Run,
 } from "./flow-orchestrator-types";
 import { flowMaximumServerSeconds } from "../workflows/flow-limits";
-import { flowEntrySegmentsMatch, flowPlanFingerprint } from "../workflows/flow-plan";
+import { flowEntrySegmentsMatch } from "../workflows/flow-plan";
 
-/** Orchestrates flows with verified authority, revision-bound writes and single-use continuations. */
+/** Orchestrates flows with verified authority and revision-bound writes. */
 
-/** The seconds a suspended run may wait for the person's answer. */
-const flowContinuationLifetimeSeconds = 900;
 const serverMilliseconds = flowMaximumServerSeconds * 1_000;
 
 const refused: FlowOrchestratorResponse = Object.freeze({ kind: "refused", committedNow: false });
@@ -64,7 +46,6 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
   const now = dependencies.now ?? (() => new Date());
   const clock = dependencies.clock ?? (() => performance.now());
   const newRunId = dependencies.newRunId ?? (() => randomUUID());
-  const newToken = dependencies.newToken ?? (() => randomBytes(32).toString("base64url"));
 
   /** The library of one release: its planned flows; a flow that is not planned is unavailable. */
   const libraryOf =
@@ -79,7 +60,6 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     run: Run,
     step: Extract<FlowRunStep, { kind: "finished" }>,
   ): FlowOrchestratorResponse => {
-    const intents = step.intents.map(safeIntent);
     if (step.result.status === "failed") {
       const failedTaskId = step.result.failure.taskId;
       // A task the platform could not run ends the run as not available, never as a refusal.
@@ -105,7 +85,6 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
             : {}),
         },
         outputs: {},
-        intents,
         unavailable: run.unavailable,
       };
     }
@@ -120,7 +99,6 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       outputs: Object.fromEntries(
         Object.entries(step.result.outputs).map(([name, value]) => [name, value.value]),
       ),
-      intents,
       unavailable: run.unavailable,
     };
   };
@@ -134,14 +112,12 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     committedEffects: state.committedEffects,
     failure: { code: "server_time_limit" },
     outputs: {},
-    intents: [],
     unavailable: run.unavailable,
   });
 
   /**
-   * The record a flow with a record input runs for, read afresh for the verified initiator: at the
-   * start from the input the binding supplied, and at every resume from the run's own input, so a
-   * stored run never holds record values. `undefined` when the flow names no record input.
+   * The record a flow with a record input runs for, read afresh for the verified initiator from the
+   * input the binding supplied. `undefined` when the flow names no record input.
    */
   const readRunRecord = async (
     session: IdentitySession,
@@ -170,98 +146,6 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     return "unavailable";
   };
 
-  /** Builds a suspension without storing it, so a parent can record its child atomically. */
-  const prepareSuspension = (run: Run, step: Extract<FlowRunStep, { kind: "interface" }>) => {
-    if (run.authority.kind !== "person" || run.selectedRecordReadSeen) return undefined;
-    const { session, selection } = run.authority;
-    if (selection.applicationRootId === undefined) return undefined;
-    const state: FlowRunState = { ...step.state };
-    delete (state as { triggerRecord?: unknown }).triggerRecord;
-    const plan = run.release.plans.get(run.flowId);
-    if (carriesSensitive(state, run.sensitive) || plan === undefined) return undefined;
-    const token = newToken();
-    const childState = {
-      state,
-      warnings: run.warnings,
-      bindingId: run.bindingId,
-      gestureId: run.gestureId,
-      planIdentity: {
-        installationRevision: run.release.installationRevision,
-        flowId: run.flowId,
-        fingerprint: flowPlanFingerprint(plan),
-      },
-      segmentFingerprints: Object.fromEntries(
-        plan.segments.flatMap((segment) =>
-          segment.kind === "server" ? [[segment.id, segment.fingerprint]] : [],
-        ),
-      ),
-    };
-    const reply = {
-      kind: "suspended" as const,
-      runId: state.runId,
-      awaiting: step.awaiting,
-      nodeId: state.awaiting?.taskId ?? "",
-      releaseKey: run.release.releaseKey,
-      committedEffects: state.committedEffects,
-      intents: step.intents.map(safeIntent),
-      continuation: token,
-      unavailable: run.unavailable,
-    };
-    const identity = {
-      organizationId: selection.organizationId,
-      applicationRootId: selection.applicationRootId,
-      identityId: session.identityId,
-      flowId: run.flowId,
-      bindingId: run.bindingId,
-      runId: state.runId,
-    };
-    return { token, childState, reply, identity };
-  };
-
-  const suspensionUnavailable = (run: Run, state: FlowRunState): FlowOrchestratorResponse => ({
-    kind: "finished",
-    committedNow: false,
-    warnings: run.warnings,
-    runId: state.runId,
-    outcome: "failed",
-    committedEffects: state.committedEffects,
-    failure: { code: "continuation_unavailable" },
-    outputs: {},
-    intents: [],
-    unavailable: run.unavailable,
-  });
-
-  /** Suspends at a form or confirmation under the issued run identity. */
-  const suspend = async (
-    run: Run,
-    step: Extract<FlowRunStep, { kind: "interface" }>,
-  ): Promise<FlowOrchestratorResponse> => {
-    // A test run shows the pause in its trace and stores no continuation.
-    if (dependencies.trace !== undefined) return refused;
-    const prepared = prepareSuspension(run, step);
-    if (prepared === undefined) return suspensionUnavailable(run, step.state);
-    let stored: Awaited<ReturnType<typeof issueFlowContinuation>> | undefined;
-    try {
-      stored = await issueFlowContinuation({
-        tokenHash: sha256(prepared.token),
-        runId: step.state.runId,
-        organizationId: prepared.identity.organizationId,
-        applicationRootId: prepared.identity.applicationRootId,
-        identityId: prepared.identity.identityId,
-        flowId: run.flowId,
-        releaseKey: run.release.releaseKey,
-        state: prepared.childState,
-        elapsedMilliseconds: Math.min(elapsedMilliseconds(run), 3_600_000),
-        lifetimeSeconds: flowContinuationLifetimeSeconds,
-      });
-    } catch (error) {
-      reportUnexpectedFailure("flow continuation storage", error);
-    }
-    return stored === undefined
-      ? suspensionUnavailable(run, step.state)
-      : { ...prepared.reply, expiresAt: stored.expiresAt, committedNow: false };
-  };
-
   /** Server tasks stop at compiled boundaries and enter the one transactional gate. */
   const boundariesOf = (run: Run): ReadonlySet<string> => {
     const plan = run.release.plans.get(run.flowId);
@@ -286,50 +170,9 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     });
     const boundaries = boundariesOf(run);
     for (;;) {
-      if (step.kind === "finished" || step.kind === "interface") {
-        if (run.pendingContinuation !== undefined) {
-          const ending = step;
-          const prepared = ending.kind === "interface" ? prepareSuspension(run, ending) : undefined;
-          const selection = run.authority.selection;
-          if (selection.applicationRootId === undefined) return refused;
-          const identity = {
-            organizationId: selection.organizationId,
-            applicationRootId: selection.applicationRootId,
-            identityId: run.authority.session.identityId,
-            flowId: run.flowId,
-            bindingId: run.bindingId,
-            runId: ending.state.runId,
-          };
-          const admitted = await dependencies.admitContinuation(
-            run,
-            ending.state,
-            async () => {
-              if (ending.kind === "finished")
-                return { kind: "finished", value: finished(run, ending) };
-              if (prepared === undefined)
-                return { kind: "finished", value: suspensionUnavailable(run, ending.state) };
-              return {
-                kind: "suspended",
-                childTokenHash: sha256(prepared.token),
-                childState: prepared.childState,
-                elapsedMilliseconds: Math.min(elapsedMilliseconds(run), 3_600_000),
-                lifetimeSeconds: flowContinuationLifetimeSeconds,
-                sealedReply: sealContinuationReplay(
-                  dependencies.continuationKey,
-                  identity,
-                  prepared.reply,
-                ),
-                value: (expiresAt) => ({ ...prepared.reply, expiresAt, committedNow: false }),
-              };
-            },
-            (payload, expiresAt) =>
-              openContinuationReplay(dependencies.continuationKey, identity, payload, expiresAt),
-          );
-          return withCommit(admitted.kind === "completed" ? admitted.value : admitted);
-        }
-        if (step.kind === "finished") return withCommit(finished(run, step));
-        return withCommit(await suspend(run, step));
-      }
+      if (step.kind === "finished") return withCommit(finished(run, step));
+      // A whole-flow run (Studio's test run) stops at a page step: the trace shows it waiting.
+      if (step.kind === "interface") return withCommit(refused);
       if (elapsedMilliseconds(run) > serverMilliseconds)
         return withCommit(limitExceeded(run, step.state));
       // The segment that ended before a Run on back end task has committed: the task runs now, in
@@ -366,9 +209,6 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       replayedCommitted ||= admitted.replayedCommitted === true;
       if (admitted.kind !== "completed") return withCommit(admitted);
       Object.assign(run, admitted.value.run);
-      delete run.pendingContinuation;
-      delete run.continuationPlan;
-      delete run.continuationSegments;
       step = admitted.value.step;
       // A segment that committed nothing in this request (refused or failed, so it rolled back)
       // leaves no effect to count: partial is reported only when something persisted.
@@ -674,26 +514,17 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       }
     },
     /**
-     * Starts a run from a binding (flow id and typed inputs) for the verified initiator. The run id
-     * is issued here. The inputs and the surface's subject are values only: authority,
-     * organisation and actor never come from them.
+     * Runs a whole flow on the server for Studio's test run (flow id and typed inputs) for the
+     * verified initiator; it stops at the first page step. The run id is issued here. The inputs and
+     * the subject are values only: authority, organisation and actor never come from them.
      */
-    async invokeBinding(
-      request: FlowStartRequest,
-      expectation?: Pick<FlowRunExpectation, "releaseKey" | "entrySegments">,
-    ): Promise<FlowOrchestratorResponse> {
+    async invokeBinding(request: FlowStartRequest): Promise<FlowOrchestratorResponse> {
       try {
         const parsed = startRequestSchema.safeParse(request);
         if (!parsed.success || !withinPayload(parsed.data.binding.inputs)) return refused;
         const { session, selection, binding, subject, bindingId, gestureId } = parsed.data;
         const prepared = await prepare(session, selection, binding.flowId);
         if (prepared === undefined) return refused;
-        if (expectation?.entrySegments !== undefined) {
-          const plan = prepared.release.plans.get(binding.flowId);
-          if (plan === undefined) return refused;
-          if (!flowEntrySegmentsMatch(plan, expectation.entrySegments))
-            return { kind: "reload", committedNow: false };
-        }
         const actor = await dependencies.resolveActor?.(session, selection);
         const flow = prepared.library(prepared.flowId);
         const triggerRecord = await readRunRecord(
@@ -741,120 +572,6 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         return await drive(run, first);
       } catch (error) {
         reportUnexpectedFailure("flow start", error);
-        return refused;
-      }
-    },
-
-    /**
-     * Resumes a suspended run from its continuation and the person's answer. The continuation is
-     * consumed exactly once, and only for the initiator, organisation and flow release it was
-     * issued for; a replay of it is refused, so no protected effect is repeated.
-     */
-    async continueAnswer(
-      request: FlowResumeRequest,
-      expectation?: FlowRunExpectation,
-    ): Promise<FlowOrchestratorResponse> {
-      try {
-        const parsed = resumeRequestSchema.safeParse(request);
-        if (!parsed.success || !withinPayload(parsed.data.answer)) return refused;
-        const { session, selection, flowId, continuation, answer } = parsed.data;
-        if (selection.applicationRootId === undefined) return refused;
-        const prepared = await prepare(session, selection, flowId);
-        if (prepared === undefined) return refused;
-        const stored = await peekFlowContinuation({
-          tokenHash: sha256(continuation),
-          organizationId: selection.organizationId,
-          applicationRootId: selection.applicationRootId,
-          identityId: session.identityId,
-          flowId,
-        });
-        if (stored === undefined) return refused;
-        const snapshot = z
-          .object({
-            state: z.unknown(),
-            warnings: z.array(flowWarningNoticeSchema),
-            bindingId: z.uuid(),
-            gestureId: z.uuid(),
-            planIdentity: z
-              .object({
-                installationRevision: z.number().int().positive(),
-                flowId: z.uuid(),
-                fingerprint: z.string().regex(/^sha256:[0-9a-f]{64}$/),
-              })
-              .strict(),
-            segmentFingerprints: z.record(z.string(), z.string()),
-          })
-          .strict()
-          .parse(stored.state);
-        const state = snapshot.state as FlowRunState;
-        // The stored run must be the run the row is bound to; anything else is never resumed.
-        if (!isRecord(state) || state.runId !== stored.runId) return refused;
-        if (!subjectSchema.optional().safeParse(state.subject).success) return refused;
-        if (expectation !== undefined) {
-          const paused = state.awaiting;
-          if (
-            expectation.pausedAt !== undefined &&
-            (paused === undefined ||
-              paused.kind !== expectation.pausedAt.awaiting ||
-              paused.taskId !== expectation.pausedAt.nodeId)
-          )
-            return refused;
-          if (
-            expectation.receipt !== undefined &&
-            (expectation.receipt.runId !== state.runId ||
-              expectation.receipt.committedEffects !== state.committedEffects)
-          )
-            return refused;
-        }
-        const root = state.activations[0];
-        const rootFlow = root === undefined ? undefined : prepared.library(root.flowId);
-        const triggerRecord = await readRunRecord(
-          session,
-          selection,
-          rootFlow,
-          rootFlow?.recordInput === undefined
-            ? undefined
-            : root?.inputs[rootFlow.recordInput]?.value,
-        );
-        if (triggerRecord === "unavailable") return refused;
-        const run: Run = {
-          authority: { kind: "person", session, selection },
-          origin: "person",
-          originId: session.identityId,
-          flowId: prepared.flowId,
-          bindingId: snapshot.bindingId,
-          gestureId: snapshot.gestureId,
-          continuationPlan: snapshot.planIdentity,
-          continuationSegments: snapshot.segmentFingerprints,
-          pendingContinuation: {
-            tokenHash: sha256(continuation),
-            releaseKey: stored.releaseKey,
-            answerHash: sha256(canonicalJson(answer)),
-          },
-          release: prepared.release,
-          library: prepared.library,
-          carriedMilliseconds: stored.elapsedMilliseconds,
-          segmentStart: clock(),
-          unavailable: [],
-          warnings: snapshot.warnings,
-          refusalLoggedTaskIds: [],
-          sensitive: [],
-          selectedRecordReadSeen: false,
-        };
-        return await drive(
-          run,
-          resumeFlowRun(
-            triggerRecord === undefined ? state : { ...state, triggerRecord },
-            answer,
-            run.library,
-            dependencies.trace?.observer,
-            undefined,
-            undefined,
-            boundariesOf(run),
-          ),
-        );
-      } catch (error) {
-        reportUnexpectedFailure("flow resume", error);
         return refused;
       }
     },

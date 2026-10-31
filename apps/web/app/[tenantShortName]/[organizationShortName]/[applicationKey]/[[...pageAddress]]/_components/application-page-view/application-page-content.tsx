@@ -14,18 +14,20 @@ import {
   type createPlatformComponentRegistryForReleases,
   PagePuckRenderer,
   type FlowIntentHost,
-  type ServerDrivenResult,
+  type FlowDispatchResult,
   type DisplaySemanticEvent,
   type RenderedPage,
   type PlatformThemeTokens,
   type ApplicationWebMcpRuntime,
+  pageAgentTools,
+  runPageAgentTool,
+  type PageAgentTool,
   isClientPageChange,
   pageHoldFor,
   primaryStreamedPlacement,
   createFlowRuntimeState,
 } from "@vortex/ui";
 import {
-  describeFailure,
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
   type ProjectedApplicationFrame,
   type PageDefinition,
@@ -38,7 +40,6 @@ import { Button } from "@vortex/ui/components/button";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { FirstRecordTypeEmptyState } from "../../../../../../_components/first-record-type-empty-state";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
-import type { PageWebMcpTool } from "../../../../../../_lib/application-page";
 import type {
   PageMessageDraft,
   SubmittedForm,
@@ -170,7 +171,6 @@ export function ApplicationPageViewContent({
   const setPanelRef = useRef<FlowIntentHost["setPanel"]>(undefined);
   const dialogFormRef = useRef<HTMLDivElement>(null);
   const submittedFormsRef = useRef(new Map<string, SubmittedForm>());
-  const continuingFormsRef = useRef(new Map<string, SubmittedForm>());
   /** Set when the person cancels a form a running flow paused at; a board move clears it when it starts. */
   const formCancelledRef = useRef(false);
   const { unsavedWorkRegistry, unsavedWork, confirmDialog } = useUnsavedWorkPrompt({ router });
@@ -283,51 +283,49 @@ export function ApplicationPageViewContent({
   }, [runtimeState, navigationKey]);
 
   const applyMessageActionRef = useRef<
-    (dispatch: Promise<ServerDrivenResult>, bindingId: string) => void
+    (dispatch: Promise<FlowDispatchResult>, bindingId: string) => void
   >(() => undefined);
-  const { formBlock, flowRuntime, webMcpRuntime, intentHostElement, messageBanner } =
-    useFlowRuntime({
-      application,
-      runtimeState,
-      subject,
-      continuingFormsRef,
-      formCancelledRef,
-      unsavedWorkRegistry,
-      submittedFormsRef,
-      router,
-      resolvePageHref,
-      basePath,
-      unsavedWork,
-      model,
-      platformComponentRegistry,
-      runtimeInputsRef,
-      controlDraftsRef,
-      fieldInputControlReleases,
-      showPageMessage,
-      currentData,
-      dialogFormRef,
-      platformThemeTokens,
-      prepareRefresh: (bindingId) => {
-        let targets = refreshTargetsForBinding(bindingId);
-        if (targets.length === 0) {
-          // Identity and Access writes have no record target. Only reread displayed data:
-          // the page payload also holds inputs for dialogs that are not part of this projection.
-          const displayed = new Set(
-            Array.from(
-              compositionRootRef.current?.querySelectorAll<HTMLElement>(
-                "[data-vortex-placement-id]",
-              ) ?? [],
-            )
-              .filter((element) => element.getClientRects().length > 0)
-              .map((element) => element.dataset.vortexPlacementId?.toLowerCase()),
-          );
-          targets = Object.keys(currentData).filter((id) => displayed.has(id.toLowerCase()));
-        }
-        return prepareFlowRefresh(targets);
-      },
-      setPanelRef,
-      applyMessageActionRef,
-    });
+  const { formBlock, flowRuntime, host, intentHostElement, messageBanner } = useFlowRuntime({
+    application,
+    runtimeState,
+    subject,
+    formCancelledRef,
+    unsavedWorkRegistry,
+    submittedFormsRef,
+    router,
+    resolvePageHref,
+    basePath,
+    unsavedWork,
+    model,
+    platformComponentRegistry,
+    runtimeInputsRef,
+    controlDraftsRef,
+    fieldInputControlReleases,
+    showPageMessage,
+    currentData,
+    dialogFormRef,
+    platformThemeTokens,
+    prepareRefresh: (bindingId) => {
+      let targets = refreshTargetsForBinding(bindingId);
+      if (targets.length === 0) {
+        // Identity and Access writes have no record target. Only reread displayed data:
+        // the page payload also holds inputs for dialogs that are not part of this projection.
+        const displayed = new Set(
+          Array.from(
+            compositionRootRef.current?.querySelectorAll<HTMLElement>(
+              "[data-vortex-placement-id]",
+            ) ?? [],
+          )
+            .filter((element) => element.getClientRects().length > 0)
+            .map((element) => element.dataset.vortexPlacementId?.toLowerCase()),
+        );
+        targets = Object.keys(currentData).filter((id) => displayed.has(id.toLowerCase()));
+      }
+      return prepareFlowRefresh(targets);
+    },
+    setPanelRef,
+    applyMessageActionRef,
+  });
 
   /** A page-level address change (a guided form step) renders the page again on the server. */
   const setQuery = useCallback(
@@ -356,32 +354,28 @@ export function ApplicationPageViewContent({
     void applyDispatch(dispatch, undefined, undefined, bindingId);
   };
 
-  const invokeWebMcpTool = useCallback(
-    async (tool: PageWebMcpTool, input: unknown, signal?: AbortSignal): Promise<unknown> => {
+  // The agent's tools come from the controls the page's model holds; read_page reads the page as
+  // it is rendered now, and every call runs as the person's own gesture.
+  const agentTools = useMemo(() => {
+    const declared = Object.values(placementEventNames);
+    return pageAgentTools({
+      forms: declared.some((events) => events.has("form_submit")),
+      buttons: declared.some((events) => events.has("action")),
+      grids: declared.some(
+        (events) => events.has("selection_changed") || events.has("row_clicked"),
+      ),
+    });
+  }, [placementEventNames]);
+  // Registered once per page: a new invoker would re-register every tool on each render.
+  const agentPageRef = useRef({ state: runtimeState, confirm: host.confirm });
+  agentPageRef.current = { state: runtimeState, confirm: host.confirm };
+  const invokeAgentTool = useCallback(
+    async (tool: PageAgentTool, input: unknown, signal?: AbortSignal): Promise<unknown> => {
       if (signal?.aborted) return { outcome: "cancelled" };
-      if (!isRecord(input)) return { outcome: "refused" };
-      showPageMessage(undefined);
-      try {
-        const result = await webMcpRuntime.dispatchReference(
-          tool.binding,
-          input,
-          crypto.randomUUID(),
-          signal,
-        );
-        await applyDispatch(Promise.resolve(result), undefined, undefined, tool.binding.bindingId);
-        if (signal?.aborted) return { outcome: "cancelled" };
-        if (result.kind === "finished")
-          return {
-            outcome: result.descriptor.outcome,
-            ...(result.descriptor.outputs === "available" ? { outputs: result.outputs } : {}),
-          };
-        return { outcome: result.kind };
-      } catch (error) {
-        console.error(`[webmcp] flow dispatch failed for ${tool.name}: ${describeFailure(error)}`);
-        return { outcome: "unavailable" };
-      }
+      if (!isRecord(input)) return { outcome: "refused", reason: "invalid_value" };
+      return runPageAgentTool(agentPageRef.current, tool.name, input, signal);
     },
-    [applyDispatch, webMcpRuntime],
+    [],
   );
 
   const webMcpContextKey = JSON.stringify([
@@ -645,8 +639,8 @@ export function ApplicationPageViewContent({
       >
         <WebMcpAdapter
           contextKey={webMcpContextKey}
-          tools={model.webMcpTools}
-          onInvoke={invokeWebMcpTool}
+          tools={agentTools}
+          onInvoke={invokeAgentTool}
           onStatusChange={reportWebMcpShellState}
         />
         <PagePuckRenderer
