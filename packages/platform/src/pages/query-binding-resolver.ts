@@ -77,7 +77,7 @@ type QueryBindingResolution =
 type Resolved =
   | Readonly<{ kind: "value"; value: JsonValue }>
   | Readonly<{ kind: "missing"; cause?: string }>
-  /** The viewer is in no team: the block reads nothing, optional input or not. */
+  /** The viewer is in no group: the block reads nothing, optional input or not. */
   | Readonly<{ kind: "no_group" }>
   | Readonly<{ kind: "refused"; reason: string }>;
 
@@ -250,7 +250,7 @@ const resolveOne = async (
         const groupIds = await context.viewerGroups.read();
         if (groupIds === undefined) return { kind: "refused", reason: "viewer_groups_unavailable" };
         // No group: the block reads nothing and shows its awaiting message, even for an optional
-        // input, because leaving the input out would widen the read beyond the viewer's team. An
+        // input, because leaving the input out would widen the read beyond the viewer's group. An
         // input holds one value, so a viewer in several groups is refused, never guessed for.
         if (groupIds.length === 0) return { kind: "no_group" };
         if (groupIds.length > 1) return { kind: "refused", reason: "current_group_ambiguous" };
