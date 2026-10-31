@@ -32,10 +32,6 @@
     "--vortex-space-sm",
     "--vortex-space-md",
     "--vortex-space-lg",
-    "--vortex-control-padding-y",
-    "--vortex-control-padding-x",
-    "--vortex-cell-padding-y",
-    "--vortex-cell-padding-x",
     "--card-spacing",
   ];
   const SKIPPED_TAGS = new Set([
@@ -114,7 +110,6 @@
         "font-family:var(--font-heading-family, var(--font-sans-family))",
         "font-family:var(--font-mono-family, ui-monospace, monospace)",
         "font-family:var(--vortex-font-family)",
-        "font-family:var(--vortex-heading-font-family)",
       ].map((declaration) => normalizeFont(read(declaration, "font-family"))),
     );
     const radii = new Set(

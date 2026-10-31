@@ -32,7 +32,6 @@ import {
   DropdownMenuTrigger,
 } from "../components/dropdown-menu";
 import { Button } from "../components/button";
-import { Skeleton } from "../components/skeleton";
 import { SidebarProvider, SidebarTrigger } from "../components/sidebar";
 import { FlowSurfaceContext } from "../flow-runtime/flow-surface-context";
 import { Icon } from "../icons/icon";
@@ -434,11 +433,9 @@ function ApplicationSwitcher({
         {switcher === undefined ? (
           <div
             role="status"
-            aria-label="Loading applications"
-            className="flex flex-col gap-[var(--vortex-space-sm)] p-[var(--vortex-space-sm)]"
+            className="px-[var(--vortex-space-md)] py-[var(--vortex-space-sm)] text-sm text-muted-foreground"
           >
-            <Skeleton className="h-5 w-full" />
-            <Skeleton className="h-5 w-3/4" />
+            Loading applications…
           </div>
         ) : switcher.state !== "available" ? (
           <>
