@@ -10,6 +10,7 @@ import {
   immutablePlatformBlockCatalogueSchema,
 } from "./application-composition/platform-block-release";
 import { PLATFORM_BLOCK_RELEASE_IDENTITIES } from "./application-composition-release-identities";
+import { deepFreeze } from "../catalogue/runtime-primitives";
 import { platformBlockReleaseContentHash } from "./catalogue-release-content-hashes";
 import catalogueSources from "../catalogue/catalogue/application-composition-catalogue.source.json";
 import sharedProperties from "../catalogue/catalogue/application-composition-shared-properties.source.json";
@@ -69,12 +70,6 @@ const sources = Object.fromEntries(
     },
   ]),
 ) as unknown as typeof catalogueSources;
-
-const deepFreeze = <Value>(value: Value): Value => {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const key of Reflect.ownKeys(value)) deepFreeze(Reflect.get(value, key));
-  return Object.freeze(value);
-};
 
 const sourcesByIdentity = new Map(
   Object.values(sources).map((definition) => [

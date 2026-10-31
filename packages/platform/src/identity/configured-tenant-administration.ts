@@ -57,13 +57,10 @@ import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
+  type RuntimeTransactionRunner,
 } from "../db/request-transaction";
 import { resolveFileStorageDestination } from "../files/storage-destination";
 import { logRefusedOperations } from "./log-refused-operations";
-
-type RuntimeTransactionRunner = <Result>(
-  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
-) => Promise<Result>;
 
 export interface ConfiguredTenantAdministrationDependencies {
   readonly environment?: Readonly<Record<string, string | undefined>>;

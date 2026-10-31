@@ -6,12 +6,7 @@ import {
 } from "../definition/application-flow-bindings";
 import { platformServiceOperationReleaseContentHash } from "../definition/catalogue-release-content-hashes";
 import sources from "./catalogue/platform-service-operation-catalogue.source.json";
-
-const deepFreeze = <Value>(value: Value): Value => {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const key of Reflect.ownKeys(value)) deepFreeze(Reflect.get(value, key));
-  return Object.freeze(value);
-};
+import { deepFreeze } from "./runtime-primitives";
 
 /**
  * One registered platform-service operation: its exact immutable release evidence and the typed

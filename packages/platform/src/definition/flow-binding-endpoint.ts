@@ -1,7 +1,7 @@
 import { safeFlowResultDescriptors } from "../workflows/flow-result-descriptors";
 import "server-only";
 
-import { createHash } from "node:crypto";
+import { uuidFromText } from "./derived-definition-id";
 import { z } from "zod";
 import { recordsTableRowEditEvent } from "./application-composition/records-table-features/row-edit";
 import {
@@ -470,26 +470,13 @@ const runIdForClick = (
   bindingId: string,
   installationRevision: number,
   clickId: string,
-): string => {
-  const bytes = createHash("sha256")
-    .update(
-      [
-        session.identityId,
-        selection.organizationId,
-        bindingId,
-        String(installationRevision),
-        clickId,
-      ]
-        .map((part) => part.toLowerCase())
-        .join("|"),
-    )
-    .digest()
-    .subarray(0, 16);
-  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
-  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
-  const hex = bytes.toString("hex");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-};
+): string =>
+  uuidFromText(
+    [session.identityId, selection.organizationId, bindingId, String(installationRevision), clickId]
+      .map((part) => part.toLowerCase())
+      .join("|"),
+    4,
+  );
 
 /**
  * The flow's input values for a binding: the binding's literals and the caller inputs it declares.

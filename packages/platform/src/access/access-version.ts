@@ -18,6 +18,7 @@ import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
+  type RuntimeTransactionRunner,
 } from "../db/request-transaction";
 
 export const accessVersionErrorCodes = [
@@ -40,10 +41,6 @@ export class AccessVersionError extends Error {
     this.code = code;
   }
 }
-
-type RuntimeTransactionRunner = <Result>(
-  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
-) => Promise<Result>;
 
 interface AccessVersionStoreDependencies {
   readonly runtimeTransaction?: RuntimeTransactionRunner;

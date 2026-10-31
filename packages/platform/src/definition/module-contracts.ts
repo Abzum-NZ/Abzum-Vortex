@@ -62,6 +62,7 @@ import {
   pipelineStageToneSchema,
 } from "./record-type-pipelines";
 import { flowIdSchema } from "../catalogue/identifiers";
+import { exactRangeValid } from "./module-source-fields";
 
 const optionSchema = z
   .object({
@@ -108,16 +109,6 @@ const wholeNumberSettingsSchema = z
       value.minimum === undefined || value.maximum === undefined || value.maximum >= value.minimum,
     { path: ["maximum"], message: "Maximum cannot be below minimum" },
   );
-
-const exactRangeValid = (minimum?: string, maximum?: string): boolean => {
-  const parsedMinimum = minimum === undefined ? undefined : parseExactDecimal(minimum);
-  const parsedMaximum = maximum === undefined ? undefined : parseExactDecimal(maximum);
-  return (
-    parsedMinimum !== undefined &&
-    parsedMaximum !== undefined &&
-    exactDecimalWithinBounds(parsedMinimum, undefined, parsedMaximum)
-  );
-};
 
 const decimalSettingsSchema = z
   .object({

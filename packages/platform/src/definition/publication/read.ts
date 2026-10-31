@@ -1,5 +1,6 @@
 import { definitionContractVersion } from "../application-contract-versions";
 import type { PlatformPermissionSource } from "../../access/platform-permissions";
+import { deepFreeze } from "../../catalogue/runtime-primitives";
 import "server-only";
 
 import {
@@ -182,14 +183,6 @@ const catalogueDefinitionSchema = z
       .optional(),
   })
   .strict();
-
-const deepFreeze = <Value>(value: Value): Value => {
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    for (const nested of Object.values(value)) deepFreeze(nested);
-    Object.freeze(value);
-  }
-  return value;
-};
 
 const duplicate = (): never => {
   throw new Error("INVALID_PLATFORM_RELEASE_CATALOGUE");

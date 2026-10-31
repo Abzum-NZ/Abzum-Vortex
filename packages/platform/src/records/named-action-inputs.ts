@@ -45,9 +45,6 @@ export type PreparedNamedAction = Readonly<{
   actorOrganizationAccountId: string;
 }>;
 
-const hasOwn = (value: object, key: string): boolean =>
-  Object.prototype.hasOwnProperty.call(value, key);
-
 // ─── The action's typed inputs ────────────────────────────────────────────────────────────────
 
 const exactWithin = (
@@ -181,7 +178,7 @@ export const normalizeActionInputs = (
   if (Object.keys(supplied).some((key) => !declared.has(key))) return undefined;
   const result: Record<string, JsonValue> = {};
   for (const input of action.inputs) {
-    if (!hasOwn(supplied, input.key)) {
+    if (!Object.hasOwn(supplied, input.key)) {
       if (input.required) return undefined;
       continue;
     }
@@ -216,7 +213,7 @@ export const actionPreconditionHolds = (
     }
   };
   walk(condition);
-  if ([...parameterKeys].some((key) => !hasOwn(normalizedInputs, key))) return undefined;
+  if ([...parameterKeys].some((key) => !Object.hasOwn(normalizedInputs, key))) return undefined;
   try {
     return evaluateTypedCondition({
       condition,
@@ -229,7 +226,7 @@ export const actionPreconditionHolds = (
       fieldValues: Object.fromEntries(
         [...fieldIds].map((fieldId) => [
           fieldId,
-          hasOwn(prepared.existingValues, fieldId) ? prepared.existingValues[fieldId] : null,
+          Object.hasOwn(prepared.existingValues, fieldId) ? prepared.existingValues[fieldId] : null,
         ]),
       ),
       parameterValues: Object.fromEntries(
@@ -258,7 +255,7 @@ export const actionFlowSeed = (
       field.key,
       flowRuntimeValueOf(
         field.type,
-        hasOwn(prepared.existingValues, field.fieldId)
+        Object.hasOwn(prepared.existingValues, field.fieldId)
           ? prepared.existingValues[field.fieldId]
           : null,
         field.type === "calculation" || field.type === "total"
@@ -269,7 +266,7 @@ export const actionFlowSeed = (
   ),
   inputs: Object.fromEntries(
     prepared.action.inputs
-      .filter((input) => hasOwn(normalizedInputs, input.key))
+      .filter((input) => Object.hasOwn(normalizedInputs, input.key))
       .map((input) => [input.key, flowRuntimeValueOf(input.type, normalizedInputs[input.key])]),
   ),
   subjectRecordId: prepared.recordId,

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { registerRuntimePreview } from "./runtime-preview";
 import { correlationIdSchema } from "../catalogue/common";
 import { recordTypeIdSchema, revisionSchema, timestampSchema } from "../catalogue/identifiers";
-import { sameId } from "../catalogue/runtime-primitives";
+import { deepFreeze, sameId } from "../catalogue/runtime-primitives";
 import { activeApplicationInstallationSchema } from "../files/storage";
 import {
   systemApplicationBoundReleaseSetResultSchema,
@@ -37,13 +37,6 @@ const previewRuntimeSourceSchema = z
     seedBoundedRecordTypeIds: z.array(recordTypeIdSchema).max(201),
   })
   .strict();
-
-const deepFreeze = <Value>(value: Value): Value => {
-  if (typeof value !== "object" || value === null || Object.isFrozen(value)) return value;
-  for (const key of Object.keys(value)) deepFreeze(Reflect.get(value, key));
-  Object.freeze(value);
-  return value;
-};
 
 /**
  * A preview's release set is written once for each draft revision it follows, so it is read and

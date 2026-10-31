@@ -242,9 +242,6 @@ export type TableFieldColumn = Readonly<{
 }>;
 
 /** The exact text of a stored number or money value a cell shows; undefined for any other value. */
-const hasOwn = (record: object, key: string): boolean =>
-  Object.prototype.hasOwnProperty.call(record, key);
-
 /** The resolved label of a linked record among the page's links, as `projectCell` reads it. */
 const recordLinkIn =
   (links: ProjectedRecordLinks | undefined) =>
@@ -305,7 +302,7 @@ const projectTableField = (
       Object.fromEntries(
         columns.map((column) => {
           const cells = row as Readonly<Record<string, JsonValue>>;
-          const stored = hasOwn(cells, column.key) ? cells[column.key] : undefined;
+          const stored = Object.hasOwn(cells, column.key) ? cells[column.key] : undefined;
           return [
             column.key,
             stored === undefined
@@ -328,7 +325,7 @@ const sameField = (left: string, right: string): boolean =>
 /** The row's value for a declared field, or undefined when the engine withheld it (absent). */
 const valueOf = (row: ProtectedQueryRow, field: string): { value: JsonValue } | undefined => {
   const values: Readonly<Record<string, JsonValue>> = row.values;
-  const key = hasOwn(values, field)
+  const key = Object.hasOwn(values, field)
     ? field
     : Object.keys(values).find((candidate) => sameField(candidate, field));
   return key === undefined ? undefined : { value: values[key] as JsonValue };

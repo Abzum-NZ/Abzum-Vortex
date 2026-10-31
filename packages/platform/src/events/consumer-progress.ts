@@ -1,9 +1,10 @@
 import "server-only";
 
 import { eventOccurrenceIdSchema, timestampSchema } from "../catalogue/identifiers";
-import { databaseCode, isNonNilUuidText, asRecord } from "../catalogue/runtime-primitives";
+import { databaseCode, isNonNilUuidText } from "../catalogue/runtime-primitives";
 import { dispatchOccurrenceSchema, type DispatchOccurrence } from "./occurrence-contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
+import { consumerKeyMatches, exactRecord } from "./event-record-shapes";
 
 export const eventConsumerProgressLimits = Object.freeze({
   maximumBatchSize: 100,
@@ -69,27 +70,8 @@ export type EventConsumerAcknowledgementResult = Readonly<{
 
 type ConsumerProgressRow = DatabaseRow & { readonly result: unknown };
 
-const consumerKeyMatches = (value: unknown): value is string =>
-  typeof value === "string" &&
-  value.length <= eventConsumerProgressLimits.maximumConsumerKeyLength &&
-  /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
-
 const timestampMatches = (value: unknown): value is string =>
   timestampSchema.safeParse(value).success;
-
-const exactRecord = <Key extends string>(
-  value: unknown,
-  keys: readonly Key[],
-): Readonly<Record<Key, unknown>> | undefined => {
-  const candidate = asRecord(value);
-  if (
-    candidate === undefined ||
-    Object.keys(candidate).length !== keys.length ||
-    keys.some((key) => !Object.hasOwn(candidate, key))
-  )
-    return undefined;
-  return candidate as Readonly<Record<Key, unknown>>;
-};
 
 const requireOne = (rows: readonly ConsumerProgressRow[]): ConsumerProgressRow => {
   if (rows.length !== 1 || rows[0] === undefined)

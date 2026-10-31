@@ -3,6 +3,7 @@ import "server-only";
 import type { PreparedApplicationPermissionRegistration } from "../access/permission-registry";
 import type { ResolvedPageComposition } from "../pages/page-composition-resolution";
 import { canonicalJson } from "./canonical-json";
+import { deepFreeze } from "../catalogue/runtime-primitives";
 import {
   systemApplicationBoundReleaseSetResultSchema,
   type SystemApplicationBoundReleaseSetResult,
@@ -107,13 +108,6 @@ const requireSection = (
   // The reader returns parsed JSON; the section's contract below checks its shape.
   const value = sections[section];
   if (value === undefined) throw new Error("INSTALLED_PAGE_BUNDLE_SECTION_UNAVAILABLE");
-  return value;
-};
-
-const deepFreeze = <Value>(value: Value): Value => {
-  if (typeof value !== "object" || value === null || Object.isFrozen(value)) return value;
-  for (const key of Object.keys(value)) deepFreeze(Reflect.get(value, key));
-  Object.freeze(value);
   return value;
 };
 

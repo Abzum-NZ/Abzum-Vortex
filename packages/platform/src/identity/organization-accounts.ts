@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
+import { uuidFromText } from "../definition/derived-definition-id";
 import {
   ensureIdentityProjectionCommandSchema,
   identityProjectionSchema,
@@ -18,6 +18,7 @@ import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
+  type RuntimeTransactionRunner,
 } from "../db/request-transaction";
 import { requireRequestIdentityNotDisabled } from "./identity-disablement-publication";
 
@@ -40,10 +41,6 @@ export class OrganizationAccountError extends Error {
     this.code = code;
   }
 }
-
-type RuntimeTransactionRunner = <Result>(
-  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
-) => Promise<Result>;
 
 interface OrganizationAccountStoreDependencies {
   readonly runtimeTransaction?: RuntimeTransactionRunner;
@@ -526,21 +523,9 @@ const derivedBatchItemId = (
   batchCommandId: string,
   item: OffboardingOwnedRecordItem,
   purpose: "command" | "activity" | "occurrence",
-): string => {
-  const bytes = Buffer.from(
-    createHash("sha256")
-      .update(`${batchCommandId}:${item.recordTypeId}:${item.recordId}:${purpose}`, "utf8")
-      .digest()
-      .subarray(0, 16),
-  );
-  // Make the digest a RFC 4122 variant, version-5-shaped UUID. The batch
-  // command is caller-provided and stable, so replays use the same protected
-  // receipt, Activity and Event identities for this exact record.
-  bytes[6] = (bytes[6]! & 0x0f) | 0x50;
-  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
-  const hex = bytes.toString("hex");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-};
+  // The batch command is caller-provided and stable, so replays use the same protected receipt,
+  // Activity and Event identities for this exact record.
+): string => uuidFromText(`${batchCommandId}:${item.recordTypeId}:${item.recordId}:${purpose}`, 5);
 
 const querySqlSection = async (
   transaction: RequestDatabaseTransaction,

@@ -80,7 +80,6 @@ export { createOptionMembershipCheck } from "./option-membership-check";
 
 export * from "./canonical-json-definition";
 export * from "./catalogue-release-content-hashes";
-export * from "./semantic-version";
 export * from "./version-impact-definition";
 export * from "./version-impact-error";
 export * from "./compilation-error";

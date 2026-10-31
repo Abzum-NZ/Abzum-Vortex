@@ -84,9 +84,6 @@ const valueMatchesField = (value: JsonValue, field: ModuleField): boolean =>
   conditionFieldType(field) !== undefined &&
   (value === null || fieldValueMatches(value, field, "canonical"));
 
-const hasOwn = (value: Readonly<Record<string, unknown>>, key: string) =>
-  Object.prototype.hasOwnProperty.call(value, key);
-
 const sameKeys = (actual: readonly string[], expected: ReadonlySet<string>) =>
   actual.length === expected.size && actual.every((key) => expected.has(key));
 
@@ -215,7 +212,7 @@ export function evaluateTypedCondition(input: TypedConditionEvaluationInput): bo
     if (value.source === "parameter") {
       const key = String(value.key);
       const type = declaredParameterTypes.get(key);
-      if (!type || !hasOwn(safeInput.parameterValues, key)) refuse("parameter_refused");
+      if (!type || !Object.hasOwn(safeInput.parameterValues, key)) refuse("parameter_refused");
       const declaredType = type ?? refuse("parameter_refused");
       return { type: declaredType, value: safeInput.parameterValues[key] as JsonValue };
     }

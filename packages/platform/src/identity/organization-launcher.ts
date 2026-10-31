@@ -12,12 +12,9 @@ import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
+  type RuntimeTransactionRunner,
 } from "../db/request-transaction";
 import { describeFailure } from "../catalogue/runtime-primitives";
-
-type RuntimeTransactionRunner = <Result>(
-  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
-) => Promise<Result>;
 
 type LauncherRow = DatabaseRow & {
   organization_id: unknown;

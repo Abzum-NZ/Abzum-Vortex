@@ -11,6 +11,7 @@ import {
   type EventDispatcherRouteDependencies,
   type EventDispatcherTransactionRunner,
 } from "./dispatcher";
+import { exactRecord } from "./event-record-shapes";
 
 /**
  * The scheduled recovery source is a caller-supplied label only: it never
@@ -96,20 +97,6 @@ export type EventDispatcherWakeupDependencies = EventDispatcherRouteDependencies
   Readonly<{ backlog?: EventDispatcherBacklogReader }>;
 
 type BacklogRow = DatabaseRow & { readonly result: unknown };
-
-const exactRecord = <Key extends string>(
-  value: unknown,
-  keys: readonly Key[],
-): Readonly<Record<Key, unknown>> | undefined => {
-  const candidate = asRecord(value);
-  if (
-    candidate === undefined ||
-    Object.keys(candidate).length !== keys.length ||
-    keys.some((key) => !Object.hasOwn(candidate, key))
-  )
-    return undefined;
-  return candidate as Readonly<Record<Key, unknown>>;
-};
 
 const boundedInteger = (value: unknown, minimum: number, maximum: number): value is number =>
   Number.isSafeInteger(value) && (value as number) >= minimum && (value as number) <= maximum;

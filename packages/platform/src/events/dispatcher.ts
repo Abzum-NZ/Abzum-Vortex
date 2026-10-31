@@ -23,6 +23,7 @@ import {
   type EventDeliveryFailureClassification,
 } from "./delivery-recovery";
 import { asRecord } from "../catalogue/runtime-primitives";
+import { consumerKeyMatches, exactRecord } from "./event-record-shapes";
 
 export const eventDispatcherLimits = Object.freeze({
   /** Occurrences claimed by one dispatch across every selected consumer. */
@@ -208,27 +209,8 @@ export interface EventDispatcherRoute {
   handle(request: EventDispatchRouteRequest): Promise<EventDispatchRouteResponse>;
 }
 
-const consumerKeyMatches = (value: unknown): value is string =>
-  typeof value === "string" &&
-  value.length <= eventConsumerProgressLimits.maximumConsumerKeyLength &&
-  /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
-
 const integerWithin = (value: unknown, minimum: number, maximum: number): value is number =>
   Number.isSafeInteger(value) && (value as number) >= minimum && (value as number) <= maximum;
-
-const exactRecord = <Key extends string>(
-  value: unknown,
-  keys: readonly Key[],
-): Readonly<Record<Key, unknown>> | undefined => {
-  const candidate = asRecord(value);
-  if (
-    candidate === undefined ||
-    Object.keys(candidate).length !== keys.length ||
-    keys.some((key) => !Object.hasOwn(candidate, key))
-  )
-    return undefined;
-  return candidate as Readonly<Record<Key, unknown>>;
-};
 
 const failureClassificationMatches = (
   value: unknown,

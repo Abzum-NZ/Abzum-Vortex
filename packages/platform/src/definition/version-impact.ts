@@ -1,4 +1,5 @@
 import { definitionContractVersion } from "./application-contract-versions";
+import { inc } from "semver";
 import { z } from "zod";
 import {
   applicationDraftSchema,
@@ -298,6 +299,17 @@ export const definitionVersionImpactResultSchema = z.discriminatedUnion("outcome
 
 export type VersionImpact = z.infer<typeof versionImpactSchema>;
 export type VersionImpactReason = z.infer<typeof versionImpactReasonSchema>;
+
+/**
+ * The stable release version after one for an impact, using semver's own increment: a patch raises
+ * the patch, a minor raises the minor and clears the patch, a major raises the major and clears
+ * both. The stored version is validated before and after, so an unassignable version is refused.
+ */
+export const nextDefinitionVersion = (currentVersion: string, impact: VersionImpact): string => {
+  const next = inc(stableDefinitionReleaseVersionSchema.parse(currentVersion), impact);
+  if (next === null) throw new TypeError("STABLE_RELEASE_VERSION_UNASSIGNABLE");
+  return stableDefinitionReleaseVersionSchema.parse(next);
+};
 export type DefinitionVersionSubject = z.infer<typeof definitionVersionSubjectSchema>;
 export type DefinitionVersionImpactFailureCode = z.infer<
   typeof definitionVersionImpactFailureCodeSchema

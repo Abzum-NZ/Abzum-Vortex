@@ -89,9 +89,6 @@ export type CalculateRelationshipTotalSaveResult =
     }>
   | Readonly<{ success: false; issues: readonly RelationshipTotalCalculationIssue[] }>;
 
-const hasOwn = (value: object, key: string): boolean =>
-  Object.prototype.hasOwnProperty.call(value, key);
-
 const dependencyFieldIds = (candidate: unknown): readonly string[] => {
   const found = new Set<string>();
   const visit = (value: unknown): void => {
@@ -440,7 +437,7 @@ export const calculateLockedRelationshipTotalSave = (
           success: false,
           issues: evaluated.issues.map((value) => issue(node.recordKey, value)),
         };
-      if (hasOwn(evaluated.setValues, node.field.fieldId))
+      if (Object.hasOwn(evaluated.setValues, node.field.fieldId))
         values[node.field.fieldId] = evaluated.setValues[node.field.fieldId]!;
       else delete values[node.field.fieldId];
     } else {
@@ -460,7 +457,7 @@ export const calculateLockedRelationshipTotalSave = (
           success: false,
           issues: evaluated.issues.map((value) => issue(node.recordKey, value)),
         };
-      if (hasOwn(evaluated.setValues, node.field.fieldId))
+      if (Object.hasOwn(evaluated.setValues, node.field.fieldId))
         values[node.field.fieldId] = evaluated.setValues[node.field.fieldId]!;
       else delete values[node.field.fieldId];
     }
@@ -580,7 +577,7 @@ export const calculateLockedRelationshipTotalSave = (
     const finalValues: Record<string, JsonValue | null> = {};
     for (const field of derivedFields(record.recordType)) {
       const existingValue = record.existingValues[field.fieldId];
-      finalValues[field.fieldId] = hasOwn(result.setValues, field.fieldId)
+      finalValues[field.fieldId] = Object.hasOwn(result.setValues, field.fieldId)
         ? result.setValues[field.fieldId]!
         : result.clearFieldIds.includes(field.fieldId)
           ? null

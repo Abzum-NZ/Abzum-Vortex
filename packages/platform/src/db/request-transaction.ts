@@ -824,6 +824,11 @@ const defaultResolvedRequestRunner = createResolvedRequestTransactionRunner({
   },
 });
 
+/** Runs one operation in the current runtime transaction, or in a new one when none is owned. */
+export type RuntimeTransactionRunner = <Result>(
+  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
+) => Promise<Result>;
+
 export const withRuntimeTransaction = async <Result>(
   operation: RuntimeOperation<Result>,
   options?: Readonly<{ notifyRequestCommit?: () => boolean }>,
