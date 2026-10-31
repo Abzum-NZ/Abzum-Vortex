@@ -10,8 +10,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { BrandLoader, type LoaderMark } from "../display/brand-loader";
+import { motion, useReducedMotion } from "motion/react";
 import { readMotionTiming, type MotionTiming } from "./motion-tokens";
 import { markDocumentHydrated } from "./page-hold";
 
@@ -86,13 +85,10 @@ const pageMountId = (transitionKey: string, generation: number): string =>
 export function ContentTransition({
   transitionKey,
   busy = false,
-  loaderMark,
   children,
 }: Readonly<{
   transitionKey: string;
   busy?: boolean;
-  /** The theme release's resolved loader mark. */
-  loaderMark: LoaderMark;
   children: ReactNode;
 }>): ReactElement {
   const reducedMotion = useReducedMotion();
@@ -164,21 +160,6 @@ export function ContentTransition({
       {...(busy ? { "aria-busy": true, "data-vortex-page-transition": "" } : {})}
     >
       {busy ? <div data-vortex-page-progress="" aria-hidden /> : null}
-      <AnimatePresence>
-        {busy ? (
-          // Only a long wait shows the loader (its delay is in its stylesheet); it fades out with
-          // the leaving page when the next page swaps in.
-          <motion.div
-            key="loader"
-            className="pointer-events-none absolute inset-0 z-20"
-            initial={false}
-            exit={{ opacity: 0 }}
-            transition={swapOut ?? NO_MOTION}
-          >
-            <BrandLoader overlay mark={loaderMark} />
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
       {current.leaving === undefined ? null : (
         // The same key the page had while current, so the leaving page keeps its mounted tree.
         <motion.div

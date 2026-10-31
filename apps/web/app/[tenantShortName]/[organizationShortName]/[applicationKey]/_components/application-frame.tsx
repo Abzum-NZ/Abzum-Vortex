@@ -424,8 +424,7 @@ export function ApplicationFrame({
                   <ContentTransition
                     transitionKey={pathname}
                     busy={pageTransitionPending}
-                    loaderMark={model.theme.loaderMark}
-                  >
+                    >
                     <FrozenRouter>{children}</FrozenRouter>
                   </ContentTransition>
                 ),

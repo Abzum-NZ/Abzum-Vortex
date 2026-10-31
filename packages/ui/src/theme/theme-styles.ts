@@ -36,8 +36,6 @@ const SHARED_COMPONENT_STYLES_CSS = `
   --vortex-motion-page-swap-out-easing: cubic-bezier(0.4, 0, 1, 1);
   --vortex-motion-page-swap-in: 180ms; /* the entering page's fade and 4px rise */
   --vortex-motion-page-swap-in-easing: cubic-bezier(0.16, 1, 0.3, 1);
-  --vortex-motion-page-hold: 450ms; /* the longest a ready page waits for its primary data */
-  --vortex-motion-page-loader-delay: 1200ms; /* a wait this long shows the loader over the page */
   --vortex-motion-row-settle: 180ms; /* each first-appearing row's fade and 3px rise */
   --vortex-motion-row-settle-easing: cubic-bezier(0.16, 1, 0.3, 1);
   --vortex-motion-row-stagger: 13ms; /* the step between rows; the twentieth row and later share one */
@@ -177,26 +175,8 @@ const SHARED_COMPONENT_STYLES_CSS = `
   height: 0.125rem;
   overflow: hidden;
   pointer-events: none;
-  /* The loader takes over from the line once the wait reaches the loader delay. */
-  animation:
-    vortex-loading-reveal var(--vortex-motion-enter-exit) var(--vortex-motion-enter-exit-easing)
-      200ms both,
-    vortex-loading-conceal var(--vortex-motion-enter-exit) var(--vortex-motion-enter-exit-easing)
-      var(--vortex-motion-page-loader-delay) forwards;
-}
-
-@keyframes vortex-loading-conceal {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
-}
-
-/* A page that was held past the page hold shows its skeleton at once: the wait has been seen. */
-[data-vortex-page-held] [data-vortex-display-state="loading"] {
-  animation-delay: 0ms;
+  animation: vortex-loading-reveal var(--vortex-motion-enter-exit)
+    var(--vortex-motion-enter-exit-easing) 200ms both;
 }
 
 /*
