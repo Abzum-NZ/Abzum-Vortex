@@ -2,9 +2,7 @@ import type { ReactElement, ReactNode } from "react";
 import type { BlockPropertyValueContract, PlatformBlockRelease } from "@vortex/platform/schema";
 import { Alert, AlertDescription } from "../components/alert";
 import { Badge } from "../components/badge";
-import { Card, CardContent } from "../components/card";
 import { Empty, EmptyHeader, EmptyDescription } from "../components/empty";
-import { Skeleton } from "../components/skeleton";
 import type { DisplayDataState, DisplayRefusalReason } from "./projected-data";
 
 /** Safe, data-free presentation text for fixed refusal reasons. */
@@ -71,11 +69,12 @@ export type DisplayStateContainerProps<Values> = Readonly<{
 }>;
 
 /**
- * Standard container for display component states, rendered with the shadcn Card, Skeleton,
- * Empty, Alert and Badge parts. Loading, empty, awaiting, refused and error states render data-free text
- * (fixed, or authored for a block that declares it) announced at the component. A viewable
- * placement whose use is unavailable keeps its permitted content with a fixed unavailable note;
- * its components receive no semantic callbacks.
+ * Standard container for display component states, rendered with the shadcn Empty, Alert and
+ * Badge parts. A loading state renders no placeholder (the page stays until the block's data
+ * is ready); empty, awaiting, refused and error states render data-free text (fixed, or authored for
+ * a block that declares it) announced at the component. A viewable placement whose use is
+ * unavailable keeps its permitted content with a fixed unavailable note; its components receive no
+ * semantic callbacks.
  */
 export function DisplayStateContainer<Values>({
   accessibleName,
@@ -87,20 +86,16 @@ export function DisplayStateContainer<Values>({
   children,
 }: DisplayStateContainerProps<Values>): ReactElement {
   if (projectedData.status === "loading") {
+    // No placeholder renders: the page stays as it is until the block's data is ready. The status
+    // keeps the state identity and accessible name for assistive technology.
     return (
-      <Card
+      <span
         role="status"
         aria-busy="true"
         data-vortex-display-state="loading"
         aria-label={`Loading ${accessibleName}`}
-      >
-        <CardContent className="flex flex-col gap-[var(--vortex-space-sm)]">
-          <Skeleton className="h-4 w-2/5" />
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-4/5" />
-          <span className="text-sm text-muted-foreground">Loading…</span>
-        </CardContent>
-      </Card>
+        className="sr-only"
+      />
     );
   }
 

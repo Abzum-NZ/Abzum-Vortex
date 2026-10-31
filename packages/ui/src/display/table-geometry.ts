@@ -162,13 +162,6 @@ export const useBoundedGridViewport = <Element extends HTMLElement>(
   }, [scroll, bounded]);
 };
 
-/**
- * Rows a skeleton of a virtualized page draws: those that fill the bounded viewport on a tall
- * screen. The rest of the page is one spacer of their height, so the scroll range is the real one.
- */
-export const skeletonWindowRows = (density: RecordsTableDensity): number =>
-  Math.ceil(900 / GRID_ROW_HEIGHT[density]);
-
 const subscribeToMedia =
   (query: string) =>
   (notify: () => void): (() => void) => {
@@ -186,9 +179,9 @@ const unknownOnServer = (): undefined => undefined;
 /**
  * The presentation the table shows now: the grid, or the phone cards when the definition asks for
  * cards and the viewport is a phone's. While the server renders and the page hydrates the
- * viewport is unknown (`undefined`): the table draws its grid, which a phone hides behind the
- * declared skeleton until the cards replace it; nothing is read twice, because both presentations
- * show the same requested columns.
+ * viewport is unknown (`undefined`): the table draws its grid, which a phone hides until the cards
+ * replace it (no placeholder stands in); nothing is read twice, because both presentations show
+ * the same requested columns.
  */
 export const useTablePresentation = (
   contract: RecordsTableContract | undefined,

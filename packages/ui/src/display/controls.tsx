@@ -3,11 +3,9 @@
 import type { ReactElement } from "react";
 import Link from "next/link";
 import { Button } from "../components/button";
-import { Card, CardContent } from "../components/card";
 import { Checkbox } from "../components/checkbox";
 import { Empty, EmptyContent, EmptyHeader, EmptyTitle } from "../components/empty";
 import { Pagination, PaginationContent, PaginationItem } from "../components/pagination";
-import { Skeleton } from "../components/skeleton";
 import { Spinner } from "../components/spinner";
 import { usePendingGesture } from "../controls/pending-gesture";
 import { Icon } from "../icons/icon";
@@ -56,31 +54,6 @@ export function DisplayHeader({
         <DisplayRefreshButton accessibleName={accessibleName} refresh={refresh} />
       )}
     </div>
-  );
-}
-
-/**
- * The loading state of the Records table and lists: a data-free skeleton announced as a status at
- * the component, carrying the same state identity and accessible name the standard state container
- * gives a loading state.
- */
-export function RecordsLoadingState({
-  accessibleName,
-}: Readonly<{ accessibleName: string }>): ReactElement {
-  return (
-    <Card
-      role="status"
-      aria-busy="true"
-      data-vortex-display-state="loading"
-      aria-label={`Loading ${accessibleName}`}
-    >
-      <CardContent className="flex flex-col gap-[var(--vortex-space-sm)]">
-        <Skeleton className="h-4 w-1/3" />
-        <Skeleton className="h-8 w-full" />
-        <Skeleton className="h-8 w-full" />
-        <Skeleton className="h-8 w-full" />
-      </CardContent>
-    </Card>
   );
 }
 

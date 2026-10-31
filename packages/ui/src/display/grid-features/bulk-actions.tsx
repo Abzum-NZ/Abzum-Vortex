@@ -340,7 +340,6 @@ function SelectionBand({
       aria-live="polite"
       className="flex min-w-0 flex-1 items-center gap-[var(--vortex-space-sm)] text-sm text-foreground"
     >
-      {scope?.kind === "counting" ? <Spinner aria-hidden="true" /> : null}
       {body}
       {run?.status === "running" ? null : <span className="ms-auto">{clear}</span>}
     </div>

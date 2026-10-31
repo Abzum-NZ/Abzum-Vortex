@@ -5,7 +5,6 @@ import Link from "next/link";
 import { Alert, AlertDescription } from "../../components/alert";
 import { Button } from "../../components/button";
 import { Empty, EmptyHeader, EmptyTitle } from "../../components/empty";
-import { Skeleton } from "../../components/skeleton";
 import {
   Table,
   TableBody,
@@ -185,17 +184,8 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
   };
 
   if (state.kind === "loading")
-    return (
-      <div
-        role="status"
-        aria-label="Reading related records"
-        className="flex flex-col gap-[var(--vortex-space-sm)] py-1"
-      >
-        {Array.from({ length: Math.min(pageSize, 5) }, (_, index) => (
-          <Skeleton key={index} className="h-5 w-full" />
-        ))}
-      </div>
-    );
+    // No placeholder renders while the related records are read: the row stays as it is.
+    return <span role="status" aria-label="Reading related records" className="sr-only" />;
   if (state.kind === "refused")
     return (
       <p role="status" className="m-0 py-1 text-sm text-muted-foreground">

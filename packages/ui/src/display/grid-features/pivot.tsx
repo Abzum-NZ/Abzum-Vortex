@@ -5,7 +5,6 @@ import { recordsTablePivotFeature, type PivotPage, type PivotReply } from "@vort
 import { Alert, AlertDescription } from "../../components/alert";
 import { Button } from "../../components/button";
 import { Empty, EmptyHeader, EmptyTitle } from "../../components/empty";
-import { Skeleton } from "../../components/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "../../components/toggle-group";
 import {
   Table,
@@ -167,17 +166,8 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
 
   if (!open || settings === undefined) return null;
   if (state.kind === "loading")
-    return (
-      <div
-        role="status"
-        aria-label="Reading the pivot"
-        className="flex flex-col gap-[var(--vortex-space-sm)] py-1"
-      >
-        {Array.from({ length: 6 }, (_, index) => (
-          <Skeleton key={index} className="h-6 w-full" />
-        ))}
-      </div>
-    );
+    // No placeholder renders while the pivot is read: the table stays as it is.
+    return <span role="status" aria-label="Reading the pivot" className="sr-only" />;
   if (state.kind === "refused")
     return (
       <Alert role="status">

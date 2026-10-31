@@ -53,7 +53,6 @@ import { columnWidth, useTablePresentation } from "./table-geometry";
 import { TableSummary, TableTotals } from "./table-totals";
 import { RecordsGrid, type GridRenderers } from "./table-grid";
 import { useGridLayout, type GridColumn } from "./table-layout";
-import { TableLoadingState, useLoadingReveal } from "./table-loading";
 
 const RecordsCards = lazy(async () => ({ default: (await import("./table-cards")).RecordsCards }));
 // Group headers load only for a grouped grid; a plain grid ships none of their code.
@@ -537,8 +536,6 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
     announce,
   ]);
 
-  const revealed = useLoadingReveal(state.status === "loading");
-
   if (contract === undefined) {
     console.error("[display] Records table settings do not declare a readable contract", {
       placementId,
@@ -640,14 +637,15 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
     for (const filter of narrowing?.filters ?? [])
       void events?.filter_changed?.({ event: "filter_changed", field: filter.fieldId, value: "" });
   };
+  // A block that is still reading renders no placeholder: the page stays as it is until rows are
+  // ready. The status keeps the state identity and accessible name for assistive technology.
   const loading = (
-    <TableLoadingState
-      accessibleName={accessibleName}
-      contract={contract}
-      density={layout.density}
-      presentation={presentation ?? "grid"}
-      selectionColumn={selectable}
-      actionsColumn={showActions}
+    <span
+      role="status"
+      aria-busy="true"
+      data-vortex-display-state="loading"
+      aria-label={`Loading ${accessibleName}`}
+      className="sr-only"
     />
   );
 
@@ -694,7 +692,6 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
                       placementId={placementId}
                       accessibleName={accessibleName}
                       grouped={grouped}
-                      loading={loading}
                       members={() => members}
                       columns={layout.shown}
                       cells={cells}
@@ -820,7 +817,6 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
               placementId={placementId}
               accessibleName={accessibleName}
               grouped={grouped}
-              loading={loading}
               members={membersView}
               columns={layout.shown}
             />
@@ -852,7 +848,6 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
           data-vortex-table-presentation={presentation ?? "pending"}
           {...(fullScreen.active ? { "data-vortex-full-screen": "" } : {})}
           className={cn(fullScreen.active && FULL_SCREEN_CLASS)}
-          {...(revealed ? { "data-vortex-display-revealed": "" } : {})}
         >
           <DisplayHeader title={title} accessibleName={accessibleName} events={undefined} />
           {purpose === undefined ? null : (
@@ -883,9 +878,9 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
           </div>
           {subRowsOpen === undefined ? null : gridFeatures.subRowsController(subRowsOpen)}
           {/* While the server renders and the page hydrates the viewport is unknown: the body is
-              drawn as the grid a wide screen shows, so its rows are painted from the first HTML,
-              and a phone shows the declared skeleton in its place (the phone layout rule) until
-              its cards are drawn. The body keeps one element, so a wide screen keeps its grid. */}
+              drawn as the grid a wide screen shows, so its rows are painted from the first HTML.
+              The body keeps one element, so a wide screen keeps its grid; a phone draws no
+              placeholder and shows its cards when they are ready. */}
           <div data-vortex-table-body="" className="contents">
             {ready && availability === "unavailable" ? (
               <DisplayStateContainer
@@ -900,11 +895,6 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
               body
             )}
           </div>
-          {presentation === undefined ? (
-            <div data-vortex-table-phone-skeleton="" className="contents">
-              {loading}
-            </div>
-          ) : null}
           {ready &&
           !pivotOpen &&
           values?.totals !== undefined &&

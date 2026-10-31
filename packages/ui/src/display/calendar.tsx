@@ -15,7 +15,7 @@ import {
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "../components/button";
 import { Card, CardContent, CardDescription, CardHeader } from "../components/card";
-import { DisplayHeader, RecordsEmptyState, RecordsLoadingState } from "./controls";
+import { DisplayHeader, RecordsEmptyState } from "./controls";
 import { resolveDisplayContext, rowActionEventIdOf, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
 import { formatIsoDate } from "./date-format";
@@ -136,7 +136,8 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
     router.replace(query === "" ? pathname : `${pathname}?${query}`);
   };
 
-  if (state.status === "loading") return <RecordsLoadingState accessibleName={accessibleName} />;
+  // No placeholder renders while the calendar reads: the page stays as it is.
+  if (state.status === "loading") return null;
   if (state.status === "empty")
     return <RecordsEmptyState accessibleName={accessibleName} message={emptyMessage} />;
 

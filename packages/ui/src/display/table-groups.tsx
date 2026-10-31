@@ -27,7 +27,6 @@ export function GroupedBody({
   placementId,
   accessibleName,
   grouped,
-  loading,
   members,
   columns,
   cells,
@@ -36,8 +35,6 @@ export function GroupedBody({
   placementId: string;
   accessibleName: string;
   grouped: GroupedTable;
-  /** The skeleton the open group shows while its first page is read, sized to the page. */
-  loading: ReactNode;
   /** Draws a page of the open group's rows. */
   members: () => ReactNode;
   columns: readonly Readonly<{ key: string; label: string }>[];
@@ -84,10 +81,9 @@ export function GroupedBody({
           open={expanded === group.key}
           onToggle={() => grouped.toggle(group.key)}
         >
-          {state === undefined || memberKey(state) !== group.key ? null : state.status ===
-            "loading" ? (
-            loading
-          ) : state.status === "ready" ? (
+          {state === undefined ||
+          memberKey(state) !== group.key ||
+          state.status === "loading" ? null : state.status === "ready" ? (
             <div
               className={cn(
                 "flex flex-col gap-[var(--vortex-space-sm)]",

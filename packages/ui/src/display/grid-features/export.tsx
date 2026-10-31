@@ -16,7 +16,6 @@ import {
   DropdownMenuTrigger,
 } from "../../components/dropdown-menu";
 import { toast } from "../../components/sonner";
-import { Spinner } from "../../components/spinner";
 import { Icon } from "../../icons/icon";
 import type { DisplayTableExportRun, DisplayTableExportScope } from "../projected-data";
 import { formatBytes, formatCount, recordsPhrase } from "../date-format";
@@ -108,7 +107,6 @@ function ExportToolbarItems({ context }: GridFeaturePointProps): ReactElement | 
         aria-live="polite"
         className="flex items-center gap-[var(--vortex-space-sm)] text-sm"
       >
-        <Spinner aria-hidden="true" />
         <span>
           Exporting{run.expected === undefined ? "" : ` ${recordsPhrase(run.expected)}`}…{" "}
           {formatBytes(run.bytes)} received
