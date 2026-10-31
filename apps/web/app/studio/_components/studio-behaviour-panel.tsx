@@ -227,7 +227,8 @@ function BehaviourEvent({
                     label: candidate.labels.name ?? candidate.key,
                   }))}
                   onChange={(value) => {
-                    if (value !== "") run((current) => applyStudioRebind(current, binding.id, value));
+                    if (value !== "")
+                      run((current) => applyStudioRebind(current, binding.id, value));
                   }}
                 />
               </Label>
