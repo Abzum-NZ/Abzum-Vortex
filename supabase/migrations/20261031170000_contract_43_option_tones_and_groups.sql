@@ -125,11 +125,14 @@ begin
           case when item.value ->> 'key' = stage_field then (
             select pg_catalog.jsonb_set(item.value, '{settings,options}', coalesce((
               select pg_catalog.jsonb_agg(
-                case when option.value ->> 'value' = moved.value ->> 'option'
-                  and not (option.value ? 'tone')
-                  and moved.value ? 'tone'
-                  then pg_catalog.jsonb_set(option.value, '{tone}',
-                    pg_catalog.to_jsonb(moved.value ->> 'tone'))
+                case when not (option.value ? 'tone') and exists (
+                    select 1 from pg_catalog.jsonb_array_elements(pipeline -> 'stages') as moved(value)
+                    where moved.value ->> 'option' = option.value ->> 'value' and moved.value ? 'tone')
+                  then pg_catalog.jsonb_set(option.value, '{tone}', pg_catalog.to_jsonb(((
+                    select moved.value ->> 'tone'
+                    from pg_catalog.jsonb_array_elements(pipeline -> 'stages') as moved(value)
+                    where moved.value ->> 'option' = option.value ->> 'value' and moved.value ? 'tone'
+                    limit 1))))
                   else option.value end
                 order by option.ordinality)
               from pg_catalog.jsonb_array_elements(
