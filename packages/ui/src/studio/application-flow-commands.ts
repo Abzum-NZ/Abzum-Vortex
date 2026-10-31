@@ -725,6 +725,48 @@ const uniqueTaskId = (type: string, used: Set<string>): string => {
   return candidate;
 };
 
+/**
+ * The visible step before a form's save that stops with "No changes to save." when the form's
+ * answers carry no change: the same steps the default Save flow has, shown inline under the form
+ * the flow runs from (a dialog when the flow has none).
+ */
+const noChangeGuard = (
+  flow: SourceFlow,
+  source: Readonly<ApplicationSourceDocument>,
+  context: StudioFlowContext,
+  used: Set<string>,
+): SourceFlowTask[] => {
+  const form = projectStudioFlowDraftChoices({
+    ...context,
+    source: source as ApplicationSourceDocument,
+    flow,
+  }).forms.at(0);
+  return [
+    {
+      id: uniqueTaskId("unchanged", used),
+      type: "if",
+      condition: {
+        op: "is_empty",
+        arg: { op: "reference", reference: { source: "input", name: "values" } },
+      },
+      then: [
+        {
+          id: uniqueTaskId("none_changed", used),
+          type: "interface.show_message",
+          version: "1.0.0",
+          properties: {
+            message: text("No changes to save."),
+            target: text(form === undefined ? "dialog" : "inline"),
+            severity: text("info"),
+            ...(form === undefined ? {} : { component: text(form.alias) }),
+          },
+        },
+        { id: uniqueTaskId("stop_unchanged", used), type: "stop", outcome: "no_changes" },
+      ],
+    },
+  ] as unknown as SourceFlowTask[];
+};
+
 /** A new step of a type, with required decisions made explicitly by the author. */
 const newStep = (
   flow: SourceFlow,
@@ -1127,7 +1169,14 @@ export const applyStudioFlowCommand = (
         inputs.settings,
       );
       if ("kind" in task && !("id" in task)) return task;
-      target.splice(command.index, 0, task as SourceFlowTask);
+      // Saving the changes of a form's record starts by saying so when nothing changed.
+      const guard =
+        command.taskType === "record.save" &&
+        original.flow.inputs?.values?.type === "json" &&
+        flowRecordInput(original.flow) !== undefined
+          ? noChangeGuard(original.flow, inputs.source, current, used)
+          : [];
+      target.splice(command.index, 0, ...guard, task as SourceFlowTask);
       return done((task as SourceFlowTask).id);
     }
 

@@ -627,6 +627,11 @@ export const createFlowTaskRunner = (
         expected,
       );
       if ("outcome" in subject) return subject;
+      // Saving no change is not an error: nothing is committed and the flow goes on.
+      if (Object.keys(submittedValues).length === 0)
+        return {
+          plan: { kind: "changes", commandId, intents: [], outputs: { record: recordId.data } },
+        };
       const command = saveRecordCommandSchema.safeParse({
         contractVersion: "2.0.0",
         commandId,
