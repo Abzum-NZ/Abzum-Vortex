@@ -11,7 +11,6 @@ import {
 } from "@vortex/ui/components/dialog";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import { RadioGroup, RadioGroupItem } from "@vortex/ui/components/radio-group";
 import { Textarea } from "@vortex/ui/components/textarea";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
@@ -20,6 +19,7 @@ import {
   studioFlowEventTitle,
   type StudioFlowCreateChoices,
   type StudioFlowCreateCommand,
+  StudioOptionControl,
 } from "@vortex/ui/studio";
 
 /**
@@ -159,24 +159,19 @@ export function StudioNewFlowDialog({
           </DialogHeader>
           <div className="space-y-1.5">
             <Label htmlFor="new-flow-existing">Workflow</Label>
-            <NativeSelect
+            <StudioOptionControl
               id="new-flow-existing"
-              className="w-full"
               value={flowKey}
-              onChange={(event) => {
-                setFlowKey(event.target.value);
+              disabled={false}
+              unset="Create a new flow"
+              options={source.body.flows
+                .filter((flow) => flow.execution === "interactive")
+                .map((flow) => ({ value: flow.key, label: flow.labels?.name ?? flow.key }))}
+              onChange={(value) => {
+                setFlowKey(value);
                 setMapping({});
               }}
-            >
-              <NativeSelectOption value="">Create a new flow</NativeSelectOption>
-              {source.body.flows
-                .filter((flow) => flow.execution === "interactive")
-                .map((flow) => (
-                  <NativeSelectOption key={flow.key} value={flow.key}>
-                    {flow.labels?.name ?? flow.key}
-                  </NativeSelectOption>
-                ))}
-            </NativeSelect>
+            />
           </div>
           {existingFlow === undefined && (
             <div className="space-y-1.5">
@@ -197,43 +192,39 @@ export function StudioNewFlowDialog({
                 Every supported control event already runs a flow. Add a control to a page first.
               </p>
             ) : (
-              <NativeSelect
+              <StudioOptionControl
                 id="new-flow-control"
-                className="w-full"
                 value={control}
-                onChange={(event) => {
-                  setControl(event.target.value);
+                disabled={false}
+                unset="Choose a control…"
+                options={controls.map((entry) => ({
+                  value: entry.controlAlias,
+                  label: entry.label,
+                }))}
+                onChange={(value) => {
+                  setControl(value);
                   setEventKind("");
                   setMapping({});
                 }}
-              >
-                <NativeSelectOption value="">Choose a control…</NativeSelectOption>
-                {controls.map((entry) => (
-                  <NativeSelectOption key={entry.controlAlias} value={entry.controlAlias}>
-                    {entry.label}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              />
             )}
           </div>
           {chosen !== undefined && (
             <div className="space-y-1.5">
               <Label htmlFor="new-flow-event">Event</Label>
-              <NativeSelect
+              <StudioOptionControl
                 id="new-flow-event"
-                className="w-full"
                 value={chosen.event}
-                onChange={(event) => {
-                  setEventKind(event.target.value);
+                disabled={false}
+                options={events.map((entry) => ({
+                  value: entry.event,
+                  label: studioFlowEventTitle(entry.event),
+                }))}
+                onChange={(value) => {
+                  setEventKind(value);
                   setMapping({});
                 }}
-              >
-                {events.map((entry) => (
-                  <NativeSelectOption key={entry.event} value={entry.event}>
-                    {studioFlowEventTitle(entry.event)}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              />
             </div>
           )}
           {chosen?.rowActionMenu === true && (
@@ -283,20 +274,18 @@ export function StudioNewFlowDialog({
                     a message.
                   </p>
                 ) : (
-                  <NativeSelect
+                  <StudioOptionControl
                     id="new-flow-operation"
                     aria-label="Operation"
-                    className="w-full"
                     value={operation}
-                    onChange={(event) => setOperation(event.target.value)}
-                  >
-                    <NativeSelectOption value="">Choose an operation…</NativeSelectOption>
-                    {choices.operations.map((entry) => (
-                      <NativeSelectOption key={entry.key} value={entry.key}>
-                        {entry.label}
-                      </NativeSelectOption>
-                    ))}
-                  </NativeSelect>
+                    disabled={false}
+                    unset="Choose an operation…"
+                    options={choices.operations.map((entry) => ({
+                      value: entry.key,
+                      label: entry.label,
+                    }))}
+                    onChange={setOperation}
+                  />
                 ))}
               {what === "message" && (
                 <Textarea
@@ -315,19 +304,17 @@ export function StudioNewFlowDialog({
                   {input.replaceAll("_", " ")}
                   {declaration.required ? " (required)" : ""}
                 </Label>
-                <NativeSelect
+                <StudioOptionControl
                   id={`new-flow-input-${input}`}
-                  className="w-full"
                   value={suppliedFor(input)}
-                  onChange={(event) => setMapping({ ...mapping, [input]: event.target.value })}
-                >
-                  <NativeSelectOption value="">Not supplied</NativeSelectOption>
-                  {chosen?.callerNames.map((entry) => (
-                    <NativeSelectOption key={entry.name} value={entry.name}>
-                      {entry.label}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                  disabled={false}
+                  unset="Not supplied"
+                  options={(chosen?.callerNames ?? []).map((entry) => ({
+                    value: entry.name,
+                    label: entry.label,
+                  }))}
+                  onChange={(value) => setMapping({ ...mapping, [input]: value })}
+                />
               </div>
             ))}
           {problem === "" ? null : (

@@ -3,8 +3,7 @@ import { useState } from "react";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
-import { StudioInspectorGroup } from "@vortex/ui/studio";
+import { StudioInspectorGroup, StudioOptionControl } from "@vortex/ui/studio";
 
 type Plain = Readonly<Record<string, unknown>>;
 type Input = Readonly<{ key: string; label: string; required: boolean }>;
@@ -98,60 +97,45 @@ export function StudioOptionsSourceEditor({
     <StudioInspectorGroup title="Where the options come from">
       <Label className="flex flex-col items-start gap-1 text-xs">
         Options source
-        <NativeSelect
+        <StudioOptionControl
           value={kind}
           disabled={disabled}
-          onChange={(event) => {
-            setKind(event.target.value as Kind);
+          options={kinds.map((entry) => ({ value: entry.kind, label: entry.label }))}
+          onChange={(value) => {
+            setKind(value as Kind);
             setProblem("");
           }}
-        >
-          {kinds.map((entry) => (
-            <NativeSelectOption key={entry.kind} value={entry.kind}>
-              {entry.label}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
+        />
       </Label>
       {kind === "query" && (
         <Label className="flex flex-col items-start gap-1 text-xs">
           Query
-          <NativeSelect
+          <StudioOptionControl
             value={query}
             disabled={disabled}
-            onChange={(event) => {
-              setQuery(event.target.value);
+            unset="Choose a query…"
+            options={queries.map((entry) => ({ value: entry.reference, label: entry.label }))}
+            onChange={(value) => {
+              setQuery(value);
               setInputs({});
             }}
-          >
-            <NativeSelectOption value="">Choose a query…</NativeSelectOption>
-            {queries.map((entry) => (
-              <NativeSelectOption key={entry.reference} value={entry.reference}>
-                {entry.label}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+          />
         </Label>
       )}
       {kind === "flow" && (
         <>
           <Label className="flex flex-col items-start gap-1 text-xs">
             Options flow
-            <NativeSelect
+            <StudioOptionControl
               value={flow}
               disabled={disabled}
-              onChange={(event) => {
-                setFlow(event.target.value);
+              unset="Choose a flow…"
+              options={flows.map((entry) => ({ value: entry.alias, label: entry.label }))}
+              onChange={(value) => {
+                setFlow(value);
                 setInputs({});
               }}
-            >
-              <NativeSelectOption value="">Choose a flow…</NativeSelectOption>
-              {flows.map((entry) => (
-                <NativeSelectOption key={entry.alias} value={entry.alias}>
-                  {entry.label}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+            />
           </Label>
           <Label className="flex flex-col items-start gap-1 text-xs">
             New options flow
@@ -180,20 +164,13 @@ export function StudioOptionsSourceEditor({
       {needed.map((input) => (
         <Label key={input.key} className="flex flex-col items-start gap-1 text-xs">
           {input.label} is filled by
-          <NativeSelect
+          <StudioOptionControl
             value={inputs[input.key] ?? ""}
             disabled={disabled}
-            onChange={(event) => setInputs({ ...inputs, [input.key]: event.target.value })}
-          >
-            <NativeSelectOption value="">
-              {input.required ? "Choose a field…" : "Nothing"}
-            </NativeSelectOption>
-            {fields.map((field) => (
-              <NativeSelectOption key={field.key} value={field.key}>
-                {field.label}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+            unset={input.required ? "Choose a field…" : "Nothing"}
+            options={fields.map((field) => ({ value: field.key, label: field.label }))}
+            onChange={(value) => setInputs({ ...inputs, [input.key]: value })}
+          />
         </Label>
       ))}
       <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={apply}>

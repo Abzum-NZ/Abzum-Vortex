@@ -378,7 +378,7 @@ function BindingSettings({
             disabled={disabled}
             options={flowBindingConcurrencySchema.options.map((option) => ({
               value: option,
-              label: concurrencyWords[option],
+              label: concurrencyWords[option] ?? option,
             }))}
             onChange={(value) => {
               const parsed = flowBindingConcurrencySchema.safeParse(value);
@@ -393,7 +393,7 @@ function BindingSettings({
             disabled={disabled}
             options={flowBindingExclusiveScopeSchema.options.map((option) => ({
               value: option,
-              label: exclusiveWords[option],
+              label: exclusiveWords[option] ?? option,
             }))}
             onChange={(value) => {
               const parsed = flowBindingExclusiveScopeSchema.safeParse(value);
