@@ -40,6 +40,10 @@ Alerts are actionable and name an owner and runbook. Organisation separation, cr
 
 Incident records contain timeline, scope, affected organisations, containment, recovery, evidence, communication, cause, follow-up work, and verification. Customer communication follows the applicable contractual and legal requirements.
 
+## Scheduled maintenance
+
+`POST /api/runtime-bundles/cleanup` deletes superseded runtime bundles, expires preview installations and their retired preview storage, and removes abandoned uploads; it keeps this path because external schedulers call it. The operations scheduler calls it daily with concurrency one, holding only the protected route credential and never a database credential. The same run reclaims at most 25 expired, never-activated attachment uploads, including clean inspections awaiting Save and rejected content; failed cleanup keeps its claims and retries after five minutes. Provision the flow and route credential in every environment that accepts uploads.
+
 ## Backup
 
 Backups cover the production [PostgreSQL](https://www.postgresql.org/docs/) database, file manifests and bytes, published definitions, flow state, configuration needed to rebuild services, and privacy-removal receipts.

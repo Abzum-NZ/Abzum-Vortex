@@ -78,6 +78,8 @@ The source verifies the complete streamed byte count and SHA-256 against the can
 
 Export uses one [query](10-queries-reports-search.md), current [access](04-access-and-permissions.md), selected fields, declared format and row limit. CSV and Excel are formats of the same bounded download stream, with no retained server file. Sensitive-field export requires explicit permission and is recorded.
 
+<a id="grid-export-csv"></a>
+
 ### Grid export (CSV and Excel)
 
 A Data grid offers **Export** only when its table turns the feature on (`features.export { enabled, formats: ["csv", "xlsx"], max_rows }`, off by default) and the viewer holds the record type's standard export permission over every record. Publication and Studio run the same check: “Available”, “Not possible - Export needs the export action on {Record type}”, or “Not possible - Excel export needs a row limit of at most 100,000” when Excel is offered (the authored default is 10,000). The grid projects the control per viewer on every read; the route decides the feature, the permission, the placement and the release again on every request, so a disabled feature or a removed permission is refused even for a hand-made request.

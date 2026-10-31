@@ -36,6 +36,8 @@ A flow is executed by the one interpreter. `interactive` flows run in the page; 
 runs inside one record save; a `background` flow runs after the request commits. A `transaction` flow
 may use only pure steps, reads under the saver's authority and changes to the record being saved.
 
+<a id="pages-compose-flows-define-actions"></a>
+
 ## Pages compose flows; bindings define actions
 
 A flow holds behaviour; a page holds composition. A component placement binds each semantic event it

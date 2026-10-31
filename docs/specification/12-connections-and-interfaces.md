@@ -6,7 +6,7 @@
 
 A **connection** lets an organisation call or receive messages from another system. Connections are
 platform catalogue data plus organisation-owned instances; there is no customer-authored interface
-language, remote MCP server or cluster federation interface.
+language.
 
 ```mermaid
 flowchart LR

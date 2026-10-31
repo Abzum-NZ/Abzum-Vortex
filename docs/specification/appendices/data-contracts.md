@@ -1,6 +1,6 @@
 # Data contracts
 
-[Specification index](../README.md) · [Glossary](glossary.md) · [Decision register](decisions.md)
+[Specification index](../README.md) ? [Glossary](glossary.md)
 
 These contracts name the information that must exist. They do not prescribe a database library or generated code structure. A value described as an identifier is an opaque platform-issued value; callers must not derive meaning from its characters.
 
@@ -192,7 +192,7 @@ The Group's organisation, identity and key remain permanent; its display label m
 
 The private stored record contains `invitation_id`, organisation, lower-cased and trimmed invited email, a unique `sha256:` fingerprint of a 32-byte random secret, inviter organisation account, creation/invitation/expiry times, optional revocation time and revoker account, optional acceptance time and accepted account, last-change time, and positive revision. The invitation carries no role or Group assignment; that is a separate authorised assignment transaction. The safe read contract omits the fingerprint. The raw secret appears only once in the successful trusted creation result and is absent from storage, fixtures, logs, errors, and durable evidence. Expiry is evaluated from database time for first acceptance rather than maintained by a background state-change job. A later exact replay by the accepting identity may return the same still-active account without mutating the invitation or account, even after that first-use expiry; every other reuse remains unavailable.
 
-Invitations with intended access add a separate, nonempty immutable intent keyed by the invitation, not fields copied into the Identity invitation or an editable approval record. It names exact new Group memberships and direct-account role assignments, including their fixed windows and reviewed role revisions. The accepted account comes from verified Identity acceptance, never from an invitation form's account identifier. Intended access changes require revoking and reissuing the invitation. The [protected invitation journey](iam-application.md#grant-and-approval-workflow) uses one private create-with-intent composition that calls the existing Identity invitation creator and stores the intent in the same transaction. Only after that transaction commits may the secret be returned. There is no operation for attaching intent to a previously issued invitation. Creating intent alone grants nothing and does not change Access version.
+Invitations with intended access add a separate, nonempty immutable intent keyed by the invitation, not fields copied into the Identity invitation or an editable approval record. It names exact new Group memberships and direct-account role assignments, including their fixed windows and reviewed role revisions. The accepted account comes from verified Identity acceptance, never from an invitation form's account identifier. Intended access changes require revoking and reissuing the invitation. The [protected invitation journey](iam-application.md#actions) uses one private create-with-intent composition that calls the existing Identity invitation creator and stores the intent in the same transaction. Only after that transaction commits may the secret be returned. There is no operation for attaching intent to a previously issued invitation. Creating intent alone grants nothing and does not change Access version.
 
 The existing account-only acceptance path must refuse an unaccepted invitation carrying intent before changing Identity state. It cannot silently omit the intended grants or execute them using its existing runtime privileges. [Access #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) provides a separate private composition that rechecks current Group, role revision, assignment kind and fixed windows, accepts the invitation and writes all intended memberships/assignments with one Access-version change in the same transaction. Failure changes none of them. Genuinely account-only invitations retain their existing behaviour. Exact replay after successful intent acceptance returns the original linkage without recreating subsequently removed access.
 
@@ -221,7 +221,7 @@ Only the human context gains the optional verified confirmation times from [#276
 
 The optional application value is the permanent application-root identifier. It is absent only when the operation legitimately occurs before application selection or belongs to an explicitly application-independent platform path. Its absence never means every application: an application-contained database policy, cache key, operation, page or interface refuses a context without the exact application root.
 
-The Phase 2 organisation launcher establishes an application-independent context and therefore carries no application identifier. [Central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) extends the same request boundary with an optional untrusted `applicationRootId` alongside the `organizationId` candidate. The trusted server supplies the verified Identity session and configured Identity Authority identifier; Identity resolves the exact active tenant, organisation and organisation account, and Access composes their current positive version. When an application is selected, the private application resolver first reuses that organisation resolution, then verifies the exact active application registration in the same organisation under its existing Access lock. The returned root must match the candidate before context initialization. Missing, foreign or withdrawn registrations refuse without revealing which case occurred. This establishes application scope, not application-use permission: the central decision must still authorize the declared operation. Downstream [runtime bindings #250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) consume this handoff; it does not depend on their page or installation interface.
+The organisation launcher establishes an application-independent context and therefore carries no application identifier. [Central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) extends the same request boundary with an optional untrusted `applicationRootId` alongside the `organizationId` candidate. The trusted server supplies the verified Identity session and configured Identity Authority identifier; Identity resolves the exact active tenant, organisation and organisation account, and Access composes their current positive version. When an application is selected, the private application resolver first reuses that organisation resolution, then verifies the exact active application registration in the same organisation under its existing Access lock. The returned root must match the candidate before context initialization. Missing, foreign or withdrawn registrations refuse without revealing which case occurred. This establishes application scope, not application-use permission: the central decision must still authorize the declared operation. Downstream [runtime bindings #250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) consume this handoff; it does not depend on their page or installation interface.
 
 The human organisation resolver, context initialization, the request-role switch, live context validation and protected operation execute in one database transaction. The resolver keeps shared locks on the selected Identity and Access scope rows until that transaction ends. The database preserves the complete union as one owner-only row bound to the establishing transaction; it cannot be replaced, re-established or cleared by the request role or the runtime login within that transaction, and no session setting carries it. Structural validation and setting that value do not grant authority. The trusted server begins the transaction as `vortex_runtime`, executes the initializer available only to that role, and then enters `vortex_request` with a transaction-local `set_config('role', 'vortex_request', true)` in the same statement; only the request role may call the read-only context accessors and Access-owned live-context validator used by protected service SQL. The request role has no Identity schema access. Commit, rollback or pooled connection reuse cannot carry the role or value into another transaction.
 
@@ -453,12 +453,7 @@ private target, permission or grant details. No random decision identity, export
 grant-witness set, independent state or reusable capability is introduced.
 
 The initial declaration supports only organisation/application targets without
-record-level policy. Record types, fields, sharing, public callers and remote policy
-cannot be smuggled in as extra fields or treated as implemented. Their required
-policies refuse until their owning tasks extend the same boundary. Contract tests
-prove shape and separation, not effective permission, database execution or a usable
-interface. The [#34 implementation plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34)
-defines the remaining evaluation, integration and verification work.
+record-level policy. Record types, fields, public callers and remote policy cannot be smuggled in as extra fields or treated as implemented. Their required policies refuse until their owning tasks extend the same boundary. The [#34 implementation plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) defines the remaining evaluation and integration work.
 
 The [record-access extension #35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35)
 adds a separate trusted record declaration with exact application, module, record
@@ -666,19 +661,13 @@ An immutable release stores the complete authored source, full canonical compila
 
 ### Definition consumer-read contract
 
-The exported [`definitionConsumerReadCommandSchema`](../../../packages/platform/src/definition/definition-consumer-read.ts) is a strict discriminated command:
+The exported [`applicationBoundReleaseSetCommandSchema`](../../../packages/platform/src/definition/definition-consumer-read.ts) is a strict command containing only `applicationReleaseRevision`, a JavaScript-safe positive integer. The protected system consumer uses `systemApplicationBoundReleaseSetCommandSchema`, which adds the exact `applicationRootId`.
 
-| Field      | Rule                                                                                                                                     |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `kind`     | Exactly `module` or `application`.                                                                                                       |
-| `rootId`   | The matching permanent Module or Application root identifier.                                                                            |
-| `selector` | Exactly `{ selection: current }` or `{ selection: revision, releaseRevision }`; an exact revision is a JavaScript-safe positive integer. |
+The exported result is a strict bound release set: the Application projection plus one exact Module projection per Module root. The human Application-bound result requires at least one Module; the system variant allows an Application with no Module dependencies. Each projection contains only `kind`, `organizationId`, `definitionKey`, `rootId`, `releaseRevision`, stable `releaseVersion`, `validationContractVersion` (contract `4.3.0`), `contentFingerprint`, `resolutionFingerprint`, complete canonical `content`, sorted complete `dependencyManifest` and `correlationId`; the Application projection also carries `platformCompatibilityVersion`. The manifest uses one exact dependency entry per Module, connection type or platform theme, in deterministic subject order. A connection-type or platform-theme `catalogueFingerprint` authenticates that exact immutable catalogue release rather than the catalogue as a whole; unrelated catalogue additions therefore do not change existing dependency evidence.
 
-The exported result is a strict kind-discriminated safe projection containing only `kind`, `organizationId`, `definitionKey`, `rootId`, `releaseRevision`, stable `releaseVersion`, `validationContractVersion`, `contentFingerprint`, `resolutionFingerprint`, complete canonical `content`, sorted complete `dependencyManifest`, and `correlationId`. The manifest uses one exact dependency entry per Module, connection type or platform theme, in deterministic subject order. A connection-type or platform-theme `catalogueFingerprint` authenticates that exact immutable catalogue release rather than the catalogue as a whole; unrelated catalogue additions therefore do not change existing dependency evidence.
+It contains no authored source or source fingerprint, draft or pointer state, compilation output or artifact, provenance, resolution-snapshot content, comparison evidence, release note, publisher, time, cache metadata, database relation, row, query or credential. A consumer cannot request a draft, pass a version range, select a dependency indirectly, or widen the set.
 
-It contains no authored source or source fingerprint, draft or pointer state, compilation output or artifact, provenance, resolution-snapshot content, comparison evidence, release note, publisher, time, cache metadata, database relation, row, query, or credential. A consumer cannot request a draft, omit the selector, pass a version range, or select a dependency indirectly.
-
-The Definition service receives the request only through a verified server request context. It returns release-not-found for unknown, foreign, wrong-kind, unpublished-current and unknown-exact selections; context refusal, unavailable exact dependency, stored-integrity failure and unexpected failure use their separate stable safe outcomes. It does not expose raw validation data, stored content on refusal, persistence details or another organisation's existence.
+The Definition service receives the request only through a verified server request context. It returns release-not-found for an unknown, foreign, wrong-revision or unpublished Application; context refusal, unavailable exact dependency, stored-integrity failure and unexpected failure use their separate stable safe outcomes. It does not expose raw validation data, stored content on refusal, persistence details or another organisation's existence.
 
 ### Definition history and restore contract
 
@@ -704,7 +693,7 @@ Pages and shells have stable contained identities and publish with their Applica
 
 Desktop, tablet and phone layout inheritance, content-driven height, theme tokens and permitted responsive order are explicit. Old immutable page releases retain supported readers; conversion occurs only through a deterministic new-draft migration.
 
-Public pages retain their stricter field/action allowlist. Shared-record panels retain source-authoritative access and cannot create cross-source joins.
+Public pages retain their stricter field/action allowlist.
 
 ## Event envelope
 
@@ -714,7 +703,7 @@ Dispatch state is stored separately: status, available time, claim owner and exp
 
 ## Live invalidation envelope
 
-A live invalidation contains contract version, organisation, application, record type, optional record identifier, change kind, record-type data version, optional record version, sequence, occurrence time, and correlation identifier. It contains no business field, file address, display label, permission result, or shared-record value.
+A live invalidation contains contract version, organisation, application, record type, optional record identifier, change kind, record-type data version, optional record version, sequence, occurrence time, and correlation identifier. It contains no business field, file address, display label or permission result.
 
 The message is sent only through a private, authorised channel and is not proof that its recipient may read the record. A client that receives it must use the ordinary authorised query or record path. Duplicate, delayed, and out-of-order messages are safe because the fresh read and current data/access versions determine the displayed result.
 

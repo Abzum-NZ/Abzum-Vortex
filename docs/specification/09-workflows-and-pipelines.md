@@ -6,7 +6,7 @@ This chapter specifies the product's workflow engine and process pipelines.
 
 ## Purpose and authority
 
-A **back-end flow** is a flow that runs apart from the request that started it: a child started by a **Run on back end** (`backend.run`) step, or an after-save subscriber started by a committed record `Event` ([Amendment A](../build-plan/architecture-decisions.md)). There is no separate workflow language, engine or catalogue: every flow uses the one [flow language](appendices/frontend-rule-designer.md#one-flow-language), the one task registry, the one compiler and the one validator. A **process pipeline** describes the business stages through which a record moves; its transitions and entry and exit effects are tasks inside flows.
+A **back-end flow** is a flow that runs apart from the request that started it: a child started by a **Run on back end** (`backend.run`) step, or an after-save subscriber started by a committed record `Event` ([Decision 1](../build-plan/architecture-decisions.md)). There is no separate workflow language, engine or catalogue: every flow uses the one [flow language](appendices/frontend-rule-designer.md#one-flow-language), the one task registry, the one compiler and the one validator. A **process pipeline** describes the business stages through which a record moves; its transitions and entry and exit effects are tasks inside flows.
 
 A back-end flow runs through a **back-end adapter**. One adapter exists, `simulated`: it runs the flow's compiled plan with the same interpreter on the Vortex server, as the initiator, in its own transaction after the calling segment commits. `await` mode returns the child's outputs to the caller; `start` mode returns a run reference and runs after the reply.
 
@@ -70,20 +70,20 @@ The idempotency key of a server segment is (gesture or form-instance id, segment
 
 Every flow uses the same task types. There is no second frontend, background or workflow catalogue: every task type is registered once in the one task registry ([`flow-task-registry.ts`](../../packages/platform/src/workflows/flow-task-registry.ts), [#983](https://github.com/Abzum-NZ/Abzum-Vortex/issues/983)) with its version, its typed properties, outputs and outcomes, its default policy, its effect class (**pure**, **read**, **change** or **interface**) and its `runs` flags: where an implementation exists (**page**, **server**, **backend**). The page and server implementation maps are typed from the flags, so a flag without an implementation, or the reverse, fails the type check. Studio's palette offers a step only where it runs, and publication refuses a step placed where it has no implementation, naming the step. 
 
-Control tasks give the ordered task list its structure: **If**, **Switch**, **For each**, **Sequential**, **Run flow** and **Stop** run wherever their children run. A **For each** over record steps inside a server segment compiles to one set-based change.
+Control tasks give the ordered step list its structure: **If**, **Switch**, **For each**, **Sequential**, **Run flow** and **Stop** run wherever their children run. A **For each** over record steps inside a server segment compiles to one set-based change.
 
 The registered task types:
 
 | Task group | Registered task types | Runs | Effect class |
 | --- | --- | --- | --- |
-| Record | Save record, Create record, Set fields, Link records, Delete record, Restore record and Apply record changes | Server | Change |
-| Query | Query records, Read selected record fields, Acquire record pin identity | Server | Read |
-| Data | Calculate (with a declared result type), Set values, Set variable, Format value and Build record link value | Page and server | Pure |
-| Save rules | Require field, Warn and Refuse save | Page (feedback only) and save transaction | Pure |
+| Record | Save record, Create record, Set fields, Link records, Delete record, Restore record and Apply record changes | Server and back end | Change |
+| Query | Query records (server and back end); Read selected record fields and Acquire record pin identity (server) | Read |
+| Data | Calculate, Set values, Set variable and Build record link value (page, server and back end); Format value and Build record link value (server and back end) | Pure |
+| Save rules | Require field, Warn and Refuse save | Server, in the save transaction | Pure |
 | Interface | Show message (target, severity, one optional action), Clear message, Set page value, Validate form, Show form, Confirm, Navigate, Refresh, Open or close panel and Set filter | Page | Interface |
-| Back end | Run on back end (`await` or `start`) | Server, ending the segment; the child runs on the back-end adapter | Change |
-| Events | Announce event | Server and save transaction (the record being saved only) | Change |
-| Protected operation | Call protected operation, whose operation descriptor declares its own effect | Server | Change, as declared by the called operation |
+| Back end | Run on back end (`await` or `start`) | Server and back end; the child runs on the back-end adapter | Change |
+| Events | Announce event | Server, in the save transaction for the record being saved | Change |
+| Protected operation | Call protected operation, whose operation descriptor declares its own effect | Server and back end | Change, as declared by the called operation |
 
 Run background flow, Call connection, Acknowledge message, Export to file, Attach file, Move file, Parallel, Wait until and Wait for a person are not registered task types: the registry holds no task that runs nowhere.
 
@@ -95,7 +95,7 @@ A task property that takes a set of named values, such as the parameters of **Na
 
 Output types cover text and formatted text, numbers and money, Boolean, dates, choices, JSON, record or record-list references, organisation-account references, child-run references, relationship or relationship-list references, and file references. Record-producing tasks also declare how their target is derived: the task's configured record type, its query, or its input record. Publication propagates that target through create, change, duplicate, bounded-loop and query tasks, set-values tasks, trigger inputs and form-response outputs. Assigning a value to a link field checks the link's exact allowed record targets as well as the general record-reference type. File tasks accept only a file reference and only an attachment field on the selected record.
 
-A named path can select a field from the `values` output of **Show form** and pass that answer to a later task. Show form's input map declares the names and types of the answers it accepts; publication checks the path against that map and the runtime refuses missing, extra or wrong-type answers before continuing. Paths cannot select fields from scalar, record-reference or unshaped JSON outputs. The flow interpreter resolves the path after the form resumes. Named-action effect collection refuses task-output references inside field values, and legacy `BeforeSave` rule-graph lowering refuses task-output formula operands; neither lowering carries intermediate task outputs.
+A named path can select a field from the `values` output of **Show form** and pass that answer to a later task. Show form's input map declares the names and types of the answers it accepts; publication checks the path against that map and the runtime refuses missing, extra or wrong-type answers before continuing. Paths cannot select fields from scalar, record-reference or unshaped JSON outputs. The flow interpreter resolves the path when the form answer arrives. Named-action effect collection refuses task-output references inside field values.
 
 The unary `record_id` formula takes a declared JSON value containing exactly the canonical Record-reference object's own `recordTypeId` and `recordId` members, both non-nil UUIDs, and returns the `recordId` as typed text. It returns an unresolved value for null, missing, malformed or extra members, arrays, scalars, or a non-JSON operand, so the caller refuses before effects. A picker answer can be declared as JSON with a null initial value, selected through its named outer field, and passed to this formula without changing path grammar. Extracting an identity grants no access or authority; the picker and protected operation retain their existing checks.
 
@@ -103,7 +103,7 @@ A **Run flow** task invokes another flow, which keeps its own declared execution
 
 Authored definitions may omit repetitive execution policy. The versioned source contract then supplies the documented conservative defaults before publication: a timeout within the one-to-ten-second server limit, a duplicate-protection requirement and a redaction choice. Tasks that create or change records, relationships or back-end runs default to required duplicate protection; read, branch, format and stop tasks default to not applicable. Canonical published tasks always contain the resolved policy explicitly, and publication refuses a policy that is unsafe for the task type.
 
-The registry excludes arbitrary SQL, JavaScript, shell commands, database credentials, unrestricted expressions, arbitrary network addresses, unrestricted file-system operations, and vendor-specific direct table manipulation. New task types require a platform release, security review, contracts, tests, and documentation; builders cannot upload executable code.
+The registry excludes arbitrary SQL, JavaScript, shell commands, database credentials, unrestricted expressions, arbitrary network addresses, unrestricted file-system operations, and vendor-specific direct table manipulation. New task types require a platform release, security review, contracts and documentation; builders cannot upload executable code.
 
 ## Limits and safeguards
 

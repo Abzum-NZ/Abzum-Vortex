@@ -22,7 +22,7 @@ flowchart LR
     M --> A[Assign minimum next version]
     A --> F[Bind result to draft and published revisions]
     F --> B{Builder confirms current result?}
-    B -- Yes --> P[Phase 2 may publish]
+    B -- Yes --> P[Builder may publish]
     B -- No or stale --> Q[Refuse or cancel]
 ```
 

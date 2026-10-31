@@ -1,6 +1,6 @@
 # 17. Runtime services, storage and caching
 
-[Previous: Copying, sharing, import and export](16-copying-import-export.md) · [Specification index](README.md) · Next: [Delivery environments, database changes and testing](18-delivery-and-testing.md)
+[Previous: Copying, import and export](16-copying-import-export.md) ? [Specification index](README.md) ? Next: [Development delivery and environment boundaries](18-delivery-and-testing.md)
 
 ## Hosting boundaries
 
@@ -106,7 +106,7 @@ The durable identity session remains in Supabase Auth; no Vortex database sessio
 - Request database roles do not own tables and cannot bypass the row restrictions.
 - The trusted backend owns the runtime database connection; browser, import and flow callers receive closed protected commands, never SQL or database credentials. Temporarily selecting a restricted request role is not a sandbox against compromised backend code: [PostgreSQL can restore the connection's session role](https://www.postgresql.org/docs/current/sql-set-role.html). The [Record save handoff](../build-plan/module-record-provisioning.md#protected-save) separates untrusted submitted values from server-computed final changes without duplicating the flow engine in SQL. A genuinely restricted session and a runtime session temporarily using the request role have different trust ceilings; source review must keep that distinction explicit.
 - The Supabase project-owner credential is limited to migration and controlled verification work. The separate non-login Record object owner is callable only through the protected [storage provisioner](#record-storage-provisioning); request roles cannot inherit it.
-- Every protected database transaction establishes one complete context containing the caller kind, Identity Authority identifier or system actor where applicable, tenant, organisation account where applicable, organisation, optional application, session, authentication strength, issue and expiry times, access version, and correlation identifier before reading organisation data. The cluster-local identity projection and all selected scope rows must be active. Tenant-administrator context alone never satisfies an organisation record policy.
+- Every protected database transaction establishes one complete context containing the caller kind, Identity Authority identifier, tenant, organisation account where applicable, organisation, optional application, session, authentication strength, issue and expiry times, access version, and correlation identifier before reading organisation data. The cluster-local identity projection and all selected scope rows must be active. Tenant-administrator context alone never satisfies an organisation record policy.
 - Organisation file paths begin with the organisation identifier and are protected by storage policy and server checks.
 - Each service's schema is accessible only through that service's database functions or server contract.
 
@@ -222,7 +222,7 @@ operation still requires the central permission decision.
 A tenant-administration operation may use tenant scope only where its owning service explicitly
 permits it; it never satisfies an organisation-record policy.
 
-The initiating human request context remains immutable for the request. A future flow task bound to a different specified account or registered system actor does not rewrite or reuse that context: after validating separate exact execution authority, the runtime opens a new Access-resolved transaction for that protected task and establishes only the effective actor's closed context. A later task repeats that resolution. Transactions remain short, never cross a form wait, and sequential commits are not rolled back by a later task failure. Current service access, tenant and application scope, record sharing, file and entitlement checks remain unchanged; a service-role credential is never an execution-identity shortcut.
+The initiating human request context remains immutable for the request. Every protected step opens its own Access-resolved transaction for the flow's effective actor. Transactions remain short, never cross a form wait, and sequential commits are not rolled back by a later step failure. Current service access, tenant and application scope, file and entitlement checks remain unchanged; a service-role credential is never an execution-identity shortcut.
 
 The database package exposes no production operation that accepts a caller-assembled request context.
 Only Access may use the resolved-request transaction capability. Protected service adapters receive

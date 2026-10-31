@@ -234,7 +234,7 @@ The delegation representation is a closed scope and subset check, not a user-aut
 
 Delegation management has three operations: grant a new delegation, replace an existing delegation's complete scope, or revoke it. Granting names one organisation account or Group and an explicit start and optional expiry. Replacement keeps that holder, identity, original grant evidence and time window; it may explicitly refresh a stale bounded scope or change between bounded and organisation-wide management. The proposed scope must be valid now, but stale old permissions do not prevent their replacement. An unchanged scope is not a change. Expired delegation cannot receive replacement scope; renewal is a new grant with a new identity. Revocation is terminal and remains possible after expiry or source inactivity. Independent grants stay independent.
 
-The [private delegation composition in #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) stores these changes atomically with one Access-version increment. It does not establish who may request them. The later protected invocation checks management permission and the caller's permitted before-and-after scope, including onward delegation, through [#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) and [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40). The permanent-steward safeguard must participate before that invocation is exposed. [IAM #267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267) supplies the ordinary request and review experience; editable requests alone never grant authority.
+Delegation is granted, replaced and revoked per holder in the organisation delegation ledger; it is not carried by a management role, so a role change never changes another holder's scope. The [private delegation composition #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) stores these changes atomically with one Access-version increment. It does not establish who may request them. The later protected invocation checks management permission and the caller's permitted before-and-after scope, including onward delegation, through [#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) and [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40). The permanent-steward safeguard must participate before that invocation is exposed. [IAM #267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267) supplies the ordinary request and review experience; editable requests alone never grant authority.
 
 ### Initial organisation stewardship
 
@@ -297,9 +297,7 @@ Each record operation uses a trusted adapter that fixes its declared action and
 storage binding and loads the actual record and relationship facts. A client
 cannot supply its own permission declaration, owner, allowed result or record
 graph. The runtime keeps its restricted database role; it does not acquire owner
-credentials to call the private evaluator. Phase 3 proved this with fixed neutral
-adapters; the permanent fixed adapters over provisioned storage now own record
-read and change, and create, delete and restore follow them. The
+credentials to call the private evaluator. The permanent fixed adapters over provisioned storage own record read and change, and create, delete and restore follow them. The
 [adapter handoff](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35)
 keeps these responsibilities separate without another permission system.
 

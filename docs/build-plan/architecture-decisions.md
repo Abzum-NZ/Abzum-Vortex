@@ -245,8 +245,7 @@ is refused or cancelled with a retained status. There is no intermediate drainin
 
 Each owning service records the registrations it creates for an installation, and can list and remove
 them. The uninstall report is the union of those lists. Uninstall is complete when nothing remains
-except items the uninstaller chose to keep. The registrations covered are execution grants and
-connection-instance grants; interface operations, public addresses and incoming-message routes;
+except items the uninstaller chose to keep. The registrations covered are connection-instance grants; interface operations, public addresses and incoming-message routes;
 search documents; pending outbox entries and start intents, which are marked refused; form drafts;
 record-sharing grants, which are revoked with notice; the default-application setting; custom
 component bundles that no other installation uses; cached runtime bundles; and permission

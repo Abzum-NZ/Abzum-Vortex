@@ -1,6 +1,6 @@
 # 11. Files and attachments
 
-[Previous: Queries, reports, search and live updates](10-queries-reports-search.md) · [Specification index](README.md) · Next: [Connections, programmable interfaces and MCP](12-connections-and-interfaces.md)
+[Previous: Queries, reports, search and live updates](10-queries-reports-search.md) ? [Specification index](README.md) ? Next: [Connections and interfaces](12-connections-and-interfaces.md)
 
 ## File lifecycle
 
@@ -77,7 +77,7 @@ Storage policies on `storage.objects` inspect the signed claims through `auth.jw
 
 Read, preview, removal and other server operations keep this credential and all upstream addresses server-side. Each new external request, including ranges, rechecks current Access before minting its own credential. A browser receives only an upload credential for INSERT at its admitted pending-object path, with no read/list/update/delete/upsert authority. Resumable uploads renew through File admission and a fresh Access check; a still-valid credential may finish depositing pending bytes after revocation, but activation always rechecks current authority and refuses them. Replacement uploads use a new pending object and an authorised record save, never unrestricted overwrite.
 
-The signing key stays in the destination environment's server secret store, separate from federation and Identity Authority keys, and rotates with the documented provider overlap/revocation procedure. It is a trusted minting credential, not a sandbox against compromised server code; no `service_role`/secret API key enters ordinary file execution. Local, federated and scoped system operations use this same source-side bridge after their own Access resolution. The #92 implementation must preserve the exact accepted claims, recheck authority on resumable renewal, refuse unintended operations and support key rotation. A simulated policy check or broad key cannot replace these source-level safeguards.
+The signing key stays in the destination environment's server secret store, separate from Identity Authority keys, and rotates with the documented provider overlap/revocation procedure. It is a trusted minting credential, not a sandbox against compromised server code; no `service_role`/secret API key enters ordinary file execution. Local and scoped system operations use this same source-side bridge after their own Access resolution. The #92 implementation must preserve the exact accepted claims, recheck authority on resumable renewal, refuse unintended operations and support key rotation. A simulated policy check or broad key cannot replace these source-level safeguards.
 
 ## Deletion, retention and legal hold
 

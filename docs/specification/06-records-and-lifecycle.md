@@ -243,28 +243,6 @@ not treated as an unlimited-retention default.
 
 Bulk create, update, delete, restore, import, and export use the same validation and [access](04-access-and-permissions.md) as single-record operations. They process records in bounded batches, return a result per record, can be safely retried, and do not turn one invalid record into an unbounded transaction.
 
-## Sharing lifecycle
-
-A record may become visible to another application or organisation through an [access grant](04-access-and-permissions.md#shared-record-access). The sharing lifecycle does not duplicate or transfer ownership of the record, including when the recipient uses another cluster.
-
-### Grant activation
-
-A cross-organisation access grant becomes active only after the source Access service verifies authorised source and recipient consent over the same grant and proposal revision. No editable application record or ordinary workflow can activate it. Activation changes no record fields. In one cluster, both organisations' access versions change in the protected activation transaction. Across clusters, each cluster changes its local access version while exchanging signed consent and activation receipts through the retry-safe [grant reconciliation](17-runtime-storage-and-caching.md#grant-activation-and-reconciliation) contract.
-
-### Grant revocation and expiry
-
-Revoking or expiring a grant removes the recipient's ability to query shared records on its next request. The source grant is authoritative, so a stale recipient mirror cannot preserve access. The recipient removes already rendered values when that check is refused and shows that access ended; it does not preserve a visible or offline snapshot. Source and recipient administrators receive one grant-level notification; the platform does not send one notification per affected record. Activity entries created while the grant was active remain in the source organisation's history and record the acting identity, recipient organisation account, recipient organisation, recipient cluster, and grant.
-
-### Collaborative access
-
-The grant lists each allowed action and readable or changeable field. If it permits a comment, attachment, or field update, that operation follows the same [save sequence](#save-sequence), validation, file checks, activity rules, and source-organisation retention as an owner operation. The recipient cannot create relationships to its own organisation's records, change ownership, delete, restore, administer permissions, or re-share. Export is possible only through the separately approved [shared export](16-copying-import-export.md#record-export), not as a record mutation.
-
-For the CRM and Service Desk fixture, CRM receives a limited presentation of a Service Desk case rather than the complete case. The grant may allow CRM collaborators to change only `status` and `priority` and to run the shareable public-comment action. Internal notes, attachments, service-level calculations, ownership, deletion, restoration, and sharing administration remain unavailable. Every permitted change saves against the source Service Desk case and is immediately visible in both applications; no summary copy is created.
-
-### Record deletion and shared visibility
-
-Soft-deleting a shared record removes it from recipient queries through the normal lifecycle-state check. Restoring it restores visibility only if the grant is still active and the record still matches its scope. Permanent removal follows the source organisation's [retention](14-activity-privacy-and-retention.md) policy regardless of active grants.
-
 ## Acceptance examples
 
 - Two people changing the same version cannot silently overwrite one another.
@@ -272,8 +250,3 @@ Soft-deleting a shared record removes it from recipient queries through the norm
 - A record outside the person's visibility scope is never fetched for display or export.
 - A soft-deleted record's unique value cannot be reused until permanent removal releases it.
 - A bulk operation reports allowed, refused, invalid, conflict, and completed results separately.
-- Approving a sharing grant does not create a copy of the shared records in the target organisation.
-- A soft-deleted record is not visible through a cross-organisation grant.
-- Activity created by a cross-organisation collaborator records the global identity, recipient organisation account, recipient organisation, source organisation, and grant.
-- Revoking a grant preserves its earlier consent decisions and creates a separate revocation record.
-- CRM collaboration changes only the fields and actions named by the active Service Desk grant, and the source case remains the single record.

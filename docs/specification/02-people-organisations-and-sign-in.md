@@ -94,7 +94,7 @@ flowchart LR
 
 ## Identity and organisation-account lifecycle
 
-The approved [offboarding and ownership-transfer rules](appendices/record-ownership-and-lifecycle.md#archive-a-person-and-transfer-ownership)
+The approved [offboarding and ownership-transfer rules](appendices/record-ownership-and-lifecycle.md#archive-a-person)
 use the existing inactive organisation-account state for an archived person.
 Archiving stops access without requiring immediate transfer; deleting the account
 requires complete ownership transfer first. Transfers may also be initiated for
@@ -157,7 +157,7 @@ Each environment has one **Vortex Identity Authority** shared by all Vortex clus
 
 Supabase tokens retain the provider's [required standard claims](https://supabase.com/docs/guides/auth/jwt-fields). After signature verification, the Identity service validates the configured issuer, `authenticated` audience, issue time, not-before time and expiry. It allows no more than 60 seconds of clock difference between systems. It converts only `sub`, `email`, `session_id`, `aal`, `iat`, `exp`, issuer, audience, and the verified JWT key identifier into a closed Vortex result. `sub` becomes the permanent global identity identifier. The `email` claim is accepted only from a non-anonymous authenticated session issued while mandatory email confirmation is enforced; the token itself has no separate email-confirmed claim. The result never contains the Supabase `role`, phone, application metadata, user-editable metadata, tenant-administrator assignments, organisation roles, groups, application access, sharing grants, MCP capability approvals, or an access decision.
 
-No custom access-token hook is used for identity tokens. Supabase's standard claims contain every identity fact Vortex needs, while tenant, organisation, application and capability authority must remain live platform data. A delegated [MCP OAuth token](12-connections-and-interfaces.md#identity-consent-and-access) may identify its registered client and MCP-server audience under the Phase 10 interface work, but those values still cannot carry organisation or application authority.
+No custom access-token hook is used for identity tokens. Supabase's standard claims contain every identity fact Vortex needs, while tenant, organisation, application and capability authority must remain live platform data. A delegated token may identify its registered client, but those values cannot carry organisation or application authority.
 
 ```mermaid
 flowchart LR
@@ -168,7 +168,7 @@ flowchart LR
     TOKEN -. ignored for Vortex authority .-> EXTRA[Provider role, phone and metadata]
 ```
 
-The identity token proves the person; it does not grant tenant administration, organisation membership, or data access. A [cross-cluster shared-record request](17-runtime-storage-and-caching.md#cross-cluster-request) carries a short-lived assertion signed by the recipient cluster and is still evaluated by the source organisation.
+The identity token proves the person; it does not grant tenant administration, organisation membership, or data access. A [cross-cluster shared-record request](17-runtime-storage-and-caching.md) carries a short-lived assertion signed by the recipient cluster and is still evaluated by the source organisation.
 
 ### First-release sign-in methods
 
@@ -186,7 +186,7 @@ Confirmation verifies the submitted email code with Supabase `verifyOtp` using t
 
 Supabase alone owns and migrates `auth.*`, including `auth.identities`. Vortex uses the supported Auth APIs, may fail closed when the managed Auth schema is unavailable, and never creates, repairs, writes migration history for, or directly depends on a Supabase-managed Auth table.
 
-Every key rotation follows the [Supabase rotation and cache windows](https://supabase.com/docs/guides/auth/signing-keys): wait at least 20 minutes after a standby key becomes discoverable before activating it; with one-hour access tokens, keep the previous key trusted for at least one hour and 15 minutes before revocation. Old and new tokens must verify during the overlap, and the private key never leaves Supabase. Phase 2 records that Testing already uses a managed P-256 `ES256` current key, that its public JWKS contains no private material, and that generated-key tests prove overlap behaviour. The operated standby-to-current rotation and revocation drill is a release-readiness control owned by [issue #171](https://github.com/Abzum-NZ/Abzum-Vortex/issues/171); it is not repeated merely to close the identity-code task.
+Every key rotation follows the [Supabase rotation and cache windows](https://supabase.com/docs/guides/auth/signing-keys): wait at least 20 minutes after a standby key becomes discoverable before activating it; with one-hour access tokens, keep the previous key trusted for at least one hour and 15 minutes before revocation. Old and new tokens must verify during the overlap, and the private key never leaves Supabase. Testing already uses a managed P-256 `ES256` current key, and its public JWKS contains no private material. The operated standby-to-current rotation and revocation drill is a release-readiness control owned by [issue #171](https://github.com/Abzum-NZ/Abzum-Vortex/issues/171); it is not repeated merely to close the identity-code task.
 
 The Identity Authority produces the verified identity result. Safe failures are deliberately grouped into stable classes such as missing token, malformed token, verification failure, untrusted issuer, untrusted audience, inactive token, invalid identity claims, anonymous identity, unsupported authentication strength, and authority unavailable. They do not reveal whether the signature, key lookup, account or other provider detail caused the refusal. The organisation-account work consumes the verified identity identifier and email; the session work consumes the same result and owns durable cookies, refresh, sign-out, revocation and session lifecycle. Neither consumer reimplements token verification.
 
@@ -225,7 +225,7 @@ The [verified recent-authentication contract](appendices/recent-authentication.m
 
 ## Invitations and groups
 
-- An invitation names one organisation, one normalised verified email address, and an expiry. Phase 2 stores no proposed role or Group assignment; [roles and groups](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) add authorised assignment handling later.
+- An invitation names one organisation, one normalised verified email address, and an expiry. The invitation stores no proposed role or Group assignment; that is a separate authorised assignment.
 - The raw invitation secret is generated from 32 cryptographically secure random bytes and is returned only to the trusted delivery caller. The database stores only its SHA-256 fingerprint and never stores or returns the raw secret.
 - Accepting requires a current verified Identity Authority result with exactly the invited normalised email. It creates the one organisation account for that identity and organisation, or reactivates an inactive account only when the invitation was issued after that account became inactive.
 - A pending invitation creates no placeholder account. First acceptance is single-use, expiry-bound, and concurrency-safe. An exact replay by the identity that already accepted it may return the same still-active account after expiry without another mutation; it is no longer a grant operation. Wrong-address, wrong-identity, revoked, expired-first-use, inactive-account, and inactive-organisation or tenant attempts return the same unavailable result. Only the matching verified identity may receive the separate `identity_inactive` outcome for its own inactive cluster projection.

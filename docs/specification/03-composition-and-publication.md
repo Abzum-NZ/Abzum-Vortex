@@ -24,13 +24,13 @@ A [module](05-modules-fields-and-relationships.md) owns reusable business meanin
 
 ### Application layer
 
-An [application](07-applications-pages-and-themes.md) selects exact compatible module versions and adds the user experience: navigation, pages, forms, application roles, application actions, rules, events, workflows, pipelines, and themes. Applications use a single surviving contract across authoring source (`2.0.0`) and compiled validation (`2.0.0`), with no retained legacy V1 format, dual readers, conversion paths, or fallback selectors. Authoring in Studio uses an internal editing adapter (Puck) to map between native Vortex page structures and the interactive canvas; Puck's private representation is not the stored or public Vortex contract.
+An [application](07-applications-pages-and-themes.md) selects exact compatible module versions and adds the user experience: navigation, pages, forms, application roles, application actions, rules, events, workflows, pipelines, and themes. Applications use contract `4.3.0` for both authoring source and compiled validation, through the one `definitionContractVersion` constant, with no earlier format, dual reader, conversion path or fallback selector. Authoring in Studio uses an internal editing adapter (Puck) to map between native Vortex page structures and the interactive canvas; Puck's private representation is not the stored or public Vortex contract.
 
-In the target [one flow model](appendices/frontend-rule-designer.md), application-owned flows compose those published capabilities. Every flow has exactly one owner: the module or application release that contains it. Behaviour that must stay hidden or platform-controlled is a protected operation, and reusable platform behaviour ships as ordinary flows in [system modules](appendices/core-contract-boundary.md#system-modules) rather than a separate catalogue. Adding these flow contracts remains future Definition source, canonical compilation, provenance, version-impact, persistence, consumer-read and restore work. This specification does not claim those extensions are already delivered.
+In the [one flow model](appendices/frontend-rule-designer.md), application-owned flows compose those published capabilities. Every flow has exactly one owner: the module or application release that contains it. Behaviour that must stay hidden or platform-controlled is a protected operation, and reusable platform behaviour ships as ordinary flows in [system modules](appendices/core-contract-boundary.md#system-modules) rather than a separate catalogue.
 
 ### Organisation-data layer
 
-[Records](06-records-and-lifecycle.md), files, organisation accounts, saved views, activity entries, workflow references, and organisation-attributed metering events belong to one organisation. Tenant-level entitlements and metering events belong to the tenant. None is part of a reusable definition.
+[Records](06-records-and-lifecycle.md), files, organisation accounts, saved views, activity entries, flow references and organisation-attributed metering events belong to one organisation. Tenant-level entitlements and metering events belong to the tenant. None is part of a reusable definition.
 
 ## Definition ownership and versions
 
@@ -108,25 +108,25 @@ Every definition kind uses the current contract `4.3.0` for both `sourceContract
 
 ## Consumer reads of published definitions
 
-Every server-side platform service reads a published Module or Application through one Definition-service operation. Its strict command names the definition kind, the matching permanent root, and exactly one selector: `current`, or `revision` with a JavaScript-safe positive immutable release revision. There is no implicit selector.
+Every server-side platform service reads a published Application and its exact Module dependencies through one Definition-service bound release set. The strict command contains only the Application release revision (plus the exact Application root for the protected system consumer); a version range, a dependency selector or a draft has no representation.
 
 ```mermaid
 flowchart LR
-    C[Authorised server consumer] --> R[Explicit current or exact revision command]
+    C[Authorised server consumer] --> R[Exact Application release revision]
     R --> D[Definition service]
-    D --> S[One consistent root and immutable release read]
+    D --> S[One consistent Application and Module release set]
     S --> V[Release-integrity verification]
     V --> P[Safe canonical release projection]
     P --> C
-    X[Stored binding or workflow run] --> E[Recorded exact release revision]
+    X[Stored binding or flow run] --> E[Recorded exact release revision]
     E --> D
 ```
 
-- `current` is discovery-only: an owning operation may use it when deliberately preparing a new binding. An installed application, saved binding, workflow run, grant, or in-flight request uses its recorded exact revision.
-- A current read selects the root's current pointer and its immutable release together. An exact read selects only the named root and immutable revision; it never follows a dependency's current pointer or resolves a version range again.
-- The request context's organisation, root kind, root, stored key and release evidence must agree before content is returned. Unknown, foreign, wrong-kind, unpublished-current and unknown-revision selections have one indistinguishable release-not-found outcome.
-- The safe result contains only the kind, organisation, key, root, exact release revision and stable release version, validation-contract version, content and resolution fingerprints, complete canonical content, sorted complete exact dependency manifest, and copied correlation identifier. It excludes authored source, drafts, publication preparation, provenance, resolution-snapshot content, comparison evidence, notes, publisher information, times, cache state and persistence details. The service verifies the stored release against contract `4.3.0` and returns the one current consumer-read result at validation-contract version `4.3.0`. No polymorphic format selector, fallback reader or earlier-contract compatibility path is permitted.
-- The Definition service verifies the stored canonical envelope, compiled artifact, release row, content fingerprint, resolution fingerprint, own snapshot entry and exact dependency manifest before returning a result. A dependency remains pinned to its stored exact root, revision, version and fingerprints. Each platform-catalogue evidence fingerprint belongs to that exact connection-type or theme release, so adding an unrelated catalogue release cannot invalidate it; a missing exact release is unavailable rather than substituted.
+- An installed application, saved binding, flow run or in-flight request uses its recorded exact revision. The service selects that exact Application release and follows its recorded Module dependencies recursively; it never follows a dependency's current pointer or resolves a version range again.
+- If the Application uses Module A and A uses a shared Module B, B is included without requiring a duplicate direct Application declaration. Each Module remains pinned to its exact published release evidence.
+- The request context's organisation, keys, roots and release evidence must agree before content is returned. An unknown, foreign or unpublished Application has one indistinguishable release-not-found outcome.
+- The safe result contains only the kind, organisation, key, root, exact release revision and stable release version, validation-contract version (contract `4.3.0`), content and resolution fingerprints, complete canonical content, sorted complete exact dependency manifest, correlation identifier and, on the Application, `platformCompatibilityVersion`. It excludes authored source, drafts, publication preparation, provenance, resolution-snapshot content, comparison evidence, notes, publisher information, times, cache state and persistence details. No polymorphic format selector, fallback reader or earlier-contract compatibility path is permitted.
+- The Definition service verifies the stored canonical envelope, compiled artifact, release row, content fingerprint, resolution fingerprint, own snapshot entry and exact dependency manifest before returning a result. A missing exact release is unavailable rather than substituted.
 - Consumer reads are server-only and use the existing request transaction boundary. They implement no cache, browser or HTTP endpoint, token parsing, session creation, access decision, installation, upgrade, publication or consumer-specific rewriting.
 
 ### Reading an installed Application
