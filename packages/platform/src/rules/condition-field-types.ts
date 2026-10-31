@@ -35,10 +35,7 @@ export function fieldValueMatches(
   );
 }
 
-/** @knipignore */
-export function fieldRecordTypeIds(
-  field: Record<string, unknown> | undefined,
-): string[] | undefined {
+function fieldRecordTypeIds(field: Record<string, unknown> | undefined): string[] | undefined {
   if (!field) return undefined;
   const settings = object(field.settings);
   if (field.type === "link")

@@ -207,11 +207,11 @@ export function StudioQueryBindings({
           facts.currentPersonRecordType !== undefined &&
           fit({ kind: "record", recordTypes: [facts.currentPersonRecordType] });
         const organisationFits = fit({ kind: "text" });
-        const teamFits =
+        const groupFits =
           facts.currentGroupRecordType !== undefined &&
           fit({ kind: "record", recordTypes: [facts.currentGroupRecordType] });
         const partsFitting = currentPersonParts.filter((part) =>
-          part === "person" ? personFits : part === "organisation" ? organisationFits : teamFits,
+          part === "person" ? personFits : part === "organisation" ? organisationFits : groupFits,
         );
         const sources: QueryBindingSourceKind[] = [
           "fixed",

@@ -253,8 +253,7 @@ const sourceGuidedFormStepSchema = z
   })
   .strict();
 
-/** @knipignore */
-export const sourcePageDefinitionSchema = z.discriminatedUnion("type", [
+const sourcePageDefinitionSchema = z.discriminatedUnion("type", [
   sourceListPageSchema,
   z
     .object({

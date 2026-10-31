@@ -123,7 +123,7 @@ export const createPlacementReadServices = (
       return undefined;
     }
   };
-  // The viewer's active organisation groups (their teams), read once per request under the
+  // The viewer's active organisation groups, read once per request under the
   // viewer's own verified context; a failure is logged with its cause and reads as unavailable.
   const loadViewerGroups = async (): Promise<readonly string[] | undefined> => {
     try {
@@ -133,13 +133,13 @@ export const createPlacementReadServices = (
         (transaction) => readCurrentRecordOwnerGroupsAfterAuthorization(transaction),
       );
       if (read.kind !== "available") {
-        console.error(`[page] viewer teams unavailable: kind=${read.kind}`);
+        console.error(`[page] viewer groups unavailable: kind=${read.kind}`);
         return undefined;
       }
       return read.value.map((group) => group.groupId);
     } catch (error) {
       console.error(
-        `[page] viewer teams unavailable: ${error instanceof Error ? error.message : "unknown"}`,
+        `[page] viewer groups unavailable: ${error instanceof Error ? error.message : "unknown"}`,
       );
       return undefined;
     }
