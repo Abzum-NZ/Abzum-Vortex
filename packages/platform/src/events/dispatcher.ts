@@ -23,8 +23,9 @@ import {
   type EventDeliveryFailureClassification,
 } from "./delivery-recovery";
 import { asRecord } from "../catalogue/runtime-primitives";
+import { consumerKeyMatches, exactRecord } from "./event-record-shapes";
 
-export const eventDispatcherLimits = Object.freeze({
+const eventDispatcherLimits = Object.freeze({
   /** Occurrences claimed by one dispatch across every selected consumer. */
   defaultBatchLimit: 20,
   maximumBatchLimit: eventConsumerProgressLimits.maximumBatchSize,
@@ -43,9 +44,9 @@ export const eventDispatcherErrorCodes = [
   "INVALID_EVENT_CONSUMER_REGISTRATION",
 ] as const;
 
-export type EventDispatcherErrorCode = (typeof eventDispatcherErrorCodes)[number];
+type EventDispatcherErrorCode = (typeof eventDispatcherErrorCodes)[number];
 
-export class EventDispatcherError extends Error {
+class EventDispatcherError extends Error {
   readonly code: EventDispatcherErrorCode;
 
   constructor(code: EventDispatcherErrorCode) {
@@ -60,7 +61,7 @@ export class EventDispatcherError extends Error {
  * held for, and renewed by, each delivery; `maxAttempts` and
  * `retryBackoffSeconds` are the bounded retry policy handed to delivery recovery.
  */
-export type EventConsumerDeliveryPolicy = Readonly<{
+type EventConsumerDeliveryPolicy = Readonly<{
   leaseSeconds: number;
   maxAttempts: number;
   retryBackoffSeconds: number;
@@ -71,7 +72,7 @@ export type EventConsumerDeliveryPolicy = Readonly<{
  * effect whose acknowledgement is lost is delivered again, so a consumer must
  * make its effect idempotent on (`consumerKey`, `occurrence.occurrenceId`).
  */
-export type EventConsumerDelivery = Readonly<{
+type EventConsumerDelivery = Readonly<{
   consumerKey: string;
   occurrence: DispatchOccurrence;
   causalDepth: number;
@@ -86,7 +87,7 @@ export type EventConsumerDelivery = Readonly<{
   renewLease: () => Promise<boolean>;
 }>;
 
-export type EventConsumerOutcome =
+type EventConsumerOutcome =
   | Readonly<{ outcome: "completed" }>
   | Readonly<{ outcome: "continued" }>
   | Readonly<{ outcome: "retryable_failure"; failureCode: EventDeliveryFailureClassification }>
@@ -105,7 +106,7 @@ export type EventConsumerAdapter = Readonly<{
  * configuration. Only values issued by that path are accepted by a dispatch;
  * an object literal of the same shape is caller-asserted and refused.
  */
-export type AuthenticatedEventDispatcher = Readonly<{
+type AuthenticatedEventDispatcher = Readonly<{
   kind: "event_dispatcher";
   systemActorId: string;
 }>;
@@ -122,7 +123,7 @@ export const eventDispatcherRefusalReasons = [
 export type EventDispatcherRefusalReason = (typeof eventDispatcherRefusalReasons)[number];
 
 /** The credential check outcome; the system actor is resolved from the grant afterwards. */
-export type EventDispatcherAuthentication =
+type EventDispatcherAuthentication =
   | Readonly<{ outcome: "authenticated" }>
   | Readonly<{ outcome: "refused"; reason: EventDispatcherRefusalReason }>;
 
@@ -131,22 +132,22 @@ export type EventDispatcherAuthentication =
  * resolved by Access for the fixed dispatcher operation. `systemActorId` is
  * the granted actor; every other result refuses.
  */
-export type EventDispatcherGrantAuthority =
+type EventDispatcherGrantAuthority =
   | Readonly<{ outcome: "authorised"; systemActorId: string }>
   | Readonly<{ outcome: "refused"; reason: EventDispatcherRefusalReason }>;
 
-export interface EventDispatcherGrantReader {
+interface EventDispatcherGrantReader {
   resolve(): Promise<EventDispatcherGrantAuthority>;
 }
 
-export type DispatchEventsInput = Readonly<{
+type DispatchEventsInput = Readonly<{
   dispatcher: AuthenticatedEventDispatcher;
   batchLimit?: number;
   /** Restricts this dispatch to one registered consumer. */
   consumerKey?: string;
 }>;
 
-export type EventDispatchStatus = "idle" | "completed" | "partial_failure" | "interrupted";
+type EventDispatchStatus = "idle" | "completed" | "partial_failure" | "interrupted";
 
 /**
  * Content-free outcome of one bounded dispatch. `interruptedCount` counts
@@ -165,7 +166,7 @@ export type EventDispatchResult = Readonly<{
   consumersUnavailable: number;
 }>;
 
-export interface EventDispatcher {
+interface EventDispatcher {
   dispatch(input: DispatchEventsInput): Promise<EventDispatchResult>;
 }
 
@@ -173,7 +174,7 @@ export type EventDispatcherTransactionRunner = <Result>(
   operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
 ) => Promise<Result>;
 
-export type EventDispatcherDependencies = Readonly<{
+type EventDispatcherDependencies = Readonly<{
   consumers: readonly EventConsumerAdapter[];
   /**
    * Runs one storage step. Every claim, renewal, acknowledgement and failure
@@ -183,14 +184,14 @@ export type EventDispatcherDependencies = Readonly<{
   runtimeTransaction?: EventDispatcherTransactionRunner;
 }>;
 
-export type EventDispatchRouteRequest = Readonly<{
+type EventDispatchRouteRequest = Readonly<{
   /** The request's `Authorization` header value. */
   authorization: string | null | undefined;
   batchLimit?: unknown;
   consumerKey?: unknown;
 }>;
 
-export type EventDispatchRouteResponse =
+type EventDispatchRouteResponse =
   | Readonly<{ outcome: "refused"; reason: EventDispatcherRefusalReason }>
   | Readonly<{
       outcome: "invalid_request";
@@ -204,31 +205,12 @@ export type EventDispatcherRouteDependencies = EventDispatcherDependencies &
     grant?: EventDispatcherGrantReader;
   }>;
 
-export interface EventDispatcherRoute {
+interface EventDispatcherRoute {
   handle(request: EventDispatchRouteRequest): Promise<EventDispatchRouteResponse>;
 }
 
-const consumerKeyMatches = (value: unknown): value is string =>
-  typeof value === "string" &&
-  value.length <= eventConsumerProgressLimits.maximumConsumerKeyLength &&
-  /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
-
 const integerWithin = (value: unknown, minimum: number, maximum: number): value is number =>
   Number.isSafeInteger(value) && (value as number) >= minimum && (value as number) <= maximum;
-
-const exactRecord = <Key extends string>(
-  value: unknown,
-  keys: readonly Key[],
-): Readonly<Record<Key, unknown>> | undefined => {
-  const candidate = asRecord(value);
-  if (
-    candidate === undefined ||
-    Object.keys(candidate).length !== keys.length ||
-    keys.some((key) => !Object.hasOwn(candidate, key))
-  )
-    return undefined;
-  return candidate as Readonly<Record<Key, unknown>>;
-};
 
 const failureClassificationMatches = (
   value: unknown,
@@ -339,7 +321,7 @@ const parseGrantAuthority = (candidate: unknown): EventDispatcherGrantAuthority 
  * result refuses closed. The actor is read from the grant, never from the
  * request.
  */
-export const createEventDispatcherGrantReader = (
+const createEventDispatcherGrantReader = (
   run: EventDispatcherTransactionRunner,
 ): EventDispatcherGrantReader =>
   Object.freeze({
@@ -527,9 +509,7 @@ const dispatchStatus = (tally: Tally): EventDispatchStatus => {
  * renewed immediately before its consumer runs, so a claim whose lease lapsed
  * (and may have been reclaimed by a concurrent dispatch) is never invoked.
  */
-export const createEventDispatcher = (
-  dependencies: EventDispatcherDependencies,
-): EventDispatcher => {
+const createEventDispatcher = (dependencies: EventDispatcherDependencies): EventDispatcher => {
   const consumers = registerConsumers(dependencies.consumers);
   const run: EventDispatcherTransactionRunner =
     dependencies.runtimeTransaction ?? withRuntimeTransaction;

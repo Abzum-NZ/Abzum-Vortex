@@ -39,7 +39,6 @@ export const flowAliasSchema = z
   .refine((value) => !/\{\{|\{%/.test(value), {
     message: "An alias cannot contain template delimiters",
   });
-export type FlowAlias = z.infer<typeof flowAliasSchema>;
 
 const boundedRecord = <Value extends z.ZodType>(value: Value, maximum: number) =>
   z.record(builderKeySchema, value).refine((record) => Object.keys(record).length <= maximum, {
@@ -76,7 +75,7 @@ const sourceTriggerCommonShape = {
 };
 
 
-export const sourceFlowTriggerSchema = z.discriminatedUnion("type", [
+const sourceFlowTriggerSchema = z.discriminatedUnion("type", [
   z
     .object({
       ...sourceTriggerCommonShape,
@@ -99,9 +98,8 @@ export const sourceFlowTriggerSchema = z.discriminatedUnion("type", [
     })
     .strict(),
 ]);
-export type SourceFlowTrigger = z.infer<typeof sourceFlowTriggerSchema>;
 
-export const sourceFlowRunAsSchema = z.discriminatedUnion("kind", [
+const sourceFlowRunAsSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("initiator") }).strict(),
   z.object({ kind: z.literal("saver") }).strict(),
 ]);
@@ -410,7 +408,7 @@ const refineSourceTaskContracts = (
 
 // ─── The authored flow ───────────────────────────────────────────────────────────────────────
 
-export const sourceFlowSchema = z
+const sourceFlowSchema = z
   .object({
     /** The flow's owner alias; resolves, with `key`, to the one permanent flow identity. */
     id: flowAliasSchema,
@@ -466,7 +464,6 @@ export const sourceFlowCollectionSchema = z
       keys.add(flow.key);
     });
   });
-export type SourceFlowCollection = z.infer<typeof sourceFlowCollectionSchema>;
 
 // ─── The compiled set ────────────────────────────────────────────────────────────────────────
 
@@ -476,7 +473,7 @@ export type SourceFlowCollection = z.infer<typeof sourceFlowCollectionSchema>;
  * reaches exactly once, whichever flow or task reaches it; the exact release evidence for each
  * lives on the definition's resolved-dependency manifest, never on a flow or a task.
  */
-export const flowDependencyManifestContributionSchema = z
+const flowDependencyManifestContributionSchema = z
   .object({
     definitionKeys: z
       .array(namespacedKeySchema)
@@ -486,9 +483,6 @@ export const flowDependencyManifestContributionSchema = z
       }),
   })
   .strict();
-export type FlowDependencyManifestContribution = z.infer<
-  typeof flowDependencyManifestContributionSchema
->;
 
 export const compiledFlowSetSchema = z
   .object({

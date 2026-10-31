@@ -14,7 +14,7 @@ import {
  * application that binds the owning module, may place it (application packages appendix,
  * "Custom components").
  */
-export const customComponentOwnerSchema = z
+const customComponentOwnerSchema = z
   .object({
     kind: sourceProvenanceUnchanged(z.enum(["application", "module"])),
     definitionKey: sourceProvenanceUnchanged(namespacedKeySchema),
@@ -23,7 +23,7 @@ export const customComponentOwnerSchema = z
   .strict();
 
 /** One typed value a custom component event carries. A payload field always declares a type. */
-export const customComponentEventPayloadFieldSchema = z
+const customComponentEventPayloadFieldSchema = z
   .object({
     key: sourceProvenanceUnchanged(builderKeySchema),
     label: sourceProvenanceUnchanged(labelSchema),
@@ -37,7 +37,7 @@ export const customComponentEventPayloadFieldSchema = z
  * payload field is refused, because the renderer validates every incoming message against this
  * declaration and drops anything else (it never trusts the component's origin).
  */
-export const customComponentEventSchema = z
+const customComponentEventSchema = z
   .object({
     key: sourceProvenanceUnchanged(builderKeySchema),
     label: sourceProvenanceUnchanged(labelSchema),
@@ -58,7 +58,7 @@ export const customComponentEventSchema = z
  * with a declared value type. Every value is treated as disclosed to the package's publisher, so
  * the contract is closed and typed rather than free-form.
  */
-export const customComponentDataContractSchema = z
+const customComponentDataContractSchema = z
   .object({
     values: sourceProvenanceUnchanged(
       z
@@ -160,7 +160,7 @@ export const customComponentReleaseSchema = z
       });
   });
 
-export type CustomComponentOwner = z.infer<typeof customComponentOwnerSchema>;
+type CustomComponentOwner = z.infer<typeof customComponentOwnerSchema>;
 export type CustomComponentRelease = z.infer<typeof customComponentReleaseSchema>;
 
 /**

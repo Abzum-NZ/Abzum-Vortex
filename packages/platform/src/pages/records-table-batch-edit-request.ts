@@ -23,10 +23,7 @@ const jsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
  * field, to exactly one record they may read. It is the only form of a link value that is not a
  * record reference; the cap is the one a record picker reads titles by.
  */
-export const pastedLinkTitleSchema = z
-  .object({ pastedTitle: z.string().trim().min(1).max(200) })
-  .strict();
-export type PastedLinkTitle = z.infer<typeof pastedLinkTitleSchema>;
+const pastedLinkTitleSchema = z.object({ pastedTitle: z.string().trim().min(1).max(200) }).strict();
 
 /** The title a cell value pastes, or undefined when the value is not a pasted title. */
 export const pastedLinkTitleOf = (value: unknown): string | undefined => {
@@ -87,7 +84,7 @@ export const recordsTableBatchEditRequestSchema = z
 export type RecordsTableBatchEditRequest = z.infer<typeof recordsTableBatchEditRequestSchema>;
 
 /** Why one cell (or its whole record) stopped the batch; the server log keeps the cause. */
-export const recordsTableBatchEditRefusalReasons = [
+const recordsTableBatchEditRefusalReasons = [
   /** The person may not change this record or this field now. */
   "not_permitted",
   /** The field is not one the table edits, or is withheld from the person. */

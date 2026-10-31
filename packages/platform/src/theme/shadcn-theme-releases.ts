@@ -7,13 +7,13 @@ import releases from "../catalogue/catalogue/shadcn-create-theme-releases.json";
  * reach only server-side theme resolution. Option releases
  * are keyed by the index's `releaseKey`; a caller reads the index first and then this map.
  */
-export type ShadcnThemeRelease = Readonly<{
+type ShadcnThemeRelease = Readonly<{
   catalogueThemeId: string;
   releaseVersion: string;
   tokens: Readonly<Record<string, unknown>>;
 }>;
 
-export const shadcnThemeReleases = releases as unknown as Readonly<
+const shadcnThemeReleases = releases as unknown as Readonly<
   Record<string, ShadcnThemeRelease | undefined>
 >;
 

@@ -16,7 +16,7 @@ import {
 import { attachmentValueSchema } from "../records/module-field-values";
 import { describeFailure } from "../catalogue/runtime-primitives";
 
-export type ReadOnlyAttachmentOwner = Readonly<{
+type ReadOnlyAttachmentOwner = Readonly<{
   organizationId: string;
   applicationRootId: string;
   recordTypeId: string;
@@ -24,7 +24,7 @@ export type ReadOnlyAttachmentOwner = Readonly<{
   fieldId: string;
 }>;
 
-export type ReadOnlyAttachmentDecision = Readonly<{
+type ReadOnlyAttachmentDecision = Readonly<{
   outcome: string;
   organizationId: string;
   applicationRootId: string;
@@ -33,7 +33,7 @@ export type ReadOnlyAttachmentDecision = Readonly<{
   fieldId: string;
 }>;
 
-export type ReadOnlyAttachmentFileMetadata = Readonly<{
+type ReadOnlyAttachmentFileMetadata = Readonly<{
   fileId: string;
   organizationId: string;
   applicationRootId?: string;
@@ -67,7 +67,7 @@ type ReadOnlyAttachmentRefusalReason =
   | "file_evidence_mismatch"
   | "payload_invalid";
 
-export type ReadOnlyAttachmentListProjection =
+type ReadOnlyAttachmentListProjection =
   | Readonly<{ kind: "ready"; values: AttachmentListPayload }>
   | Readonly<{ kind: "empty" }>
   | Readonly<{ kind: "refused"; reason: ReadOnlyAttachmentRefusalReason }>

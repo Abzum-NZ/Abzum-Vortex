@@ -40,7 +40,7 @@ export const storedRecordCandidateValues = (
   return candidate;
 };
 
-export type RecordFieldValuePreparationIssueCode =
+type RecordFieldValuePreparationIssueCode =
   | "invalid_input"
   | "invalid_existing_value"
   | "unknown_field"
@@ -53,7 +53,7 @@ export type RecordFieldValuePreparationIssueCode =
   | "unresolved_record_target"
   | "stage_move_refused";
 
-export type RecordFieldValuePreparationIssue = Readonly<{
+type RecordFieldValuePreparationIssue = Readonly<{
   code: RecordFieldValuePreparationIssueCode;
   fieldId?: string;
   path: ValuePath;
@@ -82,7 +82,7 @@ export type RecordFieldValuePendingCheck =
       fileId: FileId;
     }>;
 
-export type PrepareRecordFieldValuesInput = Readonly<{
+type PrepareRecordFieldValuesInput = Readonly<{
   operation: "create" | "update";
   recordType: RecordTypeDefinition;
   submittedValues: ValueMap;
@@ -121,11 +121,11 @@ export type InitialRecordFieldCandidate = Readonly<{
   submittedClearFieldIds: readonly string[];
 }>;
 
-export type PrepareInitialRecordFieldCandidateResult =
+type PrepareInitialRecordFieldCandidateResult =
   | Readonly<{ success: true; candidate: InitialRecordFieldCandidate }>
   | Readonly<{ success: false; issues: readonly RecordFieldValuePreparationIssue[] }>;
 
-export type FinalizeRecordFieldCandidateInput = Readonly<{
+type FinalizeRecordFieldCandidateInput = Readonly<{
   recordType: RecordTypeDefinition;
   initialCandidate: InitialRecordFieldCandidate;
   candidateValues: ValueMap;
@@ -148,7 +148,7 @@ type PreparationContext = {
 type ValueOrigin = RecordFieldValueOrigin | "candidate";
 type FieldPolicyMode = "structural" | "final";
 
-export type PersistedRecordFieldValueInput = Readonly<{
+type PersistedRecordFieldValueInput = Readonly<{
   field: ModuleField;
   value: unknown;
 }>;
@@ -158,9 +158,6 @@ const generatedFieldTypes = new Set<ModuleField["type"]>([
   "calculation",
   "total",
 ]);
-
-const hasOwn = (value: object, key: PropertyKey): boolean =>
-  Object.prototype.hasOwnProperty.call(value, key);
 
 const isValueMap = (value: unknown): value is ValueMap =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -405,7 +402,7 @@ const normalizeTable = (
       }
     for (const column of field.settings.columns) {
       const cellPath = [...rowPath, column.key];
-      if (!hasOwn(candidate, column.key)) {
+      if (!Object.hasOwn(candidate, column.key)) {
         if (policy === "final" && column.required) {
           issue(context, invalidCode, cellPath, field.fieldId);
           valid = false;
@@ -709,7 +706,7 @@ export const prepareInitialRecordFieldCandidate = (
 
   if (input.operation === "update") {
     for (const [fieldId, value] of Object.entries(existingValues)) {
-      if (hasOwn(submittedValues, fieldId)) continue;
+      if (Object.hasOwn(submittedValues, fieldId)) continue;
       const field = fieldsById.get(fieldId);
       if (field === undefined) {
         issue(context, "unknown_field", ["existingValues", fieldId], fieldId);
@@ -751,7 +748,7 @@ export const prepareInitialRecordFieldCandidate = (
 
   if (input.operation === "create") {
     for (const field of trustedRecordType.fields) {
-      if (hasOwn(submittedValues, field.fieldId) || field.default === undefined) continue;
+      if (Object.hasOwn(submittedValues, field.fieldId) || field.default === undefined) continue;
       const normalized = normalizeValue(
         field,
         field.default,
@@ -768,7 +765,7 @@ export const prepareInitialRecordFieldCandidate = (
     // A record enters each pipeline at its start stage unless it was given a stage.
     for (const pipeline of trustedRecordType.pipelines) {
       const fieldId = String(pipeline.stageFieldId);
-      if (hasOwn(candidateValues, fieldId)) continue;
+      if (Object.hasOwn(candidateValues, fieldId)) continue;
       candidateValues[fieldId] = pipelineStartStage(pipeline);
       valueOrigins[fieldId] = "default";
     }
@@ -840,7 +837,7 @@ const finalizeRecordFieldCandidateInternal = (
     }
     const changed =
       submittedFieldIds.has(fieldId) ||
-      !hasOwn(input.initialCandidate.originalValues, fieldId) ||
+      !Object.hasOwn(input.initialCandidate.originalValues, fieldId) ||
       !isDeepStrictEqual(input.initialCandidate.originalValues[fieldId], value);
     if (changed) changedFieldIds.add(fieldId);
 
@@ -857,7 +854,7 @@ const finalizeRecordFieldCandidateInternal = (
 
     const initialValue = input.initialCandidate.candidateValues[fieldId];
     const unchangedFromInitial =
-      hasOwn(input.initialCandidate.candidateValues, fieldId) &&
+      Object.hasOwn(input.initialCandidate.candidateValues, fieldId) &&
       isDeepStrictEqual(initialValue, value);
     const origin = unchangedFromInitial
       ? (input.initialCandidate.valueOrigins[fieldId] ?? "candidate")
@@ -868,7 +865,7 @@ const finalizeRecordFieldCandidateInternal = (
 
   const submittedClears = new Set(input.initialCandidate.submittedClearFieldIds);
   for (const field of trustedRecordType.fields) {
-    const present = hasOwn(normalizedCandidate, field.fieldId);
+    const present = Object.hasOwn(normalizedCandidate, field.fieldId);
     if (submittedClears.has(field.fieldId) && field.required && !present)
       issue(context, "required_field_clear", ["submittedValues", field.fieldId], field.fieldId);
     if (
@@ -893,7 +890,7 @@ const finalizeRecordFieldCandidateInternal = (
       issue(context, "unknown_field", ["requirements", requirement.fieldId], requirement.fieldId);
       continue;
     }
-    if (!hasOwn(normalizedCandidate, requirement.fieldId))
+    if (!Object.hasOwn(normalizedCandidate, requirement.fieldId))
       issue(
         context,
         "required_field_missing",
@@ -945,8 +942,8 @@ const finalizeRecordFieldCandidateInternal = (
     if (
       ((input.initialCandidate.operation === "update" &&
         input.initialCandidate.submittedClearFieldIds.includes(fieldId)) ||
-        hasOwn(input.initialCandidate.originalValues, fieldId)) &&
-      !hasOwn(normalizedCandidate, fieldId) &&
+        Object.hasOwn(input.initialCandidate.originalValues, fieldId)) &&
+      !Object.hasOwn(normalizedCandidate, fieldId) &&
       !clearFieldIds.includes(fieldId)
     )
       clearFieldIds.push(fieldId);

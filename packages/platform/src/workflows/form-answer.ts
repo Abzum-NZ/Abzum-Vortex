@@ -2,13 +2,14 @@ import { z } from "zod";
 import { jsonValueSchema } from "../catalogue/common";
 
 /*
- * What a person answers to a paused flow form: the part of the form continuation contract the
- * browser checks before it sends an answer.
+ * What a person answers to a form the page shows: the closed answer the browser checks before it
+ * sends one. A flow's interface steps run in the page, so an answer is a page event, never a
+ * continuation of a server-held run.
  */
 
 const maximumAnswerValues = 500;
 
-export const formContinuationAnswerSchema = z.discriminatedUnion("kind", [
+export const formAnswerSchema = z.discriminatedUnion("kind", [
   /** Continue or submit the form with its permitted answers. */
   z
     .object({
@@ -27,4 +28,4 @@ export const formContinuationAnswerSchema = z.discriminatedUnion("kind", [
     .object({ kind: z.literal("confirm"), confirmed: z.boolean(), choice: z.boolean().optional() })
     .strict(),
 ]);
-export type FormContinuationAnswer = z.infer<typeof formContinuationAnswerSchema>;
+export type FormAnswer = z.infer<typeof formAnswerSchema>;

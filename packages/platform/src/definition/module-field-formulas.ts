@@ -23,8 +23,8 @@ type InlineModule = ApplicationSourceDocument["body"]["modules"][number];
 type RecordType = InlineModule["record_types"][number];
 type SourceField = RecordType["fields"][number];
 export type CalculationSettings = Extract<SourceField, { type: "calculation" }>["settings"];
-export type CalculationExpression = CalculationSettings["expression"];
-export type CalculationResultType = CalculationSettings["result_type"];
+type CalculationExpression = CalculationSettings["expression"];
+type CalculationResultType = CalculationSettings["result_type"];
 export type TotalSettings = Extract<SourceField, { type: "total" }>["settings"];
 export type TotalOperation = TotalSettings["operation"];
 
@@ -57,7 +57,7 @@ const valueType = (field: FormulaField | undefined): string | undefined =>
 export const joinTextAccepts = (field: FormulaField): boolean =>
   ["text", "choice"].includes(valueType(field) ?? "");
 /** The keys of the fields an authored condition compares, in its compact or its operand form. */
-export const conditionFieldKeys = (condition: unknown): string[] => {
+const conditionFieldKeys = (condition: unknown): string[] => {
   if (condition === null || typeof condition !== "object") return [];
   const node = condition as Record<string, unknown>;
   if (Array.isArray(node.all)) return node.all.flatMap(conditionFieldKeys);

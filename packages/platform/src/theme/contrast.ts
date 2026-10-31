@@ -180,12 +180,6 @@ function colorLuminance({ r, g, b }: RgbaColor): number {
   return 0.2126 * channelLuminance(r) + 0.7152 * channelLuminance(g) + 0.0722 * channelLuminance(b);
 }
 
-/** Calculates luminance after composing a translucent color over an opaque background. */
-export function relativeLuminance(color: string, background = DEFAULT_LIGHT_SURFACE): number {
-  const backdrop = requireOpaque(parseColor(background), "Luminance background");
-  return colorLuminance(composite(parseColor(color), backdrop));
-}
-
 /**
  * Calculates foreground/background contrast after alpha-compositing both layers onto
  * an opaque canvas. Argument order is significant when either color is translucent.

@@ -1,8 +1,8 @@
+import { definitionContractVersion } from "./application-contract-versions";
 import { DefinitionCompilationError } from "./compilation-error";
 import type { ApplicationSourceDocument } from "./application-source-contracts";
 import { applicationModuleKeys } from "./application-module-sources";
 import {
-  moduleSourceContractVersion,
   moduleSourceDocumentSchema,
   type ModuleSourceDocument,
   type SourceApplicationModule,
@@ -21,7 +21,7 @@ const moduleDocument = (
 ): JsonObject => {
   const { id, key, ...body } = module;
   return {
-    source_contract_version: moduleSourceContractVersion,
+    source_contract_version: definitionContractVersion,
     root_alias: id,
     key,
     kind: "module",

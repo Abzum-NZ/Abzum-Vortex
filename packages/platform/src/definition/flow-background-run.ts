@@ -91,7 +91,7 @@ export type BackgroundRunDependencies = Readonly<{
 }>;
 
 /** The acting organisation account's open scope on one installed application. */
-export type BackendActorScope = Readonly<{
+type BackendActorScope = Readonly<{
   identityId: string;
   session: IdentitySession;
   selection: ReturnType<typeof organizationSelectionCandidateSchema.parse>;
@@ -140,7 +140,7 @@ export const openBackendActorScope = async (
 };
 
 /** What one back-end flow run needs besides its scope: the flow, its inputs and who started it. */
-export type BackendFlowRun = Readonly<{
+type BackendFlowRun = Readonly<{
   runId: string;
   flowId: string;
   actorId: string;
@@ -181,7 +181,6 @@ export const runBackendFlow = async (
   };
   const subjectReader = createPageSubjectReader(requestDependencies);
   const ports: FlowOrchestratorDependencies = {
-    continuationKey: undefined as never,
     admitSegment: () => Promise.reject(new Error("BACKEND_RUN_HAS_NO_SEGMENTS")),
     admitPageStart: () => Promise.reject(new Error("BACKEND_RUN_HAS_NO_PAGE")),
     executor: createFlowProtectedExecutor(requestDependencies, dependencies.applicationStore),

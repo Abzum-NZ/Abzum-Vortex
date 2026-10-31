@@ -1,7 +1,7 @@
 import { createDetachedSegmentInvoker } from "./flow-detached-invocation";
 import "server-only";
 
-import { createHash } from "node:crypto";
+import { uuidFromText } from "./derived-definition-id";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
 import type { JsonValue } from "../catalogue/common";
 import { recordIdSchema, type IdentityAuthorityId } from "../catalogue/identifiers";
@@ -176,7 +176,7 @@ export type InvocationDependencies = Readonly<{
   ) => Promise<GuidedInvocationPage | undefined>;
 }>;
 
-export type FlowInvocationAddress = Readonly<{
+type FlowInvocationAddress = Readonly<{
   read: Extract<PermittedApplicationsRead, { kind: "available" }>;
   application: PermittedApplication;
   /**
@@ -209,12 +209,8 @@ const logFlowRefusal = (code: string): void => {
 const refusesGuidedBinding = (guided: GuidedControl | null, event: string): boolean =>
   guided === null || (event === "form_submit" && !guided.summary);
 
-const guidedClickId = (draftId: string, revision: number, bindingId: string): string => {
-  const hex = createHash("sha256")
-    .update(JSON.stringify([draftId, revision, bindingId]))
-    .digest("hex");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
-};
+const guidedClickId = (draftId: string, revision: number, bindingId: string): string =>
+  uuidFromText(JSON.stringify([draftId, revision, bindingId]), 4);
 
 export async function invokeInstalledFlow(
   session: IdentitySession,

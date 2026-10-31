@@ -63,7 +63,7 @@ import {
  * showed (`expected`); the install and the upgrade refuse as a conflict when that state moved, so
  * a person only ever confirms what is still true.
  */
-export type ApplicationStoreEnvironment = FirstInstallFlowEnvironment & UpgradeRoleEnvironment;
+type ApplicationStoreEnvironment = FirstInstallFlowEnvironment & UpgradeRoleEnvironment;
 
 export type { StoreReceiptCompletion };
 
@@ -129,12 +129,26 @@ const listWords = (words: readonly string[]): string =>
     : `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
 
 /**
- * One sentence per role: its standard record permissions grouped by record type ("Members can view,
- * create, edit, delete, restore and export assets."), then its other permissions as written.
+ * One role as the install or upgrade confirmation lists it: the role's name as the heading, then
+ * what the role allows, one line per record type and one line for each other permission. The
+ * confirmation nests these lines under the role, so no dense sentence is ever shown.
+ */
+type ApplicationStoreRoleSummary = Readonly<{
+  text: string;
+  lines: string[];
+}>;
+
+/**
+ * One role's summary: its standard record permissions grouped by record type ("can view, create,
+ * edit, delete, restore and export assets") as one line each, then its other permissions as
+ * written.
  */
 const roleSummaryLine = (
-  role: Readonly<{ name: string; permissions: readonly Readonly<{ description: string }>[] }>,
-): string => {
+  role: Readonly<{
+    name: string;
+    permissions: readonly Readonly<{ description: string }>[];
+  }>,
+): ApplicationStoreRoleSummary => {
   const operationsByRecords = new Map<string, Set<string>>();
   const others: string[] = [];
   for (const { description } of role.permissions) {
@@ -153,9 +167,9 @@ const roleSummaryLine = (
     const words = standardOperationWords
       .filter(([operation]) => operations.has(operation))
       .map(([, word]) => word);
-    return `${role.name} can ${listWords(words)} ${records}.`;
+    return `Can ${listWords(words)} ${records}.`;
   });
-  return [...standard, ...others].join(" ");
+  return { text: role.name, lines: [...standard, ...others] };
 };
 
 /** A review that names why neither an install nor an upgrade is possible; the flow explains it. */

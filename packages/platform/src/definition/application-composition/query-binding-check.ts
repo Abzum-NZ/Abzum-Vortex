@@ -33,7 +33,7 @@ export type QueryBindingField = Readonly<{
 }>;
 
 /** One parameter the page declares: its subject, or the one a control publishes. */
-export type QueryBindingPageParameter = Readonly<{
+type QueryBindingPageParameter = Readonly<{
   name: string;
   /** The parameter in business words: "This Company", or the publishing control's label. */
   label: string;
@@ -43,7 +43,7 @@ export type QueryBindingPageParameter = Readonly<{
 }>;
 
 /** One control on the page, by the placement a binding names, with its label. */
-export type QueryBindingControl = Readonly<{
+type QueryBindingControl = Readonly<{
   placement: string;
   label: string;
   /** The page parameter it publishes; absent when it publishes none. */
@@ -60,7 +60,7 @@ export type QueryBindingPageFacts = Readonly<{
   /** The directory person type in the caller's identity space; absent without the directory. */
   currentPersonRecordType: string | undefined;
   /** The group directory type in the caller's identity space; absent without the directory. */
-  currentTeamRecordType: string | undefined;
+  currentGroupRecordType: string | undefined;
   parameters: readonly QueryBindingPageParameter[];
   controls: readonly QueryBindingControl[];
   /** The fields of the page's subject record; undefined when the page is not a record page. */
@@ -135,13 +135,13 @@ const sourceFacts = (source: QueryBindingSource, facts: QueryBindingPageFacts): 
     case "current_person":
       if (source.part === "organisation")
         return { kind: "typed", type: { kind: "text" }, description: "the current organisation" };
-      if (source.part === "team")
-        return facts.currentTeamRecordType === undefined
-          ? { kind: "problem", sentence: "Current team needs the group directory." }
+      if (source.part === "group")
+        return facts.currentGroupRecordType === undefined
+          ? { kind: "problem", sentence: "Current group needs the group directory." }
           : {
               kind: "typed",
-              type: { kind: "record", recordTypes: [facts.currentTeamRecordType] },
-              description: "the current team",
+              type: { kind: "record", recordTypes: [facts.currentGroupRecordType] },
+              description: "the current group",
             };
       return facts.currentPersonRecordType === undefined
         ? { kind: "problem", sentence: "Current person needs the people directory." }
@@ -348,7 +348,7 @@ export const pageBindingFacts = (
     /** The record type a record page is about, with its name; undefined on any other page. */
     subject: Readonly<{ recordType: string; label: string }> | undefined;
     currentPersonRecordType: string | undefined;
-    currentTeamRecordType: string | undefined;
+    currentGroupRecordType: string | undefined;
     placements: readonly QueryBindingPlacement[];
     recordFields: readonly QueryBindingField[] | undefined;
     recordTypeLabel: (recordType: string) => string;
@@ -411,7 +411,7 @@ export const pageBindingFacts = (
   }
   return {
     currentPersonRecordType: input.currentPersonRecordType,
-    currentTeamRecordType: input.currentTeamRecordType,
+    currentGroupRecordType: input.currentGroupRecordType,
     parameters,
     controls,
     recordFields: input.recordFields,

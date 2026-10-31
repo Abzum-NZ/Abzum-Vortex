@@ -151,7 +151,7 @@ export type RecordSettingsContext = Readonly<{
 }>;
 
 /** One relationship a record type could take its owner from, and why it cannot, if it cannot. */
-export type RecordOwnershipSource = Readonly<{
+type RecordOwnershipSource = Readonly<{
   key: string;
   label: string;
   /** The record types it links to, qualified (`module:record`); more than one for a polymorphic link. */

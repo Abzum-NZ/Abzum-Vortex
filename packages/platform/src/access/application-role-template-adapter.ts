@@ -28,6 +28,7 @@ import {
 } from "./permission-registry-definition-adapter";
 import { isLiveSystemContext } from "./private-system-context";
 
+/** @knipignore */
 export const applicationRoleTemplatePreparationErrorCodes = [
   "INVALID_APPLICATION_ROLE_TEMPLATE_PREPARATION_COMMAND",
   "APPLICATION_ROLE_TEMPLATE_CONTEXT_REFUSED",
@@ -36,10 +37,10 @@ export const applicationRoleTemplatePreparationErrorCodes = [
   "APPLICATION_ROLE_TEMPLATE_PERMISSION_OWNERSHIP_AMBIGUOUS",
 ] as const;
 
-export type ApplicationRoleTemplatePreparationErrorCode =
+type ApplicationRoleTemplatePreparationErrorCode =
   (typeof applicationRoleTemplatePreparationErrorCodes)[number];
 
-export class ApplicationRoleTemplatePreparationError extends Error {
+class ApplicationRoleTemplatePreparationError extends Error {
   readonly code: ApplicationRoleTemplatePreparationErrorCode;
 
   constructor(code: ApplicationRoleTemplatePreparationErrorCode, options?: ErrorOptions) {
@@ -49,12 +50,12 @@ export class ApplicationRoleTemplatePreparationError extends Error {
   }
 }
 
-export type PrepareApplicationRoleRegistrationCandidateCommand = Readonly<{
+type PrepareApplicationRoleRegistrationCandidateCommand = Readonly<{
   applicationRootId: ApplicationRootId;
   releaseRevision: number;
 }>;
 
-export interface ApplicationRoleTemplateAdapterDependencies {
+interface ApplicationRoleTemplateAdapterDependencies {
   readonly definitionReader: PermissionRegistryDefinitionSetReader;
 }
 

@@ -26,9 +26,9 @@ import {
 } from "./display-payload-summary";
 
 export type { QueryNoticeSeverity };
-export type ProjectedQueryNotice = z.input<typeof queryNoticeItemSchema>;
-export type ProjectedQueryNoticePage = z.input<typeof queryNoticePayloadSchema>;
-export type QueryNoticeResolution =
+type ProjectedQueryNotice = z.input<typeof queryNoticeItemSchema>;
+type ProjectedQueryNoticePage = z.input<typeof queryNoticePayloadSchema>;
+type QueryNoticeResolution =
   | Readonly<{ status: "ready"; values: ProjectedQueryNoticePage }>
   | Readonly<{ status: "refused"; reason: "not_permitted" }>
   | Readonly<{ status: "error" }>;
@@ -43,7 +43,7 @@ type Mapping = Readonly<{
   linkHref?: string;
   defaultSeverity: QueryNoticeSeverity;
 }>;
-export type QueryNoticeQueryBinding = Readonly<{
+type QueryNoticeQueryBinding = Readonly<{
   command: ProtectedQueryCommand;
   moduleReleaseVersion: string;
   mapping: Mapping;
@@ -60,7 +60,7 @@ const fieldReference = (settings: Settings, key: string): string | undefined => 
 };
 
 /** Builds only the installed query's declared field projection; it carries no actor authority. */
-export const buildQueryNoticeQueryBinding = (
+const buildQueryNoticeQueryBinding = (
   candidateContext: InstalledRuntimeContext,
   queryId: string,
   settings: Settings,

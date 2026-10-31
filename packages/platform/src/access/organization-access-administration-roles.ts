@@ -67,7 +67,6 @@ const projectedRoleSchema = z.object({
       key: z.string(),
       label: z.string(),
       lifecycle: z.enum(["active", "acceptance_required", "unavailable", "retired"]),
-      assignment_policy: z.enum(["standing", "activation_required"]),
     })
     .loose(),
 });
@@ -78,7 +77,6 @@ type ProjectedOrganizationRole = Readonly<{
   label: string;
   liveRevision: number;
   lifecycle: z.infer<typeof projectedRoleSchema>["attribute_values"]["lifecycle"];
-  assignmentPolicy: z.infer<typeof projectedRoleSchema>["attribute_values"]["assignment_policy"];
 }>;
 
 const projectedPageSize = 200;
@@ -142,7 +140,19 @@ export const createAccessAdministrationRoleOperations = ({
       const rows = await transaction.query<RoleChangeRow>`
         select outcome, organization_id, role_summary, access_version
         from vortex_access.change_organization_role_authority_for_administration(
-          ${JSON.stringify(changes)}::text::jsonb
+          ${JSON.stringify(
+            changes.map((change) => ({
+              ...change,
+              evidence: {
+                ...change.evidence,
+                candidate: {
+                  ...change.evidence.candidate,
+                  // assignment_policy: removed by FIX-DB-SECURITY
+                  assignmentPolicy: { kind: "standing" },
+                },
+              },
+            })),
+          )}::text::jsonb
         )
       `;
       if (rows.length !== changes.length)
@@ -420,7 +430,6 @@ export const createAccessAdministrationRoleOperations = ({
             label: command.data.label,
             description: command.data.description,
             privilegeClassification: command.data.privilegeClassification,
-            assignmentPolicy: { kind: "standing" },
             permissions,
           };
           return sealPreparedRoleChange(roleCandidate);
@@ -439,7 +448,6 @@ export const createAccessAdministrationRoleOperations = ({
           label: command.data.label,
           description: command.data.description,
           privilegeClassification: command.data.privilegeClassification,
-          assignmentPolicy: { kind: "standing" },
           sourceRoleId: command.data.sourceRoleId,
           templateContinuityRevision,
           templateSource: readRoleTemplateSource(read.templateSource),
@@ -537,7 +545,6 @@ export const createAccessAdministrationRoleOperations = ({
           label: roleConfiguration.label,
           description: roleConfiguration.description,
           privilegeClassification: roleConfiguration.privilegeClassification,
-          assignmentPolicy: roleConfiguration.assignmentPolicy,
           sourceRoleId: roleConfiguration.sourceRoleId,
           templateContinuityRevision,
           templateSource: readRoleTemplateSource(read.templateSource),
@@ -628,7 +635,6 @@ export const createAccessAdministrationRoleOperations = ({
             label: parsed.attribute_values.label,
             liveRevision: parsed.revision,
             lifecycle: parsed.attribute_values.lifecycle,
-            assignmentPolicy: parsed.attribute_values.assignment_policy,
           };
         });
       }),

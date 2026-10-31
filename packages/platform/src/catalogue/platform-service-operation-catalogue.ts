@@ -6,12 +6,7 @@ import {
 } from "../definition/application-flow-bindings";
 import { platformServiceOperationReleaseContentHash } from "../definition/catalogue-release-content-hashes";
 import sources from "./catalogue/platform-service-operation-catalogue.source.json";
-
-const deepFreeze = <Value>(value: Value): Value => {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const key of Reflect.ownKeys(value)) deepFreeze(Reflect.get(value, key));
-  return Object.freeze(value);
-};
+import { deepFreeze } from "./runtime-primitives";
 
 /**
  * One registered platform-service operation: its exact immutable release evidence and the typed
@@ -80,7 +75,6 @@ export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
   assign_role_assignment: entry(sources.assign_role_assignment),
   prepare_role_assignment: entry(sources.prepare_role_assignment),
   revoke_role_assignment: entry(sources.revoke_role_assignment),
-  deactivate_role_activation: entry(sources.deactivate_role_activation),
   revoke_delegation_authority: entry(sources.revoke_delegation_authority),
   grant_delegation_authority: entry(sources.grant_delegation_authority),
   rename_tenant_organization: entry(sources.rename_tenant_organization),

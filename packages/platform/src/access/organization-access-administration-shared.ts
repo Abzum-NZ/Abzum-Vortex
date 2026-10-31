@@ -78,14 +78,6 @@ export type StewardshipAppointmentRow = DatabaseRow & {
   refusal_reason: unknown;
 };
 
-export type RoleActivationChangeRow = DatabaseRow & {
-  outcome: unknown;
-  organization_id: unknown;
-  activation_summary: unknown;
-  access_version: unknown;
-  refusal_reason: unknown;
-};
-
 export const normalizeGroup = (value: unknown): unknown => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return value;
   return { ...value, revision: databaseRevision((value as { revision?: unknown }).revision) };
@@ -99,75 +91,6 @@ export const normalizeMembership = (value: unknown): unknown => {
 export const normalizeAssignmentLedgerFact = (value: unknown): unknown => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return value;
   return { ...value, revision: databaseRevision((value as { revision?: unknown }).revision) };
-};
-
-export const normalizeRoleActivation = (value: unknown): unknown => {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return value;
-  const activation = value as {
-    revision?: unknown;
-    historicalRoleRevision?: unknown;
-    eligibilitySource?: unknown;
-    policyAtActivation?: unknown;
-  };
-  const source = activation.eligibilitySource;
-  const normalizedSource =
-    typeof source === "object" && source !== null && !Array.isArray(source)
-      ? {
-          ...source,
-          ...(typeof (source as { eligibilityAssignment?: unknown }).eligibilityAssignment ===
-            "object" &&
-          (source as { eligibilityAssignment?: unknown }).eligibilityAssignment !== null &&
-          !Array.isArray((source as { eligibilityAssignment?: unknown }).eligibilityAssignment)
-            ? {
-                eligibilityAssignment: {
-                  ...(source as { eligibilityAssignment: object }).eligibilityAssignment,
-                  revision: databaseRevision(
-                    (
-                      source as {
-                        eligibilityAssignment: { revision?: unknown };
-                      }
-                    ).eligibilityAssignment.revision,
-                  ),
-                },
-              }
-            : {}),
-          ...(typeof (source as { originatingMembership?: unknown }).originatingMembership ===
-            "object" &&
-          (source as { originatingMembership?: unknown }).originatingMembership !== null &&
-          !Array.isArray((source as { originatingMembership?: unknown }).originatingMembership)
-            ? {
-                originatingMembership: {
-                  ...(source as { originatingMembership: object }).originatingMembership,
-                  revision: databaseRevision(
-                    (
-                      source as {
-                        originatingMembership: { revision?: unknown };
-                      }
-                    ).originatingMembership.revision,
-                  ),
-                },
-              }
-            : {}),
-        }
-      : source;
-  const policy = activation.policyAtActivation;
-  return {
-    ...activation,
-    revision: databaseRevision(activation.revision),
-    historicalRoleRevision: databaseRevision(activation.historicalRoleRevision),
-    ...(source === undefined ? {} : { eligibilitySource: normalizedSource }),
-    ...(typeof policy === "object" && policy !== null && !Array.isArray(policy)
-      ? {
-          policyAtActivation: {
-            ...policy,
-            maximumActivationDurationSeconds: databaseRevision(
-              (policy as { maximumActivationDurationSeconds?: unknown })
-                .maximumActivationDurationSeconds,
-            ),
-          },
-        }
-      : {}),
-  };
 };
 
 export const sameAssignee = (

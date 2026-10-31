@@ -8,6 +8,7 @@ import type {
 } from "./definition-publication-contracts";
 import type { ResolvedDependencies } from "./definition-dependency-resolution";
 import { sameCanonicalValue } from "./canonical-json";
+import { deepFreeze } from "../catalogue/runtime-primitives";
 
 const sameApplicationPublication = (
   retained: ApplicationDraftCompilation,
@@ -148,13 +149,6 @@ const processCompilations = globalThis as typeof globalThis & {
 };
 const applicationDraftCompilations = (processCompilations[applicationDraftCompilationsKey] ??=
   new Map<string, ApplicationDraftCompilation>());
-
-const deepFreeze = <Value>(value: Value): Value => {
-  if (typeof value !== "object" || value === null || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value)) deepFreeze(child);
-  Object.freeze(value);
-  return value;
-};
 
 // The compile of a key that is running now, so a second caller (the canvas compile and a preview
 // move that follows a save) joins it instead of compiling the same revision beside it. An entry

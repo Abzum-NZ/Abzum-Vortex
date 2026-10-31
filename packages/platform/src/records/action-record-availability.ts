@@ -57,7 +57,7 @@ export const namedActionPreviewEligibility = (
 };
 
 /** A page subject read together with the availability of every named action bound to it. */
-export type SubjectWithNamedActionAvailability = Readonly<{
+type SubjectWithNamedActionAvailability = Readonly<{
   /** The subject projection and capabilities, as `vortex_record.read_record` returns them. */
   record: unknown;
   capabilities: unknown;

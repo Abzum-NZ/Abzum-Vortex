@@ -45,10 +45,7 @@ export type FlowRunPortsHost = Readonly<{
 }>;
 
 /** The admission of the run's page start and server segments. */
-export type FlowRunAdmission = Pick<
-  FlowOrchestratorDependencies,
-  "admitSegment" | "admitPageStart"
->;
+type FlowRunAdmission = Pick<FlowOrchestratorDependencies, "admitSegment" | "admitPageStart">;
 
 /**
  * The ports one flow run needs, bound to the given request when there is one: protected
@@ -152,7 +149,6 @@ export const createFlowRunPorts = (
     canonicalJson(session) === canonicalJson(boundRequest.session) &&
     canonicalJson(selection) === canonicalJson(boundRequest.selection);
   return {
-    continuationKey: host.continuationKey,
     ...admission,
     executor: executorFor(boundRequest, receipt),
     backend: host.backend,

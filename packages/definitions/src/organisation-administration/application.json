@@ -1,5 +1,5 @@
 {
-  "source_contract_version": "4.2.0",
+  "source_contract_version": "4.3.0",
   "root_alias": "app_organisation_administration",
   "key": "vortex.app.organisation_administration",
   "kind": "application",
@@ -18,14 +18,6 @@
         "action_kind": "named",
         "named_action": "open",
         "administrative": false
-      },
-      {
-        "id": "app_permission_manage",
-        "key": "application.organisation_administration.manage",
-        "label": "Manage Organisation Administration",
-        "description": "Allows managing Organisation Administration definition-level administration.",
-        "action_kind": "manage",
-        "administrative": true
       },
       {
         "id": "app_permission_3",
@@ -285,14 +277,6 @@
     "interfaces": [],
     "events": [
       {
-        "id": "event_organisation_settings_action",
-        "key": "vortex.app.organisation_administration.settings_action",
-        "label": "Settings action",
-        "record_type": "vortex.organisation_administration:organisation_notice",
-        "carries": [],
-        "personal_or_sensitive_values_allowed": false
-      },
-      {
         "id": "event_open_organization_settings",
         "key": "vortex.app.organisation_administration.open_organization_settings",
         "label": "Open organization settings",
@@ -422,7 +406,6 @@
       }
     ],
     "public_addresses": [],
-    "platform_block_dependencies": [],
     "shells": [
       {
         "id": "shell_organisation_administration",
@@ -2343,34 +2326,40 @@
                     "heading_source": "field",
                     "heading_field": "vortex.system_directory:connection_instance.destination_key",
                     "title": "Connection details",
-                    "detail_fields": [
+                    "sections": [
                       {
-                        "field": "vortex.system_directory:connection_instance.destination_key",
-                        "label": "Destination"
-                      },
-                      {
-                        "field": "vortex.system_directory:connection_instance.connection_type_id",
-                        "label": "Connection type"
-                      },
-                      {
-                        "field": "vortex.system_directory:connection_instance.connection_type_version",
-                        "label": "Type version"
-                      },
-                      {
-                        "field": "vortex.system_directory:connection_instance.state",
-                        "label": "State"
-                      },
-                      {
-                        "field": "vortex.system_directory:connection_instance.last_health_outcome",
-                        "label": "Health"
-                      },
-                      {
-                        "field": "vortex.system_directory:connection_instance.secret_set",
-                        "label": "Secret set"
-                      },
-                      {
-                        "field": "vortex.system_directory:connection_instance.token_expires_at",
-                        "label": "Token expires"
+                        "key": "details",
+                        "title": "Details",
+                        "fields": [
+                          {
+                            "field": "vortex.system_directory:connection_instance.destination_key",
+                            "label": "Destination"
+                          },
+                          {
+                            "field": "vortex.system_directory:connection_instance.connection_type_id",
+                            "label": "Connection type"
+                          },
+                          {
+                            "field": "vortex.system_directory:connection_instance.connection_type_version",
+                            "label": "Type version"
+                          },
+                          {
+                            "field": "vortex.system_directory:connection_instance.state",
+                            "label": "State"
+                          },
+                          {
+                            "field": "vortex.system_directory:connection_instance.last_health_outcome",
+                            "label": "Health"
+                          },
+                          {
+                            "field": "vortex.system_directory:connection_instance.secret_set",
+                            "label": "Secret set"
+                          },
+                          {
+                            "field": "vortex.system_directory:connection_instance.token_expires_at",
+                            "label": "Token expires"
+                          }
+                        ]
                       }
                     ],
                     "vortex": {

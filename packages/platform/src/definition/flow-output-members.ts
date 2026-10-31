@@ -12,19 +12,19 @@ import type { FlowValue } from "../workflows/flow-values";
  * each is read as a whole, including a form answer whose value is a map or JSON object.
  */
 
-export type FlowOutputMember = Readonly<{
+type FlowOutputMember = Readonly<{
   name: string;
   /** The member's value type when the step's contract fixes it; otherwise only the run knows. */
   type: string | undefined;
 }>;
 
-export type FlowOutputMembers = Readonly<{
+type FlowOutputMembers = Readonly<{
   /** Whether the whole output may be read as one value besides its members. */
   whole: boolean;
   members: readonly FlowOutputMember[];
 }>;
 
-export type FlowOutputMemberOptions = Readonly<{
+type FlowOutputMemberOptions = Readonly<{
   /**
    * The type of a projected record field written `<record type>.<field>`, for a flow that is not
    * compiled yet. A compiled `record.read_fields` task carries its own types.

@@ -8,10 +8,13 @@ import {
   protectedQueryCommandSchema,
   type ProtectedQueryRow,
 } from "../../queries/protected-query-contracts";
-import { projectRecordDetailData } from "../component-data-projection";
+import { projectRecordDetailData, projectRecordRelatedList } from "../component-data-projection";
 import {
+  fieldPipelinesOf,
+  findModuleQuery,
   logPlacementFailure,
   moduleFieldDisplay,
+  queryRecordType,
   readyPlacementData,
   placementSettingsOf,
   readRecordLinks,
@@ -21,9 +24,15 @@ import {
   type PlacementReadEntry,
 } from "./shared";
 import type { PlacementReadInput } from "./types";
-import { recordDetailPayloadSchema } from "../display-payload-record-detail";
+import {
+  recordDetailPayloadSchema,
+  type RecordDetailPayload,
+} from "../display-payload-record-detail";
 import { controlSelectedRecordType } from "./bindings";
 import type { PageSubjectReadResult } from "../page-subject-read";
+
+/** The declared shape of a Record detail placement, read by the same reader the renderer uses. */
+type RecordDetailContract = NonNullable<ReturnType<typeof readRecordDetailContract>>;
 
 const detailState = (
   read: PlacementReadInput,
@@ -102,14 +111,7 @@ export const readSelectedDetail = async (
     return;
   }
   // Only the fields the detail shows are requested; the record read withholds the unreadable ones.
-  const requestedFieldIds = [
-    ...new Set(
-      [
-        ...contract.fields.map((field) => field.field),
-        ...(contract.headingField === undefined ? [] : [contract.headingField]),
-      ].map((field) => field.toLowerCase()),
-    ),
-  ];
+  const requestedFieldIds = detailRequestedFieldIds(contract);
   await readRecordForDetail(
     read,
     placement,
@@ -151,6 +153,12 @@ const readRecordForDetail = async (
     read.data[placementId] = { status: "refused", reason: "not_found" };
     return;
   }
+  const contract = readRecordDetailContract(placementSettingsOf(placement));
+  // A public page shows only its declared public fields, so it reads no related list.
+  const relatedLists =
+    contract === undefined || readableFieldIds !== undefined
+      ? undefined
+      : await readRelatedLists(read, placementId, contract, recordTypeId, record.row.recordId);
   const recordLinks = await readRecordLinks(read.services.resolveRecordLinks, [record.row]);
   read.data[placementId] = detailState(
     read,
@@ -159,12 +167,110 @@ const readRecordForDetail = async (
       {
         settings: placementSettingsOf(placement),
         ...(recordLinks === undefined ? {} : { recordLinks }),
-        ...(recordModule === undefined ? {} : moduleFieldDisplay(recordModule)),
+        ...(recordModule === undefined
+          ? {}
+          : {
+              ...moduleFieldDisplay(recordModule),
+              fieldPipelines: fieldPipelinesOf(recordModule),
+            }),
         ...(readableFieldIds === undefined ? {} : { readableFieldIds }),
+        ...(relatedLists === undefined ? {} : { recordRelatedLists: relatedLists }),
       },
       [record.row],
     ),
   );
+};
+
+/** Every field a Record detail requests: its sections, header key facts, stage and heading. */
+const detailRequestedFieldIds = (contract: RecordDetailContract): string[] => [
+  ...new Set(
+    [
+      ...contract.sections.flatMap((section) => section.fields).map((field) => field.field),
+      ...contract.headerFields,
+      ...(contract.stageField === undefined ? [] : [contract.stageField]),
+      ...(contract.headingField === undefined ? [] : [contract.headingField]),
+    ].map((field) => field.toLowerCase()),
+  ),
+];
+
+/**
+ * Reads every related list a Record detail declares: one installed query per list, narrowed by the
+ * record the detail shows through the list's parent input, five rows each. A list whose query is
+ * unavailable, refused or unreadable is logged and left out, so one list never blanks the record.
+ */
+const readRelatedLists = async (
+  read: PlacementReadInput,
+  placementId: string,
+  contract: RecordDetailContract,
+  parentRecordTypeId: string,
+  parentRecordId: string,
+): Promise<RecordDetailPayload["relatedLists"]> => {
+  const lists: RecordDetailPayload["relatedLists"][number][] = [];
+  for (const list of contract.relatedLists) {
+    const bound = findModuleQuery(read.context, list.query);
+    const recordType = bound === undefined ? undefined : queryRecordType(read.context, bound.query);
+    if (bound === undefined || recordType === undefined) {
+      logPlacementFailure(read.address, placementId, "related_list_query_unavailable");
+      continue;
+    }
+    const command = protectedQueryCommandSchema.safeParse({
+      moduleRootId: bound.module.rootId,
+      queryId: bound.query.queryId,
+      inputValues: {
+        [list.parentInput]: { recordTypeId: parentRecordTypeId, recordId: parentRecordId },
+      },
+      requestedFieldIds: [
+        ...new Set(
+          [...list.columns.map((column) => column.field), String(recordType.titleFieldId)].map(
+            (field) => field.toLowerCase(),
+          ),
+        ),
+      ],
+      requestedSystemFieldKeys: [],
+      sort: [],
+      sortableFieldIds: [],
+      filterableFieldIds: [],
+      searchableFieldIds: [],
+      pageSize: 5,
+    });
+    if (!command.success) {
+      logPlacementFailure(read.address, placementId, "related_list_command_invalid");
+      continue;
+    }
+    const result = await read.services.queries.run(read.session, read.selection, command.data);
+    if (result.kind === "temporarily_unavailable") {
+      logPlacementFailure(read.address, placementId, "related_list_unavailable");
+      continue;
+    }
+    if (result.kind !== "available" || result.value.outcome !== "completed") {
+      logPlacementFailure(read.address, placementId, "related_list_refused");
+      continue;
+    }
+    const rows: readonly ProtectedQueryRow[] = result.value.rows;
+    const links = await readRecordLinks(read.services.resolveRecordLinks, rows);
+    lists.push(
+      projectRecordRelatedList(
+        {
+          ...moduleFieldDisplay(bound.module),
+          titleFieldId: String(recordType.titleFieldId),
+          ...(links === undefined ? {} : { recordLinks: links }),
+        },
+        {
+          key: list.key,
+          title: list.title,
+          columns: list.columns.map((column) => ({
+            field: column.field,
+            ...(column.label === undefined ? {} : { label: column.label }),
+          })),
+          ...(list.addPage === undefined || list.addField === undefined
+            ? {}
+            : { add: { pageKey: list.addPage, parentFieldId: list.addField } }),
+        },
+        rows,
+      ),
+    );
+  }
+  return lists;
 };
 
 /** A Record detail bound to a query shows the first row that query returns for its inputs. */
@@ -189,12 +295,7 @@ export const readQueryDetail = async (
     read.data[placementId] = { status: "error" };
     return;
   }
-  const fieldIds = [
-    ...new Set([
-      ...detailContract.fields.map((field) => field.field),
-      ...(detailContract.headingField === undefined ? [] : [detailContract.headingField]),
-    ]),
-  ];
+  const fieldIds = detailRequestedFieldIds(detailContract);
   const command = protectedQueryCommandSchema.safeParse({
     moduleRootId: bound.module.rootId,
     queryId: bound.query.queryId,
@@ -224,6 +325,16 @@ export const readQueryDetail = async (
     return;
   }
   const rows: readonly ProtectedQueryRow[] = result.value.rows;
+  const relatedLists =
+    queryRecordType.state === "resolved" && rows[0] !== undefined
+      ? await readRelatedLists(
+          read,
+          placementId,
+          detailContract,
+          String(queryRecordType.recordTypeId),
+          rows[0].recordId,
+        )
+      : undefined;
   const detailLinks = await readRecordLinks(read.services.resolveRecordLinks, rows);
   read.data[placementId] = detailState(
     read,
@@ -233,6 +344,8 @@ export const readQueryDetail = async (
         settings,
         ...(detailLinks === undefined ? {} : { recordLinks: detailLinks }),
         ...moduleFieldDisplay(detailModule),
+        fieldPipelines: fieldPipelinesOf(detailModule),
+        ...(relatedLists === undefined ? {} : { recordRelatedLists: relatedLists }),
       },
       rows,
     ),

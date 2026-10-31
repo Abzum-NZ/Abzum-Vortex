@@ -3,14 +3,13 @@ import { z } from "zod";
 /**
  * Closed, platform-declared protected read models that a module's protected view may name.
  */
-export const protectedReadModelKeys = [
+const protectedReadModelKeys = [
   "people",
   "organization_accounts",
   "roles",
   "permissions",
   "groups",
   "effective_assignments",
-  "role_activations",
   "delegations",
   "tenant_structure",
   "organization_invitations",
@@ -39,15 +38,6 @@ export const boundedProtectedReadModelSortKeys: Partial<
     "starts_at",
     "expires_at",
     "state",
-    "role_key",
-    "role_label",
-  ],
-  role_activations: [
-    "record_id",
-    "activated_at",
-    "expires_at",
-    "state",
-    "account_display_name",
     "role_key",
     "role_label",
   ],

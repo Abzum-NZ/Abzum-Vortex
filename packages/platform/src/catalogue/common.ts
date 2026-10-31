@@ -30,6 +30,7 @@ export const safeHttpsUrlSchema = z
   .refine(isSafeHttpsUrl, { message: "Only safe HTTPS addresses are accepted" });
 export const duplicateProtectionKeySchema = z.string().min(16).max(200);
 export const correlationIdSchema = platformIdSchema.brand<"CorrelationId">();
+
 /** Closed safety limits shared by every authored and canonical condition tree. */
 export const conditionMaximumNestingDepth = 10;
 export const conditionMaximumOperandCount = 100;
@@ -43,26 +44,6 @@ export const secretReferenceSchema = z
     referenceId: platformIdSchema,
     key: builderKeySchema,
     version: z.string().min(1).max(120).optional(),
-  })
-  .strict();
-
-export const retryPolicySchema = z
-  .object({
-    maximumAttempts: z.number().int().min(1).max(20),
-    initialDelaySeconds: z.number().int().min(0).max(86_400),
-    maximumDelaySeconds: z.number().int().min(0).max(86_400),
-    backoff: z.enum(["fixed", "exponential"]),
-  })
-  .strict()
-  .refine((value) => value.maximumDelaySeconds >= value.initialDelaySeconds, {
-    path: ["maximumDelaySeconds"],
-    message: "Maximum delay cannot be shorter than initial delay",
-  });
-
-export const boundedPageSchema = z
-  .object({
-    pageSize: z.number().int().min(1).max(500),
-    continuationToken: z.string().min(1).max(2_000).optional(),
   })
   .strict();
 

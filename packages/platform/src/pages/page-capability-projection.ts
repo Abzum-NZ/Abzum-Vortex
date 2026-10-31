@@ -9,7 +9,7 @@ import { placementViewShown } from "./projected-navigation";
 import { conditionReadsPageValues } from "../rules/typed-condition-core";
 import type { ConditionNode } from "../definition/module-foundation-contracts";
 
-export type PlacementCapabilityState = Readonly<{
+type PlacementCapabilityState = Readonly<{
   viewAllowed: boolean;
   useAllowed: boolean;
   /** The placement binds an operation, or a binding it cannot prove; it then needs `operationBound`. */

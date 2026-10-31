@@ -1,4 +1,5 @@
 import "server-only";
+import type { definitionContractVersion } from "./application-contract-versions";
 
 import type {
   BlockId,
@@ -42,7 +43,7 @@ type ConnectionOutput = Extract<DefinitionCompilationOutput, { kind: "connection
 export type PublishableCompilationOutput = ApplicationCompilationOutput | ModuleCompilationOutput;
 export type DefinitionResolution = DefinitionResolutionSnapshot;
 
-export type DefinitionPublicationFailureCode =
+type DefinitionPublicationFailureCode =
   | "INVALID_DEFINITION_PUBLICATION_COMMAND"
   | "DEFINITION_DRAFT_STALE_OR_MISSING"
   | "DEFINITION_IDENTITY_RETIRED"
@@ -225,7 +226,7 @@ export type DefinitionReleaseAppend = Readonly<{
   reasons: DefinitionPublicationConfirmation["reasons"];
   dependencyManifest: readonly ExactDefinitionDependency[];
   resolutionSnapshot: DefinitionResolution;
-  validationContractVersion: "4.2.0";
+  validationContractVersion: typeof definitionContractVersion;
   releaseNote: string;
 }>;
 

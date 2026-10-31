@@ -40,14 +40,14 @@ import { createViewerSafeRecordLinkService } from "./viewer-safe-record-link";
 import type { createDatabaseApplicationBoundReleaseSetService } from "./application-bound-release-set";
 
 /** What the host supplies besides the builder's own request. */
-export type FlowTestRunDependencies = Readonly<{
+type FlowTestRunDependencies = Readonly<{
   requests: HumanOrganizationRequestDependencies;
   applicationStore: ApplicationStoreService;
   continuationKey: QueryContinuationKey;
   permissions: Parameters<typeof createDatabaseApplicationBoundReleaseSetService>[0]["permissions"];
 }>;
 
-export type FlowTestRunRequest = Readonly<{
+type FlowTestRunRequest = Readonly<{
   flowId: string;
   inputs: Readonly<Record<string, unknown>>;
 }>;

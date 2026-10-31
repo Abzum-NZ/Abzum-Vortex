@@ -34,7 +34,6 @@ import type { FlowSegmentReceipt, SegmentExecution, StartFlowResult } from "../w
 import type { FlowWarningNotice } from "../workflows/flow-warning-notice";
 import type { RecordSaveServiceResult } from "../records/save-record";
 import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
-import type { QueryContinuationKey } from "../queries/continuation-token";
 import type { NamedActionFlowRunner } from "./flow-action-run";
 import type { NamedActionBatchResult } from "../records/action-record-port";
 import type { ExecuteNamedActionCommand } from "../records/named-actions";
@@ -240,7 +239,6 @@ export type FlowGuidedDraftPort = Readonly<{
 }>;
 
 export type FlowOrchestratorDependencies = Readonly<{
-  continuationKey: QueryContinuationKey;
   /** Admits exactly one planned server segment and supplies its transaction-bound ports. */
   admitSegment: (
     run: Run,
@@ -312,8 +310,8 @@ export type FlowOrchestratorDependencies = Readonly<{
     >;
   }>;
   /**
-   * Reads the record a flow with a record input runs for, at its start and again at every resume,
-   * so a stored run never holds record values. Without it such a flow cannot start.
+   * Reads the record a flow with a record input runs for, once per run, so a segment never carries
+   * record values forward. Without it such a flow cannot start.
    */
   currentRecords?: FlowCurrentRecordPort;
   /**
@@ -413,7 +411,7 @@ export type FlowOrchestratorResponse = (
         diagnostic?: FlowRefusalFeedback;
       }>;
       stopped?: string;
-      /** Protected effects this run committed, across every resume: a later failure is then partial. */
+      /** Protected effects this run committed: a later failure is then partial. */
       committedEffects: number;
       outputs: Readonly<Record<string, JsonValue>>;
       carriedValues?: string;

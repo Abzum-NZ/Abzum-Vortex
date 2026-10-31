@@ -23,7 +23,7 @@ export const databaseErrorCode = (error: unknown): string | undefined =>
     : undefined;
 
 /** The closed set of database failure kinds that services map to their own safe codes. */
-export type DatabaseFailureKind =
+type DatabaseFailureKind =
   | "refused"
   | "conflict"
   | "duplicate"

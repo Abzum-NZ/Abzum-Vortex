@@ -3,7 +3,6 @@ import {
   applicationRootIdSchema,
   connectionInstanceIdSchema,
   organizationIdSchema,
-  recordTypeIdSchema,
   revisionSchema,
   storageContractIdSchema,
   timestampSchema,
@@ -19,23 +18,20 @@ const nonNilUuidSchema = z
 
 const jsonSafePositiveIntegerSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 
-export const recordLifecyclePolicyIdSchema = nonNilUuidSchema.brand<"RecordLifecyclePolicyId">();
-export type RecordLifecyclePolicyId = z.infer<typeof recordLifecyclePolicyIdSchema>;
+const recordLifecyclePolicyIdSchema = nonNilUuidSchema.brand<"RecordLifecyclePolicyId">();
 
 /**
- * Permitted end-of-life lifecycle actions.
+ * Permitted end-of-life lifecycle action.
  * - 'delete': recoverable deletion under the organisation recovery policy.
- * - 'archive_workflow': registered durable backend workflow to archive followed by protected deletion.
  */
-export const recordLifecycleActionSchema = z.enum(["delete", "archive_workflow"]);
-export type RecordLifecycleAction = z.infer<typeof recordLifecycleActionSchema>;
+const recordLifecycleActionSchema = z.literal("delete");
 
 /**
  * Closed, typed archive destination reference identifier.
  * Must be a lowercase alphanumeric identifier using hyphen or underscore delimiters.
  * Strictly excludes URLs, connection strings, SQL escape hatches, and credential patterns.
  */
-export const archiveDestinationReferenceSchema = z
+const archiveDestinationReferenceSchema = z
   .string()
   .min(1)
   .max(80)
@@ -44,7 +40,6 @@ export const archiveDestinationReferenceSchema = z
     "Archive destination reference must be a lowercase alphanumeric identifier using hyphen or underscore delimiters",
   )
   .brand<"ArchiveDestinationReference">();
-export type ArchiveDestinationReference = z.infer<typeof archiveDestinationReferenceSchema>;
 
 /**
  * Organisation runtime settings lifecycle ceiling schema.
@@ -61,6 +56,7 @@ export const organizationLifecycleLimitsSchema = z
     allowUnlimitedRetentionDays: z.boolean(),
     allowUnlimitedRecordCount: z.boolean(),
     allowedActions: z.array(recordLifecycleActionSchema).min(1),
+    // archive leftover: removed by FIX-DB-SECURITY
     allowedArchiveDestinations: z.array(archiveDestinationReferenceSchema),
   })
   .strict()
@@ -106,26 +102,13 @@ export const organizationLifecycleLimitsSchema = z
       }
     }
 
-    // 3. Unique allowed actions
+    // 4. Unique allowed actions
     const uniqueActions = new Set(limits.allowedActions);
     if (uniqueActions.size !== limits.allowedActions.length) {
       context.addIssue({
         code: "custom",
         path: ["allowedActions"],
         message: "allowedActions cannot contain duplicate values",
-      });
-    }
-
-    // 4. Archive workflow requires at least one allowed destination
-    if (
-      limits.allowedActions.includes("archive_workflow") &&
-      limits.allowedArchiveDestinations.length === 0
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["allowedArchiveDestinations"],
-        message:
-          "allowedArchiveDestinations cannot be empty when 'archive_workflow' is an allowed action",
       });
     }
   });
@@ -135,8 +118,7 @@ export type OrganizationLifecycleLimits = z.infer<typeof organizationLifecycleLi
 /**
  * Standard JSON-safe positive integer revision schema matching repository conventions.
  */
-export const policyRevisionSchema = revisionSchema;
-export type PolicyRevision = z.infer<typeof policyRevisionSchema>;
+const policyRevisionSchema = revisionSchema;
 
 const policyBaseFields = {
   policyId: recordLifecyclePolicyIdSchema,
@@ -199,9 +181,7 @@ const validatePolicyLimitsConsistency = (
  * JSON-safe integer.  A larger configured window is a refusal, never a silent
  * unlimited-recovery fallback.
  */
-export const maximumRecoveryWindowDays = Math.floor(
-  Number.MAX_SAFE_INTEGER / (24 * 60 * 60 * 1000),
-);
+const maximumRecoveryWindowDays = Math.floor(Number.MAX_SAFE_INTEGER / (24 * 60 * 60 * 1000));
 
 const recoveryWindowDaysSchema = jsonSafePositiveIntegerSchema.max(maximumRecoveryWindowDays);
 
@@ -209,7 +189,7 @@ const recoveryWindowDaysSchema = jsonSafePositiveIntegerSchema.max(maximumRecove
  * Policy contract for recoverable deletion. Carries no archive metadata; it may
  * carry the recovery window that bounds restoring a deleted record.
  */
-export const deleteRecordLifecyclePolicySchema = z
+const deleteRecordLifecyclePolicySchema = z
   .object({
     ...policyBaseFields,
     action: z.literal("delete"),
@@ -233,46 +213,16 @@ export const initialRecordLifecyclePolicySchema = z
   .strict()
   .superRefine(validatePolicyLimitsConsistency);
 
-export type DeleteRecordLifecyclePolicy = z.infer<typeof deleteRecordLifecyclePolicySchema>;
-
 /**
- * Policy contract for durable workflow archival followed by protected deletion.
- * Carries exact typed workflow reference, expected revision, connection instance and destination.
+ * The record-type lifecycle policy of a record type: recoverable deletion only.
  */
-export const archiveWorkflowRecordLifecyclePolicySchema = z
-  .object({
-    ...policyBaseFields,
-    action: z.literal("archive_workflow"),
-    archiveWorkflowId: flowIdSchema,
-    expectedWorkflowRevision: revisionSchema,
-    archiveConnectionInstanceId: connectionInstanceIdSchema,
-    archiveDestination: archiveDestinationReferenceSchema,
-    expectedConnectionRevision: revisionSchema,
-    expectedDestinationFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-    expectedConnectionHealthOutcome: z.literal("healthy"),
-  })
-  .strict()
-  .superRefine(validatePolicyLimitsConsistency);
-
-export type ArchiveWorkflowRecordLifecyclePolicy = z.infer<
-  typeof archiveWorkflowRecordLifecyclePolicySchema
->;
-
-/**
- * Discriminated union of record-type lifecycle policies.
- */
-export const recordTypeLifecyclePolicySchema = z.discriminatedUnion("action", [
-  deleteRecordLifecyclePolicySchema,
-  archiveWorkflowRecordLifecyclePolicySchema,
-]);
-
-export type RecordTypeLifecyclePolicy = z.infer<typeof recordTypeLifecyclePolicySchema>;
+const recordTypeLifecyclePolicySchema = deleteRecordLifecyclePolicySchema;
 
 /**
  * Evidence item for an exact active registered workflow in runtime.
  * Scope-bound to matching organizationId and authorizedApplicationIds.
  */
-export const registeredWorkflowEvidenceSchema = z
+const registeredWorkflowEvidenceSchema = z
   .object({
     workflowId: flowIdSchema,
     workflowRevision: revisionSchema,
@@ -281,13 +231,12 @@ export const registeredWorkflowEvidenceSchema = z
     state: z.literal("active"),
   })
   .strict();
-export type RegisteredWorkflowEvidence = z.infer<typeof registeredWorkflowEvidenceSchema>;
 
 /**
  * Evidence item for an exact active connection instance in runtime.
  * Scope-bound to matching organizationId, closed destinationKey, and canonical authorizedApplicationIds (min 1).
  */
-export const activeConnectionEvidenceSchema = z
+const activeConnectionEvidenceSchema = z
   .object({
     connectionInstanceId: connectionInstanceIdSchema,
     destinationKey: archiveDestinationReferenceSchema,
@@ -300,89 +249,20 @@ export const activeConnectionEvidenceSchema = z
     verifiedAt: timestampSchema.optional(),
   })
   .strict();
-export type ActiveConnectionEvidence = z.infer<typeof activeConnectionEvidenceSchema>;
 
 /**
  * Scope-bound live readiness evidence contract required for activation and live policy validation.
  * Proves that exact workflows and connections are active and bound to the matching organisation.
  */
-export const lifecycleReadinessEvidenceSchema = z
+const lifecycleReadinessEvidenceSchema = z
   .object({
     organizationId: organizationIdSchema,
+    // archive leftover: removed by FIX-DB-SECURITY
     registeredWorkflows: z.array(registeredWorkflowEvidenceSchema),
+    // archive leftover: removed by FIX-DB-SECURITY
     activeConnections: z.array(activeConnectionEvidenceSchema),
   })
   .strict();
-export type LifecycleReadinessEvidence = z.infer<typeof lifecycleReadinessEvidenceSchema>;
-
-/**
- * The immutable facts a caller must carry into a recovery decision.  The
- * record-type identity is intentionally paired with the stored-policy target:
- * a storage contract is not itself an authority to restore another type.
- */
-export const recordRecoveryPolicySchema = z
-  .object({
-    recordTypeId: recordTypeIdSchema,
-    policy: recordTypeLifecyclePolicySchema,
-    recoveryWindowDays: recoveryWindowDaysSchema,
-  })
-  .strict();
-export type RecordRecoveryPolicy = z.infer<typeof recordRecoveryPolicySchema>;
-
-export const recordRecoveryEligibilityReasonSchema = z.enum([
-  "malformed_input",
-  "policy_unavailable",
-  "policy_revision_stale",
-  "scope_mismatch",
-  "recovery_action_ineligible",
-  "readiness_unavailable",
-  "recovery_window_expired",
-]);
-export type RecordRecoveryEligibilityReason = z.infer<typeof recordRecoveryEligibilityReasonSchema>;
-
-/**
- * Pure, state-free recovery decision input.  The caller supplies the current
- * stored policy projection and readiness fact; this contract deliberately has
- * no record ID, mutation command, totals, effects, or receipt fields.
- *
- * `governingPolicy` is explicitly nullable so an absent stored policy is the
- * distinct `policy_unavailable` refusal rather than a malformed input, and so
- * an unavailable policy can never be read as an unrestricted recovery.
- */
-export const recordRecoveryEligibilityInputSchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    storageContractId: storageContractIdSchema,
-    applicationRootId: applicationRootIdSchema.nullable(),
-    recordTypeId: recordTypeIdSchema,
-    deletedAt: timestampSchema,
-    decidedAt: timestampSchema,
-    expectedPolicyRevision: revisionSchema,
-    readinessAvailable: z.boolean(),
-    governingPolicy: recordRecoveryPolicySchema.nullable(),
-  })
-  .strict();
-export type RecordRecoveryEligibilityInput = z.infer<typeof recordRecoveryEligibilityInputSchema>;
-
-export const recordRecoveryEligibilityDecisionSchema = z.discriminatedUnion("allowed", [
-  z
-    .object({
-      allowed: z.literal(true),
-      reason: z.null(),
-      governingPolicyRevision: revisionSchema,
-    })
-    .strict(),
-  z
-    .object({
-      allowed: z.literal(false),
-      reason: recordRecoveryEligibilityReasonSchema,
-      governingPolicyRevision: revisionSchema.nullable(),
-    })
-    .strict(),
-]);
-export type RecordRecoveryEligibilityDecision = z.infer<
-  typeof recordRecoveryEligibilityDecisionSchema
->;
 
 /**
  * Protected Record-owned snapshot taken immediately after the Module
@@ -399,128 +279,25 @@ export const applicationLifecyclePolicyReadinessSchema = z
     readinessEvidence: lifecycleReadinessEvidenceSchema,
   })
   .strict();
-export type ApplicationLifecyclePolicyReadiness = z.infer<
-  typeof applicationLifecyclePolicyReadinessSchema
->;
 
-const refusedRecovery = (
-  reason: RecordRecoveryEligibilityReason,
-  governingPolicyRevision: number | null,
-): RecordRecoveryEligibilityDecision => ({
-  allowed: false,
-  reason,
-  governingPolicyRevision,
-});
-
-/**
- * Platform identifiers are compared case-insensitively, exactly like every
- * other stored-identifier comparison in this repository: a database projection
- * and a request value can differ in hexadecimal case alone, and that
- * difference is not a scope mismatch.
- */
-const sameIdentifier = (left: string | null, right: string | null): boolean =>
-  left === null || right === null ? left === right : left.toLowerCase() === right.toLowerCase();
-
-const millisecondsPerDay = 24 * 60 * 60 * 1000;
-
-/**
- * Determines recovery eligibility without observing or changing Record state.
- * Times are interpreted as UTC instants and a record is recoverable only while
- * the elapsed interval is strictly shorter than its configured window.
- *
- * Every refusal is one of the closed `recordRecoveryEligibilityReasonSchema`
- * values and carries the governing policy revision whenever one was resolved,
- * so a caller can report exactly which revision refused it.
- */
-export const decideRecordRecoveryEligibility = (
-  candidate: unknown,
-): RecordRecoveryEligibilityDecision => {
-  const input = recordRecoveryEligibilityInputSchema.safeParse(candidate);
-  if (!input.success) return refusedRecovery("malformed_input", null);
-
-  const { governingPolicy, deletedAt, decidedAt } = input.data;
-  if (governingPolicy === null) return refusedRecovery("policy_unavailable", null);
-
-  const policy = governingPolicy.policy;
-  const policyRevision = policy.policyRevision;
-  if (input.data.expectedPolicyRevision !== policyRevision)
-    return refusedRecovery("policy_revision_stale", policyRevision);
-  if (
-    !sameIdentifier(policy.organizationId, input.data.organizationId) ||
-    !sameIdentifier(policy.storageContractId, input.data.storageContractId) ||
-    !sameIdentifier(policy.applicationRootId, input.data.applicationRootId) ||
-    !sameIdentifier(governingPolicy.recordTypeId, input.data.recordTypeId)
-  )
-    return refusedRecovery("scope_mismatch", policyRevision);
-  // Recoverable deletion is the only end-of-life action this decision allows.
-  // An archive-workflow policy removes its source through the durable archive
-  // path owned by archive removal, so it is refused here with a stable reason rather
-  // than silently reinterpreted as a recoverable delete.
-  if (policy.action !== "delete")
-    return refusedRecovery("recovery_action_ineligible", policyRevision);
-  if (!input.data.readinessAvailable)
-    return refusedRecovery("readiness_unavailable", policyRevision);
-
-  const deletedAtMs = new Date(deletedAt).getTime();
-  const decidedAtMs = new Date(decidedAt).getTime();
-  if (!Number.isFinite(deletedAtMs) || !Number.isFinite(decidedAtMs))
-    return refusedRecovery("malformed_input", policyRevision);
-  // A decision taken before the deletion it decides on is not an expired
-  // window; it is an inconsistent input and is reported as one.
-  if (decidedAtMs < deletedAtMs) return refusedRecovery("malformed_input", policyRevision);
-
-  // `recoveryWindowDays` is bounded by `maximumRecoveryWindowDays`, so this
-  // product is always a JSON-safe integer and can never degrade into an
-  // unbounded recovery window.
-  const recoveryWindowMs = governingPolicy.recoveryWindowDays * millisecondsPerDay;
-  if (decidedAtMs - deletedAtMs >= recoveryWindowMs)
-    return refusedRecovery("recovery_window_expired", policyRevision);
-
-  return { allowed: true, reason: null, governingPolicyRevision: policyRevision };
-};
-
-export interface PolicyValidationIssue {
+interface PolicyValidationIssue {
   code: string;
   message: string;
   path?: (string | number)[];
 }
 
-export interface PolicyValidationResult {
+interface PolicyValidationResult {
   valid: boolean;
   success: boolean;
   issues: PolicyValidationIssue[];
   errors: string[];
 }
 
-/**
- * Live policy and activation validation: validates a record-type policy against
- * the organisation's protected settings limits, mandatory expectedSettingsRevision,
- * and typed runtime readiness evidence.
- *
- * Enforces:
- * 1. expectedSettingsRevision is MANDATORY, validated as a JSON-safe revision, and must match limits.settingsRevision.
- * 2. Policy and limits conform to their strict contracts.
- * 3. Organisation isolation: policy.organizationId MUST match organizationLimits.organizationId.
- * 4. Ceilings: maxAgeDays <= maxRetentionDays, maxCount <= maxRecordCount.
- * 5. Unlimited permissions: allowUnlimitedAge / allowUnlimitedCount require organisation permission.
- * 6. Action permission: policy.action is in organisationLimits.allowedActions.
- * 7. For archive_workflow:
- *    - Destination is in organisationLimits.allowedArchiveDestinations.
- *    - readinessEvidence is mandatory and must match policy.organizationId.
- *    - Exact archiveWorkflowId and expectedWorkflowRevision must be in registeredWorkflows with state "active".
- *    - Exact archiveConnectionInstanceId and archiveDestination must be in activeConnections with matching organisationId.
- *    - Permanent application root scope: policy.applicationRootId must be present in authorizedApplicationIds
- *      for both workflow and connection; organisation-shared policies cannot activate archive_workflow without application scope.
- *    - Unavailable archival NEVER silently falls back to deletion.
- */
-export interface ValidateRecordTypeLifecyclePolicyOptions {
-  expectedSettingsRevision: number;
-}
-
 export const validateRecordTypeLifecyclePolicy = (
   policyCandidate: unknown,
   organizationLimitsCandidate: unknown,
-  readinessEvidenceCandidate: unknown,
+  // archive leftover: removed by FIX-DB-SECURITY, with the readiness evidence it was read from.
+  _readinessEvidenceCandidate: unknown,
   expectedSettingsRevisionCandidate: unknown,
 ): PolicyValidationResult => {
   const issues: PolicyValidationIssue[] = [];
@@ -661,135 +438,6 @@ export const validateRecordTypeLifecyclePolicy = (
       path: ["allowUnlimitedCount"],
       message: "Policy requests unlimited record count, but organisation limits forbid it",
     });
-  }
-
-  // Archive workflow readiness and destination checks
-  if (policy.action === "archive_workflow") {
-    // Destination check in allowedArchiveDestinations
-    if (!limits.allowedArchiveDestinations.includes(policy.archiveDestination)) {
-      issues.push({
-        code: "archive_destination_not_allowed",
-        path: ["archiveDestination"],
-        message: `Archive destination "${policy.archiveDestination}" is not in organisation's allowed destinations (allowed: ${limits.allowedArchiveDestinations.join(", ") || "none"})`,
-      });
-    }
-
-    // Typed readiness evidence check
-    if (readinessEvidenceCandidate === undefined || readinessEvidenceCandidate === null) {
-      issues.push({
-        code: "readiness_evidence_required",
-        path: ["action"],
-        message:
-          "Readiness evidence is required to activate archive_workflow; unavailable workflow archival cannot silently fall back to deletion",
-      });
-    } else {
-      const parsedEvidence = lifecycleReadinessEvidenceSchema.safeParse(readinessEvidenceCandidate);
-      if (!parsedEvidence.success) {
-        for (const issue of parsedEvidence.error.issues) {
-          issues.push({
-            code: "invalid_readiness_evidence",
-            path: ["readinessEvidence", ...(issue.path as (string | number)[])],
-            message: `Invalid readiness evidence: ${issue.message}`,
-          });
-        }
-      } else {
-        const evidence = parsedEvidence.data;
-
-        // Evidence organisation isolation check
-        if (evidence.organizationId !== policy.organizationId) {
-          issues.push({
-            code: "readiness_evidence_organization_mismatch",
-            path: ["readinessEvidence", "organizationId"],
-            message: `Readiness evidence organizationId does not match policy organizationId (evidence: ${evidence.organizationId}, policy: ${policy.organizationId})`,
-          });
-        }
-
-        // Exact workflow registration check
-        const matchingWorkflow = evidence.registeredWorkflows.find(
-          (w) =>
-            w.workflowId === policy.archiveWorkflowId &&
-            w.workflowRevision === policy.expectedWorkflowRevision &&
-            w.organizationId === policy.organizationId &&
-            w.state === "active",
-        );
-        if (!matchingWorkflow) {
-          issues.push({
-            code: "archive_workflow_not_registered",
-            path: ["archiveWorkflowId"],
-            message: `Active workflow ${policy.archiveWorkflowId} at expected revision ${policy.expectedWorkflowRevision} in organisation ${policy.organizationId} is not registered in runtime workflows; archival cannot fall back to deletion`,
-          });
-        } else {
-          if (policy.applicationRootId === null) {
-            issues.push({
-              code: "archive_workflow_scope_mismatch",
-              path: ["archiveWorkflowId"],
-              message: `Organisation-shared policy (${policy.policyId}) cannot activate archive_workflow because registered workflows require permanent application scope`,
-            });
-          } else if (
-            !matchingWorkflow.authorizedApplicationIds.includes(policy.applicationRootId)
-          ) {
-            issues.push({
-              code: "archive_workflow_scope_mismatch",
-              path: ["archiveWorkflowId"],
-              message: `Registered workflow ${policy.archiveWorkflowId} is not authorized for permanent application root ${policy.applicationRootId}`,
-            });
-          }
-        }
-
-        // Exact connection instance check
-        const matchingConnection = evidence.activeConnections.find(
-          (c) =>
-            c.connectionInstanceId === policy.archiveConnectionInstanceId &&
-            c.destinationKey === policy.archiveDestination &&
-            c.organizationId === policy.organizationId &&
-            c.state === "active",
-        );
-        if (!matchingConnection) {
-          issues.push({
-            code: "archive_connection_not_active",
-            path: ["archiveConnectionInstanceId"],
-            message: `Active connection instance ${policy.archiveConnectionInstanceId} for destination "${policy.archiveDestination}" in organisation ${policy.organizationId} is unavailable; archival cannot fall back to deletion`,
-          });
-        } else {
-          if (matchingConnection.revision !== policy.expectedConnectionRevision) {
-            issues.push({
-              code: "archive_connection_stale_revision",
-              path: ["archiveConnectionInstanceId"],
-              message: `Active connection instance ${policy.archiveConnectionInstanceId} revision (${matchingConnection.revision}) does not match expected (${policy.expectedConnectionRevision})`,
-            });
-          }
-          if (matchingConnection.destinationFingerprint !== policy.expectedDestinationFingerprint) {
-            issues.push({
-              code: "archive_connection_stale_fingerprint",
-              path: ["archiveConnectionInstanceId"],
-              message: `Active connection instance ${policy.archiveConnectionInstanceId} destination fingerprint does not match expected`,
-            });
-          }
-          if (matchingConnection.lastHealthOutcome !== policy.expectedConnectionHealthOutcome) {
-            issues.push({
-              code: "archive_connection_unhealthy",
-              path: ["archiveConnectionInstanceId"],
-              message: `Active connection instance ${policy.archiveConnectionInstanceId} health outcome (${matchingConnection.lastHealthOutcome}) does not match required (${policy.expectedConnectionHealthOutcome})`,
-            });
-          }
-          if (policy.applicationRootId === null) {
-            issues.push({
-              code: "archive_connection_scope_mismatch",
-              path: ["archiveConnectionInstanceId"],
-              message: `Organisation-shared policy (${policy.policyId}) cannot activate archive_workflow because connection instances require permanent application scope`,
-            });
-          } else if (
-            !matchingConnection.authorizedApplicationIds.includes(policy.applicationRootId)
-          ) {
-            issues.push({
-              code: "archive_connection_scope_mismatch",
-              path: ["archiveConnectionInstanceId"],
-              message: `Active connection instance ${policy.archiveConnectionInstanceId} is not authorized for permanent application root ${policy.applicationRootId}`,
-            });
-          }
-        }
-      }
-    }
   }
 
   const isValid = issues.length === 0;

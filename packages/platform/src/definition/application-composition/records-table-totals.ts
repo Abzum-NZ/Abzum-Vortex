@@ -22,7 +22,7 @@ export const recordsTableAggregateLabels: Readonly<Record<RecordsTableAggregateO
   };
 
 /** Only formatted, permission-checked values cross the renderer boundary. */
-export const recordsTableTotalSchema = z
+const recordsTableTotalSchema = z
   .object({
     fieldId: fieldIdSchema,
     operation: z.enum(recordsTableAggregateOperations),

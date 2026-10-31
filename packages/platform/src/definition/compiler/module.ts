@@ -1,3 +1,4 @@
+import { definitionContractVersion } from "../application-contract-versions";
 import type { moduleCompilationRequestSchema } from "../definition-compilation-contracts";
 import { recordOwnershipModeSchema } from "../../records/record-ownership-mode";
 import type { FlowDefinition } from "../../workflows/flow-contracts";
@@ -602,7 +603,7 @@ export function compileParsedModuleRequest(
     const ownDefinition = resolution.definition(definitionKey, "module");
     const output = moduleCompilationOutputSchema.safeParse({
       kind: "module",
-      validationContractVersion: "4.2.0",
+      validationContractVersion: definitionContractVersion,
       canonical,
       artifact: {
         kind: "module",

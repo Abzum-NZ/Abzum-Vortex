@@ -56,16 +56,12 @@ import {
 import {
   withRuntimeTransaction,
   type DatabaseRow,
-  type RequestDatabaseTransaction,
+  type RuntimeTransactionRunner,
 } from "../db/request-transaction";
 import { resolveFileStorageDestination } from "../files/storage-destination";
 import { logRefusedOperations } from "./log-refused-operations";
 
-type RuntimeTransactionRunner = <Result>(
-  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
-) => Promise<Result>;
-
-export interface ConfiguredTenantAdministrationDependencies {
+interface ConfiguredTenantAdministrationDependencies {
   readonly environment?: Readonly<Record<string, string | undefined>>;
   readonly runtimeTransaction?: RuntimeTransactionRunner;
 }
@@ -627,10 +623,3 @@ export const createConfiguredTenantAdministrationService = (
 const defaultService = createConfiguredTenantAdministrationService();
 export const bootstrapVortexSuperAdministrator = defaultService.bootstrapVortexSuperAdministrator;
 export const provisionTenant = defaultService.provisionTenant;
-export const adoptTenant = defaultService.adoptTenant;
-export const adoptOrganization = defaultService.adoptOrganization;
-export const suspendClusterIdentity = defaultService.suspendClusterIdentity;
-export const reactivateClusterIdentity = defaultService.reactivateClusterIdentity;
-export const closeClusterIdentity = defaultService.closeClusterIdentity;
-export const suspendTenant = defaultService.suspendTenant;
-export const reactivateTenant = defaultService.reactivateTenant;

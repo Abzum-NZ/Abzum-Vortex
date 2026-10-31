@@ -1,3 +1,4 @@
+import { definitionContractVersion } from "./application-contract-versions";
 import { z } from "zod";
 import {
   builderKeySchema,
@@ -45,9 +46,6 @@ import {
   pipelineStageSchema,
   pipelineTransitionSchema,
 } from "./record-type-pipelines";
-
-/** The one current Module source/validation contract pair. */
-export const moduleSourceContractVersion = "4.2.0" as const;
 
 /**
  * The closed set of protected read models the platform has a writer for. A system projection of one
@@ -194,7 +192,6 @@ const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
 const sourcePermissionRecordScopeRouteSchema = z.discriminatedUnion("kind", [
   z.object({ kind: sourceProvenanceUnchanged(z.literal("all_records")) }).strict(),
   z.object({ kind: sourceProvenanceUnchanged(z.literal("ownership")) }).strict(),
-  z.object({ kind: sourceProvenanceUnchanged(z.literal("direct_share")) }).strict(),
   z
     .object({
       kind: sourceProvenanceUnchanged(z.literal("relationship")),
@@ -1083,7 +1080,7 @@ export const moduleSourceDocumentSchema = z
   .object({
     ...authoredSourceBase,
     kind: sourceProvenanceUnchanged(z.literal("module")),
-    source_contract_version: sourceProvenanceUnchanged(z.literal(moduleSourceContractVersion)),
+    source_contract_version: sourceProvenanceUnchanged(z.literal(definitionContractVersion)),
     body: sourceProvenanceUnchanged(z.preprocess(inspectSourceBounds, moduleSourceBodySchema)),
   })
   .strict();

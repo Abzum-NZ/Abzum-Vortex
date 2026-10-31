@@ -97,7 +97,7 @@ export type FlowBindingConcurrency = z.infer<typeof flowBindingConcurrencySchema
 
 /** While an exclusive binding's flow runs, nothing else starts on its form or its page. */
 export const flowBindingExclusiveScopeSchema = z.enum(["none", "form", "page"]);
-export type FlowBindingExclusiveScope = z.infer<typeof flowBindingExclusiveScopeSchema>;
+type FlowBindingExclusiveScope = z.infer<typeof flowBindingExclusiveScopeSchema>;
 
 /** The longest a bound flow may run before the page gives up waiting for it. */
 export const flowBindingMaximumTimeoutMs = flowMaximumServerSeconds * 1_000;
@@ -146,38 +146,37 @@ const queued: EventDefaults = {
  * latest start win after a short debounce, and edits queue so they keep their order. A new binding
  * is written with these values; the page runner never fills a missing one.
  */
-export const componentEventBindingDefaults: Readonly<
-  Record<ComponentSemanticEventKind, EventDefaults>
-> = Object.freeze({
-  action: once(),
-  row_clicked: once(),
-  row_action: once(),
-  bulk_action: once("page"),
-  [recordsTableInlineEditEvent]: queued,
-  [recordsTableRowEditEvent]: queued,
-  batch_edit: queued,
-  card_moved: queued,
-  card_added: once(),
-  load: latest(),
-  refresh: latest(),
-  record_loaded: latest(),
-  filter_changed: latest(),
-  search_changed: latest(250),
-  sort_changed: latest(),
-  columns_changed: latest(),
-  row_expanded: latest(),
-  page_changed: latest(),
-  selection_changed: latest(),
-  field_changed: latest(250),
-  field_focus_lost: latest(),
-  options_requested: latest(250),
-  form_ready: once(),
-  form_reset: once(),
-  form_submit: once("form"),
-  form_cancel: once(),
-  tab_changed: latest(),
-  guided_step_changed: once(),
-} satisfies Record<ComponentSemanticEventKind, EventDefaults>);
+const componentEventBindingDefaults: Readonly<Record<ComponentSemanticEventKind, EventDefaults>> =
+  Object.freeze({
+    action: once(),
+    row_clicked: once(),
+    row_action: once(),
+    bulk_action: once("page"),
+    [recordsTableInlineEditEvent]: queued,
+    [recordsTableRowEditEvent]: queued,
+    batch_edit: queued,
+    card_moved: queued,
+    card_added: once(),
+    load: latest(),
+    refresh: latest(),
+    record_loaded: latest(),
+    filter_changed: latest(),
+    search_changed: latest(250),
+    sort_changed: latest(),
+    columns_changed: latest(),
+    row_expanded: latest(),
+    page_changed: latest(),
+    selection_changed: latest(),
+    field_changed: latest(250),
+    field_focus_lost: latest(),
+    options_requested: latest(250),
+    form_ready: once(),
+    form_reset: once(),
+    form_submit: once("form"),
+    form_cancel: once(),
+    tab_changed: latest(),
+    guided_step_changed: once(),
+  } satisfies Record<ComponentSemanticEventKind, EventDefaults>);
 
 /** A fresh copy of an event's default binding settings, for a new binding. */
 export const defaultFlowBindingSettings = (

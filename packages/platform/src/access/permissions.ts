@@ -54,10 +54,9 @@ export const permissionActionKindSchema = z.enum([
   "named",
 ]);
 
-export const permissionRecordScopeRouteSchema = z.discriminatedUnion("kind", [
+const permissionRecordScopeRouteSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("all_records") }).strict(),
   z.object({ kind: z.literal("ownership") }).strict(),
-  z.object({ kind: z.literal("direct_share") }).strict(),
   z
     .object({
       kind: z.literal("relationship"),
@@ -67,7 +66,7 @@ export const permissionRecordScopeRouteSchema = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 
-export const savedConditionParameterBindingSchema = z.discriminatedUnion("source", [
+const savedConditionParameterBindingSchema = z.discriminatedUnion("source", [
   z
     .object({
       key: builderKeySchema,
@@ -83,7 +82,7 @@ export const savedConditionParameterBindingSchema = z.discriminatedUnion("source
     .strict(),
 ]);
 
-export const permissionSavedConditionRestrictionSchema = z
+const permissionSavedConditionRestrictionSchema = z
   .object({
     conditionId: containedComponentIdSchema,
     publishedRevision: revisionSchema,
@@ -110,7 +109,6 @@ export const permissionSavedConditionRestrictionSchema = z
 const recordScopeRouteRank = {
   all_records: 0,
   ownership: 1,
-  direct_share: 2,
   relationship: 3,
 } as const;
 const recordScopeRouteIdentity = (route: z.infer<typeof permissionRecordScopeRouteSchema>) =>
@@ -176,7 +174,7 @@ export const permissionDeclarationSchema = z
   });
 
 /** A contained application role may name exact permissions or all of its own non-admin permissions. */
-export const applicationRolePermissionEntrySchema = z.union([namespacedKeySchema, z.literal("*")]);
+const applicationRolePermissionEntrySchema = z.union([namespacedKeySchema, z.literal("*")]);
 export const applicationRolePermissionKeysSchema = z
   .array(applicationRolePermissionEntrySchema)
   .min(1)
@@ -194,8 +192,4 @@ export const applicationRolePermissionKeysSchema = z
   });
 
 export type PermissionActionKind = z.infer<typeof permissionActionKindSchema>;
-export type PermissionRecordScopeRoute = z.infer<typeof permissionRecordScopeRouteSchema>;
-export type PermissionRecordScope = z.infer<typeof permissionRecordScopeSchema>;
-export type PermissionFieldPolicy = z.infer<typeof permissionFieldPolicySchema>;
 export type PermissionDeclaration = z.infer<typeof permissionDeclarationSchema>;
-export type ApplicationRolePermissionEntry = z.infer<typeof applicationRolePermissionEntrySchema>;

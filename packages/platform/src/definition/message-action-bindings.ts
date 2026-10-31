@@ -5,7 +5,7 @@ import type { FlowDefinition, FlowTask } from "../workflows/flow-contracts";
 import { flowTaskChildLists } from "../workflows/flow-task-tree";
 import { reachablePageFlows } from "../workflows/flow-reachability";
 
-export type MessageActionBinding = Readonly<{
+type MessageActionBinding = Readonly<{
   binding: ComponentFlowBinding;
   authoredBindingId: string;
   sourceFlowId: string;

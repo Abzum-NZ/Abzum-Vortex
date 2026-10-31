@@ -7,7 +7,7 @@ import type {
 } from "../catalogue/validation-errors";
 import type { ThemeValidationFailure } from "./types";
 
-export const THEME_DEFAULT_RULE_CODE = "vortex.definition.application_block_settings";
+const THEME_DEFAULT_RULE_CODE = "vortex.definition.application_block_settings";
 
 export function createThemeLocation(
   documentKey: string,

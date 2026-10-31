@@ -79,7 +79,6 @@ export function StudioStandardFieldPolicy({
               .find((module) => module.key === available.moduleKey)
               ?.record_types.find((record) => record.key === available.recordKey)}
             scope={scope}
-            allowShared={false}
             disabled={disabled}
             hint="Owned records lets people create or change only records they own."
             onChange={setScope}

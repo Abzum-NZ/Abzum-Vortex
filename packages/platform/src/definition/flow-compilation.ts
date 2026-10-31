@@ -73,7 +73,7 @@ export type ResolvedFlowFieldMetadata = Readonly<{
  * or relationship is written `<record type reference>.<alias>` and receives the two halves
  * already split.
  */
-export type FlowCompilationResolver = Readonly<{
+type FlowCompilationResolver = Readonly<{
   /** The compiled definition's key. Its flows' canonical namespace is derived from it. */
   definitionKey: string;
   flow: (alias: string) => ResolvedFlowIdentity;
@@ -100,7 +100,7 @@ export type FlowCompilationResolver = Readonly<{
   locate?: (flowKey: string) => DefinitionValidationLocation | undefined;
 }>;
 
-export type FlowCompilationInput = Readonly<{
+type FlowCompilationInput = Readonly<{
   flows: readonly SourceFlow[];
   /** The authored flows before shorthand references and defaults are parsed. */
   rawFlows?: readonly unknown[];

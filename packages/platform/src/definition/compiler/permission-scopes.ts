@@ -20,7 +20,6 @@ import { moduleDependencies } from "../module-dependencies";
 const permissionScopeRouteRank: Readonly<Record<string, number>> = {
   all_records: 0,
   ownership: 1,
-  direct_share: 2,
   relationship: 3,
 };
 

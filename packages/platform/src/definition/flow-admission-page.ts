@@ -60,7 +60,7 @@ export const admitPageGesture = async (
   if (request.invocation.kind === "binding") {
     Object.assign(inputs, request.invocation.callerInputs ?? {});
   } else {
-    // The stored run names flow inputs; table checks use the binding's caller names.
+    // The admitted segment names flow inputs; table checks use the binding's caller names.
     // Reconstruct only values the original binding actually accepted from the caller.
     const activation = state.activations[0];
     if (activation === undefined) return false;

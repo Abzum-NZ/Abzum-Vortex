@@ -43,7 +43,7 @@ type InstallationProblemKind =
   | "temporarily_unavailable"
   | "failed";
 
-export type InstallationUnavailableReason =
+type InstallationUnavailableReason =
   | "republish_required"
   | "not_installed"
   | "not_newer"
@@ -169,7 +169,7 @@ export const installationTargetFacts = async (
   return readInstallationOrdinaryRoot(transaction, rootId);
 };
 
-export const installationPermissionDeclaration = (
+const installationPermissionDeclaration = (
   permissions: PlatformPermissionSource,
   key: string,
   requiresRecentAuthentication = false,

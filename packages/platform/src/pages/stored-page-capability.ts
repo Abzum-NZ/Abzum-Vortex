@@ -80,13 +80,13 @@ type SubjectWithAvailability = Readonly<{
 }>;
 
 /** Address candidates select a page and its subject; organisation, installation and release come from context. */
-export type StoredPageCapabilitySelection = Readonly<{
+type StoredPageCapabilitySelection = Readonly<{
   pageId: string;
   /** Untrusted address candidate, used only with this page's exact declared protected subject. */
   subjectRecordId?: string;
 }>;
 
-export type StoredPageCapabilityDependencies = HumanOrganizationRequestDependencies &
+type StoredPageCapabilityDependencies = HumanOrganizationRequestDependencies &
   Readonly<{
     /**
      * The single trusted installed context assembled by App. Page projects only from this exact

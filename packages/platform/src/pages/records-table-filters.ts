@@ -11,7 +11,7 @@ import {
 } from "../records/exact-decimal";
 
 /** The longest text filter, and the most values a choice filter and records a link filter name. */
-export const RECORDS_TABLE_MAXIMUM_FILTER_TEXT_LENGTH = 200;
+const RECORDS_TABLE_MAXIMUM_FILTER_TEXT_LENGTH = 200;
 export const RECORDS_TABLE_MAXIMUM_FILTER_CHOICES = 50;
 export const RECORDS_TABLE_MAXIMUM_FILTER_RECORDS = 20;
 

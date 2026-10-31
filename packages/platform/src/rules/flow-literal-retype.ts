@@ -27,7 +27,7 @@ const literalAs = (type: string, value: JsonValue): JsonValue | undefined => {
 };
 
 /** The typed values a flow's comparisons read, which give a compared literal its type. */
-export type RetypeScope = Readonly<{
+type RetypeScope = Readonly<{
   triggerRecord: FlowRuntimeValues;
   previousRecord?: FlowRuntimeValues;
   inputs?: FlowRuntimeValues;

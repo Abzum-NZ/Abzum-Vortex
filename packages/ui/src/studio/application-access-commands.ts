@@ -619,11 +619,7 @@ const sameScope = (
 const scopeWords = (scope: NonNullable<ModulePermission["record_scope"]>): string =>
   scope.routes.length === 1 && scope.routes[0]!.kind === "ownership"
     ? "owned records"
-    : scope.routes.length === 1 && scope.routes[0]!.kind === "direct_share"
-      ? "directly shared records"
-      : scope.routes.length > 1
-        ? "owned or directly shared records"
-        : "all records";
+    : "all records";
 
 const setStandardPermission = (
   candidate: Source,

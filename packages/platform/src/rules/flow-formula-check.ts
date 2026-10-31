@@ -4,9 +4,9 @@ import type { FlowFormula, FlowReference } from "../workflows/flow-values";
 import { conditionValueType, operatorAcceptsOperands } from "./condition-types";
 
 /** A location in a formula, relative to its containing definition. */
-export type FlowFormulaPath = (string | number)[];
+type FlowFormulaPath = (string | number)[];
 
-export type FlowFormulaCheckOptions = Readonly<{
+type FlowFormulaCheckOptions = Readonly<{
   nowAllowed: boolean;
   /** A record money literal cannot carry a currency. */
   moneyLiterals?: boolean;

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { recordsTableInlineEditFeature } from "../inline-edit";
+import { pipelineStageToneSchema } from "../../../record-type-pipelines";
 import { projectionFieldKeySchema as fieldKeySchema } from "./field-key";
 
 const textSchema = z.string().min(1);
@@ -57,6 +58,7 @@ const recordsTableInlineEditorSchema = z.discriminatedUnion("kind", [
             .object({
               value: textSchema,
               label: textSchema,
+              tone: pipelineStageToneSchema.optional(),
               parentValues: z.array(textSchema).readonly().optional(),
             })
             .strict()

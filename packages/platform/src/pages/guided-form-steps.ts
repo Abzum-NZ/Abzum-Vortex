@@ -1,9 +1,4 @@
 import "server-only";
-
-import {
-  createHumanOrganizationRequestService,
-  type HumanOrganizationRequestResult,
-} from "../access/human-organization-request";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   FIELD_INPUT_BLOCK_RELEASE,
@@ -38,7 +33,6 @@ import type {
   ApplicationShell,
   PageComposition,
 } from "../definition/application-composition/page-composition";
-import type { PageDefinition } from "../definition/application-contracts";
 import type { ModuleField, RecordTypeDefinition } from "../definition/module-contracts";
 import { moduleFieldValueSchemas } from "../records/module-field-values";
 import { richTextDocumentSchema } from "../records/rich-text";
@@ -70,7 +64,7 @@ export type GuidedFormDependencies = Readonly<{
   platformPermissionOwnerId: PlatformId;
 }>;
 
-export type GuidedFormStepField = Readonly<{
+type GuidedFormStepField = Readonly<{
   field: ModuleField;
   fieldKey: string;
   placementId: string;
@@ -927,66 +921,4 @@ export const guidedFormInputData = (
   };
   for (const data of Object.values(stepContent)) walkPlacementData(data, visitPlacement);
   return result;
-};
-
-export const resolveGuidedFormAuthority = async (
-  dependencies: GuidedFormDependencies,
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
-  form: PrivateFormDraftScope,
-): Promise<
-  | Readonly<{
-      access: OrganizationAccessDeclaration;
-      page: PageDefinition;
-      recordType: RecordTypeDefinition;
-      steps: readonly GuidedFormStepFields[];
-    }>
-  | undefined
-> => {
-  const context = await dependencies.readContext(transaction, scope);
-  if (context === undefined) return undefined;
-  const pages = context.releaseSet.application.content.pages.filter((candidate) =>
-    sameId(String(candidate.pageId), String(form.formId)),
-  );
-  if (pages.length !== 1 || pages[0] === undefined) return undefined;
-  const page = pages[0] as unknown as Readonly<Record<string, unknown>>;
-  const recordType = recordTypeForPage(
-    page,
-    context.releaseSet.modules as unknown as readonly Readonly<Record<string, unknown>>[],
-  );
-  if (page.type !== "guided_form" || recordType === undefined) return undefined;
-  const steps = collectStepFields(page, recordType, context.releaseSet.application.content.shells);
-  const flowId = flowForGuidedForm(
-    page,
-    context.releaseSet.application.content.flowBindings as unknown as readonly Readonly<
-      Record<string, unknown>
-    >[],
-    context.releaseSet.application.content.shells,
-  );
-  const access = pageAccess(dependencies, context, page);
-  if (
-    steps === undefined ||
-    flowId === undefined ||
-    form.flowId === undefined ||
-    !sameId(flowId, String(form.flowId)) ||
-    access === undefined
-  )
-    return undefined;
-  return { access, page: pages[0], recordType, steps };
-};
-
-export const loadGuidedFormAuthorityForSession = async (
-  dependencies: GuidedFormDependencies,
-  session: IdentitySession,
-  selection: OrganizationSelectionCandidate,
-  form: PrivateFormDraftScope,
-): Promise<
-  HumanOrganizationRequestResult<Awaited<ReturnType<typeof resolveGuidedFormAuthority>>>
-> => {
-  const requests = createHumanOrganizationRequestService({
-    identityAuthorityId: dependencies.identityAuthorityId,
-  });
-  return requests.run(session, selection, (transaction, scope) =>
-    resolveGuidedFormAuthority(dependencies, transaction, scope, form),
-  );
 };

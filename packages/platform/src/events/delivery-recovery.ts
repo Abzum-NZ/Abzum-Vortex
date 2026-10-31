@@ -1,8 +1,9 @@
 import "server-only";
 
 import { eventOccurrenceIdSchema, timestampSchema } from "../catalogue/identifiers";
-import { databaseCode, isNonNilUuidText, asRecord } from "../catalogue/runtime-primitives";
+import { databaseCode, isNonNilUuidText } from "../catalogue/runtime-primitives";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
+import { consumerKeyMatches, exactRecord } from "./event-record-shapes";
 
 export const eventDeliveryRecoveryLimits = Object.freeze({
   maximumConsumerKeyLength: 128,
@@ -29,9 +30,9 @@ export const eventDeliveryRecoveryErrorCodes = [
   "EVENT_DELIVERY_RECOVERY_STORAGE_UNAVAILABLE",
 ] as const;
 
-export type EventDeliveryRecoveryErrorCode = (typeof eventDeliveryRecoveryErrorCodes)[number];
+type EventDeliveryRecoveryErrorCode = (typeof eventDeliveryRecoveryErrorCodes)[number];
 
-export class EventDeliveryRecoveryError extends Error {
+class EventDeliveryRecoveryError extends Error {
   readonly code: EventDeliveryRecoveryErrorCode;
 
   constructor(code: EventDeliveryRecoveryErrorCode) {
@@ -51,7 +52,7 @@ export class EventDeliveryRecoveryError extends Error {
  * how long the reclaim lease is held before the same claim becomes eligible
  * for ordinary claim reclaim again.
  */
-export type EventDeliveryFailureReportInput = Readonly<{
+type EventDeliveryFailureReportInput = Readonly<{
   consumerKey: string;
   occurrenceId: string;
   claimCursor: string;
@@ -60,7 +61,7 @@ export type EventDeliveryFailureReportInput = Readonly<{
   retryBackoffSeconds: number;
 }>;
 
-export type EventDeliveryFailureReportResult =
+type EventDeliveryFailureReportResult =
   | Readonly<{ outcome: "claim_unavailable" }>
   | Readonly<{ outcome: "mismatched" }>
   | Readonly<{ outcome: "already_acknowledged" }>
@@ -73,11 +74,6 @@ export type EventDeliveryFailureReportResult =
 
 type DeliveryRecoveryRow = DatabaseRow & { readonly result: unknown };
 
-const consumerKeyMatches = (value: unknown): value is string =>
-  typeof value === "string" &&
-  value.length <= eventDeliveryRecoveryLimits.maximumConsumerKeyLength &&
-  /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
-
 const timestampMatches = (value: unknown): value is string =>
   timestampSchema.safeParse(value).success;
 
@@ -89,20 +85,6 @@ const failureClassificationMatches = (
 
 const boundedCount = (value: unknown, maximum: number): value is number =>
   Number.isSafeInteger(value) && (value as number) >= 0 && (value as number) <= maximum;
-
-const exactRecord = <Key extends string>(
-  value: unknown,
-  keys: readonly Key[],
-): Readonly<Record<Key, unknown>> | undefined => {
-  const candidate = asRecord(value);
-  if (
-    candidate === undefined ||
-    Object.keys(candidate).length !== keys.length ||
-    keys.some((key) => !Object.hasOwn(candidate, key))
-  )
-    return undefined;
-  return candidate as Readonly<Record<Key, unknown>>;
-};
 
 const requireOne = (rows: readonly DeliveryRecoveryRow[]): DeliveryRecoveryRow => {
   if (rows.length !== 1 || rows[0] === undefined)

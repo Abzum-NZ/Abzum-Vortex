@@ -52,7 +52,7 @@ export const boundedRecord = <Value extends z.ZodType>(value: Value, maximum: nu
  * evaluated as text. `{{ outputs.task.outcome }}` is a task output whose key is `outcome`; a
  * bounded suffix such as `{{ outputs.form.values.label }}` selects named fields from a JSON output.
  */
-export const flowReferenceObjectSchema = z.discriminatedUnion("source", [
+const flowReferenceObjectSchema = z.discriminatedUnion("source", [
   z.object({ source: z.literal("input"), name: builderKeySchema }).strict(),
   z.object({ source: z.literal("variable"), name: builderKeySchema }).strict(),
   z.object({ source: z.literal("trigger_record"), field: builderKeySchema }).strict(),
@@ -169,7 +169,7 @@ const referenceTextSchema = z.string().transform((text, context) => {
 });
 
 /** Authored as the closed text or already typed; always parsed to the typed reference. */
-export const flowReferenceSchema = z.union([referenceTextSchema, flowReferenceObjectSchema]);
+const flowReferenceSchema = z.union([referenceTextSchema, flowReferenceObjectSchema]);
 
 // ─── Typed literals ────────────────────────────────────────────────────────────────────────
 
@@ -195,7 +195,7 @@ export type FlowLiteral = z.infer<typeof flowLiteralSchema>;
 // ─── Formula: a typed JSON expression tree over a closed operator catalogue ───────────────────
 
 export const flowRoundingModeSchema = z.enum(flowRoundingModes);
-export const flowDateUnitSchema = z.enum(["minutes", "hours", "days", "weeks", "months", "years"]);
+const flowDateUnitSchema = z.enum(["minutes", "hours", "days", "weeks", "months", "years"]);
 export type FlowRoundingMode = z.infer<typeof flowRoundingModeSchema>;
 export type FlowDateUnit = z.infer<typeof flowDateUnitSchema>;
 
@@ -377,9 +377,9 @@ export const flowFormulaSchema: z.ZodType<FlowFormula> = flowFormulaTreeSchema.s
 // ─── Values: literal, closed reference, formula, map or array ────────────────────────────────
 
 /** Closed constructor bounds; map and array nesting share the same five-level budget. */
-export const flowMaximumMapEntries = 100;
-export const flowMaximumMapDepth = 5;
-export const flowMaximumArrayItems = 100;
+const flowMaximumMapEntries = 100;
+const flowMaximumMapDepth = 5;
+const flowMaximumArrayItems = 100;
 
 /**
  * A map of named values. Like an array, it carries other values, so a task property
@@ -387,18 +387,18 @@ export const flowMaximumArrayItems = 100;
  * outputs instead of only from a fixed literal. A plain JSON object literal is still exactly a
  * literal: a constructed map is resolved entry by entry, and each entry is a flow value of its own.
  */
-export type FlowMapValue = Readonly<{
+type FlowMapValue = Readonly<{
   kind: "map";
   entries: Readonly<Record<string, FlowValue>>;
 }>;
 
 /** An ordered JSON array whose members are independently resolved flow values. */
-export type FlowArrayValue = Readonly<{
+type FlowArrayValue = Readonly<{
   kind: "array";
   items: readonly FlowValue[];
 }>;
 
-export type FlowValueObject =
+type FlowValueObject =
   | Readonly<{ kind: "literal"; literal: FlowLiteral }>
   | Readonly<{ kind: "reference"; reference: FlowReference }>
   | Readonly<{ kind: "formula"; formula: FlowFormula }>
@@ -462,7 +462,7 @@ const flowArrayValueSchema = z
   .object({ kind: z.literal("array"), items: z.lazy(flowArrayItemsSchema) })
   .strict();
 
-export const flowValueObjectSchema = z.discriminatedUnion("kind", [
+const flowValueObjectSchema = z.discriminatedUnion("kind", [
   flowLiteralValueSchema,
   flowReferenceValueSchema,
   flowFormulaValueSchema,

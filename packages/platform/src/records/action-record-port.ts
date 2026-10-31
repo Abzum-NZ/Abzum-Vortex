@@ -45,7 +45,7 @@ type RuleReason = Readonly<{ code: string; message: string }>;
  * The named-action result plus any before-save rule warnings of a completed
  * attempt. The closed result contract has no warning field, so they travel beside it.
  */
-export type NamedActionServiceResult = HumanOrganizationRequestResult<ExecuteNamedActionResult> &
+type NamedActionServiceResult = HumanOrganizationRequestResult<ExecuteNamedActionResult> &
   Readonly<{ warnings?: readonly BeforeSaveRuleWarning[] }>;
 
 /** The refusal the person sees is a closed safe code; the server log keeps the real reason. */
@@ -397,9 +397,9 @@ export type NamedActionBatchResult =
   | Readonly<{ kind: "unavailable" | "temporarily_unavailable" }>;
 
 /** The most records one command of a named action changes. */
-export const namedActionBatchMaximum = 200;
+const namedActionBatchMaximum = 200;
 
-export type NamedActionRecordPortDependencies = HumanOrganizationRequestDependencies &
+type NamedActionRecordPortDependencies = HumanOrganizationRequestDependencies &
   Readonly<{
     activityId?: () => string;
     occurrenceId?: () => string;

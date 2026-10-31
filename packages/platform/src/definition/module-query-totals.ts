@@ -7,7 +7,7 @@ export const queryNumericTotalFieldTypes: ReadonlySet<string> = new Set([
   "money",
 ]);
 /** Field types a lowest or highest value is taken of. */
-export const queryExtremeTotalFieldTypes: ReadonlySet<string> = new Set([
+const queryExtremeTotalFieldTypes: ReadonlySet<string> = new Set([
   "text",
   "whole_number",
   "decimal_number",

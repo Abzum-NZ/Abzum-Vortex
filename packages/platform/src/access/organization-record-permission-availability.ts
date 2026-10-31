@@ -20,7 +20,7 @@ import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-tran
 const unavailableCode = "ORGANIZATION_RECORD_PERMISSION_AVAILABILITY_UNAVAILABLE";
 
 /** Permission availability only: no row identity, final access decision or operation callback. */
-export type OrganizationRecordPermissionAvailability =
+type OrganizationRecordPermissionAvailability =
   | Readonly<{ outcome: "eligible"; correlationId: string; validUntil: string }>
   | SafeOrganizationAccessRefusal;
 
