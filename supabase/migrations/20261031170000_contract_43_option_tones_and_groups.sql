@@ -235,6 +235,52 @@ begin
 end
 $function$;
 
+-- Every stored permission that named a direct-share route loses that route; a permission whose only
+-- route was direct sharing granted nothing, so it goes with its role grants left to the next publish.
+create function pg_temp.contract_43_direct_share(p_value jsonb)
+returns jsonb
+language plpgsql
+immutable
+set search_path = ''
+as $function$
+declare
+  result jsonb;
+  member record;
+  item jsonb;
+  routes jsonb;
+  kept jsonb;
+begin
+  case pg_catalog.jsonb_typeof(p_value)
+    when 'object' then
+      result := '{}'::jsonb;
+      for member in select entry.key, entry.value from pg_catalog.jsonb_each(p_value) as entry(key, value) loop
+        result := result || pg_catalog.jsonb_build_object(
+          member.key, pg_temp.contract_43_direct_share(member.value));
+      end loop;
+      return result;
+    when 'array' then
+      result := '[]'::jsonb;
+      for item in select element.value from pg_catalog.jsonb_array_elements(p_value) as element(value) loop
+        routes := item -> 'record_scope' -> 'routes';
+        if pg_catalog.jsonb_typeof(routes) = 'array' then
+          kept := coalesce((
+            select pg_catalog.jsonb_agg(route.value order by route.ordinality)
+            from pg_catalog.jsonb_array_elements(routes) with ordinality as route(value, ordinality)
+            where route.value ->> 'kind' <> 'direct_share'
+          ), '[]'::jsonb);
+          if pg_catalog.jsonb_array_length(kept) = 0 then continue; end if;
+          item := pg_catalog.jsonb_set(item, '{record_scope,routes}', kept);
+        end if;
+        result := result || pg_catalog.jsonb_build_array(
+          pg_temp.contract_43_direct_share(item));
+      end loop;
+      return result;
+    else
+      return p_value;
+  end case;
+end
+$function$;
+
 -- Every stored definition that declared the removed assignment kind no longer names it: the field
 -- definition, every readable/select/filter list entry, the person and group form inputs, the grid
 -- column and every flow input that read it.
@@ -303,11 +349,12 @@ begin
       body := pg_temp.contract_43_module(body);
     end if;
     converted := pg_temp.contract_43_assignment_kind(
-      pg_temp.contract_43_detail_sections(
-        pg_temp.contract_43_groups(
-          pg_catalog.jsonb_set(
-            pg_catalog.jsonb_set(draft.draft_source, '{body}', body),
-            '{source_contract_version}', '"4.3.0"'::jsonb))));
+      pg_temp.contract_43_direct_share(
+        pg_temp.contract_43_detail_sections(
+          pg_temp.contract_43_groups(
+            pg_catalog.jsonb_set(
+              pg_catalog.jsonb_set(draft.draft_source, '{body}', body),
+              '{source_contract_version}', '"4.3.0"'::jsonb)))));
     update vortex_definition.drafts d set
       draft_source = converted,
       source_contract_version = '4.3.0',
@@ -325,6 +372,7 @@ $convert$;
 drop function pg_temp.contract_43_module(jsonb);
 drop function pg_temp.contract_43_groups(jsonb);
 drop function pg_temp.contract_43_detail_sections(jsonb);
+drop function pg_temp.contract_43_direct_share(jsonb);
 drop function pg_temp.contract_43_assignment_kind(jsonb);
 drop function pg_temp.contract_43_fingerprint(jsonb);
 drop function pg_temp.contract_43_canonical_json(jsonb);

@@ -3,8 +3,6 @@ import { correlationIdSchema } from "../catalogue/common";
 import {
   applicationRootIdSchema,
   containedComponentIdSchema,
-  directShareIdSchema,
-  fieldIdSchema,
   moduleRootIdSchema,
   namespacedKeySchema,
   organizationAccountIdSchema,
@@ -385,38 +383,6 @@ const organizationRecordMatchedRouteSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("ownership") }).strict(),
   z
     .object({
-      kind: z.literal("direct_share"),
-      directShareId: directShareIdSchema,
-      directShareRevision: revisionSchema,
-      readableFieldIds: z.array(fieldIdSchema).min(1),
-      changeableFieldIds: z.array(fieldIdSchema),
-    })
-    .strict()
-    .superRefine((value, context) => {
-      const readable = value.readableFieldIds.map((fieldId) => fieldId.toLowerCase());
-      const changeable = value.changeableFieldIds.map((fieldId) => fieldId.toLowerCase());
-      if (
-        new Set(readable).size !== readable.length ||
-        readable.some((fieldId, index) => index > 0 && readable[index - 1]! >= fieldId)
-      )
-        context.addIssue({
-          code: "custom",
-          path: ["readableFieldIds"],
-          message: "Matched readable fields must use canonical UUID order",
-        });
-      if (
-        new Set(changeable).size !== changeable.length ||
-        changeable.some((fieldId, index) => index > 0 && changeable[index - 1]! >= fieldId) ||
-        changeable.some((fieldId) => !readable.includes(fieldId))
-      )
-        context.addIssue({
-          code: "custom",
-          path: ["changeableFieldIds"],
-          message: "Matched changeable fields must be a canonical readable subset",
-        });
-    }),
-  z
-    .object({
       kind: z.literal("relationship"),
       relationshipId: containedComponentIdSchema,
       sourcePermissionId: permissionIdSchema,
@@ -468,15 +434,6 @@ const organizationRecordAccessAllowedSchema = organizationRecordDecisionEvidence
         code: "custom",
         path: ["validUntil"],
         message: "Record access must use the earliest complete contribution deadline",
-      });
-    if (
-      !["read", "update"].includes(value.action.actionKind) &&
-      value.matchedContributions.some((contribution) => contribution.route.kind === "direct_share")
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["matchedContributions"],
-        message: "Direct shares can contribute only to read or update decisions",
       });
   });
 

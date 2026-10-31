@@ -192,7 +192,6 @@ const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
 const sourcePermissionRecordScopeRouteSchema = z.discriminatedUnion("kind", [
   z.object({ kind: sourceProvenanceUnchanged(z.literal("all_records")) }).strict(),
   z.object({ kind: sourceProvenanceUnchanged(z.literal("ownership")) }).strict(),
-  z.object({ kind: sourceProvenanceUnchanged(z.literal("direct_share")) }).strict(),
   z
     .object({
       kind: sourceProvenanceUnchanged(z.literal("relationship")),

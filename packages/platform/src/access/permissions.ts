@@ -57,7 +57,6 @@ export const permissionActionKindSchema = z.enum([
 export const permissionRecordScopeRouteSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("all_records") }).strict(),
   z.object({ kind: z.literal("ownership") }).strict(),
-  z.object({ kind: z.literal("direct_share") }).strict(),
   z
     .object({
       kind: z.literal("relationship"),
@@ -110,7 +109,6 @@ export const permissionSavedConditionRestrictionSchema = z
 const recordScopeRouteRank = {
   all_records: 0,
   ownership: 1,
-  direct_share: 2,
   relationship: 3,
 } as const;
 const recordScopeRouteIdentity = (route: z.infer<typeof permissionRecordScopeRouteSchema>) =>
