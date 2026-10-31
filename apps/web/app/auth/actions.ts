@@ -125,7 +125,8 @@ export type MfaFormState =
 export async function completeMfa(
   formData: FormData,
 ): Promise<
-  { kind: "enrolled"; factorId: string; secret: string } | { kind: "error"; error: string }
+  | { kind: "enrolled"; factorId: string; secret: string; qrCode: string }
+  | { kind: "error"; error: string }
 > {
   if (formValue(formData, "intent") === "enroll") {
     const enrolled = await enrollMfaFactor();
