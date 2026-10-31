@@ -25,9 +25,14 @@ export async function proxy(request: NextRequest) {
     const componentOrigin = process.env.VORTEX_COMPONENT_BUNDLE_ORIGIN
       ? new URL(process.env.VORTEX_COMPONENT_BUNDLE_ORIGIN).origin
       : undefined;
+    const scriptSources = ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'"];
+    // React's development build calls `eval()` to reconstruct call stacks; under the nonce policy
+    // every page in `next dev` otherwise shows the "eval() is not supported" error overlay. Only
+    // development allows evaluation: production and test policies never carry it.
+    if (process.env.NODE_ENV === "development") scriptSources.push("'unsafe-eval'");
     policy = [
       "default-src 'self'",
-      `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+      `script-src ${scriptSources.join(" ")}`,
       "style-src 'self' 'unsafe-inline'",
       `connect-src 'self'${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
       `frame-src 'self'${componentOrigin ? ` ${componentOrigin}` : ""}`,
