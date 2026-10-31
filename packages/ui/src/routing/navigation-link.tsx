@@ -1,8 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, type ComponentProps, type ReactElement } from "react";
-import { useRouter } from "next/navigation";
+import {
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactElement,
+} from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { PageNavigationBusyContext } from "../navigation/navigation";
 import { destinationOf } from "./destination";
 import { useNavigator } from "./navigator";
 import { prefetchPage } from "./prefetch";
@@ -36,6 +44,20 @@ export function NavigationLink({
   const navigator = useNavigator();
   const router = useRouter();
   const prefetched = useRef(false);
+  // The change this link started (the address it started from), until the address has changed
+  // once the host's page change is over, or the change was cancelled. Only this link shows it.
+  const pathname = usePathname();
+  const busy = useContext(PageNavigationBusyContext);
+  const [pending, setPending] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (pending === undefined || busy) return;
+    if (window.location.pathname + window.location.search !== pending) setPending(undefined);
+  }, [busy, pathname, pending]);
+  useEffect(() => {
+    if (pending === undefined) return;
+    const timer = window.setTimeout(() => setPending(undefined), 10_000);
+    return () => window.clearTimeout(timer);
+  }, [pending]);
   const destination = destinationOf(href);
   if (destination === undefined) throw new Error(`Refused navigation address: ${href}`);
   if (destination.kind === "fragment") return <a {...anchor} href={destination.address} />;
@@ -53,6 +75,7 @@ export function NavigationLink({
       href={path}
       prefetch={false}
       {...(replace === undefined ? {} : { replace })}
+      {...(pending === undefined ? {} : { "aria-busy": true, "data-vortex-link-pending": "" })}
       onPointerEnter={(event) => {
         anchor.onPointerEnter?.(event);
         intend();
@@ -67,9 +90,13 @@ export function NavigationLink({
       }}
       onNavigate={(event) => {
         onNavigate?.();
+        setPending(window.location.pathname + window.location.search);
         // The navigator in force carries out the change (unsaved-work question, page-change state).
         event.preventDefault();
-        navigator.navigate(path, replace === undefined ? undefined : { replace });
+        navigator.navigate(path, {
+          ...(replace === undefined ? {} : { replace }),
+          onCancelled: () => setPending(undefined),
+        });
       }}
     />
   );

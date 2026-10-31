@@ -159,7 +159,6 @@ export function ContentTransition({
       style={{ gap: "inherit" }}
       {...(busy ? { "aria-busy": true, "data-vortex-page-transition": "" } : {})}
     >
-      {busy ? <div data-vortex-page-progress="" aria-hidden /> : null}
       {current.leaving === undefined ? null : (
         // The same key the page had while current, so the leaving page keeps its mounted tree.
         <motion.div

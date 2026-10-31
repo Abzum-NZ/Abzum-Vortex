@@ -163,20 +163,19 @@ const SHARED_COMPONENT_STYLES_CSS = `
 }
 
 /*
- * The page progress line: a thin bar along the top of the page outlet while the next page is
- * fetched, so the current page can stay in place without the click looking ignored. It appears
- * only after 200ms, so a quick change shows nothing, and it is static under reduced motion.
+ * A link whose page change takes a moment shows it on the link itself (the page stays as it is):
+ * after 200ms the link dims and the pointer shows progress, so a quick change shows nothing.
  */
-[data-vortex-page-progress] {
-  position: absolute;
-  inset-inline: 0;
-  top: 0;
-  z-index: 20;
-  height: 0.125rem;
-  overflow: hidden;
-  pointer-events: none;
-  animation: vortex-loading-reveal var(--vortex-motion-enter-exit)
+[data-vortex-link-pending] {
+  cursor: progress;
+  animation: vortex-link-pending var(--vortex-motion-enter-exit)
     var(--vortex-motion-enter-exit-easing) 200ms both;
+}
+
+@keyframes vortex-link-pending {
+  to {
+    opacity: 0.55;
+  }
 }
 
 /*
@@ -197,34 +196,6 @@ const SHARED_COMPONENT_STYLES_CSS = `
   position: relative;
   z-index: 1;
   background-color: transparent;
-}
-
-[data-vortex-page-progress]::before {
-  content: "";
-  position: absolute;
-  inset-block: 0;
-  left: 0;
-  width: 40%;
-  background-color: var(--primary);
-  animation: vortex-page-progress calc(var(--vortex-motion-page) * 4)
-    var(--vortex-motion-page-easing) infinite;
-}
-
-@keyframes vortex-page-progress {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(250%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  [data-vortex-page-progress]::before {
-    width: 100%;
-    opacity: 0.6;
-    animation: none;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

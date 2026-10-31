@@ -282,7 +282,10 @@ export function ApplicationFrame({
       navigate: (path, options) => {
         historyPathname.current = undefined;
         void (async () => {
-          if (!(await leaveIfConfirmedRef.current())) return;
+          if (!(await leaveIfConfirmedRef.current())) {
+            options?.onCancelled?.();
+            return;
+          }
           forgetPagesWrittenSince(router);
           startPageTransition(() =>
             options?.replace === true ? router.replace(path) : router.push(path),
@@ -421,10 +424,7 @@ export function ApplicationFrame({
               outlet={{
                 location: frame.outlet,
                 content: (
-                  <ContentTransition
-                    transitionKey={pathname}
-                    busy={pageTransitionPending}
-                    >
+                  <ContentTransition transitionKey={pathname} busy={pageTransitionPending}>
                     <FrozenRouter>{children}</FrozenRouter>
                   </ContentTransition>
                 ),

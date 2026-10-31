@@ -24,7 +24,6 @@ export type {
 export type { ControlSemanticEvent } from "./controls/projected-data";
 
 // Display components and values.
-export { BrandLoader } from "./display/brand-loader";
 export { FormattedTime } from "./display/date-format-context";
 export { getAccessibleName } from "./display/display-state-container";
 

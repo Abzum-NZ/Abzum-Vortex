@@ -4,7 +4,11 @@ import { createContext, useContext, useMemo, type ReactElement, type ReactNode }
 import { useRouter } from "next/navigation";
 import { forgetPagesWrittenSince } from "./prefetch";
 
-export type NavigateOptions = Readonly<{ replace?: boolean }>;
+export type NavigateOptions = Readonly<{
+  replace?: boolean;
+  /** The change did not start (the person chose to stay with unsaved work). */
+  onCancelled?: () => void;
+}>;
 
 /**
  * The one way the product changes page in place: every internal destination (a link, a menu item,
