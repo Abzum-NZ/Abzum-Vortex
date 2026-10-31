@@ -220,6 +220,7 @@ const literalOnlyPropertyTypes: ReadonlySet<string> = new Set([
   "relationship_id",
   "query_id",
   "page_id",
+  "application_key",
   "form_id",
   "placement_id",
   "connection_binding_id",

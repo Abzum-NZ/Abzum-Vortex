@@ -33,6 +33,7 @@ import {
 import { Button } from "@vortex/ui/components/button";
 import { DialogFooter } from "@vortex/ui/components/dialog";
 import { useNavigator } from "@vortex/ui/routing";
+import { resolveApplicationPagePathAction } from "../../../frame-actions";
 import { useApplicationFrame } from "../../../_components/application-frame-state";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import type { SubmittedForm, PageMessageDraft } from "./types";
@@ -177,27 +178,44 @@ export function useFlowRuntime({
   const navigation = model.navigation ?? applicationFrame?.navigation;
   const navigationEnvironment = useMemo<LinkNavigationEnvironment>(
     () => ({
-      recheckInternalTarget: async (target) => {
-        if (model.pages.some((page) => sameId(page.pageId, target.pageId))) return true;
-        // The projected page list is a rendering hint; the destination still authorises its read.
-        // A page it does not offer must not resolve to the application's home address.
-        showPageMessage(unavailableNotice);
-        return false;
-      },
-      navigateInternal: (target) => {
+      resolveTarget: async (target) => {
         const parameters = new URLSearchParams();
         for (const [name, value] of Object.entries(target.parameters ?? {}))
           if (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
             parameters.set(name, String(value));
         const query = parameters.toString();
-        const address = `${resolvePageHref(target.pageId)}${query === "" ? "" : `?${query}`}`;
+        // This application's page is one of the pages projected for the person (a rendering hint;
+        // the destination still authorises its own read). Another application's page is resolved
+        // against the person's current access in the same organisation. A page that is not offered
+        // never falls back to an application's home address.
+        const path =
+          target.applicationKey === undefined
+            ? model.pages.some((page) => sameId(page.pageId, target.page))
+              ? resolvePageHref(target.page)
+              : undefined
+            : await resolveApplicationPagePathAction(
+                application.tenantShortName,
+                application.organizationShortName,
+                target.applicationKey,
+                target.page,
+              ).catch((error: unknown) => {
+                console.error("[flow] navigate target could not be resolved", error);
+                return undefined;
+              });
+        if (path === undefined) {
+          showPageMessage(unavailableNotice);
+          return undefined;
+        }
+        return `${path}${query === "" ? "" : `?${query}`}`;
+      },
+      navigate: (path) => {
         runtimeState.messages.carryToasts();
         // The navigator in force asks before discarding unsaved work and, inside the frame, runs
         // the change in its page transition (dimmed page, progress line).
-        navigator.navigate(address);
+        navigator.navigate(path);
       },
     }),
-    [model.pages, navigator, resolvePageHref, runtimeState, showPageMessage],
+    [application, model.pages, navigator, resolvePageHref, runtimeState, showPageMessage],
   );
   // A dialog's form registers in its own scope: the form's placement and the dialog's run.
   const dialogStatesRef = useRef(new Map<string, FlowRuntimeState>());

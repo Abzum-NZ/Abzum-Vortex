@@ -18,6 +18,12 @@ export const metadata: Metadata = {
   description: "The Vortex application platform.",
 };
 
+/**
+ * The document. Its two reads (the appearance cookie and the addressed application's theme) are the
+ * one per-request read above the pages: only `<html>` can carry them for the first paint. A page
+ * change inside the product never fetches this layout again (only the changed segment is fetched),
+ * so the reads cost a document load, never a page change.
+ */
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   // The viewer's appearance choice (one cookie, all applications), so the first server render is right.
   const appearance = parseThemeMode((await cookies()).get(APPEARANCE_COOKIE)?.value);

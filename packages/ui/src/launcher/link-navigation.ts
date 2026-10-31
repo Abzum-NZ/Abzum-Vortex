@@ -10,8 +10,13 @@ import type { FlowIntent } from "../flow-runtime/intents";
  */
 type LinkTarget = Readonly<{
   kind: "page";
-  pageId: string;
-  /** Parameters of the Navigate task that opened it; the shell decides how a page uses them. */
+  /**
+   * Another installed application of the same organisation, by key; absent for this application.
+   * With it, `page` is a page key of that application; without it, this application's page identity.
+   */
+  applicationKey?: string;
+  page: string;
+  /** Parameters of the Navigate task that opened it (a record page's `record_id`, for example). */
   parameters?: Readonly<Record<string, JsonValue>>;
 }>;
 
@@ -28,26 +33,34 @@ export type UnsavedWorkGuard = Readonly<{
 /** Shell services a link activation needs; all browser and server effects stay with the shell. */
 export type LinkNavigationEnvironment = Readonly<{
   /**
-   * Re-checks an internal target on the server through the page/access projection at the moment of
-   * activation. A target that is missing, refused or withdrawn returns false and is not opened.
+   * The final page address of a target, checked against the person's current access at the moment
+   * of activation. A target that is missing, refused or withdrawn resolves to undefined and is not
+   * opened.
    */
-  recheckInternalTarget: (target: LinkTarget) => Promise<boolean> | boolean;
+  resolveTarget: (target: LinkTarget) => Promise<string | undefined> | string | undefined;
   /**
    * Changes the page in place through the navigator in force, which asks before discarding unsaved
    * work; the shell stays mounted.
    */
-  navigateInternal: (target: LinkTarget) => void;
+  navigate: (path: string) => void;
 }>;
 
 /** The page target a Navigate task intent names; undefined when it names no valid page. */
 const linkTargetForNavigateIntent = (intent: FlowIntent): LinkTarget | undefined => {
-  const { page, parameters } = intent.properties;
+  const { application, page, parameters } = intent.properties;
   if (intent.kind !== "navigate" || typeof page !== "string" || page.length === 0) return undefined;
+  if (application !== undefined && (typeof application !== "string" || application.length === 0))
+    return undefined;
   const bag =
     typeof parameters === "object" && parameters !== null && !Array.isArray(parameters)
       ? parameters
       : undefined;
-  return { kind: "page", pageId: page, ...(bag === undefined ? {} : { parameters: bag }) };
+  return {
+    kind: "page",
+    ...(application === undefined ? {} : { applicationKey: application }),
+    page,
+    ...(bag === undefined ? {} : { parameters: bag }),
+  };
 };
 
 /**
@@ -62,7 +75,8 @@ export async function performNavigateTask(
   if (typeof window === "undefined") return false;
   const target = linkTargetForNavigateIntent(intent);
   if (target === undefined) return false;
-  if (!(await environment.recheckInternalTarget(target))) return false;
-  environment.navigateInternal(target);
+  const path = await environment.resolveTarget(target);
+  if (path === undefined) return false;
+  environment.navigate(path);
   return true;
 }
