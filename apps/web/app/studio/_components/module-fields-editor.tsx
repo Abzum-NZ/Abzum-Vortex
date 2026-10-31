@@ -142,6 +142,68 @@ const computedTypes: ReadonlySet<ModuleFieldType> = new Set(["calculation", "tot
 const linkTypes: ReadonlySet<string> = new Set(["link", "link_to_one_of_several"]);
 
 /**
+ * The colour of each option of a published choice field. A published field keeps its stored shape,
+ * but an option's colour is presentation and publishes as a patch, so it stays editable while the
+ * rest of the options stay fixed. // item 22: CRM-FIX-PLATFORM
+ */
+function PublishedOptionColours({
+  declarations,
+  values,
+  onChange,
+}: Readonly<{
+  declarations: ReturnType<typeof moduleFieldSettingDeclarations>;
+  values: StudioSettingValues;
+  onChange: (values: StudioSettingValues) => void;
+}>) {
+  const list = declarations.find((declaration) => declaration.key === "options");
+  const current = values["options"];
+  if (list?.kind !== "list" || list.item.kind !== "group" || current?.kind !== "list") return null;
+  const tone = list.item.properties.find((property) => property.key === "tone");
+  if (tone?.kind !== "choice" || current.items.length === 0) return null;
+  const withTone = (index: number, next: string) =>
+    onChange({
+      ...values,
+      options: {
+        kind: "list",
+        items: current.items.map((item, position) => {
+          if (position !== index || item.kind !== "group") return item;
+          const { tone: _previous, ...rest } = item.properties;
+          return {
+            kind: "group",
+            properties: next === "" ? rest : { ...rest, tone: { kind: "choice", value: next } },
+          };
+        }),
+      },
+    });
+  return (
+    <div className="space-y-2">
+      <Label>Option colours</Label>
+      {current.items.map((item, index) => {
+        if (item.kind !== "group") return null;
+        const label = item.properties["label"];
+        const held = item.properties["tone"];
+        const id = `module-field-option-colour-${index}`;
+        return (
+          <div key={id} className="flex items-center justify-between gap-2">
+            <Label htmlFor={id}>
+              {label?.kind === "text" ? label.value : `Option ${index + 1}`}
+            </Label>
+            <StudioOptionControl
+              id={id}
+              value={held?.kind === "choice" ? held.value : ""}
+              unset="No colour"
+              options={tone.options.map((option) => ({ value: option.key, label: option.label }))}
+              disabled={false}
+              onChange={(next) => withTone(index, next)}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
  * The one field editor of the Data tab. Without a field it is the form that adds a field to a
  * record type of a module this application owns, with every setting its type declares and, in the
  * same edit, the record type's pages it is also shown on. With a field it changes that field: each
@@ -1101,17 +1163,26 @@ export function ModuleFieldsEditor({
         ) : declarations.length === 0 ? (
           <p className="text-sm text-muted-foreground">This type has no settings.</p>
         ) : (
-          declarations.map((declaration) => (
-            <StudioSettingFields
-              key={declaration.key}
-              idPrefix="module-field-setting"
-              properties={[declaration]}
-              values={form.settings}
-              choices={choices}
-              disabled={disabled || (shapeLocked && declaration.key !== "reverse_name")}
-              onChange={changeSettings}
-            />
-          ))
+          <>
+            {declarations.map((declaration) => (
+              <StudioSettingFields
+                key={declaration.key}
+                idPrefix="module-field-setting"
+                properties={[declaration]}
+                values={form.settings}
+                choices={choices}
+                disabled={disabled || (shapeLocked && declaration.key !== "reverse_name")}
+                onChange={changeSettings}
+              />
+            ))}
+            {shapeLocked && !disabled && (
+              <PublishedOptionColours
+                declarations={declarations}
+                values={form.settings}
+                onChange={changeSettings}
+              />
+            )}
+          </>
         )}
         {settingsValue.problem === "" ? null : (
           <p role="alert" className="text-sm text-destructive">

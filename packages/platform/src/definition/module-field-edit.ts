@@ -454,15 +454,26 @@ export const changeInlineModuleField = (
     if (publication.fields.has(`${qualifiedRecord}.${field.key}`)) {
       // The display name and the source of the offered options are editable even after publication
       // (which values are offered is behaviour); stored relationship settings are fixed.
+      // An option's colour is presentation (a patch), so it is not part of the stored shape.
+      const withoutTones = (key: string, entry: unknown): unknown =>
+        key === "options" && Array.isArray(entry)
+          ? entry.map((option: unknown) =>
+              typeof option === "object" && option !== null
+                ? Object.fromEntries(Object.entries(option).filter(([name]) => name !== "tone"))
+                : option,
+            )
+          : entry;
       const storedSettings = (value: Readonly<Record<string, unknown>>) =>
         Object.fromEntries(
-          Object.entries(value).filter(
-            ([key]) =>
-              key !== "options_source" &&
-              (change.type === "calculation"
-                ? ["result_type", "decimal_places", "evaluation"].includes(key)
-                : change.type !== "link" || key !== "reverse_name"),
-          ),
+          Object.entries(value)
+            .filter(
+              ([key]) =>
+                key !== "options_source" &&
+                (change.type === "calculation"
+                  ? ["result_type", "decimal_places", "evaluation"].includes(key)
+                  : change.type !== "link" || key !== "reverse_name"),
+            )
+            .map(([key, entry]) => [key, withoutTones(key, entry)]),
         );
       const fixed = [
         ...(field.type === change.type ? [] : ["type"]),
