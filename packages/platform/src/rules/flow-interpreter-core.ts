@@ -32,7 +32,6 @@ import { findTask, validReadFieldsResume } from "./flow-read-fields-resume";
 export { flowRunStateVersion } from "./flow-interpreter-state";
 import { flowValueMatchesType } from "./flow-value-shapes";
 import type { JsonValue } from "../catalogue/common";
-import { isRecord } from "../catalogue/runtime-primitives";
 import { isRecordLinkValue } from "../records/module-field-value-predicates";
 import { calculateFlowValue } from "./flow-calculate";
 import type { FlowTask } from "../workflows/flow-contracts";
