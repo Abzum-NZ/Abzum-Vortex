@@ -85,16 +85,6 @@ export const addRecordPage = (
       `${resolved.record.plural_name} already have ${/^[aeiou]/.test(kindWords[command.type]) ? "an" : "a"} ${kindWords[command.type]}: ${quoted(existing.name)}. Open it in Structure and change it there.`,
     );
   const plan: Plan = { source: candidate, details: [], taken: takenIds(candidate) };
-  if (command.type === "list" || command.type === "board") {
-    const companionCommand = { ...command, addToMenu: false };
-    if (found.detail === undefined) addDetail(context, plan, resolved, companionCommand);
-    if (found.create === undefined && resolved.record.standard_actions.includes("create"))
-      addForm(context, plan, resolved, companionCommand, "create");
-    // The Edit form belongs with List, Board, Detail and Create: a member can change a record from
-    // the detail page's header and from each row's menu.
-    if (found.edit === undefined && resolved.record.standard_actions.includes("update"))
-      addForm(context, plan, resolved, companionCommand, "update");
-  }
   const page =
     command.type === "list"
       ? addList(context, plan, resolved, command, listName)
@@ -111,6 +101,18 @@ export const addRecordPage = (
                 command,
                 command.type === "form_create" ? "create" : "update",
               );
+  if (command.type === "list" || command.type === "board") {
+    // The list comes first, so each companion made after it links back to it: a create form's
+    // Cancel returns to the list, and the list gains Add and its rows open the detail page.
+    const companionCommand = { ...command, addToMenu: false };
+    if (found.detail === undefined) addDetail(context, plan, resolved, companionCommand);
+    if (found.create === undefined && resolved.record.standard_actions.includes("create"))
+      addForm(context, plan, resolved, companionCommand, "create");
+    // The Edit form belongs with List, Board, Detail and Create: a member can change a record from
+    // the detail page's header and from each row's menu.
+    if (found.edit === undefined && resolved.record.standard_actions.includes("update"))
+      addForm(context, plan, resolved, companionCommand, "update");
+  }
   ensureHomeDashboard(context, plan, resolved.qualified);
   return {
     kind: "applied",

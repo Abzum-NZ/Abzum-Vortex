@@ -10,6 +10,7 @@ import {
   bindDelete,
   companions,
   ensureDetailDelete,
+  ensureListCreate,
   ensureDetailEdit,
   ensureListEdit,
   field,
@@ -127,17 +128,12 @@ export const addList = (
               quick_add: false,
             },
           };
-  const addFromList =
-    boardMode === undefined &&
-    record.standard_actions.includes("create") &&
-    found.create !== undefined;
   const table = blockItem(
     release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE, "records table"),
     tableAlias,
     {
       title: record.plural_name,
       purpose: `Every ${lowerFirst(record.name)} you can see in this organisation.`,
-      ...(addFromList ? { inline_create: true, create_page: found.create!.key } : {}),
       empty_message: `There are no ${record.plural_name.toLowerCase()} yet.`,
       columns: tableColumns((entry) => field(resolved, entry), columns, title.key),
       ...(features === undefined ? {} : { features }),
@@ -184,10 +180,7 @@ export const addList = (
   if (found.detail !== undefined) {
     openRows(plan, tableAlias, resolved, found.detail);
     plan.details.push(`Clicking a row opens ${quoted(found.detail.name)}.`);
-  } else
-    plan.details.push(
-      `Rows open nothing yet: ${record.plural_name.toLowerCase()} have no detail page. Adding one makes rows open it.`,
-    );
+  }
   if (boardMode !== undefined) {
     // A card drag runs the board's one move flow: it saves the card's new stage, so the pipeline and
     // the action owning a gated stage apply, the same flow the Board setting makes in Studio.
@@ -206,13 +199,8 @@ export const addList = (
       `Dragging a card runs ${quoted("Move card")}: the card's stage is saved through the pipeline.`,
     );
   }
-  plan.details.push(
-    addFromList
-      ? `The list has an ${quoted("Add " + lowerFirst(record.name))} button that opens ${quoted(found.create!.name)}.`
-      : boardMode === undefined
-        ? `No Add button yet: ${record.plural_name.toLowerCase()} have no create form. Adding one puts the button here.`
-        : `Adding a card is done from the board's quick add.`,
-  );
+  // A list asks for adding from the list once a create form exists: the form made after it brings it.
+  if (boardMode === undefined) ensureListCreate(plan, resolved);
   if (record.standard_actions.includes("soft_delete") && boardMode === undefined) {
     bindDelete(
       plan,
