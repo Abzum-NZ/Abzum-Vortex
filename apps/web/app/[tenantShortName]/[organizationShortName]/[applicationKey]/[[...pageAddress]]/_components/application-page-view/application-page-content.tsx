@@ -13,9 +13,6 @@ import {
   pageAgentTools,
   runPageAgentTool,
   type PageAgentTool,
-  isClientPageChange,
-  pageHoldFor,
-  primaryStreamedPlacement,
   createFlowRuntimeState,
 } from "@vortex/ui";
 import {
@@ -95,18 +92,6 @@ export function ApplicationPageViewContent({
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
 }>): ReactElement {
-  // Hold then swap: a page that arrives after the document has loaded waits, inside the page
-  // change's transition (so the current page stays on screen), for its primary placement's data or
-  // the page hold, whichever comes first. The data is the same response's streamed read, so the
-  // wait never costs a request. A page released by the hold shows its skeleton at once.
-  const primaryPlacementId =
-    model.streamedData === undefined
-      ? undefined
-      : primaryStreamedPlacement(content, model.streamedData);
-  const primaryRead =
-    primaryPlacementId === undefined ? undefined : model.streamedData?.[primaryPlacementId];
-  const pageHold =
-    primaryRead !== undefined && isClientPageChange() ? use(pageHoldFor(primaryRead)) : "ready";
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -621,11 +606,7 @@ export function ApplicationPageViewContent({
 
   return (
     <>
-      <div
-        ref={compositionRootRef}
-        className="contents"
-        {...(pageHold === "held" ? { "data-vortex-page-held": "" } : {})}
-      >
+      <div ref={compositionRootRef} className="contents">
         <WebMcpAdapter
           contextKey={webMcpContextKey}
           tools={agentTools}

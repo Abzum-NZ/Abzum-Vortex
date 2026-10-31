@@ -69,7 +69,6 @@ import { projectCreateFormDefaults, projectEditForms } from "./edit-form-project
 import { readFieldAccess } from "./field-access-read";
 import { projectGroupCreateForms } from "./group-create-forms";
 import { projectGuidedForm } from "./guided-form-projection";
-import { startStreamedPlacementReads } from "./streamed-placements";
 import { placementOptionInputKeys, projectInitialLinkInputs } from "./link-input";
 import {
   projectPlacementBindings,
@@ -78,11 +77,7 @@ import {
   projectFlowBindingTargets,
 } from "./flow-bindings";
 import { pageDefinitionGrids, readPageGridLayouts } from "./grid-layouts";
-import {
-  isStreamablePlacement,
-  readPlacement,
-  type PlacementReaderInput,
-} from "./placement-reader";
+import { readPlacement, type PlacementReaderInput } from "./placement-reader";
 import { platformPermissionSource } from "../platform-permission-source";
 import {
   availableContributedActions,
@@ -199,7 +194,7 @@ export const loadApplicationPageInternal = async (
       boardReads,
       expectedInstallationRevision,
       tableContinuation,
-      release === undefined ? options : { ...options, streamPlacementReads: false },
+      options,
     );
   } finally {
     await Promise.allSettled(startedReads);
@@ -702,18 +697,9 @@ const loadApplicationPageJoined = async (
     if (read.value.accessVersion !== page.accessVersion) return { kind: "temporarily_unavailable" };
     flowTimeZone = read.value.timeZone;
   }
-  // A page load may stream the placements that only show their own query's rows: the frame, the
-  // title and every other placement are decided and sent first, each streamed placement shows its
-  // loading state until its own read settles. A placement reread by id is always read in full.
-  const streamed =
-    options?.streamPlacementReads === true && selectedPlacementIds === undefined
-      ? placements.filter(isStreamablePlacement)
-      : [];
-  const streamedIds = new Set(streamed.map((entry) => entry.placementId));
-  await readConcurrently(
-    placements.filter((entry) => !streamedIds.has(entry.placementId)),
-    (entry) => readPlacement(placementReaderInput, entry),
-  );
+  // Every placement is read before the page is sent: a page arrives complete, so a page change
+  // keeps the current page on screen until the next one is ready and no placeholder is drawn.
+  await readConcurrently(placements, (entry) => readPlacement(placementReaderInput, entry));
 
   // A Group-owned create form needs an explicit owner from the viewer's current
   // memberships. Every Group returned here is eligible for initial Group ownership;
@@ -843,15 +829,6 @@ const loadApplicationPageJoined = async (
   if (subjectUnreadable) return { kind: "unavailable" };
   if (typeof page.accessVersion !== "number" || !Number.isSafeInteger(page.accessVersion))
     throw new Error("APPLICATION_PAGE_ACCESS_VERSION_UNAVAILABLE");
-  // Every refusal this loader can make has been made: only now do the streamed reads start, so a
-  // page that is not shown never leaves a read running. A failed read shows its placement's error
-  // state and is logged with its cause; it never fails the page or goes unobserved.
-  const streamedData = startStreamedPlacementReads({
-    streamed,
-    placementReaderInput,
-    address,
-    data,
-  });
   const permittedKeys = new Set(address.application.pageKeys);
   const applicationShellId = compiledPageShellId(pageDefinition.composition) ?? undefined;
   const applicationShell =
@@ -888,7 +865,6 @@ const loadApplicationPageJoined = async (
     ...(firstRecordTypeHref === undefined ? {} : { firstRecordTypeHref }),
     accessVersion: page.accessVersion,
     data,
-    ...(streamed.length === 0 ? {} : { streamedData }),
     tableAddress: Object.fromEntries(
       Object.entries(parameters).flatMap(([name, value]) => {
         const text = first(value);

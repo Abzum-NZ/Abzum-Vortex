@@ -90,13 +90,7 @@ export type {
 } from "./navigation/application-shell";
 export { ContentTransition, usePagePresence } from "./navigation/content-transition";
 export { PageNavigationBusyContext } from "./navigation/navigation";
-export {
-  isClientPageChange,
-  observeSettled,
-  pageHoldFor,
-  primaryStreamedPlacement,
-  settledValue,
-} from "./navigation/page-hold";
+export { isClientPageChange } from "./navigation/page-hold";
 export { renderedPageOf } from "./page-composition";
 export type { RenderedPage } from "./page-composition";
 export { PagePuckRenderer } from "./page-puck-renderer";

@@ -322,7 +322,6 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
     },
     parameters,
     {
-      streamPlacementReads: true,
       // Client page changes reuse the layout; a document already receives the frame's copy.
       includeNavigation: (await headers()).get("rsc") === "1",
     },
