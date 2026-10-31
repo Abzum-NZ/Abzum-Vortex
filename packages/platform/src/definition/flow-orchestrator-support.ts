@@ -28,8 +28,6 @@ import type { FlowRelease, FlowSelectedRecordReadProjection } from "./flow-orche
 
 const maximumPayloadCharacters = 65_536;
 
-export const sha256 = (value: string): string => createHash("sha256").update(value).digest("hex");
-
 /**
  * The command identity of one protected task's record change: stable for the run, task path and
  * iteration, so a replayed run reaches the same record receipt instead of writing again. Version

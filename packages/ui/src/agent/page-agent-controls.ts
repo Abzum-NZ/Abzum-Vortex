@@ -19,7 +19,7 @@ export type AgentButton = Readonly<{
   activate: () => unknown;
 }>;
 
-export type AgentGridRow = Readonly<{
+type AgentGridRow = Readonly<{
   record: string;
   cells: Readonly<Record<string, JsonValue>>;
   selected: boolean;

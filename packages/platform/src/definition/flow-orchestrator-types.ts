@@ -350,7 +350,7 @@ export type FlowOrchestratorDependencies = Readonly<{
   newToken?: () => string;
 }>;
 
-export const subjectSchema = z
+const subjectSchema = z
   .object({
     recordId: recordIdSchema,
     revision: revisionSchema.max(Number.MAX_SAFE_INTEGER - 1),

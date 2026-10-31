@@ -15,7 +15,7 @@ type FormFieldSet = Readonly<{
 }>;
 
 /** Why a field takes no value now: the same answer for a flow's Set value and an agent's set_field. */
-export type FieldRefusal = "not_on_page" | "hidden" | "read_only" | "disabled" | "invalid_value";
+type FieldRefusal = "not_on_page" | "hidden" | "read_only" | "disabled" | "invalid_value";
 export type FieldWriteResult =
   Readonly<{ kind: "set" }> | Readonly<{ kind: "refused"; reason: FieldRefusal }>;
 
