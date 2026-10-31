@@ -6,7 +6,6 @@ returns table (
   restricted boolean,
   owner_account_id uuid,
   owner_group_ids uuid[],
-  shared_record_ids uuid[],
   alternatives jsonb
 )
 language plpgsql
@@ -57,7 +56,7 @@ begin
   -- empty alternative list narrows the scan to nothing; the exact decision
   -- would refuse every row anyway.
   if eligibility ->> 'outcome' <> 'eligible' then
-    return query select true, null::uuid, array[]::uuid[], array[]::uuid[], '[]'::jsonb;
+    return query select true, null::uuid, array[]::uuid[], '[]'::jsonb;
     return;
   end if;
 
@@ -71,7 +70,7 @@ begin
   loop
     routes := candidate -> 'recordScope' -> 'routes';
     if pg_catalog.jsonb_typeof(routes) is distinct from 'array' then
-      return query select false, null::uuid, array[]::uuid[], array[]::uuid[], null::jsonb;
+      return query select false, null::uuid, array[]::uuid[], null::jsonb;
       return;
     end if;
     alternatives := alternatives || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
@@ -124,8 +123,6 @@ begin
       then account_id else null::uuid end,
     case when wants_owner and p_ownership_mode = 'group'
       then member_group_ids else array[]::uuid[] end,
-    -- No route narrows by record identity, so the shared-record slot is null.
-    null::uuid[],
     alternatives;
 end
 $function$;
@@ -136,7 +133,7 @@ grant execute on function vortex_access.resolve_record_read_scan_routes_internal
   to vortex_record_adapter;
 
 comment on function vortex_access.resolve_record_read_scan_routes_internal(jsonb, text) is
-  'Private read-scan narrowing for the fixed record adapter: from the caller''s own current eligible read alternatives it returns the owner account and owner groups (the shared-record slot is always null), the eligible alternatives reduced to their route lists and saved-condition envelopes, and whether every route has an exact stored predicate; it only narrows candidates and never replaces the exact-record decision.';
+  'Private read-scan narrowing for the fixed record adapter: from the caller''s own current eligible read alternatives it returns the owner account and owner groups, the eligible alternatives reduced to their route lists and saved-condition envelopes, and whether every route has an exact stored predicate; it only narrows candidates and never replaces the exact-record decision.';
 
 alter function vortex_access.resolve_record_read_scan_routes_internal(jsonb, text)
   owner to vortex_owner;

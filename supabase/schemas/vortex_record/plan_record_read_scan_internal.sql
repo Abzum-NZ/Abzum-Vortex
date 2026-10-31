@@ -5,7 +5,6 @@ returns table (
   restricted boolean,
   owner_account_id uuid,
   owner_group_ids uuid[],
-  shared_record_ids uuid[],
   readable_field_ids text[],
   access_predicate text,
   access_parameters jsonb,
@@ -101,7 +100,7 @@ begin
     plan, p_record_type_id, context_application_root_id
   );
   if declaration is null then
-    return query select false, null::uuid, array[]::uuid[], array[]::uuid[],
+    return query select false, null::uuid, array[]::uuid[],
       array[]::text[], 'false'::text, '[]'::jsonb, array[]::text[];
     return;
   end if;
@@ -332,7 +331,7 @@ begin
                 '{}'::jsonb,
                 condition_parameter_types,
                 condition_parameter_values,
-                10,
+                9,
                 parameter_offset
               );
               condition_sql := compiled ->> 'predicate';
@@ -382,7 +381,6 @@ begin
     access_routes.restricted,
     access_routes.owner_account_id,
     access_routes.owner_group_ids,
-    access_routes.shared_record_ids,
     readable_field_ids_value,
     access_predicate_value,
     access_parameters_value,
@@ -406,4 +404,4 @@ revoke all on function vortex_record.plan_record_read_scan_internal(uuid)
 grant execute on function vortex_record.plan_record_read_scan_internal(uuid) to vortex_owner;
 
 comment on function vortex_record.plan_record_read_scan_internal(uuid) is
-  'Private read-scan narrowing for the record query: builds the read declaration for one record type of the exact active installation and returns the owner account and owner groups a caller can be admitted through (the shared-record slot is always null), the fields every eligible read alternative is guaranteed to expose, kept only when every row the scan examines is one the exact decision admits, the same guaranteed fields unconditionally as the reader''s current field bound (what a list may offer to filter, search or sort by), and one scan predicate that OR-s every eligible alternative''s exact route test with its saved condition compiled into the same scan; any route without an exact stored predicate or any condition the compiler cannot express as a superset is left unrestricted or true, so the per-row decision remains the only thing that decides access.';
+  'Private read-scan narrowing for the record query: builds the read declaration for one record type of the exact active installation and returns the owner account and owner groups a caller can be admitted through, the fields every eligible read alternative is guaranteed to expose, kept only when every row the scan examines is one the exact decision admits, the same guaranteed fields unconditionally as the reader''s current field bound (what a list may offer to filter, search or sort by), and one scan predicate that OR-s every eligible alternative''s exact route test with its saved condition compiled into the same scan; any route without an exact stored predicate or any condition the compiler cannot express as a superset is left unrestricted or true, so the per-row decision remains the only thing that decides access.';

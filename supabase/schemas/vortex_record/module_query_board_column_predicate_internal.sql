@@ -12,9 +12,9 @@ as $function$
   select case
     when p_member ->> 'choiceColumn' is null then null
     when p_column ->> 'kind' = 'option' then pg_catalog.format(
-      'stored.%I collate "C" = $13 collate "C"', p_member ->> 'choiceColumn')
+      'stored.%I collate "C" = $12 collate "C"', p_member ->> 'choiceColumn')
     else pg_catalog.format(
-      '(stored.%1$I is null or not (stored.%1$I collate "C" = any ($14::text[])))',
+      '(stored.%1$I is null or not (stored.%1$I collate "C" = any ($13::text[])))',
       p_member ->> 'choiceColumn')
   end
 $function$;

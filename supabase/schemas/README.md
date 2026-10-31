@@ -20,9 +20,9 @@ The schema directory names the function's schema and the file name is the functi
 lowercase SQL identifiers, so one name has one file: do not overload a function name. Keep each
 canonical file synchronized with the migration that installs its function.
 
-`vortex_record_adapter` and `vortex_record_inventory` own the record functions their restricted
-policies need, four integration functions keep `postgres` ownership (target architecture §4), and
-every other function is owned by `vortex_owner`.
+`vortex_record_adapter` owns the record functions its restricted policies need, four integration
+functions keep `postgres` ownership (target architecture §4), and every other function is owned by
+`vortex_owner`.
 
 ## Migration rule
 

@@ -482,8 +482,7 @@ begin
           'predicate', 'true',
           'parameters', '[]'::jsonb,
           'ownerAccountId', null,
-          'ownerGroupIds', '[]'::jsonb,
-          'sharedRecordIds', '[]'::jsonb
+          'ownerGroupIds', '[]'::jsonb
         )
       );
     else
@@ -547,8 +546,7 @@ begin
           'predicate', access_plan.access_predicate,
           'parameters', coalesce(access_plan.access_parameters, '[]'::jsonb),
           'ownerAccountId', access_plan.owner_account_id,
-          'ownerGroupIds', pg_catalog.to_jsonb(coalesce(access_plan.owner_group_ids, array[]::uuid[])),
-          'sharedRecordIds', pg_catalog.to_jsonb(coalesce(access_plan.shared_record_ids, array[]::uuid[]))
+          'ownerGroupIds', pg_catalog.to_jsonb(coalesce(access_plan.owner_group_ids, array[]::uuid[]))
         )
       );
     end if;
@@ -746,7 +744,7 @@ begin
         filter_read_time_expressions,
         parameter_types,
         parameter_values,
-        9,
+        8,
         0
       );
       filter_predicate := coalesce(filter_plan ->> 'predicate', 'true');
