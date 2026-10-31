@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "../components/select";
 import { DefinitionRenderError } from "../definition-error";
+import { OptionToneDot } from "../display/option-tone";
 import { setFieldChange } from "../flow-runtime/flow-cycle";
 import {
   readChoiceOptionsPage,
@@ -283,7 +284,10 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
                     value={option.key}
                     aria-invalid={error !== undefined}
                   />
-                  <FieldLabel htmlFor={optionId}>{option.label}</FieldLabel>
+                  <FieldLabel htmlFor={optionId} className="flex items-center gap-2">
+                    <OptionToneDot tone={option.tone} />
+                    {option.label}
+                  </FieldLabel>
                 </Field>
               );
             })}
@@ -339,7 +343,10 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
               <ComboboxList>
                 {(item: ChoiceOption) => (
                   <ComboboxItem key={item.key} value={item}>
-                    {item.label}
+                    <span className="flex min-w-0 items-center gap-2">
+                      <OptionToneDot tone={item.tone} />
+                      {item.label}
+                    </span>
                   </ComboboxItem>
                 )}
               </ComboboxList>
@@ -401,7 +408,10 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
               <SelectItem value={null}>{placeholder}</SelectItem>
               {options.map((option) => (
                 <SelectItem key={option.key} value={option.key}>
-                  {option.label}
+                  <span className="flex min-w-0 items-center gap-2">
+                    <OptionToneDot tone={option.tone} />
+                    {option.label}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>

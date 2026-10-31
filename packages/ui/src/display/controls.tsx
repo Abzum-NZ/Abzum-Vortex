@@ -1,10 +1,11 @@
 "use client";
 
 import type { ReactElement } from "react";
+import Link from "next/link";
 import { Button } from "../components/button";
 import { Card, CardContent } from "../components/card";
 import { Checkbox } from "../components/checkbox";
-import { Empty, EmptyHeader, EmptyTitle } from "../components/empty";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "../components/empty";
 import { Pagination, PaginationContent, PaginationItem } from "../components/pagination";
 import { Skeleton } from "../components/skeleton";
 import { Spinner } from "../components/spinner";
@@ -78,7 +79,16 @@ export function RecordsLoadingState({
 export function RecordsEmptyState({
   accessibleName,
   message,
-}: Readonly<{ accessibleName: string; message: string }>): ReactElement {
+  purpose,
+  create,
+}: Readonly<{
+  accessibleName: string;
+  message: string;
+  /** The authored one-line purpose of the list, shown above the empty message. */
+  purpose?: string;
+  /** The inline create action when the list offers one. */
+  create?: Readonly<{ href: string; label: string }>;
+}>): ReactElement {
   return (
     <Empty
       role="status"
@@ -88,7 +98,18 @@ export function RecordsEmptyState({
     >
       <EmptyHeader>
         <EmptyTitle>{message}</EmptyTitle>
+        {purpose === undefined ? null : <EmptyDescription>{purpose}</EmptyDescription>}
       </EmptyHeader>
+      {create === undefined ? null : (
+        <EmptyContent>
+          <Button
+            nativeButton={false}
+            render={<Link href={create.href} prefetch={false} />}
+          >
+            {create.label}
+          </Button>
+        </EmptyContent>
+      )}
     </Empty>
   );
 }

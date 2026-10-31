@@ -13,6 +13,7 @@ import {
 import { DefinitionRenderError } from "../definition-error";
 import { formatIsoDate, INVALID_DATE_TEXT, type DateFormatOptions } from "./date-format";
 import { FormattedTime } from "./date-format-context";
+import { optionToneBadgeClass } from "./option-tone";
 import { isSafeLinkAddress } from "@vortex/platform/schema";
 import {
   isInternalAddress,
@@ -124,7 +125,12 @@ export function DisplayCellView({ value }: Readonly<{ value: DisplayDetailCell }
       return <FormattedTime className="vortex-cell-date" iso={value.iso} />;
     case "choice":
       return (
-        <Badge variant="outline" data-vortex-choice-key={value.key}>
+        <Badge
+          variant="outline"
+          data-vortex-choice-key={value.key}
+          data-vortex-option-tone={value.tone}
+          className={optionToneBadgeClass(value.tone)}
+        >
           {value.label}
         </Badge>
       );

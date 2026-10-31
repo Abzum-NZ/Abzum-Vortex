@@ -1,5 +1,11 @@
 import {
-  maximumFlowConfirmationDetailLines,
+  flowConfirmDetailsSchema,
+  flowMessageDismissBounds,
+  flowMessageSeverities,
+  flowMessageTargets,
+  type FlowConfirmDetail,
+  type FlowMessageSeverity,
+  type FlowMessageTarget,
   type FormContinuationAnswer,
   type JsonValue,
 } from "@vortex/platform/schema";
@@ -72,7 +78,8 @@ export type FlowMessageIntent = Readonly<{
 export type FlowConfirmIntent = Readonly<{
   title: string | undefined;
   message: string;
-  details: readonly string[];
+  /** Each review entry, with one level of lines under it (a role and what it allows). */
+  details: readonly FlowConfirmDetail[];
   choice: string | undefined;
   confirmLabel: string | undefined;
   destructive: boolean | undefined;
@@ -108,8 +115,10 @@ export const readMessageIntent = (intent: FlowIntent): FlowMessageIntent | undef
   const dismissAfterMs = intent.properties.dismiss_after_ms;
   if (
     message === undefined ||
-    !["toast", "banner", "dialog", "inline", "slot"].includes(target ?? "") ||
-    !["info", "success", "warning", "error"].includes(severity ?? "") ||
+    target === undefined ||
+    !(flowMessageTargets as readonly string[]).includes(target) ||
+    severity === undefined ||
+    !(flowMessageSeverities as readonly string[]).includes(severity) ||
     ((target === "inline" || target === "slot") && component === undefined) ||
     (actionLabel === undefined) !== (actionFlow === undefined) ||
     (actionInputs !== undefined &&
@@ -117,17 +126,17 @@ export const readMessageIntent = (intent: FlowIntent): FlowMessageIntent | undef
     (dismissAfterMs !== undefined &&
       (typeof dismissAfterMs !== "number" ||
         !Number.isInteger(dismissAfterMs) ||
-        dismissAfterMs < 2_000 ||
-        dismissAfterMs > 30_000 ||
+        dismissAfterMs < flowMessageDismissBounds.minimumMs ||
+        dismissAfterMs > flowMessageDismissBounds.maximumMs ||
         (target !== "toast" && target !== "banner") ||
         (severity !== "info" && severity !== "success")))
   )
     return undefined;
   return {
     taskId: intent.taskId,
-    target: target as PageMessageTarget,
+    target: target as FlowMessageTarget,
     text: message,
-    severity: severity as NoticeSeverity,
+    severity: severity as FlowMessageSeverity,
     ...(title === undefined ? {} : { title }),
     ...(component === undefined ? {} : { component }),
     ...(actionLabel === undefined ? {} : { actionLabel }),
@@ -140,17 +149,14 @@ export const readMessageIntent = (intent: FlowIntent): FlowMessageIntent | undef
 };
 
 /**
- * A bounded number of complete review entries, or none. An entry can describe a role's entire
- * permission set and field changes, so it must not inherit the short message-text limit.
+ * The review entries a confirmation lists: a bounded number of complete entries, each with an
+ * optional one-level list beneath it. An entry can describe a role's entire permission set, so it
+ * must not inherit the short message-text limit.
  */
-const detailLines = (candidate: JsonValue | undefined): readonly string[] | undefined => {
+const detailLines = (candidate: JsonValue | undefined): readonly FlowConfirmDetail[] | undefined => {
   if (candidate === undefined || candidate === null) return [];
-  if (!Array.isArray(candidate) || candidate.length > maximumFlowConfirmationDetailLines)
-    return undefined;
-  const lines = candidate.map((line) =>
-    typeof line === "string" && line.length > 0 ? line : undefined,
-  );
-  return lines.every((line): line is string => line !== undefined) ? lines : undefined;
+  const parsed = flowConfirmDetailsSchema.safeParse(candidate);
+  return parsed.success ? parsed.data : undefined;
 };
 
 /** Undefined when the message is missing or the review entries are not a bounded list of texts. */

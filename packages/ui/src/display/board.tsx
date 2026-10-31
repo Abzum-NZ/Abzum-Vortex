@@ -35,6 +35,7 @@ import { formatLocaleNumber } from "./date-format";
 import { DisplayHeader } from "./controls";
 import { resolveDisplayContext, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
+import { optionToneFillClass } from "./option-tone";
 import type { BoardBucketPayload, BoardPayload, DisplaySemanticEvent } from "./projected-data";
 import { useRowEntrance } from "./row-entrance";
 
@@ -66,16 +67,7 @@ type BoardBucket = Readonly<{
 }>;
 
 /** Each stage colour role as its theme token; never a colour value. */
-const toneClasses: Readonly<Record<PipelineStageTone, string>> = {
-  neutral: "bg-muted-foreground",
-  primary: "bg-primary",
-  destructive: "bg-destructive",
-  chart_1: "bg-chart-1",
-  chart_2: "bg-chart-2",
-  chart_3: "bg-chart-3",
-  chart_4: "bg-chart-4",
-  chart_5: "bg-chart-5",
-};
+const toneClasses = optionToneFillClass;
 
 /** Whether the pipeline lets a card in one bucket move to another column. */
 const mayMove = (from: BoardBucket | undefined, to: BoardBucket): boolean =>

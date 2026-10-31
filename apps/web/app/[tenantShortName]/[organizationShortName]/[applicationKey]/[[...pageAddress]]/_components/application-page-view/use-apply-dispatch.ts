@@ -215,7 +215,8 @@ export function useApplyDispatch({
             const presentation = diagnostic.presentation;
             resultNotice = {
               ...reason,
-              ...(presentation === undefined
+              ...(presentation?.link_label === undefined ||
+              presentation.destination === undefined
                 ? {}
                 : {
                     action: {
@@ -231,8 +232,8 @@ export function useApplyDispatch({
                   }),
               text:
                 recovery === undefined
-                  ? (diagnostic.presentation?.message ?? reason.text)
-                  : `${diagnostic.presentation?.message ?? reason.text} ${resultNotice.text}`,
+                  ? (presentation?.message ?? reason.text)
+                  : `${presentation?.message ?? reason.text} ${reason.text}`,
             };
           }
           // Signing in again, or verifying, comes back to this page and record, where the person can retry.
