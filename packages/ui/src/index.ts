@@ -388,11 +388,10 @@ export {
   type FlowMessageIntent,
   type PageMessage,
   type PageMessageDraft,
-  type FlowResumeEvidence,
   type FlowRuntime,
   type FlowRuntimeOptions,
   type FlowRuntimeState,
-  type ServerDrivenResult,
+  type FlowDispatchResult,
   type ServerFlowResponse,
 } from "./flow-runtime";
 

@@ -44,11 +44,8 @@ export type FlowRunPortsHost = Readonly<{
   recordPinService: ReturnType<typeof createViewerSafeRecordLinkService>;
 }>;
 
-/** The admission of the run's page start, server segments and continuations. */
-export type FlowRunAdmission = Pick<
-  FlowOrchestratorDependencies,
-  "admitSegment" | "admitContinuation" | "admitPageStart"
->;
+/** The admission of the run's page start and server segments. */
+export type FlowRunAdmission = Pick<FlowOrchestratorDependencies, "admitSegment" | "admitPageStart">;
 
 /**
  * The ports one flow run needs, bound to the given request when there is one: protected

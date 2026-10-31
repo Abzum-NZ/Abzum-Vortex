@@ -4,10 +4,11 @@ import type { QueryContinuationKey } from "../queries/continuation-token";
 import type { FlowBindingEndpointDependencies } from "./flow-binding-endpoint";
 import type { FlowOrchestrator } from "./flow-orchestrator";
 
+type InvokeSegment = FlowBindingEndpointDependencies["invokeSegment"];
 type OrchestratorFactory = (
-  release: Parameters<FlowBindingEndpointDependencies["orchestratorFor"]>[0],
+  release: Parameters<InvokeSegment>[5],
   runId: string,
-  installation: Parameters<FlowBindingEndpointDependencies["orchestratorFor"]>[2],
+  installation: Parameters<InvokeSegment>[7],
 ) => FlowOrchestrator;
 
 /** Wires a detached page segment through the existing admitted execution path. */
@@ -15,13 +16,12 @@ export const createDetachedSegmentInvoker =
   (
     continuationKey: QueryContinuationKey,
     orchestratorFor: OrchestratorFactory,
-  ): NonNullable<FlowBindingEndpointDependencies["invokeSegment"]> =>
+  ): InvokeSegment =>
   async (session, selection, binding, inputs, request, release, runId, installation) => {
-    if (request.segment === undefined || selection.applicationRootId === undefined)
-      return { kind: "refused", committedNow: false };
+    if (selection.applicationRootId === undefined) return { kind: "refused", committedNow: false };
     const plan = installation.plans.get(String(binding.flow.flowId));
     const segment = plan?.segments.find(
-      (part) => part.kind === "server" && part.id === request.segment?.segmentId,
+      (part) => part.kind === "server" && part.id === request.segment.segmentId,
     );
     if (plan === undefined || segment === undefined || segment.kind !== "server")
       return { kind: "refused", committedNow: false };

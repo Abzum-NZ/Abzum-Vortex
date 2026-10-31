@@ -4,7 +4,7 @@ export * from "./flow-set-based";
 export * from "./flow-effects";
 export * from "./flow-confirmation-limits";
 export * from "./flow-values";
-export * from "./form-continuation-contracts";
+export * from "./flow-warning-notice";
 export * from "./form-continuation-answer";
 export * from "./flow-invocation-contracts";
 export * from "./flow-refusal-feedback";

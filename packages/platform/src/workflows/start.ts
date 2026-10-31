@@ -16,7 +16,6 @@ import { flowRefusalFeedbackCodeSchema } from "./flow-refusal-feedback";
 import { flowNeedsRunStart } from "./flow-run-start";
 import {
   flowEntrySegmentsMatch,
-  flowPlanFingerprint,
   type FlowPlan,
   type FlowServerSegment,
 } from "./flow-plan";
@@ -73,7 +72,6 @@ export const commandIdOf = (
   gestureId: string,
   segmentId: string,
   iteration: string,
-  continuation?: Readonly<{ tokenHash: string; answerHash: string }>,
 ): string => {
   const bytes = createHash("sha256")
     .update(
@@ -83,7 +81,6 @@ export const commandIdOf = (
         gestureId.toLowerCase(),
         segmentId,
         iteration,
-        ...(continuation === undefined ? [] : [continuation.tokenHash, continuation.answerHash]),
       ]),
     )
     .digest()
@@ -179,23 +176,10 @@ type StartFlowExecutionResult<Value> =
   | Readonly<{ kind: "completed"; value: Value; runId: string; committedNow?: boolean; replayedCommitted?: true }>
   | Readonly<{ kind: "reload" }>
   | Readonly<{ kind: "rate_limited"; retryAfterSeconds: number }>
-  | Readonly<{ kind: "already_answered" }>
   | Readonly<{ kind: "refused" }>;
 
 export type StartFlowResult<Value> = StartFlowExecutionResult<Value> &
   Readonly<{ committedNow: boolean; replayedCommitted?: true }>;
-
-export type FlowContinuationExecution<Value> =
-  | Readonly<{ kind: "finished"; value: Value }>
-  | Readonly<{
-      kind: "suspended";
-      childTokenHash: string;
-      childState: Readonly<Record<string, unknown>>;
-      elapsedMilliseconds: number;
-      lifetimeSeconds: number;
-      sealedReply: string;
-      value: (expiresAt: string) => Value;
-    }>;
 
 /** The host resolves the page and its binding; protected decisions use the supplied transaction. */
 type StartFlowDependencies<Value> = Readonly<{
@@ -208,13 +192,6 @@ type StartFlowDependencies<Value> = Readonly<{
   currentPlan: (
     context: SegmentContext,
   ) => Promise<Readonly<{ plan: FlowPlan; installationRevision: number }> | undefined>;
-  /** A path that ends or suspends without reaching another server segment. */
-  executeContinuation?: (
-    context: SegmentContext,
-    runId: string,
-  ) => Promise<FlowContinuationExecution<Value>>;
-  /** Opens a sealed child reply only after the current caller has been authorized. */
-  openContinuationReplay?: (payload: string, expiresAt: string) => Value;
   /** Rebuild the segment frame for each call: a restart rolls back the entire transaction. */
   execute: (
     context: SegmentContext,
@@ -301,13 +278,6 @@ const startFlowInternal = async <Value>(
     /** Required when the plan has a completion segment; resolved from the trusted binding. */
     bindingId?: string;
     iteration: string;
-    /** Hashed continuation read before path selection; consumed only after admission. */
-    continuation?: Readonly<{ tokenHash: string; releaseKey: string; answerHash: string }>;
-    continuationPlan?: Readonly<{
-      installationRevision: number;
-      flowId: string;
-      fingerprint: string;
-    }>;
     /** Resolved by the server before opening a profile-change scope. */
     profileAccountId?: string;
   }>,
@@ -320,9 +290,6 @@ const startFlowInternal = async <Value>(
   const completionOnly = serverSegments.length === 1 && hasCompletion;
   if (
     !id.success ||
-    (request.continuation !== undefined &&
-      (!/^[a-f0-9]{64}$/.test(request.continuation.tokenHash) ||
-        !/^[a-f0-9]{64}$/.test(request.continuation.answerHash))) ||
     (!suppliedRunId.success && !(completionOnly && request.runId === undefined)) ||
     (hasCompletion && !bindingId.success) ||
     request.iteration.length > 200
@@ -382,98 +349,8 @@ const startFlowInternal = async <Value>(
         .parse(rows[0]);
       return rate.admitted ? undefined : rate.retry_after_seconds;
     };
-    const consumeContinuation = async (
-      runId: string,
-      commandId: string,
-      target: SegmentContext["transaction"] = transaction,
-    ) => {
-      if (request.continuation === undefined) return { status: "admitted" } as const;
-      const rows =
-        await target.query`select vortex_platform.admit_flow_continuation(${request.continuation.tokenHash}::text, ${runId}::uuid, ${currentPlan.flowId}::uuid, ${request.continuation.releaseKey}::text, ${commandId}::uuid) as result`;
-      return z
-        .object({
-          status: z.enum(["admitted", "replay", "already_answered", "unavailable"]),
-          payload: z.string().nullable().optional(),
-          expiresAt: z.string().nullable().optional(),
-        })
-        .parse(z.object({ result: z.unknown() }).parse(rows[0]).result);
-    };
-    const consumeAndProject = async (runId: string, commandId: string, replay: boolean) => {
-      if (request.continuation === undefined) return consumeContinuation(runId, commandId);
-      const refused = new Error("FLOW_GESTURE_REFUSED_ROLLBACK");
-      try {
-        return await requireRequestSavepoint(transaction).withSavepoint(async (child) => {
-          const consumed = await consumeContinuation(runId, commandId, child);
-          if (
-            consumed.status === "admitted" &&
-            !replay &&
-            !(await dependencies.authorizeGesture({ ...context, transaction: child }))
-          )
-            throw refused;
-          return consumed;
-        });
-      } catch (error) {
-        if (error === refused) return { status: "gesture_refused" } as const;
-        throw error;
-      }
-    };
     if (request.expected === null) {
-      if (
-        request.continuation === undefined &&
-        !(await dependencies.authorizeGesture(context))
-      )
-        return { kind: "refused" };
-      if (request.continuation !== undefined) {
-        if (
-          request.continuationPlan === undefined ||
-          dependencies.executeContinuation === undefined ||
-          dependencies.openContinuationReplay === undefined ||
-          !suppliedRunId.success
-        )
-          return { kind: "refused" };
-        if (
-          request.continuationPlan.installationRevision !== current.installationRevision ||
-          request.continuationPlan.flowId !== currentPlan.flowId ||
-          request.continuationPlan.fingerprint !== flowPlanFingerprint(currentPlan)
-        )
-          return { kind: "reload" };
-        const commandId = commandIdOf(
-          request.session,
-          request.selection,
-          id.data,
-          "continuation",
-          request.iteration,
-          request.continuation,
-        );
-        const retryAfterSeconds = await rateLimit("read");
-        if (retryAfterSeconds !== undefined) return { kind: "rate_limited", retryAfterSeconds };
-        const consumed = await consumeAndProject(suppliedRunId.data, commandId, false);
-        if (consumed.status === "already_answered") return { kind: "already_answered" };
-        if (consumed.status !== "admitted" && consumed.status !== "replay")
-          return { kind: "refused" };
-        if (consumed.status === "replay" && consumed.payload != null) {
-          if (consumed.expiresAt == null) throw new Error("FLOW_CONTINUATION_CHILD_UNAVAILABLE");
-          return {
-            kind: "completed",
-            value: dependencies.openContinuationReplay(consumed.payload, consumed.expiresAt),
-            runId: suppliedRunId.data,
-          };
-        }
-        const executed = await dependencies.executeContinuation(context, suppliedRunId.data);
-        if (executed.kind === "finished")
-          return { kind: "completed", value: executed.value, runId: suppliedRunId.data };
-        const rows =
-          await transaction.query`select vortex_platform.complete_flow_continuation(${request.continuation.tokenHash}::text, ${commandId}::uuid, ${executed.childTokenHash}::text, ${JSON.stringify(executed.childState)}::text::jsonb, ${executed.elapsedMilliseconds}::integer, ${executed.lifetimeSeconds}::integer, ${executed.sealedReply}::text) as result`;
-        const recorded = z
-          .object({ status: z.literal("recorded"), expiresAt: z.string() })
-          .parse(z.object({ result: z.unknown() }).parse(rows[0]).result);
-        return {
-          kind: "completed",
-          value: executed.value(recorded.expiresAt),
-          runId: suppliedRunId.data,
-        };
-      }
-      if (request.continuationPlan !== undefined) return { kind: "refused" };
+      if (!(await dependencies.authorizeGesture(context))) return { kind: "refused" };
       if (
         request.entrySegments === undefined &&
         currentPlan.segments.some((part) => part.kind === "server")
@@ -512,7 +389,6 @@ const startFlowInternal = async <Value>(
       id.data,
       segment.id,
       request.iteration,
-      request.continuation,
     );
     let runId = suppliedRunId.success ? suppliedRunId.data : undefined;
     let evidenceState:
@@ -584,19 +460,12 @@ const startFlowInternal = async <Value>(
       else if (found.status === "pending" && segment.multiTransaction) workflowPending = true;
       else if (found.status !== "none") return { kind: "refused" };
     }
-    if (
-      request.continuation === undefined &&
-      replay === undefined &&
-      !(await dependencies.authorizeGesture(context))
-    )
+    if (replay === undefined && !(await dependencies.authorizeGesture(context)))
       return { kind: "refused" };
     if (replay === undefined && !workflowPending) {
       const retryAfterSeconds = await rateLimit(segment.changes ? "change" : "read");
       if (retryAfterSeconds !== undefined) return { kind: "rate_limited", retryAfterSeconds };
     }
-    const consumed = await consumeAndProject(runId, commandId, replay !== undefined);
-    if (consumed.status === "already_answered") return { kind: "already_answered" };
-    if (consumed.status !== "admitted" && consumed.status !== "replay") return { kind: "refused" };
     if (segment.multiTransaction) {
       const refused = new Error("FLOW_WORKFLOW_PREPARATION_REFUSED");
       try {

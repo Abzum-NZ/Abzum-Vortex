@@ -14,7 +14,7 @@ import {
   type createPlatformComponentRegistryForReleases,
   PagePuckRenderer,
   type FlowIntentHost,
-  type ServerDrivenResult,
+  type FlowDispatchResult,
   type DisplaySemanticEvent,
   type RenderedPage,
   type PlatformThemeTokens,
@@ -170,7 +170,6 @@ export function ApplicationPageViewContent({
   const setPanelRef = useRef<FlowIntentHost["setPanel"]>(undefined);
   const dialogFormRef = useRef<HTMLDivElement>(null);
   const submittedFormsRef = useRef(new Map<string, SubmittedForm>());
-  const continuingFormsRef = useRef(new Map<string, SubmittedForm>());
   /** Set when the person cancels a form a running flow paused at; a board move clears it when it starts. */
   const formCancelledRef = useRef(false);
   const { unsavedWorkRegistry, unsavedWork, confirmDialog } = useUnsavedWorkPrompt({ router });
@@ -283,14 +282,13 @@ export function ApplicationPageViewContent({
   }, [runtimeState, navigationKey]);
 
   const applyMessageActionRef = useRef<
-    (dispatch: Promise<ServerDrivenResult>, bindingId: string) => void
+    (dispatch: Promise<FlowDispatchResult>, bindingId: string) => void
   >(() => undefined);
   const { formBlock, flowRuntime, webMcpRuntime, intentHostElement, messageBanner } =
     useFlowRuntime({
       application,
       runtimeState,
       subject,
-      continuingFormsRef,
       formCancelledRef,
       unsavedWorkRegistry,
       submittedFormsRef,

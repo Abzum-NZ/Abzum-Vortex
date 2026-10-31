@@ -19,7 +19,7 @@ import {
   type FlowMessageIntent,
   type FlowRuntimeState,
   type FlowInvokeClient,
-  type ServerDrivenResult,
+  type FlowDispatchResult,
   type LinkNavigationEnvironment,
   type PlatformThemeTokens,
 } from "@vortex/ui";
@@ -43,7 +43,6 @@ export function useFlowRuntime({
   application,
   runtimeState,
   subject,
-  continuingFormsRef,
   formCancelledRef,
   unsavedWorkRegistry,
   submittedFormsRef,
@@ -67,7 +66,7 @@ export function useFlowRuntime({
   application: ApplicationPageModel["invocation"];
   runtimeState: FlowRuntimeState;
   subject: ApplicationPageModel["subject"];
-  continuingFormsRef: RefObject<Map<string, SubmittedForm>>;
+  /** Set when the person cancels a form a running flow shows; a board move reads it. */
   formCancelledRef: RefObject<boolean>;
   unsavedWorkRegistry: ReturnType<typeof useUnsavedWorkRegistry>;
   submittedFormsRef: RefObject<Map<string, SubmittedForm>>;
@@ -90,7 +89,7 @@ export function useFlowRuntime({
   /** Filled by the page's panel host once it has rendered. */
   setPanelRef: RefObject<FlowIntentHost["setPanel"]>;
   applyMessageActionRef: RefObject<
-    (dispatch: Promise<ServerDrivenResult>, bindingId: string) => void
+    (dispatch: Promise<FlowDispatchResult>, bindingId: string) => void
   >;
 }>) {
   /**
@@ -155,8 +154,6 @@ export function useFlowRuntime({
       return (client: FlowInvokeClient) =>
         trackFlowInvokeClient(client, {
           submissions,
-          continuingFormsRef,
-          formCancelledRef,
           unsavedWorkRegistry,
           controlDraftsRef,
         });
@@ -171,7 +168,6 @@ export function useFlowRuntime({
     };
   }, [
     application,
-    formCancelledRef,
     model.pageParameters.controls,
     runtimeInputsRef,
     controlDraftsRef,
@@ -243,6 +239,10 @@ export function useFlowRuntime({
         cancel: () => void;
       }>,
     ) => {
+      const cancel = () => {
+        formCancelledRef.current = true;
+        controls.cancel();
+      };
       const surface = formSurfaceComposition(
         model.page,
         model.pageId,
@@ -254,7 +254,7 @@ export function useFlowRuntime({
           title: "Form unavailable",
           body: (
             <DialogFooter>
-              <Button type="button" variant="secondary" onClick={controls.cancel}>
+              <Button type="button" variant="secondary" onClick={cancel}>
                 Cancel
               </Button>
             </DialogFooter>
@@ -348,7 +348,7 @@ export function useFlowRuntime({
                 />
               </UnsavedWorkProvider>
               <DialogFooter>
-                <Button type="button" variant="secondary" onClick={controls.cancel}>
+                <Button type="button" variant="secondary" onClick={cancel}>
                   Cancel
                 </Button>
                 <Button
@@ -363,7 +363,7 @@ export function useFlowRuntime({
         ),
       };
     },
-    [currentData, dialogState, model, navigation, resolvePageHref, router],
+    [currentData, dialogState, formCancelledRef, model, navigation, resolvePageHref, router],
   );
   const messageActionRef = useRef<(message: FlowMessageIntent) => void>(() => undefined);
   const {
@@ -502,9 +502,18 @@ export function useFlowRuntime({
         state: runtimeState,
         bindingSettings,
         begin: beginSubmission,
+        browserBinding: browserBindings,
         ...(application.flowTimeZone === undefined ? {} : { timeZone: application.flowTimeZone }),
       }),
-    [application.flowTimeZone, beginSubmission, bindingSettings, webMcpClient, host, runtimeState],
+    [
+      application.flowTimeZone,
+      beginSubmission,
+      bindingSettings,
+      browserBindings,
+      webMcpClient,
+      host,
+      runtimeState,
+    ],
   );
   useEffect(() => {
     if (

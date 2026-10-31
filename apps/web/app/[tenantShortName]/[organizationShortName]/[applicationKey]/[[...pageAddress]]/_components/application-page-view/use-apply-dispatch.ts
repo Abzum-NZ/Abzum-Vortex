@@ -2,7 +2,7 @@ import { useCallback, type Dispatch, type SetStateAction, type RefObject } from 
 import type { useRouter } from "next/navigation";
 import type {
   createPlatformComponentRegistryForReleases,
-  ServerDrivenResult,
+  FlowDispatchResult,
   FormFlowFeedback,
   FlowRuntimeState,
 } from "@vortex/ui";
@@ -65,7 +65,7 @@ export function useApplyDispatch({
    */
   const applyDispatch = useCallback(
     async (
-      dispatch: Promise<ServerDrivenResult | undefined>,
+      dispatch: Promise<FlowDispatchResult | undefined>,
       formPlacementId?: string,
       afterAccepted?: () => Promise<PageMessageDraft | undefined>,
       sourceBindingId?: string,
@@ -359,18 +359,8 @@ export function useApplyDispatch({
           );
           return outcome;
         }
-        if (server.kind === "abandoned") {
-          // A surface that went away at a pause before any answer was sent: nothing to report.
-          if (server.unanswered) return outcome;
-          // The run may have committed a step before the answer was lost: never report nothing.
-          showResult(outcomeNotices.uncertain ?? unavailableNotice);
-          if (model.guidedForm !== undefined) setCompletedGuidedNavigationKey(navigationKey);
-          if (sourceBindingId !== undefined)
-            void refreshPlacements(refreshTargetsForBinding(sourceBindingId), undefined, {
-              content: true,
-            });
-          return outcome;
-        }
+        // A surface that went away before the run finished: nothing to report.
+        if (server.kind === "abandoned") return outcome;
         showResult(unavailableNotice);
         return outcome;
       } catch {

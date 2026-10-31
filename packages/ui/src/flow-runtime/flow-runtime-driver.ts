@@ -1,7 +1,7 @@
 import { safeFlowResultDescriptors } from "@vortex/platform/schema";
 import type { FlowRuntimeOptions, FlowBindingReference } from "./flow-runtime";
 import type { FlowSubjectContext } from "./server-flow-client";
-import type { ServerDrivenResult } from "./server-driven-run";
+import type { FlowDispatchResult } from "./flow-runtime";
 
 /** The page host of one binding's run: while a call waits on the person, the binding's timeout clock stands still. */
 const hostWaitingOnPerson = (
@@ -34,102 +34,77 @@ export async function runFlowBinding(
   subject: FlowSubjectContext | undefined,
   sourceTablePlacementId: string | undefined,
   settings: NonNullable<ReturnType<FlowRuntimeOptions["bindingSettings"]>>,
-): Promise<ServerDrivenResult> {
+): Promise<FlowDispatchResult> {
   const pageHost = hostWaitingOnPerson(options.host, () =>
     options.state.holdTimeouts(binding.bindingId),
   );
-  const browser = options.browserBinding?.(binding.bindingId);
-  if (browser !== undefined && options.timeZone !== undefined) {
-    const { startBrowserFlow } = await import("./browser-flow-runner");
-    const result = await startBrowserFlow({
-      plan: browser.plan,
-      bindings: browser.inputs,
-      event: binding.event,
-      caller: callerInputs ?? {},
-      runId: clickId,
-      timeZone: options.timeZone,
-      host: {
-        ...pageHost,
-        showMessage: (message, signal) =>
-          pageHost.showMessage(
-            {
-              ...message,
-              originBindingId: binding.bindingId,
-              sourceFlowId: binding.flowId,
-              ...(subject === undefined ? {} : { subject }),
-              ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
-            },
-            signal,
-          ),
-        setPageValues: options.state.pageValues.write,
-        validateForm: options.state.validateForm,
-        setFormValue: (form, field, value) => {
-          const cycle = options.state.cycleFor(clickId);
-          return cycle !== undefined && options.state.writeFormValue(form, field, value, cycle);
-        },
-      },
-      readFormValue: options.state.readFormValue,
-      readPageValues: options.state.pageValues.snapshot,
-      condition: settings.condition,
-      signal: runSignal,
-      server: {
-        client: options.client,
-        binding,
-        ...((subject ?? options.subject) === undefined
-          ? {}
-          : { subject: subject ?? options.subject }),
-        ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
-      },
-    });
-    if (result.kind === "abandoned") return { kind: "abandoned", unanswered: true };
-    if (result.kind === "skipped") return { kind: "skipped" };
-    if (result.kind === "server_result") return result.result;
-    if (result.kind === "completed")
-      return {
-        kind: "finished",
-        runId: clickId,
-        descriptor: result.committed
-          ? safeFlowResultDescriptors.committed
-          : safeFlowResultDescriptors.completed,
-        outputs: result.outputs,
-      };
-    if (result.kind === "failed")
-      return {
-        kind: "finished",
-        runId: clickId,
-        descriptor: safeFlowResultDescriptors[result.failure.outcome],
-        outputs: {},
-        failure: {
-          code: result.failure.code,
-          ...(result.failure.taskId === undefined ? {} : { taskId: result.failure.taskId }),
-          ...(result.failure.diagnostic === undefined
-            ? {}
-            : { diagnostic: result.failure.diagnostic }),
-        },
-      };
+  const browser = options.browserBinding(binding.bindingId);
+  if (browser === undefined || options.timeZone === undefined) {
+    console.error(`[flow] binding ${binding.bindingId} has no page plan or time zone`);
+    return { kind: "refused" };
   }
-  const [first, { driveServerFlow }] = await Promise.all([
-    options.client.startBinding(
-      {
-        bindingId: binding.bindingId,
-        flowId: binding.flowId,
-        entrySegments: binding.entrySegments,
+  const { startBrowserFlow } = await import("./browser-flow-runner");
+  const result = await startBrowserFlow({
+    plan: browser.plan,
+    bindings: browser.inputs,
+    event: binding.event,
+    caller: callerInputs ?? {},
+    runId: clickId,
+    timeZone: options.timeZone,
+    host: {
+      ...pageHost,
+      showMessage: (message, signal) =>
+        pageHost.showMessage(
+          {
+            ...message,
+            originBindingId: binding.bindingId,
+            sourceFlowId: binding.flowId,
+            ...(subject === undefined ? {} : { subject }),
+            ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
+          },
+          signal,
+        ),
+      setPageValues: options.state.pageValues.write,
+      validateForm: options.state.validateForm,
+      setFormValue: (form, field, value) => {
+        const cycle = options.state.cycleFor(clickId);
+        return cycle !== undefined && options.state.writeFormValue(form, field, value, cycle);
       },
-      callerInputs ?? {},
-      clickId,
-      runSignal,
-      subject,
-      sourceTablePlacementId,
-    ),
-    import("./server-driven-run"),
-  ]);
-  return await driveServerFlow(
-    options.client,
-    binding.flowId,
-    first,
-    pageHost,
-    runSignal,
-    sourceTablePlacementId,
-    binding.bindingId,
-  );
+    },
+    readFormValue: options.state.readFormValue,
+    readPageValues: options.state.pageValues.snapshot,
+    condition: settings.condition,
+    signal: runSignal,
+    server: {
+      client: options.client,
+      binding,
+      ...((subject ?? options.subject) === undefined
+        ? {}
+        : { subject: subject ?? options.subject }),
+      ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
+    },
+  });
+  if (result.kind === "abandoned") return { kind: "abandoned" };
+  if (result.kind === "skipped") return { kind: "skipped" };
+  if (result.kind === "server_result") return result.result;
+  if (result.kind === "completed")
+    return {
+      kind: "finished",
+      runId: clickId,
+      descriptor: result.committed
+        ? safeFlowResultDescriptors.committed
+        : safeFlowResultDescriptors.completed,
+      outputs: result.outputs,
+    };
+  return {
+    kind: "finished",
+    runId: clickId,
+    descriptor: safeFlowResultDescriptors[result.failure.outcome],
+    outputs: {},
+    failure: {
+      code: result.failure.code,
+      ...(result.failure.taskId === undefined ? {} : { taskId: result.failure.taskId }),
+      ...(result.failure.diagnostic === undefined ? {} : { diagnostic: result.failure.diagnostic }),
+    },
+  };
 }

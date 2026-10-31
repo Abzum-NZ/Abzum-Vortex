@@ -6,13 +6,9 @@ import {
   type FlowWarningNotice,
   type FlowBindingInvocation,
   type FlowRefusalFeedback,
-  type FormContinuationAnswer,
-  type FormContinuationReceipt,
-  type FormContinuationTarget,
   type JsonValue,
   isRecord,
 } from "@vortex/platform/schema";
-import { isFlowIntent, type FlowIntent } from "./intents";
 import type { PlacementFlowBinding } from "./flow-runtime";
 
 /** The address the signed-in person is using; the server resolves everything else from it. */
@@ -25,18 +21,6 @@ export type FlowApplicationAddress = Readonly<{
   pageRecordId?: string;
 }>;
 
-/**
- * The exact evidence the server issued with a paused run, returned with the continuation so the
- * server can compare it with trusted state. The page never invents it: it stores what the previous
- * response carried and sends it back unchanged.
- */
-export type FlowResumeEvidence = Readonly<{
-  /** The exact paused target: installation, release, flow, node, awaiting form and receipt. */
-  target: FormContinuationTarget;
-  /** The run receipt: which run and how many protected effects it has committed. */
-  receipt?: FormContinuationReceipt;
-}>;
-
 export type ServerFlowResponse =
   | Readonly<{ kind: "run_opened"; carriedValues: string }>
   | Readonly<{ kind: "reload"; installationRevision: number }>
@@ -47,22 +31,10 @@ export type ServerFlowResponse =
       descriptor: Readonly<{ outcome: string; commit: string; outputs: string; recovery: string }>;
       outputs: Readonly<Record<string, JsonValue>>;
       stopped?: string;
-      intents: readonly FlowIntent[];
       carriedValues?: string;
       failure?: Readonly<{ code: string; taskId?: string; diagnostic?: FlowRefusalFeedback }>;
     }>
-  | Readonly<{
-      kind: "intent";
-      runId: string;
-      awaiting: "form" | "confirm";
-      intents: readonly FlowIntent[];
-      continuation: string;
-      expiresAt: string;
-      carriedValues?: string;
-      target: FormContinuationTarget;
-      receipt?: FormContinuationReceipt;
-    }>
-  | Readonly<{ kind: "refused"; reason?: "this step was already answered" }>
+  | Readonly<{ kind: "refused" }>
   /** A pasted, filled or undone batch stopped before any cell was written: every cell that stopped it. */
   | Readonly<{ kind: "cells_refused"; problems: readonly RecordsTableBatchEditProblem[] }>
   | Readonly<{ kind: "unavailable" }>
@@ -79,27 +51,18 @@ export type FlowInvokeClient = Readonly<{
     binding: Pick<PlacementFlowBinding, "bindingId" | "flowId" | "entrySegments">,
     callerInputs: Readonly<Record<string, unknown>>,
     clickId: string,
-    signal?: AbortSignal,
+    signal: AbortSignal | undefined,
     /** The one record this gesture is about, when it is not the record the page was rendered for. */
-    subject?: FlowSubjectContext,
-    sourceTablePlacementId?: string,
-    carriedValues?: string,
-    segmentValues?: Readonly<{
+    subject: FlowSubjectContext | undefined,
+    sourceTablePlacementId: string | undefined,
+    carriedValues: string | undefined,
+    /** The one server segment this request runs, with the page values it starts from. */
+    segmentValues: Readonly<{
       seed: Readonly<Record<string, JsonValue>>;
       iteration: string;
       phase?: "success" | "page_failure";
-      segment?: Readonly<{ segmentId: string; fingerprint: string }>;
+      segment: Readonly<{ segmentId: string; fingerprint: string }>;
     }>,
-  ) => Promise<ServerFlowResponse>;
-  resume: (
-    flowId: string,
-    continuation: string,
-    answer: FormContinuationAnswer,
-    evidence: FlowResumeEvidence,
-    signal?: AbortSignal,
-    sourceTablePlacementId?: string,
-    carriedValues?: string,
-    bindingId?: string,
   ) => Promise<ServerFlowResponse>;
 }>;
 
@@ -136,9 +99,6 @@ const invalidServerResponse = (cause: unknown = new TypeError("FLOW_SERVER_RESPO
   return unknown;
 };
 
-const parseIntents = (candidate: unknown): readonly FlowIntent[] | undefined =>
-  Array.isArray(candidate) && candidate.every(isFlowIntent) ? candidate : undefined;
-
 /** Exactly a committed save's authored warning: its task and a non-blank message. */
 const isWarningNotice = (candidate: unknown): candidate is FlowWarningNotice =>
   isRecord(candidate) &&
@@ -147,12 +107,6 @@ const isWarningNotice = (candidate: unknown): candidate is FlowWarningNotice =>
   typeof candidate.message === "string" &&
   candidate.message.length > 0;
 
-/**
- * The paused target and run receipt are evidence the server built through their contracts. The
- * page keeps them unchanged and returns them with the continuation, where the endpoint's strict
- * request contract and the server's trusted state check them again.
- */
-const isEvidence = (candidate: unknown): boolean => candidate === undefined || isRecord(candidate);
 const isCarriedValues = (candidate: unknown): candidate is string | undefined =>
   candidate === undefined ||
   (typeof candidate === "string" && candidate.length > 0 && candidate.length <= 65_536);
@@ -166,9 +120,7 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         ? { kind: "run_opened", carriedValues: candidate.carriedValues }
         : invalidServerResponse();
     case "refused":
-      return candidate.reason === "this step was already answered"
-        ? { kind: "refused", reason: candidate.reason }
-        : refused;
+      return refused;
     case "unavailable":
       return unavailable;
     case "cells_refused": {
@@ -185,44 +137,12 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
       return typeof candidate.installationRevision === "number"
         ? { kind: "reload", installationRevision: candidate.installationRevision }
         : invalidServerResponse();
-    case "intent": {
-      const intents = parseIntents(candidate.intents);
-      if (
-        intents === undefined ||
-        !isEvidence(candidate.target) ||
-        candidate.target === undefined ||
-        !isEvidence(candidate.receipt) ||
-        !isCarriedValues(candidate.carriedValues) ||
-        typeof candidate.runId !== "string" ||
-        (candidate.awaiting !== "form" && candidate.awaiting !== "confirm") ||
-        typeof candidate.continuation !== "string" ||
-        typeof candidate.expiresAt !== "string"
-      )
-        return invalidServerResponse();
-      return {
-        kind: "intent",
-        runId: candidate.runId,
-        awaiting: candidate.awaiting,
-        intents,
-        continuation: candidate.continuation,
-        expiresAt: candidate.expiresAt,
-        ...(candidate.carriedValues === undefined
-          ? {}
-          : { carriedValues: candidate.carriedValues }),
-        target: candidate.target as FormContinuationTarget,
-        ...(candidate.receipt === undefined
-          ? {}
-          : { receipt: candidate.receipt as FormContinuationReceipt }),
-      };
-    }
     case "result": {
       const warnings = candidate.warnings;
       if (!Array.isArray(warnings) || !warnings.every(isWarningNotice))
         return invalidServerResponse();
-      const intents = parseIntents(candidate.intents);
       const descriptor = candidate.descriptor;
       if (
-        intents === undefined ||
         typeof candidate.runId !== "string" ||
         !isRecord(descriptor) ||
         typeof descriptor.outcome !== "string" ||
@@ -273,7 +193,6 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         },
         outputs: candidate.outputs as Readonly<Record<string, JsonValue>>,
         ...(candidate.stopped === undefined ? {} : { stopped: candidate.stopped as string }),
-        intents,
         ...(candidate.carriedValues === undefined
           ? {}
           : { carriedValues: candidate.carriedValues }),
@@ -288,8 +207,7 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
 /**
  * The page's client for the component event endpoint. It names only the application
  * address and the invocation; the organisation, installation and bindings are resolved on the
- * server. It sends a continuation exactly as the server issued it, together with only the person's
- * answer, and never states which path a flow took.
+ * server. Each request runs exactly one server segment of a flow the page runner drives.
  */
 export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowInvokeClient {
   const endpoint = options.endpoint ?? "/api/flows/invoke";
@@ -328,7 +246,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
       if (signal?.aborted) return unavailable;
       const parsed = parseServerFlowResponse(body);
       if (isRecord(body) && body.refresh !== undefined) {
-        if (refresh === undefined || (parsed.kind !== "result" && parsed.kind !== "intent"))
+        if (refresh === undefined || parsed.kind !== "result")
           return invalidServerResponse();
         refresh.apply(body.refresh);
       }
@@ -368,11 +286,11 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
           bindingId: binding.bindingId,
           flowId: binding.flowId,
           entrySegments: [...binding.entrySegments],
-          ...(segmentValues?.segment === undefined ? {} : { segment: segmentValues.segment }),
+          segment: segmentValues.segment,
           clickId,
-          seed: segmentValues?.seed ?? {},
-          iteration: segmentValues?.iteration ?? "0",
-          ...(segmentValues?.phase === undefined ? {} : { phase: segmentValues.phase }),
+          seed: segmentValues.seed,
+          iteration: segmentValues.iteration,
+          ...(segmentValues.phase === undefined ? {} : { phase: segmentValues.phase }),
           callerInputs,
           ...(carriedValues === undefined ? {} : { carriedValues }),
           ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
@@ -382,30 +300,6 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
         },
         signal,
         binding.bindingId,
-      ),
-    resume: (
-      flowId,
-      continuation,
-      answer,
-      evidence,
-      signal,
-      sourceTablePlacementId,
-      carriedValues,
-      bindingId,
-    ) =>
-      send(
-        {
-          kind: "continuation",
-          flowId,
-          continuation,
-          answer,
-          ...(carriedValues === undefined ? {} : { carriedValues }),
-          ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
-          target: evidence.target,
-          ...(evidence.receipt === undefined ? {} : { receipt: evidence.receipt }),
-        },
-        signal,
-        bindingId,
       ),
   });
 }

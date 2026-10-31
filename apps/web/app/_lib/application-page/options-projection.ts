@@ -132,27 +132,6 @@ export type ProjectedOptionsForm = Readonly<{
   fields: ReadonlyMap<string, ProjectedOptionsField>;
 }>;
 
-/** A form id is usable only when one authored Form placement has that identity in the release. */
-export const applicationHasAuthoredForm = (
-  application: ApplicationContent,
-  formId: string,
-): boolean => {
-  let matches = 0;
-  const countForm = (placement: VisitedPlacement): undefined => {
-    const block = placement.vortex.block;
-    if (
-      sameId(placement.placementId, formId) &&
-      isRecord(block) &&
-      typeof block.blockId === "string" &&
-      sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
-    )
-      matches += 1;
-  };
-  for (const page of application.pages) walkPageComposition(page.composition, countForm);
-  for (const shell of application.shells) walkPlacementData(shell.layout, countForm);
-  return matches === 1;
-};
-
 /**
  * The option-sourced fields (link inputs) of the one usable Form on the viewer's projected page,
  * by the field key they publish. Undefined when the form is not on the page, is not usable, or two

@@ -6,10 +6,13 @@ import type {
   FlowFormula,
   PageDefinition,
 } from "@vortex/platform/schema";
-import { isRecord } from "@vortex/platform/schema";
+import { isRecord, type JsonValue } from "@vortex/platform/schema";
 import type { FlowIntentHost } from "./intents";
-import type { ServerDrivenResult } from "./server-driven-run";
-import type { FlowInvokeClient, FlowSubjectContext } from "./server-flow-client";
+import type {
+  FlowInvokeClient,
+  FlowSubjectContext,
+  ServerFlowResponse,
+} from "./server-flow-client";
 import { startFlowEventCycle, type FlowEventCycle } from "./flow-cycle";
 import type { TypedFieldValue } from "../controls/projected-data";
 import { createExclusiveScopes } from "./exclusive";
@@ -27,6 +30,29 @@ type CallerInputs =
       | undefined
       | Promise<Readonly<Record<string, unknown>> | undefined>);
 
+/** What one dispatched gesture came to, as the page runner reports it. */
+export type FlowDispatchResult =
+  /** The binding condition did not hold, so its flow was not started. */
+  | Readonly<{ kind: "skipped" }>
+  /** The run ended; `descriptor` is its safe result and outputs are as the run released them. */
+  | Readonly<{
+      kind: "finished";
+      runId: string;
+      descriptor: Extract<ServerFlowResponse, { kind: "result" }>["descriptor"];
+      outputs: Readonly<Record<string, JsonValue>>;
+      failure?: Extract<ServerFlowResponse, { kind: "result" }>["failure"];
+    }>
+  /** The surface is older than the installation: nothing ran and the page must reload. */
+  | Readonly<{ kind: "reload"; installationRevision: number }>
+  /** Unknown, expired, foreign, tampered or not permitted: the one neutral refusal. */
+  | Readonly<{ kind: "refused"; reason?: string }>
+  /** A pasted, filled or undone batch stopped before any cell was written: every cell that stopped it. */
+  | Extract<ServerFlowResponse, { kind: "cells_refused" }>
+  | Readonly<{ kind: "unavailable" }>
+  | Readonly<{ kind: "unknown"; controlId?: string; retry?: () => Promise<FlowDispatchResult> }>
+  /** The surface or caller went away before the run finished. */
+  | Readonly<{ kind: "abandoned" }>;
+
 /** Stable key ordering makes equivalent submitted answers share one retry identity. */
 const canonicalInputs = (inputs: Readonly<Record<string, unknown>>) =>
   JSON.stringify(inputs, (_key, value: unknown) =>
@@ -37,11 +63,13 @@ const canonicalInputs = (inputs: Readonly<Record<string, unknown>>) =>
 
 export type FlowRuntimeOptions = Readonly<{
   client: FlowInvokeClient;
-  browserBinding?: (
+  /** Every binding's compiled page plan: each gesture runs through it, page and server segments alike. */
+  browserBinding: (
     bindingId: string,
   ) =>
     | Readonly<{ plan: BrowserFlowPlan; inputs: Readonly<Record<string, FlowBindingInput>> }>
     | undefined;
+  /** The organisation's time zone the page plan resolves dates in; a page with bindings has one. */
   timeZone?: string;
   /** The record the page was rendered for: the form-submit mapping fills a declared `record` input from it. */
   subject?: FlowSubjectContext;
@@ -102,7 +130,7 @@ export function createFlowRuntimeState(
     else running.set(controlId, after);
     if ((before === 0) !== (after === 0)) notify(controlId);
   };
-  const abandoned: ServerDrivenResult = { kind: "abandoned", unanswered: true };
+  const abandoned: FlowDispatchResult = { kind: "abandoned" };
   return {
     dispose: () => {
       for (const entry of entries.values()) for (const job of entry.jobs) job.controller.abort();
@@ -119,9 +147,8 @@ export function createFlowRuntimeState(
         : JSON.stringify([bindingId, subject?.recordId ?? null, canonicalInputs(inputs)]);
     },
     retryId: (key: string, proposed: string) => retries.get(key) ?? proposed,
-    rememberResult: (key: string, runId: string, result: ServerDrivenResult) => {
-      if (result.kind === "unknown" || (result.kind === "abandoned" && !result.unanswered))
-        retries.set(key, runId);
+    rememberResult: (key: string, runId: string, result: FlowDispatchResult) => {
+      if (result.kind === "unknown") retries.set(key, runId);
       else if (result.kind !== "abandoned") retries.delete(key);
     },
     pageValues,
@@ -203,8 +230,8 @@ export function createFlowRuntimeState(
       bindingId: string,
       settings: NonNullable<ReturnType<FlowRuntimeOptions["bindingSettings"]>>,
       signal: AbortSignal | undefined,
-      execute: (signal: AbortSignal) => Promise<ServerDrivenResult>,
-    ): Promise<ServerDrivenResult> => {
+      execute: (signal: AbortSignal) => Promise<FlowDispatchResult>,
+    ): Promise<FlowDispatchResult> => {
       if (signal?.aborted) return Promise.resolve(abandoned);
       const { controlId, concurrency, debounceMs, exclusive, timeoutMs, event, formId } = settings;
       const initialConflict = scopes.conflict({
@@ -299,7 +326,7 @@ export function createFlowRuntimeState(
               flush = done;
               controller.signal.addEventListener("abort", done, { once: true });
             });
-      const start = async (): Promise<ServerDrivenResult> => {
+      const start = async (): Promise<FlowDispatchResult> => {
         if (controller.signal.aborted) return abandoned;
         await ready;
         if (controller.signal.aborted) return abandoned;
@@ -332,7 +359,7 @@ export function createFlowRuntimeState(
           ? (entry.tail ?? Promise.resolve()).then(start, start)
           : Promise.resolve().then(start);
       let stopWaiting: (() => void) | undefined;
-      const stopped = new Promise<ServerDrivenResult>((resolve) => {
+      const stopped = new Promise<FlowDispatchResult>((resolve) => {
         stopWaiting = () => resolve(abandoned);
         if (controller.signal.aborted) stopWaiting();
         else controller.signal.addEventListener("abort", stopWaiting, { once: true });
@@ -437,7 +464,7 @@ export type FlowRuntime = Readonly<{
     subject?: FlowSubjectContext,
     sourceTablePlacementId?: string,
     cycle?: FlowEventCycle,
-  ) => Promise<ServerDrivenResult>;
+  ) => Promise<FlowDispatchResult>;
   /** Starts one exact server binding and drives its normal intents and continuations. */
   dispatchReference: (
     binding: FlowBindingReference,
@@ -447,7 +474,7 @@ export type FlowRuntime = Readonly<{
     subject?: FlowSubjectContext,
     sourceTablePlacementId?: string,
     cycle?: FlowEventCycle,
-  ) => Promise<ServerDrivenResult>;
+  ) => Promise<FlowDispatchResult>;
 }>;
 
 export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
@@ -459,7 +486,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
     subject?: FlowSubjectContext,
     sourceTablePlacementId?: string,
     cycle?: FlowEventCycle,
-  ): Promise<ServerDrivenResult> => {
+  ): Promise<FlowDispatchResult> => {
     const settings = options.bindingSettings(binding.bindingId);
     if (settings === undefined) {
       console.error(`[flow] binding ${binding.bindingId} has no projected settings`);
@@ -468,14 +495,14 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
     let retry:
       { key: string; runId: string; inputs: Readonly<Record<string, unknown>> } | undefined;
     let end: (() => void) | undefined;
-    const execute = (nextSignal?: AbortSignal, resume?: () => Promise<ServerDrivenResult>) =>
+    const execute = (nextSignal?: AbortSignal, resume?: () => Promise<FlowDispatchResult>) =>
       options.state.run(binding.bindingId, settings, nextSignal, async (runSignal) => {
         if (retry === undefined) {
           const inputs =
             typeof callerInputs === "function"
               ? await callerInputs(runSignal)
               : (callerInputs ?? {});
-          if (runSignal.aborted) return { kind: "abandoned", unanswered: true };
+          if (runSignal.aborted) return { kind: "abandoned" };
           if (inputs === undefined) return { kind: "skipped" };
           const key = options.state.retryKey(binding.bindingId, subject, inputs);
           retry = { key, runId: options.state.retryId(key, clickId), inputs };
@@ -503,7 +530,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
           releaseCycle();
         }
       });
-    const keepRetry = (result: ServerDrivenResult): ServerDrivenResult => {
+    const keepRetry = (result: FlowDispatchResult): FlowDispatchResult => {
       if (retry !== undefined) options.state.rememberResult(retry.key, retry.runId, result);
       if (result.kind !== "unknown") {
         end?.();

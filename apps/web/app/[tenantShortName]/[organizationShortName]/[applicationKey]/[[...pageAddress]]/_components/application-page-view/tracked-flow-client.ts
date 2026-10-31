@@ -4,26 +4,18 @@ import type { useFlowRuntime } from "./use-flow-runtime";
 
 type Tracking = Pick<
   Parameters<typeof useFlowRuntime>[0],
-  "continuingFormsRef" | "formCancelledRef" | "unsavedWorkRegistry" | "controlDraftsRef"
+  "unsavedWorkRegistry" | "controlDraftsRef"
 > &
   Readonly<{ submissions: Map<string, SubmittedForm> }>;
 
-/** Track form submissions through the existing invocation and continuation client. */
+/** Track form submissions through the invocation client. */
 export function trackFlowInvokeClient(
   client: FlowInvokeClient,
-  {
-    submissions,
-    continuingFormsRef,
-    formCancelledRef,
-    unsavedWorkRegistry,
-    controlDraftsRef,
-  }: Tracking,
+  { submissions, unsavedWorkRegistry, controlDraftsRef }: Tracking,
 ): FlowInvokeClient {
   const recordResponse = (response: ServerFlowResponse, submission: SubmittedForm | undefined) => {
     if (submission === undefined) return;
-    if (response.kind === "intent") {
-      continuingFormsRef.current.set(response.continuation, submission);
-    } else if (
+    if (
       response.kind === "result" &&
       response.failure === undefined &&
       (response.descriptor.commit === "confirmed" || submission.draftSaved === true)
@@ -72,32 +64,6 @@ export function trackFlowInvokeClient(
         carriedValues,
         segmentValues,
       );
-      recordResponse(response, submission);
-      return response;
-    },
-    resume: async (
-      flowId,
-      continuation,
-      answer,
-      evidence,
-      signal,
-      sourceTablePlacementId,
-      carriedValues,
-      bindingId,
-    ) => {
-      if (answer.kind === "cancel") formCancelledRef.current = true;
-      const submission = continuingFormsRef.current.get(continuation);
-      const response = await client.resume(
-        flowId,
-        continuation,
-        answer,
-        evidence,
-        signal,
-        sourceTablePlacementId,
-        carriedValues,
-        bindingId,
-      );
-      if (response.kind !== "unknown") continuingFormsRef.current.delete(continuation);
       recordResponse(response, submission);
       return response;
     },

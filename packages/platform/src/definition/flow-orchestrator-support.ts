@@ -28,7 +28,6 @@ import type {
 import type {
   FlowRelease,
   FlowSelectedRecordReadProjection,
-  SafeIntent,
 } from "./flow-orchestrator-types";
 
 const maximumPayloadCharacters = 65_536;
@@ -95,14 +94,6 @@ export const runFlowTargets = (flow: FlowDefinition): string[] => {
   visit(flow.finally);
   return targets;
 };
-
-export const safeIntent = (intent: FlowInterfaceIntent): SafeIntent => ({
-  kind: intent.kind,
-  taskId: intent.taskId,
-  properties: Object.fromEntries(
-    Object.entries(intent.properties).map(([name, value]) => [name, value.value]),
-  ),
-});
 
 /**
  * A declared sensitive output (for example a raw invitation secret) is returned once in the live
