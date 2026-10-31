@@ -1,4 +1,5 @@
 import { useCallback, type Dispatch, type SetStateAction, type RefObject } from "react";
+import { noteCommittedWrite } from "@vortex/ui/routing";
 import type { useRouter } from "next/navigation";
 import type {
   createPlatformComponentRegistryForReleases,
@@ -152,6 +153,9 @@ export function useApplyDispatch({
           return { ...outcome, cellProblems: server.problems };
         }
         if (server.kind === "finished") {
+          // A committed write: no prefetched page may open with data from before it.
+          if (server.descriptor.commit === "confirmed" || server.descriptor.commit === "partial")
+            noteCommittedWrite();
           // A later run of the same binding that went through settles the earlier unknown outcome.
           const sourceControlId = Object.values(model.bindings)
             .flat()

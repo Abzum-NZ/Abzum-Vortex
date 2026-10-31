@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useMemo, type ReactElement, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { forgetPagesWrittenSince } from "./prefetch";
 
 export type NavigateOptions = Readonly<{ replace?: boolean }>;
 
@@ -25,9 +26,6 @@ export function NavigatorProvider({
   return <NavigatorContext.Provider value={navigator}>{children}</NavigatorContext.Provider>;
 }
 
-/** The host's navigator, when a host supplies one. */
-export const useHostNavigator = (): Navigator | undefined => useContext(NavigatorContext);
-
 /** The navigator in force: the host's, else the client router's. */
 export function useNavigator(): Navigator {
   const host = useContext(NavigatorContext);
@@ -35,7 +33,11 @@ export function useNavigator(): Navigator {
   return useMemo<Navigator>(
     () =>
       host ?? {
-        navigate: (path, options) => (options?.replace ? router.replace(path) : router.push(path)),
+        navigate: (path, options) => {
+          forgetPagesWrittenSince(router);
+          if (options?.replace === true) router.replace(path);
+          else router.push(path);
+        },
       },
     [host, router],
   );

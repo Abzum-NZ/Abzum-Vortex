@@ -27,7 +27,7 @@ import {
   type ApplicationShellRuntime,
   type PagePuckRendererProps,
 } from "@vortex/ui";
-import { NavigatorProvider, type Navigator } from "@vortex/ui/routing";
+import { forgetPagesWrittenSince, NavigatorProvider, type Navigator } from "@vortex/ui/routing";
 import type { ApplicationFrameModel } from "../../../../_lib/application-frame";
 import { signOut } from "../../../../auth/actions";
 import {
@@ -283,6 +283,7 @@ export function ApplicationFrame({
         historyPathname.current = undefined;
         void (async () => {
           if (!(await leaveIfConfirmedRef.current())) return;
+          forgetPagesWrittenSince(router);
           startPageTransition(() =>
             options?.replace === true ? router.replace(path) : router.push(path),
           );

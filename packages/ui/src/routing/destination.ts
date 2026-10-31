@@ -6,6 +6,7 @@
  */
 export type Destination =
   | Readonly<{ kind: "internal"; path: string }>
+  | Readonly<{ kind: "fragment"; address: string }>
   | Readonly<{ kind: "external"; address: string; web: boolean }>;
 
 /** A control character (C0 or delete) never belongs in an address. */
@@ -20,6 +21,8 @@ const INTERNAL_BASE = "https://vortex.invalid";
 export function destinationOf(address: string): Destination | undefined {
   if (address.length === 0 || hasControlCharacter(address) || address.includes("\\"))
     return undefined;
+  // A place on the page shown now (a skip link, or a design canvas whose links lead nowhere).
+  if (address.startsWith("#")) return { kind: "fragment", address };
   if (address.startsWith("/") && !address.startsWith("//")) {
     try {
       const url = new URL(address, INTERNAL_BASE);

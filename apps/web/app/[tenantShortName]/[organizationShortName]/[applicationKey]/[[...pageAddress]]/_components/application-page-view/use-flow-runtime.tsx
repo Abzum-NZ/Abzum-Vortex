@@ -32,7 +32,7 @@ import {
 } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { DialogFooter } from "@vortex/ui/components/dialog";
-import { useNavigator } from "@vortex/ui/routing";
+import { noteCommittedWrite, useNavigator } from "@vortex/ui/routing";
 import { resolveApplicationPagePathAction } from "../../../frame-actions";
 import { useApplicationFrame } from "../../../_components/application-frame-state";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
@@ -209,6 +209,8 @@ export function useFlowRuntime({
         return `${path}${query === "" ? "" : `?${query}`}`;
       },
       navigate: (path) => {
+        // A flow's Navigate follows its own writes: no prefetched page opens with older data.
+        noteCommittedWrite();
         runtimeState.messages.carryToasts();
         // The navigator in force asks before discarding unsaved work and, inside the frame, runs
         // the change in its page transition (dimmed page, progress line).
