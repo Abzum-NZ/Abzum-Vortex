@@ -380,8 +380,9 @@ export const publishShippedDefinitions = async (
 
 /**
  * Publishes one Studio-built application's current draft through the ordinary publication service,
- * as the setup's definition actor: the draft the contract-4 migration converted becomes the
- * release its installation then upgrades to. Any unpublished work in the draft is published with it.
+ * as the setup's definition actor, against the current definition contract and platform catalogue:
+ * it becomes the release that replaces an installed release that no longer verifies. Any
+ * unpublished work in the draft is published with it.
  */
 export const publishStudioApplicationDraft = async (
   facts: SystemContextFacts,
@@ -394,7 +395,7 @@ export const publishStudioApplicationDraft = async (
     readLiveDraft(transaction, root.rootId),
   );
   if (live === undefined) throw new Error(`Studio draft is missing for ${root.key}`);
-  // Save the converted draft as it stands, so its identity requirements are its own.
+  // Save the draft as it stands, so its identity requirements are its own.
   const saved = await inSystemTransaction(context, (transaction) =>
     createDefinitionStore(transaction, authority, platformPermissionSource).saveDraft({
       rootId: root.rootId,
@@ -417,11 +418,12 @@ export const publishStudioApplicationDraft = async (
       authority,
     ).publish(context, {
       confirmation: prepared.confirmation,
-      releaseNote: "Republished under the current definition contract by the setup refresh",
+      releaseNote:
+        "Republished on the current definition contract and platform catalogue by the setup refresh",
     }),
   );
   log(
-    `published Studio application ${root.key} ${published.releaseVersion} (revision ${published.releaseRevision}) from its converted draft, including any unpublished work in it`,
+    `published Studio application ${root.key} ${published.releaseVersion} (revision ${published.releaseRevision}) from its current draft, including any unpublished work in it`,
   );
   return {
     rootId: published.rootId,

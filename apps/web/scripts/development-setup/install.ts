@@ -57,7 +57,9 @@ export type InstallFacts = Readonly<{
   state: SetupState;
 }>;
 
-const definitionReader = (_facts: InstallFacts): PermissionRegistryDefinitionSetReader => ({
+const definitionReader = (
+  _facts: Omit<InstallFacts, "releases">,
+): PermissionRegistryDefinitionSetReader => ({
   read: (context, command, purpose) =>
     inSystemTransaction(context, (transaction) =>
       createDatabaseSystemApplicationBoundReleaseSetService(
@@ -68,7 +70,7 @@ const definitionReader = (_facts: InstallFacts): PermissionRegistryDefinitionSet
 });
 
 const coordinatorDependencies = (
-  facts: InstallFacts,
+  facts: Omit<InstallFacts, "releases">,
 ): ApplicationInstallationCoordinatorDependencies<never> => ({
   installerRequests: createHumanOrganizationRequestService({
     identityAuthorityId: facts.identityAuthorityId,
@@ -197,6 +199,55 @@ export const readReleaseSet = (
 };
 
 /**
+ * Whether one installed release no longer verifies and is replaced by a release of the current
+ * draft: a platform definition it pins was superseded, or it was published under an earlier
+ * definition contract. Both are the one replacement case.
+ */
+const releaseSuperseded = (
+  system: SystemContextFacts,
+  applicationRootId: string,
+  applicationReleaseRevision: number,
+): Promise<boolean> =>
+  readReleaseSet(system, applicationRootId, applicationReleaseRevision).then(
+    () => false,
+    (error: unknown) => {
+      if (
+        error instanceof DefinitionError &&
+        (error.code === "DEFINITION_DEPENDENCY_SUPERSEDED" ||
+          error.code === "RELEASE_CONTRACT_SUPERSEDED")
+      )
+        return true;
+      throw error;
+    },
+  );
+
+/**
+ * Switches the installation from the observed active revision to one exact published release. The
+ * upgrade prepares its storage inside the coordinator's atomic switch; the first-install
+ * preparation would only refuse an already installed application.
+ */
+const switchActiveRelease = async (
+  facts: Omit<InstallFacts, "releases">,
+  applicationKey: string,
+  target: Pick<PublishedRelease, "rootId" | "releaseRevision">,
+  activeRevision: number,
+  log: (message: string) => void,
+): Promise<void> => {
+  const activation = await createApplicationInstallationCoordinator(
+    coordinatorDependencies(facts),
+  ).activate(
+    nominatedOwnerSession(facts.stewardIdentityId),
+    applicationInstallationActivationRequestSchema.parse({
+      organizationId: facts.system.organizationId,
+      applicationRootId: target.rootId,
+      applicationReleaseRevision: target.releaseRevision,
+      expectedActiveReleaseRevision: activeRevision,
+    }),
+  );
+  log(`upgraded ${applicationKey}: ${activation.outcome}`);
+};
+
+/**
  * Replaces only the observed active revision. System applications follow every shipped release;
  * an ordinary application keeps its administrator's choice while that release still verifies.
  */
@@ -218,41 +269,14 @@ export const upgradeOne = async (
   }
   if (activeRevision > published.releaseRevision)
     throw new Error(`Active release is newer than the publication for ${applicationKey}`);
-
-  if (origin === "ordinary") {
-    // A release that no longer verifies is replaced: a dependency was superseded, or it was
-    // published under an earlier definition contract.
-    const superseded = await readReleaseSet(facts.system, published.rootId, activeRevision).then(
-      () => false,
-      (error: unknown) => {
-        if (
-          error instanceof DefinitionError &&
-          (error.code === "DEFINITION_DEPENDENCY_SUPERSEDED" ||
-            error.code === "RELEASE_CONTRACT_SUPERSEDED")
-        )
-          return true;
-        throw error;
-      },
-    );
-    if (!superseded) {
-      log(`available ${applicationKey} ${published.releaseVersion}: awaiting in-page adoption`);
-      return;
-    }
+  if (
+    origin === "ordinary" &&
+    !(await releaseSuperseded(facts.system, published.rootId, activeRevision))
+  ) {
+    log(`available ${applicationKey} ${published.releaseVersion}: awaiting in-page adoption`);
+    return;
   }
-  // An upgrade prepares its storage inside the coordinator's atomic switch; the first-install
-  // preparation would only refuse an already installed application.
-  const activation = await createApplicationInstallationCoordinator(
-    coordinatorDependencies(facts),
-  ).activate(
-    nominatedOwnerSession(facts.stewardIdentityId),
-    applicationInstallationActivationRequestSchema.parse({
-      organizationId: facts.system.organizationId,
-      applicationRootId: published.rootId,
-      applicationReleaseRevision: published.releaseRevision,
-      expectedActiveReleaseRevision: activeRevision,
-    }),
-  );
-  log(`upgraded ${applicationKey}: ${activation.outcome}`);
+  await switchActiveRelease(facts, applicationKey, published, activeRevision, log);
 };
 
 /** The one local shipped-refresh operation, including first install and interrupted-run recovery. */
@@ -288,12 +312,6 @@ export const refreshShippedApplications = async (
 };
 
 /**
- * Moves every application built in Studio whose active release was published under an earlier
- * definition contract to a release of its converted draft, through the same publication and
- * upgrade the shipped applications use. An application not installed, or already on a current
- * release, is left alone.
- */
-/**
  * The organisation's own applications (built in Studio, not shipped) that have a release, listed
  * as the steward sees them in Studio.
  */
@@ -326,6 +344,13 @@ const listStudioApplicationRoots = async (
   );
 };
 
+/**
+ * Moves every application built in Studio whose active release no longer verifies (a platform
+ * definition it pins was superseded, or it was published under an earlier definition contract) to
+ * a release of its current draft, published against the current catalogue, through the same
+ * upgrade the shipped applications use. An application not installed, or whose active release
+ * still verifies, is left alone.
+ */
 export const refreshStudioApplications = async (
   facts: Omit<InstallFacts, "releases">,
   log: (message: string) => void,
@@ -333,21 +358,14 @@ export const refreshStudioApplications = async (
   for (const root of await listStudioApplicationRoots(facts)) {
     const activeRevision = await readActiveReleaseRevision(facts, root.key, root.rootId);
     if (activeRevision === null) continue;
-    const superseded = await readReleaseSet(facts.system, root.rootId, activeRevision).then(
-      () => false,
-      (error: unknown) => {
-        if (error instanceof DefinitionError && error.code === "RELEASE_CONTRACT_SUPERSEDED")
-          return true;
-        throw error;
-      },
-    );
-    if (!superseded) continue;
-    const published = await publishStudioApplicationDraft(facts.system, root, log);
-    await upgradeOne(
-      { ...facts, releases: new Map([[root.key, published]]) },
-      root.key,
-      "ordinary",
-      log,
-    );
+    if (!(await releaseSuperseded(facts.system, root.rootId, activeRevision))) continue;
+    // A later release that verifies (published by the builder, or by a run interrupted before its
+    // switch) is the replacement; otherwise the current draft is published.
+    const current = root.currentReleaseRevision ?? activeRevision;
+    const target =
+      current > activeRevision && !(await releaseSuperseded(facts.system, root.rootId, current))
+        ? { rootId: root.rootId, releaseRevision: current }
+        : await publishStudioApplicationDraft(facts.system, root, log);
+    await switchActiveRelease(facts, root.key, target, activeRevision, log);
   }
 };
