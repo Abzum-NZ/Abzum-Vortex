@@ -1,47 +1,36 @@
 /* Remaining per-style component rules recovered from shadcn/create 4.21.0. */
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"], [data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
@@ -111,7 +100,6 @@
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -141,22 +129,18 @@
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
@@ -284,34 +268,27 @@
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
@@ -942,7 +919,6 @@
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
@@ -1022,7 +998,6 @@
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
@@ -1108,7 +1083,6 @@
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
@@ -1336,7 +1310,6 @@
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
@@ -1349,7 +1322,6 @@
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
@@ -1362,35 +1334,27 @@
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
@@ -1409,11 +1373,9 @@
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
@@ -1423,7 +1385,6 @@
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
@@ -1433,7 +1394,6 @@
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
@@ -1443,15 +1403,12 @@
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
@@ -1461,15 +1418,12 @@
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
@@ -1485,7 +1439,6 @@
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
@@ -1497,11 +1450,9 @@
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
@@ -1514,7 +1465,6 @@
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"], [data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
@@ -1527,15 +1477,12 @@
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -1876,7 +1823,6 @@
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
@@ -2297,13 +2243,11 @@
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
@@ -2376,7 +2320,6 @@
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
@@ -2415,7 +2358,6 @@
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
@@ -2605,15 +2547,12 @@
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"], [data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
@@ -2660,27 +2599,21 @@
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"], [data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
@@ -2691,7 +2624,6 @@
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
@@ -2701,91 +2633,69 @@
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"], [data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
@@ -2925,7 +2835,6 @@
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
@@ -2952,11 +2861,9 @@
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
@@ -2972,31 +2879,24 @@
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"], [data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
@@ -3006,7 +2906,6 @@
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
@@ -3016,43 +2915,33 @@
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
@@ -3105,15 +2994,12 @@
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -3123,11 +3009,9 @@
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -3147,11 +3031,9 @@
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
@@ -3296,11 +3178,9 @@
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
@@ -3313,11 +3193,9 @@
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
@@ -3364,19 +3242,15 @@
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
@@ -3392,7 +3266,6 @@
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
@@ -3484,7 +3357,6 @@
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
@@ -3634,11 +3506,9 @@
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
@@ -3651,12 +3521,10 @@
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -3683,42 +3551,33 @@
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -3730,7 +3589,6 @@
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
@@ -4011,27 +3869,21 @@
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -4089,19 +3941,15 @@
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
@@ -4117,27 +3965,21 @@
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
@@ -4155,7 +3997,6 @@
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
@@ -4165,15 +4006,12 @@
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -4249,7 +4087,6 @@
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -4261,15 +4098,12 @@
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -4326,79 +4160,60 @@
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
@@ -4445,7 +4260,6 @@
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
@@ -4456,7 +4270,6 @@
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
@@ -4486,7 +4299,6 @@
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
@@ -4545,7 +4357,6 @@
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
@@ -4949,7 +4760,6 @@
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
@@ -4962,11 +4772,9 @@
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
@@ -4979,11 +4787,9 @@
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
@@ -5126,11 +4932,9 @@
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -5189,11 +4993,9 @@
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
@@ -5204,15 +5006,12 @@
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -5234,11 +5033,9 @@
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
@@ -5257,15 +5054,12 @@
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -5277,7 +5071,6 @@
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -5295,7 +5088,6 @@
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -5307,7 +5099,6 @@
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
@@ -5324,7 +5115,6 @@
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (hover: hover) {
-    
   }
 }
 
@@ -5341,7 +5131,6 @@
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
@@ -5416,7 +5205,6 @@
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (hover: hover) {
-    
     :scope .cn-sidebar-menu-button-variant-default:hover {
       background-color: var(--sidebar-hover, var(--sidebar-accent));
       color: var(--sidebar-hover-foreground, var(--sidebar-accent-foreground));
@@ -5493,7 +5281,6 @@
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
@@ -5503,11 +5290,9 @@
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
@@ -5520,7 +5305,6 @@
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -5577,40 +5361,33 @@
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
@@ -5635,28 +5412,23 @@
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"], [data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
@@ -6662,11 +6434,9 @@
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -6681,227 +6451,179 @@
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
-    
   }
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (hover: hover) {
-    
   }
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -7018,11 +6740,9 @@
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
@@ -7037,23 +6757,18 @@
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
@@ -7100,17 +6815,13 @@
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-  
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-  
 }
