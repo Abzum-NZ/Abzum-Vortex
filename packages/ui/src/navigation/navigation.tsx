@@ -339,7 +339,7 @@ export function ApplicationNavigation({
       {...(compact ? { "data-vortex-navigation-compact": "true" as const } : {})}
       className={cn("w-full min-w-0", className)}
     >
-      <Sidebar className="md:min-h-svh">
+      <Sidebar>
         <SidebarContent>
           <SidebarGroup>
             <Button

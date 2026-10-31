@@ -42,6 +42,7 @@ export const CONTROL_EVENT_NAMES = Object.freeze([
   "action",
   "field_changed",
   "field_focus_lost",
+  "form_cancel",
   "form_ready",
   "form_reset",
   "form_submit",
@@ -91,6 +92,7 @@ export type ControlSemanticEvent =
       /** For a dependent link field: the record chosen in the field it depends on, in the form's draft. */
       parentRecordId?: string;
     }>
+  | Readonly<{ event: "form_cancel"; gestureId: string }>
   | Readonly<{ event: "form_ready"; gestureId: string }>
   | Readonly<{ event: "form_reset"; gestureId: string }>
   | Readonly<{
