@@ -125,7 +125,7 @@ function ThemePresetCard({
     >
       <span className="block text-sm font-medium">{preset.label}</span>
       <span className="block text-xs text-muted-foreground">{preset.description}</span>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid min-w-0 grid-cols-1 gap-2">
         <PresetPreview preset={preset} mode="light" />
         <PresetPreview preset={preset} mode="dark" />
       </div>
