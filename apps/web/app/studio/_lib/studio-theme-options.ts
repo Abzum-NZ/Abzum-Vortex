@@ -28,9 +28,39 @@ export type StudioThemeDimension = Readonly<{
   options: readonly StudioThemeOption[];
 }>;
 
+/** The colours a theme preset's preview card draws its header, card, badge and button in. */
+type StudioThemePresetPreview = Readonly<{
+  light: Readonly<{
+    background: string;
+    card: string;
+    text: string;
+    primary: string;
+    primaryForeground: string;
+  }>;
+  dark: Readonly<{
+    background: string;
+    card: string;
+    text: string;
+    primary: string;
+    primaryForeground: string;
+  }>;
+}>;
+
+/** One complete theme the platform ships: a release pin and the selection that names it. */
+export type StudioThemePreset = Readonly<{
+  key: string;
+  label: string;
+  description: string;
+  base: Readonly<{ catalogueThemeId: string; releaseVersion: string }>;
+  selection: SourceApplicationThemeSelection;
+  preview: StudioThemePresetPreview;
+}>;
+
 export type StudioThemeOptions = Readonly<{
   /** In shadcn create's order: Style, Base colour, Theme, Chart colour, Heading font, Font, Icon library, Radius, Menu, Menu accent. */
   dimensions: readonly StudioThemeDimension[];
+  /** The platform theme set, from the checked-in catalogue releases. */
+  presets: readonly StudioThemePreset[];
 }>;
 
 /** Whether every setting of a selection is an option the Theme tab offers; the first one that is not is named. */

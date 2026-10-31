@@ -2,7 +2,8 @@ import type { Source } from "./application-structure-common";
 
 /** The kinds of page a record type gets in one draft edit, and which of them its standard actions allow. */
 
-export type StudioRecordPageKind = "list" | "detail" | "form_create" | "form_edit" | "guided";
+export type StudioRecordPageKind =
+  "list" | "board" | "detail" | "form_create" | "form_edit" | "guided";
 
 export type StudioRecordPageCommand = Readonly<{
   kind: "add_record_page";
@@ -27,6 +28,11 @@ export const studioRecordPageKinds: readonly Readonly<{
     kind: "list",
     label: "List",
     hint: "A table of every record, with a New button; a row opens the record.",
+  },
+  {
+    kind: "board",
+    label: "Board",
+    hint: "Cards in columns, one for each stage of a pipeline; dragging a card changes its stage.",
   },
   {
     kind: "detail",
@@ -70,7 +76,9 @@ export const studioRecordPageChoices = (
               ? record.standard_actions.includes("create")
               : entry.kind === "form_edit"
                 ? record.standard_actions.includes("update")
-                : true),
+                : entry.kind === "board"
+                  ? record.pipelines.length > 0
+                  : true),
         )
         .map((entry) => entry.kind),
     })),
@@ -105,6 +113,7 @@ export const columnTypes: ReadonlySet<string> = new Set([
   "web_address",
   "phone_number",
   "choice",
+  "link",
   "whole_number",
   "decimal_number",
   "money",
@@ -140,6 +149,7 @@ export const takenIds = (source: Source): Set<string> => {
 
 export const kindWords: Readonly<Record<StudioRecordPageKind, string>> = {
   list: "list",
+  board: "board",
   detail: "detail page",
   form_create: "create form",
   form_edit: "edit form",

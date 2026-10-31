@@ -54,6 +54,8 @@ export type StudioWorkspacePlace = Readonly<{
   applicationHref: string | undefined;
   /** The App Store, where a published version is installed or upgraded to; absent like the above. */
   appStoreHref: string | undefined;
+  /** Whether this application is installed in the builder's organisation. */
+  installed: boolean;
 }>;
 
 type WorkspaceProps =
@@ -261,10 +263,13 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     hidden: tab !== "data",
     compositionContext: canvas.compositionContext,
     readRecords: canvas.readRecordChoices,
+    structure: structureCommand,
   });
   const releases = useStudioReleasesTab({
     draft,
     compositionContext: canvas.compositionContext,
+    structure: structureCommand,
+    installed: place.installed,
     hidden: tab !== "releases",
     initialSection: isStudioReleasesSection(props.initialSection)
       ? props.initialSection
@@ -339,6 +344,8 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
                 onUndo={draft.undo}
                 onRedo={draft.redo}
                 backToAppHref={place.applicationHref}
+                appStoreHref={place.appStoreHref}
+                installed={place.installed}
                 onPreview={releases.openPreview}
                 previewPending={releases.previewPending}
                 previewDisabled={draft.locked}

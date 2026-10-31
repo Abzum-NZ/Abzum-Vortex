@@ -9,7 +9,7 @@ import { Button } from "../components/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Input } from "../components/input";
 import { Label } from "../components/label";
-import { NativeSelect, NativeSelectOption } from "../components/native-select";
+import { StudioOptionControl } from "./studio-setting-controls";
 import type {
   StudioCompositionAddTarget,
   StudioCompositionDestination,
@@ -88,18 +88,16 @@ export function StudioBlockPalette({
     <div className="space-y-3" data-vortex-studio-palette="" style={studioPuckStyle}>
       <div className="flex flex-col gap-2">
         <Label htmlFor={targetSelectId}>Add to</Label>
-        <NativeSelect
+        <StudioOptionControl
           id={targetSelectId}
-          className="w-full"
           value={target.id}
-          onChange={(event) => setTargetId(event.target.value)}
-        >
-          {targets.map((candidate) => (
-            <NativeSelectOption key={candidate.id} value={candidate.id}>
-              {`${"  ".repeat(candidate.depth)}${candidate.label}`}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
+          disabled={false}
+          options={targets.map((candidate) => ({
+            value: candidate.id,
+            label: `${"  ".repeat(candidate.depth)}${candidate.label}`,
+          }))}
+          onChange={(value) => setTargetId(value)}
+        />
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor={searchId}>Search blocks</Label>

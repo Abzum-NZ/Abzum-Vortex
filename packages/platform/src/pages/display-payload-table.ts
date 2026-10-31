@@ -272,6 +272,8 @@ const tableReadShape = {
   kind: z.literal("table"),
   /** The authored one-line purpose shown above the rows; absent when the block declares none. */
   purpose: displayTextSchema.exactOptional(),
+  /** The plural name of the record type the table lists ("accounts"); the summary row counts it. */
+  recordNoun: displayTextSchema.exactOptional(),
   /**
    * Present when the block offers adding a record from the list: the create form page the person
    * opens. The page runtime builds the address from its own route and page key.

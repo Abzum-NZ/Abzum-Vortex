@@ -65,6 +65,8 @@ export function StudioTopBar({
   onUndo,
   onRedo,
   backToAppHref,
+  appStoreHref,
+  installed,
   onPreview,
   previewDisabled,
   previewPending,
@@ -79,6 +81,10 @@ export function StudioTopBar({
   onUndo: () => void;
   onRedo: () => void;
   backToAppHref: string | undefined;
+  /** The App Store page, for installing this application when it is not installed yet. */
+  appStoreHref: string | undefined;
+  /** Whether the application is installed in the builder's organisation. */
+  installed: boolean;
   onPreview: () => void;
   previewDisabled: boolean;
   previewPending: boolean;
@@ -184,7 +190,7 @@ export function StudioTopBar({
             <Icon name="redo" />
           </ToolbarButton>
           <Separator orientation="vertical" className="mx-2 h-6" />
-          {backToAppHref !== undefined && (
+          {installed && backToAppHref !== undefined ? (
             <Button
               variant="ghost"
               size="sm"
@@ -194,7 +200,17 @@ export function StudioTopBar({
               <Icon name="chevron-left" />
               Back to app
             </Button>
-          )}
+          ) : !installed && appStoreHref !== undefined ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              nativeButton={false}
+              render={<Link href={appStoreHref} prefetch={false} />}
+            >
+              <Icon name="plus" />
+              Install in this organisation
+            </Button>
+          ) : null}
           <ToolbarButton
             tip={
               previewDisabled
@@ -242,11 +258,15 @@ export function StudioTopBar({
                 <Icon name="redo" /> Redo
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              {backToAppHref !== undefined && (
+              {installed && backToAppHref !== undefined ? (
                 <DropdownMenuItem render={<Link href={backToAppHref} prefetch={false} />}>
                   <Icon name="chevron-left" /> Back to app
                 </DropdownMenuItem>
-              )}
+              ) : !installed && appStoreHref !== undefined ? (
+                <DropdownMenuItem render={<Link href={appStoreHref} prefetch={false} />}>
+                  <Icon name="plus" /> Install in this organisation
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem
                 disabled={previewDisabled || previewPending}
                 aria-busy={previewPending}

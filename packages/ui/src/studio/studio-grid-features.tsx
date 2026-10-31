@@ -1,5 +1,6 @@
 "use client";
 
+import { Alert, AlertDescription } from "../components/alert";
 import {
   recordsTableInlineEditFeature,
   recordsTableMasterDetailFeature,
@@ -326,9 +327,9 @@ export function StudioGridFeatures({
   return (
     <StudioInspectorGroup title="Features">
       {viewportCheck?.kind === "not_possible" ? (
-        <p role="alert" className="text-sm text-destructive">
-          {viewportCheck.reason}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{viewportCheck.reason}</AlertDescription>
+        </Alert>
       ) : null}
       <ItemGroup role="list" aria-label="Table features" className="gap-1">
         {recordsTableFeatureKeys.map((key) => {
@@ -444,18 +445,18 @@ export function StudioGridFeatures({
                 </ItemActions>
               </Item>
               {ownProblems.map((sentence) => (
-                <p key={sentence} role="alert" className="text-sm text-destructive">
-                  {sentence}
-                </p>
+                <Alert variant="destructive" key={sentence}>
+                  <AlertDescription>{sentence}</AlertDescription>
+                </Alert>
               ))}
               {/* A held change this feature's own sentences do not explain still says why. */}
               {problem !== "" &&
               changedFeature === key &&
               check?.kind !== "not_possible" &&
               ownProblems.length === 0 ? (
-                <p role="alert" className="text-sm text-destructive">
-                  {problem}
-                </p>
+                <Alert variant="destructive">
+                  <AlertDescription>{problem}</AlertDescription>
+                </Alert>
               ) : null}
               {enabled && key === recordsTableSpreadsheetFeature.key ? (
                 <StudioSpreadsheetEditor

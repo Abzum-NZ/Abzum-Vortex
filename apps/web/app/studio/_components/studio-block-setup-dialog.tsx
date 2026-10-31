@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { Button } from "@vortex/ui/components/button";
 import {
@@ -190,7 +191,7 @@ export function StudioBlockSetupDialog({
         onClose();
       }}
     >
-      <DialogContent className="max-h-dvh overflow-y-auto sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Set up {choice.name}</DialogTitle>
           <DialogDescription>
@@ -242,9 +243,9 @@ export function StudioBlockSetupDialog({
             />
           )}
           {problem.length === 0 ? null : (
-            <p role="alert" className="text-sm text-destructive">
-              {problem}
-            </p>
+            <Alert variant="destructive">
+              <AlertDescription>{problem}</AlertDescription>
+            </Alert>
           )}
         </form>
         <DialogFooter>

@@ -85,7 +85,7 @@ export function StudioPublishDialog(props: StudioPublishDialogProps) {
         if (!publishing) props.onOpenChange(next);
       }}
     >
-      <DialogContent className="min-w-0 max-h-dvh max-w-xl overflow-y-auto break-words">
+      <DialogContent className="min-w-0 max-w-xl break-words">
         <DialogHeader>
           <DialogTitle className="text-xl tracking-tight">
             {prepared === null

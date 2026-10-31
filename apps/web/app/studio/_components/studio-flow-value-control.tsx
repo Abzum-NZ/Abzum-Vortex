@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
@@ -520,9 +521,11 @@ export function StudioFlowValueControl({
         />
       )}
       {!known && (
-        <p role="alert" className="text-sm text-destructive">
-          This step cannot read that value here any more. Choose another.
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>
+            This step cannot read that value here any more. Choose another.
+          </AlertDescription>
+        </Alert>
       )}
     </div>
   );
