@@ -66,7 +66,7 @@ Conditions may refer to:
 
 Relationship traversal is limited and validated. Conditions cannot execute code or network calls.
 
-The early [record-visibility foundation #36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36) supplies the shared typed Boolean evaluator using the existing condition contract. It validates the complete tree and declared inputs before evaluating truth: invalid or missing input cannot become an allowance through negation or a short-circuited branch. Values are compared without implicit type conversion, and pure evaluation and PostgreSQL restrictions use the same tested meaning. The [condition builder #57](https://github.com/Abzum-NZ/Abzum-Vortex/issues/57) later adds authoring and general-rule extensions to that same implementation; the operators listed conceptually above are not a claim that all extensions already ship.
+The shared typed Boolean evaluator uses the existing condition contract. It validates the complete tree and declared inputs before evaluating truth: invalid or missing input cannot become an allowance through negation or a short-circuited branch. Values are compared without implicit type conversion, and pure evaluation and PostgreSQL restrictions use the same tested meaning. The condition builder authors conditions with that same implementation.
 
 The current Module contract supplies the [exact-value Rule semantics](https://github.com/Abzum-NZ/Abzum-Vortex/issues/44)
 needed by its field definitions. Select them from the trusted owning Module
@@ -157,9 +157,8 @@ The unique occurrence identifier is separate from the reusable custom event
 declaration identifier. Resolve a custom event by its exact owning Application
 or Module release and permanent declaration reference, retaining its published
 namespaced key. Resolve a standard event by its fixed kind and owning record
-type/release. Never infer either identity from a display label. Introduce the
-explicit versioned runtime envelope before delivery; preserve historical envelope
-contracts rather than silently changing their meaning.
+type/release. Never infer either identity from a display label. The runtime envelope is
+versioned; a change never silently alters the meaning of a historical envelope.
 
 Event keys are resolved within their owning Application or Module; an identical
 key in another owner is not the same declaration. Validate carried values with

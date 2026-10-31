@@ -63,7 +63,7 @@ The save transaction performs these steps in order:
 5. Compare the submitted concurrency number with the current number.
 6. Run eligible immediate [rules](08-forms-actions-rules-and-events.md).
 7. Run the owning reference-number, calculation and total generators in their declared dependency order. Validate the complete final candidate, including required fields and accumulated rule requirements, choices, currency/precision/row settings, live reference and file eligibility, uniqueness and application bindings. Refuse all writes if final validation fails.
-8. Save the record, affected parent totals and revisions, relationship changes, reference number, and matching [activity entries](14-activity-privacy-and-retention.md) in one database transaction. Include both old and new parents when a relationship moves; [#48](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48) owns calculation and total integration. A failed calculation or total refuses the operation without partial changes.
+8. Save the record, affected parent totals and revisions, relationship changes, reference number, and matching [activity entries](14-activity-privacy-and-retention.md) in one database transaction. Include both old and new parents when a relationship moves; calculation and total integration is part of this one operation. A failed calculation or total refuses the operation without partial changes.
 9. Write [events](08-forms-actions-rules-and-events.md#delivery-guarantees) to the event outbox in that same transaction. Dispatch and external work begin only after commit.
 10. Return the fields the person may read and the new concurrency number.
 
@@ -74,7 +74,7 @@ corresponding live checks; intermediate values overwritten by later rules are
 not saved. A rule requirement accumulates a check until the final candidate
 exists, including any generated value. A refusal still stops immediately.
 
-This sequence defines one protected Record operation, not a transaction around an entire [flow](appendices/frontend-rule-designer.md). A configured flow may run several queries and changes in order. Each protected change opens its own short owning-service transaction and either commits or refuses atomically; a later task failure does not roll back an earlier committed operation. Collecting all inputs before one save remains an available authoring pattern when one atomic Record operation is intended, but it is not mandatory for every journey. [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) delivered the base ordinary-human create/update implementation over active installed definitions with [hosted Testing acceptance](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47#issuecomment-5656036501). Subsequent #48 stages integrated calculations and relationship totals into the same protected operation. Immediate Rules, deadline-driven recalculation, named-action execution and broader relationships retain their existing owners in the [save plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47).
+This sequence defines one protected Record operation, not a transaction around an entire [flow](appendices/frontend-rule-designer.md). A configured flow may run several queries and changes in order. Each protected change opens its own short owning-service transaction and either commits or refuses atomically; a later task failure does not roll back an earlier committed operation. Collecting all inputs before one save remains an available authoring pattern when one atomic Record operation is intended, but it is not mandatory for every journey.
 
 ### Private recalculation scope
 
@@ -223,15 +223,12 @@ stateDiagram-v2
 - Soft-deleted records are excluded from ordinary reads, search, totals, choices, and relationship navigation.
 - A deleted record and its directly owned files remain recoverable for the configured recovery period.
 - Relationship deletion behaviour from [modules, fields and relationships](05-modules-fields-and-relationships.md) is applied in a deterministic order. Refuse needs no child mutation permission; emptying an optional child link requires current update access to that child, and soft-deleting an exact inherited-owner dependent requires current delete access to that child. Parent delete authority is still required.
-- Restore revalidates current restore access and the current published record definition. Before reactivation, every currently required non-link value must still be present, non-null and canonical for its storage type, and every currently required fixed-target link must agree with exactly one retained edge to a locked, active target the person may read. Complete settings and live-reference validation of the final record remains part of the [protected save command](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47), not this private lifecycle primitive. Its unique values remain reserved throughout recovery, so restoration cannot conflict with a value accepted during the recovery window.
+- Restore revalidates current restore access and the current published record definition. Before reactivation, every currently required non-link value must still be present, non-null and canonical for its storage type, and every currently required fixed-target link must agree with exactly one retained edge to a locked, active target the person may read. Complete settings and live-reference validation of the final record belongs to the [record-change command](#record-change-command), not to restore. Its unique values remain reserved throughout recovery, so restoration cannot conflict with a value accepted during the recovery window.
 - Permanent removal follows [privacy and retention](14-activity-privacy-and-retention.md) and records an irreversible-removal receipt without retaining the removed business content.
 
-The private create/delete/restore primitives delivered before the full save
-pipeline retain the row and recovery facts but do not decide whether a recovery
-window is still open. That policy belongs to the organisation and record-type
-lifecycle integration in [#408](https://github.com/Abzum-NZ/Abzum-Vortex/issues/408)
-and [#117](https://github.com/Abzum-NZ/Abzum-Vortex/issues/117); their absence is
-not treated as an unlimited-retention default.
+Restore does not decide whether a recovery window is still open: the
+organisation and record-type lifecycle policy owns that deadline, and its absence
+is not treated as an unlimited-retention default.
 
 ## Bulk changes
 

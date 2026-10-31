@@ -1,12 +1,12 @@
-# Page builder contracts and Fluid adaptation
+# Page builder contracts
 
 [Specification index](../README.md) · [Pages](../07-applications-pages-and-themes.md) · [Core boundary](core-contract-boundary.md) · [Architecture decisions](../../build-plan/architecture-decisions.md)
 
 ## Status and boundaries
 
-This specifies the single Application contract consolidated under [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) and the richer data and form bindings still required in [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250). The current Application contract (`4.3.0` for both source and validation, through the one `definitionContractVersion` constant) is the sole Application format across authoring, validation, compilation, storage and consumer reads. The authoring canvas, preview and page rendering described here remain required design; do not mistake this specification update for delivered engine code.
+This specifies the single Application contract. The current Application contract (`4.3.0` for both source and validation, through the one `definitionContractVersion` constant) is the sole Application format across authoring, validation, compilation, storage and consumer reads.
 
-Adapt the useful authoring experience inspected in Fluid, not its prototype persistence or authority model. Fluid is the local reference at `C:/Apps/fluid`, with [its running editor](http://localhost:3001/builder/edit/projects). Its Puck canvas, outline, palette, inspector, shell/outlet editing and viewport previews are useful. Its filesystem JSON store, seed-on-read-error fallback, label-derived identities, client-only shell locks, unauthorised server actions, global refreshes and static demonstration rows are not Vortex implementations.
+The authoring canvas is built on Puck: canvas, outline, palette, inspector, shell/outlet editing and viewport previews. Persistence, identity and authority belong to Vortex: drafts are revision-checked, identities are permanent, every operation is checked on the server, and the canvas shows real data through preview. There is no filesystem store, label-derived identity, client-only shell lock, unauthorised server action or static demonstration row.
 
 The user approved a normal editable HR application as the example; it is built in App Studio, not shipped with the platform. There is no customer-uploaded executable module, HR engine, HR schema in core, or new independent publication kind.
 
@@ -58,7 +58,7 @@ flowchart TD
     SECONDSLOTS --> SECONDBLOCKS[Distinct ordered blocks]
 ```
 
-Validation, identity extraction, dependency discovery, fingerprints and the editor adapter traverse every step's content. Placement identities remain unique across the application, including shell content and different steps. Every step retains its own identity, blocks and authored order in declared shell slots. The flow/form contract in [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) and [#58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58) supports the configured completion outcomes and sequential operations described in [forms and guided forms](../07-applications-pages-and-themes.md#forms-and-guided-forms).
+Validation, identity extraction, dependency discovery, fingerprints and the editor adapter traverse every step's content. Placement identities remain unique across the application, including shell content and different steps. Every step retains its own identity, blocks and authored order in declared shell slots. The flow and form contract supports the configured completion outcomes and sequential operations described in [forms and guided forms](../07-applications-pages-and-themes.md#forms-and-guided-forms).
 
 A placement has a permanent identity, registered block and version, schema-validated settings, named child slots, optional binding context, visibility/use constraints and layout overrides. The ordered children of each declared slot are the one source of sibling order. Do not duplicate order in a second page-wide array and a third phone-order field.
 
@@ -69,8 +69,7 @@ including nested shell content and every guided step. Their absence stays absent
 reading or publishing does not inject new defaults into historical definitions.
 Changing conditional visibility or query selection has major access/data meaning,
 not a presentation-only change. These references preserve configuration; they do
-not grant permission to read records or implement the richer runtime bindings in
-[#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250).
+not grant permission to read records or implement the runtime bindings.
 
 Stored authenticated Page projection evaluates literal operands and fields of the
 exact declared Page subject through the existing typed-condition engine. The
@@ -167,7 +166,7 @@ The typed draft scope includes person, organisation, installation, exact flow/fo
 
 ```mermaid
 flowchart LR
-    E[Fluid-adapted editor] <--> A[Typed Vortex adapter]
+    E[Puck editor] <--> A[Typed Vortex adapter]
     A --> D[Revision-checked application draft]
     D --> V[Validate and preview same renderer]
     V --> P[Publish immutable application release]
@@ -180,7 +179,7 @@ Save updates the draft only. Preview renders that exact draft revision under cur
 
 Use the same Puck config and registered React components for preview and live rendering. The [shared Puck config](../../../packages/ui/src/puck-config.tsx) maps between native Vortex shells, placement slots and blocks and Puck Data. The page renderer resolves the compiled definition, converts its placement tree to Puck Data (root props, content and slots), and renders it with Puck Render. Studio uses the same adapter for authoring. Puck Data is an internal representation: Definition drafts and published releases persist the native Application contract, and consumer reads and public contracts do not expose Puck internals. Follow [Puck slot guidance](https://puckeditor.com/docs/guides/migrations/dropzones-to-slots) and [Next.js layouts](https://nextjs.org/docs/app/getting-started/layouts-and-pages). Preserve server-side service boundaries and keep interactive canvas code in client components.
 
-Before copying source, inventory Fluid-owned code, third-party licenses and assets. Copy only required generic authoring/components; do not import its demo applications or entire dependency tree. Local tabs/drafts must be scoped by current account, organisation, app and revision; do not persist sensitive HR labels in unscoped browser storage.
+Local tabs/drafts are scoped by current account, organisation, app and revision; do not persist sensitive HR labels in unscoped browser storage.
 
 The implementation supplies revision handling, permissions, persistence, keyboard control and semantic operations.
 
@@ -196,13 +195,13 @@ History and restore operate exclusively on the current `4.3.0` representation. R
 
 Correct development data and checked-in definitions at the same owning boundary when the platform schema changes. Applied database corrections use a forward migration; this instruction does not reset shared environments.
 
-Typed placement visibility and query selection remain first-class properties. Richer data/form/flow bindings belong to [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250). No setting bag or editor-specific JSON may replace these semantics.
+Typed placement visibility and query selection remain first-class properties. Data, form and flow bindings are typed contracts of their own. No setting bag or editor-specific JSON may replace these semantics.
 
 Visible behaviour follows the local application walkthrough in [quality and acceptance](../20-quality-and-acceptance.md), with screenshots included in pull requests.
 
 ## HR example policy
 
-The HR application in [#251](https://github.com/Abzum-NZ/Abzum-Vortex/issues/251) is an ordinary editable example, not a platform rule and not a shipped application.
+The HR application is an ordinary editable example, not a platform rule and not a shipped application.
 
 | Area             | Approved example behavior                                                                                                                                                                  |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -218,7 +217,7 @@ The user approved the no-self-approval rule for this example; it is not a legal 
 
 The Employee record links to the People system record type through an ordinary link. Organisation-wide person details are organisation-added fields on that system record type, and a link to a person or a group is an ordinary link to the People or Group system record type, so the example builds no second people directory and needs no special person field type.
 
-Write the full HR JSON fixture set first. The editable HR application is authored in App Studio; its actions are ordinary flows.
+The editable HR application is authored in App Studio; its actions are ordinary flows.
 
 ### Approvals are ordinary actions, not custom code
 
@@ -233,7 +232,7 @@ flowchart LR
 
 ## Literal data is not a reference
 
-Acceptance by a JSON value contract does not authorize every registered control to accept every JSON shape. Existing scalar controls continue to reject object/array values that do not match their declared types. [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) adds the richer setting declarations and publication validation; [#258](https://github.com/Abzum-NZ/Abzum-Vortex/issues/258) must not weaken current control validation to imitate that later feature. User-defined input-map keys are also data labels, not platform reference properties.
+Acceptance by a JSON value contract does not authorize every registered control to accept every JSON shape. Existing scalar controls continue to reject object/array values that do not match their declared types. Setting declarations and publication validation define which shapes each control accepts. User-defined input-map keys are also data labels, not platform reference properties.
 
 Reference traversal follows declared contract positions and discriminated value kinds. An explicitly literal value remains data even if it contains keys named `state`, `qualifiedKey`, `rootId` or `fieldId`. Do not infer platform authority or unresolved references from arbitrary object shape. Literal content still participates in schema validation, fingerprints and its owning component's version-impact policy. [#258](https://github.com/Abzum-NZ/Abzum-Vortex/issues/258) corrects the delivered shape-based scanner before [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) expands the representation.
 

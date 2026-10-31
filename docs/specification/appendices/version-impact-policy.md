@@ -61,7 +61,7 @@ Components are matched by permanent identifiers, never labels or array positions
 | Pipeline stages | Stage key | Display order is patch; entry/exit work is executable order. |
 | Choice options and table columns | Stored value or column key | Reordering is patch; identity/value/type removal is major. |
 
-Duplicate comparison identities are refused as `ambiguous_component_identity`; the comparator never guesses which item is which. Cross-reference and full definition validity remain owned by [validation stages](../03-composition-and-publication.md#validation-before-publication) and [issue #15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15).
+Duplicate comparison identities are refused as `ambiguous_component_identity`; the comparator never guesses which item is which. Cross-reference and full definition validity remain owned by [validation stages](../03-composition-and-publication.md#validation-before-publication).
 
 ## Module policy
 
@@ -182,13 +182,13 @@ Exact content fingerprints use deterministic canonical JSON with sorted object k
 
 Confirmation identifies the root and draft revision and carries the assigned version and dependency manifest. Publication locks the root and draft, recomputes the assessment and accepts only the same confirmation. A stale result, override, or `no_change` confirmation is refused.
 
-## Boundary with later work
+## Boundary
 
-Version impact does not prove installed dependant compatibility, resolve authored aliases, assess migrations, publish, restore, or query a database. [Validation ownership #15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) owns full canonical/source validity, cross-definition resolution, dependency checks, and migration feasibility boundaries.
+Version impact does not prove installed dependant compatibility, resolve authored aliases, assess migrations, publish, restore, or query a database. Validation owns full canonical/source validity, cross-definition resolution, dependency checks, and migration feasibility boundaries.
 
-## Page-representation completion
+## Page representation
 
-[#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) aligns this policy with the current source/canonical schemas, compiler and publication readers. Shell/slot identity, binding context, typed operation input/output and access changes receive explicit classification. Pure presentation changes may remain patch; structural changes cannot silently lower executable or access impact. Apply the [current page representation](page-builder-contracts.md#current-representation) consistently without retaining obsolete format readers or conversion paths.
+This policy follows the current source/canonical schemas, compiler and publication readers. Shell/slot identity, binding context, typed operation input/output and access changes are classified explicitly. Pure presentation changes may remain patch; structural changes cannot silently lower executable or access impact. Apply the [current page representation](page-builder-contracts.md#current-representation) consistently without retaining obsolete format readers or conversion paths.
 
 ### Current composition comparison
 

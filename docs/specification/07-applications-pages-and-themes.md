@@ -31,15 +31,15 @@ Installing, updating or withdrawing an application requires its declared applica
 
 An authorised person can open an installed file-defined application, navigate its pages, read permitted records, create and edit records, invoke a declared action and see its theme and page states. The renderer, Query, Record, Access and flow services supply this functionality, and the designer changes the same definitions through the same protected operations. There is no second renderer, save path or flow engine.
 
-Implement application composition, page editing, component-to-flow configuration and release controls in the shipping designer. Reuse one application draft and the same revision-checked semantic operations for people and agents; meaningful authoring cannot depend on private editor state or pointer-only controls.
+The shipping designer provides application composition, page editing, component-to-flow configuration and release controls. It uses one application draft and the same revision-checked semantic operations for people and agents; meaningful authoring cannot depend on private editor state or pointer-only controls.
 
 The App Designer is a canvas-first workspace with four areas: application-wide navigation, a contextual searchable palette, the working canvas, and a selection inspector. The navigation rail contains Structure, Outline, Blocks, Menu, Data, Flows, Theme, Access and Releases. Flows are one list, and each flow shows a run-location badge for its execution kind (`interactive`, `transaction` or `background`). Page components drag from the palette into page composition; a flow's ordered steps and their branches are edited in the shared Frontend Rule Designer. Equivalent click, keyboard and page-model operations are required. The editor chrome never overrides the theme of the application being authored.
 
-The architecture review and approved HR example establish the generic builder scope. Use the existing Fluid integration map when adapting useful UI in [#65](https://github.com/Abzum-NZ/Abzum-Vortex/issues/65), retaining compatible licences, accessibility, package ownership and semantic-operation boundaries. The implementation follows [Page builder contracts](appendices/page-builder-contracts.md#draft-preview-publication-and-activation); prototype persistence, sample data and parallel engines are not runtime implementations. No additional prototype or consultation approval is required to implement the bounded issue.
+The implementation follows [Page builder contracts](appendices/page-builder-contracts.md#draft-preview-publication-and-activation); prototype persistence, sample data and parallel engines are not runtime implementations.
 
 ### Initial application setup
 
-Initial provisioning explicitly nominates an organisation account. The existing Identity provision/adopt operation establishes that nomination and management authority; it does not grant entry to business applications. Initial application installation and operating rights require a separately scoped setup capability and the protected composition owned by [#72](https://github.com/Abzum-NZ/Abzum-Vortex/issues/72). Subsequent access expansion follows the ordinary [IAM request and approval journey](appendices/iam-application.md).
+Initial provisioning explicitly nominates an organisation account. The existing Identity provision/adopt operation establishes that nomination and management authority; it does not grant entry to business applications. Initial application installation and operating rights require a separately scoped setup capability and the protected composition. Subsequent access expansion follows the ordinary [IAM request and approval journey](appendices/iam-application.md).
 
 Before the first setup mutation, bind the original provisioning receipt and expected setup revision to one server-owned manifest containing the exact organisation, nominated account, initial application releases and operating roles with their permission scope. Freeze that manifest identity and fingerprint for the setup attempt. A retry must present the same receipt, revision and manifest and return or resume the recorded outcome; changing a release, beneficiary or permission set is not a retry. Setup cannot become a later general grant path, infer a beneficiary from first sign-in, or reuse tenant-administration status as application authority.
 
@@ -242,7 +242,7 @@ Page states are normal, loading, empty, not found, validation, refused, access e
 
 ## Page composition
 
-Pages compose registered blocks through reusable application-contained shells and declared named slots. The complete normative structure, setting schemas, responsive inheritance, related-record contexts, form/flow bindings and Fluid adapter are specified in [Page builder contracts](appendices/page-builder-contracts.md). [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) and [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) deliver the missing code contracts before the canvas.
+Pages compose registered blocks through reusable application-contained shells and declared named slots. The complete normative structure, setting schemas, responsive inheritance, related-record contexts and form/flow bindings are specified in [Page builder contracts](appendices/page-builder-contracts.md).
 
 ```mermaid
 flowchart TD

@@ -387,9 +387,7 @@ plan fingerprint, receipt counter or second platform migration ledger is needed.
 The provisioner accepts the declared current Module source/validation pair and
 uses its exact-value field storage model and graph definitions consistently.
 Rule changes do not create a separate record table or relabel a published release.
-Remove obsolete pair selectors with [Module consolidation #548](https://github.com/Abzum-NZ/Abzum-Vortex/issues/548);
-the [storage owner](https://github.com/Abzum-NZ/Abzum-Vortex/issues/45) retains
-the existing allocation and installation responsibilities.
+The storage owner keeps the allocation and installation responsibilities.
 
 An unchanged retry of the original first-provision command may return the same
 inactive provisioned binding after a lost response, even though its expected
@@ -483,12 +481,9 @@ The [Access service](04-access-and-permissions.md) owns access versions. The [Re
 - [Vercel cache invalidation](https://vercel.com/docs/cli/cache) may reclaim old entries but is not the security mechanism.
 - Private page responses instruct browsers and shared networks not to store them.
 
-Implement [permission-safe query caching #39](https://github.com/Abzum-NZ/Abzum-Vortex/issues/39)
-with the actual [query engine #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54).
-Native dependencies govern its order relative to [live refresh #56](https://github.com/Abzum-NZ/Abzum-Vortex/issues/56).
-No dormant cache framework or duplicate version counter is required.
-The [application runtime #64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) owns
-its later immutable-definition and resolved-application cache integration.
+Query caching is permission-safe and runs inside the query engine. There is no
+dormant cache framework and no duplicate version counter. The application runtime
+owns the immutable-definition and resolved-application caches.
 
 ## Acceptance examples
 

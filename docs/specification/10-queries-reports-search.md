@@ -91,8 +91,7 @@ related-total dependency contributes no value. Total sources, money calculations
 omitted or read-time calculations, nonnumeric calculations, and complex derived
 grouping remain unsupported. The field-less `count` descriptor is unchanged.
 
-These requirements belong to [Query execution #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54)
-and its real storage path, not to a browser-only correction after rows are paged.
+These requirements belong to the query engine and its real storage path, not to a browser-only correction after rows are paged.
 
 ## Pagination and limits
 
