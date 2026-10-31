@@ -14,17 +14,7 @@ import {
   type DisplaySemanticEventName,
 } from "./display-events";
 import { displayRefusalReasons } from "@vortex/platform/schema";
-import type {
-  RichTextPayload,
-  TextPayload,
-  SummaryPayload,
-  RecordDetailPayload,
-  LauncherRowsPayload,
-  DisplayDataState,
-  BlockPropertyValueContract,
-  DisplayTablePayload,
-  BoardPayload,
-} from "@vortex/platform/schema";
+import type { DisplayDataState, BlockPropertyValueContract } from "@vortex/platform/schema";
 import type { DefinitionRenderErrorLocation } from "../definition-error";
 import { fail, requireRecord } from "./payload-parse";
 

@@ -1,24 +1,10 @@
 import {
   choiceOptionsSchema,
   isRecord,
-  typedFieldValueSchema,
-  type BooleanInputPayload,
-  type ButtonPayload,
-  type ChoiceInputPayload,
   type ChoiceOption,
-  type DateInputPayload,
-  type DialogPayload,
-  type DrawerPayload,
-  type FieldInputPayload,
-  type FormPayload,
-  type LinkInputPayload,
-  type NumberInputPayload,
   type RecordChoicePage,
   type RichTextInputPayload,
-  type TabsPayload,
-  type TextInputPayload,
   type TypedFieldValue,
-  type ValidationPayload,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import type { FlowEventCycle } from "../flow-runtime/flow-cycle";
@@ -180,17 +166,6 @@ const controlParser =
 
 /** Bounded choice options, refusing duplicate values so every option has one identity. */
 export const parseChoiceOptions = controlParser(choiceOptionsSchema, "Choice options are invalid");
-
-/**
- * One typed form field value exactly as a control input emits or collects it, validated
- * fail-closed. A several-choice value is a bounded array of declared option values, a linked
- * record contributes only its stable `recordTypeId:recordId` identity, and a document is structured
- * rich text.
- */
-export const parseTypedFieldValue = controlParser<TypedFieldValue>(
-  typedFieldValueSchema,
-  "A typed field value is invalid",
-);
 
 /**
  * One page of pickable records as the server answered a records request: an object with its

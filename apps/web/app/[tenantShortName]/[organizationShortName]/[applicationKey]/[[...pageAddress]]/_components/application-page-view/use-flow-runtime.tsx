@@ -48,7 +48,6 @@ export function useFlowRuntime({
   submittedFormsRef,
   router,
   resolvePageHref,
-  basePath,
   unsavedWork,
   model,
   platformComponentRegistry,

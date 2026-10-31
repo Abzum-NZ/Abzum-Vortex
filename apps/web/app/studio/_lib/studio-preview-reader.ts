@@ -1,6 +1,7 @@
 "use client";
 
 import { isRecord } from "@vortex/platform/schema";
+import { postJson } from "../../_lib/post-json";
 import {
   readStudioCanvasRecords as canvas,
   readStudioDataRecords as records,
@@ -26,18 +27,14 @@ export const fillPreviewAfterRead = (
     const started: Lease = { readers: 0, controller: new AbortController() };
     lease = started;
     leases.set(key, started);
-    void fetch("/api/studio/preview-fill", {
-      method: "POST",
-      credentials: "same-origin",
-      cache: "no-store",
-      signal: started.controller.signal,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ organizationId, rootId, draftRevision, previewInstallationId }),
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`STUDIO_PREVIEW_FILL_HTTP_${response.status}`);
-        const result: unknown = await response.json();
-        const kind = isRecord(result) ? result.kind : undefined;
+    void postJson(
+      "/api/studio/preview-fill",
+      { organizationId, rootId, draftRevision, previewInstallationId },
+      { signal: started.controller.signal },
+    )
+      .then((response) => {
+        const kind = isRecord(response.body) ? response.body.kind : undefined;
+        if (!response.ok) throw new Error(`STUDIO_PREVIEW_FILL_HTTP_${response.status}_${kind}`);
         if (kind !== "ready") console.warn("[studio] idle preview fill ended", { kind });
       })
       .catch((error: unknown) => {

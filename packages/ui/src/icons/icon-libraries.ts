@@ -1,7 +1,4 @@
-import {
-  isShadcnIconLibrary,
-  type ShadcnIconLibrary,
-} from "@vortex/platform/schema";
+import { isShadcnIconLibrary, type ShadcnIconLibrary } from "@vortex/platform/schema";
 import type { PRESET_ICON_LIBRARIES } from "shadcn/preset";
 
 import type { VortexIconAdapter } from "./icon-names";
