@@ -3,27 +3,14 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/utils";
 
 /*
- * One severity treatment per variant: a left rule and title in the severity's semantic text role
- * (success, warning, info, destructive) on the resolved theme's surface; never a chart colour.
- * Tailwind only emits utilities it finds as complete strings in source, so each variant spells its
- * own classes out.
+ * One severity treatment per variant: the style's alert surface, with the severity's semantic
+ * text role on the title and the style's left rule. Tailwind only emits utilities it finds as
+ * complete strings in source, so each variant spells its own classes out.
  */
-const infoVariant =
-  "border-l-4 bg-background border-l-info " +
-  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-info " +
-  "[&_[data-slot=alert-description]]:text-foreground";
-const successVariant =
-  "border-l-4 bg-background border-l-success " +
-  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-success " +
-  "[&_[data-slot=alert-description]]:text-foreground";
-const warningVariant =
-  "border-l-4 bg-background border-l-warning " +
-  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-warning " +
-  "[&_[data-slot=alert-description]]:text-foreground";
-const dangerVariant =
-  "border-l-4 bg-background border-l-destructive " +
-  "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-destructive " +
-  "[&_[data-slot=alert-description]]:text-foreground";
+const infoVariant = "after:bg-info text-info";
+const successVariant = "after:bg-success text-success";
+const warningVariant = "after:bg-warning text-warning";
+const dangerVariant = "after:bg-destructive text-destructive";
 
 const alertVariants = cva("cn-alert group/alert relative w-full", {
   variants: {
@@ -61,7 +48,7 @@ function AlertTitle({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="alert-title"
       className={cn(
-        "cn-alert-title [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground",
+        "cn-alert-title group-has-[>svg]/alert:col-start-2 [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground",
         className,
       )}
       {...props}
@@ -74,7 +61,7 @@ function AlertDescription({ className, ...props }: React.ComponentProps<"div">) 
     <div
       data-slot="alert-description"
       className={cn(
-        "cn-alert-description [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground",
+        "cn-alert-description md:text-pretty [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground [&_p:not(:last-child)]:mb-4",
         className,
       )}
       {...props}
