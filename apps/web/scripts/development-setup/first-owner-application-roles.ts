@@ -202,8 +202,7 @@ export const grantFirstOwnerApplicationRoles = async (
         assignment.organizationAccountId !== null &&
         sameId(assignment.organizationAccountId, facts.stewardOrganizationAccountId) &&
         assignment.state === "live" &&
-        assignment.temporalState === "active" &&
-        assignment.assignmentKind === "standing",
+        assignment.temporalState === "active",
     );
 
   let ensuredGrants = 0;
@@ -254,7 +253,6 @@ export const grantFirstOwnerApplicationRoles = async (
           expectedRoleRevision: role.liveRevision,
           assigneeKind: "organization_account",
           organizationAccountId: facts.stewardOrganizationAccountId,
-          assignmentKind: "standing",
           startsAt: new Date(Date.now() - 1_000).toISOString(),
         }),
       );
@@ -265,7 +263,6 @@ export const grantFirstOwnerApplicationRoles = async (
       if (
         assigned.value.assignment.state !== "live" ||
         assigned.value.assignment.temporalState !== "active" ||
-        assigned.value.assignment.assignmentKind !== "standing" ||
         !sameId(assigned.value.assignment.role.roleId, role.roleId) ||
         assigned.value.assignment.assignee.kind !== "organization_account" ||
         !sameId(

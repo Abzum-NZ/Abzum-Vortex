@@ -827,7 +827,6 @@
           "assignee_kind",
           "organization_account_id",
           "group_id",
-          "assignment_kind",
           "state",
           "temporal_state",
           "role_label"
@@ -980,33 +979,6 @@
           "type": "text",
           "settings": {
             "max_length": 36
-          }
-        },
-        {
-          "id": "fld_role_assignment_assignment_kind",
-          "key": "assignment_kind",
-          "label": "Assignment kind",
-          "required": false,
-          "unique": false,
-          "filterable": true,
-          "sortable": false,
-          "personal_data": "none",
-          "public_display": "refused",
-          "type": "choice",
-          "settings": {
-            "options": [
-              {
-                "value": "standing",
-                "label": "Standing"
-              },
-              {
-                "value": "eligible",
-                "label": "Eligible"
-              }
-            ],
-            "options_source": {
-              "kind": "fixed"
-            }
           }
         },
         {
@@ -2325,7 +2297,6 @@
         "role_label",
         "assignee_display_name",
         "assignee_kind",
-        "assignment_kind",
         "starts_at",
         "expires_at",
         "state",

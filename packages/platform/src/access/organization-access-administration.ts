@@ -443,7 +443,6 @@ export const organizationAdministrationRoleAssignmentSchema = z
     roleAssignmentId: roleAssignmentIdSchema,
     role: organizationAdministrationAssignedRoleSchema,
     assignee: organizationAdministrationAssignmentSubjectSchema,
-    assignmentKind: z.enum(["standing", "eligible"]),
     ...organizationAdministrationTemporalFactFields,
   })
   .strict()
@@ -474,7 +473,6 @@ export const assignOrganizationAdministrationRoleAssignmentCommandSchema = z
     assigneeKind: z.enum(["organization_account", "group"]),
     organizationAccountId: organizationAccountIdSchema.optional(),
     groupId: groupIdSchema.optional(),
-    assignmentKind: z.enum(["standing", "eligible"]),
     startsAt: timestampSchema.optional(),
     expiresAt: timestampSchema.optional(),
   })

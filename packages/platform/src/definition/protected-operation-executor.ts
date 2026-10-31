@@ -554,7 +554,6 @@ const roleAssignmentCommand = (inputs: Inputs) => ({
   assigneeKind: inputs.assignee_kind,
   organizationAccountId: optionalText(inputs.organization_account_id),
   groupId: optionalText(inputs.group_id),
-  assignmentKind: inputs.assignment_kind,
   startsAt: optionalText(inputs.starts_at),
   expiresAt: optionalText(inputs.expires_at),
 });

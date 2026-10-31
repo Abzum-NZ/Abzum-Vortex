@@ -404,22 +404,19 @@ export const groupMembershipEffectiveStateSchema = z
     },
   );
 
-export const roleAssignmentKindSchema = z.enum(["standing", "eligible"]);
-
 export const roleAssignmentSchema = z
   .object({
     roleAssignmentId: roleAssignmentIdSchema,
     organizationId: organizationIdSchema,
     roleId: roleIdSchema,
     assignee: accessAssigneeSchema,
-    assignmentKind: roleAssignmentKindSchema,
     revision: revisionSchema,
     ...temporalGrantFields,
   })
   .strict()
   .superRefine(addTemporalGrantIssues);
 
-/** Timing-only validity; an active eligible assignment is not effective permission. */
+/** Timing-only validity; an active assignment is effective while its window is open. */
 export const roleAssignmentEffectiveStateSchema = z
   .object({
     assignment: roleAssignmentSchema,
@@ -815,7 +812,6 @@ export type AccessAssignee = z.infer<typeof accessAssigneeSchema>;
 export type GroupMembership = z.infer<typeof groupMembershipSchema>;
 export type GroupMembershipEffectiveState = z.infer<typeof groupMembershipEffectiveStateSchema>;
 export type RoleAssignment = z.infer<typeof roleAssignmentSchema>;
-export type RoleAssignmentKind = z.infer<typeof roleAssignmentKindSchema>;
 export type RoleAssignmentEffectiveState = z.infer<typeof roleAssignmentEffectiveStateSchema>;
 export type RoleActivationEligibilitySource = z.infer<typeof roleActivationEligibilitySourceSchema>;
 export type RoleActivation = z.infer<typeof roleActivationSchema>;

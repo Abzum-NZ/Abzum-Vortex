@@ -63,7 +63,6 @@ const projectedAssignmentSchema = z.object({
       role_id: z.string(),
       assignee_kind: z.enum(["organization_account", "group"]),
       organization_account_id: z.string().nullable(),
-      assignment_kind: z.string(),
       state: z.string(),
       temporal_state: z.enum(["active", "scheduled", "expired", "revoked"]),
     })
@@ -74,7 +73,6 @@ type ProjectedRoleAssignment = Readonly<{
   roleAssignmentId: string;
   roleId: string;
   organizationAccountId: string | null;
-  assignmentKind: string;
   state: string;
   temporalState: z.infer<typeof projectedAssignmentSchema>["attribute_values"]["temporal_state"];
 }>;
@@ -118,7 +116,6 @@ export const createAccessAdministrationAssignmentOperations = ({
             roleAssignmentId: parsed.record_id,
             roleId: parsed.attribute_values.role_id,
             organizationAccountId: parsed.attribute_values.organization_account_id,
-            assignmentKind: parsed.attribute_values.assignment_kind,
             state: parsed.attribute_values.state,
             temporalState: parsed.attribute_values.temporal_state,
           };
@@ -172,7 +169,8 @@ export const createAccessAdministrationAssignmentOperations = ({
             ${command.data.assigneeKind}::text,
             ${command.data.organizationAccountId ?? null}::uuid,
             ${command.data.groupId ?? null}::uuid,
-            ${command.data.assignmentKind}::text,
+            // assignment_kind: removed by FIX-DB-SECURITY
+            'standing'::text,
             ${command.data.startsAt ?? null}::timestamptz,
             ${command.data.expiresAt ?? null}::timestamptz,
             ${activityId}::uuid
@@ -204,7 +202,6 @@ export const createAccessAdministrationAssignmentOperations = ({
               parsed.data.accessVersion !== scope.accessVersion + (created ? 1 : 0) ||
               !sameId(parsed.data.assignment.role.roleId, command.data.roleId) ||
               !sameAssignee(parsed.data.assignment.assignee, command.data) ||
-              parsed.data.assignment.assignmentKind !== command.data.assignmentKind ||
               (created && parsed.data.assignment.revision !== 1) ||
               parsed.data.assignment.state !== "live"
             )

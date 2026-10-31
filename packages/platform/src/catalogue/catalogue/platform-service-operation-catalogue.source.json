@@ -663,10 +663,6 @@
           "type": "text",
           "required": false
         },
-        "assignment_kind": {
-          "type": "choice",
-          "required": true
-        },
         "starts_at": {
           "type": "date_time",
           "required": false
@@ -1907,10 +1903,6 @@
         "group_id": {
           "type": "text",
           "required": false
-        },
-        "assignment_kind": {
-          "type": "choice",
-          "required": true
         },
         "starts_at": {
           "type": "date_time",

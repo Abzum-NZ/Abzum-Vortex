@@ -183,7 +183,6 @@
             "role_label",
             "assignee_display_name",
             "assignee_kind",
-            "assignment_kind",
             "starts_at",
             "expires_at",
             "state",
@@ -1853,42 +1852,6 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.choice_input",
-                        "props": {
-                          "id": "input_assign_role_assignment_person_assignment_kind",
-                          "name": "assignment_kind",
-                          "label": "Assignment kind",
-                          "required": true,
-                          "options": [
-                            {
-                              "key": "standing",
-                              "label": "Standing"
-                            },
-                            {
-                              "key": "eligible",
-                              "label": "Eligible"
-                            }
-                          ],
-                          "vortex": {
-                            "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.2.0"
-                            },
-                            "responsive": {
-                              "desktop": {
-                                "visible": true,
-                                "width": {
-                                  "kind": "fill"
-                                },
-                                "height": {
-                                  "kind": "content"
-                                }
-                              }
-                            }
-                          }
-                        }
-                      },
-                      {
                         "type": "platform.renderer.field_input",
                         "props": {
                           "id": "input_assign_role_assignment_person_starts_at",
@@ -1978,42 +1941,6 @@
                             "block": {
                               "block_id": "8d1b6a2f-4c3e-4f0a-9c2b-6f1d2e7a5b94",
                               "release_version": "1.0.0"
-                            },
-                            "responsive": {
-                              "desktop": {
-                                "visible": true,
-                                "width": {
-                                  "kind": "fill"
-                                },
-                                "height": {
-                                  "kind": "content"
-                                }
-                              }
-                            }
-                          }
-                        }
-                      },
-                      {
-                        "type": "platform.renderer.choice_input",
-                        "props": {
-                          "id": "input_assign_role_assignment_group_assignment_kind",
-                          "name": "assignment_kind",
-                          "label": "Assignment kind",
-                          "required": true,
-                          "options": [
-                            {
-                              "key": "standing",
-                              "label": "Standing"
-                            },
-                            {
-                              "key": "eligible",
-                              "label": "Eligible"
-                            }
-                          ],
-                          "vortex": {
-                            "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.2.0"
                             },
                             "responsive": {
                               "desktop": {
@@ -2169,12 +2096,6 @@
                       {
                         "field": "vortex.system_directory:role_assignment.assignee_kind",
                         "label": "Assignee kind",
-                        "visible": true,
-                        "pin": "unpinned"
-                      },
-                      {
-                        "field": "vortex.system_directory:role_assignment.assignment_kind",
-                        "label": "Assignment kind",
                         "visible": true,
                         "pin": "unpinned"
                       },
@@ -4962,13 +4883,6 @@
                               "value": null
                             }
                           },
-                          "assignment_kind": {
-                            "kind": "literal",
-                            "literal": {
-                              "type": "choice",
-                              "value": "standing"
-                            }
-                          },
                           "starts_at": {
                             "kind": "formula",
                             "formula": {
@@ -5057,15 +4971,6 @@
                                   "path": ["organization_account_id"]
                                 }
                               }
-                            }
-                          },
-                          "assignment_kind": {
-                            "kind": "reference",
-                            "reference": {
-                              "source": "task_output",
-                              "task": "person_form",
-                              "key": "values",
-                              "path": ["assignment_kind"]
                             }
                           },
                           "starts_at": {
@@ -5261,15 +5166,6 @@
                               }
                             }
                           },
-                          "assignment_kind": {
-                            "kind": "reference",
-                            "reference": {
-                              "source": "task_output",
-                              "task": "person_form",
-                              "key": "values",
-                              "path": ["assignment_kind"]
-                            }
-                          },
                           "starts_at": {
                             "kind": "reference",
                             "reference": {
@@ -5387,13 +5283,6 @@
                               "value": null
                             }
                           },
-                          "assignment_kind": {
-                            "kind": "literal",
-                            "literal": {
-                              "type": "choice",
-                              "value": "standing"
-                            }
-                          },
                           "starts_at": {
                             "kind": "formula",
                             "formula": {
@@ -5482,15 +5371,6 @@
                                   "path": ["group_id"]
                                 }
                               }
-                            }
-                          },
-                          "assignment_kind": {
-                            "kind": "reference",
-                            "reference": {
-                              "source": "task_output",
-                              "task": "group_form",
-                              "key": "values",
-                              "path": ["assignment_kind"]
                             }
                           },
                           "starts_at": {
@@ -5684,15 +5564,6 @@
                                   "path": ["group_id"]
                                 }
                               }
-                            }
-                          },
-                          "assignment_kind": {
-                            "kind": "reference",
-                            "reference": {
-                              "source": "task_output",
-                              "task": "group_form",
-                              "key": "values",
-                              "path": ["assignment_kind"]
                             }
                           },
                           "starts_at": {
