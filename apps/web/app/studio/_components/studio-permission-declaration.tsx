@@ -15,6 +15,7 @@ import {
 } from "@vortex/ui/studio";
 import { applicationUses, changeableByPeople } from "@vortex/platform/schema";
 import { StudioPlaceList } from "./studio-used-in";
+import { StudioRecordScopeField } from "./studio-record-scope";
 import type { StudioAccessRun } from "./studio-access-role";
 
 type Permission = ApplicationSourceDocument["body"]["permissions"][number];
@@ -175,42 +176,13 @@ export function StudioPermissionDeclaration({
               )}
             </StudioField>
           )}
-          <StudioField label="Record scope">
-            {(control) => (
-              <StudioReferencePicker
-                {...control}
-                disabled={disabled || unsupportedScope}
-                value={
-                  unsupportedScope
-                    ? "advanced"
-                    : scope.routes.length > 1
-                      ? "ownership_and_share"
-                      : scope.routes[0]!.kind
-                }
-                options={[
-                  { value: "all_records", label: "All records" },
-                  ...(record?.ownership_mode !== "none"
-                    ? [
-                        { value: "ownership", label: "Owned records" },
-                        { value: "ownership_and_share", label: "Owned or directly shared records" },
-                      ]
-                    : []),
-                  { value: "direct_share", label: "Directly shared records" },
-                  ...(unsupportedScope
-                    ? [{ value: "advanced", label: "Relationship or saved condition scope" }]
-                    : []),
-                ]}
-                onChange={(value) =>
-                  setScope({
-                    routes:
-                      value === "ownership_and_share"
-                        ? [{ kind: "ownership" }, { kind: "direct_share" }]
-                        : [{ kind: value as "all_records" | "ownership" | "direct_share" }],
-                  })
-                }
-              />
-            )}
-          </StudioField>
+          <StudioRecordScopeField
+            record={record}
+            scope={scope}
+            allowShared
+            disabled={disabled}
+            onChange={setScope}
+          />
           <StudioInspectorGroup title="Fields">
             <p className="text-sm text-muted-foreground">
               {actionKind === "read"

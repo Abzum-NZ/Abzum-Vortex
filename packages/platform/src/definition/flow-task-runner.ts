@@ -46,6 +46,7 @@ import {
   carriesSensitive,
   dedupeFieldCorrections,
   effectCommandId,
+  recordWriterRefusal,
   redactSensitiveOutputs,
   refusalOutcome,
   requestOutcome,
@@ -1420,11 +1421,7 @@ export const createFlowTaskRunner = (
     if (changed?.kind === "refused") {
       const failed =
         [...slices].reverse().find((slice) => slice.start <= changed.index) ?? slices[0]!;
-      const failure = changed.result;
-      return stop(failed.call.taskId, {
-        outcome: failure?.outcome === "refused" ? refusalOutcome(failure.error.code) : "refused",
-        ...(failure?.outcome === "refused" ? ruleRefusalResult(failure.error) : {}),
-      });
+      return stop(failed.call.taskId, recordWriterRefusal(changed.result));
     }
     for (const [index, result] of (changed?.results ?? []).entries())
       changedRevisions.set(

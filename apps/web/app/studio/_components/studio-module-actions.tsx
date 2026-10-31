@@ -369,6 +369,31 @@ export function StudioModuleActions({
               : choiceOptions(
                   record.fields.find((field) => field.key === action.sets_choice_field),
                 ).find((entry) => entry.value === action.sets_choice_option);
+          // Its own permission may reach nobody or allow no field: an action with neither cannot be
+          // used until the builder gives it to roles and chooses its fields, so say the next step.
+          const ownPermission = module.permissions.find(
+            (permission) => permission.key === action.permission,
+          );
+          const permissionHeld = source.body.roles.some(
+            (role) =>
+              (action.permission !== undefined && role.permissions.includes(action.permission)) ||
+              role.permissions.includes("*"),
+          );
+          const permissionAllowsNoFields =
+            ownPermission !== undefined &&
+            ownPermission.field_policy !== undefined &&
+            ownPermission.field_policy.readable_fields.length === 0 &&
+            ownPermission.field_policy.changeable_fields.length === 0;
+          const permissionGuidance =
+            action.protected_operation !== undefined
+              ? undefined
+              : !permissionHeld && permissionAllowsNoFields
+                ? "Its permission is held by no role and allows no fields yet. Give it to roles in Access, then choose the fields it reads and changes."
+                : !permissionHeld
+                  ? "No role holds its permission yet, so no one can use this action. Give it to roles in Access."
+                  : permissionAllowsNoFields
+                    ? "Its permission allows no fields yet. Choose what it reads and changes in Access → Permissions."
+                    : undefined;
           return (
             <Item key={action.key} render={<li />} variant="outline" size="sm">
               <ItemHeader className="flex-wrap gap-2">
@@ -413,6 +438,9 @@ export function StudioModuleActions({
                 </ItemActions>
               </ItemHeader>
               <ItemContent className="basis-full space-y-1">
+                {permissionGuidance === undefined ? null : (
+                  <ItemDescription>{permissionGuidance}</ItemDescription>
+                )}
                 {action.protected_operation !== undefined ? (
                   <ItemDescription>
                     Runs a registered operation of the platform; it is not changed here.
