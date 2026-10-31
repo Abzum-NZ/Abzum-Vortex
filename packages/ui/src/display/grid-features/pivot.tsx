@@ -253,7 +253,7 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
         <TableBody>
           {page.rows.map((row) => (
             <TableRow key={row.key}>
-              <TableHead scope="row" className="sticky left-0 z-10 bg-card font-normal">
+              <TableHead scope="row" className="sticky left-0 z-10 bg-card">
                 {heading(row, row.drill === undefined ? [] : [row.drill], row.count)}
               </TableHead>
               {row.cells.map((cell, index) => {
@@ -281,7 +281,7 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
                 );
               })}
               {totals ? (
-                <TableCell className="text-right font-medium tabular-nums">
+                <TableCell className="text-right tabular-nums">
                   <Value cell={row.total ?? null} />
                 </TableCell>
               ) : null}

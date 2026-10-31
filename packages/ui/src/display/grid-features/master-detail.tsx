@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState, type ReactElement } from "rea
 import Link from "next/link";
 import { Alert, AlertDescription } from "../../components/alert";
 import { Button } from "../../components/button";
-import { Empty, EmptyHeader, EmptyTitle } from "../../components/empty";
 import {
   Table,
   TableBody,
@@ -206,13 +205,9 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
     );
   if (state.kind === "empty")
     return (
-      <Empty role="status" className="p-[var(--vortex-space-sm)] md:p-[var(--vortex-space-sm)]">
-        <EmptyHeader>
-          <EmptyTitle className="text-sm font-normal text-muted-foreground">
-            No related records
-          </EmptyTitle>
-        </EmptyHeader>
-      </Empty>
+      <p role="status" className="m-0 py-1 text-sm text-muted-foreground">
+        No related records
+      </p>
     );
   const { page, more } = state;
   const footer = (
@@ -303,7 +298,7 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
               {page.columns.map((column, index) => {
                 const cell = cellOf(related, column);
                 return (
-                  <TableCell key={column.key} className="max-w-64 truncate py-1.5">
+                  <TableCell key={column.key} className="max-w-64 truncate">
                     {index === 0 && related.href !== undefined ? (
                       <Link
                         href={related.href}

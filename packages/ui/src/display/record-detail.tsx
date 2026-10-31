@@ -211,20 +211,15 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
               </div>
             </>
           )}
-          <CardContent className="grid gap-[var(--vortex-space-md)] bg-muted/20 p-[var(--vortex-space-md)] sm:p-[var(--vortex-space-lg)] md:grid-cols-2 xl:grid-cols-3">
+          <CardContent className="grid gap-[var(--vortex-space-md)] bg-muted/20 md:grid-cols-2 xl:grid-cols-3">
             {sections.map((section) => (
               <Card key={section.key} className="min-w-0 border-border/70 shadow-none">
                 {section.title === undefined ? null : (
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-semibold">{section.title}</CardTitle>
+                  <CardHeader>
+                    <CardTitle>{section.title}</CardTitle>
                   </CardHeader>
                 )}
-                <CardContent
-                  className={cn(
-                    "grid gap-[var(--vortex-space-md)]",
-                    section.title === undefined && "pt-4",
-                  )}
-                >
+                <CardContent className="grid gap-[var(--vortex-space-md)]">
                   <dl className="m-0 grid gap-[var(--vortex-space-md)]">
                     {section.fields.map((field) => (
                       <div
@@ -253,8 +248,8 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
                   data-vortex-related-list={list.key}
                   className="min-w-0 border-border/70 shadow-none"
                 >
-                  <CardHeader className="flex-row items-center justify-between gap-[var(--vortex-space-sm)] pb-2">
-                    <CardTitle className="flex min-w-0 items-center gap-[var(--vortex-space-sm)] text-sm font-semibold">
+                  <CardHeader className="flex-row items-center justify-between gap-[var(--vortex-space-sm)]">
+                    <CardTitle className="flex min-w-0 items-center gap-[var(--vortex-space-sm)]">
                       <span className="truncate">{list.title}</span>
                       <Badge variant="secondary">{list.rows.length}</Badge>
                     </CardTitle>
@@ -269,7 +264,7 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
                       </Link>
                     )}
                   </CardHeader>
-                  <CardContent className="pt-0">
+                  <CardContent>
                     {list.rows.length === 0 ? (
                       <p className="m-0 text-sm text-muted-foreground">Nothing yet.</p>
                     ) : (
@@ -308,7 +303,7 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
             })}
           </CardContent>
           {events?.row_action === undefined ? null : (
-            <CardContent className="pt-0">
+            <CardContent>
               <RowActionControl
                 recordId={values.recordId}
                 name={accessibleName}

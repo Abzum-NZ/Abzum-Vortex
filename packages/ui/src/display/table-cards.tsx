@@ -12,7 +12,7 @@ import { RowExpansionToggle } from "./row-expansion-toggle";
 import { SubRowNoticeView } from "./sub-row-notice";
 import { SUB_ROW_INDENT_REM, type RowLine, type SubRowsControls } from "./sub-rows";
 import type { GridColumn } from "./table-layout";
-import { BOUNDED_VIEWPORT_CLASS, CARD_SPACING, useBoundedGridViewport } from "./table-geometry";
+import { BOUNDED_VIEWPORT_CLASS, useBoundedGridViewport } from "./table-geometry";
 import { isOwnClick } from "./table-interaction";
 
 const PRIORITY_ORDER: Readonly<Record<RecordsTableColumnContract["priority"], number>> = {
@@ -183,8 +183,8 @@ export function RecordsCards({
             }}
           >
             <Card
-              size="sm"
-              className={cn(CARD_SPACING[density], selected && "ring-2 ring-primary")}
+              size={density === "compact" ? "sm" : "default"}
+              className={cn(selected && "ring-2 ring-primary")}
             >
               <div className="flex min-w-0 items-center gap-[var(--vortex-space-sm)] [&_button]:min-h-6 [&_button]:min-w-6 [@media(pointer:coarse)]:[&_button]:min-h-11 [@media(pointer:coarse)]:[&_button]:min-w-11">
                 {selectable ? renderers.select(row, selected) : null}

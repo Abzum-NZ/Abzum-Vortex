@@ -475,7 +475,7 @@ function LinkEditor({
         >
           {chosen.map((recordId) => (
             <li key={recordId}>
-              <Badge variant="secondary" className="gap-[var(--vortex-space-xs)] pe-0.5">
+              <Badge variant="secondary">
                 {narrowing?.recordTitles?.[recordId] ?? "Restricted record"}
                 <Button
                   variant="ghost"
@@ -709,11 +709,7 @@ export function FiltersToolbar({
         </PopoverContent>
       </Popover>
       {active.map(({ field, filter }) => (
-        <Badge
-          key={field.fieldId}
-          variant="secondary"
-          className="gap-[var(--vortex-space-xs)] pe-0.5"
-        >
+        <Badge key={field.fieldId} variant="secondary">
           <span className="font-medium">{field.label}:</span>
           <FilterSummary field={field} filter={filter} narrowing={context.narrowing} />
           <Button

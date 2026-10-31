@@ -107,7 +107,7 @@ export function PersonalFormattingDialog({
     <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
       <DialogContent className="min-w-0 max-h-[90dvh] grid-cols-1 overflow-y-auto break-words sm:max-w-xl [&>*]:min-w-0">
         <DialogHeader>
-          <DialogTitle className="pr-8">Formatting for “{selected.name}”</DialogTitle>
+          <DialogTitle>Formatting for "{selected.name}"</DialogTitle>
           <DialogDescription>
             Highlight the rows or cells of this view that match a condition. For each row or cell
             the first matching rule wins, after the rules the table already has. People you share

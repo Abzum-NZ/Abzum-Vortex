@@ -160,12 +160,7 @@ export function RangeStatusBar({
         <>
           <span className="sr-only">{readout(summary.fields, labelOf)}</span>
           {summary.fields.map((field) => (
-            <Badge
-              key={field.fieldId}
-              variant="outline"
-              className="gap-[var(--vortex-space-xs)] font-normal"
-              aria-hidden
-            >
+            <Badge key={field.fieldId} variant="outline" aria-hidden>
               <span className="font-medium text-foreground">{labelOf(field.fieldId)}</span>
               {field.state === "withheld" ? (
                 <span>Not available</span>

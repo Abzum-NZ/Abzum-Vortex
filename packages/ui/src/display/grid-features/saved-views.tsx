@@ -441,7 +441,7 @@ function ViewSwitcher({
           <span className="max-w-40 truncate">{label}</span>
           {unsaved ? (
             <>
-              <Badge aria-hidden="true" className="size-2 min-w-0 p-[0]" />
+              <span aria-hidden="true" className="size-2 shrink-0 bg-primary" />
               <span className="sr-only">Unsaved changes</span>
             </>
           ) : null}

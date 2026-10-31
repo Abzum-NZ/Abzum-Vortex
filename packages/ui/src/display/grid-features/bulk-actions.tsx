@@ -324,7 +324,7 @@ function SelectionBand({
           <Button
             variant="link"
             size="sm"
-            className="h-auto px-[0]"
+            className="h-auto"
             onClick={() => void onScope({ event: "selection_scope_changed", scope: "matching" })}
           >
             Select all matching records

@@ -221,7 +221,7 @@ function ConditionalFormatMenu({ context, column }: GridFeatureColumnProps): Rea
   return columnFormatOf(context, column) === undefined ? null : (
     <>
       <DropdownMenuGroup>
-        <DropdownMenuLabel className="max-w-64 whitespace-normal font-normal">
+        <DropdownMenuLabel className="max-w-64 whitespace-normal">
           Formatting uses the values on this page.
         </DropdownMenuLabel>
       </DropdownMenuGroup>
