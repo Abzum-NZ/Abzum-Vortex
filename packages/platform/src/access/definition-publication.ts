@@ -281,17 +281,17 @@ export const createHumanDefinitionPublisher = (
           transaction,
           authority,
         );
-        // A draft not saved since the last release is published only when the platform has moved on:
-        // preparing it compares what it compiles to with the latest release, and refuses with
-        // DEFINITION_NO_CHANGE when they are the same. A release takes the draft's revision, so the
-        // unchanged draft is saved once more, in this transaction, to get the newer revision.
+        // A draft not saved since the last release is published only when the platform has moved on.
+        // A release takes the draft's revision, so the unchanged draft is saved once more, in this
+        // transaction, to get a newer one, and prepared on it: preparing compares what it compiles to
+        // with the latest release and refuses with DEFINITION_NO_CHANGE when they are the same,
+        // which rolls the extra save back with everything else.
         if (
           initial.publishedRevision !== undefined &&
           initial.publishedRevision !== null &&
           initial.draftRevision <= initial.publishedRevision
         ) {
           if (mode !== "prepare") throw new DefinitionError("DEFINITION_NO_CHANGE");
-          await service.prepare(context, command);
           const saved = await createDefinitionStore(
             transaction,
             authority,
