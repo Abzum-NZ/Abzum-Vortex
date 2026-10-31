@@ -13,8 +13,10 @@ import {
 } from "../workflows/flow-contracts";
 import {
   flowRefusalFeedbackSchema,
+  unlocatedCorrectionsRefusal,
   type FlowFieldCorrection,
   type FlowRefusalFeedback,
+  type FlowRuleRefusal,
 } from "../workflows/flow-refusal-feedback";
 import type { FlowValue } from "../workflows/flow-values";
 import { typedValueMatchesType } from "../rules/condition-types";
@@ -301,6 +303,36 @@ export const selectedRecordProjectionForTask = (
       return undefined;
   }
   return projection.data;
+};
+
+/**
+ * The task result of a record writer refusal: a safe refusal keeps its authored rule sentence, and
+ * a correction a named action cannot place on a form keeps it as the run's rule refusal instead of
+ * becoming a bare "not allowed".
+ */
+export const recordWriterRefusal = (
+  failure:
+    | Readonly<{
+        outcome: string;
+        error?: Readonly<{ code: string; reason?: FlowRuleRefusal | undefined }> | undefined;
+        corrections?:
+          readonly Readonly<{ code: string; message?: string | undefined }>[] | undefined;
+      }>
+    | undefined,
+): Readonly<{ outcome: FlowTaskOutcome; diagnostic?: FlowRefusalFeedback }> => {
+  if (failure?.outcome === "refused" && failure.error !== undefined)
+    return {
+      outcome: refusalOutcome(failure.error.code),
+      ...ruleRefusalResult(failure.error),
+    };
+  if (failure?.outcome === "correction_required") {
+    const reason = unlocatedCorrectionsRefusal(failure.corrections ?? []);
+    return {
+      outcome: "validation",
+      ...(reason === undefined ? {} : ruleRefusalResult({ code: "operation_refused", reason })),
+    };
+  }
+  return { outcome: "refused" };
 };
 
 /** The rule's authored refusal of a protected record path, when its safe error carries one. */
