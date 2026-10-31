@@ -103,7 +103,12 @@ export function useAgentGrid(placementId: string, label: string, state: GridStat
             return { refused: "not_on_page" };
           if (!eligibleActions(grid, row).includes(action)) return { refused: "not_permitted" };
           return Promise.resolve(
-            handler({ event: "row_action", eventId: action, recordId: row.recordId, revision: row.revision }),
+            handler({
+              event: "row_action",
+              eventId: action,
+              recordId: row.recordId,
+              revision: row.revision,
+            }),
           );
         },
         edit: async (record, field, value) => {
