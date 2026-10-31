@@ -5,14 +5,15 @@ import { createVortexStyleRootProps, Icon, VORTEX_STYLES } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 import { InputGroup, InputGroupInput, InputGroupAddon } from "@vortex/ui/components/input-group";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
+import { Notice } from "@vortex/ui/components/notice";
 import { RadioGroup, RadioGroupItem } from "@vortex/ui/components/radio-group";
 import { ToggleGroup, ToggleGroupItem } from "@vortex/ui/components/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
-import { toast } from "@vortex/ui/components/sonner";
+import { studioNotice } from "./studio-save-state";
 import { cn } from "@vortex/ui/lib/utils";
 import {
   StudioInspectorGroup,
+  StudioOptionControl,
   StudioIconButton,
   StudioCopyButton,
   decodeStudioThemePreset,
@@ -25,6 +26,7 @@ import {
   type StudioThemeDimension,
   type StudioThemeDimensionKey,
   type StudioThemeOptions,
+  type StudioThemePreset,
 } from "../_lib/studio-theme-options";
 import { StudioPanelShell } from "./studio-frame";
 import { StudioField } from "./studio-field";
@@ -61,6 +63,73 @@ function StylePreview({ style }: Readonly<{ style: string }>) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** One theme's colours drawn as a header, a card, a badge and a button, in light and in dark. */
+function PresetPreview({
+  preset,
+  mode,
+}: Readonly<{ preset: StudioThemePreset; mode: "light" | "dark" }>) {
+  const colours = preset.preview[mode];
+  return (
+    <div
+      className="space-y-2 rounded-md p-2"
+      style={{ background: colours.background, color: colours.text }}
+      aria-hidden="true"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] font-semibold">Overview</span>
+        <span
+          className="rounded-full px-1.5 py-0.5 text-[9px] font-medium"
+          style={{ background: colours.primary, color: colours.primaryForeground }}
+        >
+          {mode === "light" ? "Light" : "Dark"}
+        </span>
+      </div>
+      <div className="space-y-1 rounded p-1.5" style={{ background: colours.card }}>
+        <p className="text-[9px] font-medium">{preset.label}</p>
+        <p className="text-[9px] opacity-70">A card in this theme.</p>
+        <span
+          className="inline-block rounded px-1.5 py-0.5 text-[9px] font-medium"
+          style={{ background: colours.primary, color: colours.primaryForeground }}
+        >
+          Continue
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ThemePresetCard({
+  preset,
+  selected,
+  disabled,
+  onPick,
+}: Readonly<{
+  preset: StudioThemePreset;
+  selected: boolean;
+  disabled: boolean;
+  onPick: () => void;
+}>) {
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      disabled={disabled}
+      onClick={onPick}
+      className={cn(
+        "space-y-2 rounded-lg border p-2 text-left transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+        selected && "ring-2 ring-primary",
+      )}
+    >
+      <span className="block text-sm font-medium">{preset.label}</span>
+      <span className="block text-xs text-muted-foreground">{preset.description}</span>
+      <div className="grid grid-cols-2 gap-2">
+        <PresetPreview preset={preset} mode="light" />
+        <PresetPreview preset={preset} mode="dark" />
+      </div>
+    </button>
   );
 }
 
@@ -112,7 +181,7 @@ function Swatch({
         ))}
       </RadioGroup>
       <p className="text-sm text-muted-foreground">
-        {studioThemeOptionLabel({ dimensions: [dimension] }, dimension.key, value)}
+        {studioThemeOptionLabel({ dimensions: [dimension], presets: [] }, dimension.key, value)}
       </p>
     </div>
   );
@@ -126,18 +195,26 @@ function Swatch({
  */
 export function StudioThemePanel({
   selection,
+  base,
   options,
   disabled,
   hidden,
   onChange,
+  onPreset,
 }: Readonly<{
   selection: SourceApplicationThemeSelection;
+  base: Readonly<{ catalogue_theme_id: string; release_version: string }>;
   options: StudioThemeOptions;
   disabled: boolean;
   hidden: boolean;
   /** Puts a selection in the draft after it resolves, or says why it was refused. */
   onChange: (
     next: SourceApplicationThemeSelection,
+    what: string,
+  ) => Promise<StudioThemeChangeOutcome & Readonly<{ problems?: readonly string[] }>>;
+  /** Puts a complete theme (its release and selection) in the draft after it resolves. */
+  onPreset: (
+    next: StudioThemePreset,
     what: string,
   ) => Promise<StudioThemeChangeOutcome & Readonly<{ problems?: readonly string[] }>>;
 }>) {
@@ -169,7 +246,7 @@ export function StudioThemePanel({
       const outcome = await onChange(next, what);
       if (outcome.kind === "applied") {
         setFeedback(null);
-        toast.success(outcome.message);
+        studioNotice(outcome.message, "success");
       } else setFeedback(outcome);
       return outcome.kind === "applied";
     } finally {
@@ -181,6 +258,19 @@ export function StudioThemePanel({
       { ...selection, [key]: id },
       `${dimension(key).label} set to ${studioThemeOptionLabel(options, key, id)}`,
     );
+  };
+  const applyPreset = async (preset: StudioThemePreset) => {
+    if (locked) return;
+    setPending(true);
+    try {
+      const outcome = await onPreset(preset, `Theme ${preset.label} applied`);
+      if (outcome.kind === "applied") {
+        setFeedback(null);
+        studioNotice(outcome.message, "success");
+      } else setFeedback(outcome);
+    } finally {
+      setPending(false);
+    }
   };
   // A pasted code applies as soon as it reads as a preset; a code that does not is explained on Enter or when leaving the field.
   const paste = async (next: string, explain: boolean) => {
@@ -203,7 +293,7 @@ export function StudioThemePanel({
         const outcome = await onChange(next, "Shuffled");
         if (outcome.kind === "applied") {
           setFeedback(null);
-          toast.success(outcome.message);
+          studioNotice(outcome.message, "success");
           return;
         }
         if (outcome.problems === undefined) {
@@ -223,21 +313,13 @@ export function StudioThemePanel({
   const select = (entry: StudioThemeDimension) => (
     <StudioField label={entry.label}>
       {(control) => (
-        <NativeSelect
+        <StudioOptionControl
           {...control}
           value={selection[entry.key]}
+          options={entry.options.map((option) => ({ value: option.id, label: option.label }))}
           disabled={locked}
-          onChange={(event) => pick(entry.key, event.target.value)}
-        >
-          {entry.options.some((option) => option.id === selection[entry.key]) ? null : (
-            <NativeSelectOption value={selection[entry.key]}>Not offered</NativeSelectOption>
-          )}
-          {entry.options.map((option) => (
-            <NativeSelectOption key={option.id} value={option.id}>
-              {option.label}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
+          onChange={(id) => pick(entry.key, id)}
+        />
       )}
     </StudioField>
   );
@@ -276,15 +358,11 @@ export function StudioThemePanel({
       }
     >
       {feedback !== null && (
-        <div
-          role={feedback.kind === "refused" ? "alert" : "status"}
-          className={
-            feedback.kind === "refused"
-              ? "space-y-1 text-sm text-destructive"
-              : "text-sm text-muted-foreground"
-          }
-        >
-          <p>{feedback.message}</p>
+        <div className="space-y-1 text-sm">
+          <Notice
+            severity={feedback.kind === "refused" ? "error" : "info"}
+            content={feedback.message}
+          />
           {feedback.problems !== undefined && (
             <ul className="list-disc pl-5">
               {feedback.problems.map((problem) => (
@@ -299,6 +377,22 @@ export function StudioThemePanel({
           Checking the theme…
         </p>
       )}
+      <StudioInspectorGroup title="Themes">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {options.presets.map((preset) => (
+            <ThemePresetCard
+              key={preset.key}
+              preset={preset}
+              selected={
+                base.catalogue_theme_id === preset.base.catalogueThemeId &&
+                base.release_version === preset.base.releaseVersion
+              }
+              disabled={locked}
+              onPick={() => void applyPreset(preset)}
+            />
+          ))}
+        </div>
+      </StudioInspectorGroup>
       <StudioInspectorGroup title="Style">
         <RadioGroup
           aria-label="Style"

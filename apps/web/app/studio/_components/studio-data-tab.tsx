@@ -5,6 +5,7 @@ import {
   type StudioCompositionContext,
   type StudioDataSelection,
   type StudioRecordReader,
+  type StudioStructureCommand,
 } from "@vortex/ui/studio";
 import {
   peopleDirectory as directory,
@@ -106,6 +107,7 @@ export function useStudioDataTab({
   hidden,
   compositionContext,
   readRecords,
+  structure,
 }: Readonly<{
   draft: StudioDraft;
   applications: readonly StudioModuleOwnerApplication[];
@@ -116,6 +118,8 @@ export function useStudioDataTab({
   compositionContext: StudioCompositionContext;
   /** Reads records of the builder's preview of the saved draft, for a link field's default. */
   readRecords: StudioRecordReader | null;
+  /** The one Structure command runner, for the home dashboard after a record type is added. */
+  structure: Readonly<{ command: (command: StudioStructureCommand) => unknown }>;
 }>) {
   useIntentPreload(preloadDataView, "#studio-rail-data");
   const visited = useStudioTabVisited(!hidden);
@@ -311,6 +315,9 @@ export function useStudioDataTab({
     setCreating,
     newQuery,
     setNewQuery,
+    fillHome: (recordType: string) => {
+      structure.command({ kind: "fill_home", recordType });
+    },
   };
   return {
     panel: visited ? <StudioDataTreePanel model={model} /> : null,

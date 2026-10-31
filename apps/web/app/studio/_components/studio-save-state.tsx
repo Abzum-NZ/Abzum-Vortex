@@ -1,7 +1,7 @@
 "use client";
 
 import { useStudioFieldProblems } from "@vortex/ui/studio";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { FormattedTime, Icon } from "@vortex/ui";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
@@ -32,23 +32,40 @@ export function studioNotice(
   message: string,
   kind: "success" | "error" | "info" = "info",
   link?: Readonly<{ label: string; href: string }>,
+  details?: Readonly<{
+    /** A second line, or the controls a refusal needs. */
+    description?: ReactNode;
+    /** One action, such as opening a preview in a new tab or showing where a change belongs. */
+    action?: Readonly<{ label: string; onClick: () => void }> | undefined;
+    id?: string;
+    duration?: number;
+    closeButton?: boolean;
+  }>,
 ) {
-  const options = {
-    ...(kind === "error" ? { duration: Infinity } : {}),
-    ...(link === undefined
-      ? {}
+  const action =
+    details?.action ??
+    (link === undefined
+      ? undefined
       : {
-          action: {
-            label: link.label,
-            onClick: () => {
-              window.location.assign(link.href);
-            },
+          label: link.label,
+          onClick: () => {
+            window.location.assign(link.href);
           },
-        }),
+        });
+  const options = {
+    ...(details?.id === undefined ? {} : { id: details.id }),
+    ...(details?.description === undefined ? {} : { description: details.description }),
+    ...(details?.duration === undefined ? {} : { duration: details.duration }),
+    ...(details?.closeButton === undefined ? {} : { closeButton: details.closeButton }),
+    ...(action === undefined ? {} : { action }),
+    ...(kind === "error" && details?.duration === undefined ? { duration: Infinity } : {}),
   };
   if (kind === "success") return toast.success(message, options);
   if (kind === "error")
-    return toast.error("Studio could not finish that", { ...options, description: message });
+    return toast.error("Studio could not finish that", {
+      ...options,
+      description: details?.description ?? message,
+    });
   return toast(message, options);
 }
 

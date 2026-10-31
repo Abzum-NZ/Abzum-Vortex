@@ -3,7 +3,6 @@ import { useState } from "react";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import type {
   ApplicationSourceDocument,
   FlowBindingSettings,
@@ -18,6 +17,7 @@ import {
 import { Icon } from "@vortex/ui";
 import {
   StudioIconButton,
+  StudioOptionControl,
   StudioRowActionsBindings,
   type StudioActionChoice,
   type StudioBehaviourEvent,
@@ -218,40 +218,35 @@ function BehaviourEvent({
             <>
               <Label className="flex flex-col items-start gap-1 text-xs">
                 Run another flow
-                <NativeSelect
+                <StudioOptionControl
                   value=""
+                  unset="Choose a flow…"
                   disabled={disabled}
-                  onChange={(event) => {
-                    const key = event.target.value;
-                    if (key !== "") run((current) => applyStudioRebind(current, binding.id, key));
+                  options={others.map((candidate) => ({
+                    value: candidate.key,
+                    label: candidate.labels.name ?? candidate.key,
+                  }))}
+                  onChange={(value) => {
+                    if (value !== "")
+                      run((current) => applyStudioRebind(current, binding.id, value));
                   }}
-                >
-                  <NativeSelectOption value="">Choose a flow…</NativeSelectOption>
-                  {others.map((candidate) => (
-                    <NativeSelectOption key={candidate.key} value={candidate.key}>
-                      {candidate.labels.name ?? candidate.key}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                />
               </Label>
               <Label className="flex flex-col items-start gap-1 text-xs">
                 Combine with another flow
-                <NativeSelect
+                <StudioOptionControl
                   value=""
+                  unset="Choose a flow…"
                   disabled={disabled}
-                  onChange={(event) => {
-                    const key = event.target.value;
-                    if (key !== "")
-                      run((current) => applyStudioFlowCombine(current, binding.id, key));
+                  options={others.map((candidate) => ({
+                    value: candidate.key,
+                    label: candidate.labels.name ?? candidate.key,
+                  }))}
+                  onChange={(value) => {
+                    if (value !== "")
+                      run((current) => applyStudioFlowCombine(current, binding.id, value));
                   }}
-                >
-                  <NativeSelectOption value="">Choose a flow…</NativeSelectOption>
-                  {others.map((candidate) => (
-                    <NativeSelectOption key={candidate.key} value={candidate.key}>
-                      {candidate.labels.name ?? candidate.key}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                />
               </Label>
             </>
           )}
@@ -379,28 +374,30 @@ function BindingSettings({
         </Label>
         <Label className="flex flex-col items-start gap-1 text-xs">
           When it happens again while the flow runs
-          <NativeSelect
+          <StudioOptionControl
             value={settings.concurrency}
             disabled={disabled}
-            onChange={(next) => {
-              const parsed = flowBindingConcurrencySchema.safeParse(next.target.value);
+            options={flowBindingConcurrencySchema.options.map((option) => ({
+              value: option,
+              label: concurrencyWords[option] ?? option,
+            }))}
+            onChange={(value) => {
+              const parsed = flowBindingConcurrencySchema.safeParse(value);
               if (parsed.success) onChange({ ...settings, concurrency: parsed.data });
             }}
-          >
-            {flowBindingConcurrencySchema.options.map((option) => (
-              <NativeSelectOption key={option} value={option}>
-                {concurrencyWords[option]}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+          />
         </Label>
         <Label className="flex flex-col items-start gap-1 text-xs">
           While it runs
-          <NativeSelect
+          <StudioOptionControl
             value={settings.exclusive}
             disabled={disabled}
-            onChange={(next) => {
-              const parsed = flowBindingExclusiveScopeSchema.safeParse(next.target.value);
+            options={flowBindingExclusiveScopeSchema.options.map((option) => ({
+              value: option,
+              label: exclusiveWords[option] ?? option,
+            }))}
+            onChange={(value) => {
+              const parsed = flowBindingExclusiveScopeSchema.safeParse(value);
               if (!parsed.success) return;
               onChange({
                 ...settings,
@@ -411,13 +408,7 @@ function BindingSettings({
                     : (settings.timeoutMs ?? flowBindingMaximumTimeoutMs),
               });
             }}
-          >
-            {flowBindingExclusiveScopeSchema.options.map((option) => (
-              <NativeSelectOption key={option} value={option}>
-                {exclusiveWords[option]}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+          />
         </Label>
         <Label className="flex flex-col items-start gap-1 text-xs">
           Give up after (seconds{settings.exclusive === "none" ? ", optional" : ", required"})

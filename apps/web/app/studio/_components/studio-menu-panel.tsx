@@ -19,9 +19,9 @@ import { Icon, IconLibraryProvider } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { Input } from "@vortex/ui/components/input";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import { cn } from "@vortex/ui/lib/utils";
 import {
+  StudioOptionControl,
   studioMenuPageChoices,
   studioMenuPosition,
   type StudioMenuCommand,
@@ -407,20 +407,16 @@ export function StudioMenuPanel({
             </StudioField>
             <StudioField label="First page">
               {(control) => (
-                <NativeSelect
+                <StudioOptionControl
                   {...control}
                   value={firstPage}
-                  required
                   disabled={disabled}
-                  onChange={(event) => setFirstPage(event.target.value)}
-                >
-                  <NativeSelectOption value="">Choose a page…</NativeSelectOption>
-                  {pages.map((page) => (
-                    <NativeSelectOption key={page.key} value={page.key}>
-                      {page.label}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                  options={[
+                    { value: "", label: "Choose a page…" },
+                    ...pages.map((page) => ({ value: page.key, label: page.label })),
+                  ]}
+                  onChange={(value) => setFirstPage(value)}
+                />
               )}
             </StudioField>
             <Button
@@ -441,19 +437,16 @@ export function StudioMenuPanel({
             }
           >
             {(control) => (
-              <NativeSelect
+              <StudioOptionControl
                 {...control}
                 value={newPage}
                 disabled={disabled}
-                onChange={(event) => setNewPage(event.target.value)}
-              >
-                <NativeSelectOption value="">Choose a page</NativeSelectOption>
-                {pages.map((page) => (
-                  <NativeSelectOption key={page.key} value={page.key}>
-                    {page.label}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+                options={[
+                  { value: "", label: "Choose a page" },
+                  ...pages.map((page) => ({ value: page.key, label: page.label })),
+                ]}
+                onChange={(value) => setNewPage(value)}
+              />
             )}
           </StudioField>
           <Button type="submit" size="sm" disabled={disabled}>
@@ -626,23 +619,15 @@ function StudioMenuEntryEditor({
           }
         >
           {(control) => (
-            <NativeSelect
+            <StudioOptionControl
               {...control}
               value={item.page}
               disabled={disabled}
-              onChange={(event) =>
-                change({ kind: "change", alias: item.id, changes: { page: event.target.value } })
+              options={pages.map((page) => ({ value: page.key, label: page.label }))}
+              onChange={(value) =>
+                change({ kind: "change", alias: item.id, changes: { page: value } })
               }
-            >
-              {pages.some((page) => page.key === item.page) ? null : (
-                <NativeSelectOption value={item.page}>Missing page</NativeSelectOption>
-              )}
-              {pages.map((page) => (
-                <NativeSelectOption key={page.key} value={page.key}>
-                  {page.label}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+            />
           )}
         </StudioField>
       )}

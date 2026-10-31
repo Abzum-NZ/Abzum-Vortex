@@ -190,7 +190,7 @@ export function StudioBlockSetupDialog({
         onClose();
       }}
     >
-      <DialogContent className="max-h-dvh overflow-y-auto sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Set up {choice.name}</DialogTitle>
           <DialogDescription>

@@ -31,7 +31,6 @@ import {
   ItemTitle,
 } from "@vortex/ui/components/item";
 import { Label } from "@vortex/ui/components/label";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import {
   StudioConditionControls,
   projectStudioActionCondition,
@@ -40,6 +39,7 @@ import {
   studioActionConditionSource,
   validateStudioCondition,
   type StudioConditionValidation,
+  StudioOptionControl,
 } from "@vortex/ui/studio";
 import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
 import { StudioReferencesAlert, StudioUsedIn, useStudioPlaceOpener } from "./studio-used-in";
@@ -172,7 +172,7 @@ export function ActionDialog({
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-screen overflow-y-auto sm:max-w-3xl">
+      <DialogContent className="sm:max-w-3xl">
         <form onSubmit={submit} className="space-y-4">
           <DialogHeader>
             <DialogTitle>
@@ -240,21 +240,18 @@ export function ActionDialog({
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="action-permission">Permission</Label>
-            <NativeSelect
+            <StudioOptionControl
               id="action-permission"
-              className="w-full"
               value={permission}
-              onChange={(event) => setPermission(event.target.value)}
-            >
-              <NativeSelectOption value="own">Its own permission</NativeSelectOption>
-              {named
-                .filter((entry) => entry.key !== action?.key)
-                .map((entry) => (
-                  <NativeSelectOption key={entry.key} value={entry.key}>
-                    {entry.label}
-                  </NativeSelectOption>
-                ))}
-            </NativeSelect>
+              disabled={false}
+              options={[
+                { value: "own", label: "Its own permission" },
+                ...named
+                  .filter((entry) => entry.key !== action?.key)
+                  .map((entry) => ({ value: entry.key, label: entry.label })),
+              ]}
+              onChange={setPermission}
+            />
           </div>
           {issues.length === 0 ? null : (
             <ul role="alert" className="space-y-1 text-sm text-destructive">

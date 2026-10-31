@@ -11,11 +11,11 @@ import {
 } from "@vortex/platform/schema";
 import {
   StudioInspectorGroup,
+  StudioOptionControl,
   StudioReferencePicker,
   StudioSegmentedControl,
 } from "@vortex/ui/studio";
 import { Button } from "@vortex/ui/components/button";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import { StudioField } from "./studio-field";
 import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
 
@@ -131,13 +131,16 @@ export function StudioRecordStorageOwnership({
       </StudioField>
       <StudioField label="Owner" hint={ownershipHints[mode]} error={problem}>
         {(control) => (
-          <NativeSelect
+          <StudioOptionControl
             {...control}
-            className="w-full"
             value={mode}
             disabled={disabled}
-            onChange={(event) => {
-              const next = event.target.value as RecordOwnershipMode;
+            options={ownershipModes.map((value) => ({
+              value,
+              label: recordOwnershipLabels[value],
+            }))}
+            onChange={(value) => {
+              const next = value as RecordOwnershipMode;
               if (next === "inherited") {
                 setProblem(undefined);
                 setChoosingLink(true);
@@ -146,13 +149,7 @@ export function StudioRecordStorageOwnership({
               setChoosingLink(false);
               apply(record.storage_scope, { mode: next });
             }}
-          >
-            {ownershipModes.map((value) => (
-              <NativeSelectOption key={value} value={value}>
-                {recordOwnershipLabels[value]}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+          />
         )}
       </StudioField>
       {mode !== "inherited" ? null : (

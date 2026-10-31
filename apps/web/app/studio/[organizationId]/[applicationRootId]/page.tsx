@@ -1,6 +1,9 @@
 import { loadStudioApplicationDraft } from "../../../_lib/studio-application-draft";
 import { organizationAddressPath } from "../../../_lib/address-paths";
-import { loadOrganizationLauncher } from "../../../_lib/organization-context";
+import {
+  loadOrganizationLauncher,
+  loadPermittedApplicationsAtAddress,
+} from "../../../_lib/organization-context";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { continueStudioSession } from "../../_lib/studio-session";
 import { StudioUnavailable } from "../../_components/studio-unavailable";
@@ -80,12 +83,26 @@ const loadWorkspacePlace = async (
     entry.tenantShortName,
     entry.organizationShortName,
   );
+  // Whether this application is installed in the organisation decides Back to app vs Install.
+  const applications = await loadPermittedApplicationsAtAddress(
+    resolved.session,
+    entry.tenantShortName,
+    entry.organizationShortName,
+  );
+  if (applications.kind !== "available")
+    console.error(
+      `[studio] installed applications could not be read: ${applications.kind}${applications.kind === "temporarily_unavailable" && applications.cause !== undefined ? ` (${applications.cause})` : ""}`,
+    );
+  const installed =
+    applications.kind === "available" &&
+    applications.applications.some((candidate) => candidate.key === applicationKey);
   return {
     kind: "available",
     place: {
       organizationName: entry.organizationDisplayName,
       applicationHref: `${organizationPath}/${encodeURIComponent(applicationKey)}`,
       appStoreHref: `${organizationPath}/${encodeURIComponent(settings.value)}`,
+      installed,
     },
   };
 };

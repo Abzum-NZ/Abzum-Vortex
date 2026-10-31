@@ -6,7 +6,7 @@ import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
+import { StudioOptionControl } from "@vortex/ui/studio";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import {
   Dialog,
@@ -85,22 +85,20 @@ function EventDialog({
           </StudioField>
           <StudioField label="Record type" error={problemField === "record" ? problem : undefined}>
             {(control) => (
-              <NativeSelect
+              <StudioOptionControl
                 {...control}
-                className="w-full"
                 value={selectedRecord}
-                onChange={(change) => {
-                  setSelectedRecord(change.target.value);
+                disabled={false}
+                options={module.record_types.map((entry) => ({
+                  value: entry.key,
+                  label: entry.name,
+                }))}
+                onChange={(value) => {
+                  setSelectedRecord(value);
                   setCarries([]);
                   setProblem(undefined);
                 }}
-              >
-                {module.record_types.map((entry) => (
-                  <NativeSelectOption key={entry.key} value={entry.key}>
-                    {entry.name}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              />
             )}
           </StudioField>
           <fieldset

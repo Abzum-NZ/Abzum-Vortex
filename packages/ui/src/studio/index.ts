@@ -34,6 +34,7 @@ export { describeStudioCompositionGate } from "./application-composition-gate";
 export * from "./field-placement";
 export * from "./application-flow-model";
 export * from "./application-flow-commands";
+export * from "./application-flow-command-apply";
 export * from "./studio-flow-step-picker";
 export * from "./application-flow-create";
 export * from "./application-flow-delete";
@@ -75,6 +76,8 @@ export {
   type StudioRecordPageCommand,
   type StudioRecordPageKind,
 } from "./application-record-page-kinds";
+export * from "./application-record-page-checks";
+export * from "./application-home-dashboard";
 export * from "./application-item-labels";
 export { tokenName } from "./studio-words";
 export * from "./studio-reference-picker";

@@ -1,5 +1,6 @@
 "use client";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   applicationSourceDocumentSchema,
@@ -22,9 +23,15 @@ import { describeStudioCompileFailure } from "../_lib/studio-compile-failure";
 import { studioReleasesSections, type StudioReleasesSection } from "./studio-rail-tabs";
 import type { StudioDraft } from "./use-studio-draft";
 import { studioNotice } from "./studio-save-state";
-import { toast } from "@vortex/ui/components/sonner";
+import { Button } from "@vortex/ui/components/button";
 import { useStudioTabVisited } from "./studio-frame";
 import type { StudioCompositionContext } from "@vortex/ui/studio";
+import {
+  studioRecordPageChecks,
+  type StudioRecordPageCheck,
+  type StudioStructureCommand,
+  type StudioStructureResult,
+} from "@vortex/ui/studio";
 import { studioDataEdit } from "../_lib/studio-data-model";
 import { deferredStudioPart } from "./studio-deferred-part";
 import { useIntentPreload } from "../_lib/use-intent-preload";
@@ -43,9 +50,17 @@ const StudioFieldPageReview = deferredStudioPart(
   () => import("./studio-field-page-review").then((module) => module.StudioFieldPageReview),
   "review of the new fields",
 );
+const StudioPageCheckReview = deferredStudioPart(
+  () => import("./studio-page-check-review").then((module) => module.StudioPageCheckReview),
+  "review of the record pages",
+);
 const preloadReleasesPanel = () => import("./studio-releases-panel");
 const preloadPublishDialog = () =>
-  Promise.all([import("./studio-publish-dialog"), import("./studio-field-page-review")]);
+  Promise.all([
+    import("./studio-publish-dialog"),
+    import("./studio-field-page-review"),
+    import("./studio-page-check-review"),
+  ]);
 
 const ApplicationSourceImport = dynamic(
   () => import("./application-source-import").then((module) => module.ApplicationSourceImport),
@@ -136,14 +151,22 @@ export function useStudioReleasesTab({
   hidden,
   initialSection,
   appStoreHref,
+  installed,
   compositionContext,
+  structure,
 }: Readonly<{
   draft: StudioDraft;
   compositionContext: StudioCompositionContext;
   hidden: boolean;
   /** The App Store, where a published version is installed or upgraded to; absent when its address is unknown. */
   appStoreHref: string | undefined;
+  /** Whether this application is installed in the builder's organisation. */
+  installed: boolean;
   initialSection: StudioReleasesSection;
+  /** The one Structure command runner, for the one-click offers Publish shows. */
+  structure: Readonly<{
+    command: (command: StudioStructureCommand) => StudioStructureResult;
+  }>;
 }>) {
   const { organizationId, history } = draft;
   useIntentPreload(preloadReleasesPanel, "#studio-rail-releases");
@@ -455,24 +478,26 @@ export function useStudioReleasesTab({
         if (latest.current.isActive()) setPreviewPending(false);
       }
     })();
-    toast.promise(starting, {
-      loading: "Preview is starting…",
-      success: (href) => ({
-        message: "Preview ready",
-        action: {
-          label: "Open",
-          onClick: () => {
-            window.open(href, "_blank", "noopener");
+    studioNotice("Preview is starting…");
+    void starting
+      .then((href) =>
+        studioNotice("Preview ready", "success", undefined, {
+          action: {
+            label: "Open",
+            onClick: () => {
+              window.open(href, "_blank", "noopener");
+            },
           },
-        },
-      }),
-      error: (error: unknown) => ({
-        message: "Preview could not start",
-        duration: Infinity,
-        description:
-          error instanceof Error ? error.message : "Your changes are kept. Try Preview again.",
-      }),
-    });
+        }),
+      )
+      .catch((error: unknown) =>
+        studioNotice(
+          error instanceof Error
+            ? error.message
+            : "Preview could not start. Your changes are kept. Try Preview again.",
+          "error",
+        ),
+      );
   };
 
   /** The saved draft the agent's preview runs; null while edits are being saved or a request holds the draft. */
@@ -522,11 +547,24 @@ export function useStudioReleasesTab({
       parsed.data.root_alias !== expected.rootAlias
     )
       return "stale";
+    // The reviewed file is what the draft must hold: a parse that drops anything is a defect, not a silent replace.
+    if (canonicalJson(parsed.data) !== canonicalJson(candidate)) {
+      console.error(
+        "[studio] the imported source did not survive its own contract: STUDIO_SOURCE_IMPORT_PARSE_LOST",
+      );
+      return "stale";
+    }
     const outcome = draft.run(() => ({ kind: "edit", source: parsed.data, result: true }), {
       expected: expected.source,
     });
     if (outcome.kind === "blocked") return "stale";
     if (!outcome.changed) return "unchanged";
+    if (canonicalJson(draft.history.getState().source) !== canonicalJson(parsed.data)) {
+      console.error(
+        "[studio] the draft did not keep the imported source: STUDIO_SOURCE_IMPORT_EDIT_LOST",
+      );
+      return "stale";
+    }
     return "applied";
   };
 
@@ -546,6 +584,26 @@ export function useStudioReleasesTab({
   ) : null;
   const centre: ReactNode = (
     <div className="mx-auto max-w-4xl px-8 py-6 text-foreground">
+      {!installed && appStoreHref !== undefined && (
+        <section
+          aria-label="Installation"
+          className="mb-4 space-y-2 rounded-md border border-border bg-muted/40 p-4"
+        >
+          <p className="font-medium">Not installed yet</p>
+          <p className="text-sm text-muted-foreground">
+            This application is not installed in your organisation, so people cannot open it yet.
+            Install it from the App Store to use the published version.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            nativeButton={false}
+            render={<Link href={appStoreHref} prefetch={false} />}
+          >
+            Install in this organisation
+          </Button>
+        </section>
+      )}
       {!hidden && section === "history" && (
         <StudioHistoryTab
           key={historyGeneration}
@@ -608,6 +666,25 @@ export function useStudioReleasesTab({
   const title = studioReleasesSections.find((entry) => entry.value === section)!.label;
   const notSaved =
     draft.status.kind === "conflict" || draft.status.kind === "refused" ? draft.status.message : "";
+  const pageChecks = prepared === null ? [] : studioRecordPageChecks(draft.state.source);
+  const fixPageCheck = (check: StudioRecordPageCheck): StudioStructureResult => {
+    if (check.kind === "missing_edit_page")
+      return structure.command({
+        kind: "add_record_page",
+        type: "form_edit",
+        recordType: check.recordType,
+        shellAlias: null,
+        addToMenu: false,
+      });
+    if (check.kind === "missing_row_edit")
+      return structure.command({
+        kind: "ensure_record_page_actions",
+        recordType: check.recordType,
+      });
+    if (check.kind === "missing_form_cancel")
+      return structure.command({ kind: "ensure_form_cancel", pageAlias: check.pageAlias });
+    return { kind: "refused", message: "Add content to the home page in Structure." };
+  };
   const dialog = !dialogVisited ? null : (
     <StudioPublishDialog
       open={publishOpen}
@@ -621,12 +698,19 @@ export function useStudioReleasesTab({
       revision={draft.state.draftRevision}
       pageReview={
         prepared === null ? null : (
-          <StudioFieldPageReview
-            addedFields={prepared.addedFields}
-            context={compositionContext}
-            disabled={draft.locked || preparing || draft.updatingCanvas}
-            edit={studioDataEdit(draft)}
-          />
+          <>
+            <StudioFieldPageReview
+              addedFields={prepared.addedFields}
+              context={compositionContext}
+              disabled={draft.locked || preparing || draft.updatingCanvas}
+              edit={studioDataEdit(draft)}
+            />
+            <StudioPageCheckReview
+              checks={pageChecks}
+              disabled={draft.locked || preparing || draft.updatingCanvas}
+              onFix={fixPageCheck}
+            />
+          </>
         )
       }
       note={note}

@@ -28,7 +28,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@vortex/ui/components/dialog";
-import { toast } from "@vortex/ui/components/sonner";
+import { studioNotice } from "./studio-save-state";
 import { useStudioDraftText } from "./use-studio-draft-text";
 import { StudioPlaceList } from "./studio-used-in";
 
@@ -222,7 +222,7 @@ export function StudioLayoutOutlets({
       }
       return true;
     }
-    toast.error("Nothing was changed", {
+    studioNotice("Nothing was changed", "error", undefined, {
       id: "studio-layout-outlet-refusal",
       description: result.message,
       closeButton: true,
