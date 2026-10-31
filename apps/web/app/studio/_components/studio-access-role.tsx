@@ -25,7 +25,6 @@ import { ToggleGroup, ToggleGroupItem } from "@vortex/ui/components/toggle-group
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { Input } from "@vortex/ui/components/input";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import { Notice } from "@vortex/ui/components/notice";
 import {
   Table,
@@ -47,7 +46,7 @@ import {
   type StudioAccessPermission,
 } from "@vortex/ui/studio";
 import { StudioField } from "./studio-field";
-import { StudioIconButton } from "@vortex/ui/studio";
+import { StudioIconButton, StudioOptionControl } from "@vortex/ui/studio";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 
 type Role = ApplicationSourceDocument["body"]["roles"][number];
@@ -385,22 +384,17 @@ export function StudioAccessRoleEditor({
       <div className="max-w-sm">
         <StudioField label="Starts on" hint="The page its people see first.">
           {(control) => (
-            <NativeSelect
+            <StudioOptionControl
               {...control}
               value={role.home_page}
               disabled={disabled}
-              onChange={(event) =>
-                run({ kind: "set_role_home_page", roleKey: role.key, pageKey: event.target.value })
-              }
-            >
-              {source.body.pages
+              options={source.body.pages
                 .filter((page) => page.type !== "detail" && page.type !== "public")
-                .map((page) => (
-                  <NativeSelectOption key={page.key} value={page.key}>
-                    {page.name}
-                  </NativeSelectOption>
-                ))}
-            </NativeSelect>
+                .map((page) => ({ value: page.key, label: page.name }))}
+              onChange={(value) =>
+                run({ kind: "set_role_home_page", roleKey: role.key, pageKey: value })
+              }
+            />
           )}
         </StudioField>
       </div>

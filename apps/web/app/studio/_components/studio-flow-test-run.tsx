@@ -5,7 +5,7 @@ import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
-import { NativeSelect } from "@vortex/ui/components/native-select";
+import { StudioOptionControl } from "@vortex/ui/studio";
 import {
   describeFailure,
   flowTaskRegistry,
@@ -227,18 +227,19 @@ export function StudioFlowTestRun({
           </Label>
           {declaration.recordTypeIds !== undefined && declaration.recordTypeIds.length > 0 ? (
             <div className="flex items-center gap-2">
-              <NativeSelect
+              <StudioOptionControl
                 id={`test-run-${name}`}
                 value={typeof values[name] === "string" ? values[name] : ""}
-                onChange={(event) => setValues((held) => ({ ...held, [name]: event.target.value }))}
-              >
-                <option value="">Choose a record</option>
-                {(records[name] ?? []).map((choice) => (
-                  <option key={choice.id} value={choice.id}>
-                    {choice.label}
-                  </option>
-                ))}
-              </NativeSelect>
+                disabled={false}
+                options={[
+                  { value: "", label: "Choose a record" },
+                  ...(records[name] ?? []).map((choice) => ({
+                    value: choice.id,
+                    label: choice.label,
+                  })),
+                ]}
+                onChange={(value) => setValues((held) => ({ ...held, [name]: value }))}
+              />
               <Button
                 type="button"
                 variant="outline"
