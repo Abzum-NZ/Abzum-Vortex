@@ -1412,6 +1412,21 @@
           "settings": {}
         },
         {
+          "id": "fld_delegation_holder_display_name",
+          "key": "holder_display_name",
+          "label": "Holder",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "personal",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 120
+          }
+        },
+        {
           "id": "fld_delegation_holder_kind",
           "key": "holder_kind",
           "label": "Holder kind",
@@ -2396,6 +2411,7 @@
       "record_type": "delegation",
       "inputs": [],
       "select": [
+        "holder_display_name",
         "holder_kind",
         "group_id",
         "scope_kind",

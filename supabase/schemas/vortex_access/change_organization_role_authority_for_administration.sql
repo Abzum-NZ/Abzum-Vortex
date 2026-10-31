@@ -66,16 +66,6 @@ begin
     if changed_summary is null then
       raise exception using errcode = '40001', message = 'Changed organization role projection is unavailable';
     end if;
-    -- Only this protected writer advances its established context, to the version its own
-    -- successful change just produced. Identity, organisation, session and authentication stay pinned.
-    context_value := pg_catalog.jsonb_set(context_value, '{accessVersion}', pg_catalog.to_jsonb(changed.access_version));
-    update vortex_platform.request_contexts as established
-    set context = context_value
-    where established.backend_pid = pg_catalog.pg_backend_pid()
-      and established.transaction_id = pg_catalog.pg_current_xact_id();
-    if not found then
-      raise exception using errcode = '55000', message = 'Organization role-authority context is unavailable';
-    end if;
     return query select 'completed'::text, context_organization_id, changed_summary, changed.access_version;
   end loop;
 exception
