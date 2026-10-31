@@ -381,6 +381,22 @@ const nextPhase = (machine: Machine, activation: Activation): Activation | undef
   return undefined;
 };
 
+/**
+ * One declared output at the end of a run. A run that ended by Stop is a successful end, so an
+ * output whose step did not run is omitted (undefined) instead of failing the run.
+ */
+const finalOutput = (
+  machine: Machine,
+  activation: Activation,
+  flow: FlowProgram,
+  name: string,
+  expression: FlowValue,
+): FlowRuntimeValue | undefined =>
+  resolveFlowValue(
+    expression,
+    scopeOf(machine.state, activation, flow, machine.resolveMember, machine.resolveForm),
+  ) ?? (activation.stopped === undefined ? failed("value_unresolved", "failed", name) : undefined);
+
 const finishActivation = (machine: Machine, activation: Activation): FlowRunResult => {
   const flow = flowOf(machine, activation);
   if (activation.failure !== undefined) return { status: "failed", failure: activation.failure };
@@ -397,15 +413,8 @@ const finishActivation = (machine: Machine, activation: Activation): FlowRunResu
     );
     const finalOutputs: Record<string, FlowRuntimeValue> = {};
     for (const [name, expression] of Object.entries(machine.segment.finalOutputExpressions)) {
-      const value = evaluateValue(
-        expression,
-        machine.state,
-        activation,
-        flow,
-        name,
-        machine.resolveMember,
-        machine.resolveForm,
-      );
+      const value = finalOutput(machine, activation, flow, name, expression);
+      if (value === undefined) continue;
       if (value.type !== machine.segment.finalOutputTypes[name])
         failed("value_unresolved", "failed", name);
       finalOutputs[name] = value;
@@ -418,16 +427,10 @@ const finishActivation = (machine: Machine, activation: Activation): FlowRunResu
       ...(activation.stopped === undefined ? {} : { stopped: activation.stopped }),
     };
   }
-  for (const [name, declaration] of Object.entries(flow.outputs))
-    outputs[name] = evaluateValue(
-      declaration.value,
-      machine.state,
-      activation,
-      flow,
-      name,
-      machine.resolveMember,
-      machine.resolveForm,
-    );
+  for (const [name, declaration] of Object.entries(flow.outputs)) {
+    const value = finalOutput(machine, activation, flow, name, declaration.value);
+    if (value !== undefined) outputs[name] = value;
+  }
   return {
     status: "completed",
     outputs,

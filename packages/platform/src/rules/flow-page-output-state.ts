@@ -152,6 +152,7 @@ export const pageFlowFinalOutputs = (
   program: FlowProgram,
   plan: BrowserFlowPlan,
   completion: Readonly<Record<string, unknown>>,
+  stopped: boolean,
   resolveMember: FlowOutputMemberTypeResolver,
   resolveForm?: FlowFormReferenceResolver,
 ): Readonly<Record<string, JsonValue>> => {
@@ -163,8 +164,11 @@ export const pageFlowFinalOutputs = (
     if (!isPageOutputExpression(expression)) {
       const completionName = expression.reference.name;
       expected.add(completionName);
-      if (!Object.hasOwn(completion, completionName))
+      if (!Object.hasOwn(completion, completionName)) {
+        // A Stop ends the run successfully: an output whose step did not run is omitted.
+        if (stopped) continue;
         throw new Error("FLOW_PAGE_FINAL_OUTPUT_MISSING");
+      }
       const result = completion[completionName];
       if (result !== null && !flowValueMatchesType(result, declaration.type))
         throw new Error("FLOW_PAGE_FINAL_OUTPUT_INVALID");
@@ -172,6 +176,7 @@ export const pageFlowFinalOutputs = (
       continue;
     }
     const result = resolveFlowValue(expression, scope);
+    if (result === undefined && stopped) continue;
     if (result === undefined || result.type !== declaration.type)
       throw new Error("FLOW_PAGE_FINAL_OUTPUT_UNRESOLVED");
     values[name] = result.value;
