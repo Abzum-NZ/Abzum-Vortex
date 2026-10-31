@@ -2,6 +2,7 @@ import {
   buildLinkTilesQueryBinding,
   flowEntrySegments,
   formFieldOf,
+  installedNamedActions,
   messageActionBindings,
   readOrganizationRuntimeSettings,
   type HumanOrganizationRequestDependencies,
@@ -18,6 +19,7 @@ import {
   type BlockPropertyValueContract,
   recordsTableContractOrLog,
   readRecordDetailContract,
+  type FlowDefinition,
   type FlowTask,
   type IdentitySession,
   type OrganizationSelectionCandidate,
@@ -304,23 +306,59 @@ export const projectFlowBindingTargets = (input: {
 /** The task types an agent may start only with the person's confirmation. */
 const agentConfirmedTaskTypes = new Set(["record.delete", "record.changes", "backend.run"]);
 
+/** The named action a Call protected operation task names, when it is a literal one. */
+const calledOperationKey = (task: FlowTask): string | undefined => {
+  if (task.type !== "operation.call") return undefined;
+  const operation = (task.properties as Readonly<Record<string, unknown>>).operation;
+  return isRecord(operation) &&
+    operation.kind === "literal" &&
+    isRecord(operation.literal) &&
+    typeof operation.literal.value === "string"
+    ? operation.literal.value
+    : undefined;
+};
+
 /**
- * Whether a flow reaches a delete, a set of record changes or a back-end run before its own steps
- * ask the person to confirm. Only a confirmation that always runs first counts: one in a branch
- * may be skipped.
+ * Whether a flow reaches a delete, a set of record changes or a back-end run, itself or through a
+ * named action it calls, before its own steps ask the person to confirm. Only a confirmation that
+ * always runs first counts: one in a branch may be skipped.
  */
-const changesBeforeConfirming = (tasks: readonly FlowTask[]): boolean => {
+const changesBeforeConfirming = (
+  tasks: readonly FlowTask[],
+  namedFlow: (operationKey: string) => FlowDefinition | undefined,
+): boolean => {
+  const seen = new Set<string>();
   const changes = (list: readonly FlowTask[]): boolean =>
-    list.some(
-      (task) =>
-        agentConfirmedTaskTypes.has(task.type) ||
-        flowTaskChildLists(task).some((child) => changes(child.tasks)),
-    );
+    list.some((task) => {
+      if (agentConfirmedTaskTypes.has(task.type)) return true;
+      const key = calledOperationKey(task);
+      const called = key === undefined || seen.has(key) ? undefined : namedFlow(key);
+      if (key !== undefined) seen.add(key);
+      if (called !== undefined && changes(called.tasks)) return true;
+      return flowTaskChildLists(task).some((child) => changes(child.tasks));
+    });
   for (const task of tasks) {
     if (task.type === "interface.confirm") return false;
     if (changes([task])) return true;
   }
   return false;
+};
+
+/** The named actions of one installed context, read once per context. */
+const namedActionsByContext = new WeakMap<
+  InstalledRuntimeContext,
+  ReturnType<typeof installedNamedActions>
+>();
+const namedActionsOf = (context: InstalledRuntimeContext) => {
+  const held = namedActionsByContext.get(context);
+  if (held !== undefined) return held;
+  const actions = installedNamedActions(
+    context.releaseSet.application,
+    context.releaseSet.modules,
+    context.recordContributions,
+  );
+  namedActionsByContext.set(context, actions);
+  return actions;
 };
 
 export const projectPlacementBindings = (
@@ -416,7 +454,10 @@ export const projectPlacementBindings = (
       const agentConfirmation =
         binding.event === "bulk_action" ||
         binding.event === "batch_edit" ||
-        changesBeforeConfirming(flow.tasks);
+        changesBeforeConfirming(flow.tasks, (operationKey) => {
+          const flowId = namedActionsOf(context).get(operationKey)?.flowId;
+          return flowId === undefined ? undefined : plans.flows.get(String(flowId));
+        });
       const label = placement.settings.label;
       const recordType = context.releaseSet.modules
         .flatMap((module) => module.content.recordTypes)

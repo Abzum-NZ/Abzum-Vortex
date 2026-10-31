@@ -83,10 +83,11 @@ export function Button(props: ButtonProps): ReactElement {
   // An agent uses the button as the person does: its click, or its form's one submit or reset path.
   const agentState = useRef({ click, disabled, hidden: reactions.visible === false, form, mode });
   agentState.current = { click, disabled, hidden: reactions.visible === false, form, mode };
-  const runtimeState = useContext(FlowRuntimeStateContext);
+  // The registry is the page's one agent registry; a host may wrap the runtime state per render.
+  const agent = useContext(FlowRuntimeStateContext)?.agent;
   useEffect(
     () =>
-      runtimeState?.agent.register({
+      agent?.register({
         kind: "button",
         id: props.placementId,
         label,
@@ -104,7 +105,7 @@ export function Button(props: ButtonProps): ReactElement {
           else current.click();
         },
       }),
-    [form?.formId, label, mode, props.placementId, runtimeState],
+    [agent, form?.formId, label, mode, props.placementId],
   );
 
   return (

@@ -176,13 +176,11 @@ export function createFlowRuntimeState(
       forms.set(key, form);
       for (const fieldKey of Object.keys(formTypes[formId] ?? {}))
         notify(`form:${formId.toLowerCase()}:${fieldKey}`);
-      notify("agent");
       return () => {
         if (forms.get(key) === form) {
           forms.delete(key);
           for (const fieldKey of Object.keys(formTypes[formId] ?? {}))
             notify(`form:${formId.toLowerCase()}:${fieldKey}`);
-          notify("agent");
         }
       };
     },
@@ -211,11 +209,9 @@ export function createFlowRuntimeState(
       register: (control: AgentControl) => {
         const key = control.id.toLowerCase();
         agentControls.set(key, control);
-        notify("agent");
         return () => {
           if (agentControls.get(key) !== control) return;
           agentControls.delete(key);
-          notify("agent");
         };
       },
       claim: (controlId: string, gesture: AgentGesture) => {
@@ -548,6 +544,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
     }
     // An agent's gesture claimed this control, or this run continues one an agent started.
     const agent = cycle?.agent ?? options.state.agent.take(settings.controlId);
+    agent?.started();
     let retry:
       { key: string; runId: string; inputs: Readonly<Record<string, unknown>> } | undefined;
     let end: (() => void) | undefined;
@@ -606,6 +603,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
       return result;
     } catch (error) {
       end?.();
+      agent?.settled({ kind: "unavailable" });
       throw error;
     }
   };

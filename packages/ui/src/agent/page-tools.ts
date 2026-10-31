@@ -40,11 +40,9 @@ export type AgentPage = Readonly<{
 }>;
 
 const text = (description: string): JsonSchema => ({ type: "string", description });
-const ids = (values: readonly string[], description: string): JsonSchema =>
-  values.length === 0 ? text(description) : { type: "string", enum: [...values], description };
 const anyValue: JsonSchema = {
   description:
-    "The value as the field stores it: text, a number, true or false, an ISO date, an option or record id, a list of option ids, or null to clear it.",
+    'The value as the field stores it: text, a whole number, decimal and money amounts as text ("12500.50"), true or false, an ISO date, an option or record id from list_options, a list of option ids, or null to clear it.',
 };
 const schema = (
   properties: Readonly<Record<string, JsonSchema>>,
@@ -61,28 +59,27 @@ const buttonsOf = (controls: readonly AgentControl[]): AgentButton[] =>
 const gridsOf = (controls: readonly AgentControl[]): AgentGrid[] =>
   controls.filter((control): control is AgentGrid => control.kind === "grid");
 
+/** The kinds of controls a page's model holds, which decide the tools it offers. */
+export type PageAgentToolKinds = Readonly<{ forms: boolean; buttons: boolean; grids: boolean }>;
+
 /**
- * The tools of the page as it is rendered now. Each names only what the person can see and use:
- * the page's forms and their fields, its buttons and its grids. Using a tool runs the same flow,
- * through the same runner and gate, as the person's own gesture on that control.
+ * The tools of a page, generated from the controls its model holds. They name no control
+ * themselves: `read_page` lists the forms, fields, buttons and grids the person sees now, by id,
+ * and each tool acts on one of them through the same flow, runner and gate as the person's own
+ * gesture on that control. The set stays the same while the page is open, so the agent's tools are
+ * registered once per page.
  */
-export function pageAgentTools(state: FlowRuntimeState): readonly PageAgentTool[] {
-  const forms = state.agent.forms();
-  const controls = state.agent.controls();
-  const buttons = buttonsOf(controls).filter((button) => button.refusal() !== "hidden");
-  const grids = gridsOf(controls);
-  const formIds = forms.map((form) => form.formId);
-  const gridIds = grids.map((grid) => grid.id);
+export function pageAgentTools(kinds: PageAgentToolKinds): readonly PageAgentTool[] {
   const tools: PageAgentTool[] = [
     {
       name: "read_page",
       description:
-        "Reads the page as the person sees it: its forms with their fields and values, its buttons and whether they can be used, its grids with the rows on screen, and the messages shown.",
+        "Reads the page as the person sees it: its forms with their fields and values, its buttons and whether they can be used, its grids with the rows on screen, and the messages shown. Use the ids it gives in the other tools.",
       inputSchema: schema({}, []),
       readOnly: true,
     },
   ];
-  if (forms.length > 0)
+  if (kinds.forms)
     tools.push(
       {
         name: "set_field",
@@ -90,7 +87,7 @@ export function pageAgentTools(state: FlowRuntimeState): readonly PageAgentTool[
           "Sets one field of a form, as the person typing or choosing it would; the field's own change flow runs. A hidden, read-only or disabled field refuses.",
         inputSchema: schema(
           {
-            form: ids(formIds, "The form, by its id from read_page."),
+            form: text("The form, by its id from read_page."),
             field: text("The field, by its key from read_page."),
             value: anyValue,
           },
@@ -103,7 +100,7 @@ export function pageAgentTools(state: FlowRuntimeState): readonly PageAgentTool[
           "Lists the options a choice or link field offers now, read the way its picker reads them; set_field takes one of their values.",
         inputSchema: schema(
           {
-            form: ids(formIds, "The form, by its id from read_page."),
+            form: text("The form, by its id from read_page."),
             field: text("The field, by its key from read_page."),
             search: text("Optional search text."),
           },
@@ -112,42 +109,35 @@ export function pageAgentTools(state: FlowRuntimeState): readonly PageAgentTool[
         readOnly: true,
       },
     );
-  if (buttons.length > 0)
+  if (kinds.buttons || kinds.forms)
     tools.push({
       name: "click",
       description:
-        "Clicks a button, as the person would. A disabled button refuses. A delete, bulk change or back-end run waits for the person to confirm it on the page.",
-      inputSchema: schema(
-        {
-          component: ids(
-            buttons.map((button) => button.id),
-            "The button, by its id.",
-          ),
-        },
-        ["component"],
-      ),
+        "Clicks a button by its id from read_page, as the person would. A disabled button refuses. A delete, bulk change or back-end run waits for the person to confirm it on the page.",
+      inputSchema: schema({ component: text("The button, by its id from read_page.") }, [
+        "component",
+      ]),
     });
-  if (grids.some((grid) => grid.open !== undefined))
-    tools.push({
-      name: "open_row",
-      description: "Opens a row of a grid, as a click on the row does.",
-      inputSchema: schema(
-        {
-          grid: ids(gridIds, "The grid, by its id from read_page."),
-          record: text("The row's record id from read_page."),
-        },
-        ["grid", "record"],
-      ),
-    });
-  if (grids.length > 0)
+  if (kinds.grids)
     tools.push(
+      {
+        name: "open_row",
+        description: "Opens a row of a grid, as a click on the row does.",
+        inputSchema: schema(
+          {
+            grid: text("The grid, by its id from read_page."),
+            record: text("The row's record id from read_page."),
+          },
+          ["grid", "record"],
+        ),
+      },
       {
         name: "edit_cell",
         description:
           "Edits one cell of a grid in place, as the person's in-place edit does; only an editable column of a row the person may change takes a value.",
         inputSchema: schema(
           {
-            grid: ids(gridIds, "The grid, by its id from read_page."),
+            grid: text("The grid, by its id from read_page."),
             record: text("The row's record id."),
             field: text("The column's field."),
             value: anyValue,
@@ -160,7 +150,7 @@ export function pageAgentTools(state: FlowRuntimeState): readonly PageAgentTool[
         description: "Ticks or unticks rows of a grid for a bulk action.",
         inputSchema: schema(
           {
-            grid: ids(gridIds, "The grid, by its id from read_page."),
+            grid: text("The grid, by its id from read_page."),
             records: { type: "array", items: { type: "string" }, description: "Record ids." },
             selected: { type: "boolean", description: "False unticks; ticks when left out." },
           },
@@ -173,7 +163,7 @@ export function pageAgentTools(state: FlowRuntimeState): readonly PageAgentTool[
           "Runs a grid's bulk action over its ticked rows; it waits for the person to confirm it on the page.",
         inputSchema: schema(
           {
-            grid: ids(gridIds, "The grid, by its id from read_page."),
+            grid: text("The grid, by its id from read_page."),
             action: text("The bulk action, by its key from read_page."),
           },
           ["grid", "action"],
@@ -187,23 +177,6 @@ const sameId = (left: string, right: string): boolean => left.toLowerCase() === 
 const stringOf = (input: Readonly<Record<string, unknown>>, name: string): string | undefined =>
   typeof input[name] === "string" ? input[name] : undefined;
 const refused = (reason: string) => ({ outcome: "refused", reason });
-
-/** Waits until none of the controls runs a flow any more, or the call is cancelled. */
-const settled = (state: FlowRuntimeState, controls: readonly string[], signal?: AbortSignal) =>
-  new Promise<void>((resolve) => {
-    const removals: (() => void)[] = [];
-    const finish = (): void => {
-      for (const remove of removals) remove();
-      signal?.removeEventListener("abort", finish);
-      resolve();
-    };
-    const check = (): void => {
-      if (controls.every((control) => !state.isRunning(control))) finish();
-    };
-    for (const control of controls) removals.push(state.subscribe(control, check));
-    signal?.addEventListener("abort", finish, { once: true });
-    check();
-  });
 
 /** What one run came to, in the words the agent reads. */
 const describeResult = (result: FlowDispatchResult): ToolAnswer => {
@@ -245,12 +218,30 @@ const gesture = async (
 ): Promise<ToolAnswer> => {
   const results: FlowDispatchResult[] = [];
   const driver = createHeadlessPageDriver(page.confirm);
-  const claim: AgentGesture = { driver, settled: (result) => results.push(result) };
+  let running = 0;
+  let idle: (() => void) | undefined;
+  const claim: AgentGesture = {
+    driver,
+    started: () => {
+      running += 1;
+    },
+    settled: (result) => {
+      results.push(result);
+      running -= 1;
+      if (running === 0) idle?.();
+    },
+  };
   const releases = controls.map((control) => page.state.agent.claim(control, claim));
   try {
     const acted = act();
     if (acted instanceof Promise) await acted;
-    await settled(page.state, controls, signal);
+    // A gesture's runs start in its own turn; one more task lets a debounced or deferred start in.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    if (running > 0)
+      await new Promise<void>((resolve) => {
+        idle = resolve;
+        signal?.addEventListener("abort", () => resolve(), { once: true });
+      });
   } finally {
     for (const release of releases) release();
   }

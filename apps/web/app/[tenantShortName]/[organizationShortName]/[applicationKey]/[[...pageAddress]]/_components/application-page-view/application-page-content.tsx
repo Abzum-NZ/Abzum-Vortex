@@ -5,7 +5,6 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
   type ReactElement,
   type ReactNode,
 } from "react";
@@ -72,23 +71,6 @@ import {
   useFramePageState,
   emptyControlDrafts,
 } from "../../../_components/application-frame-state";
-
-const noAgentTools: readonly PageAgentTool[] = [];
-/** The page's tools, rebuilt only when what they offer changed, so the adapter keeps its registration. */
-const agentToolCache = new WeakMap<
-  object,
-  Readonly<{ key: string; tools: readonly PageAgentTool[] }>
->();
-const agentToolsOf = (
-  state: ReturnType<typeof createFlowRuntimeState>,
-): readonly PageAgentTool[] => {
-  const tools = pageAgentTools(state);
-  const key = JSON.stringify(tools);
-  const held = agentToolCache.get(state);
-  if (held?.key === key) return held.tools;
-  agentToolCache.set(state, { key, tools });
-  return tools;
-};
 
 /** Every placement id of the page's own content, nested placements and guided step content included. */
 const placementIdsOf = (content: Readonly<Record<string, unknown>>): ReadonlySet<string> => {
@@ -372,28 +354,28 @@ export function ApplicationPageViewContent({
     void applyDispatch(dispatch, undefined, undefined, bindingId);
   };
 
-  // The agent's tools are the page model as it is rendered now: they change as controls mount,
-  // leave or change what they offer, and each call runs as the person's own gesture.
-  const agentTools = useSyncExternalStore(
-    useCallback(
-      (listener: () => void) => runtimeState.subscribe("agent", listener),
-      [runtimeState],
-    ),
-    useCallback(() => agentToolsOf(runtimeState), [runtimeState]),
-    () => noAgentTools,
-  );
+  // The agent's tools come from the controls the page's model holds; read_page reads the page as
+  // it is rendered now, and every call runs as the person's own gesture.
+  const agentTools = useMemo(() => {
+    const declared = Object.values(placementEventNames);
+    return pageAgentTools({
+      forms: declared.some((events) => events.has("form_submit")),
+      buttons: declared.some((events) => events.has("action")),
+      grids: declared.some(
+        (events) => events.has("selection_changed") || events.has("row_clicked"),
+      ),
+    });
+  }, [placementEventNames]);
+  // Registered once per page: a new invoker would re-register every tool on each render.
+  const agentPageRef = useRef({ state: runtimeState, confirm: host.confirm });
+  agentPageRef.current = { state: runtimeState, confirm: host.confirm };
   const invokeAgentTool = useCallback(
     async (tool: PageAgentTool, input: unknown, signal?: AbortSignal): Promise<unknown> => {
       if (signal?.aborted) return { outcome: "cancelled" };
       if (!isRecord(input)) return { outcome: "refused", reason: "invalid_value" };
-      return runPageAgentTool(
-        { state: runtimeState, confirm: host.confirm },
-        tool.name,
-        input,
-        signal,
-      );
+      return runPageAgentTool(agentPageRef.current, tool.name, input, signal);
     },
-    [host, runtimeState],
+    [],
   );
 
   const webMcpContextKey = JSON.stringify([

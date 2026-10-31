@@ -24,6 +24,8 @@ export type PageDriver = Readonly<{
  */
 export type AgentGesture = Readonly<{
   driver: PageDriver;
+  /** A run of the gesture started; each start is followed by exactly one `settled`. */
+  started: () => void;
   settled: (result: FlowDispatchResult) => void;
 }>;
 

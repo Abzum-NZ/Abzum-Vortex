@@ -401,6 +401,7 @@ export {
   runPageAgentTool,
   type AgentPage,
   type PageAgentTool,
+  type PageAgentToolKinds,
 } from "./agent/page-tools";
 export {
   createHeadlessPageDriver,

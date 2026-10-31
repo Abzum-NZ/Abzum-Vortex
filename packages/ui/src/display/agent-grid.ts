@@ -44,12 +44,14 @@ const editResult = (answer: unknown): AgentGridEditResult => {
  * open, cell edit, selection and bulk gestures, each the same event the person's gesture emits.
  */
 export function useAgentGrid(placementId: string, label: string, state: GridState): void {
-  const runtimeState = useContext(FlowRuntimeStateContext);
+  // The registry is the page's one agent registry; a host may wrap the runtime state per render.
+  const agent = useContext(FlowRuntimeStateContext)?.agent;
   const current = useRef(state);
   current.current = state;
+  const opensRows = state.activateRow !== undefined;
   useEffect(
     () =>
-      runtimeState?.agent.register({
+      agent?.register({
         kind: "grid",
         id: placementId,
         label,
@@ -74,10 +76,7 @@ export function useAgentGrid(placementId: string, label: string, state: GridStat
                 label: action.label,
               }))
             : [],
-        open:
-          state.activateRow === undefined
-            ? undefined
-            : (record) => current.current.activateRow?.(record),
+        open: opensRows ? (record) => current.current.activateRow?.(record) : undefined,
         edit: async (record, field, value) => {
           const grid = current.current;
           const row = grid.rows.find((candidate) => same(candidate.recordId, record));
@@ -121,6 +120,6 @@ export function useAgentGrid(placementId: string, label: string, state: GridStat
         },
         bulk: (action) => current.current.events?.bulk_action?.({ event: "bulk_action", action }),
       }),
-    [label, placementId, runtimeState, state.activateRow === undefined],
+    [agent, label, opensRows, placementId],
   );
 }
