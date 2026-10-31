@@ -836,7 +836,9 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
           data-vortex-display="table"
           data-vortex-placement-id={placementId}
           data-vortex-table-density={layout.density}
-          data-vortex-table-presentation={presentation ?? "pending"}
+          {...(presentation === undefined
+            ? {}
+            : { "data-vortex-table-presentation": presentation })}
           {...(fullScreen.active ? { "data-vortex-full-screen": "" } : {})}
           className={cn(fullScreen.active && FULL_SCREEN_CLASS)}
         >
@@ -870,8 +872,8 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
           {subRowsOpen === undefined ? null : gridFeatures.subRowsController(subRowsOpen)}
           {/* While the server renders and the page hydrates the viewport is unknown: the body is
               drawn as the grid a wide screen shows, so its rows are painted from the first HTML.
-              The body keeps one element, so a wide screen keeps its grid; a phone draws no
-              placeholder and shows its cards when they are ready. */}
+              The body keeps one element, so a wide screen keeps its grid; a phone shows that grid
+              until its cards are ready, with no placeholder in between. */}
           <div data-vortex-table-body="" className="contents">
             {ready && availability === "unavailable" ? (
               <DisplayStateContainer
