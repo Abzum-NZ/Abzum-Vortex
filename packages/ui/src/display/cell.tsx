@@ -167,7 +167,7 @@ export function DisplayCellView({ value }: Readonly<{ value: DisplayDetailCell }
       return value.href === undefined ? (
         <span className="vortex-cell-text">{value.label}</span>
       ) : (
-        <Link className="vortex-cell-link" href={value.href}>
+        <Link className="vortex-cell-link" href={value.href} prefetch={false}>
           {value.label}
         </Link>
       );

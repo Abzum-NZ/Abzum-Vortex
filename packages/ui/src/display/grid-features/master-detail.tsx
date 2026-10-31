@@ -258,6 +258,7 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
                     ) : (
                       <Link
                         href={related.href}
+                        prefetch={false}
                         className="underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
                       >
                         {cellValueToText(titleValue) || "Open"}
@@ -308,6 +309,7 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
                     {index === 0 && related.href !== undefined ? (
                       <Link
                         href={related.href}
+                        prefetch={false}
                         className="font-medium underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
                       >
                         {cellValueToText(cell) || "Open"}

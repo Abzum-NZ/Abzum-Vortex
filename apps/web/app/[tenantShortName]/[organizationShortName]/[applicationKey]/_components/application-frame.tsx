@@ -44,9 +44,6 @@ import {
   type FramePageStateOwner,
 } from "./application-frame-state";
 import { FrozenRouter } from "./frozen-router";
-// The public router API takes the prefetch kind but does not export it; AUTO is named explicitly so
-// a hover can never ask for a full (data) prefetch, whatever the router's default becomes.
-import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 
 type ApplicationSearch = NonNullable<PagePuckRendererProps["applicationSearch"]>;
 type Registration = Readonly<{ owner: FramePageStateOwner; value: unknown }>;
@@ -166,17 +163,8 @@ export function ApplicationFrame({
     (navigate) => startPageTransition(navigate),
     [],
   );
-  // Intent to open a menu page (the pointer rests on its link or focus reaches it) asks the router
-  // for an automatic prefetch of that address, never a full one. An automatic prefetch of these
-  // dynamic pages carries only the route tree and what lies above the nearest loading boundary
-  // (the organisation's quiet loading state), which is no viewer data; the frame, the page and
-  // their authorisation-filtered data are never prefetched or cached, and with `staleTimes.dynamic`
-  // at 0 (next.config.ts) the click always reads the page fresh on the server for its own request.
-  // Links never approached are never fetched.
-  const prefetchPage = useCallback(
-    (pageId: string) => router.prefetch(resolvePageHref(pageId), { kind: PrefetchKind.AUTO }),
-    [resolvePageHref, router],
-  );
+  // Dynamic pages are never prefetched: with `staleTimes.dynamic` at 0 (next.config.ts) a prefetch
+  // is never reused, so it is one request per approach that the click then repeats.
 
   // The header search follows the address. The layout searched for the address it was rendered
   // for; a later query change without a new document searches again through the server.
@@ -425,7 +413,6 @@ export function ApplicationFrame({
             {...(frameRuntimeInputs === undefined ? {} : { runtimeInputs: frameRuntimeInputs })}
             resolvePageHref={resolvePageHref}
             onNavigatePage={navigateToPage}
-            onPrefetchPage={prefetchPage}
             {...(currentPage === undefined ? {} : { currentPageId: currentPage.pageId })}
             outlet={{
               location: frame.outlet,
