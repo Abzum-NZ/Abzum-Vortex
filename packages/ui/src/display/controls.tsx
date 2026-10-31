@@ -8,7 +8,6 @@ import { Checkbox } from "../components/checkbox";
 import {
   Empty,
   EmptyContent,
-  EmptyDescription,
   EmptyHeader,
   EmptyTitle,
 } from "../components/empty";
@@ -98,13 +97,10 @@ export function RecordsLoadingState({
 export function RecordsEmptyState({
   accessibleName,
   message,
-  purpose,
   create,
 }: Readonly<{
   accessibleName: string;
   message: string;
-  /** The authored one-line purpose of the list, shown above the empty message. */
-  purpose?: string;
   /** The inline create action when the list offers one. */
   create?: Readonly<{ href: string; label: string }>;
 }>): ReactElement {
@@ -117,7 +113,6 @@ export function RecordsEmptyState({
     >
       <EmptyHeader>
         <EmptyTitle>{message}</EmptyTitle>
-        {purpose === undefined ? null : <EmptyDescription>{purpose}</EmptyDescription>}
       </EmptyHeader>
       {create === undefined ? null : (
         <EmptyContent>

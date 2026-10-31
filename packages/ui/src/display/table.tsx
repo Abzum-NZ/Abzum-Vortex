@@ -17,7 +17,6 @@ import { Button } from "../components/button";
 import {
   Empty,
   EmptyContent,
-  EmptyDescription,
   EmptyHeader,
   EmptyTitle,
 } from "../components/empty";
@@ -734,7 +733,6 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
         <RecordsEmptyState
           accessibleName={accessibleName}
           message={emptyMessage}
-          {...(purpose === undefined ? {} : { purpose })}
           {...(create === undefined ? {} : { create })}
         />
       );
@@ -800,7 +798,6 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
                     ? "No records on this page"
                     : emptyMessage}
             </EmptyTitle>
-            {purpose === undefined ? null : <EmptyDescription>{purpose}</EmptyDescription>}
           </EmptyHeader>
           {narrowed(narrowing) ? (
             <EmptyContent>
