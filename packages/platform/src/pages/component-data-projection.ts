@@ -200,6 +200,8 @@ export type ProjectedComponentData<Values> =
  */
 type ComponentDataProjectionInput = Readonly<{
   settings: Readonly<Record<string, BlockPropertyValueContract>>;
+  /** The plural name of the record type a table lists, for its summary row. */
+  recordNoun?: string;
   fieldLabels?: Readonly<Record<string, string>>;
   /** Every declared option in definition order for choice fields, used only to label stored values. */
   fieldChoiceLabels?: Readonly<
@@ -487,6 +489,7 @@ export const projectRecordsTableData = (
     values: {
       kind: "table",
       ...(contract.purpose === undefined ? {} : { purpose: contract.purpose }),
+      ...(input.recordNoun === undefined ? {} : { recordNoun: input.recordNoun }),
       ...(contract.createPage === undefined ? {} : { create: { pageKey: contract.createPage } }),
       sortableFields: contract.sortableFields.filter((field) =>
         fieldBounds.readableFieldIds.some((readable) => sameField(readable, field)),

@@ -130,11 +130,12 @@ export const readRecordsTable = async (
   }
   const { layout, readable, state: effectiveState } = view;
   const recordType = bound.query.recordType;
-  const titleFieldId = bound.module.content.recordTypes.find(
+  const listed = bound.module.content.recordTypes.find(
     (candidate) =>
       recordType.state === "resolved" &&
       sameId(String(candidate.recordTypeId), String(recordType.recordTypeId)),
-  )?.titleFieldId;
+  );
+  const titleFieldId = listed?.titleFieldId;
   if (titleFieldId === undefined) throw new Error("RECORDS_TABLE_TITLE_FIELD_MISSING");
   // A date-and-time filter takes whole days in the organisation's time zone, so the zone is read
   // only when the table offers a filter on such a field.
@@ -339,6 +340,7 @@ export const readRecordsTable = async (
       queryId: bound.query.queryId,
       settings: placementSettingsOf(placement),
       titleFieldId: String(titleFieldId),
+      recordNoun: listed!.pluralLabel,
       inputValues,
       fieldLabels: fieldLabelsOf(bound.module),
       fieldChoiceLabels: fieldChoiceLabelsOf(bound.module),
