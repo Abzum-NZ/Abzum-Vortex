@@ -5,11 +5,7 @@ import {
   type AlertRecord,
   type ServiceTelemetryPort,
 } from "../events/telemetry";
-import {
-  withRuntimeTransaction,
-  type RequestDatabaseTransaction,
-  type RuntimeTransactionRunner,
-} from "../db/request-transaction";
+import { withRuntimeTransaction, type RuntimeTransactionRunner } from "../db/request-transaction";
 
 interface OperationsAlertSinkDependencies {
   readonly runtimeTransaction?: RuntimeTransactionRunner;

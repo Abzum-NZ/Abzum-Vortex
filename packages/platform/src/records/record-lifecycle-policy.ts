@@ -23,11 +23,10 @@ export const recordLifecyclePolicyIdSchema = nonNilUuidSchema.brand<"RecordLifec
 export type RecordLifecyclePolicyId = z.infer<typeof recordLifecyclePolicyIdSchema>;
 
 /**
- * Permitted end-of-life lifecycle actions.
+ * Permitted end-of-life lifecycle action.
  * - 'delete': recoverable deletion under the organisation recovery policy.
- * - 'archive_workflow': registered durable backend workflow to archive followed by protected deletion.
  */
-export const recordLifecycleActionSchema = z.enum(["delete", "archive_workflow"]);
+export const recordLifecycleActionSchema = z.literal("delete");
 export type RecordLifecycleAction = z.infer<typeof recordLifecycleActionSchema>;
 
 /**
@@ -61,6 +60,7 @@ export const organizationLifecycleLimitsSchema = z
     allowUnlimitedRetentionDays: z.boolean(),
     allowUnlimitedRecordCount: z.boolean(),
     allowedActions: z.array(recordLifecycleActionSchema).min(1),
+    // archive leftover: removed by FIX-DB-SECURITY
     allowedArchiveDestinations: z.array(archiveDestinationReferenceSchema),
   })
   .strict()
@@ -106,26 +106,13 @@ export const organizationLifecycleLimitsSchema = z
       }
     }
 
-    // 3. Unique allowed actions
+    // 4. Unique allowed actions
     const uniqueActions = new Set(limits.allowedActions);
     if (uniqueActions.size !== limits.allowedActions.length) {
       context.addIssue({
         code: "custom",
         path: ["allowedActions"],
         message: "allowedActions cannot contain duplicate values",
-      });
-    }
-
-    // 4. Archive workflow requires at least one allowed destination
-    if (
-      limits.allowedActions.includes("archive_workflow") &&
-      limits.allowedArchiveDestinations.length === 0
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["allowedArchiveDestinations"],
-        message:
-          "allowedArchiveDestinations cannot be empty when 'archive_workflow' is an allowed action",
       });
     }
   });
@@ -236,35 +223,9 @@ export const initialRecordLifecyclePolicySchema = z
 export type DeleteRecordLifecyclePolicy = z.infer<typeof deleteRecordLifecyclePolicySchema>;
 
 /**
- * Policy contract for durable workflow archival followed by protected deletion.
- * Carries exact typed workflow reference, expected revision, connection instance and destination.
+ * The record-type lifecycle policy of a record type: recoverable deletion only.
  */
-export const archiveWorkflowRecordLifecyclePolicySchema = z
-  .object({
-    ...policyBaseFields,
-    action: z.literal("archive_workflow"),
-    archiveWorkflowId: flowIdSchema,
-    expectedWorkflowRevision: revisionSchema,
-    archiveConnectionInstanceId: connectionInstanceIdSchema,
-    archiveDestination: archiveDestinationReferenceSchema,
-    expectedConnectionRevision: revisionSchema,
-    expectedDestinationFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-    expectedConnectionHealthOutcome: z.literal("healthy"),
-  })
-  .strict()
-  .superRefine(validatePolicyLimitsConsistency);
-
-export type ArchiveWorkflowRecordLifecyclePolicy = z.infer<
-  typeof archiveWorkflowRecordLifecyclePolicySchema
->;
-
-/**
- * Discriminated union of record-type lifecycle policies.
- */
-export const recordTypeLifecyclePolicySchema = z.discriminatedUnion("action", [
-  deleteRecordLifecyclePolicySchema,
-  archiveWorkflowRecordLifecyclePolicySchema,
-]);
+export const recordTypeLifecyclePolicySchema = deleteRecordLifecyclePolicySchema;
 
 export type RecordTypeLifecyclePolicy = z.infer<typeof recordTypeLifecyclePolicySchema>;
 
@@ -309,7 +270,9 @@ export type ActiveConnectionEvidence = z.infer<typeof activeConnectionEvidenceSc
 export const lifecycleReadinessEvidenceSchema = z
   .object({
     organizationId: organizationIdSchema,
+    // archive leftover: removed by FIX-DB-SECURITY
     registeredWorkflows: z.array(registeredWorkflowEvidenceSchema),
+    // archive leftover: removed by FIX-DB-SECURITY
     activeConnections: z.array(activeConnectionEvidenceSchema),
   })
   .strict();
@@ -452,12 +415,7 @@ export const decideRecordRecoveryEligibility = (
     !sameIdentifier(governingPolicy.recordTypeId, input.data.recordTypeId)
   )
     return refusedRecovery("scope_mismatch", policyRevision);
-  // Recoverable deletion is the only end-of-life action this decision allows.
-  // An archive-workflow policy removes its source through the durable archive
-  // path owned by archive removal, so it is refused here with a stable reason rather
-  // than silently reinterpreted as a recoverable delete.
-  if (policy.action !== "delete")
-    return refusedRecovery("recovery_action_ineligible", policyRevision);
+  // Recoverable deletion is the only end-of-life action, so the governing policy is a delete policy.
   if (!input.data.readinessAvailable)
     return refusedRecovery("readiness_unavailable", policyRevision);
 
@@ -504,15 +462,7 @@ export interface PolicyValidationResult {
  * 4. Ceilings: maxAgeDays <= maxRetentionDays, maxCount <= maxRecordCount.
  * 5. Unlimited permissions: allowUnlimitedAge / allowUnlimitedCount require organisation permission.
  * 6. Action permission: policy.action is in organisationLimits.allowedActions.
- * 7. For archive_workflow:
- *    - Destination is in organisationLimits.allowedArchiveDestinations.
- *    - readinessEvidence is mandatory and must match policy.organizationId.
- *    - Exact archiveWorkflowId and expectedWorkflowRevision must be in registeredWorkflows with state "active".
- *    - Exact archiveConnectionInstanceId and archiveDestination must be in activeConnections with matching organisationId.
- *    - Permanent application root scope: policy.applicationRootId must be present in authorizedApplicationIds
- *      for both workflow and connection; organisation-shared policies cannot activate archive_workflow without application scope.
- *    - Unavailable archival NEVER silently falls back to deletion.
- */
+ * 7. There is no archival action: a policy deletes or restores. */
 export interface ValidateRecordTypeLifecyclePolicyOptions {
   expectedSettingsRevision: number;
 }
@@ -520,7 +470,8 @@ export interface ValidateRecordTypeLifecyclePolicyOptions {
 export const validateRecordTypeLifecyclePolicy = (
   policyCandidate: unknown,
   organizationLimitsCandidate: unknown,
-  readinessEvidenceCandidate: unknown,
+  // archive leftover: removed by FIX-DB-SECURITY, with the readiness evidence it was read from.
+  _readinessEvidenceCandidate: unknown,
   expectedSettingsRevisionCandidate: unknown,
 ): PolicyValidationResult => {
   const issues: PolicyValidationIssue[] = [];
@@ -661,135 +612,6 @@ export const validateRecordTypeLifecyclePolicy = (
       path: ["allowUnlimitedCount"],
       message: "Policy requests unlimited record count, but organisation limits forbid it",
     });
-  }
-
-  // Archive workflow readiness and destination checks
-  if (policy.action === "archive_workflow") {
-    // Destination check in allowedArchiveDestinations
-    if (!limits.allowedArchiveDestinations.includes(policy.archiveDestination)) {
-      issues.push({
-        code: "archive_destination_not_allowed",
-        path: ["archiveDestination"],
-        message: `Archive destination "${policy.archiveDestination}" is not in organisation's allowed destinations (allowed: ${limits.allowedArchiveDestinations.join(", ") || "none"})`,
-      });
-    }
-
-    // Typed readiness evidence check
-    if (readinessEvidenceCandidate === undefined || readinessEvidenceCandidate === null) {
-      issues.push({
-        code: "readiness_evidence_required",
-        path: ["action"],
-        message:
-          "Readiness evidence is required to activate archive_workflow; unavailable workflow archival cannot silently fall back to deletion",
-      });
-    } else {
-      const parsedEvidence = lifecycleReadinessEvidenceSchema.safeParse(readinessEvidenceCandidate);
-      if (!parsedEvidence.success) {
-        for (const issue of parsedEvidence.error.issues) {
-          issues.push({
-            code: "invalid_readiness_evidence",
-            path: ["readinessEvidence", ...(issue.path as (string | number)[])],
-            message: `Invalid readiness evidence: ${issue.message}`,
-          });
-        }
-      } else {
-        const evidence = parsedEvidence.data;
-
-        // Evidence organisation isolation check
-        if (evidence.organizationId !== policy.organizationId) {
-          issues.push({
-            code: "readiness_evidence_organization_mismatch",
-            path: ["readinessEvidence", "organizationId"],
-            message: `Readiness evidence organizationId does not match policy organizationId (evidence: ${evidence.organizationId}, policy: ${policy.organizationId})`,
-          });
-        }
-
-        // Exact workflow registration check
-        const matchingWorkflow = evidence.registeredWorkflows.find(
-          (w) =>
-            w.workflowId === policy.archiveWorkflowId &&
-            w.workflowRevision === policy.expectedWorkflowRevision &&
-            w.organizationId === policy.organizationId &&
-            w.state === "active",
-        );
-        if (!matchingWorkflow) {
-          issues.push({
-            code: "archive_workflow_not_registered",
-            path: ["archiveWorkflowId"],
-            message: `Active workflow ${policy.archiveWorkflowId} at expected revision ${policy.expectedWorkflowRevision} in organisation ${policy.organizationId} is not registered in runtime workflows; archival cannot fall back to deletion`,
-          });
-        } else {
-          if (policy.applicationRootId === null) {
-            issues.push({
-              code: "archive_workflow_scope_mismatch",
-              path: ["archiveWorkflowId"],
-              message: `Organisation-shared policy (${policy.policyId}) cannot activate archive_workflow because registered workflows require permanent application scope`,
-            });
-          } else if (
-            !matchingWorkflow.authorizedApplicationIds.includes(policy.applicationRootId)
-          ) {
-            issues.push({
-              code: "archive_workflow_scope_mismatch",
-              path: ["archiveWorkflowId"],
-              message: `Registered workflow ${policy.archiveWorkflowId} is not authorized for permanent application root ${policy.applicationRootId}`,
-            });
-          }
-        }
-
-        // Exact connection instance check
-        const matchingConnection = evidence.activeConnections.find(
-          (c) =>
-            c.connectionInstanceId === policy.archiveConnectionInstanceId &&
-            c.destinationKey === policy.archiveDestination &&
-            c.organizationId === policy.organizationId &&
-            c.state === "active",
-        );
-        if (!matchingConnection) {
-          issues.push({
-            code: "archive_connection_not_active",
-            path: ["archiveConnectionInstanceId"],
-            message: `Active connection instance ${policy.archiveConnectionInstanceId} for destination "${policy.archiveDestination}" in organisation ${policy.organizationId} is unavailable; archival cannot fall back to deletion`,
-          });
-        } else {
-          if (matchingConnection.revision !== policy.expectedConnectionRevision) {
-            issues.push({
-              code: "archive_connection_stale_revision",
-              path: ["archiveConnectionInstanceId"],
-              message: `Active connection instance ${policy.archiveConnectionInstanceId} revision (${matchingConnection.revision}) does not match expected (${policy.expectedConnectionRevision})`,
-            });
-          }
-          if (matchingConnection.destinationFingerprint !== policy.expectedDestinationFingerprint) {
-            issues.push({
-              code: "archive_connection_stale_fingerprint",
-              path: ["archiveConnectionInstanceId"],
-              message: `Active connection instance ${policy.archiveConnectionInstanceId} destination fingerprint does not match expected`,
-            });
-          }
-          if (matchingConnection.lastHealthOutcome !== policy.expectedConnectionHealthOutcome) {
-            issues.push({
-              code: "archive_connection_unhealthy",
-              path: ["archiveConnectionInstanceId"],
-              message: `Active connection instance ${policy.archiveConnectionInstanceId} health outcome (${matchingConnection.lastHealthOutcome}) does not match required (${policy.expectedConnectionHealthOutcome})`,
-            });
-          }
-          if (policy.applicationRootId === null) {
-            issues.push({
-              code: "archive_connection_scope_mismatch",
-              path: ["archiveConnectionInstanceId"],
-              message: `Organisation-shared policy (${policy.policyId}) cannot activate archive_workflow because connection instances require permanent application scope`,
-            });
-          } else if (
-            !matchingConnection.authorizedApplicationIds.includes(policy.applicationRootId)
-          ) {
-            issues.push({
-              code: "archive_connection_scope_mismatch",
-              path: ["archiveConnectionInstanceId"],
-              message: `Active connection instance ${policy.archiveConnectionInstanceId} is not authorized for permanent application root ${policy.applicationRootId}`,
-            });
-          }
-        }
-      }
-    }
   }
 
   const isValid = issues.length === 0;
