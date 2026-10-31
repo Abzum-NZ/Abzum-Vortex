@@ -355,60 +355,60 @@ export function ApplicationFrame({
 
   return (
     <NavigatorProvider navigator={navigator}>
-    <ApplicationFrameStateProvider value={frameState}>
-      <ApplicationAccountActionsProvider actions={accountActions}>
-        <PageNavigationBusyContext.Provider value={pageTransitionPending}>
-          <PagePuckRenderer
-            readSettings={readCompiledItemSettings}
-            applicationSurface
-            composition={frame}
-            registry={registry}
-            fieldInputControlReleases={model.fieldInputControlReleases}
-            platformThemeTokens={model.platformThemeTokens}
-            {...(shell === undefined ? {} : { shell })}
-            theme={model.theme}
-            locale={model.locale}
-            timeZone={model.timeZone}
-            applicationShellRuntime={applicationShellRuntime}
-            applicationSwitcherSource={Object.assign(
-              () =>
-                readApplicationSwitcherAction(
-                  application.tenantShortName,
-                  application.organizationShortName,
-                ),
-              {
-                search: (expression: string, groupKey?: string, cursor?: string) =>
-                  searchLauncherAction(
+      <ApplicationFrameStateProvider value={frameState}>
+        <ApplicationAccountActionsProvider actions={accountActions}>
+          <PageNavigationBusyContext.Provider value={pageTransitionPending}>
+            <PagePuckRenderer
+              readSettings={readCompiledItemSettings}
+              applicationSurface
+              composition={frame}
+              registry={registry}
+              fieldInputControlReleases={model.fieldInputControlReleases}
+              platformThemeTokens={model.platformThemeTokens}
+              {...(shell === undefined ? {} : { shell })}
+              theme={model.theme}
+              locale={model.locale}
+              timeZone={model.timeZone}
+              applicationShellRuntime={applicationShellRuntime}
+              applicationSwitcherSource={Object.assign(
+                () =>
+                  readApplicationSwitcherAction(
                     application.tenantShortName,
                     application.organizationShortName,
-                    expression,
-                    groupKey,
-                    cursor,
                   ),
-              },
-            )}
-            applicationSearch={applicationSearch}
-            applicationSearchPageSubject={applicationSearchPageSubject}
-            projectedNavigation={navigation}
-            {...(frameRuntimeInputs === undefined ? {} : { runtimeInputs: frameRuntimeInputs })}
-            resolvePageHref={resolvePageHref}
-            {...(currentPage === undefined ? {} : { currentPageId: currentPage.pageId })}
-            outlet={{
-              location: frame.outlet,
-              content: (
-                <ContentTransition
-                  transitionKey={pathname}
-                  busy={pageTransitionPending}
-                  loaderMark={model.theme.loaderMark}
-                >
-                  <FrozenRouter>{children}</FrozenRouter>
-                </ContentTransition>
-              ),
-            }}
-          />
-        </PageNavigationBusyContext.Provider>
-      </ApplicationAccountActionsProvider>
-    </ApplicationFrameStateProvider>
+                {
+                  search: (expression: string, groupKey?: string, cursor?: string) =>
+                    searchLauncherAction(
+                      application.tenantShortName,
+                      application.organizationShortName,
+                      expression,
+                      groupKey,
+                      cursor,
+                    ),
+                },
+              )}
+              applicationSearch={applicationSearch}
+              applicationSearchPageSubject={applicationSearchPageSubject}
+              projectedNavigation={navigation}
+              {...(frameRuntimeInputs === undefined ? {} : { runtimeInputs: frameRuntimeInputs })}
+              resolvePageHref={resolvePageHref}
+              {...(currentPage === undefined ? {} : { currentPageId: currentPage.pageId })}
+              outlet={{
+                location: frame.outlet,
+                content: (
+                  <ContentTransition
+                    transitionKey={pathname}
+                    busy={pageTransitionPending}
+                    loaderMark={model.theme.loaderMark}
+                  >
+                    <FrozenRouter>{children}</FrozenRouter>
+                  </ContentTransition>
+                ),
+              }}
+            />
+          </PageNavigationBusyContext.Provider>
+        </ApplicationAccountActionsProvider>
+      </ApplicationFrameStateProvider>
     </NavigatorProvider>
   );
 }

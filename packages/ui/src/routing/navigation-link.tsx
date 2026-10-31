@@ -5,7 +5,10 @@ import type { ComponentProps, ReactElement } from "react";
 import { destinationOf } from "./destination";
 import { useHostNavigator } from "./navigator";
 
-export type NavigationLinkProps = Omit<ComponentProps<"a">, "href"> &
+export type NavigationLinkProps = Omit<
+  ComponentProps<typeof Link>,
+  "href" | "replace" | "prefetch" | "onNavigate" | "as" | "legacyBehavior" | "passHref" | "shallow"
+> &
   Readonly<{
     href: string;
     /** Replaces the current history entry instead of adding one. */

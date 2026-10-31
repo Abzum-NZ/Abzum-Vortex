@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useLayoutEffect,
-  useState,
-  type RefObject,
-} from "react";
+import { createContext, useContext, useLayoutEffect, useState, type RefObject } from "react";
 import { usePagePresence } from "@vortex/ui";
 import type { ProjectedApplicationFrame, ProjectedNavigation } from "@vortex/platform/schema";
 import type { ApplicationWebMcpRuntime, PagePuckRendererProps, UnsavedWorkGuard } from "@vortex/ui";

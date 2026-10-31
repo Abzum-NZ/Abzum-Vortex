@@ -2,13 +2,7 @@
 
 import { compiledItemSettings } from "@vortex/platform/schema";
 import { Puck, createUsePuck, useGetPuck, type Content, type Data } from "@puckeditor/core";
-import {
-  useEffect,
-  useRef,
-  type ReactNode,
-  type RefObject,
-  type SyntheticEvent,
-} from "react";
+import { useEffect, useRef, type ReactNode, type RefObject, type SyntheticEvent } from "react";
 import type {
   ApplicationShell,
   ProjectedApplicationFrame,
