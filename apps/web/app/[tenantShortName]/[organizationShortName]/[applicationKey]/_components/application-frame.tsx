@@ -274,27 +274,28 @@ export function ApplicationFrame({
   const readReleaseAdoption = useCallback<
     NonNullable<ApplicationAccountActions["readReleaseAdoption"]>
   >(async () => {
-    const pending = (async () => {
-      const result = await readReleaseAdoptionAction(
-        application.tenantShortName,
-        application.organizationShortName,
-        application.key,
-      );
-      if (result.state !== "available") return result;
-      const offer = result.offer;
-      return {
-        state: "available",
-        ...(offer === undefined || adoptRelease === undefined
-          ? {}
-          : {
-              offer: {
-                version: offer.version,
-                adopt: () =>
-                  adoptRelease(offer.offeredReleaseRevision, offer.installedReleaseRevision),
-              },
-            }),
-      };
-    })();
+    const pending: ReturnType<NonNullable<ApplicationAccountActions["readReleaseAdoption"]>> =
+      (async () => {
+        const result = await readReleaseAdoptionAction(
+          application.tenantShortName,
+          application.organizationShortName,
+          application.key,
+        );
+        if (result.state !== "available") return result;
+        const offer = result.offer;
+        return {
+          state: "available",
+          ...(offer === undefined || adoptRelease === undefined
+            ? {}
+            : {
+                offer: {
+                  version: offer.version,
+                  adopt: () =>
+                    adoptRelease(offer.offeredReleaseRevision, offer.installedReleaseRevision),
+                },
+              }),
+        };
+      })();
     adoptionRead.current = pending;
     return pending;
   }, [
