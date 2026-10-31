@@ -1,28 +1,6 @@
-# App Studio redesign spec
+# App Studio
 
-Owner request (19 Oct 2026): "The interface of the app studio needs to be redesigned to make it more readable. Use shadcn ui components / theme if needed. It should look ultra modern and elegant."
-
-Author: Opus design architect, 19 Oct 2026. Baseline: `origin/main` 626737f5. The local checkout was 133 commits behind and was not used. Every file path below is on `origin/main`.
-
-Binding: `A:/Apps/Abzum-Vortex/AGENTS.md`, `docs/build-plan/target-architecture.md`, and Studio decisions 1, 14, 17, 20 and 34 (vortex-studio-decisions). Also ui-fully-definition-driven and one way only. Studio's frame is platform code. The canvas keeps the app's own theme. All theming goes through a shadcn create selection, with no token-override editor. Old styling is replaced in place and deleted.
-
----
-
-## 0. Diagnosis (why it reads badly today)
-
-| Symptom (screenshots) | Root cause in code |
-|---|---|
-| Type is 11-13 px, controls are cramped, and every button looks alike | Studio paints with the **platform default selection**: `style: "nova"`, described as "Reduced padding and margins". Studio is in `PLATFORM_SEGMENTS` in `apps/web/app/_lib/document-theme.ts`. Nova's buttons are h-7 with xs text, and its inputs are h-8. |
-| Low-contrast grey on near-black, and no brand colour | The neutral base and neutral theme have no accent. `primary` is near-white in dark mode, so Publish looks like every other button. |
-| No hierarchy: everything is a bordered box | `StudioPanelShell` uses a `text-sm font-medium` title and an `text-xs` description. Rows are `<Button variant="outline">` pills. Section headers are `text-xs uppercase` everywhere. |
-| Page-wide walls of red text | `StudioSaveProblem` renders a destructive `Alert` across the whole top bar for every refused save and every conflict. A second status line (`status`) also sits under the top bar. |
-| Inspector is dense: a "Technical details" box on top and long helper paragraphs | `StudioInspector` puts `TechnicalDetails` first. `StudioField` hints are full paragraphs. Move up, Move down and Remove are a row of equal buttons. |
-| Flow nodes are white boxes on a dotted void | `StudioFlowCanvas` uses `Card` with radius 0 (`--xy-node-border-radius-default: 0`) and no type icon. React Flow `colorMode` is not tied to appearance, so its own light defaults show through. The canvas is not framed. |
-| Canvas is mostly empty, and the three columns are cramped | The inspector is fixed at `w-80`. The canvas has no page frame, and its placeholders are not empty states. |
-
-The single biggest fix is **one Studio theme selection** (section B), which repairs size, density, contrast and button hierarchy everywhere at once through the component layer. The rest is layout and patterns.
-
----
+Studio is the App Studio interface: the frame, navigation and editing surfaces are platform code, while the canvas keeps the application's own theme. All theming goes through one shadcn create selection, with no token-override editor. Old styling is replaced in place and deleted.
 
 ## A. Design direction and principles
 
@@ -35,8 +13,6 @@ Principles (each is a review check):
 4. **Calm feedback.** Saving is a chip. Successes and notices are toasts. Errors sit next to what caused them. Only states that block work (a conflict, an ended session) interrupt, and they do so as a dialog with one clear primary action.
 5. **Short words, details on demand.** Labels use 1-3 words and help is one line. Longer help goes into a tooltip, and identifiers go into a closed "Details" disclosure at the bottom.
 6. **Tokens only.** No literal colours, radii, font sizes or pixel paddings in Studio code. Use only Tailwind scale utilities on theme tokens, so the off-theme detector (`tooling/theme/off-theme-detector.js`) reports zero inside the frame.
-
----
 
 ## B. Tokens
 
@@ -61,7 +37,7 @@ export const STUDIO_THEME_SELECTION = applicationThemeSelectionSchema.parse({
 ```
 
 - The selection is resolved once, server-side, against `DEFAULT_PLATFORM_THEME_RELEASE`, using the existing resolver in `packages/platform/src/theme/selection.ts`. It is exported as `STUDIO_THEME_ROOT` (the theme variables plus `createVortexStyleRootProps`).
-- `apps/web/app/_lib/document-theme.ts`: the `studio` segment stops falling into the platform default branch. `loadDocumentTheme()` returns the Studio root for `/studio/**`, so the first paint, `<html>`, and every portal (Dialog, Popover, Sonner, Tooltip) carry the Studio theme. This satisfies decision 14.
+- `apps/web/app/_lib/document-theme.ts`: the `studio` segment stops falling into the platform default branch. `loadDocumentTheme()` returns the Studio root for `/studio/**`, so the first paint, `<html>`, and every portal (Dialog, Popover, Sonner, Tooltip) carry the Studio theme.
 - New `apps/web/app/studio/layout.tsx` wraps all Studio routes in `<VortexStyleRoot documentTheme {...STUDIO_THEME_ROOT}>`. This keeps client-side navigation into and out of Studio correct through the existing `useDocumentTheme` mechanism. The canvas keeps nesting the app's own `VortexStyleRoot`. Nested roots reset variables, so the app theme is unaffected.
 - The platform default selection (nova and neutral) is **not** changed: shipped app themes pin it.
 
@@ -85,9 +61,9 @@ The ratios below are WCAG 2.x, computed from the catalogue's resolved oklch valu
 | `--border` / `--input` | 0.92 | white at 10% / 15% | Pane edges, inputs, cards, tables | Decorative. Inputs are also identified by their label and focus ring |
 | `--ring` | oklch(0.705 …) | oklch(0.552 …) | Focus | **Light ring is 2.63:1 and fails 1.4.11** (see below) |
 
-Tinted status fills use `bg-warning/10`, `bg-destructive/10` and `bg-success/10` with text in the same role. Each stays at 4.5:1 or above because the tint is no more than 10% over the background. Chart colours are never used for status (decision 34).
+Tinted status fills use `bg-warning/10`, `bg-destructive/10` and `bg-success/10` with text in the same role. Each stays at 4.5:1 or above because the tint is no more than 10% over the background. Chart colours are never used for status.
 
-**Focus ring defect (platform-wide, fix at the root):** zinc and neutral `ring` in light mode is 2.63:1 on white. Fix it in the catalogue's contrast gate. Add `ring ≥ 3:1 on background` to the same derivation that already corrects `primary` (`contrastDerivations`), so every selection, apps included, gets a compliant ring. This goes in slice 1 (S1) as its own commit. Studio code adds no ring override.
+**Focus ring (platform-wide, at the root):** the catalogue's contrast gate derives `ring` at 3:1 or better on the background in the same derivation that corrects `primary` (`contrastDerivations`), so every selection, apps included, has a compliant ring. Studio code adds no ring override.
 
 ### B3. Typography (Geist via `bodyFont: "geist"`; Tailwind scale only)
 
@@ -136,8 +112,6 @@ Numbers in tables and counts use `tabular-nums`. The longest reading line is `ma
 
   - Minimum hit target: 24 × 24 (WCAG 2.5.8).
   - Never stack more than two text lines in a list row.
-
----
 
 ## C. Layout
 
@@ -206,8 +180,6 @@ Numbers in tables and counts use `tabular-nums`. The longest reading line is `ma
 | 1024-1279 | 72 | 256 | overlay | about 696 | Inspector opens as an overlay `Sheet` from the right on selection |
 | < 1024 | Existing narrow mode | | | | Navigator and inspector in sheets. Kept, not a design target |
 
----
-
 ## D. Component patterns (exact shadcn components)
 
 New shadcn components are added to `packages/ui/src/components/` from the base registry pinned at shadcn 4.21.0: **`tooltip.tsx`, `toggle.tsx`, `toggle-group.tsx`, `kbd.tsx`**. They use `@base-ui/react`, which is already a dependency, so no npm packages are added. The `.cn-tooltip`, `.cn-toggle-group` and `.cn-kbd` rules already exist in `style-variants.css` and `shared-components.css`.
@@ -246,7 +218,7 @@ Already present and to be used: `Item`, `Empty`, `Badge`, `Button`, `Collapsible
 - **Details** (replaces `TechnicalDetails` at the top): a closed `Collapsible` "Details" at the **bottom** of the inspector, holding a `dl` with kind, alias and source path in `font-mono text-xs` and a copy `icon-xs` button.
 - Empty inspector: `Empty` with a cursor icon, the title "Nothing selected" and the body "Select a page, block, field or step to change it."
 
-**D5. Save-state chip** (in `StudioTopBar`; one chip per decision 20):
+**D5. Save-state chip** (in `StudioTopBar`):
 - `Badge`, `rounded-full h-6 px-2 text-xs font-medium gap-1.5`, `role="status" aria-live="polite"`.
 
   | State | Look | Content |
@@ -324,8 +296,6 @@ Already present and to be used: `Item`, `Empty`, `Badge`, `Button`, `Collapsible
 - Pane: React Flow `colorMode` follows the resolved appearance, background `variant="dots" gap={20} size={1}` in `--border`, and `Controls` restyled as a vertical `ButtonGroup`-like stack of ghost `icon-sm` buttons in a `rounded-lg border bg-card shadow-xs` container at bottom-left.
 - "+" add-step affordance: a ghost `icon-xs` circle on each edge midpoint on hover. It opens the same "Add a step" `Combobox` the inspector uses (one code path).
 
----
-
 ## E. Screen-by-screen
 
 **E1. Studio home** (`/studio` and `/studio/[org]`):
@@ -339,7 +309,7 @@ Already present and to be used: `Item`, `Empty`, `Badge`, `Button`, `Collapsible
   - a `DropdownMenu` "More" with "Published versions", which opens `?tab=releases&section=history`.
 - The empty state uses `Empty` with "+ New application".
 - "Show more" becomes keyset `Pagination` per the list paging rule (default 40).
-- `/studio/[org]/new`: a centred `Card max-w-lg` with Name and Description (decision 21) and primary "Create application".
+- `/studio/[org]/new`: a centred `Card max-w-lg` with Name and Description and primary "Create application".
 
 **E2. Structure** (navigator):
 - Header "Structure" with "+ Add" `DropdownMenu`: Page, Page for a record type, Layout. This replaces three stacked buttons.
@@ -374,7 +344,7 @@ Already present and to be used: `Item`, `Empty`, `Badge`, `Button`, `Collapsible
 - Canvas (`studio-data-centre`):
   - Header: record type name (`text-xl`) plus `Tabs`: Fields, Records, Rules, Pipelines, Search.
   - **Fields** tab: a `Table` of name, type (icon plus label), required, used in (count link), with "+ Field" primary. Clicking a row selects it, and the inspector shows the **field editor** in Collapsible groups (General: label, type, required; Choices or Format by type; Access note; Used in).
-  - **Records** tab: real-data `Table` (decision 2) with keyset paging.
+  - **Records** tab: real-data `Table` with keyset paging.
   - Relationships show as their own section in Fields with link icons.
 
 **E7. Flows:**
@@ -421,252 +391,7 @@ Already present and to be used: `Item`, `Empty`, `Badge`, `Button`, `Collapsible
 - **Page adoption:** a per-page table with a `ToggleGroup` "Keep mine" or "Use standard".
 
 **E11. Preview:**
-- "Preview" (outline, top bar) saves and then opens the preview in a new tab (decision 4).
+- "Preview" (outline, top bar) saves and then opens the preview in a new tab .
 - While starting, the button shows a `Spinner` with "Starting…" and a promise toast resolves to "Preview ready" with an "Open" action if the pop-up was blocked.
 - The canvas "View as" plus the appearance toggles are the in-place preview. There is no second preview mode.
 
----
-
-## F. Implementation plan (8 slices, one PR each)
-
-Each PR is walked in the running app on a local database lane. Each PR attaches **before and after screenshots at 1440 × 900 in light and dark** for the listed scenarios, and runs `tooling/theme/off-theme-detector.js` on the Studio frame with zero findings in both modes. `pnpm verify` and `pnpm guard` must pass. No tests are added (owner rule).
-
-**Open PRs that touch Studio files** (checked 19 Oct with `gh pr list`):
-- #2975 (forms, workflows, titles): `module-fields-editor`, `studio-data-tab`, `studio-flows-panel`, `studio-new-flow-dialog`, `studio-placement-workflows`, plus ui/studio command files.
-- #2974: `actions.ts`.
-- #2952: `application-record-pages`, `field-placement`.
-- #2943 (boards): `application-draft-agent-tools`, `studio-block-setup-dialog`, `use-studio-canvas-tab`, `studio-setting-controls`, `contextual-palette`, `index.ts`.
-- #2941 (query filters): `module-fields-editor`, `studio-flow-value-control`, `studio-query-editor`, `condition-controls`, `condition-literal-editor`, `studio-setting-controls`.
-- #2939: `studio-setting-controls`.
-- None touches `studio-frame`, `studio-top-bar`, `studio-save-problem`, `document-theme`, `packages/ui/src/components`, the flow canvas, Access, Theme or Releases.
-
-| Slice | Can start | Waits for |
-|---|---|---|
-| S1 Tokens + shell | Now | Nothing |
-| S2 Navigator + home | After S1 | #2975 (`studio-flows-panel`) |
-| S3 Inspector forms | After S1 | #2939, #2941, #2943 |
-| S4 Flow canvas | After S1, parallel with S2/S5/S6/S7 | Nothing |
-| S5 Data tab | After S2 (uses `StudioNavItem` / `StudioSection`) | #2975, #2941 |
-| S6 Access + Theme | After S2 | Nothing |
-| S7 Releases + Publish + Import | After S2 | Nothing |
-| S8 Canvas, Blocks, toolbar, Preview | After S1 | #2943 (`use-studio-canvas-tab`) |
-
-Running in parallel without shared files:
-- **S4 alongside any other slice.**
-- **S6 alongside S7.**
-- **S3 alongside S6 and S7** (S3 owns `studio-inspector`, `studio-field`, `studio-setting-controls` and `studio-flow-*` forms; S6 and S7 do not touch them).
-- S2 and S8 share nothing except `studio-frame.tsx`, which belongs to S1 and S2 only. S8 must not edit it.
-
-### S1: Studio theme, tokens and shell
-- **Files:**
-  - `packages/platform/src/definition/application-composition/theme.ts`: `STUDIO_THEME_SELECTION`.
-  - `packages/platform/src/theme/index.ts` (plus server export): `STUDIO_THEME_ROOT` resolved once.
-  - The catalogue contrast gate for `ring` (`packages/platform/src/theme/contrast.ts` plus a regenerated `shadcn-create-theme-catalogue.json` with derivations): a separate commit.
-  - `apps/web/app/_lib/document-theme.ts`.
-  - New `apps/web/app/studio/layout.tsx` (`VortexStyleRoot documentTheme`, `Toaster`, `Tooltip` provider).
-  - New `packages/ui/src/components/{tooltip,toggle,toggle-group,kbd}.tsx` plus `package.json` exports if they are listed.
-  - `apps/web/app/studio/_components/studio-frame.tsx` (rail groups and indicator, hairline resizer, resizable inspector, focus-canvas, breakpoint widths).
-  - `studio-rail-tabs.ts` (groups, widths).
-  - `studio-top-bar.tsx` (layout, chip, tooltips, Publish primary, app switcher).
-  - New `studio-save-state.tsx` (chip, popover, the two `AlertDialog`s, toast helpers).
-  - `application-draft-workspace.tsx` (wire `StudioSaveState`, remove the `status` and `statusLink` props in favour of `toast`).
-- **Done when:**
-  - `<html>` on `/studio/**` has `data-vortex-style="vega"` and Geist computed on body text.
-  - Dialogs and toasts are themed (computed style check).
-  - No page-wide banner exists; conflict and session-ended show the dialogs.
-  - Chip states all render.
-  - The inspector resizes and remembers its width.
-  - The 1280, 1440 and 1920 layouts match section C.
-  - The app canvas is unchanged: theme, radius and font are computed from the app's selection.
-  - The ring is at least 3:1 in light.
-- **Walk:**
-  1. Open a Studio-authored app with several record types at 1440, light then dark: Structure tab.
-  2. Force a conflict (edit the same draft in two tabs): the dialog appears, then "Load the latest draft".
-  3. Sign out in another tab, then edit: the session dialog appears; sign in again and the change retries.
-  4. Publish: dialog, then toast.
-  5. Resize both panes, reload, and confirm the widths are kept.
-  6. Repeat at 1280 and 1920.
-- **Delete:** see G-S1.
-
-### S2: Navigator patterns and Studio home
-- **Files:**
-  - `studio-frame.tsx` (`StudioPanelShell` rewrite, new `StudioSection`).
-  - New `studio-nav-tree.tsx` (`StudioNavItem`, `StudioNavTree` on `Item`, with roving-focus tree).
-  - `studio-structure-editor.tsx`, `studio-outline.tsx`, `studio-outline-panels.tsx`, `studio-data-panel.tsx`, `studio-flows-panel.tsx`, `studio-releases-panel.tsx`, `studio-menu-panel.tsx`, `use-studio-structure-tab.tsx`.
-  - Access navigator portion of `studio-access-tab.tsx`: **only the navigator list**. S6 owns the canvas editor files.
-  - `apps/web/app/studio/page.tsx`, `apps/web/app/studio/[organizationId]/page.tsx`, `[organizationId]/new/page.tsx`.
-  - New `apps/web/app/studio/_components/studio-home.tsx`.
-- **Done when:**
-  - Every navigator uses `StudioPanelShell`, `StudioSection` and `StudioNavItem`.
-  - Trees work with arrow keys.
-  - Selected rows use the accent role.
-  - Home shows the card grid with icon, description, edited time and published badge, and pages with keyset paging (40).
-- **Walk:**
-  1. Home, light and dark.
-  2. Structure: add a page through "+ Add", select it, then keyboard-walk the tree.
-  3. Data navigator with a read-only group.
-  4. Flows navigator.
-  5. Releases navigator.
-  6. Access roles list.
-
-### S3: Inspector forms
-- **Files:**
-  - `studio-inspector.tsx`, `studio-field.tsx`.
-  - `packages/ui/src/studio/studio-setting-controls.tsx`.
-  - New `packages/ui/src/studio/studio-reference-picker.tsx` (`Combobox`).
-  - `studio-flow-inspector.tsx`, `studio-flow-step-form.tsx`, `studio-flow-start-editor.tsx`, `studio-flow-value-control.tsx`, `studio-flow-calculation.tsx`, `studio-calculation-editor.tsx`, `studio-formula-condition.tsx`, `studio-used-in.tsx`, `studio-link-section.tsx`.
-  - `packages/ui/src/studio/condition-controls.tsx`, `condition-literal-editor.tsx`.
-  - `packages/ui/src/components/technical-details.tsx`: deleted if Studio was its only user; otherwise Studio stops using it.
-- **Done when:**
-  - The inspector has a header with a "More" menu, Collapsible groups, one-line help with tooltips, no "(required)", `Optional` marks, and reference pickers searchable.
-  - "Details" is at the bottom.
-  - Long help (more than 80 characters) does not appear inline anywhere in the inspector (grep check on hint strings).
-- **Walk:**
-  1. Select an app, a page, a block, a flow step (Save record) and a flow start.
-  2. Change a reference through the picker.
-  3. Trigger a located refusal (duplicate alias): `FieldError` at the field, chip "Not saved".
-  4. Do all of it with the keyboard only.
-
-### S4: Flow canvas
-- **Files:**
-  - `packages/ui/src/studio/studio-flow-canvas.tsx` (new `StudioFlowNode`, edges, handles, controls, `colorMode`, add-on-edge).
-  - `apps/web/app/studio/_components/use-studio-flows-tab.tsx` (pass the appearance and the add-step handler).
-- **Done when:**
-  - Nodes match D11 in light and dark, with no white nodes in dark.
-  - The selected ring is primary.
-  - Branch labels are pills.
-  - Edge "+" opens the add-step picker and adds the step.
-- **Walk:**
-  1. Open "New opportunity": select Start, If, Stop and Save record.
-  2. Add a step from an edge.
-  3. Zoom controls.
-  4. Light and dark.
-
-### S5: Data tab
-- **Files:** `studio-data-centre.tsx`, `studio-data-tab.tsx`, `module-fields-editor.tsx`, `studio-record-type-dialog.tsx`, `studio-relationships-section.tsx`, `studio-record-rules.tsx`, `studio-record-pipelines.tsx`, `studio-query-editor.tsx`, `studio-search-settings.tsx`, `studio-total-editor.tsx`, `studio-module-actions.tsx`.
-- **Done when:**
-  - The record-type header has `Tabs`.
-  - The fields `Table` matches D10.
-  - The field editor is in the inspector groups.
-  - Records use keyset paging.
-  - The empty states match D8.
-- **Walk:**
-  1. Create a record type.
-  2. Add three fields (text, choice, link).
-  3. Edit a field.
-  4. View records.
-  5. Open a read-only System Directory type.
-  6. Search settings.
-  7. Light and dark.
-
-### S6: Access and Theme
-- **Files:** `studio-access-role.tsx`, `studio-access-gates.tsx` (and the canvas part of `studio-access-tab.tsx` after S2), `studio-theme-panel.tsx`, `use-studio-menu-theme-tabs.tsx`.
-- **Done when:**
-  - The access matrices match D10, with the expandable extra-permissions sub-row and full checkbox names.
-  - The role header has "More".
-  - Theme style tiles, swatches, `ToggleGroup`s and the preset code are collapsible.
-  - Zero off-theme elements on the canvas after switching a preset (decision 13).
-- **Walk:**
-  1. Add a role.
-  2. Grant Update on a record type.
-  3. Set field access.
-  4. Preview as a role.
-  5. Switch style, theme colour and radius.
-  6. Check the canvas computed styles.
-  7. Light and dark.
-
-### S7: Releases, Publish and Import
-- **Files:** `use-studio-releases-tab.tsx`, `studio-history-tab.tsx`, `application-release-history.tsx`, `studio-publish-dialog.tsx`, `publication-summary.tsx`, `application-source-import.tsx`, `standard-page-adoption.tsx`.
-  - **Delete** the standalone routes `apps/web/app/studio/[organizationId]/[applicationRootId]/history/{page,actions}.ts(x)` and `page-adoption/{page,actions}.ts(x)`, after moving any server action they own into the Releases tab's actions.
-  - Repoint every link (home, App Store, emails) to `?tab=releases&section=…`. `git grep "/history"` and `git grep "page-adoption"` must return zero Studio route links.
-- **Done when:**
-  - The timeline list, Publish dialog with change summary, drop-zone import and toasts all work.
-  - The standalone routes are gone and return 404.
-- **Walk:**
-  1. Publish v1 and v2.
-  2. Restore v1.
-  3. Import a file: check, diff, replace.
-  4. Page adoption choice.
-  5. Light and dark.
-
-### S8: Canvas, Blocks, toolbar and Preview
-- **Files:**
-  - `packages/ui/src/studio/application-page-puck-editor.tsx` (page frame, well, Puck variables mapped to `--primary`, compile-failure inline `Alert`, empty states).
-  - `packages/ui/src/studio/studio-block-palette.tsx` (tile grid).
-  - `apps/web/app/studio/_components/studio-canvas-toolbar.tsx` (`ToggleGroup`s, Fit zoom, focus-canvas).
-  - `use-studio-canvas-tab.tsx` (after #2943).
-  - The `studio-block-setup-dialog.tsx` restyle (after #2943).
-- **Done when:**
-  - The page frame and well match section C.
-  - Fit zoom at 1280.
-  - Block tiles drag and add.
-  - The toolbar uses `ToggleGroup`s with `aria-pressed`.
-  - Preview shows a spinner and a promise toast.
-  - Zero off-theme elements on the app canvas in light and dark.
-- **Walk:**
-  1. Open a page at 1280, 1440 and 1920.
-  2. Drag a block in.
-  3. Switch device, appearance and zoom.
-  4. Change View as.
-  5. Preview.
-  6. Produce a compile error.
-
----
-
-## G. What to delete (one way only), per slice
-
-- **S1:**
-  - The `studio` segment's use of the platform default style in `document-theme.ts` (the platform branch no longer serves `/studio`).
-  - `StudioSaveProblem` (`studio-save-problem.tsx`), the whole file.
-  - The top bar's inline chip `span` classes, the `status` `<p>` line, the `statusLink` row and their props through `application-draft-workspace.tsx`.
-  - The "Publish…" ellipsis label.
-  - The `w-1.5 bg-border` resizer bar styling.
-  - The fixed `w-80` inspector.
-  - The `bg-muted/30` canvas section background (the well moves to S8's frame).
-  - The duplicate `h2` pane titles that `StudioPanelShell` will own.
-  - Any Studio use of `TechnicalDetails` at the top of the inspector is moved in S3 rather than deleted here.
-- **S2:**
-  - Every ad hoc pane header and description pair.
-  - All `h3.text-xs.font-semibold.uppercase` section headers in Studio.
-  - The "button as row" hacks (`h-auto justify-start whitespace-normal` outline buttons) in the Structure, Data, Releases and Access navigators.
-  - Tree guide lines (`border-l pl-2/pl-3`).
-  - `RootList` and `RootTable` (two app-list renderings), replaced by one `StudioHome`.
-  - The "Create an application" underline links.
-  - The `size` "Show more" query parameter, replaced by keyset paging.
-  - The always-visible "New role" input row (moves to a popover in S2's Access navigator).
-- **S3:**
-  - `TechnicalDetails` at the top of the inspector, and the component itself if no other user remains (`git grep TechnicalDetails`).
-  - The "(required)" and "(optional)" label suffixes.
-  - Inline hint paragraphs longer than one line (moved to tooltips).
-  - The Move up, Move down and Remove button row, replaced by the "More" menu.
-  - Per-editor bespoke reference `NativeSelect`s for authored items, replaced by the one `StudioReferencePicker`.
-  - Duplicated label markup (`label.block.space-y-1 > span.text-sm`) in `StudioInspector`'s `LabelsForm`, which moves to `StudioField`.
-- **S4:**
-  - `CanvasNode` and its `Card size="sm"` markup.
-  - `--xy-node-border-radius-default: 0` and the related `themed` overrides that the new node makes obsolete.
-  - The default React Flow `Controls` styling (replaced by the custom control stack).
-  - The `border border-border` wrapper around the canvas.
-- **S5:**
-  - The "Choose a record type in the Data panel…" sentences, replaced by `Empty`.
-  - Bespoke field-list markup in `module-fields-editor.tsx`, replaced by `Table`.
-  - The "Search" footer section in the Data navigator, replaced by the row that opens canvas search settings.
-- **S6:**
-  - The "Also:" permission line markup.
-  - The bordered default-member `div` (`rounded-md border p-3`), replaced by an info `Alert` on the default role only.
-  - Theme panel `p.text-xs` per-dimension hint lines beyond one line.
-  - The always-open preset code form, which moves to a `Collapsible`.
-- **S7:**
-  - The standalone history and page-adoption routes and their actions.
-  - The plain file `input` plus `Textarea` import layout.
-  - The "Imported. Your draft is…" inline status `p`, replaced by a toast.
-  - The "Draft: Not saved. Publish a new version with Publish… at the top." sentence in the Releases navigator.
-- **S8:**
-  - The `overflow-x-auto border border-border bg-muted/30 p-2` canvas wrapper.
-  - The plain `p.text-sm.text-muted-foreground` canvas placeholders.
-  - The "Light"/"Dark" text button pair and the device button group, replaced by `ToggleGroup`s.
-  - Block palette `ul > li` rows, replaced by tiles.
-
-After S8 is merged, run one closing check:
-- `git grep -nE "text-\[|rounded-\[|p-\[|#[0-9a-fA-F]{3,6}" apps/web/app/studio packages/ui/src/studio` returns nothing.
-- `git grep -n "uppercase" apps/web/app/studio packages/ui/src/studio` returns nothing.
-- `pnpm knip` reports no unused Studio exports.

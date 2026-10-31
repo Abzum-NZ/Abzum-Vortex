@@ -20,9 +20,13 @@ The schema directory names the function's schema and the file name is the functi
 lowercase SQL identifiers, so one name has one file: do not overload a function name. Keep each
 canonical file synchronized with the migration that installs its function.
 
-`vortex_record_adapter` and `vortex_record_inventory` own the record functions their restricted
-policies need, four integration functions keep `postgres` ownership (target architecture §4), and
-every other function is owned by `vortex_owner`.
+`vortex_record_adapter` owns the record functions its restricted policies need. A function keeps `postgres` ownership only where it calls an integration the
+`vortex_owner` role cannot be granted; every other function is owned by `vortex_owner`.
+
+`vortex_owner` is NOLOGIN and has `BYPASSRLS`, so the security-definer functions it owns keep the
+access that their former `postgres` ownership provided on FORCE RLS tables. Every organisation-owned
+table has RLS enabled and forced; the inert policies that duplicated those rules are removed. The
+restricted record roles do not have `BYPASSRLS`, and their organisation-scoped policies continue to apply.
 
 ## Migration rule
 
