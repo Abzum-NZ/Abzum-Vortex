@@ -1,7 +1,6 @@
 import {
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
   plainSettingValue,
-  sourcePageItems,
   type RecordsTableBoardMode,
 } from "@vortex/platform/schema";
 import { listing, lowerFirst, type StudioRecordPageCommand } from "./application-record-page-kinds";
@@ -14,7 +13,6 @@ import {
   ensureDetailEdit,
   ensureListEdit,
   field,
-  isFormContainer,
   keyColumns,
   listQuery,
   openRows,
@@ -191,37 +189,21 @@ export const addList = (
       `Rows open nothing yet: ${record.plural_name.toLowerCase()} have no detail page. Adding one makes rows open it.`,
     );
   if (boardMode !== undefined) {
-    // A card drag runs the record's own update flow: the one its edit form submits.
-    const editForm = found.edit;
-    const form =
-      editForm === undefined
-        ? undefined
-        : sourcePageItems(editForm.composition).find(isFormContainer);
-    const save =
-      form === undefined
-        ? undefined
-        : plan.source.body.flow_bindings.find(
-            (binding) => binding.control === form.props.id && binding.event === "form_submit",
-          );
-    if (save !== undefined)
-      flowCreate(
-        plan,
-        {
-          kind: "bind",
-          controlAlias: tableAlias,
-          event: "card_moved",
-          flowKey: save.flow,
-          bindingInputs: {
-            record: { kind: "caller", name: "record_id" },
-            values: { kind: "caller", name: "values" },
-          },
-        },
-        `The card move of ${quoted(name)}`,
-      );
+    // A card drag runs the board's one move flow: it saves the card's new stage, so the pipeline and
+    // the action owning a gated stage apply, the same flow the Board setting makes in Studio.
+    flowCreate(
+      plan,
+      {
+        kind: "action",
+        controlAlias: tableAlias,
+        name: "Move card",
+        recordType: resolved.qualified,
+        event: "card_moved",
+      },
+      `The card move of ${quoted(name)}`,
+    );
     plan.details.push(
-      save === undefined
-        ? `Dragging a card changes nothing yet: add the ${record.name} edit form, then Studio binds its save flow here.`
-        : `Dragging a card runs ${quoted("Save " + lowerFirst(record.name) + " changes")}: the card's stage is saved.`,
+      `Dragging a card runs ${quoted("Move card")}: the card's stage is saved through the pipeline.`,
     );
   }
   plan.details.push(
