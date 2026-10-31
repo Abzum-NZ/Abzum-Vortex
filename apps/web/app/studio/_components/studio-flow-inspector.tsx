@@ -1,10 +1,16 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@vortex/ui";
 
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { Button } from "@vortex/ui/components/button";
-import { checkFlowFormula, describeFailure, type SourceFlow } from "@vortex/platform/schema";
+import {
+  checkFlowFormula,
+  canonicalJson,
+  describeFailure,
+  type SourceFlow,
+} from "@vortex/platform/schema";
 import {
   StudioField,
   StudioReferencePicker,
@@ -211,17 +217,19 @@ export function StudioFlowInspector({
         });
   const canEnforceFormula = formulaType === "yes_no" && !formulaHasErrors;
   /**
-   * The settings as typed, on the draft snapshot they stand on: what the draft took (which it may
+   * The settings as typed, on the step they were typed against: what the draft took (which it may
    * hold trimmed, so the typing is shown as typed), or input it refused, shown with its problem and
-   * kept out of the draft. A change from elsewhere (Undo, Redo, a reload) drops it.
+   * kept out of the draft. An autosave echo or a re-projection leaves the step's own settings
+   * unchanged and keeps the typing; Undo, Redo, a reload or another edit of the step replaces it.
    */
+  const taskIdentity = task === undefined ? "" : canonicalJson(task);
   const [edits, setEdits] = useState<Readonly<{
-    base: unknown;
+    taskIdentity: string;
     draft: StudioFlowStepDraft;
     problem: string | null;
   }> | null>(null);
-  if (edits !== null && edits.base !== context.source) setEdits(null);
-  const local = edits !== null && edits.base === context.source ? edits : null;
+  if (edits !== null && edits.taskIdentity !== taskIdentity) setEdits(null);
+  const local = edits !== null && edits.taskIdentity === taskIdentity ? edits : null;
   const [problem, setProblem] = useState("");
   const [status, setStatus] = useState("");
   const [focusId, setFocusId] = useState<string | null>(null);
@@ -252,7 +260,7 @@ export function StudioFlowInspector({
     if (result.kind === "applied") {
       setProblem("");
       setStatus(done);
-      if (local !== null) setEdits({ ...local, base: result.source });
+      if (local !== null) setEdits({ ...local, taskIdentity });
     } else {
       setStatus("");
       setProblem(result.reason);
@@ -292,9 +300,9 @@ export function StudioFlowInspector({
   const messages = (
     <>
       {problem === "" ? null : (
-        <p role="alert" className="text-sm text-destructive">
-          {problem}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{problem}</AlertDescription>
+        </Alert>
       )}
       <p role="status" className="text-sm">
         {status}
@@ -371,7 +379,7 @@ export function StudioFlowInspector({
   const change = (next: StudioFlowStepDraft, blocked: string | null, setting: string) => {
     setStatus("");
     if (blocked !== null) {
-      setEdits({ base: context.source, draft: next, problem: blocked });
+      setEdits({ taskIdentity, draft: next, problem: blocked });
       return;
     }
     const result = onCommand(
@@ -382,8 +390,8 @@ export function StudioFlowInspector({
     );
     if (result.kind === "applied") {
       setProblem("");
-      setEdits({ base: result.source, draft: next, problem: null });
-    } else setEdits({ base: context.source, draft: next, problem: result.reason });
+      setEdits({ taskIdentity, draft: next, problem: null });
+    } else setEdits({ taskIdentity, draft: next, problem: result.reason });
   };
   const fields =
     form?.kind !== "available" || task === undefined || outline === null || draft === null
@@ -466,14 +474,16 @@ export function StudioFlowInspector({
       {stepPicker}
       <StudioInspectorGroup title="Settings">
         {form === null && (
-          <p role="alert" className="text-sm">
-            The settings of this step could not be read from the draft.
-          </p>
+          <Alert variant="destructive">
+            <AlertDescription>
+              The settings of this step could not be read from the draft.
+            </AlertDescription>
+          </Alert>
         )}
         {form?.kind === "unavailable" && (
-          <p role="alert" className="text-sm text-destructive">
-            {form.reason}
-          </p>
+          <Alert variant="destructive">
+            <AlertDescription>{form.reason}</AlertDescription>
+          </Alert>
         )}
         {form?.kind === "available" && draft !== null && (
           <>
@@ -551,9 +561,11 @@ export function StudioFlowInspector({
                 </div>
               )}
             {local?.problem == null ? null : (
-              <p role="alert" className="text-sm text-destructive">
-                {local.problem} The step keeps its last valid settings until this is fixed.
-              </p>
+              <Alert variant="destructive">
+                <AlertDescription>
+                  {local.problem} The step keeps its last valid settings until this is fixed.
+                </AlertDescription>
+              </Alert>
             )}
           </>
         )}

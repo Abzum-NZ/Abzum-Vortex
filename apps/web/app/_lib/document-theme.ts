@@ -2,6 +2,7 @@ import "server-only";
 
 import { headers } from "next/headers";
 import type { CSSProperties } from "react";
+import { DEFAULT_APPLICATION_THEME_SELECTION } from "@vortex/platform/schema";
 import { DEFAULT_PLATFORM_THEME_RELEASE, STUDIO_THEME_ROOT } from "@vortex/platform/server";
 import {
   createDocumentThemeVariables,
@@ -17,7 +18,9 @@ import { requestAddressHeader } from "./request-address";
 const PLATFORM_SEGMENTS = new Set(["api", "auth", "health", "signed-in"]);
 
 const platformTheme = createThemeRootProps(undefined, DEFAULT_PLATFORM_THEME_RELEASE.tokens);
-const platformStyle = createVortexStyleRootProps(resolveVortexStyleSelection());
+const platformStyle = createVortexStyleRootProps(
+  resolveVortexStyleSelection(DEFAULT_APPLICATION_THEME_SELECTION),
+);
 
 /** The same Studio root props serve the document's first paint and client-side route transitions. */
 const studioTheme = createThemeRootProps(STUDIO_THEME_ROOT, DEFAULT_PLATFORM_THEME_RELEASE.tokens);

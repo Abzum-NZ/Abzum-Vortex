@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type FormEvent } from "react";
 import { deriveQueryKey } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
@@ -34,9 +35,9 @@ function ChoiceLabel({
         onChange={(event) => text.change(event.target.value)}
       />
       {text.problem === "" ? null : (
-        <p role="alert" className="text-sm text-destructive">
-          {text.problem}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{text.problem}</AlertDescription>
+        </Alert>
       )}
     </div>
   );

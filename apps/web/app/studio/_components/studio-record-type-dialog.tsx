@@ -18,9 +18,9 @@ import {
   DialogTitle,
 } from "@vortex/ui/components/dialog";
 import { Input } from "@vortex/ui/components/input";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import {
   StudioInspectorGroup,
+  StudioOptionControl,
   StudioReferencePicker,
   StudioSegmentedControl,
 } from "@vortex/ui/studio";
@@ -146,7 +146,7 @@ export function StudioRecordTypeDialog({
         }
       }}
     >
-      <DialogContent className="max-h-screen max-w-lg overflow-y-auto" aria-label="New record type">
+      <DialogContent className="max-w-lg" aria-label="New record type">
         <DialogHeader>
           <DialogTitle>New record type</DialogTitle>
           <DialogDescription>Name this kind of record, then add its fields.</DialogDescription>
@@ -232,18 +232,16 @@ export function StudioRecordTypeDialog({
             hint="To take the owner from a linked record, add the link first, then choose it."
           >
             {(control) => (
-              <NativeSelect
+              <StudioOptionControl
                 {...control}
-                className="w-full"
                 value={ownershipMode}
-                onChange={(event) => setOwnershipMode(event.target.value as CreatedOwnership)}
-              >
-                {createdOwnerships.map((value) => (
-                  <NativeSelectOption key={value} value={value}>
-                    {recordOwnershipLabels[value]}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+                disabled={false}
+                options={createdOwnerships.map((value) => ({
+                  value,
+                  label: recordOwnershipLabels[value],
+                }))}
+                onChange={(value) => setOwnershipMode(value as CreatedOwnership)}
+              />
             )}
           </StudioField>
           {firstModule ? (

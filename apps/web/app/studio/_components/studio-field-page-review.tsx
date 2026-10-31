@@ -1,5 +1,6 @@
 "use client";
 
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
 import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
@@ -63,9 +64,9 @@ function FieldOffer({
         Add {field.label} to these pages
       </Button>
       {problem === undefined ? null : (
-        <p role="alert" className="text-destructive">
-          {problem}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{problem}</AlertDescription>
+        </Alert>
       )}
     </li>
   );

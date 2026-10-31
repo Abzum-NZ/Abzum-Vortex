@@ -1,17 +1,19 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
-import { NativeSelect } from "@vortex/ui/components/native-select";
+import { StudioOptionControl } from "@vortex/ui/studio";
 import {
   describeFailure,
   flowTaskRegistry,
   type JsonValue,
   type SourceFlow,
 } from "@vortex/platform/schema";
+import { postJson } from "../../_lib/post-json";
 import type { StudioFlowTestRunReply } from "../../_lib/studio-flow-test-run";
 import { readStudioDataRecords } from "../_lib/studio-reads";
 
@@ -85,9 +87,11 @@ function TraceStep({ step, flowKey }: Readonly<{ step: Step; flowKey: string }>)
         <p className="text-muted-foreground">{notRunSentences[step.notRun]}</p>
       ) : null}
       {step.refusal !== undefined ? (
-        <p role="alert">
-          {step.refusal.sentence} <code className="text-xs">{step.refusal.code}</code>
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>
+            {step.refusal.sentence} <code className="text-xs">{step.refusal.code}</code>
+          </AlertDescription>
+        </Alert>
       ) : null}
       {Object.keys(step.outputs).length > 0 ? (
         <pre className="m-0 overflow-x-auto rounded bg-muted p-2 text-xs">
@@ -188,22 +192,16 @@ export function StudioFlowTestRun({
     setProblem(undefined);
     setReply(undefined);
     try {
-      const response = await fetch("/api/studio/flow-test-run", {
-        method: "POST",
-        credentials: "same-origin",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          organizationId,
-          rootId,
-          draftRevision,
-          flowKey: flow.key,
-          moduleKey,
-          inputs: supplied,
-        }),
+      const response = await postJson<StudioFlowTestRunReply>("/api/studio/flow-test-run", {
+        organizationId,
+        rootId,
+        draftRevision,
+        flowKey: flow.key,
+        moduleKey,
+        inputs: supplied,
       });
       if (!response.ok) throw new Error(`STUDIO_FLOW_TEST_RUN_HTTP_${response.status}`);
-      setReply((await response.json()) as StudioFlowTestRunReply);
+      setReply(response.body);
     } catch (error) {
       console.error("[studio] flow test run failed", describeFailure(error));
       setProblem("The test run could not be completed. Try again.");
@@ -227,18 +225,19 @@ export function StudioFlowTestRun({
           </Label>
           {declaration.recordTypeIds !== undefined && declaration.recordTypeIds.length > 0 ? (
             <div className="flex items-center gap-2">
-              <NativeSelect
+              <StudioOptionControl
                 id={`test-run-${name}`}
                 value={typeof values[name] === "string" ? values[name] : ""}
-                onChange={(event) => setValues((held) => ({ ...held, [name]: event.target.value }))}
-              >
-                <option value="">Choose a record</option>
-                {(records[name] ?? []).map((choice) => (
-                  <option key={choice.id} value={choice.id}>
-                    {choice.label}
-                  </option>
-                ))}
-              </NativeSelect>
+                disabled={false}
+                options={[
+                  { value: "", label: "Choose a record" },
+                  ...(records[name] ?? []).map((choice) => ({
+                    value: choice.id,
+                    label: choice.label,
+                  })),
+                ]}
+                onChange={(value) => setValues((held) => ({ ...held, [name]: value }))}
+              />
               <Button
                 type="button"
                 variant="outline"
@@ -277,7 +276,11 @@ export function StudioFlowTestRun({
           <span className="text-xs text-muted-foreground">{blocked}</span>
         ) : null}
       </div>
-      {problem !== undefined ? <p role="alert">{problem}</p> : null}
+      {problem !== undefined ? (
+        <Alert variant="destructive">
+          <AlertDescription>{problem}</AlertDescription>
+        </Alert>
+      ) : null}
       {reply === undefined ? null : reply.kind === "ran" ? (
         <div className="space-y-2" aria-label="Step trace">
           <p className="m-0 text-sm" role="status">
@@ -303,9 +306,13 @@ export function StudioFlowTestRun({
           </ol>
         </div>
       ) : reply.kind === "temporarily_unavailable" ? (
-        <p role="alert">The test run is temporarily unavailable. Try again.</p>
+        <Alert variant="destructive">
+          <AlertDescription>The test run is temporarily unavailable. Try again.</AlertDescription>
+        </Alert>
       ) : (
-        <p role="alert">{failureSentences[reply.kind]}</p>
+        <Alert variant="destructive">
+          <AlertDescription>{failureSentences[reply.kind]}</AlertDescription>
+        </Alert>
       )}
     </section>
   );

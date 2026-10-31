@@ -1,7 +1,7 @@
 import "server-only";
 
 import {
-  DEFAULT_PLATFORM_THEME_RELEASE,
+  PLATFORM_THEME_RELEASES,
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
   PLATFORM_CONNECTION_TYPE_RELEASES,
   PLATFORM_BLOCK_RELEASES,
@@ -30,9 +30,9 @@ export const installedReleaseCatalogue: ImmutableDefinitionPublicationCatalogueD
     platformBlockReleases: PLATFORM_BLOCK_RELEASES.map(
       ({ contentFingerprint, customComponent, ...definition }) => definition,
     ),
-    platformThemeReleases: [
-      (({ contentFingerprint, ...definition }) => definition)(DEFAULT_PLATFORM_THEME_RELEASE),
-    ],
+    platformThemeReleases: Object.values(PLATFORM_THEME_RELEASES).map(
+      ({ contentFingerprint, ...definition }) => definition,
+    ),
   },
 };
 

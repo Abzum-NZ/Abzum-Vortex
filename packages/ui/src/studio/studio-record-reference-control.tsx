@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import { Button } from "../components/button";
 import { ChevronsDown, RotateCcw } from "lucide-react";
+import { useRecordChoicePager } from "../controls/use-record-choice-pager";
 import { StudioReferencePicker } from "./studio-reference-picker";
 import { StudioHelp } from "./studio-field";
 
@@ -36,17 +37,10 @@ export type StudioRecordReader = (
 
 type RecordValue = Readonly<{ recordType: string; recordId: string }>;
 
-type Loaded =
-  | Readonly<{ state: "loading" }>
-  | Readonly<{ state: "failed" }>
-  | Readonly<{ state: "read"; page: StudioRecordPage }>;
+type Refusal = Exclude<StudioRecordPage["kind"], "available">;
 
-const pageNote = (page: StudioRecordPage): string | undefined => {
-  switch (page.kind) {
-    case "available":
-      return page.records.length === 0
-        ? "There are no records of this type you may read yet."
-        : undefined;
+const refusalNote = (kind: Refusal): string => {
+  switch (kind) {
     case "not_saved":
       return "These records are not in the saved draft yet. Save, then pick a record.";
     case "no_list":
@@ -83,72 +77,7 @@ export function StudioRecordReferenceControl({
     setSeen(value.recordType);
     setRecordType(value.recordType);
   }
-  const [loaded, setLoaded] = useState<Loaded>({ state: "loading" });
-  const [records, setRecords] = useState<readonly StudioRecordChoice[]>([]);
-  const demand = useRef<AbortController | null>(null);
-  const [attempt, setAttempt] = useState(0);
   const recordId = value?.recordType === recordType ? value.recordId : undefined;
-
-  useEffect(() => {
-    if (read === null || recordType === "") return;
-    let cancelled = false;
-    const controller = new AbortController();
-    demand.current = controller;
-    setLoaded({ state: "loading" });
-    setRecords([]);
-    read({ recordType }, controller.signal).then(
-      (page) => {
-        if (cancelled) return;
-        setLoaded({ state: "read", page });
-        if (page.kind === "available") setRecords(page.records);
-      },
-      (error: unknown) => {
-        if (controller.signal.aborted) return;
-        console.error(`[studio] record choices could not be read: setting=${id}`, error);
-        if (!cancelled) setLoaded({ state: "failed" });
-      },
-    );
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [read, recordType, id, attempt]);
-
-  const more = async (after: string) => {
-    if (read === null) return;
-    const controller = demand.current;
-    if (controller === null || controller.signal.aborted) return;
-    try {
-      const page = await read({ recordType, after }, controller.signal);
-      if (controller.signal.aborted) return;
-      setLoaded({ state: "read", page });
-      if (page.kind === "available")
-        setRecords((previous) => [
-          ...previous,
-          ...page.records.filter(
-            (record) => !previous.some((known) => known.recordId === record.recordId),
-          ),
-        ]);
-    } catch (error) {
-      if (controller.signal.aborted) return;
-      console.error(`[studio] more record choices could not be read: setting=${id}`, error);
-      setLoaded({ state: "failed" });
-    }
-  };
-
-  const known = recordId === undefined || records.some((record) => record.recordId === recordId);
-  const shown = records;
-  const note =
-    loaded.state === "failed"
-      ? "The records could not be read just now."
-      : loaded.state === "read"
-        ? pageNote(loaded.page)
-        : undefined;
-  const next =
-    loaded.state === "read" && loaded.page.kind === "available" ? loaded.page.next : undefined;
-  const retry =
-    loaded.state === "failed" ||
-    (loaded.state === "read" && loaded.page.kind === "temporarily_unavailable");
 
   return (
     <div className="space-y-2">
@@ -171,67 +100,133 @@ export function StudioRecordReferenceControl({
       {recordType !== "" &&
         (read === null ? (
           <p role="status" className="text-sm text-muted-foreground">
-            Records can't be read here.
+            Records can&apos;t be read here.
           </p>
         ) : (
-          <>
-            <StudioReferencePicker
-              id={id}
-              aria-label="Record"
-              value={recordId ?? ""}
-              disabled={disabled || loaded.state === "loading"}
-              aria-invalid={!known && loaded.state === "read" && next === undefined}
-              unset={loaded.state === "loading" ? "Reading records" : "Choose a record"}
-              options={[
-                ...(!known && recordId !== undefined
-                  ? [
-                      {
-                        value: recordId,
-                        label:
-                          loaded.state === "read" && next === undefined
-                            ? "The chosen record (you may not read it now)"
-                            : "The chosen record (show more records to find it)",
-                        disabled: true,
-                      },
-                    ]
-                  : []),
-                ...shown.map((record) => ({ value: record.recordId, label: record.label })),
-              ]}
-              onChange={(next) =>
-                onChange(next === "" ? undefined : { recordType, recordId: next })
-              }
-            />
-            {note !== undefined && <StudioHelp hint={note} />}
-            <div className="flex flex-wrap gap-1">
-              {next !== undefined && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={disabled}
-                  onClick={() => {
-                    void more(next);
-                  }}
-                >
-                  <ChevronsDown />
-                  Show more records
-                </Button>
-              )}
-              {retry && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={disabled}
-                  onClick={() => setAttempt((count) => count + 1)}
-                >
-                  <RotateCcw />
-                  Try again
-                </Button>
-              )}
-            </div>
-          </>
+          <StudioRecordChoices
+            key={recordType}
+            id={id}
+            recordType={recordType}
+            recordId={recordId}
+            read={read}
+            disabled={disabled}
+            onPick={(next) => onChange(next === "" ? undefined : { recordType, recordId: next })}
+          />
         ))}
     </div>
+  );
+}
+
+/** The records of one record type, paged by the one record-choice pager; remounted to try again. */
+function StudioRecordChoices(
+  props: Readonly<{
+    id: string;
+    recordType: string;
+    recordId: string | undefined;
+    read: StudioRecordReader;
+    disabled: boolean;
+    onPick: (recordId: string) => void;
+  }>,
+): ReactElement {
+  const [attempt, setAttempt] = useState(0);
+  return (
+    <StudioRecordChoicesPage
+      key={attempt}
+      {...props}
+      onRetry={() => setAttempt((count) => count + 1)}
+    />
+  );
+}
+
+function StudioRecordChoicesPage({
+  id,
+  recordType,
+  recordId,
+  read,
+  disabled,
+  onPick,
+  onRetry,
+}: Readonly<{
+  id: string;
+  recordType: string;
+  recordId: string | undefined;
+  read: StudioRecordReader;
+  disabled: boolean;
+  onPick: (recordId: string) => void;
+  onRetry: () => void;
+}>): ReactElement {
+  const [refusal, setRefusal] = useState<Refusal | null>(null);
+  const pager = useRecordChoicePager<StudioRecordChoice>({
+    open: true,
+    search: "",
+    read: async (_search, after) => {
+      const page = await read({ recordType, ...(after === undefined ? {} : { after }) });
+      if (page.kind !== "available") {
+        setRefusal(page.kind);
+        return page.kind === "temporarily_unavailable" ? undefined : { items: [] };
+      }
+      setRefusal(null);
+      return { items: page.records, ...(page.next === undefined ? {} : { next: page.next }) };
+    },
+  });
+  const settled = !pager.loading && !pager.failed;
+  const known =
+    recordId === undefined || pager.items.some((record) => record.recordId === recordId);
+  const note = pager.failed
+    ? "The records could not be read just now."
+    : refusal !== null
+      ? refusalNote(refusal)
+      : settled && pager.items.length === 0
+        ? "There are no records of this type you may read yet."
+        : undefined;
+  const retry = pager.failed || refusal === "temporarily_unavailable";
+  return (
+    <>
+      <StudioReferencePicker
+        id={id}
+        aria-label="Record"
+        value={recordId ?? ""}
+        disabled={disabled || pager.loading}
+        aria-invalid={!known && settled && pager.next === undefined}
+        unset={pager.loading ? "Reading records" : "Choose a record"}
+        options={[
+          ...(!known && recordId !== undefined
+            ? [
+                {
+                  value: recordId,
+                  label:
+                    settled && pager.next === undefined
+                      ? "The chosen record (you may not read it now)"
+                      : "The chosen record (show more records to find it)",
+                  disabled: true,
+                },
+              ]
+            : []),
+          ...pager.items.map((record) => ({ value: record.recordId, label: record.label })),
+        ]}
+        onChange={onPick}
+      />
+      {note !== undefined && <StudioHelp hint={note} />}
+      <div className="flex flex-wrap gap-1">
+        {pager.next !== undefined && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={disabled}
+            onClick={pager.loadMore}
+          >
+            <ChevronsDown />
+            Show more records
+          </Button>
+        )}
+        {retry && (
+          <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={onRetry}>
+            <RotateCcw />
+            Try again
+          </Button>
+        )}
+      </div>
+    </>
   );
 }

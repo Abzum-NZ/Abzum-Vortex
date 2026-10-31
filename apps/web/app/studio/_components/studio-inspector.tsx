@@ -14,7 +14,7 @@ import type {
   StudioInspectorAction,
   resolveStudioSelectionInspectorContext,
 } from "@vortex/ui/studio";
-import { StudioPanelShell } from "./studio-frame";
+import { STUDIO_RAIL_BODY_CLASS, StudioPanelShell } from "./studio-frame";
 import { studioKindLabel } from "../_lib/studio-labels";
 import { useStudioDraftText } from "./use-studio-draft-text";
 
@@ -134,7 +134,7 @@ export function StudioInspector({
           />
         </header>
       )}
-      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-3">
+      <div className={STUDIO_RAIL_BODY_CLASS} data-studio-rail-body="">
         {labels !== undefined ? (
           <StudioInspectorGroup title="General">
             <LabelsForm key={labelsKey} labels={labels} />

@@ -53,7 +53,13 @@ export function useStudioStructureCommand({
     const outcome = draft.run<StudioStructureResult>(
       (current) => {
         const result = applyStudioStructureCommand(
-          { source: current, catalogue, describePlacement, publishedFields },
+          {
+            source: current,
+            catalogue,
+            describePlacement,
+            publishedFields,
+            rootId: draft.state.rootId,
+          },
           structureCommand,
         );
         if (result.kind !== "applied") return { kind: "keep", result };
@@ -79,6 +85,7 @@ export function useStudioStructureCommand({
             catalogue,
             describePlacement,
             publishedFields,
+            rootId: draft.state.rootId,
           },
           structureCommand,
         );
@@ -144,7 +151,7 @@ export function useStudioStructureTab({
           onPreview={preview}
           onLayoutPlan={(pageAlias, shellAlias) =>
             studioPageLayoutPlan(
-              { source, catalogue, describePlacement, publishedFields },
+              { source, catalogue, describePlacement, publishedFields, rootId: draft.state.rootId },
               pageAlias,
               shellAlias,
             )
