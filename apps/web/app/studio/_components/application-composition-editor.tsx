@@ -55,6 +55,7 @@ import {
 } from "@vortex/ui/studio";
 import { useStudioDraftHeld } from "./use-studio-draft-held";
 import { StudioBlockSetupDialog, type StudioBlockSetupRequest } from "./studio-block-setup-dialog";
+import { StudioTableAddRecords } from "./studio-table-add-records";
 
 type Props = Readonly<{
   context: StudioCompositionContext;
@@ -220,6 +221,15 @@ export function ApplicationCompositionEditor(props: Props) {
     settingsModel.kind === "available"
       ? studioGridFeaturesProperty(settingsModel.properties)
       : undefined;
+  // Adding records from a list opens a create form, so the form is chosen before the switch appears.
+  const addsFromList =
+    settingsModel.kind === "available" &&
+    settingsModel.properties.some((property) => property.key === "inline_create") &&
+    settingsModel.properties.some((property) => property.key === "create_page");
+  const createPageSetting = settingsInputs.settings.create_page;
+  const inlineCreateSetting = settingsInputs.settings.inline_create;
+  const createForm = createPageSetting?.kind === "page_reference" ? createPageSetting.page : "";
+  const addsRecords = inlineCreateSetting?.kind === "boolean" && inlineCreateSetting.value;
   // A canvas arrangement belongs to the query, columns and density it was made for.
   const canvasMatches =
     props.canvasArrangement?.key ===
@@ -477,6 +487,22 @@ export function ApplicationCompositionEditor(props: Props) {
                 }
               />
             )}
+            {addsFromList && (
+              <StudioTableAddRecords
+                form={createForm}
+                adding={addsRecords === true}
+                pages={choices.pages}
+                disabled={props.disabled}
+                onChange={(next) => {
+                  const settings = { ...settingsInputs.settings };
+                  if (next.form === "") delete settings.create_page;
+                  else settings.create_page = { kind: "page_reference", page: next.form };
+                  if (next.adding) settings.inline_create = { kind: "boolean", value: true };
+                  else delete settings.inline_create;
+                  changeSettings({ ...settingsInputs, settings });
+                }}
+              />
+            )}
             <StudioSettingFields
               idPrefix={settingsId}
               properties={settingsModel.properties.filter(
@@ -486,6 +512,10 @@ export function ApplicationCompositionEditor(props: Props) {
                   property.key !== "row_actions" &&
                   property.key !== "open_with" &&
                   property.key !== "record_from" &&
+                  !(
+                    addsFromList &&
+                    (property.key === "inline_create" || property.key === "create_page")
+                  ) &&
                   !studioOwnsSetting(property.key),
               )}
               values={settingsInputs.settings}
