@@ -14,7 +14,7 @@ import {
 } from "../components/combobox";
 import { Field, FieldLabel } from "../components/field";
 import { InputGroup, InputGroupAddon } from "../components/input-group";
-import { flowSetFieldChange } from "../flow-runtime/flow-cycle";
+import { setFieldChange } from "../flow-runtime/flow-cycle";
 import {
   readControlSettings,
   resolveControlContext,
@@ -109,40 +109,59 @@ export function LinkInput(props: LinkInputProps): ReactElement {
     props.placementId,
     permitted?.reference ?? null,
     { label, missing: required && !disabled && !readOnly && permitted === null },
-    (value, cycle) => {
-      if (disabled || readOnly || waiting || draftFeedback?.hidden === true) return undefined;
-      if (value === null)
+    {
+      label,
+      required,
+      refusal:
+        draftFeedback?.hidden === true
+          ? "hidden"
+          : disabled || waiting
+            ? "disabled"
+            : readOnly
+              ? "read_only"
+              : undefined,
+      set: (value, cause) => {
+        if (value === null)
+          return {
+            value: null,
+            apply: () => setPicked(null),
+            emit: () => context.events?.field_changed?.(setFieldChange(cause, fieldKey, null)),
+          };
+        const candidate =
+          typeof value === "object" && value !== null && !Array.isArray(value)
+            ? (value as Record<string, unknown>)
+            : undefined;
+        const available = choices.filter((choice) =>
+          typeof value === "string"
+            ? choice.recordId === value
+            : choice.recordId === candidate?.recordId &&
+              choice.recordTypeId === candidate?.recordTypeId,
+        );
+        if (
+          available.length !== 1 ||
+          !allowedRecordTypeIds.includes(available[0]!.recordTypeId.toLowerCase())
+        )
+          return "invalid_value";
+        const item = available[0]!;
+        const reference = Object.freeze({
+          recordTypeId: item.recordTypeId,
+          recordId: item.recordId,
+        });
         return {
-          value: null,
-          apply: () => setPicked(null),
-          emit: () => context.events?.field_changed?.(flowSetFieldChange(cycle, fieldKey, null)),
+          value: reference,
+          apply: () => setPicked({ reference, title: item.title, typeLabel: item.typeLabel }),
+          emit: () =>
+            context.events?.field_changed?.({
+              ...setFieldChange(cause, fieldKey, reference),
+              draftDisplay: { title: item.title },
+            }),
         };
-      const candidate =
-        typeof value === "object" && value !== null && !Array.isArray(value)
-          ? (value as Record<string, unknown>)
-          : undefined;
-      const available = choices.filter((choice) =>
-        typeof value === "string"
-          ? choice.recordId === value
-          : choice.recordId === candidate?.recordId &&
-            choice.recordTypeId === candidate?.recordTypeId,
-      );
-      if (
-        available.length !== 1 ||
-        !allowedRecordTypeIds.includes(available[0]!.recordTypeId.toLowerCase())
-      )
-        return undefined;
-      const item = available[0]!;
-      const reference = Object.freeze({ recordTypeId: item.recordTypeId, recordId: item.recordId });
-      return {
-        value: reference,
-        apply: () => setPicked({ reference, title: item.title, typeLabel: item.typeLabel }),
-        emit: () =>
-          context.events?.field_changed?.({
-            ...flowSetFieldChange(cycle, fieldKey, reference),
-            draftDisplay: { title: item.title },
-          }),
-      };
+      },
+      options: async (search) =>
+        (await load.current(search ?? "")).map((choice) => ({
+          value: choice.recordId,
+          label: choice.title,
+        })),
     },
   );
   const error = projectedError ?? validationError;
@@ -161,16 +180,21 @@ export function LinkInput(props: LinkInputProps): ReactElement {
   const location = useRef(context.location);
   location.current = context.location;
 
-  /** Reads one page; a newer request or a closed picker discards the answer of an older one. */
-  const load = useRef<(search: string, continuationToken?: string) => void>(() => undefined);
+  /**
+   * Reads one page and answers with its records; a newer request or a closed picker discards the
+   * answer of an older one, which then answers with none.
+   */
+  const load = useRef<
+    (search: string, continuationToken?: string) => Promise<readonly RecordChoiceOption[]>
+  >(async () => []);
   load.current = (search, continuationToken) => {
     const handler = requestRecords.current;
-    if (handler === undefined) return;
+    if (handler === undefined) return Promise.resolve([]);
     const request = ++generation.current;
     setLoading(true);
     setFailed(false);
     const bounded = search.trim().slice(0, 100);
-    void Promise.resolve(
+    return Promise.resolve(
       handler({
         event: "options_requested",
         ...(bounded === "" ? {} : { search: bounded }),
@@ -179,17 +203,20 @@ export function LinkInput(props: LinkInputProps): ReactElement {
       }),
     )
       .then((answer) => {
-        if (generation.current !== request) return;
+        if (generation.current !== request) return [];
         const page = readRecordChoicePage(answer, location.current);
         setChoices((current) =>
           continuationToken === undefined ? page.choices : [...current, ...page.choices],
         );
         setNext(page.nextContinuationToken);
+        return page.choices;
       })
       .catch((cause: unknown) => {
-        if (generation.current !== request) return;
-        console.error("[link-input] records unavailable", cause);
-        setFailed(true);
+        if (generation.current === request) {
+          console.error("[link-input] records unavailable", cause);
+          setFailed(true);
+        }
+        return [];
       })
       .finally(() => {
         if (generation.current === request) setLoading(false);
@@ -204,7 +231,7 @@ export function LinkInput(props: LinkInputProps): ReactElement {
       return;
     }
     const timeout = setTimeout(
-      () => load.current(searchTerm),
+      () => void load.current(searchTerm),
       searchTerm.trim() === "" ? 0 : SEARCH_DELAY_MS,
     );
     return () => clearTimeout(timeout);

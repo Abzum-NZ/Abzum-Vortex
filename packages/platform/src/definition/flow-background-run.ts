@@ -183,7 +183,6 @@ export const runBackendFlow = async (
   const ports: FlowOrchestratorDependencies = {
     continuationKey: undefined as never,
     admitSegment: () => Promise.reject(new Error("BACKEND_RUN_HAS_NO_SEGMENTS")),
-    admitContinuation: () => Promise.reject(new Error("BACKEND_RUN_HAS_NO_CONTINUATION")),
     admitPageStart: () => Promise.reject(new Error("BACKEND_RUN_HAS_NO_PAGE")),
     executor: createFlowProtectedExecutor(requestDependencies, dependencies.applicationStore),
     records: createRecordSaveService(requestDependencies),

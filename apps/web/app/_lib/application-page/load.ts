@@ -83,7 +83,6 @@ import {
   readPlacement,
   type PlacementReaderInput,
 } from "./placement-reader";
-import { projectPageWebMcpTools } from "./webmcp-projection";
 import { platformPermissionSource } from "../platform-permission-source";
 import {
   availableContributedActions,
@@ -976,19 +975,6 @@ const loadApplicationPageJoined = async (
     model: {
       ...model,
       ...(options?.includeNavigation === false ? {} : { navigation }),
-      webMcpTools: projectPageWebMcpTools({
-        page,
-        ...(guidedForm === undefined ? {} : { activeStepId: guidedForm.activeStepId }),
-        bindings,
-        applicationBindings: application.content.flowBindings,
-        toolBundle: application.toolBundle,
-        applicationRootId: String(application.rootId),
-        applicationKey: address.application.key,
-        permittedApplications: address.read.applications.map((candidate) => ({
-          applicationRootId: candidate.applicationRootId,
-          key: candidate.key,
-        })),
-      }),
     },
     shells: application.content.shells,
     ...(applicationShell === undefined ? {} : { applicationShell }),

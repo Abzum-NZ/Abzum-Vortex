@@ -4,7 +4,7 @@ import type { ReactElement } from "react";
 import { Checkbox } from "../components/checkbox";
 import { Field, FieldLabel } from "../components/field";
 import { Switch } from "../components/switch";
-import { flowSetFieldChange } from "../flow-runtime/flow-cycle";
+import { setFieldChange } from "../flow-runtime/flow-cycle";
 import type { BooleanInputPayload } from "./projected-data";
 import {
   readControlSettings,
@@ -49,13 +49,18 @@ export function BooleanInput(props: BooleanInputProps): ReactElement {
   const note = inactiveNote(context);
 
   const [checked, setChecked] = useSeededState(context.values?.value ?? false);
-  useFormField(fieldKey, props.placementId, checked, undefined, (value, cycle) => {
-    if (disabled || draftFeedback?.hidden === true || typeof value !== "boolean") return undefined;
-    return {
-      value,
-      apply: () => setChecked(value),
-      emit: () => context.events?.field_changed?.(flowSetFieldChange(cycle, fieldKey, value)),
-    };
+  useFormField(fieldKey, props.placementId, checked, undefined, {
+    label,
+    required: false,
+    refusal: draftFeedback?.hidden === true ? "hidden" : disabled ? "disabled" : undefined,
+    set: (value, cause) =>
+      typeof value !== "boolean"
+        ? "invalid_value"
+        : {
+            value,
+            apply: () => setChecked(value),
+            emit: () => context.events?.field_changed?.(setFieldChange(cause, fieldKey, value)),
+          },
   });
 
   const change = (next: boolean): void => {

@@ -26,7 +26,7 @@ import { pageFlowClock } from "./page-flow-clock";
 import { isSurfaceCancellation, type FlowIntentHost } from "./intents";
 import type { FlowBindingReference } from "./flow-runtime";
 import type { FlowInvokeClient, FlowSubjectContext } from "./server-flow-client";
-import type { ServerDrivenResult } from "./server-driven-run";
+import type { FlowDispatchResult } from "./flow-runtime";
 
 export type BrowserFlowResult =
   | Readonly<{
@@ -37,8 +37,7 @@ export type BrowserFlowResult =
   | Readonly<{ kind: "failed"; failure: FlowFailure }>
   | Readonly<{ kind: "abandoned" }>
   | Readonly<{ kind: "skipped" }>
-  | Readonly<{ kind: "server_result"; result: ServerDrivenResult }>
-  | Readonly<{ kind: "not_page_only" }>;
+  | Readonly<{ kind: "server_result"; result: FlowDispatchResult }>;
 
 /** Runs each compiled page segment locally and each protected segment through its gate. */
 export async function runBrowserFlow(
@@ -50,7 +49,7 @@ export async function runBrowserFlow(
     resolveForm?: FlowFormReferenceResolver;
     condition?: FlowFormula | null;
     signal?: AbortSignal;
-    server?: Readonly<{
+    server: Readonly<{
       client: FlowInvokeClient;
       binding: FlowBindingReference;
       caller: Readonly<Record<string, unknown>>;
@@ -64,7 +63,6 @@ export async function runBrowserFlow(
   const servers = plan.segments.filter((segment) => segment.kind === "server");
   const isCompletion = (segment: (typeof servers)[number]) =>
     Object.keys(segment.finalOutputTypes).length > 0;
-  if (servers.length > 0 && server === undefined) return { kind: "not_page_only" };
   const members = browserFlowMemberTypeResolver(plan);
   const declaredTasks = plan.segments.flatMap((segment) =>
     segment.kind === "page" ? segment.tasks : [],
@@ -87,7 +85,7 @@ export async function runBrowserFlow(
   let committed = false;
   let failure:
     | { kind: "page"; value: FlowFailure }
-    | { kind: "server"; value: ServerDrivenResult }
+    | { kind: "server"; value: FlowDispatchResult }
     | undefined;
   const page = async (tasks: FlowProgram["tasks"]) => {
     const result = await drivePageFlowSegment({
@@ -103,7 +101,7 @@ export async function runBrowserFlow(
     if (result.kind === "finished") state = result.state;
     return result;
   };
-  const terminal = (result: ServerDrivenResult): BrowserFlowResult => ({
+  const terminal = (result: FlowDispatchResult): BrowserFlowResult => ({
     kind: "server_result",
     result,
   });
@@ -124,11 +122,11 @@ export async function runBrowserFlow(
       if (!value.value) return { kind: "skipped" };
     }
     if (flowNeedsRunStart(plan.segments)) {
-      const opened = await server!.client.openRun(
-        server!.binding,
+      const opened = await server.client.openRun(
+        server.binding,
         start.runId,
         signal,
-        server!.sourceTablePlacementId,
+        server.sourceTablePlacementId,
       );
       if (opened.kind === "run_opened") carriedValues = opened.carriedValues;
       else if (
@@ -177,7 +175,7 @@ export async function runBrowserFlow(
       const seed = pageFlowSegmentSeed(
         state,
         segment.inputs,
-        server!.pageInputs,
+        server.pageInputs,
         segment.carriedInputKeys,
         resolveForm,
       );
@@ -189,13 +187,13 @@ export async function runBrowserFlow(
             : failure?.kind === "server"
               ? undefined
               : ("success" as const);
-      const result = await server!.client.startBinding(
-        server!.binding,
-        server!.caller,
+      const result = await server.client.startBinding(
+        server.binding,
+        server.caller,
         start.runId,
         signal,
-        server!.subject,
-        server!.sourceTablePlacementId,
+        server.subject,
+        server.sourceTablePlacementId,
         carriedValues,
         {
           seed,
@@ -212,8 +210,7 @@ export async function runBrowserFlow(
         result.kind === "unknown"
       )
         return { kind: "terminal", value: terminal(result) };
-      if (result.kind !== "result" || result.intents.length !== 0)
-        throw new Error("FLOW_PAGE_SEGMENT_RESPONSE_INVALID");
+      if (result.kind !== "result") throw new Error("FLOW_PAGE_SEGMENT_RESPONSE_INVALID");
       carriedValues = result.carriedValues;
       if (result.descriptor.commit === "confirmed" || result.descriptor.commit === "partial")
         committed = true;
@@ -307,7 +304,7 @@ export async function startBrowserFlow(
     readPageValues: () => FlowRuntimeValues;
     condition?: FlowFormula | null;
     signal?: AbortSignal;
-    server?: Readonly<{
+    server: Readonly<{
       client: FlowInvokeClient;
       binding: FlowBindingReference;
       subject?: FlowSubjectContext;
@@ -326,7 +323,7 @@ export async function startBrowserFlow(
     // A form submit carries its answers as one envelope; the binding sees the same mapping as at the endpoint.
     const callerInputs =
       input.event === "form_submit"
-        ? adaptFormSubmitInputs(input.bindings, input.caller, input.server?.subject)
+        ? adaptFormSubmitInputs(input.bindings, input.caller, input.server.subject)
         : input.caller;
     if (callerInputs === undefined) throw new Error("FLOW_PAGE_FORM_SUBMIT_INVALID");
     const inputs = resolvePageFlowInputs(input.plan.inputs, input.bindings, callerInputs, {
@@ -348,23 +345,17 @@ export async function startBrowserFlow(
       resolveForm,
       ...(input.condition === undefined ? {} : { condition: input.condition }),
       ...(input.signal === undefined ? {} : { signal: input.signal }),
-      ...(input.server === undefined
-        ? {}
-        : {
-            server: {
-              ...input.server,
-              caller: input.caller,
-              pageInputs: new Set(
-                Object.entries(input.bindings).flatMap(([name, source]) =>
-                  typeof source === "object" &&
-                  source.kind !== "caller" &&
-                  source.kind !== "literal"
-                    ? [name]
-                    : [],
-                ),
-              ),
-            },
-          }),
+      server: {
+        ...input.server,
+        caller: input.caller,
+        pageInputs: new Set(
+          Object.entries(input.bindings).flatMap(([name, source]) =>
+            typeof source === "object" && source.kind !== "caller" && source.kind !== "literal"
+              ? [name]
+              : [],
+          ),
+        ),
+      },
     });
   } catch (error) {
     console.error("[flow] page input resolution failed", error);

@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "../components/select";
 import { DefinitionRenderError } from "../definition-error";
-import { flowSetFieldChange } from "../flow-runtime/flow-cycle";
+import { setFieldChange } from "../flow-runtime/flow-cycle";
 import {
   readChoiceOptionsPage,
   type ChoiceInputPayload,
@@ -154,18 +154,26 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
     props.placementId,
     permittedSelected,
     { label, missing: required && !explicitlyDisabled && permittedSelected === null },
-    (value, cycle) => {
-      if (disabled || draftFeedback?.hidden === true) return undefined;
-      if (
-        value !== null &&
-        (typeof value !== "string" || !options.some((option) => option.key === value))
-      )
-        return undefined;
-      return {
-        value,
-        apply: () => setSelected(value),
-        emit: () => context.events?.field_changed?.(flowSetFieldChange(cycle, fieldKey, value)),
-      };
+    {
+      label,
+      required,
+      refusal: draftFeedback?.hidden === true ? "hidden" : disabled ? "disabled" : undefined,
+      set: (value, cause) => {
+        if (
+          value !== null &&
+          (typeof value !== "string" || !options.some((option) => option.key === value))
+        )
+          return "invalid_value";
+        return {
+          value,
+          apply: () => setSelected(value),
+          emit: () => context.events?.field_changed?.(setFieldChange(cause, fieldKey, value)),
+        };
+      },
+      options: async (search) => {
+        const offered = remoteOptions ? await requestChoices.current(search ?? "") : options;
+        return (offered ?? []).map((option) => ({ value: option.key, label: option.label }));
+      },
     },
   );
   const error = projectedError ?? validationError;
@@ -208,12 +216,13 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
 
   const optionsRequested = useRef(context.events?.options_requested);
   optionsRequested.current = context.events?.options_requested;
-  const requestChoices = useRef<(search: string, continuationToken?: string) => void>(
-    () => undefined,
-  );
+  /** Reads one page of options and answers with them; an older or refused request answers with none. */
+  const requestChoices = useRef<
+    (search: string, continuationToken?: string) => Promise<readonly ChoiceOption[]>
+  >(async () => []);
   requestChoices.current = (search, continuationToken) => {
     const handler = optionsRequested.current;
-    if (handler === undefined || disabled) return;
+    if (handler === undefined || disabled) return Promise.resolve([]);
     const boundedSearch = search.trim().slice(0, 100);
     setRemoteFailed(false);
     const event = {
@@ -223,9 +232,9 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
     };
     const request = ++choiceRequestGeneration.current;
     setRemoteLoading(true);
-    void Promise.resolve(handler(event))
+    return Promise.resolve(handler(event))
       .then((answer) => {
-        if (choiceRequestGeneration.current !== request) return;
+        if (choiceRequestGeneration.current !== request) return [];
         const page = readChoiceOptionsPage(answer, context.location);
         setRemote((current) => ({
           options:
@@ -234,11 +243,14 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
               : [...current.options, ...page.options],
           ...(page.nextContinuationToken === undefined ? {} : { next: page.nextContinuationToken }),
         }));
+        return page.options;
       })
       .catch((cause: unknown) => {
-        if (choiceRequestGeneration.current !== request) return;
-        console.error("[choice-input] options unavailable", cause);
-        setRemoteFailed(true);
+        if (choiceRequestGeneration.current === request) {
+          console.error("[choice-input] options unavailable", cause);
+          setRemoteFailed(true);
+        }
+        return [];
       })
       .finally(() => {
         if (choiceRequestGeneration.current === request) setRemoteLoading(false);

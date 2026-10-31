@@ -4,7 +4,7 @@ import { useRef, type ReactElement } from "react";
 import { Checkbox } from "../components/checkbox";
 import { Field, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "../components/field";
 import { DefinitionRenderError } from "../definition-error";
-import { flowSetFieldChange } from "../flow-runtime/flow-cycle";
+import { setFieldChange } from "../flow-runtime/flow-cycle";
 import type { SeveralChoicesInputPayload } from "./projected-data";
 import {
   readControlSettings,
@@ -77,22 +77,28 @@ export function SeveralChoicesInput(props: SeveralChoicesInputProps): ReactEleme
     props.placementId,
     allowedSelected,
     required && allowedSelected.length === 0 ? () => `${label} is required.` : undefined,
-    (value, cycle) => {
-      if (disabled || draftFeedback?.hidden === true || !Array.isArray(value)) return undefined;
-      if (
-        value.some(
-          (item) => typeof item !== "string" || !options.some((option) => option.key === item),
-        ) ||
-        new Set(value).size !== value.length ||
-        (maximumSelections !== undefined && value.length > maximumSelections)
-      )
-        return undefined;
-      const selected = value as string[];
-      return {
-        value: selected,
-        apply: () => setSelected(selected),
-        emit: () => context.events?.field_changed?.(flowSetFieldChange(cycle, fieldKey, selected)),
-      };
+    {
+      label,
+      required,
+      refusal: draftFeedback?.hidden === true ? "hidden" : disabled ? "disabled" : undefined,
+      set: (value, cause) => {
+        if (
+          !Array.isArray(value) ||
+          value.some(
+            (item) => typeof item !== "string" || !options.some((option) => option.key === item),
+          ) ||
+          new Set(value).size !== value.length ||
+          (maximumSelections !== undefined && value.length > maximumSelections)
+        )
+          return "invalid_value";
+        const selected = value as string[];
+        return {
+          value: selected,
+          apply: () => setSelected(selected),
+          emit: () => context.events?.field_changed?.(setFieldChange(cause, fieldKey, selected)),
+        };
+      },
+      options: async () => options.map((option) => ({ value: option.key, label: option.label })),
     },
   );
   const validationError = useFormFieldError(fieldKey);

@@ -13,8 +13,7 @@ set search_path = ''
 as $function$
 declare
   expected_sections constant text[] := array[
-    'pages', 'navigation', 'flows', 'theme', 'component_registry',
-    'access_plan', 'tool_bundle'
+    'pages', 'navigation', 'flows', 'theme', 'component_registry', 'access_plan'
   ];
   permission_decision record;
   delegation_decision record;
@@ -254,7 +253,6 @@ begin
     )
     or section_payloads -> 'theme' is distinct from application_content -> 'theme'
     or section_payloads -> 'component_registry' is distinct from application_content -> 'platformBlockDependencies'
-    or section_payloads -> 'tool_bundle' is distinct from prepared_source #> '{application,compilationOutput,toolBundle}'
     or section_payloads -> 'access_plan' is distinct from expected_access_plan
     or section_payloads #> '{pages,application,identity}' is distinct from (
       pg_catalog.jsonb_build_object(

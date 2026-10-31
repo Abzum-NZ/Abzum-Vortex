@@ -2,7 +2,7 @@ export { useFlowIntentHost, type FlowIntentHostOptions } from "./flow-intent-hos
 export type { PageMessage, PageMessageDraft } from "./messages";
 export {
   continueFlowEventCycle,
-  flowSetFieldChange,
+  setFieldChange,
   startFlowEventCycle,
   type FlowCycleRefusal,
   type FlowEventCycle,
@@ -38,7 +38,7 @@ export {
   type FlowIntentKind,
   type FlowMessageIntent,
 } from "./intents";
-export type { ServerDrivenResult } from "./server-driven-run";
+export type { FlowDispatchResult } from "./flow-runtime";
 export { createFlowInvokeClient } from "./lazy-flow-client";
 export {
   parseServerFlowResponse,
@@ -46,6 +46,5 @@ export {
   type FlowSubjectContext,
   type FlowInvokeClient,
   type FlowInvokeClientOptions,
-  type FlowResumeEvidence,
   type ServerFlowResponse,
 } from "./server-flow-client";

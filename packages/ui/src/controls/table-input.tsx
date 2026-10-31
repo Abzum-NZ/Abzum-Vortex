@@ -12,7 +12,7 @@ import { Field, FieldLabel } from "../components/field";
 import { Input } from "../components/input";
 import { NativeSelect, NativeSelectOption } from "../components/native-select";
 import { DefinitionRenderError } from "../definition-error";
-import { flowSetFieldChange } from "../flow-runtime/flow-cycle";
+import { setFieldChange } from "../flow-runtime/flow-cycle";
 import { Icon } from "../icons/icon";
 import {
   readControlSettings,
@@ -169,23 +169,27 @@ export function TableInput(props: ControlRenderProps<TableInputPayload>): ReactE
     props.placementId,
     !required && typed.length === 0 ? null : typed,
     locked || localError === undefined ? undefined : () => localError,
-    (value, cycle) => {
-      if (locked || draftFeedback?.hidden === true) return undefined;
-      const parsed = sourceModuleFieldValueSchemas.table.safeParse(value === null ? [] : value);
-      if (!parsed.success) return undefined;
-      const inspected = inspect(parsed.data);
-      if (
-        inspected.invalid !== undefined ||
-        parsed.data.length > maximum! ||
-        ((required || parsed.data.length > 0) && parsed.data.length < minimumRows)
-      )
-        return undefined;
-      const next = !required && inspected.typed.length === 0 ? null : inspected.typed;
-      return {
-        value: next,
-        apply: () => setRaw(JSON.stringify(parsed.data)),
-        emit: () => context.events?.field_changed?.(flowSetFieldChange(cycle, fieldKey, next)),
-      };
+    {
+      label,
+      required,
+      refusal: draftFeedback?.hidden === true ? "hidden" : locked ? "disabled" : undefined,
+      set: (value, cause) => {
+        const parsed = sourceModuleFieldValueSchemas.table.safeParse(value === null ? [] : value);
+        if (!parsed.success) return "invalid_value";
+        const inspected = inspect(parsed.data);
+        if (
+          inspected.invalid !== undefined ||
+          parsed.data.length > maximum! ||
+          ((required || parsed.data.length > 0) && parsed.data.length < minimumRows)
+        )
+          return "invalid_value";
+        const next = !required && inspected.typed.length === 0 ? null : inspected.typed;
+        return {
+          value: next,
+          apply: () => setRaw(JSON.stringify(parsed.data)),
+          emit: () => context.events?.field_changed?.(setFieldChange(cause, fieldKey, next)),
+        };
+      },
     },
   );
   const validationError = useFormFieldError(fieldKey);

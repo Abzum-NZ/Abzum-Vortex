@@ -39,7 +39,6 @@ import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { privateJsonResponse as privateResponse } from "../../../_lib/private-response";
 import { mapWebError } from "../../../_lib/web-error-mapper";
 import {
-  applicationHasAuthoredForm,
   projectRowOptionsForm,
   validateProjectedControlOption,
 } from "../../../_lib/application-page/options-projection";
@@ -99,20 +98,19 @@ class RolledBackInvocation extends Error {
 
 /**
  * True when every segment this request may have run is guaranteed to reach a Navigate on success,
- * so the page leaves and the refreshed rows would be thrown away. Anything uncertain (a
- * continuation, a failed or partial outcome, an unknown plan) keeps the rows.
+ * so the page leaves and the refreshed rows would be thrown away. Anything uncertain (a failed or
+ * partial outcome, an unknown plan) keeps the rows.
  */
 const navigatesAfterSuccess = (
   invocation: z.infer<typeof requestSchema>["invocation"],
-  result: Readonly<{ kind: "result" | "intent"; descriptor?: Readonly<{ outcome: string }> }>,
+  result: Readonly<{ descriptor: Readonly<{ outcome: string }> }>,
   releaseSet: Parameters<typeof flowPlansOf>[0] | undefined,
 ): boolean => {
-  if (result.kind !== "result" || invocation.kind === "continuation" || releaseSet === undefined)
-    return false;
-  if (result.descriptor?.outcome !== "completed" && result.descriptor?.outcome !== "committed")
+  if (releaseSet === undefined) return false;
+  if (result.descriptor.outcome !== "completed" && result.descriptor.outcome !== "committed")
     return false;
   const ids =
-    invocation.kind === "binding" && invocation.segment !== undefined
+    invocation.kind === "binding"
       ? [invocation.segment.segmentId]
       : invocation.entrySegments.map((entry) => entry.segmentId);
   const stubs = flowPlansOf(releaseSet).plans.get(String(invocation.flowId))?.browser.segments;
@@ -295,7 +293,6 @@ export const createFlowInvocationHandler =
               },
               guidedFormControls: getGuidedFormControlIds,
               guidedFormFlowId: getGuidedFormFlowId,
-              hasAuthoredForm: applicationHasAuthoredForm,
               projectForm: (session, form) =>
                 loadProjectedOptionsForm(session, address, form, bound),
               resolveFormValues: (args) =>
@@ -318,8 +315,7 @@ export const createFlowInvocationHandler =
                   bound,
                 ),
             });
-            if (result.kind === "refused")
-              return privateResponse(result, result.reason === undefined ? 404 : 409);
+            if (result.kind === "refused") return privateResponse(result, 404);
             if (result.kind === "rate_limited") {
               const response = privateResponse(
                 { kind: "refused", code: "flow_rate_limited", committedNow: result.committedNow },
@@ -331,7 +327,7 @@ export const createFlowInvocationHandler =
             const refresh = body.refresh;
             if (
               refresh !== undefined &&
-              (result.kind === "result" || result.kind === "intent") &&
+              result.kind === "result" &&
               (result.committedNow || result.replayedCommitted === true) &&
               !navigatesAfterSuccess(body.invocation, result, address.installedContext?.releaseSet)
             )

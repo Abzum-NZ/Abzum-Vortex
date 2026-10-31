@@ -34,7 +34,6 @@ export type {
   PlacementFlowBinding,
   ApplicationPageModel,
   ApplicationPagePlacementReadResult,
-  PageWebMcpTool,
 } from "./application-page/types";
 
 /** The form submission's fields come only from its current actor-permitted page. */

@@ -1,6 +1,4 @@
 import { z } from "zod";
-import { formContinuationReceiptSchema, formContinuationTargetSchema } from "./form-continuation-contracts";
-import { formContinuationAnswerSchema } from "./form-continuation-answer";
 import { containedComponentIdSchema, recordIdSchema, revisionSchema } from "../catalogue/identifiers";
 import { flowIdSchema } from "../catalogue/identifiers";
 import { jsonValueSchema } from "../catalogue/common";
@@ -29,10 +27,11 @@ const bindingInvocationSchema = z
     /** A row form's source table; the gate revalidates it and the subject against that table. */
     sourceTablePlacementId: containedComponentIdSchema.optional(),
     entrySegments: entrySegmentsSchema,
+    /** The one server segment of the flow's plan this request runs; the page runner drives the rest. */
     segment: z.object({
       segmentId: z.string().min(1).max(200),
       fingerprint: z.string().regex(/^sha256:[0-9a-f]{64}$/),
-    }).strict().optional(),
+    }).strict(),
     /** One identity per user gesture, so a repeated request for the same click is the same run. */
     clickId: z.uuid(),
     seed: z.record(z.string().min(1).max(300), jsonValueSchema),
@@ -52,29 +51,10 @@ const bindingInvocationSchema = z
   })
   .strict();
 
-const continuationInvocationSchema = z
-  .object({
-    kind: z.literal("continuation"),
-    flowId: flowIdSchema,
-    /** The row form's source table, supplied by the page and revalidated by the gate. */
-    sourceTablePlacementId: containedComponentIdSchema.optional(),
-    continuation: z.string().min(16).max(128),
-    carriedValues: z.string().min(1).max(65_536).optional(),
-    answer: formContinuationAnswerSchema,
-    /**
-     * The exact paused target and run receipt the surface last saw. Both are evidence: the server
-     * compares them with trusted state so a caller cannot skip inputs or name a different node.
-     */
-    target: formContinuationTargetSchema,
-    receipt: formContinuationReceiptSchema.optional(),
-  })
-  .strict();
-
 /** The one request contract shared by the flow client, endpoint and route. */
 export const flowBindingInvocationSchema = z.discriminatedUnion("kind", [
   runStartInvocationSchema,
   bindingInvocationSchema,
-  continuationInvocationSchema,
 ]);
 
 export type FlowBindingInvocation = z.input<typeof flowBindingInvocationSchema>;
