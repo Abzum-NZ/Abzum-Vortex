@@ -1,6 +1,6 @@
 -- DT-7: two dormant subsystems leave. Record sharing across organisations and identity
 -- disablement have no entry point in the application: their writers went in
--- 20261031180100 and every one of their tables is empty. What remains is the tables, their
+-- 20261101010100 and every one of their tables is empty. What remains is the tables, their
 -- protection triggers and the identity read path that could only ever answer "not disabled":
 -- the request checks, the insert trigger that started a disabled identity suspended, and the
 -- reactivation check in the identity projection guard.
