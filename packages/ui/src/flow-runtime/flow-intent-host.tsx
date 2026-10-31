@@ -145,16 +145,7 @@ function ConfirmSurface({
           {confirmation.details.length === 0 ? null : (
             <ul className="flex list-disc flex-col gap-1 pl-5 text-sm">
               {confirmation.details.map((line, index) => (
-                <li key={index}>
-                  {line.text}
-                  {line.lines === undefined ? null : (
-                    <ul className="mt-1 flex list-disc flex-col gap-1 pl-5">
-                      {line.lines.map((nested, nestedIndex) => (
-                        <li key={nestedIndex}>{nested}</li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
+                <li key={index}>{line}</li>
               ))}
             </ul>
           )}

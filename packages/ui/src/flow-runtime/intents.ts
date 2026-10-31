@@ -1,9 +1,8 @@
 import {
-  flowConfirmDetailsSchema,
+  maximumFlowConfirmationDetailLines,
   flowMessageDismissBounds,
   flowMessageSeverities,
   flowMessageTargets,
-  type FlowConfirmDetail,
   type FlowMessageSeverity,
   type FlowMessageTarget,
   type FormContinuationAnswer,
@@ -78,8 +77,7 @@ export type FlowMessageIntent = Readonly<{
 export type FlowConfirmIntent = Readonly<{
   title: string | undefined;
   message: string;
-  /** Each review entry, with one level of lines under it (a role and what it allows). */
-  details: readonly FlowConfirmDetail[];
+  details: readonly string[];
   choice: string | undefined;
   confirmLabel: string | undefined;
   destructive: boolean | undefined;
@@ -149,14 +147,17 @@ export const readMessageIntent = (intent: FlowIntent): FlowMessageIntent | undef
 };
 
 /**
- * The review entries a confirmation lists: a bounded number of complete entries, each with an
- * optional one-level list beneath it. An entry can describe a role's entire permission set, so it
- * must not inherit the short message-text limit.
+ * A bounded number of complete review entries, or none. An entry can describe a role's entire
+ * permission set and field changes, so it must not inherit the short message-text limit.
  */
-const detailLines = (candidate: JsonValue | undefined): readonly FlowConfirmDetail[] | undefined => {
+const detailLines = (candidate: JsonValue | undefined): readonly string[] | undefined => {
   if (candidate === undefined || candidate === null) return [];
-  const parsed = flowConfirmDetailsSchema.safeParse(candidate);
-  return parsed.success ? parsed.data : undefined;
+  if (!Array.isArray(candidate) || candidate.length > maximumFlowConfirmationDetailLines)
+    return undefined;
+  const lines = candidate.map((line) =>
+    typeof line === "string" && line.length > 0 ? line : undefined,
+  );
+  return lines.every((line): line is string => line !== undefined) ? lines : undefined;
 };
 
 /** Undefined when the message is missing or the review entries are not a bounded list of texts. */
