@@ -560,8 +560,14 @@ function PropertyControl({
         />
       );
     default: {
-      const text = value?.kind === "text" ? value.value : "";
       const options = pickerOptions(field, choices, flows);
+      const written = value?.kind === "text" ? value.value : "";
+      // A module's flow may name its own record type by key alone: the same item as `module:key`.
+      const text =
+        field.control === "record_type" &&
+        options?.some((entry) => entry.value === written) !== true
+          ? (options?.find((entry) => entry.value.endsWith(`:${written}`))?.value ?? written)
+          : written;
       return (
         <div className="space-y-1.5">
           <Label htmlFor={id}>

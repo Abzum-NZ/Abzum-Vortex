@@ -210,6 +210,10 @@ const readFieldsTextAlias = (value: FlowValue | undefined): string | undefined =
     ? value.literal.value
     : undefined;
 
+/** A module's flow names its own record type by key or as `module:key`: the same record type. */
+export const sameRecordTypeAlias = (left: string, right: string): boolean =>
+  left === right || left.endsWith(`:${right}`) || right.endsWith(`:${left}`);
+
 const refineReadFieldsTask = (
   task: SourceFlowTask,
   taskPath: (string | number)[],
@@ -254,7 +258,7 @@ const refineReadFieldsTask = (
   if (
     targetAlias !== undefined &&
     selectedTypeAlias !== undefined &&
-    targetAlias !== selectedTypeAlias
+    !sameRecordTypeAlias(targetAlias, selectedTypeAlias)
   ) {
     context.addIssue({
       code: "custom",
@@ -355,7 +359,11 @@ const refineRecordLinkTask = (
     }
   }
 
-  if (targetAlias !== undefined && inputTypeAlias !== undefined && targetAlias !== inputTypeAlias) {
+  if (
+    targetAlias !== undefined &&
+    inputTypeAlias !== undefined &&
+    !sameRecordTypeAlias(targetAlias, inputTypeAlias)
+  ) {
     context.addIssue({
       code: "custom",
       path: [...taskPath, "properties", "record"],

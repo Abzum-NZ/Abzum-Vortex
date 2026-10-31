@@ -17,7 +17,7 @@ import {
   type FlowSource,
   type FlowTask,
 } from "../workflows/flow-contracts";
-import type { SourceFlow } from "../workflows/flow-source-contracts";
+import { sameRecordTypeAlias, type SourceFlow } from "../workflows/flow-source-contracts";
 import {
   flowTaskRegistry,
   validateFlowTaskPlacement,
@@ -1183,7 +1183,10 @@ export function validateFlow(
       );
       return;
     }
-    if (targetTypeId !== undefined && targetTypeId !== declaration.recordTypeIds[0])
+    if (
+      targetTypeId !== undefined &&
+      !sameRecordTypeAlias(targetTypeId, declaration.recordTypeIds[0] ?? "")
+    )
       add(
         [...path, "properties", "record"],
         "vortex.definition.workflow_node_values",
