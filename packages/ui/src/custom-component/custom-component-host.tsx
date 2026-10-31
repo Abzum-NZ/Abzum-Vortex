@@ -26,13 +26,13 @@ import {
  */
 
 /** One declared custom component event, as carried by its release. */
-export type CustomComponentEventDeclaration = CustomComponentRelease["events"][number];
+type CustomComponentEventDeclaration = CustomComponentRelease["events"][number];
 
 /** One typed value a custom component sends back in an event payload. */
-export type CustomComponentEventPayload = Readonly<Record<string, unknown>>;
+type CustomComponentEventPayload = Readonly<Record<string, unknown>>;
 
 /** One validated event emitted by a custom component. */
-export type CustomComponentEvent = Readonly<{
+type CustomComponentEvent = Readonly<{
   event: string;
   payload: CustomComponentEventPayload;
 }>;
@@ -47,7 +47,7 @@ export type CustomComponentEventBinding = Readonly<{
 }>;
 
 /** Event bindings accepted by one custom component placement, keyed only by declared event name. */
-export type CustomComponentEventBindings = Readonly<Record<string, CustomComponentEventBinding>>;
+type CustomComponentEventBindings = Readonly<Record<string, CustomComponentEventBinding>>;
 
 /** The props a custom component host receives beyond the base platform render props. */
 export type CustomComponentHostProps = PlatformBlockRenderProps &
@@ -77,7 +77,7 @@ const EMPTY_BINDINGS: CustomComponentEventBindings = Object.freeze({});
  * rule, which also refuses template delimiters in text) makes the whole message invalid, so the host
  * drops it instead of forwarding it to a flow.
  */
-export const validateCustomComponentEventPayload = (
+const validateCustomComponentEventPayload = (
   declaration: CustomComponentEventDeclaration,
   value: unknown,
 ): CustomComponentEventPayload | undefined => {

@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { uuidFromText } from "./derived-definition-id";
 import { z } from "zod";
 import type { JsonValue } from "../catalogue/common";
 import { builderKeySchema, fieldIdSchema, recordTypeIdSchema } from "../catalogue/identifiers";
@@ -36,16 +36,8 @@ const maximumPayloadCharacters = 65_536;
  * iteration, so a replayed run reaches the same record receipt instead of writing again. Version
  * and variant bits are set so it is a strictly valid UUID.
  */
-export const effectCommandId = (runId: string, taskPath: string, iteration: string): string => {
-  const bytes = createHash("sha256")
-    .update(["flow-task-command", runId.toLowerCase(), taskPath, iteration].join("|"))
-    .digest()
-    .subarray(0, 16);
-  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
-  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
-  const hex = bytes.toString("hex");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-};
+export const effectCommandId = (runId: string, taskPath: string, iteration: string): string =>
+  uuidFromText(["flow-task-command", runId.toLowerCase(), taskPath, iteration].join("|"), 4);
 
 /** The task outcome of a protected record path's safe refusal code. */
 export const dedupeFieldCorrections = (

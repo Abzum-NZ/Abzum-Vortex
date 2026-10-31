@@ -19,7 +19,7 @@ type OptionsFlowTaskShape = Readonly<{
   tasks?: readonly OptionsFlowTaskShape[] | undefined;
 }>;
 
-export type OptionsFlowShape = Readonly<{
+type OptionsFlowShape = Readonly<{
   execution: string;
   outputs: Readonly<Record<string, unknown>>;
   tasks: readonly OptionsFlowTaskShape[];

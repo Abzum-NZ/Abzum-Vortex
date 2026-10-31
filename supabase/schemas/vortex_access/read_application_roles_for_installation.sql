@@ -33,7 +33,6 @@ begin
       'label', selected.label,
       'liveRevision', selected.live_revision,
       'lifecycle', selected.lifecycle,
-      'assignmentPolicy', selected.assignment_policy,
       'liveAssignmentCount', (
         select pg_catalog.count(*)
         from vortex_access.organization_role_assignments as assignment
@@ -52,7 +51,6 @@ begin
           and assignment.role_id = selected.role_id
           and assignment.assignee_kind = 'organization_account'
           and assignment.organization_account_id = installer.organization_account_id
-          and assignment.assignment_kind = 'standing'
           and assignment.state = 'live'
           and assignment.starts_at <= pg_catalog.clock_timestamp()
           and (assignment.expires_at is null
@@ -110,7 +108,7 @@ begin
   from (
     select distinct on (role.source_role_id)
       role.role_id, role.source_role_id, role.live_revision, revision.label,
-      revision.lifecycle, revision.assignment_policy
+      revision.lifecycle
     from vortex_access.organization_roles as role
     join vortex_access.organization_role_revisions as revision
       on revision.organization_id = role.organization_id

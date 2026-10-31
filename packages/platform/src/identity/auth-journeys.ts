@@ -36,7 +36,7 @@ export type LocalDevelopmentSignInConfiguration = Readonly<{
   adminKey: string;
 }>;
 
-export type IdentityJourneyFailure =
+type IdentityJourneyFailure =
   | "vortex.identity.invalid_input"
   | "vortex.identity.invalid_password"
   | "vortex.identity.invalid_credentials"
@@ -47,7 +47,7 @@ export type IdentityJourneyFailure =
   | "vortex.identity.registration_closed"
   | "vortex.identity.authority_unavailable";
 
-export type IdentityJourneyResult =
+type IdentityJourneyResult =
   Readonly<{ ok: true }> | Readonly<{ ok: false; code: IdentityJourneyFailure }>;
 
 export type VerifiedSignInResult =
@@ -444,6 +444,10 @@ export const completePasswordRecovery = async (
       logJourneyRefusal("password-recovery", "PASSWORD_UPDATE_REJECTED", updateError);
       return { ok: false, code: "vortex.identity.invalid_or_expired_link" };
     }
+    // The provider ended every other session of the person with the password change. The recovery
+    // session itself never reaches a browser, so it ends here too and the person signs in afresh.
+    const { error: signOutError } = await authority.auth.signOut({ scope: "local" });
+    if (signOutError) logProviderFailure("password-recovery-sign-out", signOutError);
     return { ok: true };
   } catch (error) {
     logProviderFailure("password-recovery", error);

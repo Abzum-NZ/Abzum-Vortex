@@ -15,7 +15,6 @@ declare
   allow_unlimited_retention_value boolean;
   allow_unlimited_count_value boolean;
   allowed_actions_value text[];
-  allowed_destinations_value text[];
 begin
   if p_organization_id is null
     or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
@@ -24,12 +23,12 @@ begin
     or not p_limits ?& array[
       'organizationId', 'settingsRevision', 'maxRetentionDays', 'maxRecordCount',
       'allowUnlimitedRetentionDays', 'allowUnlimitedRecordCount', 'allowedActions',
-      'allowedArchiveDestinations', 'initialPolicy'
+      'initialPolicy'
     ]
     or p_limits - array[
       'organizationId', 'settingsRevision', 'maxRetentionDays', 'maxRecordCount',
       'allowUnlimitedRetentionDays', 'allowUnlimitedRecordCount', 'allowedActions',
-      'allowedArchiveDestinations', 'initialPolicy'
+      'initialPolicy'
     ] <> '{}'::jsonb
     or not vortex_platform.is_non_nil_uuid(p_limits ->> 'organizationId')
     or pg_catalog.lower(p_limits ->> 'organizationId')
@@ -44,7 +43,6 @@ begin
     or (p_limits -> 'allowUnlimitedRecordCount' = 'true'::jsonb)
       <> (pg_catalog.jsonb_typeof(p_limits -> 'maxRecordCount') = 'null')
     or pg_catalog.jsonb_typeof(p_limits -> 'allowedActions') <> 'array'
-    or pg_catalog.jsonb_typeof(p_limits -> 'allowedArchiveDestinations') <> 'array'
     or exists (
       select 1
       from pg_catalog.jsonb_array_elements(
@@ -53,17 +51,7 @@ begin
       ) as item(value)
       where pg_catalog.jsonb_typeof(item.value) <> 'string'
     )
-    or exists (
-      select 1
-      from pg_catalog.jsonb_array_elements(
-        case
-          when pg_catalog.jsonb_typeof(p_limits -> 'allowedArchiveDestinations') = 'array'
-            then p_limits -> 'allowedArchiveDestinations'
-          else '[]'::jsonb
-        end
-      ) as item(value)
-      where pg_catalog.jsonb_typeof(item.value) <> 'string'
-    ) then
+    then
     raise exception using errcode = '22023',
       message = 'Organisation lifecycle limits setup is invalid';
   end if;
@@ -85,20 +73,8 @@ begin
     into allowed_actions_value
   from pg_catalog.jsonb_array_elements(p_limits -> 'allowedActions')
     with ordinality as item(value, ordinal);
-  select coalesce(
-    pg_catalog.array_agg(item.value #>> '{}' order by item.ordinal),
-    array[]::text[]
-  )
-    into allowed_destinations_value
-  from pg_catalog.jsonb_array_elements(p_limits -> 'allowedArchiveDestinations')
-    with ordinality as item(value, ordinal);
 
-  if not vortex_record.is_lifecycle_action_list(allowed_actions_value)
-    or not vortex_record.is_lifecycle_destination_list(allowed_destinations_value)
-    or (
-      'archive_workflow' = any (allowed_actions_value)
-      and pg_catalog.cardinality(allowed_destinations_value) = 0
-    ) then
+  if not vortex_record.is_lifecycle_action_list(allowed_actions_value) then
     raise exception using errcode = '22023',
       message = 'Organisation lifecycle limits setup is invalid';
   end if;
@@ -156,8 +132,7 @@ begin
       or existing.max_record_count is distinct from max_count_value
       or existing.allow_unlimited_retention_days is distinct from allow_unlimited_retention_value
       or existing.allow_unlimited_record_count is distinct from allow_unlimited_count_value
-      or existing.allowed_actions is distinct from allowed_actions_value
-      or existing.allowed_archive_destinations is distinct from allowed_destinations_value then
+      or existing.allowed_actions is distinct from allowed_actions_value then
       raise exception using errcode = '40001',
         message = 'Organisation lifecycle limits are already initialised differently';
     end if;
@@ -166,11 +141,11 @@ begin
       insert into vortex_record.organization_lifecycle_limits (
         organization_id, settings_revision, max_retention_days, max_record_count,
         allow_unlimited_retention_days, allow_unlimited_record_count,
-        allowed_actions, allowed_archive_destinations, initial_policy
+        allowed_actions, initial_policy
       ) values (
         p_organization_id, 1, max_retention_value, max_count_value,
         allow_unlimited_retention_value, allow_unlimited_count_value,
-        allowed_actions_value, allowed_destinations_value, p_limits -> 'initialPolicy'
+        allowed_actions_value, p_limits -> 'initialPolicy'
       ) returning * into existing;
     exception when unique_violation then
       raise exception using errcode = '40001',
@@ -185,8 +160,7 @@ begin
     'maxRecordCount', existing.max_record_count,
     'allowUnlimitedRetentionDays', existing.allow_unlimited_retention_days,
     'allowUnlimitedRecordCount', existing.allow_unlimited_record_count,
-    'allowedActions', pg_catalog.to_jsonb(existing.allowed_actions),
-    'allowedArchiveDestinations', pg_catalog.to_jsonb(existing.allowed_archive_destinations)
+    'allowedActions', pg_catalog.to_jsonb(existing.allowed_actions)
   );
 end
 $function$;

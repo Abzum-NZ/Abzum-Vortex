@@ -243,7 +243,7 @@ export function validateApplicationSourceCatalogue(
     const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
     if (
       release.key === "platform.display.record_detail" &&
-      settings.detail_fields !== undefined &&
+      settings.sections !== undefined &&
       detail === undefined
     ) {
       report("vortex.definition.application_block_settings", "required_value", [
@@ -453,8 +453,12 @@ export function validateApplicationSourceCatalogue(
       }
     } else if (detail !== undefined) {
       checkFields(
-        "detail_fields",
-        detail.fields.map((entry) => entry.field),
+        "sections",
+        [
+          ...detail.sections.flatMap((section) => section.fields.map((entry) => entry.field)),
+          ...detail.headerFields,
+          ...(detail.stageField === undefined ? [] : [detail.stageField]),
+        ],
         () => true,
         "invalid_value",
       );

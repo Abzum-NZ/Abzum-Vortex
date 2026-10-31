@@ -5,17 +5,14 @@ import { z } from "zod";
 import { continueSessionOrEnd } from "../../../../auth/_lib/session-redirect";
 import { resolveIdentitySession } from "../../../../auth/_lib/session-server";
 import { resolveApplicationAddress } from "../../../../_lib/application-address";
+import { pageAddressSchema, searchParametersOf } from "../../../../_lib/page-address-schema";
 import {
   loadApplicationRowDetail,
   type RowDetailLoadResult,
 } from "../../../../_lib/application-page/row-detail";
 
-const rowDetailRequestSchema = z
-  .object({
-    tenantShortName: z.string().min(1).max(80),
-    organizationShortName: z.string().min(1).max(80),
-    applicationKey: z.string().min(1).max(80),
-    pageKey: z.string().min(1).max(80),
+const rowDetailRequestSchema = pageAddressSchema
+  .extend({
     installationRevision: z.number().finite().pipe(revisionSchema),
     search: z.string().max(8_192),
     placementId: containedComponentIdSchema,
@@ -31,22 +28,6 @@ const rowDetailRequestSchema = z
   .refine((request) => (request.recordId === undefined) !== (request.groupKey === undefined), {
     message: "A read names either a row or a group",
   });
-
-const searchParametersOf = (
-  search: string,
-): Readonly<Record<string, string | readonly string[]>> => {
-  const parameters: Record<string, string | readonly string[]> = {};
-  for (const [name, value] of new URLSearchParams(search)) {
-    const current = parameters[name];
-    parameters[name] =
-      current === undefined
-        ? value
-        : typeof current === "string"
-          ? [current, value]
-          : [...current, value];
-  }
-  return parameters;
-};
 
 /**
  * Reads one page of an expanded row's related records, or of an open group's members, under the

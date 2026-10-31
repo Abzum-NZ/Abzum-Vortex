@@ -54,8 +54,6 @@ begin
   );
 end
 $function$;
-alter function vortex_record.preview_record_field_bounds_internal(uuid,uuid,jsonb) owner to vortex_record_adapter;
-
 
 alter function vortex_record.preview_record_field_bounds_internal(uuid, uuid, jsonb)
   owner to vortex_record_adapter;

@@ -584,7 +584,7 @@ const loadApplicationPageJoined = async (
               ? readSubject(String(subjectType.recordTypeId), subjectId.data)
               : Promise.resolve({ kind: "refused" }),
     subjectRecordTypeId: subjectType === undefined ? undefined : String(subjectType.recordTypeId),
-    readViewerTeams: services.readViewerTeams,
+    readViewerGroups: services.readViewerGroups,
     readTimeZone: services.readTimeZone,
   });
   const pageSubjectRecordTypeId =
@@ -730,16 +730,11 @@ const loadApplicationPageJoined = async (
   });
   if (groupCreateRefusal !== undefined) return groupCreateRefusal;
 
-  // A detail or form page offers its subject to the flows it starts; a public page never does.
+  // A detail or form page offers its subject to the flows it starts; a public page never does. A
+  // read of some placements returns it too, so the page always holds the concurrency number of its
+  // last read and a second action is not refused as stale.
   const subjectRow =
-    (selectedForProjection === undefined ||
-      pageDefinition.type === "guided_form" ||
-      [...editFormPlacementIds].some((placementId) =>
-        selectedForProjection.has(placementId.toLowerCase()),
-      )) &&
-    subjectType !== undefined &&
-    pageDefinition.type !== "public" &&
-    subjectId.success
+    subjectType !== undefined && pageDefinition.type !== "public" && subjectId.success
       ? await readSubject(String(subjectType.recordTypeId), subjectId.data)
       : undefined;
   const subject =

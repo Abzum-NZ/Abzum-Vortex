@@ -32,7 +32,7 @@ type TenantGovernanceMethod =
   | "suspendOrganization"
   | "reactivateOrganization";
 
-export type RequestBoundTenantGovernanceService = Pick<
+type RequestBoundTenantGovernanceService = Pick<
   ReturnType<typeof createTenantGovernanceService>,
   TenantGovernanceMethod
 >;

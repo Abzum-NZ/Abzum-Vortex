@@ -29,7 +29,7 @@ export const recordChoicePageSizes = Object.freeze({ default: 40, maximum: 200 }
  * One record type a link field may point at, as the installed release declares it: the Module
  * that owns it, its identity, its title field and its singular name.
  */
-export const recordChoiceTargetSchema = z
+const recordChoiceTargetSchema = z
   .object({
     moduleRootId: moduleRootIdSchema,
     recordTypeId: recordTypeIdSchema,
@@ -37,7 +37,6 @@ export const recordChoiceTargetSchema = z
     label: z.string().min(1).max(120),
   })
   .strict();
-export type RecordChoiceTarget = z.infer<typeof recordChoiceTargetSchema>;
 
 const recordChoiceCommandSchema = z
   .object({
@@ -85,7 +84,7 @@ export type RecordChoice = Readonly<{
   typeLabel: string;
 }>;
 
-export type RecordChoiceRead =
+type RecordChoiceRead =
   | Readonly<{
       outcome: "completed";
       choices: readonly RecordChoice[];
@@ -115,7 +114,7 @@ type RecordChoiceQueryRunner = Readonly<{
 }>;
 
 /** The longest title a record is picked or pasted by. */
-export const recordTitleMaximumLength = 200;
+const recordTitleMaximumLength = 200;
 
 /** The text a record is picked by: its title as the viewer may read it. */
 export const titleText = (value: JsonValue | undefined): string => {

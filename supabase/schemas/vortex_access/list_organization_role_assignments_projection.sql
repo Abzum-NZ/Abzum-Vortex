@@ -108,7 +108,6 @@ begin
       "assignee_kind": {"sql": "assignment.assignee_kind::text", "database": "text", "filter": true},
       "organization_account_id": {"sql": "assignment.organization_account_id::text", "database": "text", "filter": true},
       "group_id": {"sql": "assignment.group_id::text", "database": "text", "filter": true},
-      "assignment_kind": {"sql": "assignment.assignment_kind::text", "database": "text", "filter": true},
       "state": {"sql": "assignment.state::text", "database": "text", "filter": true},
       "temporal_state": {"sql": "(case when assignment.state = 'revoked' then 'revoked' when assignment.starts_at > $7 then 'scheduled' when assignment.expires_at is not null and assignment.expires_at <= $7 then 'expired' else 'active' end)", "database": "text", "filter": true},
       "role_key": {"sql": "role_revision.role_key", "database": "text", "search": true},
@@ -128,7 +127,9 @@ begin
   end if;
   begin
     select authorized.* into strict scope_row
-    from vortex_access.organization_assignment_ledger_administration_scope() as authorized;
+    from vortex_access.organization_administration_read_scope(
+      'platform.organization.assignments.read', 'Organization assignment ledger is unavailable'
+    ) as authorized;
   exception when insufficient_privilege then
     return;
   end;
@@ -153,7 +154,6 @@ begin
       'organization_account_id', assignment.organization_account_id,
       'group_id', assignment.group_id,
       'assignee_display_name', coalesce(assignee_account.display_name, assignee_group.label),
-      'assignment_kind', assignment.assignment_kind,
       'starts_at', assignment.starts_at,
       'expires_at', assignment.expires_at,
       'state', assignment.state,

@@ -1,3 +1,4 @@
+import { definitionContractVersion } from "./application-contract-versions";
 import {
   definitionResolutionSnapshotSchema,
   type DefinitionResolutionSnapshot,
@@ -7,6 +8,7 @@ import type { ModuleField } from "./module-contracts";
 import type { ConditionNode } from "./module-foundation-contracts";
 import type { z } from "zod";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json-definition";
+import { pipelineStageToneSchema, type PipelineStageTone } from "./record-type-pipelines";
 
 export type ApplicationCompositionResolution = Readonly<{
   identity(
@@ -62,7 +64,14 @@ export type FieldInputSourceField = Readonly<{
   textFormat?: string | undefined;
   displayTimeZone?: "person" | "organization" | "utc" | undefined;
   maximumSelections?: number | undefined;
-  choices: readonly Readonly<{ key: string; label: string; parentValues?: readonly string[] }>[];
+  /** A fixed money field's currency, so the money input shows it as a prefix. */
+  currency?: string | undefined;
+  choices: readonly Readonly<{
+    key: string;
+    label: string;
+    tone?: PipelineStageTone;
+    parentValues?: readonly string[];
+  }>[];
   /** The field of the same record type whose chosen value narrows this field's choices. */
   dependsOn?: Readonly<{ fieldKey: string; label: string }> | undefined;
   recordTypes: readonly Readonly<{
@@ -118,6 +127,9 @@ export const fieldInputSourceField = (
       ? (settings.options as FieldInputJson[]).map((option) => ({
           key: String(option.value),
           label: String(option.label),
+          ...(option.tone === undefined
+            ? {}
+            : { tone: pipelineStageToneSchema.parse(option.tone) }),
           ...(Array.isArray(optionParents[String(option.value)])
             ? {
                 parentValues: (optionParents[String(option.value)] as unknown[]).map(String),
@@ -152,6 +164,9 @@ export const fieldInputSourceField = (
       : {}),
     ...(type === "several_choices" && typeof settings.maximumSelections === "number"
       ? { maximumSelections: settings.maximumSelections }
+      : {}),
+    ...(type === "money" && typeof settings.currency === "string"
+      ? { currency: settings.currency }
       : {}),
     ...(type === "attachment"
       ? {
@@ -277,7 +292,7 @@ export const createApplicationResolutionSnapshot = (
   const identities = [...input.identities].sort((left, right) =>
     compareCanonicalStrings(identityOrder(left), identityOrder(right)),
   );
-  const evidence = { contractVersion: "4.2.0" as const, definitions, identities };
+  const evidence = { contractVersion: definitionContractVersion, definitions, identities };
   return definitionResolutionSnapshotSchema.parse({
     ...evidence,
     fingerprint: fingerprintCanonicalValue(evidence),

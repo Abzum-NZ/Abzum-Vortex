@@ -7,7 +7,7 @@ import {
 } from "@vortex/platform/schema";
 import authoredSource from "./application.json";
 import { loadApplicationSource } from "../application-source-loader";
-import { connectionTypeChoices, organisationAdministrationModule } from "./module";
+import { connectionTypeChoices, organisationAdministrationModules } from "./module";
 import { systemDirectoryModule } from "./system-directory";
 
 const organizationSettings = "vortex.organisation_administration:organization_settings";
@@ -32,7 +32,7 @@ export const organisationAdministrationApplication: ApplicationSourceDocument =
   loadApplicationSource(
     source,
     DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
-    [organisationAdministrationModule, systemDirectoryModule],
+    [...organisationAdministrationModules, systemDirectoryModule],
     [
       {
         ...defaultOpenFlowSource({

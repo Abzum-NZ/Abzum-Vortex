@@ -971,7 +971,7 @@ export const recordsTableConditionalFormattingFeature: RecordsTableFeatureDefini
  * (a bar or scale over a column of cells) has nothing to draw on; a rule reads any field of the
  * board's record type that the query selects, whether or not the card shows it.
  */
-export const boardFormattingProblem = (
+const boardFormattingProblem = (
   settings: RecordsTableConditionalFormattingSettings,
   board: RecordsTableBoardFacts,
 ): Extract<RecordsTableFeatureCheck, { kind: "not_possible" }> | undefined => {

@@ -152,7 +152,7 @@ type OwnProfileRow = DatabaseRow & {
   time_zone: unknown;
 };
 
-export type OrganizationLocalAdministrationDependencies = HumanOrganizationRequestDependencies &
+type OrganizationLocalAdministrationDependencies = HumanOrganizationRequestDependencies &
   Readonly<{ activityId?: () => string }>;
 
 const normalizeRevision = (value: unknown): unknown =>

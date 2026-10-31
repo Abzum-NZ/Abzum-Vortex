@@ -16,7 +16,7 @@ export const PREVIEW_SEED_RECORD_BOUND = 2000;
  * What marks a runtime context as a preview: its address, draft revision and expiry, and the
  * record types whose seed reached the preview bound.
  */
-export type RuntimePreview = Readonly<{
+type RuntimePreview = Readonly<{
   previewInstallationId: string;
   draftRevision: number;
   expiresAt: string;

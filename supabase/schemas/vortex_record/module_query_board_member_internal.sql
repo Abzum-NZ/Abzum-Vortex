@@ -38,7 +38,7 @@ begin
   end if;
   for board_option in select item.value from pg_catalog.jsonb_array_elements(board_options) as item(value) loop
     if pg_catalog.jsonb_typeof(board_option) is distinct from 'object'
-      or board_option - array['value', 'label', 'requiredPermissionId']::text[] <> '{}'::jsonb
+      or board_option - array['value', 'label', 'tone', 'requiredPermissionId']::text[] <> '{}'::jsonb
       or not (board_option ? 'value') or not (board_option ? 'label')
       or pg_catalog.jsonb_typeof(board_option -> 'value') is distinct from 'string'
       or coalesce(pg_catalog.length(board_option ->> 'value'), 0) not between 1 and 120

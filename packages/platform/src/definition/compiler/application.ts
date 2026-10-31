@@ -1,3 +1,4 @@
+import { definitionContractVersion } from "../application-contract-versions";
 import type { FlowFormTypes } from "../../workflows/flow-form-types";
 import type { FlowFormula, FlowReference } from "../../workflows/flow-values";
 import { valueTypesCompatible } from "../../catalogue/catalogues";
@@ -916,7 +917,7 @@ export function compileParsedApplicationRequest(
     };
     const output = applicationCompilationOutputSchema.safeParse({
       kind: "application",
-      validationContractVersion: "4.2.0",
+      validationContractVersion: definitionContractVersion,
       platformCompatibilityVersion: APPLICATION_PLATFORM_COMPATIBILITY_VERSION,
       canonical,
       artifact,

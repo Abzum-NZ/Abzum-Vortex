@@ -9,7 +9,7 @@ import {
 import { nonNegativeFiniteSchema, positiveFiniteSchema } from "./shared";
 import { DEFAULT_APPLICATION_THEME_SELECTION } from "./theme-defaults";
 
-export const themeTokenKindSchema = z.enum([
+const themeTokenKindSchema = z.enum([
   "color_pair",
   "typography",
   "spacing",
@@ -28,7 +28,7 @@ const oklchColorPattern = new RegExp(
 );
 
 /** A theme colour is a six-digit hex value or an oklch() function, the two app-lightness forms. */
-export const themeColorSchema = z
+const themeColorSchema = z
   .string()
   .refine((value) => hexColorPattern.test(value) || oklchColorPattern.test(value), {
     message: "Use a six-digit hex or an oklch() colour value",
@@ -39,7 +39,7 @@ export const themeColorSchema = z
  * catalogue's declaration rather than token names. Only platform theme releases
  * declare roles; application and placement overrides inherit them unchanged.
  */
-export const themeColorRoleSchema = z.enum(["foreground", "background"]);
+const themeColorRoleSchema = z.enum(["foreground", "background"]);
 export type ThemeColorRole = z.infer<typeof themeColorRoleSchema>;
 
 export const themeTokenValueSchema = z.discriminatedUnion("kind", [
@@ -107,7 +107,7 @@ export const themeTokenValueSchema = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 
-export const exactPlatformThemeDependencySchema = z
+const exactPlatformThemeDependencySchema = z
   .object({
     kind: sourceProvenanceUnchanged(z.literal("platform_theme")),
     catalogueThemeId: sourceProvenanceUnchanged(platformIdSchema),
@@ -116,7 +116,7 @@ export const exactPlatformThemeDependencySchema = z
   })
   .strict();
 
-export const sourceExactPlatformThemeDependencySchema = z
+const sourceExactPlatformThemeDependencySchema = z
   .object({
     kind: sourceProvenanceUnchanged(z.literal("platform_theme")),
     catalogue_theme_id: sourceProvenanceUnchanged(platformIdSchema),
@@ -136,7 +136,7 @@ export const DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY = Object.freeze({
  * lowercase kebab-case, for example `default-translucent`, and are matched against the catalogue
  * exactly.
  */
-export const themeCatalogueOptionIdSchema = z
+const themeCatalogueOptionIdSchema = z
   .string()
   .min(1)
   .max(120)
@@ -175,7 +175,7 @@ export type ApplicationThemeSelection = z.infer<typeof applicationThemeSelection
  * The authored form of the catalogue selection, with the snake_case keys every source document
  * uses. Compilation maps it one to one onto the canonical selection above.
  */
-export const sourceApplicationThemeSelectionSchema = z
+const sourceApplicationThemeSelectionSchema = z
   .object({
     style: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),
     base_color: sourceProvenanceUnchanged(themeCatalogueOptionIdSchema),

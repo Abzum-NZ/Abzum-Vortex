@@ -9,18 +9,15 @@ import { z } from "zod";
 import { continueSessionOrEnd } from "../auth/_lib/session-redirect";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { resolveApplicationAddress } from "./application-address";
+import { pageAddressSchema, searchParametersOf } from "./page-address-schema";
 import {
   loadApplicationPagePlacements,
   type ApplicationPagePlacementReadResult,
   type PageDataState,
 } from "./application-page";
 
-export const placementRefreshAddressSchema = z
-  .object({
-    tenantShortName: z.string().min(1).max(80),
-    organizationShortName: z.string().min(1).max(80),
-    applicationKey: z.string().min(1).max(80),
-    pageKey: z.string().min(1).max(80),
+export const placementRefreshAddressSchema = pageAddressSchema
+  .extend({
     installationRevision: z.number().finite().pipe(revisionSchema),
     search: z.string().max(8_192),
   })
@@ -81,22 +78,6 @@ const tableContinuationTargetSchema = z
   .strict();
 
 const unavailablePlacement = Object.freeze({ status: "error" }) satisfies PageDataState;
-
-const searchParametersOf = (
-  search: string,
-): Readonly<Record<string, string | readonly string[]>> => {
-  const parameters: Record<string, string | readonly string[]> = {};
-  for (const [name, value] of new URLSearchParams(search)) {
-    const current = parameters[name];
-    parameters[name] =
-      current === undefined
-        ? value
-        : typeof current === "string"
-          ? [current, value]
-          : [...current, value];
-  }
-  return parameters;
-};
 
 /** Re-reads only named placements after resolving the viewer's current page authority. */
 export async function rereadApplicationPlacements(

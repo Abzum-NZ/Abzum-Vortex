@@ -1,30 +1,19 @@
 "use client";
 
-import { safeHttpsUrlSchema, type JsonValue } from "@vortex/platform/schema";
-import { DefinitionRenderError } from "../definition-error";
+import type { JsonValue } from "@vortex/platform/schema";
 import type { FlowIntent } from "../flow-runtime/intents";
-
-/**
- * The two open behaviours a link may declare (spec 07). `replace` uses a client-side transition for
- * an internal target and a full document navigation for an external one; `new_page` opens a new
- * browsing context without opener access or referrer.
- */
-export type LinkOpenBehavior = "replace" | "new_page";
 
 /**
  * One declared link target. The target is definition or record data and grants no access to what
  * it names; an internal target is only ever resolved against the viewer's current server-side
  * access, never trusted from the browser.
  */
-export type LinkTarget =
-  | Readonly<{
-      kind: "page";
-      pageId: string;
-      /** Parameters of the Navigate task that opened it; the shell decides how a page uses them. */
-      parameters?: Readonly<Record<string, JsonValue>>;
-    }>
-  | Readonly<{ kind: "application"; applicationRootId: string }>
-  | Readonly<{ kind: "external"; address: string }>;
+type LinkTarget = Readonly<{
+  kind: "page";
+  pageId: string;
+  /** Parameters of the Navigate task that opened it; the shell decides how a page uses them. */
+  parameters?: Readonly<Record<string, JsonValue>>;
+}>;
 
 /**
  * Unsaved-work protection supplied by the shell: `hasUnsavedWork` reports whether the current
@@ -46,78 +35,14 @@ export type LinkNavigationEnvironment = Readonly<{
   recheckInternalTarget: (target: LinkTarget) => Promise<boolean> | boolean;
   /** Performs the client-side transition for an internal target; the shell stays mounted. */
   navigateInternal: (target: LinkTarget) => void;
-  /** The same-origin address a new browsing context opens for an internal target. */
-  resolveInternalAddress: (target: LinkTarget) => string;
 }>;
-
-/** One external anchor's attributes: a validated address opened in a new browsing context. */
-type ExternalLinkActivation = Readonly<{
-  href: string;
-  target: "_blank";
-  rel: "noopener noreferrer";
-}>;
-
-const refusedExternalAddress = (): DefinitionRenderError =>
-  new DefinitionRenderError(
-    "INVALID_COMPOSITION",
-    "An external link requires an HTTPS address without credentials, at most 2048 characters",
-  );
 
 /** True when leaving the current surface may proceed; absent guard means nothing to protect. */
 const mayDiscardUnsavedWork = async (guard: UnsavedWorkGuard | undefined): Promise<boolean> =>
   guard === undefined || !guard.hasUnsavedWork() || (await guard.confirmDiscardUnsavedWork());
 
-/** Opens a new browsing context with no opener access and no referrer; never a server fetch. */
-const openNewContext = (address: string): void => {
-  window.open(address, "_blank", "noopener,noreferrer");
-};
-
-/**
- * Resolves the shell's address for an internal target against this document and accepts it only
- * when it stays on this origin, so an internal link can never be turned into an external one.
- */
-const sameOriginAddress = (address: string): string | undefined => {
-  try {
-    const resolved = new URL(address, window.location.origin);
-    return resolved.origin === window.location.origin ? resolved.href : undefined;
-  } catch {
-    return undefined;
-  }
-};
-
-/**
- * The anchor attributes for one external link tile. The address is validated against the shared
- * bounded HTTPS contract (HTTPS only, no embedded credentials, at most the shared length limit)
- * before render, and an invalid address fails the render closed rather than being shown. The anchor
- * opens a new browsing context with no opener access or referrer, so the current surface and its
- * unsaved work stay in place. The platform never fetches the address on the person's behalf.
- */
-export function externalLinkActivation(address: unknown): ExternalLinkActivation {
-  const parsed = safeHttpsUrlSchema.safeParse(address);
-  if (!parsed.success) throw refusedExternalAddress();
-  return Object.freeze({
-    href: parsed.data,
-    target: "_blank" as const,
-    rel: "noopener noreferrer" as const,
-  });
-}
-
-/** The Navigate task's intent, from the flow runtime or built for a link activation. */
-export type NavigateTaskIntent = FlowIntent & Readonly<{ kind: "navigate" }>;
-
-/** The Navigate task intent that opens one page; a link activation runs exactly this intent. */
-export const navigateIntentForPage = (
-  pageId: string,
-  parameters?: Readonly<Record<string, JsonValue>>,
-  taskId = "link_activation",
-): NavigateTaskIntent => ({
-  kind: "navigate",
-  taskId,
-  properties: parameters === undefined ? { page: pageId } : { page: pageId, parameters },
-});
-
 /** The page target a Navigate task intent names; undefined when it names no valid page. */
-export const linkTargetForNavigateIntent = (intent: FlowIntent): LinkTarget | undefined => {
+const linkTargetForNavigateIntent = (intent: FlowIntent): LinkTarget | undefined => {
   const { page, parameters } = intent.properties;
   if (intent.kind !== "navigate" || typeof page !== "string" || page.length === 0) return undefined;
   const bag =
@@ -128,10 +53,9 @@ export const linkTargetForNavigateIntent = (intent: FlowIntent): LinkTarget | un
 };
 
 /**
- * The browser implementation of the Navigate task (`interface.navigate`), shared by a flow's
- * Navigate task and by link activation. The page is re-checked on the server first and refused when
- * it is no longer available; navigation then follows unsaved-work protection. Returns true only when
- * navigation was started.
+ * The browser implementation of the Navigate task (`interface.navigate`). The page is re-checked on
+ * the server first and refused when it is no longer available; navigation then follows unsaved-work
+ * protection. Returns true only when navigation was started.
  */
 export async function performNavigateTask(
   intent: FlowIntent,
@@ -141,50 +65,6 @@ export async function performNavigateTask(
   const target = linkTargetForNavigateIntent(intent);
   if (target === undefined) return false;
   if (!(await environment.recheckInternalTarget(target))) return false;
-  if (!(await mayDiscardUnsavedWork(environment.unsavedWork))) return false;
-  environment.navigateInternal(target);
-  return true;
-}
-
-/**
- * Activates one declared link target under its declared open behaviour. An external address is
- * validated, then opened by full document navigation after unsaved-work protection (`replace`) or
- * in a new browsing context without opener access or referrer (`new_page`); it is never fetched.
- * An internal target is re-checked on the server first and refused when it is no longer available;
- * `replace` then transitions client-side after unsaved-work protection, and `new_page` opens its
- * same-origin address in a new browsing context. A new browsing context never leaves the current
- * surface, so it needs no unsaved-work prompt. Returns true only when navigation was started.
- */
-export async function activateLinkTarget(
-  target: LinkTarget,
-  behavior: LinkOpenBehavior,
-  environment: LinkNavigationEnvironment,
-): Promise<boolean> {
-  if (typeof window === "undefined") return false;
-  if (target.kind === "external") {
-    const address = safeHttpsUrlSchema.safeParse(target.address);
-    if (!address.success) return false;
-    if (behavior === "new_page") {
-      openNewContext(address.data);
-      return true;
-    }
-    if (!(await mayDiscardUnsavedWork(environment.unsavedWork))) return false;
-    window.location.assign(address.data);
-    return true;
-  }
-  // A same-context page link is the Navigate task, so links and flows share one navigation path.
-  if (target.kind === "page" && behavior === "replace")
-    return performNavigateTask(
-      navigateIntentForPage(target.pageId, target.parameters),
-      environment,
-    );
-  if (!(await environment.recheckInternalTarget(target))) return false;
-  if (behavior === "new_page") {
-    const address = sameOriginAddress(environment.resolveInternalAddress(target));
-    if (address === undefined) return false;
-    openNewContext(address);
-    return true;
-  }
   if (!(await mayDiscardUnsavedWork(environment.unsavedWork))) return false;
   environment.navigateInternal(target);
   return true;

@@ -19,7 +19,6 @@ begin
       and revision.revision = role.live_revision
     where role.organization_id = scope.organization_id and role.role_id = any(p_role_ids)
       and revision.lifecycle = 'active'
-      and revision.assignment_policy in ('standing', 'activation_required')
       and vortex_access.check_organization_invitation_role_authority_internal(
         scope.organization_id, scope.organization_account_id, role.role_id, checked_at)
   ), '{}'::uuid[]);

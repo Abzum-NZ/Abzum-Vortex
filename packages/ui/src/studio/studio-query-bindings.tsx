@@ -92,7 +92,7 @@ export function StudioSelectionControlBinding({
 const partLabels: Record<CurrentPersonPart, string> = {
   person: "Person",
   organisation: "Organisation",
-  team: "Team",
+  group: "Group",
 };
 /**
  * A date and time is written in UTC, as `2026-10-20T09:30`, and kept as an exact instant. An instant
@@ -195,16 +195,16 @@ export function StudioQueryBindings({
           (field) => field.type !== undefined && fit(field.type),
         );
         // The person's directory record fills a record input; their organisation fills a text one;
-        // their team fills a record input of the group directory.
+        // their group fills a record input of the group directory.
         const personFits =
           facts.currentPersonRecordType !== undefined &&
           fit({ kind: "record", recordTypes: [facts.currentPersonRecordType] });
         const organisationFits = fit({ kind: "text" });
-        const teamFits =
-          facts.currentTeamRecordType !== undefined &&
-          fit({ kind: "record", recordTypes: [facts.currentTeamRecordType] });
+        const groupFits =
+          facts.currentGroupRecordType !== undefined &&
+          fit({ kind: "record", recordTypes: [facts.currentGroupRecordType] });
         const partsFitting = currentPersonParts.filter((part) =>
-          part === "person" ? personFits : part === "organisation" ? organisationFits : teamFits,
+          part === "person" ? personFits : part === "organisation" ? organisationFits : groupFits,
         );
         const sources: QueryBindingSourceKind[] = [
           "fixed",

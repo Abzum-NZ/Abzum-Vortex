@@ -49,7 +49,7 @@ export const isControlPayload = (values: unknown): boolean =>
   Object.hasOwn(CONTROL_PAYLOAD_CONTRACTS, values.kind);
 
 /** A control's ready state, or why its payload was not published. */
-export type ControlDataPublication =
+type ControlDataPublication =
   Readonly<{ status: "ready"; values: unknown }> | Readonly<{ status: "disabled"; reason: string }>;
 
 /**

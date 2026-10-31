@@ -3,13 +3,13 @@ import type { ModuleContent } from "./module-contracts";
 import type { JsonValue } from "../catalogue/common";
 
 /** A complete review reserves one bounded release and independently retained historical roles. */
-export const maximumApplicationRoleReviewBytes = 896 * 1024;
+const maximumApplicationRoleReviewBytes = 896 * 1024;
 // Every one of the 500 roles may retain a different previously published permission set.
-export const maximumAcceptedRoleHistoryBytes =
+const maximumAcceptedRoleHistoryBytes =
   96 * 1024 * 1024 - 256 * 1024 - maximumApplicationRoleReviewBytes;
 const fieldGrantBytes = 384;
 
-export type ApplicationRoleReviewRole = Readonly<{
+type ApplicationRoleReviewRole = Readonly<{
   name: string;
   permissionCount: number;
   fieldGrants: number;
@@ -19,7 +19,7 @@ export type ApplicationRoleReviewRole = Readonly<{
 const bytes = (value: string): number => new TextEncoder().encode(value).length;
 
 /** Upper bound for freshly parsed JSONB, including entry headers, alignment and numeric storage. */
-export const reviewJsonbBytes = (value: JsonValue): number => {
+const reviewJsonbBytes = (value: JsonValue): number => {
   if (typeof value === "string") return bytes(value) + 8;
   if (typeof value === "number") return 32;
   if (typeof value === "boolean" || value === null) return 8;

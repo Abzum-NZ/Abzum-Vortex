@@ -15,6 +15,7 @@ import type { InstalledRuntimeContext } from "../../definition/installed-runtime
 import type { ProtectedQueryRow } from "../../queries/protected-query-contracts";
 import {
   collectRecordLinks,
+  type ProjectedFieldPipeline,
   type RecordLinkResolver,
   type TableFieldColumn,
 } from "../component-data-projection";
@@ -67,7 +68,7 @@ export type PlacementLogPlace = Readonly<{
   pageKey: string;
 }>;
 
-export type PlacementFailureReason =
+type PlacementFailureReason =
   | "query_not_bound"
   | "query_binding_refused"
   | "query_binding_withheld"
@@ -78,6 +79,10 @@ export type PlacementFailureReason =
   | "detail_command_invalid"
   | "detail_query_unavailable"
   | "detail_query_refused"
+  | "related_list_query_unavailable"
+  | "related_list_command_invalid"
+  | "related_list_unavailable"
+  | "related_list_refused"
   | "launcher_query_invalid"
   | "launcher_query_unavailable"
   | "launcher_query_refused"
@@ -372,6 +377,7 @@ export const fieldChoiceLabelsOf = (
                 field.settings.options.map((option) => ({
                   value: option.value,
                   label: option.label,
+                  ...(option.tone === undefined ? {} : { tone: option.tone }),
                 })),
               ] as const,
             ],
@@ -510,6 +516,7 @@ export const fieldEditorsOf = (
                     return {
                       value: option.value,
                       label: option.label,
+                      ...(option.tone === undefined ? {} : { tone: option.tone }),
                       ...(parentValues === undefined ? {} : { parentValues }),
                     };
                   }),
@@ -559,6 +566,43 @@ export const fieldEditorsOf = (
           default:
             return [];
         }
+      }),
+    ),
+  );
+
+/**
+ * The pipeline every stage field of one module declares, by stage field identity: the field's label,
+ * every option with its label and colour role, the stage order and the allowed moves. A record
+ * detail's stage strip reads this map, so a stage's colour is its option's own and never a second
+ * declaration.
+ */
+export const fieldPipelinesOf = (module: PlacementModule): Record<string, ProjectedFieldPipeline> =>
+  Object.fromEntries(
+    module.content.recordTypes.flatMap((recordType) =>
+      recordType.pipelines.flatMap((pipeline) => {
+        const field = recordType.fields.find((candidate) =>
+          sameId(String(candidate.fieldId), String(pipeline.stageFieldId)),
+        );
+        if (field === undefined) return [];
+        if (field.type !== "choice" && field.type !== "several_choices") return [];
+        return [
+          [
+            String(field.fieldId).toLowerCase(),
+            {
+              fieldLabel: field.label,
+              options: field.settings.options.map((option) => ({
+                value: option.value,
+                label: option.label,
+                tone: option.tone ?? "neutral",
+              })),
+              stages: pipeline.stages.map((stage) => ({ option: stage.option })),
+              transitions: pipeline.transitions.map((transition) => ({
+                from: transition.from,
+                to: transition.to,
+              })),
+            },
+          ] as const,
+        ];
       }),
     ),
   );

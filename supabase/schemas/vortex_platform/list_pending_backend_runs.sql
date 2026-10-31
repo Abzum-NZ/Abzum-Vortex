@@ -1,14 +1,28 @@
 create or replace function vortex_platform.list_pending_backend_runs(p_limit integer)
 returns setof uuid
 language plpgsql
-stable
+volatile
 security definer
 set search_path = ''
 as $function$
+declare
+  retention_window constant interval := interval '90 days';
+  maximum_trim constant integer := 500;
 begin
   if p_limit is null or p_limit not between 1 and 100 then
     raise exception using errcode = '22023', message = 'Back-end run limit is invalid';
   end if;
+  -- Retention runs once per recovery tick: a bounded batch of runs that finished more than
+  -- 90 days ago leaves the history; the rest goes on later ticks.
+  delete from vortex_platform.backend_runs as run
+  where run.backend_run_id in (
+    select finished.backend_run_id
+    from vortex_platform.backend_runs as finished
+    where finished.finished_at < pg_catalog.statement_timestamp() - retention_window
+    order by finished.finished_at
+    limit maximum_trim
+    for update skip locked
+  );
   return query
   select run.backend_run_id
   from vortex_platform.backend_runs as run
@@ -25,4 +39,4 @@ revoke all on function vortex_platform.list_pending_backend_runs(integer)
 grant execute on function vortex_platform.list_pending_backend_runs(integer) to vortex_runtime;
 
 comment on function vortex_platform.list_pending_backend_runs(integer) is
-  'Lists the oldest pending or abandoned back-end runs for the recovery tick.';
+  'The recovery tick: deletes a bounded batch of back-end runs finished more than 90 days ago, then lists the oldest pending or abandoned back-end runs.';

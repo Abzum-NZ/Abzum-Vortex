@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
+import type { z } from "zod";
 import {
   logRefusal,
   recordIdSchema,
@@ -18,12 +18,13 @@ import {
   type RecordsTableBulkAddress,
 } from "@vortex/platform/server";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
+import { pageAddressSchema } from "../../../_lib/page-address-schema";
 import { platformPermissionSource } from "../../../_lib/platform-permission-source";
 import { getQueryContinuationKey } from "../../../_lib/query-continuation-key";
 import { humanOrganizationRequestDependencies } from "../../../_lib/server-composition";
 import { privateJsonResponse as privateResponse } from "../../../_lib/private-response";
 import { readBoundedRequestText } from "../../_lib/bounded-request-body";
-import { getIdentityJourneyConfiguration } from "../../../auth/_lib/authority-configuration";
+import { isOwnSiteJsonRequest } from "../../_lib/own-site-request";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 
 const defaultMaximumRequestBodyLength = 65_536;
@@ -33,13 +34,9 @@ const defaultMaximumRequestBodyLength = 65_536;
  * record a detail page was opened for is an address candidate, never authority: the page's declared
  * subject decides whether it counts.
  */
-const addressSchema = z
-  .object({
-    tenantShortName: z.string().min(1).max(200),
-    organizationShortName: z.string().min(1).max(200),
-    applicationKey: z.string().min(1).max(200),
-    pageRecordId: recordIdSchema.optional(),
-  })
+const addressSchema = pageAddressSchema
+  .pick({ tenantShortName: true, organizationShortName: true, applicationKey: true })
+  .extend({ pageRecordId: recordIdSchema.optional() })
   .strict();
 
 /** The one bulk service of a Records table, composed for this request. */
@@ -97,13 +94,7 @@ export const resolveBulkRequest = async <Body extends { pageKey: string; placeme
     const refusal: RecordsTableRequestRejection = { kind: "refused", reason };
     return { kind: "response", response: privateResponse(refusal, status) };
   };
-  const origin = request.headers.get("origin");
-  const contentType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
-  if (
-    origin === null ||
-    origin !== new URL(getIdentityJourneyConfiguration().siteUrl).origin ||
-    contentType !== "application/json"
-  )
+  if (!isOwnSiteJsonRequest(request))
     return refused("request_not_from_own_site", "not_available", 403);
   const identity = await resolveIdentitySession();
   if (identity.kind === "temporarily_unavailable")

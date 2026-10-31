@@ -410,8 +410,10 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
   };
 
   /**
-   * The storage set an upgrade replaces. Temporary: remove the superseded outcome when stage and
-   * production report 0 active installations on a superseded contract.
+   * The storage set an upgrade replaces. A release published under an earlier definition contract is
+   * never read as a storage set: it stays as history, and the upgrade reads the release before it
+   * only to replace it by name. The superseded-contract path stays for ever, because a customer's
+   * history holds releases of every contract the platform has accepted.
    */
   const readOldStorageRelease = async (
     session: IdentitySession,
@@ -935,10 +937,9 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
               active.releaseRevision !== oldTarget.applicationReleaseRevision
             )
               throw fail("APPLICATION_INSTALLATION_STALE");
-            // Temporary: remove when stage and production report 0 active installations on a
-            // superseded contract. A release of an earlier definition contract is never decoded;
-            // its pins are the active bindings and it detaches no contributions, because the
-            // release-set read refuses one whose Module releases declare any.
+            // A release of an earlier definition contract is never decoded; its pins are the
+            // active bindings and it detaches no contributions, because the release-set read
+            // refuses one whose Module releases declare any.
             const old =
               oldExact === "superseded"
                 ? {

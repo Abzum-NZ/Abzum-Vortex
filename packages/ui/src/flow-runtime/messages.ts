@@ -1,7 +1,7 @@
 import type { NoticeSeverity } from "../components/notice";
-import type { FormFlowFeedback } from "@vortex/platform/schema";
+import type { FlowMessageTarget, FormFlowFeedback } from "@vortex/platform/schema";
 
-export type PageMessageTarget = "toast" | "banner" | "dialog" | "inline" | "slot";
+export type PageMessageTarget = FlowMessageTarget;
 export type PageMessage = Readonly<{
   id: string;
   target: PageMessageTarget;

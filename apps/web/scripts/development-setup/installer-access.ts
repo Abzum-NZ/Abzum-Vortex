@@ -88,7 +88,6 @@ const createAndAssignPlatformRole = async (
         label,
         description,
         privilegeClassification: "privileged",
-        assignmentPolicy: { kind: "standing" },
         permissions,
       },
     }),
@@ -110,7 +109,6 @@ const createAndAssignPlatformRole = async (
       expectedRoleRevision: created.value.role.liveRevision,
       assigneeKind: "organization_account",
       organizationAccountId: facts.stewardOrganizationAccountId,
-      assignmentKind: "standing",
       startsAt: new Date(Date.now() - 1_000).toISOString(),
     }),
   );

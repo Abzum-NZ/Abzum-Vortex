@@ -1,23 +1,5 @@
 import "server-only";
-
-import type {
-  ApplicationRootId,
-  FieldId,
-  FileId,
-  Fingerprint,
-  OrganizationId,
-  PlatformId,
-  RecordId,
-  RecordTypeId,
-} from "../catalogue/identifiers";
-import {
-  fileRecordSchema,
-  type FileLegalHoldProjection,
-  type FileLifecycleState,
-  type FileRecord,
-  type VerifiedFileActor,
-} from "./file-contracts";
-import type { ContentKind } from "./content-safety";
+import { fileRecordSchema, type FileLifecycleState, type FileRecord } from "./file-contracts";
 
 /** The stored-content safety inspection used by upload completion. */
 export const PREFLIGHT_SCANNER_NAME = "vortex_file_preflight";
@@ -73,7 +55,7 @@ const ALLOWED_LIFECYCLE_TRANSITIONS: ReadonlyMap<
   ["removed", new Set<FileLifecycleState>()],
 ]);
 
-export const isValidFileLifecycleTransition = (
+const isValidFileLifecycleTransition = (
   from: FileLifecycleState,
   to: FileLifecycleState,
 ): boolean => ALLOWED_LIFECYCLE_TRANSITIONS.get(from)?.has(to) === true;
@@ -159,34 +141,3 @@ export const recordFileSafetyResult = (
     scannerResult: outcome.scannerResult,
   });
 };
-
-/** The canonical attachment settings of the field contract. */
-export type FileAttachmentConstraints = Readonly<{
-  allowedKinds?: readonly ContentKind[];
-  allowedExtensions?: readonly string[];
-  maxFileSizeMb?: number;
-  multiple?: boolean;
-  maxFiles?: number;
-}>;
-
-export type CreateFileRecordInput = Readonly<{
-  organizationId: OrganizationId;
-  applicationRootId?: ApplicationRootId;
-  owner?: Readonly<{
-    recordTypeId: RecordTypeId;
-    recordId: RecordId;
-    fieldId: FieldId;
-  }>;
-  attachmentConstraints?: FileAttachmentConstraints;
-  existingAttachmentCount: number;
-  rawFilename: string;
-  detectedMediaType: string;
-  extension: string;
-  sizeBytes: number;
-  checksum: Fingerprint;
-  uploader: VerifiedFileActor;
-  fileId?: FileId;
-  owningAttachmentReferences?: readonly PlatformId[];
-  legalHold?: FileLegalHoldProjection;
-  clock?: () => Date;
-}>;

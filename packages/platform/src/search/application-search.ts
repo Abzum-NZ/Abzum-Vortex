@@ -14,11 +14,11 @@ import {
 import { literalSearchTerms } from "./literal-search";
 import { prepareSearchFilters, splitSearchFilters } from "./search-filters";
 
-export type ApplicationSearchRecord = Readonly<{
+type ApplicationSearchRecord = Readonly<{
   concurrencyNumber: number;
   values: Readonly<Record<string, JsonValue>>;
 }>;
-export type ApplicationSearchMatch = Readonly<{
+type ApplicationSearchMatch = Readonly<{
   recordId: string;
   recordTypeId: string;
   targetPageId: string;
@@ -27,8 +27,8 @@ export type ApplicationSearchMatch = Readonly<{
   subtitle?: string;
   rank: number;
 }>;
-export type SearchPosition = Readonly<{ score: number; id: string }>;
-export type SearchScanState = Readonly<{
+type SearchPosition = Readonly<{ score: number; id: string }>;
+type SearchScanState = Readonly<{
   scan: SearchPosition | null;
   held: readonly SearchPosition[];
   done: boolean;

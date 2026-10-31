@@ -422,82 +422,232 @@
       },
       {
         "kind": "list",
-        "key": "detail_fields",
+        "key": "header_fields",
         "presentation": true,
         "presentationIdentity": "field",
-        "label": "Detail fields",
-        "help": "Ordered fields shown for the record",
-        "required": true,
+        "label": "Header key facts",
+        "help": "Up to four fields shown as the record's key facts beside its heading",
+        "required": false,
         "minimumItems": 1,
-        "maximumItems": 100,
+        "maximumItems": 4,
         "item": {
           "kind": "group",
-          "key": "detail_field",
-          "label": "Detail field",
-          "help": "One displayed field of the bound record",
+          "key": "header_field",
+          "label": "Key fact",
+          "help": "One field shown in the header",
           "required": true,
           "properties": [
             {
               "kind": "field_reference",
               "key": "field",
               "label": "Field",
-              "help": "Field of the bound query or record type shown here",
               "required": true
+            }
+          ]
+        }
+      },
+      {
+        "kind": "field_reference",
+        "key": "stage_field",
+        "label": "Stage field",
+        "help": "The choice field whose pipeline shows as the record's stage strip",
+        "required": false
+      },
+      {
+        "kind": "list",
+        "key": "sections",
+        "presentation": true,
+        "presentationIdentity": "key",
+        "label": "Sections",
+        "help": "Cards of fields, in the order the record page shows them",
+        "required": true,
+        "minimumItems": 1,
+        "maximumItems": 20,
+        "item": {
+          "kind": "group",
+          "key": "section",
+          "label": "Section",
+          "help": "One card of the record page",
+          "required": true,
+          "properties": [
+            {
+              "kind": "text",
+              "key": "key",
+              "label": "Key",
+              "help": "Stable identity of this card in the page",
+              "required": true,
+              "minLength": 1,
+              "maxLength": 40
             },
             {
               "kind": "text",
-              "key": "label",
+              "key": "title",
               "presentation": true,
-              "label": "Label",
-              "help": "Field label; the field name is used when absent",
+              "label": "Title",
+              "help": "Card heading; absent leaves the card untitled",
               "required": false,
               "minLength": 1,
               "maxLength": 120
             },
             {
-              "kind": "choice",
-              "key": "format",
-              "label": "Format",
-              "help": "How the value is presented",
-              "required": false,
-              "defaultValue": {
-                "kind": "choice",
-                "value": "automatic"
-              },
-              "options": [
-                {
-                  "key": "automatic",
-                  "label": "Automatic"
-                },
-                {
-                  "key": "text",
-                  "label": "Text"
-                },
-                {
-                  "key": "number",
-                  "label": "Number"
-                },
-                {
-                  "key": "currency",
-                  "label": "Currency"
-                },
-                {
-                  "key": "percent",
-                  "label": "Percent"
-                },
-                {
-                  "key": "date",
-                  "label": "Date"
-                },
-                {
-                  "key": "date_time",
-                  "label": "Date and time"
-                },
-                {
-                  "key": "boolean",
-                  "label": "Yes or no"
-                }
-              ]
+              "kind": "list",
+              "key": "fields",
+              "presentation": true,
+              "presentationIdentity": "field",
+              "label": "Fields",
+              "help": "Ordered fields shown in this card",
+              "required": true,
+              "minimumItems": 1,
+              "maximumItems": 100,
+              "item": {
+                "kind": "group",
+                "key": "detail_field",
+                "label": "Detail field",
+                "help": "One displayed field of the bound record",
+                "required": true,
+                "properties": [
+                  {
+                    "kind": "field_reference",
+                    "key": "field",
+                    "label": "Field",
+                    "help": "Field of the bound query or record type shown here",
+                    "required": true
+                  },
+                  {
+                    "kind": "text",
+                    "key": "label",
+                    "presentation": true,
+                    "label": "Label",
+                    "help": "Field label; the field name is used when absent",
+                    "required": false,
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  {
+                    "kind": "choice",
+                    "key": "format",
+                    "label": "Format",
+                    "help": "How the value is presented",
+                    "required": false,
+                    "defaultValue": {
+                      "kind": "choice",
+                      "value": "automatic"
+                    },
+                    "options": [
+                      { "key": "automatic", "label": "Automatic" },
+                      { "key": "text", "label": "Text" },
+                      { "key": "number", "label": "Number" },
+                      { "key": "currency", "label": "Currency" },
+                      { "key": "percent", "label": "Percent" },
+                      { "key": "date", "label": "Date" },
+                      { "key": "date_time", "label": "Date and time" },
+                      { "key": "boolean", "label": "Yes or no" }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "kind": "list",
+        "key": "related_lists",
+        "presentation": true,
+        "presentationIdentity": "key",
+        "label": "Related lists",
+        "help": "Cards listing records linked to this one, each with an add action",
+        "required": false,
+        "minimumItems": 1,
+        "maximumItems": 20,
+        "item": {
+          "kind": "group",
+          "key": "related_list",
+          "label": "Related list",
+          "help": "One card of related records",
+          "required": true,
+          "properties": [
+            {
+              "kind": "text",
+              "key": "key",
+              "label": "Key",
+              "help": "Stable identity of this card in the page",
+              "required": true,
+              "minLength": 1,
+              "maxLength": 40
+            },
+            {
+              "kind": "text",
+              "key": "title",
+              "presentation": true,
+              "label": "Title",
+              "required": true,
+              "minLength": 1,
+              "maxLength": 120
+            },
+            {
+              "kind": "query_reference",
+              "key": "query",
+              "label": "Query",
+              "help": "The query that lists the related records",
+              "required": true
+            },
+            {
+              "kind": "text",
+              "key": "parent_input",
+              "label": "Parent input",
+              "help": "The query input that takes this record",
+              "required": true,
+              "minLength": 1,
+              "maxLength": 40
+            },
+            {
+              "kind": "list",
+              "key": "columns",
+              "presentation": true,
+              "presentationIdentity": "field",
+              "label": "Columns",
+              "help": "The fields each related record shows",
+              "required": true,
+              "minimumItems": 1,
+              "maximumItems": 8,
+              "item": {
+                "kind": "group",
+                "key": "column",
+                "label": "Column",
+                "required": true,
+                "properties": [
+                  {
+                    "kind": "field_reference",
+                    "key": "field",
+                    "label": "Field",
+                    "required": true
+                  },
+                  {
+                    "kind": "text",
+                    "key": "label",
+                    "presentation": true,
+                    "label": "Label",
+                    "required": false,
+                    "minLength": 1,
+                    "maxLength": 120
+                  }
+                ]
+              }
+            },
+            {
+              "kind": "page_reference",
+              "key": "add_page",
+              "label": "Create form page",
+              "help": "The form a new related record opens",
+              "required": false
+            },
+            {
+              "kind": "field_reference",
+              "key": "add_field",
+              "label": "Link field",
+              "help": "The new record's link field that points at this record",
+              "required": false
             }
           ]
         }
@@ -765,6 +915,28 @@
         "help": "Granularity of value changes",
         "required": false,
         "integer": false
+      },
+      {
+        "kind": "text",
+        "key": "currency",
+        "presentation": true,
+        "label": "Currency",
+        "help": "Shows this three-letter currency as the input's prefix, for example NZD",
+        "required": false,
+        "minLength": 3,
+        "maxLength": 3
+      },
+      {
+        "kind": "boolean",
+        "key": "group_digits",
+        "presentation": true,
+        "label": "Group thousands",
+        "help": "Shows thousands separators in the value",
+        "required": false,
+        "defaultValue": {
+          "kind": "boolean",
+          "value": false
+        }
       }
     ],
     "slots": [],
@@ -2133,6 +2305,28 @@
         "required": false
       },
       {
+        "kind": "text",
+        "key": "currency",
+        "presentation": true,
+        "label": "Currency",
+        "help": "Shows this three-letter currency as the input's prefix, for example NZD",
+        "required": false,
+        "minLength": 3,
+        "maxLength": 3
+      },
+      {
+        "kind": "boolean",
+        "key": "group_digits",
+        "presentation": true,
+        "label": "Group thousands",
+        "help": "Shows thousands separators in the value",
+        "required": false,
+        "defaultValue": {
+          "kind": "boolean",
+          "value": false
+        }
+      },
+      {
         "kind": "choice",
         "key": "display_time_zone",
         "label": "Display time zone",
@@ -2202,6 +2396,23 @@
                 "minLength": 1,
                 "maxLength": 120
               }
+            },
+            {
+              "kind": "choice",
+              "key": "tone",
+              "label": "Colour",
+              "help": "The colour role shown with this option",
+              "required": false,
+              "options": [
+                { "key": "neutral", "label": "Neutral" },
+                { "key": "primary", "label": "Primary" },
+                { "key": "destructive", "label": "Destructive" },
+                { "key": "chart_1", "label": "Chart 1" },
+                { "key": "chart_2", "label": "Chart 2" },
+                { "key": "chart_3", "label": "Chart 3" },
+                { "key": "chart_4", "label": "Chart 4" },
+                { "key": "chart_5", "label": "Chart 5" }
+              ]
             }
           ]
         }
@@ -2769,6 +2980,34 @@
         "required": false,
         "minLength": 1,
         "maxLength": 120
+      },
+      {
+        "kind": "text",
+        "key": "purpose",
+        "presentation": true,
+        "label": "Purpose",
+        "help": "One line saying what this list is for, shown under the title and above the rows",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      },
+      {
+        "kind": "boolean",
+        "key": "inline_create",
+        "label": "Add records from this list",
+        "help": "Shows a create button in the list header and in its empty state",
+        "required": false,
+        "defaultValue": {
+          "kind": "boolean",
+          "value": false
+        }
+      },
+      {
+        "kind": "page_reference",
+        "key": "create_page",
+        "label": "Create form page",
+        "help": "The form a new record opens when adding records from this list is on",
+        "required": false
       },
       {
         "kind": "text",

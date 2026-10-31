@@ -25,6 +25,7 @@ import { canonicalJson, compareCanonicalStrings } from "../definition/canonical-
 import { fingerprintCanonicalValue } from "../definition/canonical-json-definition";
 import { isLiveSystemContext } from "./private-system-context";
 
+/** @knipignore */
 export const permissionRegistryPreparationErrorCodes = [
   "INVALID_PERMISSION_REGISTRY_PREPARATION_COMMAND",
   "PERMISSION_REGISTRY_CONTEXT_REFUSED",
@@ -33,7 +34,7 @@ export const permissionRegistryPreparationErrorCodes = [
   "PERMISSION_REGISTRY_PERMISSION_OWNERSHIP_AMBIGUOUS",
 ] as const;
 
-export type PermissionRegistryPreparationErrorCode =
+type PermissionRegistryPreparationErrorCode =
   (typeof permissionRegistryPreparationErrorCodes)[number];
 
 export class PermissionRegistryPreparationError extends Error {
@@ -55,7 +56,7 @@ export interface PermissionRegistryDefinitionSetReader {
   ): Promise<SystemApplicationBoundReleaseSetResult>;
 }
 
-export type PrepareApplicationPermissionRegistrationCommand = Readonly<{
+type PrepareApplicationPermissionRegistrationCommand = Readonly<{
   applicationRootId: ApplicationRootId;
   releaseRevision: number;
 }>;

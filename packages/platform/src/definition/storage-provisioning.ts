@@ -102,7 +102,7 @@ export type ResolvedContributionBinding = Readonly<{
 }>;
 
 /** Attach or detach one contributor Module's resolved bindings on its target storage. */
-export type ModuleContributionStorageCommand = Readonly<{
+type ModuleContributionStorageCommand = Readonly<{
   applicationRootId: string;
   applicationReleaseRevision: number;
   moduleRootId: string;
@@ -112,7 +112,7 @@ export type ModuleContributionStorageCommand = Readonly<{
   contributions: readonly ResolvedContributionBinding[];
 }>;
 
-export type ModuleContributionStorageResult = Readonly<{
+type ModuleContributionStorageResult = Readonly<{
   state: "attached" | "detached";
   changed: boolean;
   bindingRevision: number;

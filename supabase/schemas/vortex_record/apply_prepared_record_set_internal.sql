@@ -162,22 +162,13 @@ begin
         select item.value from pg_catalog.jsonb_array_elements(meta #> '{recordType,relationships}') as item(value)
         where (subject -> 'finalValues') ? (item.value ->> 'fromFieldId')
       loop
-        if plan -> 'action' is not null and plan -> 'action' <> 'null'::jsonb then
-          perform vortex_record.prepare_named_action_relationship_value_internal(
-            (subject ->> 'recordTypeId')::uuid, (prepared ->> 'recordId')::uuid,
-            (relationship_value ->> 'relationshipId')::uuid,
-            subject -> 'finalValues' -> (relationship_value ->> 'fromFieldId'),
-            plan #>> '{action,ownerKind}', (plan #>> '{action,ownerId}')::uuid,
-            (plan #>> '{action,releaseRevision}')::bigint, (plan #>> '{action,actionId}')::uuid,
-            (subject ->> 'recordTypeId')::uuid, (prepared ->> 'recordId')::uuid
-          );
-        else
-          perform vortex_record.prepare_relationship_value_internal(
-            (subject ->> 'recordTypeId')::uuid, (prepared ->> 'recordId')::uuid,
-            (relationship_value ->> 'relationshipId')::uuid,
-            subject -> 'finalValues' -> (relationship_value ->> 'fromFieldId'), false
-          );
-        end if;
+        perform vortex_record.prepare_relationship_value_internal(
+          (subject ->> 'recordTypeId')::uuid, (prepared ->> 'recordId')::uuid,
+          (relationship_value ->> 'relationshipId')::uuid,
+          subject -> 'finalValues' -> (relationship_value ->> 'fromFieldId'), false,
+          case when plan -> 'action' is not null and plan -> 'action' <> 'null'::jsonb
+            then plan -> 'action' else null end
+        );
       end loop;
     end if;
     if subject ->> 'operation' = 'create' then

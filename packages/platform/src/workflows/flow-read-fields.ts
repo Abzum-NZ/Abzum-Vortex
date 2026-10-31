@@ -39,8 +39,8 @@ export const flowReadFieldsScalarTypeForField = (
       return undefined;
   }
 };
-export type FlowReadFieldsProjectionEntry = { alias: string; field: string };
-export type FlowReadFieldsTypeMap = Record<string, FlowReadFieldsScalarType>;
+type FlowReadFieldsProjectionEntry = { alias: string; field: string };
+type FlowReadFieldsTypeMap = Record<string, FlowReadFieldsScalarType>;
 
 export const isFlowReadFieldsTypeMap = (value: unknown): value is FlowReadFieldsTypeMap => {
   if (!isPlainRecord(value)) return false;

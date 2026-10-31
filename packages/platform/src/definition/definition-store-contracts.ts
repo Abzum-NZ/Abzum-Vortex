@@ -22,8 +22,8 @@ import {
   versionImpactSchema,
 } from "./version-impact";
 
-export const storedApplicationSourceDocumentSchema = applicationSourceDocumentSchema;
-export const storedModuleSourceDocumentSchema = moduleSourceDocumentSchema;
+const storedApplicationSourceDocumentSchema = applicationSourceDocumentSchema;
+const storedModuleSourceDocumentSchema = moduleSourceDocumentSchema;
 export const storedDefinitionSourceSchema = z.union([
   storedModuleSourceDocumentSchema,
   storedApplicationSourceDocumentSchema,
@@ -302,8 +302,6 @@ export const publishDefinitionResultSchema = z
     publishedBy: actorIdSchema,
   })
   .strict();
-
-export type CreateDefinitionRootCommand = z.infer<typeof createDefinitionRootCommandSchema>;
 export type SaveDefinitionDraftCommand = z.infer<typeof saveDefinitionDraftCommandSchema>;
 export type StoredDefinitionSource = z.infer<typeof storedDefinitionSourceSchema>;
 export type StoredDefinitionDraft = z.infer<typeof storedDefinitionDraftSchema>;

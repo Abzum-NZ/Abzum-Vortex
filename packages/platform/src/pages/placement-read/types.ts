@@ -36,7 +36,7 @@ export type LauncherQueryRow = Readonly<{
 }>;
 
 /** The person's stored layouts of a page's data grids, read once before any grid reads its rows. */
-export type PlacementGridLayouts = Readonly<{
+type PlacementGridLayouts = Readonly<{
   storage: GridLayoutStorage;
   stored: StoredGridViews;
   /**
@@ -52,7 +52,7 @@ export type PlacementGridLayouts = Readonly<{
  * same records, with the same access, in both. The two projections the UI owns (a launcher's list
  * values and a board's payload contract) are injected, so the platform never imports the UI.
  */
-export type PlacementReadServices = Readonly<{
+type PlacementReadServices = Readonly<{
   queries: ReturnType<typeof createProtectedQueryService>;
   linkTiles: ReturnType<typeof createLinkTilesQueryResolver>;
   queryNotices: ReturnType<typeof createQueryNoticeQueryResolver>;

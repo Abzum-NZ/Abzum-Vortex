@@ -7,7 +7,7 @@ import {
 } from "./display-payload-parts";
 
 /** One summary aggregate: its stable key, readable label and value, which may be unavailable. */
-export const displaySummaryMetricSchema = z
+const displaySummaryMetricSchema = z
   .object({ key: builderKeySchema, label: displayTextSchema, value: displayScalarCellSchema })
   .strict()
   .readonly();

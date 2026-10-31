@@ -289,6 +289,29 @@ export const LAYOUT_ONLY_STYLES_CSS = `
   }
 }
 
+/* A record page's header actions are one row: the page's own actions with Refresh among them,
+   primary first, Refresh next, destructive last. */
+[data-vortex-record-actions] {
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+[data-vortex-record-actions] > .vortex-puck-slot {
+  display: contents;
+}
+[data-vortex-record-actions] > .vortex-puck-slot > [data-vortex-layout-wrapper] {
+  width: auto;
+  flex: none;
+}
+[data-vortex-record-actions] > button {
+  order: 1;
+}
+[data-vortex-record-actions] > .vortex-puck-slot > [data-vortex-layout-wrapper]:has([data-vortex-variant="danger"]) {
+  order: 2;
+}
+
 .vortex-puck-slot:has(> [data-vortex-grid-child]) {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));

@@ -71,7 +71,7 @@ export const versionRequirementSchema = z.discriminatedUnion("selection", [
     .strict(),
 ]);
 
-export const qualifiedRecordTypeKeySchema = z
+const qualifiedRecordTypeKeySchema = z
   .string()
   .max(81)
   .regex(
@@ -79,11 +79,11 @@ export const qualifiedRecordTypeKeySchema = z
     "Use module_key:record_type_key",
   );
 
-export const unresolvedRecordTypeReferenceSchema = z
+const unresolvedRecordTypeReferenceSchema = z
   .object({ state: z.literal("unresolved"), qualifiedKey: qualifiedRecordTypeKeySchema })
   .strict();
 
-export const resolvedRecordTypeReferenceSchema = z
+const resolvedRecordTypeReferenceSchema = z
   .object({
     state: z.literal("resolved"),
     moduleRootId: moduleRootIdSchema,
@@ -323,8 +323,8 @@ export const requireResolvedRecordTypeReferences = (
 };
 
 export type VersionRequirement = z.infer<typeof versionRequirementSchema>;
-export type UnresolvedRecordTypeReference = z.infer<typeof unresolvedRecordTypeReferenceSchema>;
-export type RecordTypeReference = z.infer<typeof recordTypeReferenceSchema>;
+type UnresolvedRecordTypeReference = z.infer<typeof unresolvedRecordTypeReferenceSchema>;
+type RecordTypeReference = z.infer<typeof recordTypeReferenceSchema>;
 export type ResolveRecordTypeReferences<T> = T extends UnresolvedRecordTypeReference
   ? never
   : T extends string | number | boolean | bigint | symbol | null | undefined

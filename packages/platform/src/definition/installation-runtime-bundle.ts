@@ -49,9 +49,9 @@ export const installationRuntimeBundleSections = [
   "access_plan",
 ] as const;
 
-export const installationRuntimeBundleSectionSchema = z.enum(installationRuntimeBundleSections);
+const installationRuntimeBundleSectionSchema = z.enum(installationRuntimeBundleSections);
 
-export const installationRuntimeBundlePartMetadataSchema = z
+const installationRuntimeBundlePartMetadataSchema = z
   .object({
     section: installationRuntimeBundleSectionSchema,
     ordinal: z.number().int().nonnegative().max(2_147_483_647),
@@ -340,7 +340,7 @@ export const installationPreparedRecordAccessPlanSchema = z
   })
   .strict();
 
-export const installationRuntimeBundleAccessPlanSectionSchema = z
+const installationRuntimeBundleAccessPlanSectionSchema = z
   .object({
     preparedRecordAccessPlan: installationPreparedRecordAccessPlanSchema,
     declaredPermissions: z
@@ -499,14 +499,11 @@ export const installationRuntimeBundleReadPartsCommandSchema = z
   });
 
 export type InstallationRuntimeBundleSection = (typeof installationRuntimeBundleSections)[number];
-export type InstallationRuntimeBundlePartMetadata = z.infer<
-  typeof installationRuntimeBundlePartMetadataSchema
->;
 export type InstallationRuntimeBundlePart = z.infer<typeof installationRuntimeBundlePartSchema>;
 export type InstallationRuntimeBundleSourceManifest = z.infer<
   typeof installationRuntimeBundleSourceManifestSchema
 >;
-export type InstallationPreparedRecordAccessPlan = z.infer<
+type InstallationPreparedRecordAccessPlan = z.infer<
   typeof installationPreparedRecordAccessPlanSchema
 >;
 export type PreparedInstallationRuntimeSource = Readonly<{

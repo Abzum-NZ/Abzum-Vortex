@@ -9,8 +9,8 @@
 @layer base {
   /*
    * Tailwind's preflight is not loaded (see globals.css), so the reset the component classes rely
-   * on is applied to shadcn component elements (and their content) only. Existing screens carry no
-   * data-slot and keep their look: no border, outline, spacing or font change reaches them.
+   * on is applied to shadcn component elements (and their content) only. Nothing outside a
+   * data-slot element changes: no border, outline, spacing or font change reaches it.
    */
   [data-vortex-style] :where([data-slot], [data-slot] *) {
     box-sizing: border-box;

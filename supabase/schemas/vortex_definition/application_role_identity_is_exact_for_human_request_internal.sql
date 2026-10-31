@@ -36,8 +36,6 @@ begin
   );
 end
 $function$;
-alter function vortex_definition.application_role_identity_is_exact_for_human_request_internal(uuid,uuid) owner to vortex_owner;
-
 
 alter function vortex_definition.application_role_identity_is_exact_for_human_request_internal(
   uuid, uuid

@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { formatCount } from "@vortex/ui/display/date-format";
 
 /**
  * Says, on a page whose records reached the preview bound, that the preview holds only the
@@ -17,7 +18,7 @@ export function DraftPreviewBoundNotice({
   if (label === undefined) return null;
   return (
     <p className="basis-full">
-      Preview shows the first {seedBound.toLocaleString("en-NZ")} {label} you can see.
+      Preview shows the first {formatCount(seedBound)} {label} you can see.
     </p>
   );
 }

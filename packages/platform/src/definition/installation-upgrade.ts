@@ -70,7 +70,7 @@ export type UpgradeSelector = Readonly<{
   releaseRevision: number;
 }>;
 
-export type UpgradeReleaseIdentity = Readonly<{
+type UpgradeReleaseIdentity = Readonly<{
   releaseRevision: number;
   releaseVersion: string;
   validationContractVersion: string;
@@ -98,7 +98,7 @@ export type UpgradeState = Readonly<{
   bindings: InstallationBindings;
 }>;
 
-export type UpgradeAuthorizedState = Readonly<{
+type UpgradeAuthorizedState = Readonly<{
   snapshot: UpgradeSnapshot;
   state: UpgradeState;
   checkedAt: string;
@@ -460,113 +460,6 @@ export const readUpgradeAuthorizedState = async (
   if (result.kind === "unavailable")
     return installationProblem("upgrade_request_unavailable", "refused");
   return installationProblem("upgrade_request_temporarily_unavailable", "temporarily_unavailable");
-};
-
-/**
- * Reads the release the application's active installation names after an install, under the
- * same checks as the install itself.
- */
-export const readUpgradeActiveObservation = async (
-  environment: UpgradeEnvironment,
-  organizationId: OrganizationId,
-  rootId: ApplicationRootId,
-  session: IdentitySession,
-): Promise<UpgradeReleaseIdentity> => {
-  let captured: InstallationProblemShape | undefined;
-  const scopeCandidate = { organizationId, applicationRootId: rootId };
-  const result = await environment.requests.run(
-    session,
-    scopeCandidate,
-    async (transaction, scope, issuedAt) => {
-      try {
-        const context = await readInstallationHumanContext(
-          transaction,
-          scope,
-          session,
-          issuedAt,
-          scopeCandidate,
-        );
-        const active = await readCurrentActiveApplicationInstallation(transaction);
-        if (
-          !sameId(active.organizationId, organizationId) ||
-          !sameId(active.applicationRootId, rootId)
-        )
-          installationProblem("observed_installation_mismatch", "refused");
-        const registration = await readInstallationBindings(transaction, rootId);
-        const registeredActive = registration.moduleBindings.filter(
-          (binding) => binding.state === "active",
-        );
-        if (
-          !sameId(registration.organizationId, organizationId) ||
-          !sameId(registration.applicationRootId, rootId) ||
-          registration.moduleBindings.some(
-            (binding) =>
-              !sameId(binding.organizationId, organizationId) ||
-              !sameId(binding.applicationRootId, rootId),
-          ) ||
-          registration.registeredReleaseRevision !== active.applicationReleaseRevision ||
-          registration.moduleBindings.some(
-            (binding) => binding.state !== "active" && binding.state !== "detached",
-          ) ||
-          !same(sortedBindingTuples(registeredActive), sortedBindingTuples(active.moduleBindings))
-        )
-          installationProblem("observed_bindings_misaligned", "refused");
-        const releaseSet = await readInstallationReleaseSet(
-          transaction,
-          environment.catalogue,
-          rootId,
-          active.applicationReleaseRevision,
-          organizationId,
-          context.correlationId,
-        );
-        if (
-          releaseSet.modules.length !== active.moduleBindings.length ||
-          active.moduleBindings.some(
-            (binding) =>
-              !releaseSet.modules.some(
-                (module) =>
-                  sameId(module.rootId, binding.moduleRootId) &&
-                  module.releaseRevision === binding.moduleReleaseRevision,
-              ),
-          )
-        )
-          installationProblem("observed_release_set_misaligned", "refused");
-        await readInstallationOrdinaryRoot(transaction, rootId);
-        await requireInstallationAuthority(
-          transaction,
-          scope,
-          environment.permissions,
-          installationOperation(rootId, environment.containsCustomComponents(releaseSet)),
-        );
-        const finalContext = await readInstallationHumanContext(
-          transaction,
-          scope,
-          session,
-          issuedAt,
-          scopeCandidate,
-        );
-        if (!same(context, finalContext)) installationProblem("human_context_changed", "refused");
-        await installationDeadline(
-          environment,
-          transaction,
-          scope,
-          finalContext,
-          rootId,
-          releaseSet,
-        );
-        return releaseIdentity(releaseSet.application);
-      } catch (error) {
-        captured = classifyInstallationFailure(error);
-        throw error;
-      }
-    },
-  );
-  if (result.kind === "available") return result.value;
-  if (captured !== undefined)
-    throw new InstallationProblem(captured, "transaction_failure_captured");
-  return result.kind === "unavailable"
-    ? installationProblem("observation_request_unavailable", "refused")
-    : installationProblem("observation_request_temporarily_unavailable", "temporarily_unavailable");
 };
 
 /**

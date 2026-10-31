@@ -24,7 +24,7 @@ import { isRecord } from "../catalogue/runtime-primitives";
  */
 
 /** Version of the stored document shape; bumped only by a deliberate rebuild. */
-export const searchDocumentSchemaVersion = 1;
+const searchDocumentSchemaVersion = 1;
 
 /** Ranking weight per declared search priority; ranking never overrides access. */
 export const searchPriorityWeights: Readonly<Record<SearchPriority, number>> = Object.freeze({
@@ -33,13 +33,13 @@ export const searchPriorityWeights: Readonly<Record<SearchPriority, number>> = O
   last: 1,
 });
 
-export const searchDocumentLimits = Object.freeze({
+const searchDocumentLimits = Object.freeze({
   entryTextLength: 4_000,
   documentTextLength: 20_000,
   entries: 100,
 });
 
-export type SearchableFieldConfigurationEntry = Readonly<{
+type SearchableFieldConfigurationEntry = Readonly<{
   fieldId: string;
   type: FieldType;
   priority: SearchPriority;
@@ -49,7 +49,7 @@ export type SearchableFieldConfigurationEntry = Readonly<{
 }>;
 
 /** The exact set of fields one record type may contribute to its search document. */
-export type SearchableFieldConfiguration = Readonly<{
+type SearchableFieldConfiguration = Readonly<{
   recordTypeId: string;
   fields: readonly SearchableFieldConfigurationEntry[];
 }>;
@@ -134,7 +134,7 @@ export type SearchRecordSnapshot = Readonly<{
   fieldValues: Readonly<Record<string, unknown>>;
 }>;
 
-export type SearchDocumentEntry = Readonly<{
+type SearchDocumentEntry = Readonly<{
   fieldId: string;
   priority: SearchPriority;
   weight: number;
@@ -149,7 +149,7 @@ type SearchDocumentIdentity = Readonly<{
   sourceRecordVersion: number;
 }>;
 
-export type SearchDocument = SearchDocumentIdentity &
+type SearchDocument = SearchDocumentIdentity &
   Readonly<{
     kind: "document";
     schemaVersion: typeof searchDocumentSchemaVersion;
@@ -157,7 +157,7 @@ export type SearchDocument = SearchDocumentIdentity &
     contentFingerprint: string;
   }>;
 
-export type SearchDocumentDeletion = SearchDocumentIdentity &
+type SearchDocumentDeletion = SearchDocumentIdentity &
   Readonly<{
     kind: "deletion";
     schemaVersion: typeof searchDocumentSchemaVersion;
@@ -166,7 +166,7 @@ export type SearchDocumentDeletion = SearchDocumentIdentity &
 export type SearchDocumentRefusalCode =
   "invalid_snapshot" | "configuration_mismatch" | "shared_source_record";
 
-export type BuildSearchDocumentResult =
+type BuildSearchDocumentResult =
   | Readonly<{ success: true; output: SearchDocument | SearchDocumentDeletion }>
   | Readonly<{ success: false; code: SearchDocumentRefusalCode }>;
 

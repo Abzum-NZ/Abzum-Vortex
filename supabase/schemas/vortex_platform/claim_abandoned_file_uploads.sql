@@ -25,7 +25,7 @@ begin
       and (u.cleanup_claim_until is null or u.cleanup_claim_until <= pg_catalog.clock_timestamp())
       and f.lifecycle_state in ('pending', 'uploaded', 'scanning', 'quarantined', 'abandoned')
       and f.activated_at is null and pg_catalog.cardinality(f.owning_attachment_references) = 0
-      and f.preview_references = '[]'::jsonb and not f.legal_hold
+      and f.preview_references = '[]'::jsonb
     order by u.upload_expires_at, f.file_id
     limit p_limit for update of f skip locked
   loop

@@ -36,7 +36,7 @@ export type BeforeSaveRuleWarning = Readonly<{
   record?: Readonly<{ recordTypeId: string; recordId: string }>;
 }>;
 
-export type BeforeSaveRuleRefusal = Readonly<{
+type BeforeSaveRuleRefusal = Readonly<{
   ruleKey: string;
   code: string;
   message: string;
@@ -52,7 +52,7 @@ export class BeforeSaveFlowEvaluationError extends Error {
   }
 }
 
-export type EvaluateBeforeSaveFlowsInput = Readonly<{
+type EvaluateBeforeSaveFlowsInput = Readonly<{
   /**
    * The compiled BeforeSave flows of the record type's Module release, in the order of the record
    * type's ordered rule list (`before_save_flows_for_record_type_internal` returns them so).
@@ -68,7 +68,7 @@ export type EvaluateBeforeSaveFlowsInput = Readonly<{
   now: string;
 }>;
 
-export type EvaluateBeforeSaveFlowsResult =
+type EvaluateBeforeSaveFlowsResult =
   | Readonly<{
       success: true;
       requirements: readonly BeforeSaveRuleRequirement[];

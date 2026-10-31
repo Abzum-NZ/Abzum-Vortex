@@ -1,4 +1,4 @@
-import { describeFailure } from "@vortex/platform/schema";
+import { describeFailure, logRefusal } from "@vortex/platform/schema";
 import type { NextRequest, NextResponse } from "next/server";
 import {
   authenticateRuntimeBundleCleanup,
@@ -15,13 +15,20 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
+/**
+ * The scheduled maintenance call. It does three jobs: it deletes superseded runtime bundles, it
+ * expires preview installations and drops their retired preview storage, and it removes abandoned
+ * uploads. The path keeps its name because external schedulers call it.
+ */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const authentication = authenticateRuntimeBundleCleanup(request.headers.get("authorization"));
-  if (authentication.outcome === "refused")
+  if (authentication.outcome === "refused") {
+    logRefusal("runtime-bundles", "cleanup", `authentication_${authentication.reason}`);
     return privateJsonResponse(
       { outcome: "refused", reason: authentication.reason },
       authentication.reason === "cleanup_not_configured" ? 503 : 401,
     );
+  }
 
   // Expired previews are removed first; their storage, and that of replaced previews, is then
   // dropped one storage identity per short transaction.

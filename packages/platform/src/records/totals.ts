@@ -15,18 +15,18 @@ import { isRecord } from "../catalogue/runtime-primitives";
 
 type TotalField = Extract<ModuleField, { type: "total" }>;
 
-export type RecordRelationshipTotalSource = Readonly<{
+type RecordRelationshipTotalSource = Readonly<{
   relationshipId: string;
   sourceRecordType: RecordTypeDefinition;
   records: readonly Readonly<{ fieldValues: Readonly<Record<string, unknown>> }>[];
 }>;
 
-export type EvaluateRecordTotalsInput = Readonly<{
+type EvaluateRecordTotalsInput = Readonly<{
   recordType: RecordTypeDefinition;
   relationshipSources: readonly RecordRelationshipTotalSource[];
 }>;
 
-export type RecordTotalIssueCode =
+type RecordTotalIssueCode =
   | "invalid_input"
   | "execution_ineligible"
   | "invalid_source_value"
@@ -37,7 +37,7 @@ export type RecordTotalIssueCode =
   | "required_result_missing"
   | "invalid_result";
 
-export type RecordTotalIssue = Readonly<{
+type RecordTotalIssue = Readonly<{
   code: RecordTotalIssueCode;
   fieldId?: string;
   path: readonly (string | number)[];
@@ -45,7 +45,7 @@ export type RecordTotalIssue = Readonly<{
   currencyCodes?: readonly string[];
 }>;
 
-export type EvaluateRecordTotalsResult =
+type EvaluateRecordTotalsResult =
   | Readonly<{
       success: true;
       setValues: Readonly<Record<string, JsonValue>>;

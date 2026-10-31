@@ -1,3 +1,4 @@
+import { definitionContractVersion } from "./application-contract-versions";
 import { z } from "zod";
 import { builderKeySchema } from "../catalogue/identifiers";
 import {
@@ -6,7 +7,6 @@ import {
 } from "./application-source-contracts";
 import type { ApplicationUsePlace } from "./application-uses";
 import { moduleDependencies } from "./module-dependencies";
-import { moduleSourceContractVersion } from "./module-source-contracts";
 
 /** Actual published or installed contributions, read in the owner's organisation. */
 export const moduleExtensionPointUseSchema = z
@@ -49,7 +49,7 @@ const draftUses = (source: ApplicationSourceDocument): ModuleExtensionPointUse[]
       kind: "module",
       root_alias: id,
       key,
-      source_contract_version: moduleSourceContractVersion,
+      source_contract_version: definitionContractVersion,
       body: { ...body, owner_application: source.key },
     });
     return (body.contributions ?? []).flatMap((contribution) => {

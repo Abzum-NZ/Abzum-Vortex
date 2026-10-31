@@ -35,7 +35,7 @@ import { isRecord } from "../catalogue/runtime-primitives";
  * with the current Module field model, so the document builder passes its own
  * published record type without a second conversion.
  */
-export type PublishedSearchField = Readonly<{
+type PublishedSearchField = Readonly<{
   fieldId: string;
   type: string;
   /** The published data class; anything other than a known class is not disclosable. */
@@ -50,7 +50,7 @@ export type PublishedSearchField = Readonly<{
  * recipient-copied shared-source record is not this organisation's content and
  * contributes nothing to its index.
  */
-export type SearchIndexShareMetadata = Readonly<{
+type SearchIndexShareMetadata = Readonly<{
   /** Personal fields are indexable only when the organisation privacy policy permits it. */
   personalDataPermitted: boolean;
   /** `shared` marks a recipient copy of another organisation's shared source record. */
@@ -68,7 +68,7 @@ const derivedFieldTypes: ReadonlySet<string> = new Set(["calculation", "total"])
  * calculation dependencies and expressions and total aggregate sources and
  * filters.
  */
-export const derivedFieldInputIds = (settings: unknown): readonly string[] => {
+const derivedFieldInputIds = (settings: unknown): readonly string[] => {
   const found = new Set<string>();
   const visit = (value: unknown): void => {
     if (Array.isArray(value)) {
@@ -111,12 +111,12 @@ const ownDisclosureAllowed = (
  * It memoises and detects cycles, so a self-referential or repeated dependency
  * resolves once and a cycle is ineligible rather than an infinite walk.
  */
-export type SearchFieldDisclosure = Readonly<{
+type SearchFieldDisclosure = Readonly<{
   /** Whether the named field, lower-cased by identity, may be disclosed. */
   discloses: (fieldId: string) => boolean;
 }>;
 
-export const searchFieldDisclosure = (
+const searchFieldDisclosure = (
   fields: readonly PublishedSearchField[],
   metadata: SearchIndexShareMetadata,
 ): SearchFieldDisclosure => {
@@ -188,22 +188,3 @@ export const searchIndexFieldDiscloses = (
   fieldId: string,
   metadata: SearchIndexShareMetadata,
 ): boolean => disclosureFor(fields, metadata).discloses(fieldId);
-
-/**
- * The lower-cased identities of every field of the record type whose value may
- * be disclosed to a search document after following its recursive input
- * closure. The document builder intersects this with its own searchable-type
- * and search-priority rules, so an unknown or disallowed derived input removes
- * the derived field while leaving unrelated fields untouched.
- */
-export const searchIndexDisclosableFieldIds = (
-  fields: readonly PublishedSearchField[],
-  metadata: SearchIndexShareMetadata,
-): ReadonlySet<string> => {
-  const { discloses } = searchFieldDisclosure(fields, metadata);
-  const eligible = new Set<string>();
-  for (const field of fields)
-    if (typeof field.fieldId === "string" && discloses(field.fieldId))
-      eligible.add(field.fieldId.toLowerCase());
-  return eligible;
-};

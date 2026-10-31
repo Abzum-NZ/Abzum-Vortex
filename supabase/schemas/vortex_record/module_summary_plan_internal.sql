@@ -50,7 +50,6 @@ declare
   access_parameters jsonb := '[]'::jsonb;
   access_owner_account_id uuid;
   access_owner_group_ids uuid[] := array[]::uuid[];
-  access_shared_record_ids uuid[] := array[]::uuid[];
   readable_field_ids text[] := array[]::text[];
   bound_field_ids text[] := array[]::text[];
   filter_condition jsonb;
@@ -266,7 +265,7 @@ begin
       if pg_catalog.jsonb_typeof(board_option) is distinct from 'object' then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
       end if;
-      if board_option - array['value', 'label', 'requiredPermissionId']::text[] <> '{}'::jsonb
+      if board_option - array['value', 'label', 'tone', 'requiredPermissionId']::text[] <> '{}'::jsonb
         or not (board_option ? 'value') or not (board_option ? 'label')
         or pg_catalog.jsonb_typeof(board_option -> 'value') is distinct from 'string'
         or coalesce(pg_catalog.length(board_option ->> 'value'), 0) not between 1 and 120
@@ -347,9 +346,6 @@ begin
   select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[])
   into access_owner_group_ids
   from pg_catalog.jsonb_array_elements_text(prepared_plan #> '{access,ownerGroupIds}') as item(value);
-  select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[])
-  into access_shared_record_ids
-  from pg_catalog.jsonb_array_elements_text(prepared_plan #> '{access,sharedRecordIds}') as item(value);
   select coalesce(pg_catalog.array_agg(item.value), array[]::text[])
   into readable_field_ids
   from pg_catalog.jsonb_array_elements_text(prepared_plan -> 'readableFieldIds') as item(value);
@@ -505,7 +501,7 @@ begin
   -- A search narrows the candidate scan, and so the ceiling, through the one shared
   -- stored-value pre-predicate; read_record stays the decision for each counted match.
   search_prefilter_sql := vortex_record.query_search_prefilter_internal(
-    v_storage_contract_id, fields_by_id, search_field_ids, readable_field_ids, user_search, 18, 19
+    v_storage_contract_id, fields_by_id, search_field_ids, readable_field_ids, user_search, 17, 18
   );
 
   for aggregate_item in
@@ -868,7 +864,7 @@ begin
     selected_sql := case when filter_condition is not null then
       'select candidate.projected_values from candidate where
          vortex_access.evaluate_query_condition_internal(
-           $12, $13, candidate.filter_values, $14, $15, false
+           $11, $12, candidate.filter_values, $13, $14, false
          )'
       else 'select candidate.projected_values from candidate' end;
   else
@@ -887,26 +883,26 @@ begin
        )
        select (
          select coalesce(pg_catalog.jsonb_object_agg(field.id, readable.result -> ''values'' -> field.id), ''{}''::jsonb)
-         from pg_catalog.unnest($17::text[]) as field(id)
+         from pg_catalog.unnest($16::text[]) as field(id)
          where readable.result -> ''values'' ? field.id
        ) as projected_values
        from readable
        where readable.result ->> ''outcome'' = ''allowed''
-         and vortex_record.query_search_matches_internal(readable.result -> ''values'', $18::text[], $19::text)
+         and vortex_record.query_search_matches_internal(readable.result -> ''values'', $17::text[], $18::text)
          and not exists (
-           select 1 from pg_catalog.unnest($16::text[]) as required(id)
+           select 1 from pg_catalog.unnest($15::text[]) as required(id)
            where not (readable.result -> ''values'' ? required.id)
          )
-         and ($12::jsonb is null or vortex_access.evaluate_query_condition_internal(
-           $12, $13,
+         and ($11::jsonb is null or vortex_access.evaluate_query_condition_internal(
+           $11, $12,
            (select coalesce(pg_catalog.jsonb_object_agg(referenced.id,
-             case $13 ->> referenced.id
+             case $12 ->> referenced.id
                when ''organization_account_reference'' then pg_catalog.to_jsonb(
                  pg_catalog.lower(readable.result -> ''values'' -> referenced.id ->> ''organizationAccountId''))
                else readable.result -> ''values'' -> referenced.id
              end), ''{}''::jsonb)
-            from pg_catalog.unnest($16::text[]) as referenced(id)),
-           $14, $15, false
+            from pg_catalog.unnest($15::text[]) as referenced(id)),
+           $13, $14, false
          ))',
       record_type_id_value::text, summary_candidate_limit,
       prepared_plan ? 'preview', v_storage_contract_id::text,
@@ -965,7 +961,6 @@ begin
       'access_parameters', pg_catalog.to_jsonb(access_parameters),
       'access_owner_account_id', pg_catalog.to_jsonb(access_owner_account_id),
       'access_owner_group_ids', pg_catalog.to_jsonb(access_owner_group_ids),
-      'access_shared_record_ids', pg_catalog.to_jsonb(access_shared_record_ids),
       'bound_field_ids', pg_catalog.to_jsonb(bound_field_ids),
       'filter_condition', pg_catalog.to_jsonb(filter_condition))
     || pg_catalog.jsonb_build_object('filter_types', pg_catalog.to_jsonb(filter_types),

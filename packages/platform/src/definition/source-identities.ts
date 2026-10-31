@@ -9,7 +9,7 @@ import type { StoredDefinitionSource } from "./definition-store-contracts";
 import { isSourceItemShape } from "./application-composition/source-composition";
 import { reservedItemPropKeys } from "./application-composition/platform-block-release";
 
-export type SourceIdentityRequirement = Readonly<{
+type SourceIdentityRequirement = Readonly<{
   definitionKey: string;
   /** Stable parent-owner scope used only by the identity store. */
   ownerScope: string;

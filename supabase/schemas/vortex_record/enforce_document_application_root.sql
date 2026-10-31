@@ -30,7 +30,4 @@ revoke execute on function vortex_record.enforce_document_application_root()
 comment on function vortex_record.enforce_document_application_root() is
   'Checks that a search document application root is an Application root belonging to the same organisation.';
 
-alter function vortex_record.enforce_document_application_root()
-  owner to postgres;
-
 alter function vortex_record.enforce_document_application_root() owner to vortex_owner;

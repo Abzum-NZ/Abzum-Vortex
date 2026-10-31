@@ -13,6 +13,7 @@ import {
   type GridViewsState,
   type SelectedGridView,
 } from "@vortex/platform/schema";
+import { Alert, AlertDescription } from "../../components/alert";
 import { Button } from "../../components/button";
 import {
   Dialog,
@@ -257,9 +258,9 @@ export function PersonalFormattingDialog({
           </section>
         )}
         {refused === undefined ? null : (
-          <p role="alert" className="text-sm text-destructive">
-            {refused}
-          </p>
+          <Alert variant="destructive">
+            <AlertDescription>{refused}</AlertDescription>
+          </Alert>
         )}
         <DialogFooter>
           <Button variant="outline" disabled={busy} onClick={onClose}>

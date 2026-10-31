@@ -10,6 +10,7 @@ import { Field, FieldLabel } from "../components/field";
 import { Input } from "../components/input";
 import { Button } from "../components/button";
 import { setFieldChange } from "../flow-runtime/flow-cycle";
+import { postJson } from "../lib/post-json";
 import {
   readControlSettings,
   resolveControlContext,
@@ -130,13 +131,8 @@ export function AttachmentInput(props: ControlRenderProps<AttachmentInputPayload
     setFailure(undefined);
     let next = replacing ? [] : [...files];
     const command = async (body: unknown) => {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const result: unknown = await response.json();
+      const response = await postJson(endpoint, body);
+      const result: unknown = response.body;
       const refused = refusedSchema.safeParse(result);
       if (refused.success) throw new Error(refused.data.message);
       if (!response.ok) throw new Error("The upload could not finish. Try again.");

@@ -137,7 +137,7 @@ const interactiveSource = (
   finally: [],
 });
 
-export type DefaultSaveFlowInput = DefaultFlowIdentity &
+type DefaultSaveFlowInput = DefaultFlowIdentity &
   Readonly<{
     /** The record type the form saves: `key` in the owning definition or `definition.key:key`. */
     recordType: string;
@@ -266,7 +266,7 @@ export const defaultSaveFlowSource = (input: DefaultSaveFlowInput): SourceFlow =
         : {},
   });
 
-export type DefaultGuidedStepFlowInput = DefaultFlowIdentity &
+type DefaultGuidedStepFlowInput = DefaultFlowIdentity &
   Readonly<{
     /** The placement alias of the step's form, and the key of the guided page the flow stays on. */
     form: string;
@@ -318,7 +318,7 @@ export const defaultGuidedStepFlowSource = (input: DefaultGuidedStepFlowInput): 
     outputs: {},
   });
 
-export type DefaultGuidedCancelFlowInput = DefaultFlowIdentity &
+type DefaultGuidedCancelFlowInput = DefaultFlowIdentity &
   Readonly<{ after: DefaultFlowAfter }>;
 
 /** The default Cancel of a guided form: discard the person's draft, then the page they go on to. */
@@ -340,7 +340,7 @@ export const defaultGuidedCancelFlowSource = (input: DefaultGuidedCancelFlowInpu
     outputs: {},
   });
 
-export type DefaultDeleteFlowInput = DefaultFlowIdentity &
+type DefaultDeleteFlowInput = DefaultFlowIdentity &
   Readonly<{
     recordType: string;
     /** The key of the restore flow the "Deleted" message's Undo runs. */
@@ -399,7 +399,7 @@ export const defaultDeleteFlowSource = (input: DefaultDeleteFlowInput): SourceFl
     outputs: {},
   });
 
-export type DefaultRestoreFlowInput = DefaultFlowIdentity &
+type DefaultRestoreFlowInput = DefaultFlowIdentity &
   Readonly<{ recordType: string; after: DefaultFlowAfter; recordName: string }>;
 
 /** The default Restore: bring a deleted record back, say so, and refresh. */
@@ -422,7 +422,7 @@ export const defaultRestoreFlowSource = (input: DefaultRestoreFlowInput): Source
     outputs: {},
   });
 
-export type DefaultOpenFlowInput = DefaultFlowIdentity &
+type DefaultOpenFlowInput = DefaultFlowIdentity &
   Readonly<{
     /** The page the flow opens, by key. */
     page: string;
@@ -445,7 +445,7 @@ export const defaultOpenFlowSource = (input: DefaultOpenFlowInput): SourceFlow =
     outputs: {},
   });
 
-export type DefaultNewDialogFlowInput = DefaultFlowIdentity &
+type DefaultNewDialogFlowInput = DefaultFlowIdentity &
   Readonly<{
     recordType: string;
     ownershipMode: DefaultSaveFlowInput["ownershipMode"];
@@ -520,7 +520,7 @@ export const defaultNewDialogFlowSource = (input: DefaultNewDialogFlowInput): So
     outputs: {},
   });
 
-export type DefaultChangeFlowInput = DefaultFlowIdentity & Readonly<{ recordType: string }>;
+type DefaultChangeFlowInput = DefaultFlowIdentity & Readonly<{ recordType: string }>;
 
 /**
  * The default for a change made in place (inline edit, row edit, card move): save the changed
@@ -555,7 +555,7 @@ export const defaultChangeFlowSource = (input: DefaultChangeFlowInput): SourceFl
     errors: [refreshTask("refresh_after_failure")],
   });
 
-export type DefaultBatchEditFlowInput = DefaultFlowIdentity & Readonly<{ recordType: string }>;
+type DefaultBatchEditFlowInput = DefaultFlowIdentity & Readonly<{ recordType: string }>;
 
 const loopItemField = (name: string) =>
   ({ kind: "reference", reference: { source: "loop_item", path: [name] } }) as const;
@@ -599,7 +599,7 @@ export const defaultBatchEditFlowSource = (input: DefaultBatchEditFlowInput): So
     errors: [refreshTask("refresh_after_failure")],
   });
 
-export type DefaultBulkActionFlowInput = DefaultFlowIdentity &
+type DefaultBulkActionFlowInput = DefaultFlowIdentity &
   Readonly<{
     /** The named action's namespaced operation key. */
     operation: string;
@@ -827,15 +827,7 @@ export const defaultBulkMatchingFlowSource = (input: DefaultBulkActionFlowInput)
   finally: [],
 });
 
-export type DefaultQueryFlowInput = DefaultFlowIdentity &
-  Readonly<{
-    /** The declared query the flow reads: its alias in the owning definition. */
-    query: string;
-    /** The record type of the rows the query returns, for the typed `records` output. */
-    recordType: string;
-  }>;
-
-export type DefaultOperationFlowInput = DefaultFlowIdentity &
+type DefaultOperationFlowInput = DefaultFlowIdentity &
   Readonly<{
     /** The operation's key: `platformOperationKey(...)` or a named action's namespaced key. */
     operation: string;

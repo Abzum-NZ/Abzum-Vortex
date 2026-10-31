@@ -21,6 +21,7 @@ import {
   type SelectedGridView,
 } from "@vortex/platform/schema";
 import { Badge } from "../../components/badge";
+import { Alert, AlertDescription } from "../../components/alert";
 import { Button } from "../../components/button";
 import { Checkbox } from "../../components/checkbox";
 import { useConfirm } from "../../components/confirm-dialog";
@@ -256,9 +257,9 @@ function ShareDialog({
               Loading roles and groups…
             </p>
           ) : targets === "unavailable" ? (
-            <p role="alert" className="text-sm text-destructive">
-              Roles and groups could not be loaded.
-            </p>
+            <Alert variant="destructive">
+              <AlertDescription>Roles and groups could not be loaded.</AlertDescription>
+            </Alert>
           ) : (
             <>
               <fieldset className="flex flex-col gap-2">
@@ -485,9 +486,9 @@ function ViewSwitcher({
                 </p>
               ) : listing === "unavailable" ? (
                 <div className="px-2 py-1">
-                  <p role="alert" className="text-sm text-destructive">
-                    Views could not be loaded.
-                  </p>
+                  <Alert variant="destructive">
+                    <AlertDescription>Views could not be loaded.</AlertDescription>
+                  </Alert>
                   <Button variant="ghost" size="sm" onClick={loadList}>
                     Retry
                   </Button>

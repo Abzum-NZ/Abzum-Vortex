@@ -175,7 +175,7 @@ begin
   from vortex_access.coordinate_organization_role_assignment_change(
     'revoke', context_organization_id, p_role_assignment_id,
     p_expected_assignment_revision, null, null, null, null, null, null,
-    null, null, context_account_id, context_correlation_id
+    null, context_account_id, context_correlation_id
   ) as assignment_change;
 
   select pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
@@ -194,7 +194,6 @@ begin
         'key', organization_group.group_key, 'label', organization_group.label,
         'state', organization_group.state
       ) end,
-    'assignmentKind', assignment.assignment_kind,
     'revision', assignment.revision, 'startsAt', assignment.starts_at,
     'expiresAt', assignment.expires_at, 'state', assignment.state,
     'temporalState', 'revoked'

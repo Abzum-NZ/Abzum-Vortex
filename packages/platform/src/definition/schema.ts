@@ -35,12 +35,9 @@ export {
   type FlowValidationIssue,
   type FlowValidationOptions,
 } from "./flow-validation";
-export {
-  flowTaskOutputMembers,
-  type FlowOutputMember,
-  type FlowOutputMemberOptions,
-  type FlowOutputMembers,
-} from "./flow-output-members";
+export { flowTaskOutputMembers } from "./flow-output-members";
+// The page validates a Show-message intent against the same closed settings that published it.
+export * from "./flow-step-settings";
 export * from "./canonical-json";
 export * from "./definitions";
 export * from "./definition-source";

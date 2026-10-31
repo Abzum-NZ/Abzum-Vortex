@@ -12,7 +12,7 @@ import {
 import { invitationSchema } from "./identity-access";
 import { organizationRuntimeSettingsSchema } from "./organization-runtime-settings-schema";
 
-export const organizationAdministrationAccountSummarySchema = z
+const organizationAdministrationAccountSummarySchema = z
   .object({
     organizationAccountId: organizationAccountIdSchema,
     displayName: z.string().trim().min(1).max(120).optional(),
@@ -266,10 +266,6 @@ export const revokeOrganizationInvitationForAdministrationResultSchema = z
     ...organizationInvitationChangeFields,
   })
   .strict();
-
-export type OrganizationAdministrationAccountSummary = z.infer<
-  typeof organizationAdministrationAccountSummarySchema
->;
 export type ListOrganizationAccountsCommand = z.infer<typeof listOrganizationAccountsCommandSchema>;
 export type ListOrganizationAccountsResult = z.infer<typeof listOrganizationAccountsResultSchema>;
 export type ReadOrganizationAccountCommand = z.infer<typeof readOrganizationAccountCommandSchema>;

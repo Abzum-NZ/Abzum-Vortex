@@ -29,8 +29,7 @@ as $function$
     'owningAttachmentReferences', pg_catalog.to_jsonb(p_file.owning_attachment_references),
     'ownerRecordTypeId', p_file.owner_record_type_id,
     'ownerRecordId', p_file.owner_record_id,
-    'ownerFieldId', p_file.owner_field_id,
-    'legalHold', pg_catalog.jsonb_build_object('isHeld', p_file.legal_hold)
+    'ownerFieldId', p_file.owner_field_id
   ))
 $function$;
 

@@ -42,7 +42,6 @@ declare
   outcome text;
   access_sql text := p_storage_plan #>> '{access,predicate}';
   owner_groups uuid[];
-  shared_records uuid[];
   storage_contract_id uuid := (p_storage_plan #>> '{storage,storageContractId}')::uuid;
   filter_exact boolean := (p_filter ->> 'exact')::boolean is true;
   owner_column text := case when p_parents then 'from_record_id' else 'to_record_id' end;
@@ -57,8 +56,6 @@ begin
   end if;
   select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[]) into owner_groups
   from pg_catalog.jsonb_array_elements_text(p_storage_plan #> '{access,ownerGroupIds}') as item(value);
-  select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[]) into shared_records
-  from pg_catalog.jsonb_array_elements_text(p_storage_plan #> '{access,sharedRecordIds}') as item(value);
   select coalesce(pg_catalog.array_agg(item.value), array[]::text[]) into filter_ids
   from pg_catalog.jsonb_array_elements_text(p_filter -> 'fieldIds') as item(value);
   select coalesce(pg_catalog.array_agg(item.value), array[]::text[]) into search_field_ids
@@ -79,7 +76,7 @@ begin
          pg_catalog.array_agg(pending_item.owner_id order by pending_item.owner_id),
          pg_catalog.array_agg(candidate.filter_values order by pending_item.owner_id),
          pg_catalog.array_agg(candidate.matches_filter order by pending_item.owner_id)
-       from rows from (pg_catalog.unnest($11::uuid[]), pg_catalog.unnest($12::uuid[]))
+       from rows from (pg_catalog.unnest($10::uuid[]), pg_catalog.unnest($11::uuid[]))
          as pending_item(owner_id, after_id)
        cross join lateral (
          select stored.record_id, pg_catalog.jsonb_build_object(%8$s) as filter_values,
@@ -105,7 +102,7 @@ begin
       access_sql, coalesce(p_filter ->> 'valuesSql', ''), p_filter ->> 'predicate', p_parents)
     into candidates, owners, candidate_values, candidate_matches
     using p_organization_id, p_application_root_id, null::text[], null::uuid, 501,
-      (p_storage_plan #>> '{access,ownerAccountId}')::uuid, owner_groups, shared_records,
+      (p_storage_plan #>> '{access,ownerAccountId}')::uuid, owner_groups,
       p_filter -> 'parameters', p_storage_plan #> '{access,parameters}', batch_owners, batch_after;
     if candidates is null then
       -- No owner of this batch has a matching candidate left; only owners beyond the budget remain.

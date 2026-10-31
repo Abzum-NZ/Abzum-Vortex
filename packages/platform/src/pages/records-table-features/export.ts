@@ -76,7 +76,7 @@ import { withPooledRequestLifetime } from "../../db/request-transaction";
  * that names the record type and columns, never a value; counts go to the server log.
  */
 
-export type RecordsTableExportDependencies = HumanOrganizationRequestDependencies &
+type RecordsTableExportDependencies = HumanOrganizationRequestDependencies &
   Readonly<{ continuationKey: QueryContinuationKey }>;
 
 /**

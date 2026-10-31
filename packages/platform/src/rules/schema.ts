@@ -1,9 +1,5 @@
 export * from "./condition-types";
-export {
-  checkFlowFormula,
-  type FlowFormulaCheckOptions,
-  type FlowFormulaPath,
-} from "./flow-formula-check";
+export { checkFlowFormula } from "./flow-formula-check";
 export { flowInstantMicros } from "./flow-instant";
 export { flowRuntimeValueOf } from "./flow-runtime-value";
 export { evaluateResolvedTypedCondition } from "./typed-condition-semantics";

@@ -13,7 +13,7 @@ import {
 import { motion, useReducedMotion } from "motion/react";
 import { Icon } from "../icons/icon";
 import { readMotionTiming, type MotionTiming } from "./motion-tokens";
-import type { ProjectedNavigation, ProjectedNavigationItem } from "@vortex/platform/schema";
+import type { ProjectedNavigation } from "@vortex/platform/schema";
 import { Button } from "../components/button";
 import {
   Sidebar,
@@ -37,9 +37,7 @@ import { getAccessibleName } from "../display/display-state-container";
 import { cn } from "../lib/utils";
 import type { PlatformBlockRenderProps } from "../registry";
 
-export type { ProjectedNavigation, ProjectedNavigationItem };
-
-export type ApplicationNavigationProps = Readonly<{
+type ApplicationNavigationProps = Readonly<{
   /** The viewer's already permission-filtered navigation, in definition order. */
   navigation: ProjectedNavigation;
   /** Accessible name for the navigation landmark, from the application or shell. */
@@ -62,11 +60,6 @@ export type ApplicationNavigationProps = Readonly<{
    * how to treat modifier and middle clicks; when this is omitted the browser follows the href.
    */
   onNavigate?: (pageId: string, event: MouseEvent<HTMLAnchorElement>) => void;
-  /**
-   * Intent to open a page: the pointer rests on its link or focus reaches it. The shell may start
-   * loading that page so the click lands sooner; nothing is loaded for links never approached.
-   */
-  onPrefetch?: (pageId: string) => void;
   className?: string;
 }>;
 
@@ -91,7 +84,6 @@ type NavigationListProps = Readonly<{
    */
   pendingPageId: string | undefined;
   onNavigate: ((pageId: string, event: MouseEvent<HTMLAnchorElement>) => void) | undefined;
-  onPrefetch: ((pageId: string) => void) | undefined;
   /** The one selected-item indicator's layout identity and its slide timing. */
   indicator: Readonly<{ layoutId: string; timing: MotionTiming | undefined }>;
 }>;
@@ -122,7 +114,6 @@ function NavigationList({
   currentPageId,
   pendingPageId,
   onNavigate,
-  onPrefetch,
   indicator,
 }: NavigationListProps): ReactElement {
   const sub = depth > 1;
@@ -162,7 +153,6 @@ function NavigationList({
                 currentPageId={currentPageId}
                 pendingPageId={pendingPageId}
                 onNavigate={onNavigate}
-                onPrefetch={onPrefetch}
                 indicator={indicator}
               />
             </Item>
@@ -222,12 +212,6 @@ function NavigationList({
                 aria-label={item.label}
                 {...(current ? { "aria-current": "page" as const } : {})}
                 {...(pending ? { "data-vortex-navigation-pending": "" } : {})}
-                {...(onPrefetch === undefined || current
-                  ? {}
-                  : {
-                      onPointerEnter: () => onPrefetch(item.pageId),
-                      onFocus: () => onPrefetch(item.pageId),
-                    })}
                 onClick={(event) => onNavigate?.(item.pageId, event)}
               />,
               <>
@@ -254,14 +238,13 @@ function NavigationList({
  * `aria-current` when it names the shown page, and external links are marked external and carry
  * no referrer or opener access.
  */
-export function ApplicationNavigation({
+function ApplicationNavigation({
   navigation,
   label,
   resolvePageHref,
   currentPageId,
   breakpoint,
   onNavigate,
-  onPrefetch,
   className,
 }: ApplicationNavigationProps): ReactElement {
   const [open, setOpen] = useState(false);
@@ -339,7 +322,7 @@ export function ApplicationNavigation({
       {...(compact ? { "data-vortex-navigation-compact": "true" as const } : {})}
       className={cn("w-full min-w-0", className)}
     >
-      <Sidebar className="md:min-h-svh">
+      <Sidebar>
         <SidebarContent>
           <SidebarGroup>
             <Button
@@ -368,7 +351,6 @@ export function ApplicationNavigation({
                 currentPageId={currentPageId}
                 pendingPageId={pendingPageId}
                 onNavigate={activatePage}
-                onPrefetch={onPrefetch}
                 indicator={indicator}
               />
             </SidebarGroupContent>
@@ -419,7 +401,6 @@ export function ApplicationNavigationBlock(props: PlatformBlockRenderProps): Rea
       resolvePageHref={resolvePageHref}
       {...(props.currentPageId === undefined ? {} : { currentPageId: props.currentPageId })}
       {...(props.onNavigatePage === undefined ? {} : { onNavigate: props.onNavigatePage })}
-      {...(props.onPrefetchPage === undefined ? {} : { onPrefetch: props.onPrefetchPage })}
       breakpoint={props.breakpoint}
     />
   );

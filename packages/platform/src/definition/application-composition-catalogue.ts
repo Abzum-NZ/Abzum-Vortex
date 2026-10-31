@@ -10,6 +10,7 @@ import {
   immutablePlatformBlockCatalogueSchema,
 } from "./application-composition/platform-block-release";
 import { PLATFORM_BLOCK_RELEASE_IDENTITIES } from "./application-composition-release-identities";
+import { deepFreeze } from "../catalogue/runtime-primitives";
 import { platformBlockReleaseContentHash } from "./catalogue-release-content-hashes";
 import catalogueSources from "../catalogue/catalogue/application-composition-catalogue.source.json";
 import sharedProperties from "../catalogue/catalogue/application-composition-shared-properties.source.json";
@@ -69,12 +70,6 @@ const sources = Object.fromEntries(
     },
   ]),
 ) as unknown as typeof catalogueSources;
-
-const deepFreeze = <Value>(value: Value): Value => {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const key of Reflect.ownKeys(value)) deepFreeze(Reflect.get(value, key));
-  return Object.freeze(value);
-};
 
 const sourcesByIdentity = new Map(
   Object.values(sources).map((definition) => [
@@ -354,7 +349,7 @@ export const LINK_TILES_BLOCK_RELEASE: PlatformBlockRelease = release(
 );
 
 /** All immutable display block releases, including calendar and query-bound board releases. */
-export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
+const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
   NOTICE_BLOCK_RELEASE,
   ATTACHMENT_LIST_BLOCK_RELEASE,
   QUERY_NOTICE_BLOCK_RELEASE,
@@ -389,19 +384,19 @@ export const CONTROL_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.fr
 ]);
 
 /** All immutable launcher and tile block releases. */
-export const LAUNCHER_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
+const LAUNCHER_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
   LINK_TILES_BLOCK_RELEASE,
 ]);
 
 /** All immutable general layout block releases. */
-export const LAYOUT_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
+const LAYOUT_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
   CONTAINER_BLOCK_RELEASE,
   HEADING_BLOCK_RELEASE,
 ]);
 
 /** Immutable application navigation and search releases, placed in a shell's layout. */
-export const NAVIGATION_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
+const NAVIGATION_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
   APPLICATION_NAVIGATION_BLOCK_RELEASE,
   APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE,
   APPLICATION_SEARCH_BLOCK_RELEASE,

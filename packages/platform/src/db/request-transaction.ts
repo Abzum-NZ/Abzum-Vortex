@@ -44,8 +44,6 @@ export interface SavepointRequestDatabaseTransaction extends RequestDatabaseTran
   ): Promise<Result>;
 }
 
-export type RuntimeDatabaseTransaction = RequestDatabaseTransaction;
-
 interface TransactionDriver {
   query<ResultRow extends DatabaseRow = DatabaseRow>(
     strings: TemplateStringsArray,
@@ -255,7 +253,7 @@ const createResolvedRequestTransactionRunner =
   };
 
 /** A request's abort signal and deadline, applied to pooled-runner queries made under it. */
-export type PooledRequestLifetime = Readonly<{ signal: AbortSignal; deadline: number }>;
+type PooledRequestLifetime = Readonly<{ signal: AbortSignal; deadline: number }>;
 
 const pooledLifetimeStorage = new AsyncLocalStorage<PooledRequestLifetime>();
 
@@ -823,6 +821,11 @@ const defaultResolvedRequestRunner = createResolvedRequestTransactionRunner({
     return createPostgresDriver(client).transaction(operation);
   },
 });
+
+/** Runs one operation in the current runtime transaction, or in a new one when none is owned. */
+export type RuntimeTransactionRunner = <Result>(
+  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
+) => Promise<Result>;
 
 export const withRuntimeTransaction = async <Result>(
   operation: RuntimeOperation<Result>,

@@ -39,7 +39,7 @@ import type {
  */
 const TOKEN_DIMENSION_ORDER = ["baseColor", "theme", "chartColor", "radius"] as const;
 
-export type ResolvedThemeSelection = Readonly<{
+type ResolvedThemeSelection = Readonly<{
   /** The authored selection, validated and canonical. */
   selection: ApplicationThemeSelection;
   /** The selected, catalogue-backed shadcn style id, for the style CSS loader. */
@@ -48,7 +48,7 @@ export type ResolvedThemeSelection = Readonly<{
   tokens: Readonly<Record<string, ThemeTokenValue>>;
 }>;
 
-export type ThemeSelectionResolutionInput = Readonly<{
+type ThemeSelectionResolutionInput = Readonly<{
   /** The pinned platform theme release the selection is applied to. */
   base: Pick<ExactPlatformThemeDependency, "catalogueThemeId" | "releaseVersion">;
   /** The pinned base release's tokens. */
@@ -58,7 +58,7 @@ export type ThemeSelectionResolutionInput = Readonly<{
   options?: ThemeResolutionOptions | undefined;
 }>;
 
-export type ThemeSelectionResolution =
+type ThemeSelectionResolution =
   | Readonly<{ valid: true; resolved: ResolvedThemeSelection }>
   | Readonly<{
       valid: false;

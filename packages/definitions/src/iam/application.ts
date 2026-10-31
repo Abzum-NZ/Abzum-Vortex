@@ -7,7 +7,7 @@ import {
 } from "@vortex/platform/schema";
 import authoredSource from "./application.json";
 import { loadApplicationSource } from "../application-source-loader";
-import { iamModule } from "./module";
+import { iamModules } from "./module";
 
 const accessRequest = "vortex.iam.core:access_request";
 
@@ -15,7 +15,7 @@ const accessRequest = "vortex.iam.core:access_request";
 export const iamApplication: ApplicationSourceDocument = loadApplicationSource(
   authoredSource,
   DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
-  [iamModule],
+  iamModules,
   [
     {
       ...defaultSaveFlowSource({
@@ -167,24 +167,6 @@ export const iamApplication: ApplicationSourceDocument = loadApplicationSource(
         done: "Role assignment revoked.",
       }),
       labels: { name: "Revoke role assignment" },
-    },
-    {
-      ...defaultOperationFlowSource({
-        id: "flow_deactivate_role_activation",
-        key: "deactivate_role_activation",
-        operation: "platform.deactivate_role_activation",
-        inputs: {
-          role_activation_id: {
-            type: "record_reference",
-            required: true,
-            recordTypeIds: ["vortex.system_directory:role_activation"],
-          },
-          expected_activation_revision: { type: "whole_number", required: true },
-        },
-        returnsResult: true,
-        done: "Role activation deactivated.",
-      }),
-      labels: { name: "Deactivate role activation" },
     },
     {
       ...defaultOperationFlowSource({

@@ -50,7 +50,7 @@ import {
  * person cannot read on every record is reported as withheld, never totalled. Nothing here reads
  * a record per identity, another page, or a value the browser sent.
  */
-export type RecordsRangeSummaryDependencies = HumanOrganizationRequestDependencies &
+type RecordsRangeSummaryDependencies = HumanOrganizationRequestDependencies &
   Readonly<{ continuationKey: QueryContinuationKey }>;
 
 type Money = Readonly<{ amount: string; currency: string }>;

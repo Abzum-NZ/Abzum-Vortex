@@ -49,6 +49,7 @@ import { JoinOutcomeNotice } from "./_components/join-outcome-notice";
 import { OrganizationChooserPage } from "./_components/organization-chooser-page";
 import { organizationAddressPath } from "../_lib/address-paths";
 import { loadOrganizationLauncher } from "../_lib/organization-context";
+import { resolveSignedInLandingPath } from "../_lib/signed-in-landing";
 
 export const dynamic = "force-dynamic";
 
@@ -302,8 +303,15 @@ export default async function SignedInPage({
     onlyEntry &&
     invitations.length === 0 &&
     joinSentence === undefined
-  )
-    redirect(organizationAddressPath(onlyEntry.tenantShortName, onlyEntry.organizationShortName));
+  ) {
+    // The one organisation the person belongs to resolves to the destination page in this
+    // response: no organisation-address round trip between sign-in and the page they asked for.
+    const landing = await resolveSignedInLandingPath(result.session);
+    redirect(
+      landing ??
+        organizationAddressPath(onlyEntry.tenantShortName, onlyEntry.organizationShortName),
+    );
+  }
 
   const { email } = await resolveIdentitySessionWithEmail();
   if (email === undefined) throw new Error("Active identity session resolved without an email");

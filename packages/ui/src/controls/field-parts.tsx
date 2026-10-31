@@ -76,18 +76,50 @@ export function useFieldIds(placementId: string): FieldIds {
 }
 
 /**
- * Local edit state seeded from the projected value. A changed projection (a loaded draft or a
- * reset) replaces local edits; otherwise the person's edits stay responsive between projections.
+ * The person's edit state seeded from the projected value. A seed whose value actually changed (a
+ * loaded draft, a reload or the person's own Undo) replaces local edits; a projection that carries
+ * the same value in a new object or array never replaces what the person typed.
  */
 export function useSeededState<Value>(seed: Value): [Value, (next: Value) => void] {
   const [state, setState] = useState(seed);
   const [previousSeed, setPreviousSeed] = useState(seed);
-  if (!Object.is(seed, previousSeed)) {
+  if (!sameSeededValue(seed, previousSeed)) {
     setPreviousSeed(seed);
     setState(seed);
   }
   return [state, setState];
 }
+
+/** Structural equality for the JSON-shaped seed values a control receives. */
+const sameSeededValue = (left: unknown, right: unknown): boolean => {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+    return left.every((value, index) => sameSeededValue(value, right[index]));
+  }
+  if (
+    typeof left !== "object" ||
+    left === null ||
+    typeof right !== "object" ||
+    right === null ||
+    Array.isArray(left) ||
+    Array.isArray(right)
+  )
+    return false;
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every(
+      (key) =>
+        Object.hasOwn(right, key) &&
+        sameSeededValue(
+          (left as Record<string, unknown>)[key],
+          (right as Record<string, unknown>)[key],
+        ),
+    )
+  );
+};
 
 /** Fixed data-free note for a field that cannot currently be used. */
 export const inactiveNote = <Values,>(context: ControlContext<Values>): string | undefined =>

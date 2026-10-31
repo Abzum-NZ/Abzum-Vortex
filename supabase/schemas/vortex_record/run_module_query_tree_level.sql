@@ -79,7 +79,7 @@ begin
       'exists (select 1 from vortex_record.relationship_edges as tree_edge'
       || ' where tree_edge.relationship_id = %1$L::uuid and tree_edge.from_organisation_id = stored.organisation_id'
       || ' and tree_edge.from_storage_contract_id = %2$L::uuid and tree_edge.from_record_id = stored.record_id'
-      || ' and tree_edge.to_record_id = $16)',
+      || ' and tree_edge.to_record_id = $15)',
       relationship_id, plan ->> 'storageContractId'));
   end if;
   scanned := vortex_record.module_query_scan_internal(plan, member, null);

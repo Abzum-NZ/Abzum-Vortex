@@ -1,3 +1,4 @@
+import { definitionContractVersion } from "./application-contract-versions";
 import {
   applicationContentSchema,
   type PublishedApplicationDefinition,
@@ -30,7 +31,8 @@ import {
   assertUnambiguousModuleContent,
   normaliseModuleContent,
 } from "./comparison-policy/normalisation";
-import { assignNextDefinitionVersion, compareStableVersions } from "./semantic-version";
+import { compare } from "semver";
+import { nextDefinitionVersion } from "./version-impact";
 import { refuseVersionImpact } from "./version-impact-error";
 
 type SupportedVersionImpactRequest =
@@ -82,10 +84,7 @@ const assertHistoryRelease = (
   if (
     previous &&
     (release.publication.revision <= previous.publication.revision ||
-      compareStableVersions(
-        release.publication.releaseVersion,
-        previous.publication.releaseVersion,
-      ) <= 0)
+      compare(release.publication.releaseVersion, previous.publication.releaseVersion) <= 0)
   )
     refuseVersionImpact("invalid_history");
 };
@@ -140,7 +139,7 @@ const parseVersionImpactRequest = (input: unknown): SupportedVersionImpactReques
 };
 
 const assertEvidenceContractVersions = (evidence: DefinitionPublicationHistory): void => {
-  const allowed = "4.2.0";
+  const allowed = definitionContractVersion;
   if (
     evidence.latestRelease !== null &&
     evidence.latestRelease.publication.validationContractVersion !== allowed
@@ -185,7 +184,7 @@ const compareParsedDefinitionVersionImpact = (
       outcome: "release_required" as const,
       currentVersion: evidence.supersededReleaseVersion,
       impact: "major" as const,
-      assignedVersion: assignNextDefinitionVersion(evidence.supersededReleaseVersion, "major"),
+      assignedVersion: nextDefinitionVersion(evidence.supersededReleaseVersion, "major"),
       reasons,
     });
   }
@@ -238,7 +237,7 @@ const compareParsedDefinitionVersionImpact = (
     outcome: "release_required" as const,
     currentVersion: latest.publication.releaseVersion,
     impact,
-    assignedVersion: assignNextDefinitionVersion(latest.publication.releaseVersion, impact),
+    assignedVersion: nextDefinitionVersion(latest.publication.releaseVersion, impact),
     reasons,
   };
   return definitionVersionImpactResultSchema.parse(result);
@@ -257,7 +256,7 @@ export const compareDefinitionVersionImpact = (input: unknown): DefinitionVersio
 export const compareDefinitionVersionImpactWithEvidence = (
   input: Readonly<{
     kind: "module" | "application";
-    validationContractVersion: "4.2.0";
+    validationContractVersion: typeof definitionContractVersion;
     releaseHistory: DefinitionPublicationHistory;
     candidate: unknown;
   }>,

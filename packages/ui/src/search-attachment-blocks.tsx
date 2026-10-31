@@ -11,7 +11,7 @@ import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "./def
 import { DisplayStateContainer } from "./display/display-state-container";
 import { DisplayHeader } from "./display/controls";
 import { resolveDisplayContext, type DisplayRenderProps } from "./display/context";
-import { formatLocaleNumber } from "./display/date-format";
+import { formatBytes } from "./display/date-format";
 import { parseDisplayEventHandlers, readDisplayData } from "./display/projected-data";
 import { createPayloadParser, type PlatformComponentRegistration } from "./registry";
 
@@ -51,8 +51,6 @@ const ATTACHMENT_PAYLOAD_PARSER = createPayloadParser({
     return parsed;
   },
 });
-
-const formatBytes = (bytes: number): string => `${formatLocaleNumber(bytes)} bytes`;
 
 /** A read-only accessible list. Download clicks return to the existing protected File GET route. */
 export function SearchAttachmentDisplay(
@@ -125,7 +123,7 @@ export function SearchAttachmentDisplay(
                   <div className="flex min-w-0 flex-col gap-1">
                     <span className="break-words text-sm font-medium">{file.displayName}</span>
                     <span className="text-xs text-muted-foreground">
-                      {file.mediaType} · {formatBytes(file.sizeBytes)}
+                      {file.mediaType} Â· {formatBytes(file.sizeBytes)}
                     </span>
                   </div>
                   <a

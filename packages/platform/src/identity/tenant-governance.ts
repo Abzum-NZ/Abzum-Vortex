@@ -15,7 +15,6 @@ import {
   organizationAccountLanguageSchema,
   organizationRuntimeSettingsSchema,
 } from "../access/organization-runtime-settings-schema";
-import type { tenantStructuralCapabilitySchema } from "../access/identity-access";
 import {
   tenantAdministratorMutationRefusalCodeSchema,
   tenantOrganizationMutationRefusalCodeSchema,
@@ -25,7 +24,7 @@ const pageLimitSchema = z.number().int().min(1).max(100);
 const pageFor = <Cursor extends z.ZodType>(cursor: Cursor) =>
   z.object({ limit: pageLimitSchema, after: cursor.optional() }).strict();
 
-export const tenantLauncherEntrySchema = z
+const tenantLauncherEntrySchema = z
   .object({ tenantId: tenantIdSchema, displayName: z.string().trim().min(1).max(120) })
   .strict();
 export const tenantLauncherPageSchema = z
@@ -53,7 +52,7 @@ export const tenantOrganizationQuerySchema = z
   .object({ tenantId: tenantIdSchema, organizationId: organizationIdSchema })
   .strict();
 
-export const tenantAssignmentViewSchema = z
+const tenantAssignmentViewSchema = z
   .object({
     assignmentId: tenantAdministratorAssignmentIdSchema,
     identityId: identityIdSchema,
@@ -74,7 +73,7 @@ export const tenantAssignmentPageSchema = z
   })
   .strict();
 
-export const tenantGovernanceReadRefusalSchema = z
+const tenantGovernanceReadRefusalSchema = z
   .object({ outcome: z.literal("refused"), code: z.enum(["invalid_request", "unavailable"]) })
   .strict();
 export const tenantLauncherResultSchema = z.discriminatedUnion("outcome", [
@@ -285,7 +284,7 @@ export const archiveTenantOrganizationResultSchema = organizationMutationResult(
   "archive_tenant_organization",
 );
 
-export const createTenantOrganizationAcceptedResultSchema = z
+const createTenantOrganizationAcceptedResultSchema = z
   .object({
     outcome: z.enum(["accepted", "replayed"]),
     operation: z.literal("create_tenant_organization"),
@@ -351,4 +350,3 @@ export type ReactivateTenantOrganizationResult = z.infer<
 >;
 export type ArchiveTenantOrganizationResult = z.infer<typeof archiveTenantOrganizationResultSchema>;
 export type CreateTenantOrganizationResult = z.infer<typeof createTenantOrganizationResultSchema>;
-export type TenantStructuralCapability = z.infer<typeof tenantStructuralCapabilitySchema>;

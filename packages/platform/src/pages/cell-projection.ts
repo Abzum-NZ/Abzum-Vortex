@@ -2,6 +2,7 @@ import type { z } from "zod";
 import { isSafeLinkAddress, type JsonValue } from "../catalogue/common";
 import { timestampSchema } from "../catalogue/identifiers";
 import type { RecordsDisplayFormat } from "../definition/application-composition/records-display";
+import type { PipelineStageTone } from "../definition/record-type-pipelines";
 import type { RecordLinkReference } from "../definition/viewer-safe-record-link";
 import { richTextDocumentSchema } from "../records/rich-text";
 import type { displayScalarCellSchema } from "./display-payload-parts";
@@ -94,7 +95,11 @@ const numberCell = (value: number, grouped: boolean): ProjectedScalarCellValue =
 export const projectCell = (
   value: JsonValue,
   declaredFormat: RecordsDisplayFormat,
-  choiceLabels?: readonly Readonly<{ value: string; label: string }>[],
+  choiceLabels?: readonly Readonly<{
+    value: string;
+    label: string;
+    tone?: PipelineStageTone | undefined;
+  }>[],
   dateType?: "date" | "date_time",
   /** The label of a linked record as the viewer may see it; undefined when it could not be read. */
   recordLinkOf?: (link: RecordLinkReference) => ProjectedRecordLink | undefined,
@@ -132,12 +137,13 @@ export const projectCell = (
         .join(", "),
     };
   }
-  // One selected choice shows its label; a value the field no longer offers shows no value.
+  // One selected choice shows its label and colour role; a value the field no longer offers shows
+  // no value.
   if (typeof value === "string" && choiceLabels !== undefined) {
     const option = choiceLabels.find((candidate) => candidate.value === value);
     return option === undefined
       ? emptyCell
-      : { kind: "choice", key: option.value, label: option.label };
+      : { kind: "choice", key: option.value, label: option.label, tone: option.tone ?? "neutral" };
   }
   // A formatted-text value is shown as its document, never flattened or dropped.
   const document = richTextDocumentSchema.safeParse(value);

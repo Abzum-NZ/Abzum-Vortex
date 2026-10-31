@@ -24,6 +24,7 @@ import {
   sourceProvenanceUnchanged,
 } from "./definition-source-common";
 import { parseExactDecimal } from "../records/exact-decimal";
+import { pipelineStageToneSchema } from "./record-type-pipelines";
 import {
   currencyCodeSchema,
   exactDecimalFitsDigits,
@@ -44,6 +45,7 @@ const sourceOptionSchema = z
   .object({
     value: sourceProvenanceUnchanged(z.string().min(1).max(120)),
     label: sourceProvenanceUnchanged(labelSchema),
+    tone: sourceProvenanceUnchanged(pipelineStageToneSchema.optional()),
     required_permission: sourceProvenanceTarget(namespacedKeySchema.optional(), [
       "requiredPermissionId",
     ]),

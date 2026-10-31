@@ -23,7 +23,4 @@ grant execute on function vortex_platform.alert_signal_namespaced_key_is_valid(t
 comment on function vortex_platform.alert_signal_namespaced_key_is_valid(text) is
   'Private check for the contract namespaced-key shape used by alert code and runbook-reference fields.';
 
-alter function vortex_platform.alert_signal_namespaced_key_is_valid(text)
-  owner to postgres;
-
 alter function vortex_platform.alert_signal_namespaced_key_is_valid(p_key text) owner to vortex_owner;

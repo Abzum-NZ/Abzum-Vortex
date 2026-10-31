@@ -43,7 +43,7 @@ const recordSchema = z
   })
   .strict();
 
-export type InstalledSearchModule = Readonly<{
+type InstalledSearchModule = Readonly<{
   rootId: string;
   releaseRevision: number;
   recordTypeIds: readonly string[];

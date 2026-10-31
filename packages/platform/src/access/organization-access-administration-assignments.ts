@@ -16,16 +16,12 @@ import {
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
   changeOrganizationAdministrationDelegationAuthorityResultSchema,
   changeOrganizationAdministrationRoleAssignmentResultSchema,
-  changeOrganizationAdministrationRoleActivationResultSchema,
-  deactivateOrganizationAdministrationRoleActivationCommandSchema,
   revokeOrganizationAdministrationDelegationAuthorityCommandSchema,
   revokeOrganizationAdministrationRoleAssignmentCommandSchema,
   type AssignOrganizationAdministrationRoleAssignmentCommand,
   type ChangeOrganizationAdministrationRoleAssignmentResult,
   type ChangeOrganizationAdministrationDelegationAuthorityResult,
-  type ChangeOrganizationAdministrationRoleActivationResult,
   type RevokeOrganizationAdministrationRoleAssignmentCommand,
-  type DeactivateOrganizationAdministrationRoleActivationCommand,
   type RevokeOrganizationAdministrationDelegationAuthorityCommand,
 } from "./organization-access-administration";
 import {
@@ -38,7 +34,6 @@ import {
 import type { HumanOrganizationRequestResult } from "./human-organization-request";
 import {
   normalizeAssignmentLedgerFact,
-  normalizeRoleActivation,
   sameAssignee,
   requireOne,
   recordedRefusal,
@@ -50,7 +45,6 @@ import type {
   RoleAssignmentChangeRow,
   DelegationAuthorityChangeRow,
   StewardshipAppointmentRow,
-  RoleActivationChangeRow,
   AccessAdministrationContext,
 } from "./organization-access-administration-shared";
 
@@ -63,7 +57,6 @@ const projectedAssignmentSchema = z.object({
       role_id: z.string(),
       assignee_kind: z.enum(["organization_account", "group"]),
       organization_account_id: z.string().nullable(),
-      assignment_kind: z.string(),
       state: z.string(),
       temporal_state: z.enum(["active", "scheduled", "expired", "revoked"]),
     })
@@ -74,7 +67,6 @@ type ProjectedRoleAssignment = Readonly<{
   roleAssignmentId: string;
   roleId: string;
   organizationAccountId: string | null;
-  assignmentKind: string;
   state: string;
   temporalState: z.infer<typeof projectedAssignmentSchema>["attribute_values"]["temporal_state"];
 }>;
@@ -118,7 +110,6 @@ export const createAccessAdministrationAssignmentOperations = ({
             roleAssignmentId: parsed.record_id,
             roleId: parsed.attribute_values.role_id,
             organizationAccountId: parsed.attribute_values.organization_account_id,
-            assignmentKind: parsed.attribute_values.assignment_kind,
             state: parsed.attribute_values.state,
             temporalState: parsed.attribute_values.temporal_state,
           };
@@ -172,7 +163,6 @@ export const createAccessAdministrationAssignmentOperations = ({
             ${command.data.assigneeKind}::text,
             ${command.data.organizationAccountId ?? null}::uuid,
             ${command.data.groupId ?? null}::uuid,
-            ${command.data.assignmentKind}::text,
             ${command.data.startsAt ?? null}::timestamptz,
             ${command.data.expiresAt ?? null}::timestamptz,
             ${activityId}::uuid
@@ -204,7 +194,6 @@ export const createAccessAdministrationAssignmentOperations = ({
               parsed.data.accessVersion !== scope.accessVersion + (created ? 1 : 0) ||
               !sameId(parsed.data.assignment.role.roleId, command.data.roleId) ||
               !sameAssignee(parsed.data.assignment.assignee, command.data) ||
-              parsed.data.assignment.assignmentKind !== command.data.assignmentKind ||
               (created && parsed.data.assignment.revision !== 1) ||
               parsed.data.assignment.state !== "live"
             )
@@ -370,79 +359,6 @@ export const createAccessAdministrationAssignmentOperations = ({
             throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
           return parsed.data;
         }),
-      );
-    },
-
-    deactivateRoleActivation: async (
-      session: IdentitySession,
-      candidate: OrganizationSelectionCandidate,
-      commandCandidate: DeactivateOrganizationAdministrationRoleActivationCommand,
-    ): Promise<
-      HumanOrganizationRequestResult<
-        ChangeOrganizationAdministrationRoleActivationResult,
-        "permission_denied" | "activation_not_found"
-      >
-    > => {
-      const command =
-        deactivateOrganizationAdministrationRoleActivationCommandSchema.safeParse(commandCandidate);
-      if (!command.success)
-        return refuseAdministration(
-          "deactivateRoleActivation",
-          "ACCESS_ADMIN_COMMAND_INVALID",
-          { kind: "unavailable" } as const,
-          command.error,
-        );
-      let activityId: string;
-      try {
-        activityId = activityIdSchema.parse(newActivityId());
-      } catch (error) {
-        return refuseAdministration(
-          "deactivateRoleActivation",
-          "ACCESS_ADMIN_IDENTITY_GENERATION_FAILED",
-          { kind: "temporarily_unavailable" } as const,
-          error,
-        );
-      }
-      return mapRecordedRefusal(
-        "deactivateRoleActivation",
-        requests.runAccessChange(session, candidate, async (transaction, scope) => {
-          const row = requireOne(
-            await transaction.query<RoleActivationChangeRow>`
-          select outcome, organization_id, activation_summary, access_version, refusal_reason
-          from vortex_access.deactivate_organization_role_activation_for_administration(
-            ${command.data.roleActivationId}::uuid,
-            ${command.data.expectedActivationRevision}::bigint,
-            ${activityId}::uuid
-          )`,
-          );
-          if (
-            isRecordedRefusal(
-              row,
-              row.activation_summary,
-              scope.organizationId,
-              scope.accessVersion,
-            )
-          )
-            return recordedRefusal(row);
-          const parsed = changeOrganizationAdministrationRoleActivationResultSchema.safeParse({
-            activation: normalizeRoleActivation(row.activation_summary),
-            accessVersion: databaseRevision(row.access_version),
-          });
-          if (
-            typeof row.organization_id !== "string" ||
-            !sameId(row.organization_id, scope.organizationId) ||
-            row.outcome !== "completed" ||
-            !parsed.success ||
-            parsed.data.accessVersion !== scope.accessVersion + 1 ||
-            !sameId(parsed.data.activation.roleActivationId, command.data.roleActivationId) ||
-            parsed.data.activation.revision !== command.data.expectedActivationRevision + 1 ||
-            parsed.data.activation.state !== "revoked" ||
-            parsed.data.activation.temporalState !== "revoked"
-          )
-            throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
-          return parsed.data;
-        }),
-        ["permission_denied", "activation_not_found"] as const,
       );
     },
 

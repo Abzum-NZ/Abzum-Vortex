@@ -31,7 +31,6 @@ export {
   type PreparedSave,
   type RecordSaveServiceDependencies,
   type RecordSaveServiceResult,
-  type RelationshipTotalPreparationOutcome,
 } from "./record-save-preparation";
 
 const intentOf = (command: SaveRecordCommand): RecordChangeIntent =>

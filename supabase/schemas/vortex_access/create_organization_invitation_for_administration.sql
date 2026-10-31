@@ -60,7 +60,7 @@ begin
     raise exception using errcode = '40001', message = 'Invitation authority is stale';
   end if;
   for role_item in
-    select role.role_id, role.live_revision, revision.lifecycle, revision.assignment_policy
+    select role.role_id, role.live_revision, revision.lifecycle
     from vortex_access.organization_roles as role
     join vortex_access.organization_role_revisions as revision
       on revision.organization_id = role.organization_id and revision.role_id = role.role_id
@@ -68,7 +68,7 @@ begin
     where role.organization_id = scope.organization_id and role.role_id = any(p_role_ids)
     order by role.role_id for update of role
   loop
-    if role_item.lifecycle <> 'active' or role_item.assignment_policy not in ('standing', 'activation_required')
+    if role_item.lifecycle <> 'active'
       or not vortex_access.check_organization_invitation_role_authority_internal(
         scope.organization_id, scope.organization_account_id, role_item.role_id, operation_at
       ) then

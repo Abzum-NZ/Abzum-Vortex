@@ -152,7 +152,7 @@ export function ModalSurface<Values extends ModalSurfacePayload>({
     <Dialog open={open} onOpenChange={onOpenChange} disablePointerDismissal>
       <DialogContent
         showCloseButton={false}
-        className={cn("max-h-[calc(100%-2rem)] overflow-y-auto", DIALOG_SIZES[size])}
+        className={DIALOG_SIZES[size]}
         {...sharedDataAttributes}
       >
         <DialogHeader>

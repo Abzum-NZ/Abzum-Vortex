@@ -118,8 +118,6 @@ begin
   );
 end
 $function$;
-alter function vortex_definition.validated_builder_draft_write_context_internal(uuid) owner to vortex_owner;
-
 
 revoke all on function vortex_definition.validated_builder_draft_write_context_internal(uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;

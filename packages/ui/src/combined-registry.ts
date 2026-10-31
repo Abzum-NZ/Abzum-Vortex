@@ -14,7 +14,7 @@ import { NAVIGATION_COMPONENT_REGISTRATIONS } from "./navigation/registrations";
 import { createCustomComponentRegistrations } from "./custom-component/registration";
 
 /** Every platform component registration, combining the display, control, launcher, layout and navigation families. */
-export const ALL_PLATFORM_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistration[] =
+const ALL_PLATFORM_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistration[] =
   Object.freeze([
     ...DISPLAY_COMPONENT_REGISTRATIONS,
     ...ATTACHMENT_COMPONENT_REGISTRATIONS,

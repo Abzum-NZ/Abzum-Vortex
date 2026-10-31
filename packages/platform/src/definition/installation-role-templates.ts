@@ -277,7 +277,6 @@ const installedRoleSchema = z
     label: z.string(),
     liveRevision: z.number().int().min(1),
     lifecycle: z.enum(["active", "acceptance_required", "unavailable", "retired"]),
-    assignmentPolicy: z.enum(["standing", "activation_required"]),
     liveAssignmentCount: z.number().int().min(0),
     installerAssignment: z
       .object({

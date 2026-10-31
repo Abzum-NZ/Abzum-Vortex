@@ -14,12 +14,12 @@ export function MfaForm({
   initial: MfaFormState;
   continuation?: string;
 }) {
-  const [secret, setSecret] = useState<string>();
+  const [enrolment, setEnrolment] = useState<{ secret: string; qrCode: string }>();
   const [state, action] = useActionState(
     async (previous: MfaFormState, formData: FormData): Promise<MfaFormState> => {
       const result = await completeMfa(formData);
       if (result.kind === "error") return { ...previous, error: result.error };
-      setSecret(result.secret);
+      setEnrolment({ secret: result.secret, qrCode: result.qrCode });
       return { kind: "enrolled", factorId: result.factorId };
     },
     initial,
@@ -43,10 +43,24 @@ export function MfaForm({
         </>
       ) : (
         <>
-          {state.kind === "enrolled" ? (
-            <FieldDescription>
-              Add an account in your authenticator app using this setup key: <code>{secret}</code>
-            </FieldDescription>
+          {state.kind === "enrolled" && enrolment !== undefined ? (
+            <div className="flex flex-col items-start gap-3">
+              <FieldDescription>
+                Scan this QR code with your authenticator app, then enter the code it shows.
+              </FieldDescription>
+              {/* The QR code is an SVG data address from the identity provider, shown as an image. */}
+              <img
+                src={enrolment.qrCode}
+                alt="QR code for your authenticator app"
+                width={176}
+                height={176}
+                className="rounded-md border bg-white p-2"
+              />
+              <FieldDescription>
+                If you cannot scan it, add the account with this setup key:{" "}
+                <code className="break-all">{enrolment.secret}</code>
+              </FieldDescription>
+            </div>
           ) : null}
           <input type="hidden" name="factor_id" value={state.factorId} />
           <Field>

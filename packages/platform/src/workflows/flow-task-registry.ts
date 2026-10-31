@@ -1,11 +1,8 @@
 import { flowTaskRegistry } from "./flow-task-registry-data";
 import { flowControlTaskTypeKeys } from "./flow-task-tree";
-export { flowRegisteredTaskTypeKeys, flowTaskRegistry, flowTaskRuns } from "./flow-task-registry-data";
+export {flowTaskRegistry,} from "./flow-task-registry-data";
 export type {
-  FlowRegisteredTaskTypeKey,
-  FlowControlTaskTypeKey,
   FlowTaskTypeKey,
-  PageStepType,
   PageIntentStepType,
   ServerStepType,
 } from "./flow-task-registry-data";
@@ -38,7 +35,7 @@ import { flowLiteralSchema } from "./flow-values";
  * - `server`: a protected operation in its own short transaction.
  * - `transaction`: inside the owning record save, for every writer.
  */
-export const flowTaskRunLocationSchema = z.enum(["browser", "server", "transaction"]);
+const flowTaskRunLocationSchema = z.enum(["browser", "server", "transaction"]);
 export type FlowTaskRunLocation = z.infer<typeof flowTaskRunLocationSchema>;
 
 /**
@@ -50,14 +47,14 @@ export type FlowTaskRunLocation = z.infer<typeof flowTaskRunLocationSchema>;
  * for registered tasks (`PageIntentStepType`, `ServerStepType`); control tasks are handled by the
  * shared interpreter.
  */
-export const flowStepRunsSchema = z
+const flowStepRunsSchema = z
   .object({ page: z.boolean(), server: z.boolean(), backend: z.boolean() })
   .strict();
 export type FlowStepRuns = z.infer<typeof flowStepRunsSchema>;
 
 
 /** The declared type of one task property. */
-export const flowTaskPropertyTypeSchema = z.enum([
+const flowTaskPropertyTypeSchema = z.enum([
   ...workflowValueTypeSchema.options,
   "any_value",
   "formula",
@@ -94,7 +91,7 @@ export const flowTaskOutputDeclarationSchema = z
   .strict();
 
 /** The default policy a task starts with; a builder may tighten it within the flow's limits. */
-export const flowTaskDefaultPolicySchema = z
+const flowTaskDefaultPolicySchema = z
   .object({
     timeoutSeconds: z.number().int().min(1).max(flowMaximumServerSeconds),
     duplicateProtection: z.enum(["not_applicable", "required"]),

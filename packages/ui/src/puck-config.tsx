@@ -149,8 +149,6 @@ export type VortexPuckMetadata = Readonly<{
   resolvePageHref?: ((pageId: string) => string) | undefined;
   /** Internal page activation supplied by the shell for client-side page transitions. */
   onNavigatePage?: ((pageId: string, event: MouseEvent<HTMLAnchorElement>) => void) | undefined;
-  /** Intent to open an internal page, so the shell can start loading it before the click. */
-  onPrefetchPage?: ((pageId: string) => void) | undefined;
   /** Internal page identity currently shown. */
   currentPageId?: string | undefined;
   /** Configured dedicated component origin, for the sandboxed custom-component host. */
@@ -173,7 +171,7 @@ type FieldInputControlReleases = FieldInputControlReleaseMap;
  * The part of a placement that is not a block setting: the compiled item's `vortex` prop, exactly
  * as the published definition carries it.
  */
-export type VortexPlacementMeta = Readonly<{
+type VortexPlacementMeta = Readonly<{
   block: CompiledItemVortex["block"];
   responsive: CompiledItemVortex["responsive"];
   /** The complete tablet and phone order of each child slot; a slot array is its desktop order. */
@@ -193,7 +191,7 @@ type PlacementSettings = Readonly<Record<string, BlockPropertyValueContract>>;
  * Props every component of the config receives: the compiled item's props. Each declared setting is
  * its own prop holding its typed value; slot props are `SlotComponent` functions.
  */
-export type VortexPuckComponentProps = Readonly<{
+type VortexPuckComponentProps = Readonly<{
   id: string;
   vortex: VortexPlacementMeta;
   puck: PuckContext;
@@ -543,9 +541,6 @@ function PlacementBlock(props: {
               {...(metadataIn.onNavigatePage === undefined
                 ? {}
                 : { onNavigatePage: metadataIn.onNavigatePage })}
-              {...(metadataIn.onPrefetchPage === undefined
-                ? {}
-                : { onPrefetchPage: metadataIn.onPrefetchPage })}
               {...(metadataIn.currentPageId === undefined
                 ? {}
                 : { currentPageId: metadataIn.currentPageId })}
@@ -577,7 +572,7 @@ type VortexComponentConfig = ComponentConfig<Record<string, unknown>>;
  * Builds the Puck config for every release in the registry: one component per renderer key, typed
  * from that key's one release.
  */
-export function createVortexPuckConfig(
+function createVortexPuckConfig(
   registry: PlatformComponentRegistry,
   fieldInputControlReleases: FieldInputControlReleases,
 ): Config {

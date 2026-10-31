@@ -57,7 +57,6 @@ begin
       release.resolution_fingerprint, registration.permission_catalogue_fingerprint;
 end
 $function$;
-alter function vortex_access.read_application_permission_snapshot(uuid,uuid) owner to vortex_owner;
 
 revoke execute on function vortex_access.read_application_permission_snapshot(uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;

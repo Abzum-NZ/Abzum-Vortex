@@ -11,11 +11,10 @@ import { displayScalarCellSchema, displayTextSchema } from "./display-payload-pa
 const wholeCountSchema = z.number().int().nonnegative();
 
 /** The filter a click on a row or column heading applies to the ordinary grid, in address spelling. */
-export const pivotDrillSchema = z
+const pivotDrillSchema = z
   .object({ fieldId: displayTextSchema, filter: displayTextSchema })
   .strict()
   .readonly();
-export type PivotDrill = z.input<typeof pivotDrillSchema>;
 
 const pivotAxisShape = {
   /** The canonical value text the server keys it by (a choice value or a bucket start). */
@@ -32,7 +31,7 @@ export type PivotAxisValue = z.input<typeof pivotAxisValueSchema>;
 export type PivotCell = z.input<typeof displayScalarCellSchema>;
 
 /** One row of a pivot: its heading, its records and one cell per column. */
-export const pivotRowSchema = z
+const pivotRowSchema = z
   .object({
     ...pivotAxisShape,
     /** Records in this row. */

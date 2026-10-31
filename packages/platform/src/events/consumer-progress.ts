@@ -1,9 +1,10 @@
 import "server-only";
 
 import { eventOccurrenceIdSchema, timestampSchema } from "../catalogue/identifiers";
-import { databaseCode, isNonNilUuidText, asRecord } from "../catalogue/runtime-primitives";
+import { databaseCode, isNonNilUuidText } from "../catalogue/runtime-primitives";
 import { dispatchOccurrenceSchema, type DispatchOccurrence } from "./occurrence-contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
+import { consumerKeyMatches, exactRecord } from "./event-record-shapes";
 
 export const eventConsumerProgressLimits = Object.freeze({
   maximumBatchSize: 100,
@@ -17,9 +18,9 @@ export const eventConsumerProgressErrorCodes = [
   "EVENT_CONSUMER_PROGRESS_STORAGE_UNAVAILABLE",
 ] as const;
 
-export type EventConsumerProgressErrorCode = (typeof eventConsumerProgressErrorCodes)[number];
+type EventConsumerProgressErrorCode = (typeof eventConsumerProgressErrorCodes)[number];
 
-export class EventConsumerProgressError extends Error {
+class EventConsumerProgressError extends Error {
   readonly code: EventConsumerProgressErrorCode;
 
   constructor(code: EventConsumerProgressErrorCode) {
@@ -29,20 +30,20 @@ export class EventConsumerProgressError extends Error {
   }
 }
 
-export type EventConsumerClaimInput = Readonly<{
+type EventConsumerClaimInput = Readonly<{
   consumerKey: string;
   batchSize: number;
   leaseSeconds: number;
 }>;
 
-export type EventConsumerLeaseRenewalInput = Readonly<{
+type EventConsumerLeaseRenewalInput = Readonly<{
   consumerKey: string;
   ackCursor: string;
   occurrenceId: string;
   leaseSeconds: number;
 }>;
 
-export type EventConsumerAcknowledgementInput = Readonly<{
+type EventConsumerAcknowledgementInput = Readonly<{
   consumerKey: string;
   ackCursor: string;
   occurrenceId: string;
@@ -59,37 +60,18 @@ export type EventConsumerClaimResult = Readonly<{
   occurrences: readonly ClaimedEventOccurrence[];
 }>;
 
-export type EventConsumerLeaseRenewalResult =
+type EventConsumerLeaseRenewalResult =
   | Readonly<{ outcome: "renewed"; leaseExpiresAt: string }>
   | Readonly<{ outcome: "claim_unavailable" }>;
 
-export type EventConsumerAcknowledgementResult = Readonly<{
+type EventConsumerAcknowledgementResult = Readonly<{
   outcome: "acknowledged" | "already_acknowledged" | "claim_unavailable";
 }>;
 
 type ConsumerProgressRow = DatabaseRow & { readonly result: unknown };
 
-const consumerKeyMatches = (value: unknown): value is string =>
-  typeof value === "string" &&
-  value.length <= eventConsumerProgressLimits.maximumConsumerKeyLength &&
-  /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
-
 const timestampMatches = (value: unknown): value is string =>
   timestampSchema.safeParse(value).success;
-
-const exactRecord = <Key extends string>(
-  value: unknown,
-  keys: readonly Key[],
-): Readonly<Record<Key, unknown>> | undefined => {
-  const candidate = asRecord(value);
-  if (
-    candidate === undefined ||
-    Object.keys(candidate).length !== keys.length ||
-    keys.some((key) => !Object.hasOwn(candidate, key))
-  )
-    return undefined;
-  return candidate as Readonly<Record<Key, unknown>>;
-};
 
 const requireOne = (rows: readonly ConsumerProgressRow[]): ConsumerProgressRow => {
   if (rows.length !== 1 || rows[0] === undefined)

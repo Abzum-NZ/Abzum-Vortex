@@ -124,9 +124,6 @@ begin
     -- The accepted registration remains historical evidence. A changed meaning
     -- advances continuity, so a role cannot retain it without fresh acceptance.
     select role.role_id, role.live_revision,
-      revision.assignment_policy, revision.authority_continuity_revision,
-      revision.policy_continuity_revision, revision.activation_policy_id,
-      revision.activation_policy_revision,
       accepted as accepted_entry,
       accepted.registration_revision as accepted_registration_revision
     from vortex_access.organization_roles as role
@@ -162,7 +159,6 @@ begin
   ), route_candidates as (
     select 1 as route_rank, permission.role_id,
       assignment.role_assignment_id, null::uuid as membership_id,
-      null::uuid as role_activation_id,
       permission.accepted_entry, permission.accepted_registration_revision,
       least(
         context_expires_value,
@@ -174,19 +170,17 @@ begin
       and assignment.role_id = permission.role_id
       and assignment.assignee_kind = 'organization_account'
       and assignment.organization_account_id = context_account_value
-      and assignment.assignment_kind = 'standing'
       and assignment.state = 'live'
       and assignment.starts_at <= decision_checked_at
       and (
         assignment.expires_at is null
         or assignment.expires_at > decision_checked_at
       )
-    where permission.assignment_policy = 'standing'
 
     union all
 
     select 2, permission.role_id, assignment.role_assignment_id,
-      membership.membership_id, null::uuid,
+      membership.membership_id,
       permission.accepted_entry, permission.accepted_registration_revision,
       least(
         context_expires_value,
@@ -198,7 +192,6 @@ begin
       on assignment.organization_id = context_organization_value
       and assignment.role_id = permission.role_id
       and assignment.assignee_kind = 'group'
-      and assignment.assignment_kind = 'standing'
       and assignment.state = 'live'
       and assignment.starts_at <= decision_checked_at
       and (
@@ -219,107 +212,6 @@ begin
         membership.expires_at is null
         or membership.expires_at > decision_checked_at
       )
-    where permission.assignment_policy = 'standing'
-
-    union all
-
-    select 3, permission.role_id, assignment.role_assignment_id,
-      null::uuid, activation.role_activation_id,
-      permission.accepted_entry, permission.accepted_registration_revision,
-      least(
-        context_expires_value,
-        coalesce(assignment.expires_at, context_expires_value),
-        activation.expires_at
-      )
-    from current_role_permission as permission
-    join vortex_access.organization_role_assignments as assignment
-      on assignment.organization_id = context_organization_value
-      and assignment.role_id = permission.role_id
-      and assignment.assignee_kind = 'organization_account'
-      and assignment.organization_account_id = context_account_value
-      and assignment.assignment_kind = 'eligible'
-      and assignment.state = 'live'
-      and assignment.starts_at <= decision_checked_at
-      and (
-        assignment.expires_at is null
-        or assignment.expires_at > decision_checked_at
-      )
-    join vortex_access.organization_role_activations as activation
-      on activation.organization_id = assignment.organization_id
-      and activation.organization_account_id = context_account_value
-      and activation.role_id = assignment.role_id
-      and activation.eligibility_source_kind = 'direct'
-      and activation.role_assignment_id = assignment.role_assignment_id
-      and activation.role_assignment_revision = assignment.revision
-      and activation.state = 'live'
-      and activation.activated_at <= decision_checked_at
-      and activation.expires_at > decision_checked_at
-      and activation.authority_continuity_revision =
-        permission.authority_continuity_revision
-      and activation.policy_continuity_revision =
-        permission.policy_continuity_revision
-      and activation.activation_policy_id = permission.activation_policy_id
-      and activation.activation_policy_revision =
-        permission.activation_policy_revision
-    where permission.assignment_policy = 'activation_required'
-
-    union all
-
-    select 4, permission.role_id, assignment.role_assignment_id,
-      membership.membership_id, activation.role_activation_id,
-      permission.accepted_entry, permission.accepted_registration_revision,
-      least(
-        context_expires_value,
-        coalesce(assignment.expires_at, context_expires_value),
-        coalesce(membership.expires_at, context_expires_value),
-        activation.expires_at
-      )
-    from current_role_permission as permission
-    join vortex_access.organization_role_assignments as assignment
-      on assignment.organization_id = context_organization_value
-      and assignment.role_id = permission.role_id
-      and assignment.assignee_kind = 'group'
-      and assignment.assignment_kind = 'eligible'
-      and assignment.state = 'live'
-      and assignment.starts_at <= decision_checked_at
-      and (
-        assignment.expires_at is null
-        or assignment.expires_at > decision_checked_at
-      )
-    join vortex_access.organization_groups as organization_group
-      on organization_group.organization_id = assignment.organization_id
-      and organization_group.group_id = assignment.group_id
-      and organization_group.state = 'active'
-    join vortex_access.organization_role_activations as activation
-      on activation.organization_id = assignment.organization_id
-      and activation.organization_account_id = context_account_value
-      and activation.role_id = assignment.role_id
-      and activation.eligibility_source_kind = 'group'
-      and activation.role_assignment_id = assignment.role_assignment_id
-      and activation.role_assignment_revision = assignment.revision
-      and activation.state = 'live'
-      and activation.activated_at <= decision_checked_at
-      and activation.expires_at > decision_checked_at
-      and activation.authority_continuity_revision =
-        permission.authority_continuity_revision
-      and activation.policy_continuity_revision =
-        permission.policy_continuity_revision
-      and activation.activation_policy_id = permission.activation_policy_id
-      and activation.activation_policy_revision =
-        permission.activation_policy_revision
-    join vortex_access.organization_group_memberships as membership
-      on membership.organization_id = assignment.organization_id
-      and membership.group_id = assignment.group_id
-      and membership.organization_account_id = context_account_value
-      and membership.membership_id = activation.membership_id
-      and membership.revision = activation.membership_revision
-      and membership.state = 'live'
-      and membership.starts_at <= decision_checked_at
-      and (
-        membership.expires_at is null
-        or membership.expires_at > decision_checked_at
-      )
-    where permission.assignment_policy = 'activation_required'
   ), granted as materialized (
     -- Every accepted meaning the caller holds through a live path is granted: a caller holding
     -- two roles with different accepted meanings of the permission has both, each with the

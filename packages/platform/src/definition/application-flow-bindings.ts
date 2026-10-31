@@ -31,13 +31,13 @@ import { versionRequirementSchema } from "./definitions";
 import { tenantStructuralCapabilitySchema } from "../access/identity-access";
 
 /** Flow bindings shared by compilation, publication, access and runtime contracts. */
-export const applicationFlowBindingContractVersion = "1.0.0" as const;
+const applicationFlowBindingContractVersion = "1.0.0" as const;
 
 /**
  * These descriptors are structural configuration only. Definition compilation must still resolve
  * every referenced flow, query, operation, form and execution binding before publication.
  */
-export const flowValueDeclarationSchema = z
+const flowValueDeclarationSchema = z
   .object({
     type: workflowValueTypeSchema,
     required: z.boolean(),
@@ -56,7 +56,7 @@ export const flowValueDeclarationSchema = z
   });
 
 /** What a protected operation may do: the read, change and background-start effects of a task. */
-export const protectedOperationEffectKindSchema = flowTaskEffectClassSchema.extract([
+const protectedOperationEffectKindSchema = flowTaskEffectClassSchema.extract([
   "read",
   "change",
   "background_start",
@@ -104,7 +104,7 @@ export const componentFlowBindingSchema = z
   })
   .strict();
 
-export const protectedOperationOwnerSchema = z.discriminatedUnion("kind", [
+const protectedOperationOwnerSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("application"), applicationRootId: applicationRootIdSchema }).strict(),
   z.object({ kind: z.literal("module"), moduleRootId: moduleRootIdSchema }).strict(),
   z.object({ kind: z.literal("platform_service"), serviceId: platformIdSchema }).strict(),
@@ -169,7 +169,7 @@ export const canonicalizeProtectedOperationReferences = (
 };
 
 /** A stored reference set is already deduplicated and in canonical order. */
-export const protectedOperationReferenceSetSchema = z
+const protectedOperationReferenceSetSchema = z
   .array(protectedOperationReferenceSchema)
   .superRefine((references, context) => {
     const canonical = canonicalizeProtectedOperationReferences(references);
@@ -276,12 +276,12 @@ export const platformServiceOperationReleaseSchema = z
   })
   .strict();
 
-export const protectedOperationPermissionReferenceSchema = z
+const protectedOperationPermissionReferenceSchema = z
   .object({ permissionId: permissionIdSchema, key: namespacedKeySchema })
   .strict();
 
 /** Authority a protected operation must re-check in its owning service. */
-export const protectedOperationRequiredAuthoritySchema = z.discriminatedUnion("kind", [
+const protectedOperationRequiredAuthoritySchema = z.discriminatedUnion("kind", [
   protectedOperationPermissionReferenceSchema.extend({ kind: z.literal("permission") }),
   z
     .object({
@@ -479,7 +479,7 @@ export const sourceComponentFlowBindingSchema = z
   })
   .strict();
 
-export type ProtectedOperationEffectKind = z.infer<typeof protectedOperationEffectKindSchema>;
+type ProtectedOperationEffectKind = z.infer<typeof protectedOperationEffectKindSchema>;
 export type ComponentFlowBinding = z.infer<typeof componentFlowBindingSchema>;
 export type ProtectedOperationChannel = z.infer<typeof protectedOperationChannelSchema>;
 export type ProtectedOperationReference = z.infer<typeof protectedOperationReferenceSchema>;

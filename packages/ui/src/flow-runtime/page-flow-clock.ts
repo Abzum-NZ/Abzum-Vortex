@@ -1,3 +1,5 @@
+import { zonedDateTimeParts } from "../display/date-format";
+
 /** The page clock and the same instant's calendar date in the organisation's time zone. */
 export const pageFlowClock = (
   timeZone: string,
@@ -6,20 +8,11 @@ export const pageFlowClock = (
   organizationLocalDate: string;
 }> => {
   const instant = new Date();
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    calendar: "gregory",
-    numberingSystem: "latn",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(instant);
-  const value = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value;
-  const year = value("year");
-  const month = value("month");
-  const day = value("day");
-  if (year === undefined || month === undefined || day === undefined)
+  const parts = zonedDateTimeParts(instant, timeZone);
+  if (!Number.isFinite(parts.year) || !Number.isFinite(parts.month) || !Number.isFinite(parts.day))
     throw new Error("FLOW_ORGANIZATION_LOCAL_DATE_UNAVAILABLE");
-  return { now: instant.toISOString(), organizationLocalDate: `${year}-${month}-${day}` };
+  return {
+    now: instant.toISOString(),
+    organizationLocalDate: `${String(parts.year).padStart(4, "0")}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`,
+  };
 };

@@ -18,7 +18,4 @@ grant execute on function vortex_platform.alert_signal_builder_key_is_valid(text
 comment on function vortex_platform.alert_signal_builder_key_is_valid(text) is
   'Private check for the contract builder-key shape used by alert service and owning-role fields.';
 
-alter function vortex_platform.alert_signal_builder_key_is_valid(text)
-  owner to postgres;
-
 alter function vortex_platform.alert_signal_builder_key_is_valid(p_key text) owner to vortex_owner;

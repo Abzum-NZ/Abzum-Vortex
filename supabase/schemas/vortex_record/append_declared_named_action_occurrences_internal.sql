@@ -49,9 +49,12 @@ begin
       )
     );
   end loop;
-  return vortex_platform.append_record_occurrences(
-    p_storage_contract_id, p_record_id, occurrence_values
-  );
+  return vortex_platform.append_record_occurrence_set(
+    pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'storageContractId', p_storage_contract_id, 'recordId', p_record_id,
+      'occurrences', occurrence_values
+    ))
+  ) -> 0;
 end
 $$;
 alter function vortex_record.append_declared_named_action_occurrences_internal(uuid,uuid,jsonb,jsonb,jsonb) owner to vortex_record_adapter;

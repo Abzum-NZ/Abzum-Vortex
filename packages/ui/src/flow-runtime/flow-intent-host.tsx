@@ -13,6 +13,7 @@ import {
 import { Button } from "../components/button";
 import { Notice } from "../components/notice";
 import { Checkbox } from "../components/checkbox";
+import { toast } from "../components/sonner";
 import { useConfirm } from "../components/confirm-dialog";
 import {
   Dialog,
@@ -24,6 +25,7 @@ import {
 import type { LinkNavigationEnvironment } from "../launcher/link-navigation";
 import { performNavigateTask } from "../launcher/link-navigation";
 import type {
+  FlowConfirmationDetail,
   FlowConfirmAnswer,
   FlowConfirmIntent,
   FlowFormAnswer,
@@ -72,7 +74,7 @@ export type FlowIntentHostOptions = Readonly<{
 }>;
 
 /** Flow surface width, the same 36rem the theme's medium dialog scale used. */
-const FLOW_SURFACE_CLASS = "max-h-[calc(100%-2rem)] overflow-y-auto sm:max-w-xl";
+const FLOW_SURFACE_CLASS = "sm:max-w-xl";
 
 /**
  * One modal flow surface on the shadcn Dialog (Base UI), like every other surface in the product.
@@ -142,11 +144,8 @@ function ConfirmSurface({
       details: (
         <div className="flex flex-col gap-3">
           {confirmation.details.length === 0 ? null : (
-            <ul className="flex list-disc flex-col gap-1 pl-5 text-sm">
-              {confirmation.details.map((line, index) => (
-                <li key={index}>{line}</li>
-              ))}
-            </ul>
+            // item 10: CRM-FIX-PLATFORM
+            <ConfirmationDetails entries={confirmation.details} />
           )}
           {confirmation.choice === undefined ? null : (
             <div className="flex items-start gap-2 text-sm">
@@ -262,6 +261,44 @@ function MessageTarget({
   );
 }
 
+/**
+ * Flow toasts go through the one sonner region at the bottom-right, exactly like every other toast
+ * in the product, and never over a page header's actions. The page runtime keeps the message while a
+ * page change carries it, so a carried toast shows once with the same identity and keeps its timer.
+ */
+function FlowToastRegion({ state }: Readonly<{ state: FlowRuntimeState }>): null {
+  const message = useSyncExternalStore(
+    (listener) => state.subscribe(`message:${state.messages.key("toast")}`, listener),
+    () => state.messages.read("toast"),
+    () => undefined,
+  );
+  const messageId = message?.id;
+  useEffect(() => {
+    if (messageId === undefined || message === undefined) return;
+    toast.custom(
+      () => (
+        <Notice
+          severity={message.severity}
+          content={message.text}
+          dismissible
+          onDismiss={() => state.messages.clear("toast", undefined, message.id)}
+          {...(message.title === undefined ? {} : { title: message.title })}
+          {...(message.action === undefined ? {} : { action: message.action })}
+        />
+      ),
+      {
+        id: message.id,
+        duration: message.dismissAfterMs ?? 5_000,
+        dismissible: true,
+      },
+    );
+    return () => {
+      toast.dismiss(message.id);
+    };
+  }, [message, messageId, state]);
+  return null;
+}
+
 /** Only this subtree re-renders when a flow opens or closes a surface. */
 function FlowSurfaceHost({
   queue,
@@ -337,6 +374,30 @@ function FlowSurfaceHost({
 }
 
 /** Presents flow intents without re-rendering the page when a surface changes. */
+/** Shows every review line; a role entry lists what it allows under its own line. */
+// item 10: CRM-FIX-PLATFORM
+const ConfirmationDetails = ({
+  entries,
+}: Readonly<{ entries: readonly FlowConfirmationDetail[] }>): ReactElement => (
+  <ul className="flex list-disc flex-col gap-1 pl-5 text-sm">
+    {entries.map((entry, index) =>
+      typeof entry === "string" ? (
+        <li key={index}>{entry}</li>
+      ) : (
+        <li key={index}>
+          {entry.text}
+          {/* item 10: CRM-FIX-PLATFORM */}
+          <ul className="flex list-[circle] flex-col gap-1 pl-5">
+            {entry.lines.map((line, lineIndex) => (
+              <li key={lineIndex}>{line}</li>
+            ))}
+          </ul>
+        </li>
+      ),
+    )}
+  </ul>
+);
+
 export function useFlowIntentHost(
   options: FlowIntentHostOptions,
 ): Readonly<{ host: FlowIntentHost; element: ReactElement; banner: ReactElement }> {
@@ -399,9 +460,7 @@ export function useFlowIntentHost(
   );
   const element = (
     <>
-      <div className="fixed right-4 top-4 z-50">
-        <MessageTarget state={options.state} target="toast" />
-      </div>
+      <FlowToastRegion state={options.state} />
       <FlowSurfaceHost queue={queue} optionsRef={optionsRef} />
     </>
   );

@@ -5,10 +5,10 @@
  */
 
 /** The bootstrap document path on the dedicated component origin. */
-export const COMPONENT_BOOTSTRAP_SERVING_PATH = "/api/components/bootstrap";
+const COMPONENT_BOOTSTRAP_SERVING_PATH = "/api/components/bootstrap";
 
 /** The query parameter names the bootstrap document route reads. */
-export const COMPONENT_BOOTSTRAP_QUERY_PARAMETERS = Object.freeze({
+const COMPONENT_BOOTSTRAP_QUERY_PARAMETERS = Object.freeze({
   contentAddress: "bundle",
   entryFile: "entry",
   allowedHosts: "hosts",

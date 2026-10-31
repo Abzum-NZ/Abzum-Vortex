@@ -6,7 +6,6 @@ returns table (
   outcome text,
   operation text,
   role jsonb,
-  created_activation_policy jsonb,
   access_version bigint,
   correlation_id uuid
 )
@@ -32,8 +31,6 @@ declare
   current_revision vortex_access.organization_role_revisions%rowtype;
   authority_before jsonb;
   authority_after jsonb;
-  policy_choice jsonb;
-  policy_changed boolean;
   decision record;
   changed record;
   activity_result text;
@@ -51,8 +48,8 @@ begin
   operation_name := candidate ->> 'operation';
   if operation_name is null or operation_name not in (
     'create_custom', 'create_custom_from_template',
-    'accept_new_application_role', 'revise_metadata_policy',
-    'revise_custom_permissions', 'accept_application_role_revision'
+    'accept_new_application_role', 'revise_custom_permissions',
+    'accept_application_role_revision'
   )
     or pg_catalog.jsonb_typeof(candidate -> 'organizationId')
       is distinct from 'string'
@@ -138,78 +135,22 @@ begin
   end if;
 
   -- Installation acceptance changes the supplied permissions, never the organization's local
-  -- role settings. Compare the complete policy choice, including the immutable activation-policy
-  -- revision, under the same Access lock as the write. Changing settings uses role management.
+  -- role settings. Compare them under the same Access lock as the write. Changing settings uses
+  -- role management.
   if operation_name = 'accept_application_role_revision' and (
     candidate -> 'key' is distinct from pg_catalog.to_jsonb(current_revision.role_key)
     or candidate -> 'label' is distinct from pg_catalog.to_jsonb(current_revision.label)
     or candidate -> 'description' is distinct from pg_catalog.to_jsonb(current_revision.description)
     or candidate -> 'privilegeClassification' is distinct from
       pg_catalog.to_jsonb(current_revision.privilege_classification)
-    or candidate -> 'assignmentPolicy' is distinct from case current_revision.assignment_policy
-      when 'standing' then pg_catalog.jsonb_build_object('kind', 'standing')
-      else pg_catalog.jsonb_build_object(
-        'kind', 'activation_required',
-        'activationPolicy', pg_catalog.jsonb_build_object(
-          'selection', 'existing',
-          'reference', pg_catalog.jsonb_build_object(
-            'activationPolicyId', current_revision.activation_policy_id,
-            'revision', current_revision.activation_policy_revision
-          )
-        )
-      )
-    end
   ) then
     raise exception using errcode = 'V3151',
-      message = 'Accepting application role changes must keep the role settings. Use Manage roles to change its name, description, classification or assignment and activation settings.';
+      message = 'Accepting application role changes must keep the role settings. Use Manage roles to change its name, description or classification.';
   end if;
 
-  if operation_name = 'revise_metadata_policy' then
-    policy_choice := candidate -> 'assignmentPolicy';
-    if pg_catalog.jsonb_typeof(policy_choice) is distinct from 'object'
-      or pg_catalog.jsonb_typeof(policy_choice -> 'kind') is distinct from 'string'
-      or policy_choice ->> 'kind' not in ('standing', 'activation_required') then
-      raise exception using errcode = '22023',
-        message = 'Private Organization role-authority input is invalid';
-    end if;
-    if policy_choice ->> 'kind' = 'standing' then
-      policy_changed := current_revision.assignment_policy <> 'standing';
-    elsif policy_choice #>> '{activationPolicy,selection}' = 'new' then
-      policy_changed := true;
-    elsif policy_choice #>> '{activationPolicy,selection}' = 'existing'
-      and vortex_platform.is_non_nil_uuid(
-        policy_choice #>> '{activationPolicy,reference,activationPolicyId}'
-      )
-      and pg_catalog.jsonb_typeof(
-        policy_choice #> '{activationPolicy,reference,revision}'
-      ) = 'number'
-      and (policy_choice #>>
-        '{activationPolicy,reference,revision}')::numeric between
-        1 and 9007199254740991
-      and (policy_choice #>>
-        '{activationPolicy,reference,revision}')::numeric =
-        pg_catalog.trunc((policy_choice #>>
-          '{activationPolicy,reference,revision}')::numeric) then
-      policy_changed := current_revision.assignment_policy <> 'activation_required'
-        or current_revision.activation_policy_id is distinct from
-          (policy_choice #>>
-            '{activationPolicy,reference,activationPolicyId}')::uuid
-        or current_revision.activation_policy_revision is distinct from
-          (policy_choice #>> '{activationPolicy,reference,revision}')::numeric::bigint;
-    else
-      raise exception using errcode = '22023',
-        message = 'Private Organization role-authority input is invalid';
-    end if;
-    if policy_changed is not true then
-      raise exception using errcode = '40001',
-        message = 'Private Organization role-authority candidate changes no authority';
-    end if;
-    authority_after := authority_before;
-  else
-    authority_after := vortex_access.private_management_scope_from_permission(
-      candidate -> 'permissions'
-    );
-  end if;
+  authority_after := vortex_access.private_management_scope_from_permission(
+    candidate -> 'permissions'
+  );
 
   if authority_before ->> 'kind' = 'none'
     and authority_after ->> 'kind' = 'none' then
@@ -286,8 +227,7 @@ begin
   end if;
 
   return query select changed.outcome, changed.operation, changed.role,
-    changed.created_activation_policy, changed.access_version,
-    changed.correlation_id;
+    changed.access_version, changed.correlation_id;
 exception
   when invalid_text_representation or invalid_parameter_value
       or numeric_value_out_of_range then

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
+import { uuidFromText } from "../definition/derived-definition-id";
 import { z } from "zod";
 import { requireRequestSavepoint } from "../db/request-transaction";
 import {
@@ -73,22 +73,16 @@ export const commandIdOf = (
   segmentId: string,
   iteration: string,
 ): string => {
-  const bytes = createHash("sha256")
-    .update(
-      JSON.stringify([
-        selection.organizationId.toLowerCase(),
-        session.identityId.toLowerCase(),
-        gestureId.toLowerCase(),
-        segmentId,
-        iteration,
-      ]),
-    )
-    .digest()
-    .subarray(0, 16);
-  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
-  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
-  const hex = bytes.toString("hex");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  return uuidFromText(
+    JSON.stringify([
+      selection.organizationId.toLowerCase(),
+      session.identityId.toLowerCase(),
+      gestureId.toLowerCase(),
+      segmentId,
+      iteration,
+    ]),
+    4,
+  );
 };
 
 type SegmentIdentity = Readonly<{ segmentId: string; fingerprint: string }> | null;

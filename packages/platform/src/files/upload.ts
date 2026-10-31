@@ -64,7 +64,7 @@ import type { RequestDatabaseTransaction } from "../db/request-transaction";
  * It matches the provider's resumable upload session lifetime; each browser
  * credential inside it still lasts at most 60 seconds.
  */
-export const PENDING_UPLOAD_WINDOW_SECONDS = 24 * 60 * 60;
+const PENDING_UPLOAD_WINDOW_SECONDS = 24 * 60 * 60;
 
 /** Placeholder content metadata a pending file carries until trusted inspection replaces it. */
 const PENDING_MEDIA_TYPE = "application/octet-stream";
@@ -74,7 +74,7 @@ const PENDING_CHECKSUM = fingerprintSchema.parse(`sha256:${"0".repeat(64)}`);
  * The canonical attachment settings of the published field, resolved by trusted
  * server wiring rather than supplied by the request.
  */
-export type UploadAttachmentSettings = Readonly<{
+type UploadAttachmentSettings = Readonly<{
   allowedKinds: readonly ContentKind[];
   allowedExtensions?: readonly string[] | undefined;
   maxFileSizeMb: number;
@@ -105,7 +105,7 @@ type CurrentUploadAuthority = Readonly<{
 }>;
 
 /** One admitted upload's durable state, read inside the current request's organisation. */
-export type PendingUploadState = Readonly<{
+type PendingUploadState = Readonly<{
   fileRecord: FileRecord;
   uploader: VerifiedFileActor;
   maximumBytes: number;
@@ -117,7 +117,7 @@ export type PendingUploadState = Readonly<{
   revision: number;
 }>;
 
-export type PendingUploadReservation = Readonly<{
+type PendingUploadReservation = Readonly<{
   fileRecord: FileRecord;
   grant: UploadGrant;
   correlationId: CorrelationId;
@@ -127,7 +127,7 @@ export type PendingUploadReservation = Readonly<{
   maxFiles: number;
 }>;
 
-export type ClaimedUploadGrant = Readonly<{
+type ClaimedUploadGrant = Readonly<{
   grant: UploadGrant;
   fileRecord: FileRecord;
   correlationId: CorrelationId;
@@ -291,14 +291,14 @@ export type UploadedObjectInspector = (
   location: UploadedObjectLocation,
 ) => Promise<TrustedFileInspection | null>;
 
-export type FileUploadCoordinatorDependencies = Readonly<{
+type FileUploadCoordinatorDependencies = Readonly<{
   transaction: RequestDatabaseTransaction;
   bridge: StorageCredentialBridge;
   inspectUploadedObject: UploadedObjectInspector;
   clock?: () => Date;
 }>;
 
-export type FileUploadAdmissionInput = CurrentUploadAuthority &
+type FileUploadAdmissionInput = CurrentUploadAuthority &
   Readonly<{
     organizationId: OrganizationId;
     applicationRootId?: ApplicationRootId;
@@ -317,7 +317,7 @@ export type FileUploadAdmissionInput = CurrentUploadAuthority &
     ttlSeconds?: number;
   }>;
 
-export type FileUploadAdmissionResult =
+type FileUploadAdmissionResult =
   | Readonly<{
       outcome: "admitted";
       fileId: FileId;
@@ -328,7 +328,7 @@ export type FileUploadAdmissionResult =
     }>
   | Readonly<{ outcome: "refused"; reason: FileUploadAdmissionRefusalReason; message: string }>;
 
-export type FileUploadRenewalInput = CurrentUploadAuthority &
+type FileUploadRenewalInput = CurrentUploadAuthority &
   Readonly<{
     fileId: FileId;
     /** The current grant being renewed. */
@@ -336,7 +336,7 @@ export type FileUploadRenewalInput = CurrentUploadAuthority &
     ttlSeconds?: number;
   }>;
 
-export type FileUploadRenewalResult =
+type FileUploadRenewalResult =
   | Readonly<{
       outcome: "renewed";
       fileId: FileId;
@@ -346,13 +346,13 @@ export type FileUploadRenewalResult =
     }>
   | Readonly<{ outcome: "refused"; reason: FileUploadRenewalRefusalReason; message: string }>;
 
-export type FileUploadCompletionInput = CurrentUploadAuthority &
+type FileUploadCompletionInput = CurrentUploadAuthority &
   Readonly<{
     fileId: FileId;
     attachmentSettings: UploadAttachmentSettings;
   }>;
 
-export type FileUploadCompletionResult =
+type FileUploadCompletionResult =
   | Readonly<{ outcome: "scanned"; fileRecord: FileRecord }>
   | Readonly<{
       outcome: "quarantined";
@@ -361,7 +361,7 @@ export type FileUploadCompletionResult =
     }>
   | Readonly<{ outcome: "refused"; reason: FileUploadCompletionRefusalReason; message: string }>;
 
-export type FileUploadCoordinator = Readonly<{
+type FileUploadCoordinator = Readonly<{
   admitUpload(input: FileUploadAdmissionInput): Promise<FileUploadAdmissionResult>;
   renewUpload(input: FileUploadRenewalInput): Promise<FileUploadRenewalResult>;
   completeUpload(input: FileUploadCompletionInput): Promise<FileUploadCompletionResult>;
@@ -553,7 +553,7 @@ const objectLocation = (fileRecord: FileRecord): UploadedObjectLocation =>
  * are persisted before any bytes are accepted. The browser receives only a
  * short-lived INSERT credential for that pending object.
  */
-export const reservePendingUpload = async (
+const reservePendingUpload = async (
   dependencies: FileUploadCoordinatorDependencies,
   input: FileUploadAdmissionInput,
 ): Promise<FileUploadAdmissionResult> => {
@@ -639,7 +639,6 @@ export const reservePendingUpload = async (
     ownerRecordTypeId: owner.recordTypeId,
     ownerRecordId: owner.recordId,
     ownerFieldId: owner.fieldId,
-    legalHold: { isHeld: false },
   });
   if (!pendingRecord.success) return refuse("malformed_request");
 
@@ -690,7 +689,7 @@ export const reservePendingUpload = async (
  * change the owning field, may replace the upload's current grant, and only while
  * the upload is pending inside its window. The previous grant is superseded.
  */
-export const renewPendingUpload = async (
+const renewPendingUpload = async (
   dependencies: FileUploadCoordinatorDependencies,
   input: FileUploadRenewalInput,
 ): Promise<FileUploadRenewalResult> => {
@@ -822,7 +821,7 @@ const completionOf = (fileRecord: FileRecord): FileUploadCompletionResult =>
  * save that activates it, or quarantine it (refused content included). Browser
  * metadata plays no part. A repeated completion returns the recorded result.
  */
-export const completeFileUpload = async (
+const completeFileUpload = async (
   dependencies: FileUploadCoordinatorDependencies,
   input: FileUploadCompletionInput,
 ): Promise<FileUploadCompletionResult> => {

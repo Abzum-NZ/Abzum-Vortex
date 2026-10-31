@@ -50,8 +50,4 @@ comment on function vortex_identity.assert_organization_runtime_settings_values(
 ) is
   'Private boundary validation for organisation runtime settings; currency and display-format membership comes from the seeded validation reference lists.';
 
-alter function vortex_identity.assert_organization_runtime_settings_values(
-  text, text, text, text, text
-) owner to postgres;
-
 alter function vortex_identity.assert_organization_runtime_settings_values(p_language text, p_time_zone text, p_currency text, p_date_format text, p_number_format text) owner to vortex_owner;

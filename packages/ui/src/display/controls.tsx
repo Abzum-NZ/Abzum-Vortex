@@ -1,16 +1,37 @@
 "use client";
 
 import type { ReactElement } from "react";
+import Link from "next/link";
 import { Button } from "../components/button";
 import { Card, CardContent } from "../components/card";
 import { Checkbox } from "../components/checkbox";
-import { Empty, EmptyHeader, EmptyTitle } from "../components/empty";
+import { Empty, EmptyContent, EmptyHeader, EmptyTitle } from "../components/empty";
 import { Pagination, PaginationContent, PaginationItem } from "../components/pagination";
 import { Skeleton } from "../components/skeleton";
 import { Spinner } from "../components/spinner";
 import { usePendingGesture } from "../controls/pending-gesture";
 import { Icon } from "../icons/icon";
 import type { DisplayEventHandlers, DisplayRow, DisplaySemanticEvent } from "./projected-data";
+
+/** The refresh control bound to the declared `refresh` event. */
+export function DisplayRefreshButton({
+  accessibleName,
+  refresh,
+}: Readonly<{
+  accessibleName: string;
+  refresh: NonNullable<DisplayEventHandlers["refresh"]>;
+}>): ReactElement {
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      aria-label={`Refresh ${accessibleName}`}
+      onClick={() => refresh({ event: "refresh" })}
+    >
+      Refresh
+    </Button>
+  );
+}
 
 /** Optional authored title with a refresh control bound to the declared `refresh` event. */
 export function DisplayHeader({
@@ -32,14 +53,7 @@ export function DisplayHeader({
         </h2>
       )}
       {refresh === undefined ? null : (
-        <Button
-          variant="outline"
-          size="sm"
-          aria-label={`Refresh ${accessibleName}`}
-          onClick={() => refresh({ event: "refresh" })}
-        >
-          Refresh
-        </Button>
+        <DisplayRefreshButton accessibleName={accessibleName} refresh={refresh} />
       )}
     </div>
   );
@@ -78,7 +92,13 @@ export function RecordsLoadingState({
 export function RecordsEmptyState({
   accessibleName,
   message,
-}: Readonly<{ accessibleName: string; message: string }>): ReactElement {
+  create,
+}: Readonly<{
+  accessibleName: string;
+  message: string;
+  /** The inline create action when the list offers one. */
+  create?: Readonly<{ href: string; label: string }>;
+}>): ReactElement {
   return (
     <Empty
       role="status"
@@ -89,6 +109,13 @@ export function RecordsEmptyState({
       <EmptyHeader>
         <EmptyTitle>{message}</EmptyTitle>
       </EmptyHeader>
+      {create === undefined ? null : (
+        <EmptyContent>
+          <Button nativeButton={false} render={<Link href={create.href} prefetch={false} />}>
+            {create.label}
+          </Button>
+        </EmptyContent>
+      )}
     </Empty>
   );
 }

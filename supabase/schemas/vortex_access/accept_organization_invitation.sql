@@ -116,7 +116,7 @@ begin
       as intent("roleId" uuid, "roleRevision" bigint)
     order by intent."roleId"
   loop
-    select role.live_revision, revision.lifecycle, revision.assignment_policy into role_fact
+    select role.live_revision, revision.lifecycle into role_fact
     from vortex_access.organization_roles as role
     join vortex_access.organization_role_revisions as revision
       on revision.organization_id = role.organization_id and revision.role_id = role.role_id
@@ -124,8 +124,7 @@ begin
     where role.organization_id = target_organization_id and role.role_id = role_intent.role_id
     for update of role;
     if not found or role_fact.live_revision <> role_intent.role_revision
-      or role_fact.lifecycle <> 'active'
-      or role_fact.assignment_policy not in ('standing', 'activation_required') then
+      or role_fact.lifecycle <> 'active' then
     return query select 'role_changed'::text, null::uuid, null::uuid, null::uuid,
       null::text, null::text, null::text, null::text, null::uuid,
       null::timestamptz, null::timestamptz, null::timestamptz,
@@ -202,18 +201,12 @@ begin
         as intent("roleId" uuid, "roleRevision" bigint)
       order by intent."roleId"
     loop
-      select revision.assignment_policy into strict role_fact
-      from vortex_access.organization_role_revisions as revision
-      where revision.organization_id = target_organization_id
-        and revision.role_id = role_intent.role_id and revision.revision = role_intent.role_revision;
       if not exists (
         select 1 from vortex_access.organization_role_assignments as assignment
         where assignment.organization_id = target_organization_id
           and assignment.role_id = role_intent.role_id
           and assignment.assignee_kind = 'organization_account'
           and assignment.organization_account_id = accepted.organization_account_id
-          and assignment.assignment_kind = case role_fact.assignment_policy
-            when 'standing' then 'standing' else 'eligible' end
           and assignment.state = 'live'
           and (assignment.expires_at is null or assignment.expires_at > checked_at)
       ) then
@@ -222,7 +215,6 @@ begin
           'grant', target_organization_id, pg_catalog.gen_random_uuid(), null,
           role_intent.role_id, role_intent.role_revision, 'organization_account',
           accepted.organization_account_id, null,
-          case role_fact.assignment_policy when 'standing' then 'standing' else 'eligible' end,
           checked_at, null, invitation.invited_by_organization_account_id, p_correlation_id
         ) as changed;
       end if;
