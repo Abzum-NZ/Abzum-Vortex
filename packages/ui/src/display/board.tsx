@@ -18,6 +18,7 @@ import {
   type PipelineStageTone,
 } from "@vortex/platform/schema";
 import { Badge } from "../components/badge";
+import { Alert, AlertDescription } from "../components/alert";
 import { Button } from "../components/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "../components/card";
 import {
@@ -432,12 +433,19 @@ function BoardColumn({
           </p>
         ) : null}
         {failed ? (
-          <p role="alert" className="text-sm text-destructive">
-            Could not load cards.{" "}
-            <Button variant="link" size="sm" disabled={anyPending} onClick={() => onRetry(bucket)}>
-              Try again
-            </Button>
-          </p>
+          <Alert variant="destructive">
+            <AlertDescription>
+              Could not load cards.{" "}
+              <Button
+                variant="link"
+                size="sm"
+                disabled={anyPending}
+                onClick={() => onRetry(bucket)}
+              >
+                Try again
+              </Button>
+            </AlertDescription>
+          </Alert>
         ) : null}
         {canContinue ? (
           <Button

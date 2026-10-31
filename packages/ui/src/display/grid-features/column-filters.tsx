@@ -12,6 +12,7 @@ import {
   type RecordsTableFilterField,
 } from "@vortex/platform/schema";
 import { Badge } from "../../components/badge";
+import { Alert, AlertDescription } from "../../components/alert";
 import { Button } from "../../components/button";
 import { Calendar, calendarDay } from "../../components/calendar";
 import { Checkbox } from "../../components/checkbox";
@@ -326,9 +327,9 @@ function RangeEditor({
         {bound("At most", to, setTo, "to")}
       </div>
       {problem === undefined ? null : (
-        <p role="alert" className="text-sm text-destructive">
-          {problem}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{problem}</AlertDescription>
+        </Alert>
       )}
       <Button size="sm" onClick={apply}>
         Apply
@@ -425,9 +426,9 @@ function DateEditor({
         <p className="text-xs text-muted-foreground">Whole days in {field.timeZone}</p>
       )}
       {problem === undefined ? null : (
-        <p role="alert" className="text-sm text-destructive">
-          {problem}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{problem}</AlertDescription>
+        </Alert>
       )}
       <Button size="sm" onClick={apply}>
         Apply

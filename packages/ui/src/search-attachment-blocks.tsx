@@ -1,4 +1,4 @@
-﻿import type { ReactElement } from "react";
+import type { ReactElement } from "react";
 import {
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
   attachmentListPayloadSchema,

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 import Link from "next/link";
+import { Alert, AlertDescription } from "../../components/alert";
 import { Button } from "../../components/button";
 import { Empty, EmptyHeader, EmptyTitle } from "../../components/empty";
 import { Skeleton } from "../../components/skeleton";
@@ -230,9 +231,9 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
         </Button>
       )}
       {more === "failed" ? (
-        <p role="alert" className="m-0 text-sm text-muted-foreground">
-          More related records could not be read.
-        </p>
+        <Alert>
+          <AlertDescription>More related records could not be read.</AlertDescription>
+        </Alert>
       ) : null}
     </>
   );

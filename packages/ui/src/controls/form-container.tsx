@@ -479,9 +479,11 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       >
         <FormErrorSummary form={formRef} errors={validationErrors} />
         {ownerGroups === undefined ? null : ownerGroups.length === 0 ? (
-          <p role="alert" className="text-sm text-muted-foreground">
-            You need current membership in an active Group before you can create this record.
-          </p>
+          <Alert>
+            <AlertDescription>
+              You need current membership in an active Group before you can create this record.
+            </AlertDescription>
+          </Alert>
         ) : (
           <Field>
             {ownerGroups.length === 1 ? (
