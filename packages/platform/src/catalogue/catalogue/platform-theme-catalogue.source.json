@@ -17,30 +17,30 @@
       "background": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
-        "dark": "oklch(0.145 0 0)",
+        "dark": "oklch(0.148 0.004 228.8)",
         "role": "background"
       },
       "surface": {
         "kind": "color_pair",
-        "light": "oklch(0.985 0 0)",
-        "dark": "oklch(0.205 0 0)",
+        "light": "oklch(0.987 0.002 197.1)",
+        "dark": "oklch(0.218 0.008 223.9)",
         "role": "background"
       },
       "text": {
         "kind": "color_pair",
-        "light": "oklch(0.145 0 0)",
-        "dark": "oklch(0.985 0 0)",
+        "light": "oklch(0.148 0.004 228.8)",
+        "dark": "oklch(0.987 0.002 197.1)",
         "role": "foreground"
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
-        "dark": "oklch(0.708 0 0)",
+        "light": "oklch(0.56 0.021 213.5)",
+        "dark": "oklch(0.723 0.014 214.4)",
         "role": "foreground"
       },
       "border_color": {
         "kind": "color_pair",
-        "light": "oklch(0.922 0 0)",
+        "light": "oklch(0.925 0.005 214.3)",
         "dark": "oklch(1 0 0 / 10%)"
       },
       "border": {
@@ -51,24 +51,24 @@
       },
       "primary": {
         "kind": "color_pair",
-        "light": "oklch(0.205 0 0)",
-        "dark": "oklch(0.922 0 0)"
+        "light": "oklch(0.218 0.008 223.9)",
+        "dark": "oklch(0.925 0.005 214.3)"
       },
       "primary_foreground": {
         "kind": "color_pair",
-        "light": "oklch(0.985 0 0)",
-        "dark": "oklch(0.205 0 0)",
+        "light": "oklch(0.987 0.002 197.1)",
+        "dark": "oklch(0.218 0.008 223.9)",
         "role": "foreground"
       },
       "secondary": {
         "kind": "color_pair",
-        "light": "oklch(0.97 0 0)",
-        "dark": "oklch(0.269 0 0)"
+        "light": "oklch(0.963 0.002 197.1)",
+        "dark": "oklch(0.275 0.011 216.9)"
       },
       "secondary_foreground": {
         "kind": "color_pair",
-        "light": "oklch(0.205 0 0)",
-        "dark": "oklch(0.985 0 0)",
+        "light": "oklch(0.218 0.008 223.9)",
+        "dark": "oklch(0.987 0.002 197.1)",
         "role": "foreground"
       },
       "danger": {
@@ -109,123 +109,123 @@
       "card": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
-        "dark": "oklch(0.205 0 0)",
+        "dark": "oklch(0.218 0.008 223.9)",
         "role": "background"
       },
       "card_foreground": {
         "kind": "color_pair",
-        "light": "oklch(0.145 0 0)",
-        "dark": "oklch(0.985 0 0)",
+        "light": "oklch(0.148 0.004 228.8)",
+        "dark": "oklch(0.987 0.002 197.1)",
         "role": "foreground"
       },
       "popover": {
         "kind": "color_pair",
         "light": "oklch(1 0 0)",
-        "dark": "oklch(0.205 0 0)",
+        "dark": "oklch(0.218 0.008 223.9)",
         "role": "background"
       },
       "popover_foreground": {
         "kind": "color_pair",
-        "light": "oklch(0.145 0 0)",
-        "dark": "oklch(0.985 0 0)",
+        "light": "oklch(0.148 0.004 228.8)",
+        "dark": "oklch(0.987 0.002 197.1)",
         "role": "foreground"
       },
       "muted": {
         "kind": "color_pair",
-        "light": "oklch(0.97 0 0)",
-        "dark": "oklch(0.269 0 0)",
+        "light": "oklch(0.963 0.002 197.1)",
+        "dark": "oklch(0.275 0.011 216.9)",
         "role": "background"
       },
       "accent": {
         "kind": "color_pair",
-        "light": "oklch(0.97 0 0)",
-        "dark": "oklch(0.269 0 0)",
+        "light": "oklch(0.963 0.002 197.1)",
+        "dark": "oklch(0.275 0.011 216.9)",
         "role": "background"
       },
       "accent_foreground": {
         "kind": "color_pair",
-        "light": "oklch(0.205 0 0)",
-        "dark": "oklch(0.985 0 0)",
+        "light": "oklch(0.218 0.008 223.9)",
+        "dark": "oklch(0.987 0.002 197.1)",
         "role": "foreground"
       },
       "input": {
         "kind": "color_pair",
-        "light": "oklch(0.922 0 0)",
+        "light": "oklch(0.925 0.005 214.3)",
         "dark": "oklch(1 0 0 / 15%)"
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.669432 0 0)",
-        "dark": "oklch(0.556 0 0)"
+        "light": "oklch(0.668078 0.014 214.4)",
+        "dark": "oklch(0.56 0.021 213.5)"
       },
       "chart_1": {
         "kind": "color_pair",
-        "light": "oklch(0.809 0.105 251.813)",
-        "dark": "oklch(0.809 0.105 251.813)"
+        "light": "oklch(0.872 0.007 219.6)",
+        "dark": "oklch(0.872 0.007 219.6)"
       },
       "chart_2": {
         "kind": "color_pair",
-        "light": "oklch(0.623 0.214 259.815)",
-        "dark": "oklch(0.623 0.214 259.815)"
+        "light": "oklch(0.56 0.021 213.5)",
+        "dark": "oklch(0.56 0.021 213.5)"
       },
       "chart_3": {
         "kind": "color_pair",
-        "light": "oklch(0.546 0.245 262.881)",
-        "dark": "oklch(0.546 0.245 262.881)"
+        "light": "oklch(0.45 0.017 213.2)",
+        "dark": "oklch(0.45 0.017 213.2)"
       },
       "chart_4": {
         "kind": "color_pair",
-        "light": "oklch(0.488 0.243 264.376)",
-        "dark": "oklch(0.488 0.243 264.376)"
+        "light": "oklch(0.378 0.015 216)",
+        "dark": "oklch(0.378 0.015 216)"
       },
       "chart_5": {
         "kind": "color_pair",
-        "light": "oklch(0.424 0.199 265.638)",
-        "dark": "oklch(0.424 0.199 265.638)"
+        "light": "oklch(0.275 0.011 216.9)",
+        "dark": "oklch(0.275 0.011 216.9)"
       },
       "sidebar": {
         "kind": "color_pair",
-        "light": "oklch(0.985 0 0)",
-        "dark": "oklch(0.205 0 0)",
+        "light": "oklch(0.987 0.002 197.1)",
+        "dark": "oklch(0.218 0.008 223.9)",
         "role": "background"
       },
       "sidebar_foreground": {
         "kind": "color_pair",
-        "light": "oklch(0.145 0 0)",
-        "dark": "oklch(0.985 0 0)",
+        "light": "oklch(0.148 0.004 228.8)",
+        "dark": "oklch(0.987 0.002 197.1)",
         "role": "foreground"
       },
       "sidebar_primary": {
         "kind": "color_pair",
-        "light": "oklch(0.205 0 0)",
+        "light": "oklch(0.218 0.008 223.9)",
         "dark": "oklch(0.488 0.243 264.376)"
       },
       "sidebar_primary_foreground": {
         "kind": "color_pair",
-        "light": "oklch(0.985 0 0)",
-        "dark": "oklch(0.985 0 0)",
+        "light": "oklch(0.987 0.002 197.1)",
+        "dark": "oklch(0.987 0.002 197.1)",
         "role": "foreground"
       },
       "sidebar_accent": {
         "kind": "color_pair",
-        "light": "oklch(0.97 0 0)",
-        "dark": "oklch(0.269 0 0)"
+        "light": "oklch(0.963 0.002 197.1)",
+        "dark": "oklch(0.275 0.011 216.9)"
       },
       "sidebar_accent_foreground": {
         "kind": "color_pair",
-        "light": "oklch(0.205 0 0)",
-        "dark": "oklch(0.985 0 0)",
+        "light": "oklch(0.218 0.008 223.9)",
+        "dark": "oklch(0.987 0.002 197.1)",
         "role": "foreground"
       },
       "sidebar_border": {
         "kind": "color_pair",
-        "light": "oklch(0.922 0 0)",
+        "light": "oklch(0.925 0.005 214.3)",
         "dark": "oklch(1 0 0 / 10%)"
       },
       "sidebar_ring": {
         "kind": "color_pair",
-        "light": "oklch(0.708 0 0)",
-        "dark": "oklch(0.556 0 0)"
+        "light": "oklch(0.723 0.014 214.4)",
+        "dark": "oklch(0.56 0.021 213.5)"
       },
       "focus": {
         "kind": "focus",
@@ -234,14 +234,14 @@
       },
       "body": {
         "kind": "typography",
-        "family": "body",
+        "family": "inter",
         "sizeRem": 1,
         "lineHeight": 1.5,
         "weight": 400
       },
       "heading": {
         "kind": "typography",
-        "family": "heading",
+        "family": "inter",
         "sizeRem": 1.5,
         "lineHeight": 1.25,
         "weight": 600
@@ -276,7 +276,7 @@
       },
       "radius_base": {
         "kind": "corners",
-        "rem": 0.625
+        "rem": 0
       },
       "elevation_low": {
         "kind": "elevation",

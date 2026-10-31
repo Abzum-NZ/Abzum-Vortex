@@ -23,7 +23,7 @@ const currentTokens: Record<PlatformThemeTokenRoleKey, unknown> =
 
 // The one theme changes in place. Applications pinning older content must be republished.
 const DEFAULT_PLATFORM_THEME_CONTENT_FINGERPRINT =
-  "sha256:3ed9d794ff21179bf9939661d123fb0adc66853dc3817171ba925a44b8bfd1ab";
+  "sha256:24f69d4999ef512a924a90b034f0b3b2cba91f87dc2bbdab6f6cf1e7555c0c6a";
 
 /**
  * One registered platform theme release: a source definition plus its canonical-JSON content hash,
