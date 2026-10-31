@@ -1,24 +1,10 @@
 import {
-  choiceOptionsSchema,
   isRecord,
-  typedFieldValueSchema,
-  type BooleanInputPayload,
-  type ButtonPayload,
-  type ChoiceInputPayload,
-  type ChoiceOption,
-  type DateInputPayload,
-  type DialogPayload,
-  type DrawerPayload,
-  type FieldInputPayload,
-  type FormPayload,
-  type LinkInputPayload,
-  type NumberInputPayload,
+  pipelineStageTones,
+  type PipelineStageTone,
   type RecordChoicePage,
   type RichTextInputPayload,
-  type TabsPayload,
-  type TextInputPayload,
   type TypedFieldValue,
-  type ValidationPayload,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import type { FlowEventCycle } from "../flow-runtime/flow-cycle";
@@ -29,7 +15,6 @@ export {
   type BooleanInputPayload,
   type ButtonPayload,
   type ChoiceInputPayload,
-  type ChoiceOption,
   type DateInputPayload,
   type DateTimeInputPayload,
   type DialogPayload,
@@ -56,6 +41,7 @@ export const CONTROL_EVENT_NAMES = Object.freeze([
   "action",
   "field_changed",
   "field_focus_lost",
+  "form_cancel",
   "form_ready",
   "form_reset",
   "form_submit",
@@ -105,6 +91,7 @@ export type ControlSemanticEvent =
       /** For a dependent link field: the record chosen in the field it depends on, in the form's draft. */
       parentRecordId?: string;
     }>
+  | Readonly<{ event: "form_cancel"; gestureId: string }>
   | Readonly<{ event: "form_ready"; gestureId: string }>
   | Readonly<{ event: "form_reset"; gestureId: string }>
   | Readonly<{
@@ -127,21 +114,6 @@ export type ControlEventHandlers = Readonly<
   Partial<Record<ControlSemanticEventName, ControlEventHandler>>
 >;
 
-export type TextInputData = ControlDataState<TextInputPayload>;
-export type LinkInputData = ControlDataState<LinkInputPayload>;
-export type RichTextInputData = ControlDataState<RichTextInputPayload>;
-export type NumberInputData = ControlDataState<NumberInputPayload>;
-export type BooleanInputData = ControlDataState<BooleanInputPayload>;
-export type DateInputData = ControlDataState<DateInputPayload>;
-export type ChoiceInputData = ControlDataState<ChoiceInputPayload>;
-export type FieldInputData = ControlDataState<FieldInputPayload>;
-export type ValidationData = ControlDataState<ValidationPayload>;
-export type ButtonData = ControlDataState<ButtonPayload>;
-export type TabsData = ControlDataState<TabsPayload>;
-export type DialogData = ControlDataState<DialogPayload>;
-export type DrawerData = ControlDataState<DrawerPayload>;
-export type FormContainerData = ControlDataState<FormPayload>;
-
 /**
  * Explicit, data-safe state for one control placement, parameterised by that block's own ready
  * values. `loading` means the control's data or a submission it started is pending, so it cannot be
@@ -161,51 +133,51 @@ const fail = (message: string, location: DefinitionRenderErrorLocation): never =
   throw new DefinitionRenderError("INVALID_COMPOSITION", message, location);
 };
 
-/** A Zod issue path as a property path: an index joins the property before it (`options[3]`). */
-const propertyPathOf = (path: readonly PropertyKey[]): string[] =>
-  path.reduce<string[]>((parts, segment) => {
-    const last = parts.at(-1);
-    return typeof segment === "number" && last !== undefined
-      ? [...parts.slice(0, -1), `${last}[${segment}]`]
-      : [...parts, String(segment)];
-  }, []);
+/**
+ * One choice the browser offers: the stored value, its label and the colour role the definition gave
+ * it. The placement's own setting list and a page's answer to an options request share this shape;
+ * the role is absent when the definition declares none.
+ */
+export type ChoiceOption = Readonly<{ key: string; label: string; tone?: PipelineStageTone }>;
 
-type ControlPayloadSchema<Output> = {
-  safeParse(value: unknown):
-    | { success: true; data: Output }
-    | {
-        success: false;
-        error: { issues: readonly { path: readonly PropertyKey[]; message: string }[] };
-      };
-};
-
-/** One control payload parser: its platform schema, refused with a located error. */
-const controlParser =
-  <Output>(schema: ControlPayloadSchema<Output>, message: string) =>
-  (value: unknown, location: DefinitionRenderErrorLocation = {}): Output => {
-    const parsed = schema.safeParse(value);
-    if (parsed.success) return parsed.data;
-    const issue = parsed.error.issues[0];
-    const issuePath = propertyPathOf(issue?.path ?? []);
-    return fail(
-      `${message}: ${issue?.message ?? "invalid"}`,
-      issuePath.length === 0 ? location : { ...location, propertyPath: issuePath },
-    );
-  };
-
-/** Bounded choice options, refusing duplicate values so every option has one identity. */
-export const parseChoiceOptions = controlParser(choiceOptionsSchema, "Choice options are invalid");
+const maximumChoiceOptions = 200;
+const choiceOptionTones: ReadonlySet<string> = new Set(pipelineStageTones);
 
 /**
- * One typed form field value exactly as a control input emits or collects it, validated
- * fail-closed. A several-choice value is a bounded array of declared option values, a linked
- * record contributes only its stable `recordTypeId:recordId` identity, and a document is structured
- * rich text.
+ * Bounded choice options, each key once so every option has one identity, with the option's colour
+ * role when one is declared. A tone outside the theme's roles, or a repeated key, is a defect.
  */
-export const parseTypedFieldValue = controlParser<TypedFieldValue>(
-  typedFieldValueSchema,
-  "A typed field value is invalid",
-);
+export const parseChoiceOptions = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation = {},
+): readonly ChoiceOption[] => {
+  if (!Array.isArray(value) || value.length > maximumChoiceOptions)
+    return fail("Choice options are invalid", location);
+  const keys = new Set<string>();
+  return value.map((candidate, index): ChoiceOption => {
+    const propertyPath = [`options[${index}]`];
+    if (
+      !isRecord(candidate) ||
+      typeof candidate.key !== "string" ||
+      candidate.key.length === 0 ||
+      typeof candidate.label !== "string" ||
+      (candidate.tone !== undefined &&
+        (typeof candidate.tone !== "string" || !choiceOptionTones.has(candidate.tone)))
+    )
+      return fail("Choice options are invalid", { ...location, propertyPath });
+    if (keys.has(candidate.key))
+      return fail("Choice options are invalid: a choice option value repeats", {
+        ...location,
+        propertyPath,
+      });
+    keys.add(candidate.key);
+    return {
+      key: candidate.key,
+      label: candidate.label,
+      ...(candidate.tone === undefined ? {} : { tone: candidate.tone as PipelineStageTone }),
+    };
+  });
+};
 
 /**
  * One page of pickable records as the server answered a records request: an object with its

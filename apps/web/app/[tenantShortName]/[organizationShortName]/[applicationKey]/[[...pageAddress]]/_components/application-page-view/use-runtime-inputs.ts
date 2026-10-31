@@ -807,6 +807,24 @@ export function useRuntimeInputs({
             submitBinding.bindingId,
           );
         };
+      // A plain form's Cancel button emits form_cancel and runs its bound flow, exactly as a guided
+      // form's cancel does; it never submits or saves the form's values. The bound flow maps the
+      // caller name 'record' to its record_id, so an edit form's Cancel opens the unchanged record.
+      const cancelBinding = bindings.find((binding) => binding.event === "form_cancel");
+      if (cancelBinding !== undefined && supportsEvent("form_cancel"))
+        events.form_cancel = (event: ControlSemanticEvent) => {
+          if (event.event !== "form_cancel") return;
+          void applyDispatch(
+            formBlock.guided(
+              asComponentBinding(placementId, cancelBinding),
+              () => (subject?.recordId === undefined ? {} : { record: subject.recordId }),
+              event.gestureId,
+            ),
+            undefined,
+            undefined,
+            cancelBinding.bindingId,
+          );
+        };
       const readyBinding = bindings.find((binding) => binding.event === "form_ready");
       if (readyBinding !== undefined)
         events.form_ready = (event: ControlSemanticEvent) => {

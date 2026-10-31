@@ -25,6 +25,7 @@ import type {
   ApplicationPageModel,
   PlacementFlowBinding,
 } from "../../../../../../_lib/application-page";
+import { postJson } from "../../../../../../_lib/post-json";
 import { recordsTableAddress } from "./records-table-address";
 import { tablePayloadFor } from "./placement-helpers";
 import type { DispatchOutcome, PageSelection, SelectedRecords } from "./types";
@@ -191,14 +192,12 @@ export function useBulkSelection({
       }));
       let scope: HeldScope["scope"];
       try {
-        const response = await fetch("/api/records-table/selection-count", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          credentials: "same-origin",
-          cache: "no-store",
-          body: JSON.stringify({ ...recordsTableAddress(model), placementId, token }),
+        const response = await postJson("/api/records-table/selection-count", {
+          ...recordsTableAddress(model),
+          placementId,
+          token,
         });
-        const result = recordsSelectionCountResultSchema.safeParse(await response.json());
+        const result = recordsSelectionCountResultSchema.safeParse(response.body);
         if (!result.success) throw new Error(`SELECTION_COUNT_UNREADABLE: ${response.status}`);
         scope =
           result.data.kind === "counted"
@@ -235,14 +234,12 @@ export function useBulkSelection({
         await new Promise((resolve) => window.setTimeout(resolve, runFollowMilliseconds));
         if (navigation.current !== owner) return "left";
         try {
-          const response = await fetch("/api/records-table/run", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            credentials: "same-origin",
-            cache: "no-store",
-            body: JSON.stringify({ ...recordsTableAddress(model), placementId, run }),
+          const response = await postJson("/api/records-table/run", {
+            ...recordsTableAddress(model),
+            placementId,
+            run,
           });
-          const parsed = recordsTableRunResultSchema.safeParse(await response.json());
+          const parsed = recordsTableRunResultSchema.safeParse(response.body);
           if (!parsed.success) throw new Error("BACKGROUND_RUN_REPLY_INVALID");
           if (parsed.data.kind === "refused") return "failed";
           if (parsed.data.kind === "read" && parsed.data.state !== "running") {

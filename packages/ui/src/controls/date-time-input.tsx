@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState, type ChangeEvent, type ReactElement } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type ReactElement } from "react";
+import { Button } from "../components/button";
+import { Icon } from "../icons/icon";
 import { Field, FieldLabel } from "../components/field";
 import { Input } from "../components/input";
 import { setFieldChange } from "../flow-runtime/flow-cycle";
@@ -21,7 +23,8 @@ import {
   fieldFocusLost,
 } from "./field-parts";
 import { useFormFieldPublisher, useRequiredFormField } from "./form-context";
-import { formatterFor, toLocalInputValue, toStoredInstant } from "./date-time-zone";
+import { assertTimeZone } from "../display/date-format";
+import { toLocalInputValue, toStoredInstant } from "./date-time-zone";
 
 type DateTimeInputProps = ControlRenderProps<DateTimeInputPayload>;
 
@@ -62,7 +65,7 @@ export function DateTimeInput(props: DateTimeInputProps): ReactElement {
         ? (context.values?.organizationTimeZone ?? "UTC")
         : "UTC";
   // A malformed supplied zone must never reinterpret a person's input as UTC.
-  formatterFor(timeZone);
+  assertTimeZone(timeZone);
   const help = [authoredHelp, `Time zone: ${timeZone}.`].filter(Boolean).join(" ");
   const projected = context.values?.value ?? null;
   const initialInput = toLocalInputValue(projected, timeZone);
@@ -128,6 +131,7 @@ export function DateTimeInput(props: DateTimeInputProps): ReactElement {
   };
 
   const onChange = (event: ChangeEvent<HTMLInputElement>): void => commit(event.target.value);
+  const inputRef = useRef<HTMLInputElement>(null);
   return (
     <Field
       onBlur={(event) => {
@@ -143,19 +147,33 @@ export function DateTimeInput(props: DateTimeInputProps): ReactElement {
       <FieldLabel htmlFor={ids.control}>
         <FieldLabelText label={label} required={required} />
       </FieldLabel>
-      <Input
-        id={ids.control}
-        type="datetime-local"
-        step={1}
-        name={fieldKey}
-        value={raw}
-        onChange={onChange}
-        disabled={disabled}
-        readOnly={readOnly}
-        required={required}
-        aria-invalid={error !== undefined}
-        {...describedBy(ids, help, error, note, draftFeedback)}
-      />
+      <div className="flex items-center gap-2">
+        <Input
+          ref={inputRef}
+          id={ids.control}
+          type="datetime-local"
+          step={1}
+          name={fieldKey}
+          value={raw}
+          onChange={onChange}
+          disabled={disabled}
+          readOnly={readOnly}
+          required={required}
+          aria-invalid={error !== undefined}
+          className="[&::-webkit-calendar-picker-indicator]:hidden"
+          {...describedBy(ids, help, error, note, draftFeedback)}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          disabled={disabled || readOnly}
+          onClick={() => inputRef.current?.showPicker?.()}
+        >
+          <Icon name="calendar" aria-hidden="true" />
+          <span className="sr-only">Choose date and time</span>
+        </Button>
+      </div>
       <FieldMessages
         ids={ids}
         help={help}

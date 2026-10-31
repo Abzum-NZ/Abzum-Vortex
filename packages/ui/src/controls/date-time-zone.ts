@@ -1,43 +1,13 @@
 /**
  * Wall-clock conversion between a stored instant and a local date-time text in one IANA time zone.
- * Shared by the date-time input and the grid's cell editor so both read and write the same instant.
+ * Shared by the date-time input and the grid's cell editor so both read and write the same instant;
+ * the zone-part extraction itself is the one in `display/date-format.ts`.
  */
-type DateTimeParts = Readonly<{
-  year: number;
-  month: number;
-  day: number;
-  hour: number;
-  minute: number;
-  second: number;
-}>;
+import { zonedDateTimeParts, type ZonedDateTimeParts } from "../display/date-format";
+
+type DateTimeParts = ZonedDateTimeParts;
 
 const DATE_TIME_LOCAL = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/;
-
-export const formatterFor = (timeZone: string): Intl.DateTimeFormat =>
-  new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  });
-
-const partsAt = (instant: number, timeZone: string): DateTimeParts => {
-  const parts = formatterFor(timeZone).formatToParts(new Date(instant));
-  const part = (type: Intl.DateTimeFormatPartTypes): number =>
-    Number(parts.find((candidate) => candidate.type === type)?.value);
-  return {
-    year: part("year"),
-    month: part("month"),
-    day: part("day"),
-    hour: part("hour"),
-    minute: part("minute"),
-    second: part("second"),
-  };
-};
 
 const inputText = (parts: DateTimeParts): string =>
   `${String(parts.year).padStart(4, "0")}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}T${String(parts.hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}:${String(parts.second).padStart(2, "0")}`;
@@ -84,7 +54,7 @@ export const toLocalInputValue = (value: string | null, timeZone: string): strin
   if (value === null) return "";
   const instant = Date.parse(value);
   if (Number.isNaN(instant)) return "";
-  return inputText(partsAt(instant, timeZone));
+  return inputText(zonedDateTimeParts(instant, timeZone));
 };
 
 /** Converts an unambiguous wall-clock input to an ISO instant. */
@@ -98,11 +68,11 @@ export const toStoredInstant = (raw: string, timeZone: string): string | undefin
     wallClock,
     wallClock + 36 * 60 * 60 * 1_000,
   ]) {
-    const zoned = partsAt(probe, timeZone);
+    const zoned = zonedDateTimeParts(probe, timeZone);
     offsets.add(utcMilliseconds(zoned) - probe);
   }
   const matches = [...offsets]
     .map((offset) => wallClock - offset)
-    .filter((candidate) => inputText(partsAt(candidate, timeZone)) === inputText(local));
+    .filter((candidate) => inputText(zonedDateTimeParts(candidate, timeZone)) === inputText(local));
   return matches.length === 1 ? new Date(matches[0]!).toISOString() : undefined;
 };

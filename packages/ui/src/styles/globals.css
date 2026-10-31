@@ -1,9 +1,9 @@
 /*
  * The one shared stylesheet for apps/web, studio and ui (shadcn CLI monorepo layout).
  *
- * Tailwind's preflight reset is deliberately not imported yet: the existing screens are styled by
- * their own stylesheets and would change under it. It joins this file when the screens migrate
- * to the shadcn components (#1280-#1287). The theme layer and the utilities are loaded as usual.
+ * Tailwind's preflight reset is not loaded: the platform resets only its own shadcn component
+ * elements, which set `data-slot`, in base-components.css. The theme layer and the utilities are
+ * loaded as usual.
  *
  * The shared component reset and component rules sit between `components` and `utilities`, while
  * theme variables on each application root supply the selected style's values.

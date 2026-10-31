@@ -12,25 +12,16 @@ const SHARED_COMPONENT_STYLES_CSS = `
 /* Theme roots: the runtime page or preview canvas. */
 [data-vortex-theme] {
   /*
-   * The six semantic motion tokens of the specification's animation implementation standard:
-   * one duration inside each calibration band, the easing that carries it, and the layout
-   * spring. They are platform constants: a platform component reads one token, and no feature
-   * code writes a one-off timing value.
+   * The semantic motion tokens the platform's components read: one duration inside each
+   * calibration band and the easing that carries it. They are platform constants: a platform
+   * component reads one token, and no feature code writes a one-off timing value.
    */
-  --vortex-motion-feedback: 100ms; /* pressed feedback and tiny state confirmation */
-  --vortex-motion-feedback-easing: cubic-bezier(0.4, 0, 0.2, 1);
   --vortex-motion-enter-exit: 160ms; /* tooltip, menu, popover and small component entry or exit */
   --vortex-motion-enter-exit-easing: cubic-bezier(0.16, 1, 0.3, 1);
   --vortex-motion-refresh: 220ms; /* loading-to-content, local data refresh and a row value change */
   --vortex-motion-refresh-easing: cubic-bezier(0.4, 0, 0.2, 1);
-  --vortex-motion-panel: 300ms; /* dialog, drawer, expanding section and larger local panel */
-  --vortex-motion-panel-easing: cubic-bezier(0.22, 1, 0.36, 1);
   --vortex-motion-page: 360ms; /* the changing page region while the application shell stays stable */
   --vortex-motion-page-easing: cubic-bezier(0.4, 0, 0.2, 1);
-  /* The layout spring for reordering, resizing and dragging, approximated for CSS as one mild
-   * ease-out-back overshoot that settles to rest; Motion drives the same movement with spring
-   * physics. */
-  --vortex-motion-layout-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   /*
    * Page change (hold then swap). While the next page is fetched the current page dims; the next
    * page is held until its primary data has arrived or the hold has passed, then the current page
@@ -79,11 +70,6 @@ const SHARED_COMPONENT_STYLES_CSS = `
   flex-direction: column;
   gap: var(--vortex-space-md);
   padding: var(--vortex-space-md);
-}
-
-/* The form owns field spacing across its one rendered content slot, including declared grids. */
-.vortex-form-content > [data-vortex-slot-key="content"] {
-  gap: var(--vortex-space-md);
 }
 
 /* Single-select table control */
@@ -263,10 +249,8 @@ const SHARED_COMPONENT_STYLES_CSS = `
 
 @media (prefers-reduced-motion: reduce) {
   [data-vortex-theme] {
-    --vortex-motion-feedback: 0ms;
     --vortex-motion-enter-exit: 0ms;
     --vortex-motion-refresh: 0ms;
-    --vortex-motion-panel: 0ms;
     --vortex-motion-page: 0ms;
     --vortex-motion-page-dim: 0ms;
     --vortex-motion-page-swap-out: 0ms;

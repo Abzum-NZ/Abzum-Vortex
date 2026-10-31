@@ -20,6 +20,7 @@ import { FlowSurfaceContext } from "../flow-runtime/flow-surface-context";
 import { FlowRuntimeStateContext } from "../flow-runtime/flow-runtime-state-context";
 import { InlineMessage, inlineMessageId } from "../flow-runtime/inline-message";
 import { resolveControlContext, type ControlRenderProps } from "./control-context";
+import { Button } from "../components/button";
 import {
   applicableDraftFeedback,
   fieldDraftFeedback,
@@ -163,6 +164,7 @@ function FormErrorSummary({
  */
 export function FormContainer(props: FormContainerProps): ReactElement {
   const context = resolveControlContext<FormPayload>(props, [
+    "form_cancel",
     "form_ready",
     "form_submit",
     "form_reset",
@@ -540,6 +542,23 @@ export function FormContainer(props: FormContainerProps): ReactElement {
             {props.slots.content ?? null}
           </fieldset>
         </FormScopeContext.Provider>
+        {context.events?.form_cancel === undefined ? null : (
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={pending}
+              onClick={() =>
+                void context.events?.form_cancel?.({
+                  event: "form_cancel",
+                  gestureId: crypto.randomUUID(),
+                })
+              }
+            >
+              Cancel
+            </Button>
+          </div>
+        )}
         <FormDraftFeedbackRegion id={feedbackId} summary={summary} />
         <InlineMessage placementId={props.placementId} />
       </form>

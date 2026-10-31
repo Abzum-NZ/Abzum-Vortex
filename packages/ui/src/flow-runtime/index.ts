@@ -23,8 +23,6 @@ export {
   type FlowRuntimeState,
 } from "./flow-runtime";
 export {
-  FLOW_INTENT_KINDS,
-  isFlowIntent,
   performPresentationIntent,
   readConfirmIntent,
   readFormIntent,

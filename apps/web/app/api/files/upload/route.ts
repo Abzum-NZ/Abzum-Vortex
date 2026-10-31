@@ -11,19 +11,16 @@ import { admitAttachmentUpload, completeAttachmentUpload } from "@vortex/platfor
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { humanOrganizationRequests } from "../../../_lib/server-composition";
 import { fileStorageSigningConfiguration } from "../../../_lib/server-configuration";
+import { pageAddressSchema } from "../../../_lib/page-address-schema";
 import { getIdentityJourneyConfiguration } from "../../../auth/_lib/authority-configuration";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { privateJsonResponse } from "../../../_lib/private-response";
-import { readBoundedRequestBytes } from "../../_lib/bounded-request-body";
+import { isOwnSiteJsonRequest, readJsonBody } from "../../_lib/own-site-request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-const selectorsSchema = z
-  .object({
-    tenantShortName: z.string().min(1).max(200),
-    organizationShortName: z.string().min(1).max(200),
-    applicationKey: z.string().min(1).max(200),
-    pageKey: z.string().min(1).max(200),
+const selectorsSchema = pageAddressSchema
+  .extend({
     recordTypeId: recordTypeIdSchema,
     recordId: recordIdSchema.optional(),
     fieldId: fieldIdSchema,
@@ -58,8 +55,7 @@ const refuse = (code: string, status = 403, cause?: unknown) => {
 export async function POST(request: NextRequest) {
   try {
     const configuration = getIdentityJourneyConfiguration();
-    if (request.headers.get("origin") !== new URL(configuration.siteUrl).origin)
-      return refuse("origin_refused");
+    if (!isOwnSiteJsonRequest(request)) return refuse("request_not_from_own_site");
     const identity = await resolveIdentitySession();
     if (identity.kind !== "active") return refuse("identity_not_active", 401);
     const selectors = selectorsSchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
@@ -73,11 +69,9 @@ export async function POST(request: NextRequest) {
       input.pageKey,
     );
     if (address.kind !== "application_page") return refuse("page_refused");
-    const bytes = await readBoundedRequestBytes(request, 4096);
-    if (bytes.kind !== "read")
-      return refuse(`body_${bytes.kind}`, bytes.kind === "too_large" ? 413 : 400);
-    const command = commandSchema.safeParse(JSON.parse(new TextDecoder().decode(bytes.bytes)));
-    if (!command.success) return refuse("command_invalid", 400, command.error);
+    const body = await readJsonBody(request, 4096, commandSchema);
+    if (body.kind === "too_large") return refuse("body_too_large", 413);
+    if (body.kind !== "read") return refuse(`body_${body.kind}`, 400);
     const signing = fileStorageSigningConfiguration(configuration.supabaseUrl);
     const storage = {
       destination: signing.destination,
@@ -93,9 +87,9 @@ export async function POST(request: NextRequest) {
           : { previewInstallationId: address.application.previewInstallationId }),
       },
       async (transaction) =>
-        command.data.operation === "admit"
-          ? admitAttachmentUpload(transaction, { ...input, ...command.data }, storage)
-          : completeAttachmentUpload(transaction, { ...input, ...command.data }, storage),
+        body.value.operation === "admit"
+          ? admitAttachmentUpload(transaction, { ...input, ...body.value }, storage)
+          : completeAttachmentUpload(transaction, { ...input, ...body.value }, storage),
     );
     if (result.kind !== "available") return refuse(`protected_${result.kind}`);
     if (result.value.outcome === "refused") logRefusal("files", "upload", "upload_refused");

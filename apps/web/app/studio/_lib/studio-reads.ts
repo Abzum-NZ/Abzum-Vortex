@@ -1,7 +1,9 @@
+import { isRecord } from "@vortex/platform/schema";
 import type { readStudioCanvasRecords as canvasRead } from "../../_lib/studio-canvas-records";
 import type { readStudioDataRecords as dataRead } from "../../_lib/studio-data-records";
 import type { loadStudioApplicationDraft } from "../../_lib/studio-application-draft";
 import type { prepareStudioPreview as previewRead } from "../../_lib/studio-application-preview";
+import { postJson } from "../../_lib/post-json";
 import type { StudioViewRequest } from "./studio-view-request";
 
 const read = async <Result>(
@@ -10,16 +12,17 @@ const read = async <Result>(
   candidate: unknown,
   signal?: AbortSignal,
 ): Promise<Result> => {
-  const response = await fetch("/api/studio/read", {
-    signal: signal ?? null,
-    method: "POST",
-    credentials: "same-origin",
-    cache: "no-store",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ organizationId, operation, candidate }),
-  });
-  if (!response.ok) throw new Error(`STUDIO_READ_HTTP_${response.status}`);
-  return response.json() as Promise<Result>;
+  const response = await postJson<Result>(
+    "/api/studio/read",
+    { organizationId, operation, candidate },
+    signal === undefined ? undefined : { signal },
+  );
+  if (response.ok) return response.body;
+  const kind =
+    isRecord(response.body) && typeof response.body.kind === "string"
+      ? response.body.kind
+      : "unreadable";
+  throw new Error(`STUDIO_READ_HTTP_${response.status}_${kind}`);
 };
 
 export const readStudioCanvasRecords = (

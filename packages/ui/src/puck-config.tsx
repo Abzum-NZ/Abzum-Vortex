@@ -149,8 +149,6 @@ export type VortexPuckMetadata = Readonly<{
   resolvePageHref?: ((pageId: string) => string) | undefined;
   /** Internal page activation supplied by the shell for client-side page transitions. */
   onNavigatePage?: ((pageId: string, event: MouseEvent<HTMLAnchorElement>) => void) | undefined;
-  /** Intent to open an internal page, so the shell can start loading it before the click. */
-  onPrefetchPage?: ((pageId: string) => void) | undefined;
   /** Internal page identity currently shown. */
   currentPageId?: string | undefined;
   /** Configured dedicated component origin, for the sandboxed custom-component host. */
@@ -543,9 +541,6 @@ function PlacementBlock(props: {
               {...(metadataIn.onNavigatePage === undefined
                 ? {}
                 : { onNavigatePage: metadataIn.onNavigatePage })}
-              {...(metadataIn.onPrefetchPage === undefined
-                ? {}
-                : { onPrefetchPage: metadataIn.onPrefetchPage })}
               {...(metadataIn.currentPageId === undefined
                 ? {}
                 : { currentPageId: metadataIn.currentPageId })}

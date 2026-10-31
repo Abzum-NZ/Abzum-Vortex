@@ -116,6 +116,14 @@ const shellFrameCss = `
   display: none;
 }
 }
+@media (min-width: 768px) {
+/* The menu fills its region under the header, not the viewport: without a viewport minimum the
+   sticky menu region never scrolls, and a long menu scrolls inside its own column. */
+[data-vortex-shell-navigation] {
+  max-height: calc(100svh - var(--vortex-header-height, 0px) - 2 * var(--vortex-content-padding, 0px));
+  overflow-y: auto;
+}
+}
 `;
 
 function SwitcherButton({

@@ -20,15 +20,12 @@ import { humanOrganizationRequests } from "./server-composition";
 import {
   studioApplicationRestoreCommandSchema,
   studioApplicationRestoreCommandResultSchema,
-  studioApplicationRestoreReceiptSchema,
   type StudioApplicationRestoreCommand,
   type StudioApplicationRestoreCommandResult,
   type StudioApplicationRestoreFailure,
-  type StudioApplicationRestoreReceipt,
 } from "./studio-application-restore-contracts";
 import { DefinitionError, classifyDatabaseError } from "@vortex/platform/server";
 import { platformPermissionSource } from "./platform-permission-source";
-import { readStudioPersonLabel } from "./studio-person-labels";
 import { describeFailure } from "@vortex/platform/schema";
 
 type ApplicationDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
@@ -82,11 +79,16 @@ const failureKind = (error: unknown): FailureKind => {
   return "temporarily_unavailable";
 };
 
-const createReceipt = (
+/**
+ * Proves that the committed draft is exactly the restore this command asked for, before the
+ * command reports success. The proof protects the person from a false "restored" answer; it carries
+ * no receipt and is never stored.
+ */
+const assertRestoredDraft = (
   draft: StoredDefinitionDraft,
   command: StudioApplicationRestoreCommand,
   context: LiveHumanContext,
-): StudioApplicationRestoreReceipt => {
+): void => {
   if (draft.kind !== "application") throw new RestoreUnavailable();
   const applicationDraft: ApplicationDraft = draft;
   const restoredBy = applicationDraft.restoredBy;
@@ -111,22 +113,6 @@ const createReceipt = (
     restoreCorrelationId !== context.correlationId
   )
     throw new RestoreUnavailable();
-
-  const receipt = studioApplicationRestoreReceiptSchema.safeParse({
-    organizationId: applicationDraft.organizationId,
-    rootId: applicationDraft.rootId,
-    definitionKey: applicationDraft.key,
-    targetReleaseRevision: restoredFromReleaseRevision,
-    draftRevision: applicationDraft.draftRevision,
-    sourceFingerprint: applicationDraft.sourceFingerprint,
-    publicationAnchor: applicationDraft.publishedRevision,
-    restoredBy,
-    restoredByLabel: { kind: "unavailable" },
-    restoredAt,
-    correlationId: restoreCorrelationId,
-  });
-  if (!receipt.success) throw new RestoreUnavailable();
-  return receipt.data;
 };
 
 const failedCommand = (
@@ -208,9 +194,9 @@ export async function restoreStudioApplicationDraft(
             expectedSourceFingerprint: command.data.expected.sourceFingerprint,
             expectedPublicationAnchor: command.data.expected.anchorReleaseRevision,
           });
+          assertRestoredDraft(draft, command.data, context);
           const completed = studioApplicationRestoreCommandResultSchema.safeParse({
             kind: "completed",
-            receipt: createReceipt(draft, command.data, context),
             stateMayHaveChanged: true,
           });
           if (!completed.success) throw new RestoreUnavailable();
@@ -221,18 +207,7 @@ export async function restoreStudioApplicationDraft(
         }
       },
     );
-    if (result.kind === "available") {
-      if (result.value.kind !== "completed") return result.value;
-      // The label is read after the restore committed, so a failed read never undoes or hides it.
-      const { receipt } = result.value;
-      return {
-        ...result.value,
-        receipt: {
-          ...receipt,
-          restoredByLabel: await readStudioPersonLabel(receipt.organizationId, receipt.restoredBy),
-        },
-      };
-    }
+    if (result.kind === "available") return result.value;
     const kind =
       callbackFailure ?? (result.kind === "unavailable" ? "refused" : "temporarily_unavailable");
     return failedCommand(kind, invocationStarted);

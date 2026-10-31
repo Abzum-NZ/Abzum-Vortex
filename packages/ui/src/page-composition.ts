@@ -2,32 +2,13 @@ import {
   compiledItemTree,
   compiledPageShellId,
   resolveCompositionRoots,
-  type ApplicationContent,
-  type ApplicationShell,
   type AnyPageComposition,
+  type ApplicationShell,
   type CompiledLayout,
   type PageDefinition,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "./definition-error";
 import { projectedAvailability } from "./placement-availability";
-import type { PlatformComponentRegistry } from "./registry";
-import type { ApplicationTheme } from "./theme";
-
-/**
- * Shape of materialised application composition matching definition compilation output.
- */
-export type MaterialisedApplicationComposition = Readonly<{
-  platformBlockDependencies: ApplicationContent["platformBlockDependencies"];
-  shells: readonly ApplicationShell[];
-  pages: ReadonlyArray<
-    Readonly<{
-      pageId: string;
-      composition: AnyPageComposition;
-      steps?: readonly Readonly<{ id: string; name: string; summary: boolean }>[];
-    }>
-  >;
-  theme: ApplicationTheme;
-}>;
 
 /**
  * The one input the page renderer draws: a page whose layout is already resolved into its frame
@@ -114,61 +95,6 @@ export const renderedPageOf = (
     page.type === "guided_form" ? page.steps : undefined,
     shells,
   );
-
-/**
- * Checks a materialised composition's dependency manifest against the registry: each pinned
- * release appears once and is exactly the registered release.
- */
-const validateMaterialisedDependencies = (
-  composition: MaterialisedApplicationComposition,
-  registry: PlatformComponentRegistry,
-): void => {
-  const seenBlockReleases = new Set<string>();
-  for (const dependency of composition.platformBlockDependencies) {
-    const identity = `${dependency.blockId}@${dependency.releaseVersion}`;
-    if (seenBlockReleases.has(identity)) {
-      throw new DefinitionRenderError(
-        "INVALID_COMPOSITION",
-        `Materialised composition repeats platform block dependency '${identity}'`,
-        { blockId: dependency.blockId, releaseVersion: dependency.releaseVersion },
-      );
-    }
-    seenBlockReleases.add(identity);
-    const registration = registry.get(dependency.blockId, dependency.releaseVersion);
-    if (registration === undefined) {
-      throw new DefinitionRenderError(
-        registry.hasBlockId(dependency.blockId) ? "MISMATCHED_RELEASE" : "UNKNOWN_RELEASE",
-        `Materialised composition dependency '${dependency.blockId}:${dependency.releaseVersion}' is unavailable`,
-        { blockId: dependency.blockId, releaseVersion: dependency.releaseVersion },
-      );
-    }
-    if (registration.metadata.contentFingerprint !== dependency.contentFingerprint) {
-      throw new DefinitionRenderError(
-        "MISMATCHED_RELEASE",
-        `Materialised composition dependency '${dependency.blockId}:${dependency.releaseVersion}' does not match registry metadata`,
-        { blockId: dependency.blockId, releaseVersion: dependency.releaseVersion },
-      );
-    }
-  }
-};
-
-/** One page of a materialised composition as the renderer draws it. */
-export const materialisedPageOf = (
-  composition: MaterialisedApplicationComposition,
-  pageId: string,
-  registry: PlatformComponentRegistry,
-): Readonly<{ page: RenderedPage; shell?: ApplicationShell }> => {
-  validateMaterialisedDependencies(composition, registry);
-  const matches = composition.pages.filter((page) => page.pageId === pageId);
-  const target = matches[0];
-  if (target === undefined || matches.length !== 1)
-    throw new DefinitionRenderError(
-      "INVALID_COMPOSITION",
-      `Target page '${pageId}' not found in materialised composition`,
-      { pageId },
-    );
-  return renderedCompositionOf(target.pageId, target.composition, target.steps, composition.shells);
-};
 
 /**
  * The layout one rendered page draws: the page's own layout, or the active guided step's. A

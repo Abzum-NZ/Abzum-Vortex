@@ -10,6 +10,7 @@ import { Icon } from "../icons/icon";
 import { cn } from "../lib/utils";
 import type { DisplayTableGroup } from "./projected-data";
 import { TableTotals, TotalValues } from "./table-totals";
+import { recordsPhrase } from "./date-format";
 import type { GridGroupCell } from "./table-grid";
 import { memberKey, type GroupedTable } from "./table-groups-state";
 
@@ -53,7 +54,7 @@ export function GroupedBody({
       className="flex flex-col gap-2"
     >
       <p className="m-0 text-xs text-muted-foreground tabular-nums">
-        {groups.total === 1 ? "1 record" : `${groups.total} records`} in{" "}
+        {recordsPhrase(groups.total)} in{" "}
         {groups.groups.length === 1 ? "1 group" : `${groups.groups.length} groups`}
         {groups.page.first && groups.page.next === undefined ? "" : " on this page"}
       </p>

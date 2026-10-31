@@ -150,6 +150,8 @@ export function ContentTransition({
   const generation = current.generation;
   useEffect(() => {
     if (generation === 0 || currentPageRef.current === null) return;
+    // A new page always starts at the top, including after a save that opens a record.
+    window.scrollTo({ top: 0, left: 0 });
     focusPageHeading(currentPageRef.current);
   }, [generation]);
 

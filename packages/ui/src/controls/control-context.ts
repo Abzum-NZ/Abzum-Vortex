@@ -241,9 +241,11 @@ export function readControlSettings(
             return fail(`Setting '${key}' items must be grouped options`, location);
           const optionKey = item.properties.key;
           const optionLabel = item.properties.label;
+          const optionTone = item.properties.tone;
           return {
             key: optionKey?.kind === "text" ? optionKey.value : undefined,
             label: optionLabel?.kind === "text" ? optionLabel.value : undefined,
+            tone: optionTone?.kind === "choice" ? optionTone.value : undefined,
           };
         }),
         { ...location, propertyPath: [key] },

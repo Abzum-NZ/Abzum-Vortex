@@ -27,11 +27,8 @@ import { Progress } from "../../components/progress";
 import { Spinner } from "../../components/spinner";
 import { Icon } from "../../icons/icon";
 import type { DisplayTableBulkRun, DisplayTableSelectionScope } from "../projected-data";
+import { formatCount, recordsPhrase } from "../date-format";
 import type { GridFeatureContext, GridFeatureModule, GridFeaturePointProps } from "./registry";
-
-const numberFormat = new Intl.NumberFormat();
-const records = (count: number): string =>
-  count === 1 ? "1 record" : `${numberFormat.format(count)} records`;
 
 /** How a refused record is described in a run's summary, grouped by reason. */
 const refusalWords: Readonly<Record<RecordsTableBulkRefusalReason, string>> = {
@@ -121,7 +118,7 @@ function BulkActionsMenu({
         >
           {running ? <Spinner data-icon="inline-start" aria-hidden="true" /> : null}
           Bulk actions
-          {count > 0 ? <Badge variant="secondary">{numberFormat.format(count)}</Badge> : null}
+          {count > 0 ? <Badge variant="secondary">{formatCount(count)}</Badge> : null}
         </DropdownMenuTrigger>
         <DropdownMenuContent>
           {actions.map((action) => {
@@ -137,7 +134,7 @@ function BulkActionsMenu({
                 : availability.eligible === count
                   ? "Available for all selected records"
                   : partial
-                    ? `${numberFormat.format(availability.eligible)} of ${numberFormat.format(count)} can use this action. All selected records must be eligible.`
+                    ? `${formatCount(availability.eligible)} of ${formatCount(count)} can use this action. All selected records must be eligible.`
                     : `Unavailable: ${availability.reason}`;
             return (
               // Only the label dims when unavailable; the reason stays readable in both modes.
@@ -162,7 +159,7 @@ function BulkActionsMenu({
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {!matching && count > action.maxRecords
-                      ? `Select at most ${records(action.maxRecords)}`
+                      ? `Select at most ${recordsPhrase(action.maxRecords)}`
                       : description}
                   </span>
                 </span>
@@ -180,12 +177,12 @@ function BulkActionsMenu({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {confirming?.label} for {records(capped ? confirming!.maxRecords : count)}?
+              {confirming?.label} for {recordsPhrase(capped ? confirming!.maxRecords : count)}?
             </AlertDialogTitle>
             <AlertDialogDescription>
               {capped
-                ? `${records(count)} match, and this action changes at most ${records(confirming!.maxRecords)} at a time: the first ${numberFormat.format(confirming!.maxRecords)} in the table's order are changed. `
-                : `This changes ${records(count)}. `}
+                ? `${recordsPhrase(count)} match, and this action changes at most ${recordsPhrase(confirming!.maxRecords)} at a time: the first ${formatCount(confirming!.maxRecords)} in the table's order are changed. `
+                : `This changes ${recordsPhrase(count)}. `}
               {matching
                 ? "Records it does not apply to, or that you may not change, are left as they are and reported when it finishes."
                 : "All selected records must allow this action. If any record cannot change, none of them change."}
@@ -223,27 +220,24 @@ function RunSummary({
   const drift = summary.total - run.selected;
   return (
     <span className="min-w-0 break-words">
-      {run.label}: {numberFormat.format(summary.done)} of {numberFormat.format(summary.total)}{" "}
-      changed.
+      {run.label}: {formatCount(summary.done)} of {formatCount(summary.total)} changed.
       {!summary.limited && drift !== 0 && run.selected > 0
-        ? ` ${numberFormat.format(Math.abs(drift))} ${drift > 0 ? "more matched" : "fewer matched"} than when you selected them.`
+        ? ` ${formatCount(Math.abs(drift))} ${drift > 0 ? "more matched" : "fewer matched"} than when you selected them.`
         : ""}
       {refused > 0
-        ? ` ${records(refused)} not changed: ${summary.refused
-            .map(
-              (item) => `${numberFormat.format(item.count)} because ${refusalWords[item.reason]}`,
-            )
+        ? ` ${recordsPhrase(refused)} not changed: ${summary.refused
+            .map((item) => `${formatCount(item.count)} because ${refusalWords[item.reason]}`)
             .join("; ")}.`
         : ""}
       {summary.notProcessed > 0
-        ? ` ${records(summary.notProcessed)} not reached${refused > 0 && summary.done === 0 ? ", so nothing was changed" : ""}.`
+        ? ` ${recordsPhrase(summary.notProcessed)} not reached${refused > 0 && summary.done === 0 ? ", so nothing was changed" : ""}.`
         : ""}
       {summary.limited ? " More records matched than the action's limit." : ""}
       {summary.warnings.map(({ message, count }) => (
         <span key={message} className="mt-1 flex items-start gap-1.5 text-muted-foreground">
           <Icon name="triangle-alert" className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <span className="min-w-0 break-words">
-            Warning on {records(count)}: {message}
+            Warning on {recordsPhrase(count)}: {message}
           </span>
         </span>
       ))}
@@ -296,7 +290,7 @@ function SelectionBand({
           {run.label}:{" "}
           {run.total === undefined
             ? "finding the records..."
-            : `${numberFormat.format(run.processed)} of ${records(run.total)} done`}
+            : `${formatCount(run.processed)} of ${recordsPhrase(run.total)} done`}
         </span>
         <Progress value={percent} aria-label={`${run.label} progress`} />
       </div>
@@ -314,16 +308,15 @@ function SelectionBand({
       <span>
         {scope.count === 1
           ? "The 1 matching record is selected"
-          : `All ${numberFormat.format(scope.count)} matching records are selected`}
-        {scope.excluded > 0 ? `, except ${numberFormat.format(scope.excluded)} you unticked` : ""}.
+          : `All ${formatCount(scope.count)} matching records are selected`}
+        {scope.excluded > 0 ? `, except ${formatCount(scope.excluded)} you unticked` : ""}.
       </span>
     );
   else if (scope !== undefined) body = <span>{scopeMessage(scope)}</span>;
   else if (allOnPage && context.paged && selectionToken !== undefined)
     body = (
       <span>
-        {records(selected)} selected. All {numberFormat.format(pageCount)} on this page are
-        selected.{" "}
+        {recordsPhrase(selected)} selected. All {formatCount(pageCount)} on this page are selected.{" "}
         {onScope === undefined ? null : (
           <Button
             variant="link"
@@ -336,7 +329,7 @@ function SelectionBand({
         )}
       </span>
     );
-  else if (selected > 0) body = <span>{records(selected)} selected.</span>;
+  else if (selected > 0) body = <span>{recordsPhrase(selected)} selected.</span>;
   if (body === null) return null;
   return (
     <div

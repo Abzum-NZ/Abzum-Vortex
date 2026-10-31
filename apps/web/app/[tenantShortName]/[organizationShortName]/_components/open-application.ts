@@ -10,6 +10,7 @@ import {
 import { continueSessionOrEnd } from "../../../auth/_lib/session-redirect";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
+import { loadStudioCreateAccess } from "../../../_lib/studio-application-draft";
 import {
   applicationPageAddressPath as addressPath,
   organizationAddressPath as launcherPath,
@@ -39,7 +40,8 @@ export const applicationLauncherEventIds = (composition: unknown): readonly stri
  * query-bound tile sends only its application key; the organisation launcher may send the application's stable identity.
  * This resolves either identity against the signed-in person's current permitted applications
  * before opening it, so a withdrawn or refused application is never opened from stale page data or
- * a crafted value.
+ * a crafted value. Studio is an ordinary row: when the identity is Studio's one access check passes
+ * for this organisation, and it opens with that check re-read, never from the row itself.
  */
 export const openPermittedApplication = async (
   tenantShortName: string,
@@ -66,8 +68,18 @@ export const openPermittedApplication = async (
     (candidate) =>
       candidate.key === event.recordId || candidate.applicationRootId === event.recordId,
   );
-  if (application === undefined) redirect(chooser);
-  redirect(
-    addressPath(tenantShortName, organizationShortName, application.key, application.homePageKey),
-  );
+  if (application !== undefined)
+    redirect(
+      addressPath(tenantShortName, organizationShortName, application.key, application.homePageKey),
+    );
+  // A launcher row that is not an installed application is Studio's row: the same one access check
+  // decides whether this person may build in this organisation, so no row identity is trusted.
+  const studio = await loadStudioCreateAccess(rechecked.read.organizationId);
+  if (
+    studio.kind === "available" &&
+    studio.organizationId === event.recordId &&
+    studio.organizationId === rechecked.read.organizationId
+  )
+    redirect(`/studio/${encodeURIComponent(studio.organizationId)}`);
+  redirect(chooser);
 };

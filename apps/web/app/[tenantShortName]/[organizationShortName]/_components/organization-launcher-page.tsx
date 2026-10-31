@@ -105,7 +105,6 @@ export function OrganizationLauncherPage({
   values,
   openApplication,
   openEventId,
-  studio,
   ...shellPage
 }: OrganizationShellPageProps &
   Readonly<{
@@ -114,7 +113,6 @@ export function OrganizationLauncherPage({
     values: ReturnType<typeof permittedApplicationsToListValues>;
     openApplication: (event: DisplaySemanticEvent) => Promise<void>;
     openEventId: string;
-    studio?: Readonly<{ href: string; tileId: string }>;
   }>): ReactElement {
   const params = useSearchParams();
   const expression = params.get("q") ?? "";
@@ -200,17 +198,13 @@ export function OrganizationLauncherPage({
     <OrganizationShellPage
       {...shellPage}
       applicationSearch={applicationSearch}
-      runtimeInputs={(router) => ({
+      runtimeInputs={() => ({
         [placementId]: {
           data: { status: "ready", values },
           events: {
             row_action: (event: DisplaySemanticEvent) => {
               if (event.event !== "row_action" || event.eventId !== openEventId) {
                 console.error("[launcher] open refused: ROW_ACTION_EVENT_UNKNOWN");
-                return;
-              }
-              if (studio !== undefined && event.recordId === studio.tileId) {
-                router.push(studio.href);
                 return;
               }
               return openApplication(event);

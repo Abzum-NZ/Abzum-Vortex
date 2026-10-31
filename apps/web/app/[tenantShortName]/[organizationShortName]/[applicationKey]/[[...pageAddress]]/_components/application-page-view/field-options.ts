@@ -1,5 +1,6 @@
 import { isRecord, type JsonValue } from "@vortex/platform/schema";
 import type { ChoiceOption, ControlSemanticEvent, RecordChoicePage } from "@vortex/ui";
+import { postJson } from "../../../../../../_lib/post-json";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 
 /**
@@ -48,31 +49,29 @@ export const requestFieldOptions = async (
   const held = cached.get(cacheKey);
   if (held !== undefined) return held;
   const application = model.invocation;
-  const response = await fetch("/api/field-options", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    credentials: "same-origin",
-    cache: "no-store",
-    body: JSON.stringify({
-      tenantShortName: application.tenantShortName,
-      organizationShortName: application.organizationShortName,
-      applicationKey: application.applicationKey,
-      pageKey: application.pageKey,
-      placementId,
-      ...(event.fieldId === undefined ? {} : { fieldId: event.fieldId }),
-      ...(event.purpose === undefined ? {} : { purpose: event.purpose }),
-      ...(event.parentRecordId === undefined ? {} : { parentRecordId: event.parentRecordId }),
-      ...(event.draft === undefined ? {} : { draft: event.draft }),
-      installationRevision: application.installationRevision,
-      releaseKey: application.releaseKey,
-      ...(model.subject === undefined ? {} : { subjectRecordId: model.subject.recordId }),
-      ...(event.search === undefined ? {} : { search: event.search }),
-      ...(event.continuationToken === undefined
-        ? {}
-        : { continuationToken: event.continuationToken }),
-    }),
+  const response = await postJson("/api/field-options", {
+    tenantShortName: application.tenantShortName,
+    organizationShortName: application.organizationShortName,
+    applicationKey: application.applicationKey,
+    pageKey: application.pageKey,
+    placementId,
+    ...(event.fieldId === undefined ? {} : { fieldId: event.fieldId }),
+    ...(event.purpose === undefined ? {} : { purpose: event.purpose }),
+    ...(event.parentRecordId === undefined ? {} : { parentRecordId: event.parentRecordId }),
+    ...(event.draft === undefined ? {} : { draft: event.draft }),
+    installationRevision: application.installationRevision,
+    releaseKey: application.releaseKey,
+    ...(model.subject === undefined ? {} : { subjectRecordId: model.subject.recordId }),
+    ...(event.search === undefined ? {} : { search: event.search }),
+    ...(event.continuationToken === undefined
+      ? {}
+      : { continuationToken: event.continuationToken }),
   });
-  const body: unknown = await response.json();
+  const body: unknown = response.body;
+  if (isRecord(body) && body.kind === "reload") {
+    reload();
+    throw new Error("FIELD_OPTIONS_RELEASE_CHANGED");
+  }
   if (isRecord(body) && body.kind === "reload") {
     reload();
     throw new Error("FIELD_OPTIONS_RELEASE_CHANGED");

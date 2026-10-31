@@ -8,8 +8,7 @@ import { prepareStudioPreview } from "../../../_lib/studio-application-preview";
 import { studioViewRequestSchema } from "../../../studio/_lib/studio-view-request";
 import { privateJsonResponse } from "../../../_lib/private-response";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
-import { getIdentityJourneyConfiguration } from "../../../auth/_lib/authority-configuration";
-import { readBoundedRequestText } from "../../_lib/bounded-request-body";
+import { isOwnSiteJsonRequest, readJsonBody } from "../../_lib/own-site-request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,31 +39,19 @@ const requestSchema = z.discriminatedUnion("operation", [
 /** Read requests run independently of Next's serial mutation action queue. */
 export async function POST(request: NextRequest) {
   try {
-    if (
-      request.headers.get("origin") !== new URL(getIdentityJourneyConfiguration().siteUrl).origin ||
-      request.headers.get("content-type")?.split(";", 1)[0]?.trim() !== "application/json"
-    )
-      return privateJsonResponse({ kind: "refused" }, 403);
+    if (!isOwnSiteJsonRequest(request)) return privateJsonResponse({ kind: "refused" }, 403);
     const identity = await resolveIdentitySession();
     if (identity.kind !== "active")
       return privateJsonResponse(
         {
           kind: identity.kind === "temporarily_unavailable" ? "temporarily_unavailable" : "refused",
         },
-        200,
+        identity.kind === "temporarily_unavailable" ? 503 : 401,
       );
-    const body = await readBoundedRequestText(request, 131_072);
-    if (body.kind !== "read") return privateJsonResponse({ kind: "refused" }, 413);
-    let candidateBody: unknown;
-    try {
-      candidateBody = JSON.parse(body.text);
-    } catch (error) {
-      if (error instanceof SyntaxError) return privateJsonResponse({ kind: "refused" }, 400);
-      throw error;
-    }
-    const parsed = requestSchema.safeParse(candidateBody);
-    if (!parsed.success) return privateJsonResponse({ kind: "refused" }, 400);
-    const { organizationId, operation, candidate } = parsed.data;
+    const body = await readJsonBody(request, 131_072, requestSchema);
+    if (body.kind === "too_large") return privateJsonResponse({ kind: "refused" }, 413);
+    if (body.kind !== "read") return privateJsonResponse({ kind: "refused" }, 400);
+    const { organizationId, operation, candidate } = body.value;
     const result =
       operation === "compile"
         ? await loadStudioApplicationDraft(
