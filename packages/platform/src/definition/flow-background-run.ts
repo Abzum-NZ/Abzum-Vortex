@@ -234,9 +234,17 @@ export const runBackendFlow = async (
       ? eventTrigger?.recordTypeId
       : flow.inputs[flow.recordInput]?.recordTypeIds?.[0];
   if (claimed.origin === "event") {
-    // The occurrence supplies the record, never an input the flow did not declare.
+    // The occurrence supplies the record: to the record input the flow declares, never to any
+    // other input.
+    const occurrenceRecordId = inputs.recordId;
     delete inputs.occurrenceId;
     delete inputs.recordId;
+    if (flow.recordInput !== undefined) {
+      // Only the occurrence's own record, of the record type its event is about.
+      if (typeof occurrenceRecordId !== "string" || recordTypeId !== eventTrigger?.recordTypeId)
+        return refused("record_unavailable");
+      inputs[flow.recordInput] = occurrenceRecordId;
+    }
   }
   const recordId =
     claimed.origin === "event"

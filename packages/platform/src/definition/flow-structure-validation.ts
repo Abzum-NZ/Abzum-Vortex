@@ -146,21 +146,24 @@ export const validateStructure = (flow: FlowSource, add: Add) => {
       );
   });
 
-  // Only an interactive flow or a named action's flow (a transaction flow with no trigger) names
-  // the input that carries its record: one required record input.
+  // Only an interactive flow, a named action's flow (a transaction flow with no trigger) or an
+  // event subscriber names the input that carries its record: one required record input.
   if (flow.recordInput !== undefined) {
     const declaration = Object.hasOwn(flow.inputs, flow.recordInput)
       ? flow.inputs[flow.recordInput]
       : undefined;
     if (
       flow.execution !== "interactive" &&
-      !(flow.execution === "transaction" && flow.triggers.length === 0)
+      !(flow.execution === "transaction" && flow.triggers.length === 0) &&
+      !(
+        flow.execution === "background" && flow.triggers.some((trigger) => trigger.type === "Event")
+      )
     )
       add(
         ["recordInput"],
         "vortex.definition.workflow_node_values",
         "invalid_value",
-        "Only an interactive flow or an action's flow names the input that carries its record; a record trigger supplies it otherwise",
+        "Only an interactive flow, an action's flow or an event subscriber names the input that carries its record; a record trigger supplies it otherwise",
       );
     else if (
       declaration === undefined ||
