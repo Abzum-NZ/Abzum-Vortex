@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { NavigationLink } from "@vortex/ui/routing";
 import { readPrivacyNotice } from "@vortex/platform/server";
 import { identityIdSchema } from "@vortex/platform/schema";
 import { AuthShell } from "../_components/auth-shell";
@@ -25,9 +25,9 @@ export default async function PrivacyPage({
           : "This version of the Privacy Policy does not exist.")
       }
       footer={
-        <Link className="underline" href="/auth/register">
+        <NavigationLink className="underline" href="/auth/register">
           Back to create account
-        </Link>
+        </NavigationLink>
       }
     >
       {notice?.content.paragraphs.map((paragraph, index) => (

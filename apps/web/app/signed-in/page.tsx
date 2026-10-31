@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import Link from "next/link";
+import { NavigationLink } from "@vortex/ui/routing";
 import { redirect } from "next/navigation";
 import type { OrganizationLauncherEntry } from "@vortex/platform/schema";
 import {
@@ -259,7 +259,11 @@ const organizationsUnavailable = (
         </CardDescription>
       </CardHeader>
       <CardFooter className="flex justify-between gap-3">
-        <Button variant="outline" nativeButton={false} render={<Link href="/signed-in" />}>
+        <Button
+          variant="outline"
+          nativeButton={false}
+          render={<NavigationLink href="/signed-in" />}
+        >
           Try again
         </Button>
         <form action={signOut}>

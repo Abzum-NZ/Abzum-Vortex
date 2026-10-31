@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { NavigationLink } from "@vortex/ui/routing";
 import { Icon } from "@vortex/ui/icons";
 import { AuthShell } from "../_components/auth-shell";
 
@@ -19,12 +19,12 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
       }
       footer={
         <div className="text-center text-sm">
-          <Link
+          <NavigationLink
             className="font-medium text-foreground underline underline-offset-4 hover:text-primary transition-colors"
             href="/auth/sign-in"
           >
             Continue to sign in
-          </Link>
+          </NavigationLink>
         </div>
       }
     >

@@ -1,5 +1,6 @@
 "use client";
 
+import { NavigationLink } from "../routing/navigation-link";
 import {
   lazy,
   Suspense,
@@ -11,7 +12,6 @@ import {
   type ReactElement,
 } from "react";
 import { recordsTableContractOrLog, type RecordsTableContract } from "@vortex/platform/schema";
-import Link from "next/link";
 import { Alert, AlertDescription } from "../components/alert";
 import { Button } from "../components/button";
 import { Empty, EmptyContent, EmptyHeader, EmptyTitle } from "../components/empty";
@@ -802,7 +802,7 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
             </EmptyContent>
           ) : create === undefined ? null : (
             <EmptyContent>
-              <Button nativeButton={false} render={<Link href={create.href} prefetch={false} />}>
+              <Button nativeButton={false} render={<NavigationLink href={create.href} />}>
                 {create.label}
               </Button>
             </EmptyContent>

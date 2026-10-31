@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import Link from "next/link";
+import { NavigationLink } from "../routing/navigation-link";
 import { readRecordDetailContract } from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import { Badge } from "../components/badge";
@@ -251,14 +251,13 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
                       <Badge variant="secondary">{list.rows.length}</Badge>
                     </CardTitle>
                     {href === undefined ? null : (
-                      <Link
+                      <NavigationLink
                         href={href}
-                        prefetch={false}
                         aria-label={`${addLabelOf(href)} to ${list.title}`}
                         className="shrink-0 text-sm font-medium underline-offset-4 hover:underline"
                       >
                         {addLabelOf(href)}
-                      </Link>
+                      </NavigationLink>
                     )}
                   </CardHeader>
                   <CardContent className="pt-0">

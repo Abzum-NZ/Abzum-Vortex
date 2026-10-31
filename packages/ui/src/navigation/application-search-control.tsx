@@ -1,11 +1,14 @@
 "use client";
 
 import type { BlockPropertyValueContract } from "@vortex/platform/schema";
-import type { ReactElement } from "react";
+import type { FormEvent, ReactElement } from "react";
+import { usePathname } from "next/navigation";
 import { Button } from "../components/button";
 import { Card, CardContent } from "../components/card";
 import { Input } from "../components/input";
 import { Label } from "../components/label";
+import { NavigationLink } from "../routing/navigation-link";
+import { useNavigator } from "../routing/navigator";
 
 export type ApplicationSearchRuntime =
   | Readonly<{ kind: "disabled" }>
@@ -50,7 +53,22 @@ export function ApplicationSearchControl({
   applicationSearchPageSubject?: string;
   onSearch?: (expression: string) => void;
 }>): ReactElement | null {
+  const navigator = useNavigator();
+  const pathname = usePathname();
   if (applicationSearch === undefined || applicationSearch.kind === "disabled") return null;
+  // A search the host does not run itself changes the address in place: the page follows its
+  // `q` parameter, and the document never reloads.
+  const submit = (event: FormEvent<HTMLFormElement>): void => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    if (onSearch !== undefined) {
+      onSearch(String(form.get("q") ?? ""));
+      return;
+    }
+    const query = new URLSearchParams();
+    for (const [name, value] of form) if (typeof value === "string") query.append(name, value);
+    navigator.navigate(`${pathname}?${query.toString()}`);
+  };
 
   const placeholder = textSetting(settings, "placeholder");
   const submitLabel = textSetting(settings, "submit_label");
@@ -60,14 +78,7 @@ export function ApplicationSearchControl({
         method="get"
         role="search"
         className="flex max-w-xl items-center gap-2"
-        onSubmit={
-          onSearch === undefined
-            ? undefined
-            : (event) => {
-                event.preventDefault();
-                onSearch(String(new FormData(event.currentTarget).get("q") ?? ""));
-              }
-        }
+        onSubmit={submit}
       >
         {applicationSearchPageSubject === undefined ? null : (
           <input type="hidden" name="record_id" value={applicationSearchPageSubject} />
@@ -119,12 +130,12 @@ export function ApplicationSearchControl({
                     <ul className="flex flex-col gap-2">
                       {group.results.map((result) => (
                         <li key={result.href}>
-                          <a
+                          <NavigationLink
                             href={result.href}
                             className="font-medium underline-offset-4 hover:underline"
                           >
                             {result.title}
-                          </a>
+                          </NavigationLink>
                           {result.subtitle === undefined ? null : (
                             <p className="text-muted-foreground">{result.subtitle}</p>
                           )}
@@ -147,12 +158,12 @@ export function ApplicationSearchControl({
               <ul className="flex flex-col gap-2">
                 {applicationSearch.results.map((result) => (
                   <li key={result.href}>
-                    <a
+                    <NavigationLink
                       href={result.href}
                       className="font-medium underline-offset-4 hover:underline"
                     >
                       {result.title}
-                    </a>
+                    </NavigationLink>
                     {result.subtitle === undefined ? null : (
                       <p className="text-muted-foreground">{result.subtitle}</p>
                     )}

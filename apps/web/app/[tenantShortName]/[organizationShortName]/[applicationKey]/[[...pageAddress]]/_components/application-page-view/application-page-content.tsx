@@ -35,7 +35,7 @@ import {
   walkPageComposition,
   readCompiledItemSettings,
 } from "@vortex/platform/schema";
-import Link from "next/link";
+import { NavigationLink } from "@vortex/ui/routing";
 import { Button } from "@vortex/ui/components/button";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { FirstRecordTypeEmptyState } from "../../../../../../_components/first-record-type-empty-state";
@@ -653,7 +653,10 @@ export function ApplicationPageViewContent({
                 undefined ? (
                 <FirstRecordTypeEmptyState
                   action={
-                    <Button nativeButton={false} render={<Link href={model.firstRecordTypeHref} />}>
+                    <Button
+                      nativeButton={false}
+                      render={<NavigationLink href={model.firstRecordTypeHref} />}
+                    >
                       Open the Data tab in Studio
                     </Button>
                   }

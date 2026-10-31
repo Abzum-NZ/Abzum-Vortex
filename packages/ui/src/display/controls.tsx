@@ -1,7 +1,7 @@
 "use client";
 
+import { NavigationLink } from "../routing/navigation-link";
 import type { ReactElement } from "react";
-import Link from "next/link";
 import { Button } from "../components/button";
 import { Card, CardContent } from "../components/card";
 import { Checkbox } from "../components/checkbox";
@@ -111,7 +111,7 @@ export function RecordsEmptyState({
       </EmptyHeader>
       {create === undefined ? null : (
         <EmptyContent>
-          <Button nativeButton={false} render={<Link href={create.href} prefetch={false} />}>
+          <Button nativeButton={false} render={<NavigationLink href={create.href} />}>
             {create.label}
           </Button>
         </EmptyContent>

@@ -1,7 +1,7 @@
 "use client";
 
+import { NavigationLink } from "../../routing/navigation-link";
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
-import Link from "next/link";
 import { Alert, AlertDescription } from "../../components/alert";
 import { Button } from "../../components/button";
 import { Empty, EmptyHeader, EmptyTitle } from "../../components/empty";
@@ -257,13 +257,12 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
                         <DisplayCellView value={titleValue} />
                       )
                     ) : (
-                      <Link
+                      <NavigationLink
                         href={related.href}
-                        prefetch={false}
                         className="underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
                       >
                         {cellValueToText(titleValue) || "Open"}
-                      </Link>
+                      </NavigationLink>
                     )}
                   </h4>
                 )}
@@ -308,13 +307,12 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
                 return (
                   <TableCell key={column.key} className="max-w-64 truncate py-1.5">
                     {index === 0 && related.href !== undefined ? (
-                      <Link
+                      <NavigationLink
                         href={related.href}
-                        prefetch={false}
                         className="font-medium underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
                       >
                         {cellValueToText(cell) || "Open"}
-                      </Link>
+                      </NavigationLink>
                     ) : (
                       <DisplayCellView value={cell} />
                     )}

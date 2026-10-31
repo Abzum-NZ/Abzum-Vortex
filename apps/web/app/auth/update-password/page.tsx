@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { NavigationLink } from "@vortex/ui/routing";
 import { newPasswordPolicy } from "@vortex/platform/server";
 import { Field, FieldDescription } from "@vortex/ui/components/field";
 import { Input } from "@vortex/ui/components/input";
@@ -18,12 +18,12 @@ export default async function UpdatePasswordPage({
       description="Enter the email address and six-digit recovery code from your message, then choose a new password. Opening this page does not change your password."
       footer={
         <div className="text-center text-sm">
-          <Link
+          <NavigationLink
             className="font-medium text-foreground underline underline-offset-4 hover:text-primary transition-colors"
             href="/auth/recover"
           >
             Request a new recovery code
-          </Link>
+          </NavigationLink>
         </div>
       }
     >

@@ -3,7 +3,7 @@ import { withPageReadAttribution } from "../../../../_lib/page-read-attribution"
 
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
-import Link from "next/link";
+import { NavigationLink } from "@vortex/ui/routing";
 import { redirect } from "next/navigation";
 import { flowRefusalFeedbackSentences, splitProjectedPage } from "@vortex/platform/schema";
 import type { ApplicationAccount, DisplaySemanticEvent } from "@vortex/ui";
@@ -422,7 +422,7 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
                 {parameters.adoption === "multi_factor_required" ? (
                   <>
                     {" "}
-                    <Link href={multiFactorPath}>Verify</Link>
+                    <NavigationLink href={multiFactorPath}>Verify</NavigationLink>
                   </>
                 ) : null}
               </AlertDescription>
