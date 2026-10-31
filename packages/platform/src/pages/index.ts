@@ -124,6 +124,7 @@ export {
   type RecordsTableBulkAddress,
   type RecordsTableBulkDependencies,
 } from "./records-table-features/bulk-run";
+export { createRecordsTableRunService } from "./records-table-features/run-chain";
 export {
   createRecordsRangeSummaryService,
   type RecordsRangeSummaryDependencies,

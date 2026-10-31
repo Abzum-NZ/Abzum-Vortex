@@ -66,6 +66,30 @@ export const recordsSelectionCountRequestSchema = z
   .strict();
 export type RecordsSelectionCountRequest = z.infer<typeof recordsSelectionCountRequestSchema>;
 
+/**
+ * Where a background run a table's action started has got to: the reference the start returned,
+ * read by the person who started it. The reply never carries what the run produced.
+ */
+export const recordsTableRunRequestSchema = z
+  .object({ ...placementCommandBase, run: z.uuid() })
+  .strict();
+export type RecordsTableRunRequest = z.infer<typeof recordsTableRunRequestSchema>;
+
+export const recordsTableRunResultSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("read"),
+      state: z.enum(["running", "succeeded", "failed"]),
+      /** How many runs the chain has reached: a matching run starts one after another. */
+      pages: z.number().int().min(1),
+      failureCode: z.string().max(100).nullable(),
+    })
+    .strict(),
+  recordsTableRequestRejectionSchema,
+  z.object({ kind: z.literal("unavailable") }).strict(),
+]);
+export type RecordsTableRunResult = z.infer<typeof recordsTableRunResultSchema>;
+
 /** The most records the one capped count path counts; above it the person narrows the filter. */
 export const recordsSelectionCountCeiling = 100_000;
 

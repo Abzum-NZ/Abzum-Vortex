@@ -291,6 +291,7 @@ export function useApplyDispatch({
               server.failure === undefined,
             changed: changedUnderPerson,
             ...(server.outputs.applied === undefined ? {} : { applied: server.outputs.applied }),
+            ...(typeof server.outputs.run === "string" ? { run: server.outputs.run } : {}),
             ...(diagnostic?.corrections === undefined
               ? {}
               : { corrections: diagnostic.corrections }),

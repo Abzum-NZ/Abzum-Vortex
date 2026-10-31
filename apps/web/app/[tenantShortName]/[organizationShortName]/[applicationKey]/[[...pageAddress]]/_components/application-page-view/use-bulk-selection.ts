@@ -10,6 +10,7 @@ import {
 import {
   recordsSelectionCountResultSchema,
   recordsTableBulkRequestMaximum,
+  recordsTableRunResultSchema,
   type NamedActionAvailability,
   type RecordsSelectionInput,
   type RecordsTableBulkRunLine,
@@ -40,9 +41,9 @@ type HeldScope = Readonly<{
   excluded: readonly string[];
 }>;
 
-/** How often, and how many times, the table is read while a matching run works on the back end. */
-const matchingRefreshMilliseconds = 3_000;
-const matchingRefreshReads = 20;
+/** How often, and for how long, a background run the person started is asked how far it has got. */
+const runFollowMilliseconds = 2_000;
+const runFollowReads = 300;
 
 const without = <Value>(
   current: Readonly<Record<string, Value>>,
@@ -219,16 +220,44 @@ export function useBulkSelection({
     [model],
   );
 
-  /** Reads the table again at intervals while a background run works, unless the person has left. */
-  const followBackgroundRun = useCallback(
-    async (placementId: string, owner: unknown): Promise<void> => {
-      for (let read = 0; read < matchingRefreshReads; read += 1) {
-        await new Promise((resolve) => window.setTimeout(resolve, matchingRefreshMilliseconds));
-        if (navigation.current !== owner) return;
-        await refreshPlacements([placementId]);
+  /**
+   * Waits for a background run the person started, and the runs it started after itself, to end:
+   * "succeeded" or "failed", "running" when it is still going after the time followed, or "left"
+   * when the person has gone to another page.
+   */
+  const followRun = useCallback(
+    async (
+      placementId: string,
+      run: string,
+      owner: unknown,
+    ): Promise<"succeeded" | "failed" | "running" | "left"> => {
+      for (let read = 0; read < runFollowReads; read += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, runFollowMilliseconds));
+        if (navigation.current !== owner) return "left";
+        try {
+          const response = await fetch("/api/records-table/run", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            credentials: "same-origin",
+            cache: "no-store",
+            body: JSON.stringify({ ...recordsTableAddress(model), placementId, run }),
+          });
+          const parsed = recordsTableRunResultSchema.safeParse(await response.json());
+          if (!parsed.success) throw new Error("BACKGROUND_RUN_REPLY_INVALID");
+          if (parsed.data.kind === "refused") return "failed";
+          if (parsed.data.kind === "read" && parsed.data.state !== "running") {
+            if (parsed.data.state === "failed")
+              console.error(`[page] the background run failed: ${parsed.data.failureCode}`);
+            return parsed.data.state;
+          }
+        } catch (error) {
+          // A read that fails is asked again at the next interval.
+          console.error("[page] the background run could not be read", error);
+        }
       }
+      return "running";
     },
-    [refreshPlacements],
+    [model],
   );
 
   const runAction = useCallback(
@@ -269,7 +298,6 @@ export function useBulkSelection({
           [placementId]: { status: "running", label, processed: 0 },
         }));
         let last: RecordsTableBulkRunLine | undefined;
-        let background = false;
         try {
           const binding = bindings.find(
             (candidate) =>
@@ -317,63 +345,71 @@ export function useBulkSelection({
             return;
           }
           // Every matching record, or more chosen rows than a request holds, runs on the back end a
-          // page at a time: the run only started, so there is nothing to summarise yet; the table is
-          // read again after this ends, while the work goes on.
-          background =
+          // page at a time: the start ends the selection and the run is followed until it ends.
+          let ended = outcome.confirmed;
+          if (
             outcome.completed &&
             (selection.kind === "matching" ||
-              selection.items.length > recordsTableBulkRequestMaximum);
-          if (!background)
-            last = {
-              kind: "summary",
-              total: selected,
-              done: outcome.confirmed ? selected : 0,
-              warnings: [],
-              refused: outcome.confirmed
-                ? []
-                : [{ reason: outcome.changed ? "changed" : "refused", count: selected }],
-              notProcessed: outcome.confirmed ? 0 : selected,
-              limited: false,
-            };
+              selection.items.length > recordsTableBulkRequestMaximum)
+          ) {
+            if (outcome.run === undefined)
+              throw new Error("BULK_ACTION_RUN_MISSING: the start returned no run reference");
+            setSelection((current) => without(current, placementId));
+            setScopes((current) => without(current, placementId));
+            const followed = await followRun(placementId, outcome.run, owner);
+            if (followed === "left") return;
+            if (followed === "running") {
+              // Still going after the time followed: the person sees the table as it is now.
+              setRuns((current) => without(current, placementId));
+              await refreshPlacements([placementId]);
+              return;
+            }
+            ended = followed === "succeeded";
+          }
+          last = {
+            kind: "summary",
+            total: selected,
+            done: ended ? selected : 0,
+            warnings: [],
+            refused: ended
+              ? []
+              : [{ reason: outcome.changed ? "changed" : "refused", count: selected }],
+            notProcessed: ended ? 0 : selected,
+            limited: false,
+          };
         } catch (error) {
           console.error("[page] the bulk action did not finish", error);
         }
         // A completed request belongs to the page that started it, even after navigation away.
         if (navigation.current !== owner) return;
-        setRuns((current) =>
-          background
-            ? without(current, placementId)
-            : {
-                ...current,
-                [placementId]:
-                  last?.kind === "summary"
-                    ? {
-                        status: "finished",
-                        label,
-                        selected,
-                        summary: {
-                          total: last.total,
-                          done: last.done,
-                          warnings: last.warnings,
-                          refused: last.refused,
-                          notProcessed: last.notProcessed,
-                          limited: last.limited,
-                        },
-                      }
-                    : { status: "failed", label },
-              },
-        );
+        setRuns((current) => ({
+          ...current,
+          [placementId]:
+            last?.kind === "summary"
+              ? {
+                  status: "finished",
+                  label,
+                  selected,
+                  summary: {
+                    total: last.total,
+                    done: last.done,
+                    warnings: last.warnings,
+                    refused: last.refused,
+                    notProcessed: last.notProcessed,
+                    limited: last.limited,
+                  },
+                }
+              : { status: "failed", label },
+        }));
         // The run ends the selection; the table is read once, through the ordinary read path.
         setSelection((current) => without(current, placementId));
         setScopes((current) => without(current, placementId));
         await refreshPlacements([placementId]);
-        // The person watches the rows change until the background run has had time to end.
-        if (background) void followBackgroundRun(placementId, owner);
       } finally {
         inFlight.current.delete(placementId);
       }
     },
-    [followBackgroundRun, model, refreshPlacements, scopeOf, scopes, setSelection],
+    [followRun, refreshPlacements, scopeOf, scopes, setSelection],
   );
 
   /** The Bulk actions events of one table's placement. */

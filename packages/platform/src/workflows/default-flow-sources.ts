@@ -33,6 +33,23 @@ const inputReference = (name: string) =>
   ({ kind: "reference", reference: { source: "input", name } }) as const;
 const outputReference = (task: string, key: string) =>
   ({ kind: "reference", reference: { source: "task_output", task, key } }) as const;
+const variableReference = (name: string) =>
+  ({ kind: "reference", reference: { source: "variable", name } }) as const;
+
+/** The reference a run output holds while no run was started (the nil identity: read as none). */
+const noRunReference = "00000000-0000-0000-0000-000000000000";
+const runReferenceVariable = {
+  type: "workflow_run_reference",
+  default: noRunReference,
+} as const;
+
+const setVariableTask = (id: string, name: string, value: ReturnType<typeof outputReference>): Task =>
+  ({
+    id,
+    type: "data.set_variable",
+    version: taskVersion,
+    properties: { variable: textLiteral(name), value },
+  }) as unknown as Task;
 
 const showMessage = (
   id: string,
@@ -103,7 +120,7 @@ const recordReferenceInput = (recordType: string) => ({
 const interactiveSource = (
   identity: DefaultFlowIdentity,
   parts: Pick<SourceFlow, "inputs" | "tasks" | "outputs"> &
-    Readonly<{ errors?: SourceFlow["errors"] }>,
+    Readonly<{ errors?: SourceFlow["errors"]; variables?: SourceFlow["variables"] }>,
 ): SourceFlow => ({
   id: identity.id,
   key: identity.key,
@@ -112,7 +129,7 @@ const interactiveSource = (
   execution: "interactive",
   runAs: { kind: "initiator" },
   inputs: parts.inputs,
-  variables: {},
+  variables: parts.variables ?? {},
   triggers: [],
   tasks: parts.tasks,
   outputs: parts.outputs,
@@ -612,6 +629,7 @@ export const defaultBulkActionFlowSource = (input: DefaultBulkActionFlowInput): 
       selection: { type: "text", required: true },
       excluded: { type: "json", required: true },
     },
+    variables: { run: runReferenceVariable },
     tasks: [
       {
         id: "route",
@@ -638,6 +656,7 @@ export const defaultBulkActionFlowSource = (input: DefaultBulkActionFlowInput): 
               },
             },
           } as unknown as Task,
+          setVariableTask("keep_matching_run", "run", outputReference("start_matching", "run")),
           showMessage("started", input.started, { severity: "info" }),
         ],
         else: [
@@ -659,6 +678,7 @@ export const defaultBulkActionFlowSource = (input: DefaultBulkActionFlowInput): 
                   inputs: { kind: "map", entries: { subjects: inputReference("queued") } },
                 },
               } as unknown as Task,
+              setVariableTask("keep_chosen_run", "run", outputReference("start_chosen", "run")),
               showMessage("started_chosen", input.started, { severity: "info" }),
             ],
             else: [
@@ -679,7 +699,7 @@ export const defaultBulkActionFlowSource = (input: DefaultBulkActionFlowInput): 
         ],
       } as unknown as Task,
     ],
-    outputs: {},
+    outputs: { run: { type: "workflow_run_reference", value: variableReference("run") } },
   });
 
 /**
@@ -719,7 +739,9 @@ export const defaultBulkIdsFlowSource = (input: DefaultBulkActionFlowInput): Sou
  * one page of the table's own matching rows (the token carries its filters and search), applies
  * the named action to that page as one command in one transaction, and starts itself again with
  * the next continuation until none is left. The only input that changes between runs is the
- * continuation, and every page is a run in history.
+ * continuation, and every page is a run in history. Each run's `next` output names the run it
+ * started after itself (the nil identity when it was the last), which is how the grid follows the
+ * chain.
  */
 export const defaultBulkMatchingFlowSource = (input: DefaultBulkActionFlowInput): SourceFlow => ({
   id: input.matchingFlow,
@@ -733,7 +755,7 @@ export const defaultBulkMatchingFlowSource = (input: DefaultBulkActionFlowInput)
     excluded: { type: "json", required: true },
     continuation: { type: "text", required: true },
   },
-  variables: {},
+  variables: { next: runReferenceVariable },
   triggers: [],
   tasks: [
     {
@@ -796,10 +818,11 @@ export const defaultBulkMatchingFlowSource = (input: DefaultBulkActionFlowInput)
             },
           },
         } as unknown as Task,
+        setVariableTask("keep_next_run", "next", outputReference("next_page", "run")),
       ],
     } as unknown as Task,
   ],
-  outputs: {},
+  outputs: { next: { type: "workflow_run_reference", value: variableReference("next") } },
   errors: [],
   finally: [],
 });

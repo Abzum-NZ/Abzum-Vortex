@@ -67,6 +67,8 @@ export type DispatchOutcome = Readonly<{
   cellProblems?: readonly RecordsTableBatchEditProblem[];
   /** What a batch flow reports it applied: each record's new revision and the values it replaced. */
   applied?: JsonValue;
+  /** The run reference a flow that started background work reports. */
+  run?: string;
 }>;
 
 export type SubmittedForm = Readonly<{
