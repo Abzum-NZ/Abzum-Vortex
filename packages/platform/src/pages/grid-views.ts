@@ -121,7 +121,7 @@ const resetResultSchema = z.discriminatedUnion("outcome", [
 ]);
 
 /** One stored current layout, validated against the platform's storage contract. */
-export type StoredGridView = Readonly<{
+type StoredGridView = Readonly<{
   placementId: string;
   queryId: string;
   revision: number;
@@ -131,7 +131,7 @@ export type StoredGridView = Readonly<{
 }>;
 
 /** One named view the person may see, with its document only when the address selected it. */
-export type StoredNamedGridView = Readonly<{
+type StoredNamedGridView = Readonly<{
   viewId: string;
   placementId: string;
   queryId: string;
@@ -178,9 +178,8 @@ export type GridViewConflict = Readonly<{
   }> | null;
 }>;
 
-export type GridViewWriteOutcome =
-  Readonly<{ outcome: "saved"; revision: number }> | GridViewConflict;
-export type GridViewResetOutcome = Readonly<{ outcome: "reset" }> | GridViewConflict;
+type GridViewWriteOutcome = Readonly<{ outcome: "saved"; revision: number }> | GridViewConflict;
+type GridViewResetOutcome = Readonly<{ outcome: "reset" }> | GridViewConflict;
 
 const only = (rows: readonly ResultRow[]): unknown => {
   if (rows.length !== 1 || rows[0] === undefined) throw new Error("GRID_VIEW_RESULT_INVALID");

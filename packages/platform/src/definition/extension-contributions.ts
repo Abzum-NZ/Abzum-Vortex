@@ -11,7 +11,7 @@ import {
  * and it carries its compiled content. A caller assembles the list from the installed release
  * evidence it already holds; the resolver never reads storage, permissions or a database.
  */
-export type InstalledModuleContributionRelease = Readonly<{
+type InstalledModuleContributionRelease = Readonly<{
   moduleRootId: string;
   definitionKey: string;
   releaseVersion: string;
@@ -24,7 +24,7 @@ export type InstalledModuleContributionRelease = Readonly<{
  * contributed component's own permanent identity, so a binding never invents a new identity. The
  * target record type and key come from the target release's own extension-point declaration.
  */
-export type ResolvedAdditiveContribution = Readonly<{
+type ResolvedAdditiveContribution = Readonly<{
   contributionId: string;
   kind: "field" | "action";
   contributorModuleRootId: string;
@@ -50,7 +50,7 @@ export const moduleContributionConflictCodes = [
   "unaccepted_contribution_kind",
 ] as const;
 
-export type ModuleContributionConflictCode = (typeof moduleContributionConflictCodes)[number];
+type ModuleContributionConflictCode = (typeof moduleContributionConflictCodes)[number];
 
 /**
  * A deterministic refusal for one contribution. `namespace_collision` means the contributed
@@ -61,7 +61,7 @@ export type ModuleContributionConflictCode = (typeof moduleContributionConflictC
  * `contributed_component_retyped` mean the contributor no longer owns the declared component as
  * declared; `unaccepted_contribution_kind` means the extension point does not accept the kind.
  */
-export type ModuleContributionConflict = Readonly<{
+type ModuleContributionConflict = Readonly<{
   code: ModuleContributionConflictCode;
   contributionId: string;
   contributorModuleRootId: string;
@@ -74,7 +74,7 @@ export type ModuleContributionConflict = Readonly<{
  * as an exact additive binding, plus every typed conflict. `outcome` is `resolved` only when there
  * are no conflicts. Ordering never depends on input order.
  */
-export type ModuleContributionResolution = Readonly<{
+type ModuleContributionResolution = Readonly<{
   outcome: "resolved" | "conflicted";
   bindings: readonly ResolvedAdditiveContribution[];
   conflicts: readonly ModuleContributionConflict[];

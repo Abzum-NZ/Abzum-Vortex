@@ -9,16 +9,12 @@ import {
   organizationAccountIdSchema,
   recordTypeIdSchema,
   revisionSchema,
-  roleActivationIdSchema,
   roleAssignmentIdSchema,
   roleIdSchema,
   timestampSchema,
 } from "../catalogue/identifiers";
 import { descriptionSchema, labelSchema } from "../catalogue/common";
-import {
-  rolePrivilegeClassificationSchema,
-  roleRecentAuthenticationRequirementSchema,
-} from "./organization-access-catalogue";
+import { rolePrivilegeClassificationSchema } from "./organization-access-catalogue";
 import {
   organizationAccessActionSchema,
   organizationAccessExactPermissionSchema,
@@ -26,7 +22,7 @@ import {
 import { preparedOrganizationRoleChangeSchema } from "./organization-role-changes";
 import { permissionFieldPolicySchema, permissionRecordScopeSchema } from "./permissions";
 
-export const organizationAdministrationGroupSchema = z
+const organizationAdministrationGroupSchema = z
   .object({
     groupId: groupIdSchema,
     key: builderKeySchema,
@@ -85,14 +81,14 @@ export const changeOrganizationAdministrationGroupResultSchema = z
   })
   .strict();
 
-export const organizationAdministrationMembershipTemporalStateSchema = z.enum([
+const organizationAdministrationMembershipTemporalStateSchema = z.enum([
   "active",
   "scheduled",
   "expired",
   "revoked",
 ]);
 
-export const organizationAdministrationMembershipSchema = z
+const organizationAdministrationMembershipSchema = z
   .object({
     membershipId: membershipIdSchema,
     groupId: groupIdSchema,
@@ -167,25 +163,13 @@ export const organizationAdministrationPermissionSchema = z
   })
   .strict();
 
-export const organizationAdministrationRoleSourceSchema = z.discriminatedUnion("kind", [
+const organizationAdministrationRoleSourceSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("custom") }).strict(),
   z
     .object({
       kind: z.literal("application"),
       applicationRootId: applicationRootIdSchema,
       sourceRoleId: roleIdSchema,
-    })
-    .strict(),
-]);
-
-export const organizationAdministrationRoleAssignmentPolicySchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("standing") }).strict(),
-  z
-    .object({
-      kind: z.literal("activation_required"),
-      maximumActivationDurationSeconds: revisionSchema,
-      reasonRequired: z.boolean(),
-      recentAuthentication: roleRecentAuthenticationRequirementSchema,
     })
     .strict(),
 ]);
@@ -198,7 +182,8 @@ const organizationAdministrationRoleFields = {
   lifecycle: z.enum(["active", "acceptance_required", "unavailable", "retired"]),
   liveRevision: revisionSchema,
   privilegeClassification: rolePrivilegeClassificationSchema,
-  assignmentPolicy: organizationAdministrationRoleAssignmentPolicySchema,
+  // assignment_policy: removed by FIX-DB-SECURITY
+  assignmentPolicy: z.unknown().optional(),
   source: organizationAdministrationRoleSourceSchema,
   acceptedPermissionCount: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
 };
@@ -225,12 +210,12 @@ const addOrganizationAdministrationRoleIssues = (
     });
 };
 
-export const organizationAdministrationRoleSummarySchema = z
+const organizationAdministrationRoleSummarySchema = z
   .object(organizationAdministrationRoleFields)
   .strict()
   .superRefine(addOrganizationAdministrationRoleIssues);
 
-export const organizationAdministrationRoleDetailSchema = z
+const organizationAdministrationRoleDetailSchema = z
   .object({
     ...organizationAdministrationRoleFields,
     description: descriptionSchema,
@@ -306,7 +291,7 @@ export const changeOrganizationAdministrationRoleAuthorityCommandSchema = z
  * explicit acceptance is a visible, required choice, so a broadening template is accepted on
  * purpose rather than by submitting a form.
  */
-export const organizationAdministrationRoleChangePreparationOperationSchema = z.enum([
+const organizationAdministrationRoleChangePreparationOperationSchema = z.enum([
   "create_custom",
   "accept_new_application_role",
 ]);
@@ -371,14 +356,14 @@ export const changeOrganizationAdministrationRoleResultSchema = z
   })
   .strict();
 
-export const organizationAdministrationAssignmentTemporalStateSchema = z.enum([
+const organizationAdministrationAssignmentTemporalStateSchema = z.enum([
   "active",
   "scheduled",
   "expired",
   "revoked",
 ]);
 
-export const organizationAdministrationAssignmentSubjectSchema = z.discriminatedUnion("kind", [
+const organizationAdministrationAssignmentSubjectSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("organization_account"),
@@ -398,7 +383,7 @@ export const organizationAdministrationAssignmentSubjectSchema = z.discriminated
     .strict(),
 ]);
 
-export const organizationAdministrationAssignedRoleSchema = z
+const organizationAdministrationAssignedRoleSchema = z
   .object({
     roleId: roleIdSchema,
     key: builderKeySchema,
@@ -438,12 +423,13 @@ const addOrganizationAdministrationTemporalFactIssues = (
     });
 };
 
-export const organizationAdministrationRoleAssignmentSchema = z
+const organizationAdministrationRoleAssignmentSchema = z
   .object({
     roleAssignmentId: roleAssignmentIdSchema,
     role: organizationAdministrationAssignedRoleSchema,
     assignee: organizationAdministrationAssignmentSubjectSchema,
-    assignmentKind: z.enum(["standing", "eligible"]),
+    // assignment_kind: removed by FIX-DB-SECURITY
+    assignmentKind: z.unknown().optional(),
     ...organizationAdministrationTemporalFactFields,
   })
   .strict()
@@ -474,7 +460,6 @@ export const assignOrganizationAdministrationRoleAssignmentCommandSchema = z
     assigneeKind: z.enum(["organization_account", "group"]),
     organizationAccountId: organizationAccountIdSchema.optional(),
     groupId: groupIdSchema.optional(),
-    assignmentKind: z.enum(["standing", "eligible"]),
     startsAt: timestampSchema.optional(),
     expiresAt: timestampSchema.optional(),
   })
@@ -505,7 +490,7 @@ export const assignOrganizationAdministrationRoleAssignmentCommandSchema = z
       });
   });
 
-export const organizationAdministrationDelegationScopeSchema = z.discriminatedUnion("kind", [
+const organizationAdministrationDelegationScopeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("organization_catalogue") }).strict(),
   z
     .object({
@@ -527,7 +512,7 @@ export const organizationAdministrationDelegationScopeSchema = z.discriminatedUn
     }),
 ]);
 
-export const organizationAdministrationDelegationAuthoritySchema = z
+const organizationAdministrationDelegationAuthoritySchema = z
   .object({
     delegationAuthorityId: delegationAuthorityIdSchema,
     holder: organizationAdministrationAssignmentSubjectSchema,
@@ -556,75 +541,6 @@ export const revokeOrganizationAdministrationDelegationAuthorityCommandSchema = 
 export const changeOrganizationAdministrationDelegationAuthorityResultSchema = z
   .object({
     delegation: organizationAdministrationDelegationAuthoritySchema,
-    accessVersion: revisionSchema,
-  })
-  .strict();
-
-export const organizationAdministrationRoleActivationTemporalStateSchema = z.enum([
-  "active",
-  "expired",
-  "revoked",
-]);
-
-const organizationAdministrationRoleActivationFields = {
-  roleActivationId: roleActivationIdSchema,
-  beneficiary: z
-    .object({
-      organizationAccountId: organizationAccountIdSchema,
-      // A person who has just joined has no display name until they set their profile.
-      displayName: z.string().trim().min(1).max(120).optional(),
-    })
-    .strict(),
-  role: organizationAdministrationAssignedRoleSchema,
-  revision: revisionSchema,
-  historicalRoleRevision: revisionSchema,
-  activatedAt: timestampSchema,
-  expiresAt: timestampSchema,
-  state: z.enum(["live", "revoked"]),
-  temporalState: organizationAdministrationRoleActivationTemporalStateSchema,
-};
-
-const addOrganizationAdministrationRoleActivationIssues = (
-  value: {
-    activatedAt: string;
-    expiresAt: string;
-    state: "live" | "revoked";
-    temporalState: "active" | "expired" | "revoked";
-  },
-  context: z.RefinementCtx,
-) => {
-  if (Date.parse(value.expiresAt) <= Date.parse(value.activatedAt))
-    context.addIssue({
-      code: "custom",
-      path: ["expiresAt"],
-      message: "Activation expiry must follow activation",
-    });
-  if ((value.state === "revoked") !== (value.temporalState === "revoked"))
-    context.addIssue({
-      code: "custom",
-      path: ["temporalState"],
-      message: "Only a revoked activation has revoked temporal state",
-    });
-};
-
-export const organizationAdministrationRoleActivationSummarySchema = z
-  .object({
-    ...organizationAdministrationRoleActivationFields,
-    eligibilitySourceKind: z.enum(["direct", "group"]),
-  })
-  .strict()
-  .superRefine(addOrganizationAdministrationRoleActivationIssues);
-
-export const deactivateOrganizationAdministrationRoleActivationCommandSchema = z
-  .object({
-    roleActivationId: roleActivationIdSchema,
-    expectedActivationRevision: revisionSchema,
-  })
-  .strict();
-
-export const changeOrganizationAdministrationRoleActivationResultSchema = z
-  .object({
-    activation: organizationAdministrationRoleActivationSummarySchema,
     accessVersion: revisionSchema,
   })
   .strict();
@@ -691,12 +607,6 @@ export type RevokeOrganizationAdministrationDelegationAuthorityCommand = z.infer
 >;
 export type ChangeOrganizationAdministrationDelegationAuthorityResult = z.infer<
   typeof changeOrganizationAdministrationDelegationAuthorityResultSchema
->;
-export type DeactivateOrganizationAdministrationRoleActivationCommand = z.infer<
-  typeof deactivateOrganizationAdministrationRoleActivationCommandSchema
->;
-export type ChangeOrganizationAdministrationRoleActivationResult = z.infer<
-  typeof changeOrganizationAdministrationRoleActivationResultSchema
 >;
 export type AddOrganizationAdministrationMembershipCommand = z.infer<
   typeof addOrganizationAdministrationMembershipCommandSchema

@@ -11,6 +11,7 @@ import type {
   flowTaskOutputDeclarationSchema,
 } from "./flow-task-registry";
 
+/** @knipignore */
 export const flowRegisteredTaskTypeKeys = [
   "record.save",
   "record.create",
@@ -46,8 +47,8 @@ export const flowRegisteredTaskTypeKeys = [
   "interface.set_panel",
   "interface.set_filter",
 ] as const;
-export type FlowRegisteredTaskTypeKey = (typeof flowRegisteredTaskTypeKeys)[number];
-export type FlowControlTaskTypeKey = (typeof flowControlTaskTypeKeys)[number];
+type FlowRegisteredTaskTypeKey = (typeof flowRegisteredTaskTypeKeys)[number];
+type FlowControlTaskTypeKey = (typeof flowControlTaskTypeKeys)[number];
 export type FlowTaskTypeKey = FlowControlTaskTypeKey | FlowRegisteredTaskTypeKey;
 
 const page = { page: true, server: false, backend: false } as const;
@@ -56,7 +57,7 @@ const serverAndBackend = { page: false, server: true, backend: true } as const;
 const everywhere = { page: true, server: true, backend: true } as const;
 
 /** Where each step runs today; each later batch flips a flag when it lands the implementation. */
-export const flowTaskRuns = Object.freeze({
+const flowTaskRuns = Object.freeze({
   if: everywhere,
   switch: everywhere,
   for_each: everywhere,
@@ -102,7 +103,7 @@ type StepsRunning<Where extends keyof FlowStepRuns> = {
   [Type in FlowTaskTypeKey]: (typeof flowTaskRuns)[Type][Where] extends true ? Type : never;
 }[FlowTaskTypeKey];
 /** The steps with a page implementation, including control tasks handled by the interpreter. */
-export type PageStepType = StepsRunning<"page">;
+type PageStepType = StepsRunning<"page">;
 /** Registered page steps are dispatched through the page intent implementation map. */
 export type PageIntentStepType = Exclude<Extract<PageStepType, FlowRegisteredTaskTypeKey>, "data.calculate" | "data.set_variable" | "data.build_list">;
 /** The steps with a server implementation; the server's implementation map covers exactly these. */
@@ -497,7 +498,7 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     },
   },
 
-  // Interface tasks: browser-only. A server-driven flow returns a typed intent and a continuation.
+  // Interface tasks: browser-only, answered by the page runner.
   "interface.show_message": {
     title: "Show message",
     summary:
@@ -562,8 +563,9 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       "Asks the person to confirm before the flow continues, optionally listing what it covers and offering one opt-in.",
     runLocations: ["browser"],
     effect: "interface",
-    // `details` is a list of short lines shown under the message; `choice` labels one opt-in the
-    // person may tick with a yes, answered as `choice` (always no when no choice is offered).
+    // `details` is a list of short lines shown under the message, each one line of text with an
+    // optional one level of nested lines (`{text, lines}`); `choice` labels one opt-in the person
+    // may tick with a yes, answered as `choice` (always no when no choice is offered).
     properties: {
       title: optional("message_text"),
       message: required("message_text"),

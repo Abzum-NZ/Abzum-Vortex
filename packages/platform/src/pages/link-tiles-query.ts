@@ -36,11 +36,11 @@ import {
 import type { RecordsTableQueryRunner } from "./records-table-query";
 
 type Settings = Readonly<Record<string, BlockPropertyValueContract>>;
-export type LinkTilesQueryResolution =
+type LinkTilesQueryResolution =
   | Readonly<{ status: "ready"; values: ProjectedLinkTiles }>
   | Readonly<{ status: "refused"; reason: "not_permitted" }>
   | Readonly<{ status: "error" }>;
-export type LinkTilesQueryBinding = Readonly<{
+type LinkTilesQueryBinding = Readonly<{
   command: ProtectedQueryCommand;
   moduleReleaseVersion: string;
   recordTypeId: string;

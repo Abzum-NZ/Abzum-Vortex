@@ -215,8 +215,7 @@ export function useApplyDispatch({
             const presentation = diagnostic.presentation;
             resultNotice = {
               ...reason,
-              ...(presentation?.link_label === undefined ||
-              presentation.destination === undefined
+              ...(presentation?.link_label === undefined || presentation.destination === undefined
                 ? {}
                 : {
                     action: {

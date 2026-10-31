@@ -22,7 +22,12 @@ import type {
   ProtectedQueryRow,
 } from "../queries/protected-query-contracts";
 import type { displayDetailCellSchema } from "./display-payload-parts";
-import type { recordDetailPayloadSchema } from "./display-payload-record-detail";
+import type { PipelineStageTone } from "../definition/record-type-pipelines";
+import { pipelineMovesFrom } from "../definition/record-type-pipelines";
+import type {
+  RecordDetailPayload,
+  recordDetailPayloadSchema,
+} from "./display-payload-record-detail";
 import type {
   displayTableGroupSchema,
   displayTableGroupsSchema,
@@ -53,7 +58,21 @@ import {
 } from "./records-table-features";
 
 /** One closed display value of a record detail field, as the display payload schema accepts it. */
-export type ProjectedCellValue = z.infer<typeof displayDetailCellSchema>;
+type ProjectedCellValue = z.infer<typeof displayDetailCellSchema>;
+
+/** One labelled display value of a record detail section or related-list row. */
+type LabeledValue = Readonly<{ key: string; label: string; value: ProjectedCellValue }>;
+
+/**
+ * The pipeline a record detail shows as its stage strip: the stage field's label, every option
+ * with its label and colour role, the stage order and the allowed moves.
+ */
+export type ProjectedFieldPipeline = Readonly<{
+  fieldLabel: string;
+  options: readonly Readonly<{ value: string; label: string; tone: PipelineStageTone }>[];
+  stages: readonly Readonly<{ option: string }>[];
+  transitions: readonly Readonly<{ from: string; to: string }>[];
+}>;
 
 /** The resolved links of one page, keyed by `recordLinkLabelKey`; absent when the read failed. */
 export type ProjectedRecordLinks = ReadonlyMap<string, ProjectedRecordLink>;
@@ -116,7 +135,7 @@ export const recordLinkPlainText = (
  * revision and a row action can be hidden for a row the viewer cannot act on. Neither is ever
  * inferred: a row the engine returned without them withholds the whole projection.
  */
-export type ProjectedTableRow = Readonly<{
+type ProjectedTableRow = Readonly<{
   recordId: string;
   revision: number;
   capabilities: NonNullable<ProtectedQueryRow["capabilities"]>;
@@ -162,7 +181,7 @@ export type ProjectedTableValues = z.input<typeof tableReadValuesSchema>;
 /** The viewer's search and filters a table page was read with; both empty when it was not narrowed. */
 export type RecordsTableNarrowing = z.input<typeof displayTableNarrowingSchema>;
 
-export type ProjectedRecordDetailValues = z.infer<typeof recordDetailPayloadSchema>;
+type ProjectedRecordDetailValues = z.infer<typeof recordDetailPayloadSchema>;
 
 /**
  * The display payload for one placement. Only `ready` carries values; a refusal never does, so a
@@ -179,7 +198,7 @@ export type ProjectedComponentData<Values> =
  * `readableFieldIds`, when supplied, narrows the readable fields further; it can never widen the
  * fields the Query engine returned.
  */
-export type ComponentDataProjectionInput = Readonly<{
+type ComponentDataProjectionInput = Readonly<{
   settings: Readonly<Record<string, BlockPropertyValueContract>>;
   fieldLabels?: Readonly<Record<string, string>>;
   /** Every declared option in definition order for choice fields, used only to label stored values. */
@@ -208,6 +227,10 @@ export type ComponentDataProjectionInput = Readonly<{
   /** The groups a grouped read counted; absent for an ordinary read. */
   groups?: ProjectedTableGroups;
   totals?: readonly RecordsTableTotal[];
+  /** The pipelines a record detail may show as a stage strip, by stage field identity. */
+  fieldPipelines?: Readonly<Record<string, ProjectedFieldPipeline>>;
+  /** The related lists a record detail read, in the block's declared order. */
+  recordRelatedLists?: RecordDetailPayload["relatedLists"];
 }>;
 
 /** One declared column of a table field: its key, readable heading, cell type and, for a choice, its options. */
@@ -219,9 +242,6 @@ export type TableFieldColumn = Readonly<{
 }>;
 
 /** The exact text of a stored number or money value a cell shows; undefined for any other value. */
-const hasOwn = (record: object, key: string): boolean =>
-  Object.prototype.hasOwnProperty.call(record, key);
-
 /** The resolved label of a linked record among the page's links, as `projectCell` reads it. */
 const recordLinkIn =
   (links: ProjectedRecordLinks | undefined) =>
@@ -282,7 +302,7 @@ const projectTableField = (
       Object.fromEntries(
         columns.map((column) => {
           const cells = row as Readonly<Record<string, JsonValue>>;
-          const stored = hasOwn(cells, column.key) ? cells[column.key] : undefined;
+          const stored = Object.hasOwn(cells, column.key) ? cells[column.key] : undefined;
           return [
             column.key,
             stored === undefined
@@ -305,7 +325,7 @@ const sameField = (left: string, right: string): boolean =>
 /** The row's value for a declared field, or undefined when the engine withheld it (absent). */
 const valueOf = (row: ProtectedQueryRow, field: string): { value: JsonValue } | undefined => {
   const values: Readonly<Record<string, JsonValue>> = row.values;
-  const key = hasOwn(values, field)
+  const key = Object.hasOwn(values, field)
     ? field
     : Object.keys(values).find((candidate) => sameField(candidate, field));
   return key === undefined ? undefined : { value: values[key] as JsonValue };
@@ -324,7 +344,10 @@ const headingFor = (
   return label !== undefined && label.trim().length > 0 ? label : undefined;
 };
 
-const isReadable = (field: string, input: ComponentDataProjectionInput): boolean =>
+const isReadable = (
+  field: string,
+  input: Pick<ComponentDataProjectionInput, "readableFieldIds">,
+): boolean =>
   input.readableFieldIds === undefined ||
   input.readableFieldIds.some((readable) => sameField(readable, field));
 
@@ -463,6 +486,8 @@ export const projectRecordsTableData = (
     status: "ready",
     values: {
       kind: "table",
+      ...(contract.purpose === undefined ? {} : { purpose: contract.purpose }),
+      ...(contract.createPage === undefined ? {} : { create: { pageKey: contract.createPage } }),
       sortableFields: contract.sortableFields.filter((field) =>
         fieldBounds.readableFieldIds.some((readable) => sameField(readable, field)),
       ),
@@ -533,6 +558,39 @@ export const projectRecordsTableData = (
   };
 };
 
+const projectStageStrip = (
+  pipeline: ProjectedFieldPipeline | undefined,
+  stored: JsonValue | undefined,
+): RecordDetailPayload["stage"] => {
+  if (pipeline === undefined) return undefined;
+  const current = typeof stored === "string" ? stored : undefined;
+  const stage =
+    current === undefined
+      ? pipeline.stages[0]?.option
+      : pipeline.stages.some((step) => step.option === current)
+        ? current
+        : undefined;
+  if (stage === undefined) return undefined;
+  const moves = pipelineMovesFrom(pipeline, stage);
+  return {
+    fieldLabel: pipeline.fieldLabel,
+    steps: pipeline.stages.flatMap((step) => {
+      const option = pipeline.options.find((candidate) => candidate.value === step.option);
+      return option === undefined
+        ? []
+        : [
+            {
+              value: option.value,
+              label: option.label,
+              tone: option.tone,
+              current: option.value === stage,
+              reachable: option.value === stage || moves.includes(option.value),
+            },
+          ];
+    }),
+  };
+};
+
 /**
  * Projects the one record a Record detail placement reads into its display payload, using the same
  * rules as the table: declared fields in declared order, a field the viewer cannot read shows as
@@ -547,64 +605,146 @@ export const projectRecordDetailData = (
   const row = rows[0];
   if (
     contract === undefined ||
-    contract.fields.length === 0 ||
+    contract.sections.length === 0 ||
     rows.length !== 1 ||
     row === undefined
   )
     return undefined;
 
-  const fields: { key: string; label: string; value: ProjectedCellValue }[] = [];
-  for (const declared of contract.fields) {
-    if (fields.some((shown) => sameField(shown.key, declared.field))) continue;
-    const stored = isReadable(declared.field, input) ? valueOf(row, declared.field) : undefined;
-    const label = headingFor(declared.field, declared.label, input.fieldLabels);
-    if (label === undefined) return undefined;
-    const choiceLabels = input.fieldChoiceLabels?.[declared.field.toLowerCase()];
-    const tableColumns = input.fieldTableColumns?.[declared.field.toLowerCase()];
-    fields.push({
-      key: declared.field,
-      label,
-      value:
-        stored === undefined
-          ? RESTRICTED_CELL
-          : tableColumns !== undefined
-            ? projectTableField(stored.value, tableColumns)
-            : projectCell(
-                stored.value,
-                declared.format,
-                choiceLabels,
-                input.fieldDateTypes?.[declared.field.toLowerCase()],
-                recordLinkIn(input.recordLinks),
-                input.fieldLinkTypes?.[declared.field.toLowerCase()],
-              ),
+  const projectCellOf = (fieldId: string, format: RecordsDisplayFormat) => {
+    const stored = isReadable(fieldId, input) ? valueOf(row, fieldId) : undefined;
+    const choiceLabels = input.fieldChoiceLabels?.[fieldId.toLowerCase()];
+    const tableColumns = input.fieldTableColumns?.[fieldId.toLowerCase()];
+    return stored === undefined
+      ? RESTRICTED_CELL
+      : tableColumns !== undefined
+        ? projectTableField(stored.value, tableColumns)
+        : projectCell(
+            stored.value,
+            format,
+            choiceLabels,
+            input.fieldDateTypes?.[fieldId.toLowerCase()],
+            recordLinkIn(input.recordLinks),
+            input.fieldLinkTypes?.[fieldId.toLowerCase()],
+          );
+  };
+  const sections: { key: string; title?: string; fields: LabeledValue[] }[] = [];
+  for (const section of contract.sections) {
+    const fields: LabeledValue[] = [];
+    for (const declared of section.fields) {
+      if (fields.some((shown) => sameField(shown.key, declared.field))) continue;
+      const label = headingFor(declared.field, declared.label, input.fieldLabels);
+      if (label === undefined) return undefined;
+      fields.push({
+        key: declared.field,
+        label,
+        value: projectCellOf(declared.field, declared.format),
+      });
+    }
+    if (fields.length === 0) continue;
+    sections.push({
+      key: section.key,
+      ...(section.title === undefined ? {} : { title: section.title }),
+      fields,
     });
   }
-  const headingValue =
-    contract.headingField === undefined || !isReadable(contract.headingField, input)
-      ? undefined
-      : valueOf(row, contract.headingField);
+  // A header key fact and the heading are single values; a table field has no scalar form there.
+  const scalarOf = (fieldId: string, format: RecordsDisplayFormat): ProjectedScalarCellValue => {
+    const value = projectCellOf(fieldId, format);
+    return value.kind === "field_table" ? emptyCell : value;
+  };
+  const headerFacts = contract.headerFields.flatMap((fieldId) => {
+    const label = headingFor(fieldId, undefined, input.fieldLabels);
+    return label === undefined ? [] : [{ label, value: scalarOf(fieldId, "automatic") }];
+  });
   const heading =
-    contract.headingField === undefined
+    contract.headingField === undefined ? undefined : scalarOf(contract.headingField, "automatic");
+  const stage =
+    contract.stageField === undefined || input.fieldPipelines === undefined
       ? undefined
-      : headingValue === undefined
-        ? RESTRICTED_CELL
-        : projectCell(
-            headingValue.value,
-            "automatic",
-            input.fieldChoiceLabels?.[contract.headingField.toLowerCase()],
-            input.fieldDateTypes?.[contract.headingField.toLowerCase()],
-            recordLinkIn(input.recordLinks),
-            input.fieldLinkTypes?.[contract.headingField.toLowerCase()],
-          );
-  return fields.length === 0
+      : projectStageStrip(
+          input.fieldPipelines[contract.stageField.toLowerCase()],
+          isReadable(contract.stageField, input)
+            ? valueOf(row, contract.stageField)?.value
+            : undefined,
+        );
+  return sections.length === 0
     ? { status: "empty" }
     : {
         status: "ready",
         values: {
           kind: "record_detail",
           recordId: row.recordId,
-          fields,
+          headerFacts,
+          ...(stage === undefined ? {} : { stage }),
           ...(heading === undefined ? {} : { heading }),
+          sections,
+          relatedLists: input.recordRelatedLists ?? [],
         },
       };
+};
+
+/** One related-list card a record detail declares: what it lists, its columns and where Add opens. */
+export type ProjectedRecordRelatedList = Readonly<{
+  key: string;
+  title: string;
+  columns: readonly Readonly<{ field: string; label?: string }>[];
+  add?: Readonly<{ pageKey: string; parentFieldId: string }>;
+}>;
+
+/** What a related-list projection reads of one module's display maps; it needs no placement settings. */
+export type RelatedListProjectionInput = Pick<
+  ComponentDataProjectionInput,
+  | "fieldLabels"
+  | "fieldChoiceLabels"
+  | "fieldDateTypes"
+  | "fieldLinkTypes"
+  | "recordLinks"
+  | "readableFieldIds"
+> &
+  Readonly<{ titleFieldId: string }>;
+
+/**
+ * Projects the rows one related list returned into its card. A row's title is the related record
+ * type's title field and its fields are the list's declared columns, under the same access and
+ * display rules as the detail's sections: a field the viewer cannot read shows as Restricted under
+ * its label and a table field has no scalar form in a row title.
+ */
+export const projectRecordRelatedList = (
+  input: RelatedListProjectionInput,
+  list: ProjectedRecordRelatedList,
+  rows: readonly ProtectedQueryRow[],
+): RecordDetailPayload["relatedLists"][number] => {
+  const cellOf = (row: ProtectedQueryRow, fieldId: string): ProjectedCellValue => {
+    const stored = isReadable(fieldId, input) ? valueOf(row, fieldId) : undefined;
+    return stored === undefined
+      ? RESTRICTED_CELL
+      : projectCell(
+          stored.value,
+          "automatic",
+          input.fieldChoiceLabels?.[fieldId.toLowerCase()],
+          input.fieldDateTypes?.[fieldId.toLowerCase()],
+          recordLinkIn(input.recordLinks),
+          input.fieldLinkTypes?.[fieldId.toLowerCase()],
+        );
+  };
+  const titleOf = (row: ProtectedQueryRow): ProjectedScalarCellValue => {
+    const value = cellOf(row, input.titleFieldId);
+    return value.kind === "field_table" ? emptyCell : value;
+  };
+  return {
+    key: list.key,
+    title: list.title,
+    rows: rows.map((row) => ({
+      recordId: row.recordId,
+      title: titleOf(row),
+      fields: list.columns.flatMap((column) => {
+        const label = headingFor(column.field, column.label, input.fieldLabels);
+        return label === undefined
+          ? []
+          : [{ key: column.field, label, value: cellOf(row, column.field) }];
+      }),
+    })),
+    ...(list.add === undefined ? {} : { add: list.add }),
+  };
 };

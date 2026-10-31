@@ -10,7 +10,7 @@ export class CalendarEndpointError extends RangeError {
 }
 
 /** A real ISO calendar date with a four-digit year from 0001 to 9999. */
-export const calendarDateIsValid = (candidate: string | undefined): candidate is string => {
+const calendarDateIsValid = (candidate: string | undefined): candidate is string => {
   if (candidate === undefined || !/^\d{4}-\d{2}-\d{2}$/.test(candidate)) return false;
   try {
     const date = Temporal.PlainDate.from(candidate, { overflow: "reject" });

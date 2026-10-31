@@ -17,8 +17,8 @@ import {
   revisionSchema,
 } from "../catalogue/identifiers";
 import {
-  selectApplicationContractPair,
-  selectStoredApplicationSourceContract,
+  assertDefinitionContractPair,
+  definitionContractVersion,
 } from "./application-contract-versions";
 import { sourceIdentityAssignmentSchema } from "./definition-compilation-contracts";
 import {
@@ -33,14 +33,12 @@ import {
   type DefinitionReleaseMetadataResult,
   type RestoreDefinitionDraftCommand,
 } from "./definition-history-contracts";
-import { assertModuleContractPair } from "./definition-source";
 import {
   storedDefinitionSourceSchema,
   storedDefinitionDraftSchema,
   type StoredDefinitionDraft,
 } from "./definition-store-contracts";
 import { z } from "zod";
-import { applicationSourceContractVersion } from "./application-contract-versions";
 import { requireBuilderAuthority, type BuilderAuthority } from "./builder-authority";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
@@ -87,7 +85,7 @@ const currentIdentityEvidenceSchema = sourceIdentityAssignmentSchema
 type RestoreEvidence = StoredConsumerReleaseEvidence & {
   authoredSource: z.infer<typeof storedDefinitionSourceSchema>;
   sourceFingerprint: z.infer<typeof fingerprintSchema>;
-  sourceContractVersion: typeof applicationSourceContractVersion;
+  sourceContractVersion: typeof definitionContractVersion;
   identityEvidence: readonly z.infer<typeof currentIdentityEvidenceSchema>[];
   humanDraftSnapshot?: HumanDraftSnapshot | undefined;
   humanCurrentDraft?: StoredDefinitionDraft | undefined;
@@ -134,7 +132,7 @@ const restoreEvidenceSchema = storedConsumerReleaseEvidenceSchema
   .extend({
     authoredSource: storedDefinitionSourceSchema,
     sourceFingerprint: fingerprintSchema,
-    sourceContractVersion: z.literal(applicationSourceContractVersion),
+    sourceContractVersion: z.literal(definitionContractVersion),
     identityEvidence: z.array(currentIdentityEvidenceSchema),
     humanDraftSnapshot: humanDraftSnapshotSchema.optional(),
     humanCurrentDraft: storedDefinitionDraftSchema.optional(),
@@ -199,16 +197,13 @@ const selectRestoreContract = (candidate: unknown): void => {
   // restored into a draft, which holds only the current contract.
   if (
     sourceContractVersion === intrinsicSourceContractVersion &&
-    sourceContractVersion !== applicationSourceContractVersion
+    sourceContractVersion !== definitionContractVersion
   )
     throw new DefinitionError("RELEASE_CONTRACT_SUPERSEDED");
   try {
     if (sourceContractVersion !== intrinsicSourceContractVersion)
       throw new TypeError("Stored source version mismatch");
-    if (record.kind === "application") {
-      selectStoredApplicationSourceContract(sourceContractVersion, intrinsicSourceContractVersion);
-      selectApplicationContractPair(sourceContractVersion, validationContractVersion);
-    } else assertModuleContractPair(sourceContractVersion, validationContractVersion);
+    assertDefinitionContractPair(sourceContractVersion, validationContractVersion);
   } catch (cause) {
     throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED", { cause });
   }
@@ -223,13 +218,9 @@ const selectStoredDraftContract = (candidate: unknown): void => {
   if (sourceContractVersion === undefined || intrinsicSourceContractVersion === undefined)
     throw new DefinitionError("INVALID_DEFINITION_HISTORY_RESULT");
   try {
-    if (record.kind === "application")
-      selectStoredApplicationSourceContract(sourceContractVersion, intrinsicSourceContractVersion);
-    else {
-      if (sourceContractVersion !== intrinsicSourceContractVersion)
-        throw new TypeError("Stored source version mismatch");
-      assertModuleContractPair(sourceContractVersion, sourceContractVersion);
-    }
+    if (sourceContractVersion !== intrinsicSourceContractVersion)
+      throw new TypeError("Stored source version mismatch");
+    assertDefinitionContractPair(sourceContractVersion, sourceContractVersion);
   } catch (cause) {
     throw new DefinitionError("INVALID_DEFINITION_HISTORY_RESULT", { cause });
   }

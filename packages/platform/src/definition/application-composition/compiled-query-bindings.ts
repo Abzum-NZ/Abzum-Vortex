@@ -112,7 +112,7 @@ export const compiledPageBindingFacts = <Entry extends Placement>(
   return pageBindingFacts({
     currentPersonRecordType:
       typeof directoryPersonTypeId === "string" ? directoryPersonTypeId : undefined,
-    currentTeamRecordType:
+    currentGroupRecordType:
       typeof directoryGroupTypeId === "string" ? directoryGroupTypeId : undefined,
     subject:
       subjectTypeId === undefined

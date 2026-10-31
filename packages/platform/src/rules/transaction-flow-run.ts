@@ -33,7 +33,7 @@ export type TransactionFlowSeed = Readonly<{
   now: string;
 }>;
 
-export type TransactionFlowOutcome =
+type TransactionFlowOutcome =
   | Readonly<{
       kind: "collected";
       /** The flow input that names the record the flow runs on. */

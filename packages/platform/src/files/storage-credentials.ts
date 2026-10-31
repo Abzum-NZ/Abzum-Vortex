@@ -58,7 +58,7 @@ type CurrentStorageAuthorityBase = Readonly<{
   validUntil: string;
 }>;
 
-export type CurrentStorageAuthority =
+type CurrentStorageAuthority =
   | (CurrentStorageAuthorityBase &
       Readonly<{
         operation: "upload" | "read";
@@ -82,7 +82,7 @@ export type CurrentStorageAuthority =
         removalAuthority: FileRemovalAuthoritySnapshot;
       }>);
 
-export type StorageAuthorityResolution = CurrentStorageAuthority | Readonly<{ authorized: false }>;
+type StorageAuthorityResolution = CurrentStorageAuthority | Readonly<{ authorized: false }>;
 
 export type ResolveCurrentStorageAuthority = (
   request: StorageCredentialRequest,
@@ -101,7 +101,7 @@ export type StorageKeyDefinition = Readonly<{
 }>;
 
 /** Public rotation information; private signing material is never projected. */
-export type StorageKeyRotationMetadata = Readonly<{
+type StorageKeyRotationMetadata = Readonly<{
   activeKeyId: string;
   availableKeyIds: readonly string[];
   algorithm: "ES256";
@@ -111,7 +111,7 @@ export type StorageKeyRotationMetadata = Readonly<{
  * Server-owned bridge configuration. The authority resolver and signing keys
  * are installed once by trusted service wiring, never selected by a request.
  */
-export type StorageCredentialBridgeConfig = Readonly<{
+type StorageCredentialBridgeConfig = Readonly<{
   destination: FileStorageDestination;
   activeKeyId: string;
   keys: readonly StorageKeyDefinition[];
@@ -149,7 +149,7 @@ export type BrowserUploadGrant = Readonly<{
   operation: "upload";
 }>;
 
-export type MintStorageCredentialInput = Readonly<{
+type MintStorageCredentialInput = Readonly<{
   request: StorageCredentialRequest;
   /** A caller may request a shorter lifetime, never a longer one. */
   ttlSeconds?: number;

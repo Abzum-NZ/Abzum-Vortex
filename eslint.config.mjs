@@ -57,7 +57,6 @@ export default tseslint.config(
   {
     files: [
       "apps/web/app/_lib/definition-catalogue.ts",
-      "packages/platform/src/access/record-share-grants.ts",
       "packages/platform/src/files/file-metadata.ts",
       "packages/platform/src/pages/stored-page-capability.ts",
     ],

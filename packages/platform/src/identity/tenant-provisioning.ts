@@ -117,7 +117,7 @@ const tenantLifecycleCommand = <Operation extends "suspend_tenant" | "reactivate
 export const suspendTenantCommandSchema = tenantLifecycleCommand("suspend_tenant");
 export const reactivateTenantCommandSchema = tenantLifecycleCommand("reactivate_tenant");
 
-export const configuredTenantAdministrationRefusalCodeSchema = z.enum([
+const configuredTenantAdministrationRefusalCodeSchema = z.enum([
   "invalid_command",
   "reserved_tenant_short_name",
   "operator_not_configured",
@@ -127,7 +127,7 @@ export const configuredTenantAdministrationRefusalCodeSchema = z.enum([
   "operation_unavailable",
 ]);
 
-export const configuredIdentityLifecycleRefusalCodeSchema = z.enum([
+const configuredIdentityLifecycleRefusalCodeSchema = z.enum([
   "invalid_command",
   "operator_not_configured",
   "duplicate_conflict",
@@ -154,7 +154,7 @@ const refusalFor = <Operation extends "provision_tenant" | "adopt_tenant" | "ado
     })
     .strict();
 
-export const provisionTenantAcceptedResultSchema = z
+const provisionTenantAcceptedResultSchema = z
   .object({
     ...acceptedCommon,
     operation: z.literal("provision_tenant"),
@@ -167,13 +167,13 @@ export const provisionTenantAcceptedResultSchema = z
     accessVersion: revisionSchema,
   })
   .strict();
-export const provisionTenantRefusalSchema = refusalFor("provision_tenant");
+const provisionTenantRefusalSchema = refusalFor("provision_tenant");
 export const provisionTenantResultSchema = z.discriminatedUnion("outcome", [
   provisionTenantAcceptedResultSchema,
   provisionTenantRefusalSchema,
 ]);
 
-export const adoptTenantAcceptedResultSchema = z
+const adoptTenantAcceptedResultSchema = z
   .object({
     ...acceptedCommon,
     operation: z.literal("adopt_tenant"),
@@ -182,13 +182,13 @@ export const adoptTenantAcceptedResultSchema = z
     tenantAdministratorAssignmentRevision: revisionSchema,
   })
   .strict();
-export const adoptTenantRefusalSchema = refusalFor("adopt_tenant");
+const adoptTenantRefusalSchema = refusalFor("adopt_tenant");
 export const adoptTenantResultSchema = z.discriminatedUnion("outcome", [
   adoptTenantAcceptedResultSchema,
   adoptTenantRefusalSchema,
 ]);
 
-export const adoptOrganizationAcceptedResultSchema = z
+const adoptOrganizationAcceptedResultSchema = z
   .object({
     ...acceptedCommon,
     operation: z.literal("adopt_organization"),
@@ -198,7 +198,7 @@ export const adoptOrganizationAcceptedResultSchema = z
     accessVersion: revisionSchema,
   })
   .strict();
-export const adoptOrganizationRefusalSchema = refusalFor("adopt_organization");
+const adoptOrganizationRefusalSchema = refusalFor("adopt_organization");
 export const adoptOrganizationResultSchema = z.discriminatedUnion("outcome", [
   adoptOrganizationAcceptedResultSchema,
   adoptOrganizationRefusalSchema,
@@ -282,6 +282,3 @@ export type SuspendTenantCommand = z.infer<typeof suspendTenantCommandSchema>;
 export type SuspendTenantResult = z.infer<typeof suspendTenantResultSchema>;
 export type ReactivateTenantCommand = z.infer<typeof reactivateTenantCommandSchema>;
 export type ReactivateTenantResult = z.infer<typeof reactivateTenantResultSchema>;
-export type ConfiguredTenantAdministrationRefusalCode = z.infer<
-  typeof configuredTenantAdministrationRefusalCodeSchema
->;

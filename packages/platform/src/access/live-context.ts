@@ -23,10 +23,10 @@ import {
 import type { PlatformPermissionSource } from "./platform-permissions";
 
 export type LiveHumanContext = Extract<SessionContext, { callerKind: "human" }>;
-export type LiveOrganizationAccessDeclaration = z.infer<typeof organizationAccessDeclarationSchema>;
+type LiveOrganizationAccessDeclaration = z.infer<typeof organizationAccessDeclarationSchema>;
 
 /** Stable reason codes; the one refusal carries the code and the underlying cause. */
-export type LiveContextRefusalReason =
+type LiveContextRefusalReason =
   | "request_context_invalid"
   | "session_context_mismatch"
   | "permission_undeclared"
@@ -75,7 +75,7 @@ export const readDatabaseClock = async (transaction: RequestDatabaseTransaction)
     await transaction.query<DatabaseRow>`select pg_catalog.clock_timestamp() as completed_at`,
   );
 
-export type LiveHumanContextRequest = Readonly<{
+type LiveHumanContextRequest = Readonly<{
   scope: SelectedOrganizationScope;
   session: IdentitySession;
   issuedAt: string;
@@ -154,7 +154,7 @@ export const readLiveHumanContext = async (
 };
 
 /** The organisation-target permission declaration for a permission owned by one owner. */
-export const organizationPermissionDeclaration = (
+const organizationPermissionDeclaration = (
   permission: Readonly<{ key: string; actionKind: string; permissionId: string }>,
   ownerId: string,
 ): LiveOrganizationAccessDeclaration =>
@@ -177,7 +177,7 @@ export const platformOrganizationPermissionDeclaration = (
   return organizationPermissionDeclaration(permission, source.ownerId);
 };
 
-export type LivePermissionDecision = Readonly<{
+type LivePermissionDecision = Readonly<{
   /** Epoch milliseconds until which the database says the decision holds. */
   validUntil: number;
   /** The database clock when the evaluation completed, in epoch milliseconds. */

@@ -35,7 +35,7 @@ const wholeCountSchema = z.number().int().nonnegative();
 const continuationTokenSchema = displayTextSchema.pipe(z.string().max(65_536));
 
 /** The order a table page was read in: one to twenty distinct fields, each ascending or descending. */
-export const displayTableSortSchema = z
+const displayTableSortSchema = z
   .object({
     keys: z
       .array(
@@ -71,7 +71,7 @@ const fieldFilterSchema = z
   .transform((value) => readRecordsTableFieldFilter(value)!);
 
 /** One active filter: the filterable field and its typed filter. */
-export const displayTableFilterSchema = z
+const displayTableFilterSchema = z
   .object({ fieldId: displayFieldKeySchema, filter: fieldFilterSchema })
   .strict()
   .readonly();
@@ -175,7 +175,7 @@ export type DisplayTableGroups = z.output<typeof displayTableGroupsSchema>;
  * the count of every matching record is being read, every matching record is selected (minus the
  * records the person unticked), or the matching records could not be counted.
  */
-export const displayTableSelectionScopeSchema = z.discriminatedUnion("kind", [
+const displayTableSelectionScopeSchema = z.discriminatedUnion("kind", [
   z
     .object({ kind: z.literal("counting") })
     .strict()
@@ -195,7 +195,7 @@ export const displayTableSelectionScopeSchema = z.discriminatedUnion("kind", [
 export type DisplayTableSelectionScope = z.output<typeof displayTableSelectionScopeSchema>;
 
 /** One bulk run of a table, as the page runtime follows it: running, finished or failed. */
-export const displayTableBulkRunSchema = z.discriminatedUnion("status", [
+const displayTableBulkRunSchema = z.discriminatedUnion("status", [
   z
     .object({
       status: z.literal("running"),
@@ -222,7 +222,7 @@ export const displayTableBulkRunSchema = z.discriminatedUnion("status", [
 export type DisplayTableBulkRun = z.output<typeof displayTableBulkRunSchema>;
 
 /** What an export covers: the rows ticked on the page, the current view, or every matching record. */
-export const displayTableExportScopeSchema = z.enum(["selected", "view", "matching"]);
+const displayTableExportScopeSchema = z.enum(["selected", "view", "matching"]);
 export type DisplayTableExportScope = z.output<typeof displayTableExportScopeSchema>;
 
 /**
@@ -232,7 +232,7 @@ export type DisplayTableExportScope = z.output<typeof displayTableExportScopeSch
  * person's own stop. The run ID stays the same through progress and outcome, including when
  * the page payload is parsed again.
  */
-export const displayTableExportRunSchema = z.discriminatedUnion("status", [
+const displayTableExportRunSchema = z.discriminatedUnion("status", [
   z
     .object({
       runId: displayTextSchema,
@@ -270,6 +270,13 @@ export type DisplayTableExportRun = z.output<typeof displayTableExportRunSchema>
 /** The parts of a table payload the server reads; the page runtime adds the ones below. */
 const tableReadShape = {
   kind: z.literal("table"),
+  /** The authored one-line purpose shown above the rows; absent when the block declares none. */
+  purpose: displayTextSchema.exactOptional(),
+  /**
+   * Present when the block offers adding a record from the list: the create form page the person
+   * opens. The page runtime builds the address from its own route and page key.
+   */
+  create: z.object({ pageKey: displayFieldKeySchema }).strict().readonly().exactOptional(),
   /** Declared sort fields readable on every record under this read's field policy. */
   sortableFields: z.array(displayFieldKeySchema).readonly(),
   columns: z.array(displayColumnSchema).readonly(),
@@ -378,7 +385,7 @@ export const tableReadValuesSchema = z
   .superRefine(refineTablePayload);
 
 /** The ready values a table block renders: the server's page plus what the page runtime follows. */
-export const tablePayloadSchema = z
+const tablePayloadSchema = z
   .object({
     ...tableReadShape,
     pageCount: z.number().int().positive().exactOptional(),

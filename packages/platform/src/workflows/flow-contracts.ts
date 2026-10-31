@@ -67,7 +67,7 @@ export const flowReadFieldsProjectionSchema = z
   });
 
 /** The projection is authored as one JSON literal, never a runtime map or computed value. */
-export const flowReadFieldsProjectionValueSchema = flowValueSchema.superRefine((value, context) => {
+const flowReadFieldsProjectionValueSchema = flowValueSchema.superRefine((value, context) => {
   if (value.kind !== "literal" || value.literal.type !== "json") {
     context.addIssue({
       code: "custom",
@@ -131,7 +131,7 @@ const declarationShape = {
   default: jsonValueSchema.optional(),
 };
 
-export const flowInputDeclarationSchema = z
+const flowInputDeclarationSchema = z
   .object({ ...declarationShape, required: z.boolean() })
   .strict()
   .superRefine((value, context) => {
@@ -143,15 +143,13 @@ export const flowInputDeclarationSchema = z
         message: "A required input cannot declare a default",
       });
   });
-export type FlowInputDeclaration = z.infer<typeof flowInputDeclarationSchema>;
 
-export const flowDefinitionVariableSchema = z
+const flowDefinitionVariableSchema = z
   .object(declarationShape)
   .strict()
   .superRefine(refineDeclaration);
-export type FlowDefinitionVariable = z.infer<typeof flowDefinitionVariableSchema>;
 
-export const flowOutputDeclarationSchema = z
+const flowOutputDeclarationSchema = z
   .object({
     type: workflowValueTypeSchema,
     recordTypeIds: declarationShape.recordTypeIds,
@@ -159,7 +157,6 @@ export const flowOutputDeclarationSchema = z
   })
   .strict()
   .superRefine(refineDeclaration);
-export type FlowOutputDeclaration = z.infer<typeof flowOutputDeclarationSchema>;
 
 // ─── Triggers: only the automatic starts ─────────────────────────────────────────────────────
 
@@ -194,7 +191,7 @@ const triggerCommonShape = {
   condition: flowFormulaSchema.optional(),
 };
 
-export const flowTriggerSchema = z.discriminatedUnion("type", [
+const flowTriggerSchema = z.discriminatedUnion("type", [
   z
     .object({
       ...triggerCommonShape,
@@ -249,11 +246,10 @@ export const flowTriggerExecutionKinds = Object.freeze({
  *   started it, so a start can never gain another authority.
  * - `saver`: the actor of the save or named action that owns the transaction.
  */
-export const flowRunAsSchema = z.discriminatedUnion("kind", [
+const flowRunAsSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("initiator") }).strict(),
   z.object({ kind: z.literal("saver") }).strict(),
 ]);
-export type FlowRunAs = z.infer<typeof flowRunAsSchema>;
 
 // ─── Tasks: an ordered, nested list ──────────────────────────────────────────────────────────
 
@@ -437,7 +433,7 @@ const flowTaskTreeSchema: z.ZodType<FlowTask> = z.lazy(() => {
     });
   return z.union([control, registered]);
 });
-export const flowTaskSchema: z.ZodType<FlowTask> = flowTaskTreeSchema;
+const flowTaskSchema: z.ZodType<FlowTask> = flowTaskTreeSchema;
 
 // ─── The flow ────────────────────────────────────────────────────────────────────────────────
 
@@ -494,7 +490,7 @@ export type FlowDefinition = z.infer<typeof flowSchema>;
  * Publication does not type it: the surface fills it at run time. What the flow does with it is
  * typed in the flow, where a mapped operation input must be of its declared type.
  */
-export const flowBindingCallerValueSchema = z
+const flowBindingCallerValueSchema = z
   .object({ kind: z.literal("caller"), name: builderKeySchema })
   .strict();
 
@@ -524,7 +520,6 @@ export const flowBindingSchema = z
     inputs: boundedRecord(flowBindingInputSchema, 100).default({}),
   })
   .strict();
-export type FlowBinding = z.infer<typeof flowBindingSchema>;
 
 // ─── Run flow across flows ─────────────────────────────────────────────────────────────────────
 
@@ -542,7 +537,7 @@ const collectRunFlowTargets = (flow: FlowDefinition | FlowSource): FlowId[] => {
   return targets;
 };
 
-export type FlowCallIssue = {
+type FlowCallIssue = {
   flowId: FlowId;
   code:
     | "cycle"

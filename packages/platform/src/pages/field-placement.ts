@@ -43,7 +43,7 @@ export const formFieldOf = (
 };
 
 /** The installed field a placement's `field` setting names, with the module that owns it. */
-export const fieldForPlacement = (
+const fieldForPlacement = (
   placement: Pick<PlacementReadEntry, "settings">,
   modules: Modules,
 ):
@@ -414,7 +414,7 @@ export const decideChoiceOptionGates = async (
 };
 
 /** The option values of one gate's field that the record being edited already holds. */
-export type HeldChoiceOptions = (
+type HeldChoiceOptions = (
   gate: Readonly<{ recordTypeId: string; fieldId: string }>,
 ) => ReadonlySet<string>;
 

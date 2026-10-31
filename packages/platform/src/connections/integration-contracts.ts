@@ -1,8 +1,6 @@
 import { z } from "zod";
 import { secretReferenceSchema } from "../catalogue/common";
 import {
-  activityIdSchema,
-  applicationRootIdSchema,
   builderKeySchema,
   connectionInstanceIdSchema,
   connectionTypeIdSchema,
@@ -12,14 +10,13 @@ import {
   namespacedKeySchema,
   organizationIdSchema,
   platformIdSchema,
-  revisionSchema,
   flowIdSchema,
   semanticVersionSchema,
   timestampSchema,
   workflowRunIdSchema,
 } from "../catalogue/identifiers";
 
-export const connectionAuthenticationSchema = z.discriminatedUnion("kind", [
+const connectionAuthenticationSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("oauth2"),
@@ -58,13 +55,13 @@ export const connectionShapeFieldSchema = z
     required: z.boolean(),
   })
   .strict();
-export const connectionShapeSchema = z
+const connectionShapeSchema = z
   .object({
     key: builderKeySchema,
     fields: z.array(connectionShapeFieldSchema).max(100),
   })
   .strict();
-export const connectionOperationSchema = z
+const connectionOperationSchema = z
   .object({
     key: builderKeySchema,
     method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
@@ -76,7 +73,7 @@ export const connectionOperationSchema = z
     maximumResponseBytes: z.number().int().min(1).max(100_000_000),
   })
   .strict();
-export const incomingMessageTypeSchema = z
+const incomingMessageTypeSchema = z
   .object({
     key: builderKeySchema,
     signature: z.enum(["hmac_sha256", "ed25519"]),
@@ -165,44 +162,6 @@ export const connectionTypeSchema = z
           message: "Named lifecycle operation must resolve inside this connection type",
         });
   });
-export const connectionInstanceSchema = z
-  .object({
-    connectionInstanceId: connectionInstanceIdSchema,
-    organizationId: organizationIdSchema,
-    connectionTypeId: connectionTypeIdSchema,
-    connectionTypeVersion: semanticVersionSchema,
-    secretReference: secretReferenceSchema,
-    authorizedApplicationIds: z.array(applicationRootIdSchema).min(1),
-    state: z.enum(["pending", "active", "unhealthy", "revoked"]),
-    grantedScopes: z.array(z.string().min(1).max(200)),
-    tokenExpiresAt: timestampSchema.optional(),
-    lastHealthOutcome: z.enum(["healthy", "unhealthy", "unknown"]),
-    administratorActivityId: activityIdSchema,
-  })
-  .strict();
-/**
- * The page read model of one connection instance, deliberately separate from
- * `connectionInstanceSchema`. It carries only what an administration page may render: the state, the
- * last health outcome, the credential expiry, the authority revision the revision-checking
- * administration commands must send unchanged, and both scope lists. It never carries a secret
- * reference, an organisation identity or an administrator activity identity, and it permits an
- * instance with no authorised application and no granted scope, so a grant-less instance is shown as
- * such instead of being refused. A reader that returns a value outside this closed shape fails
- * closed before the page projects it.
- */
-export const connectionInstanceStatusSchema = z
-  .object({
-    connectionInstanceId: connectionInstanceIdSchema,
-    connectionTypeId: connectionTypeIdSchema,
-    connectionTypeVersion: semanticVersionSchema,
-    state: z.enum(["pending", "active", "unhealthy", "revoked"]),
-    lastHealthOutcome: z.enum(["healthy", "unhealthy", "unknown"]),
-    revision: revisionSchema,
-    tokenExpiresAt: timestampSchema.optional(),
-    authorizedApplicationIds: z.array(applicationRootIdSchema),
-    grantedScopes: z.array(z.string().min(1).max(200)),
-  })
-  .strict();
 export const incomingMessageSchema = z
   .object({
     organizationId: organizationIdSchema,
@@ -218,7 +177,7 @@ export const incomingMessageSchema = z
   })
   .strict();
 
-export const interfaceValueTypeSchema = z.enum([
+const interfaceValueTypeSchema = z.enum([
   "text",
   "whole_number",
   "decimal_number",
@@ -228,7 +187,7 @@ export const interfaceValueTypeSchema = z.enum([
   "date_time",
   "record_reference",
 ]);
-export const interfaceInputFieldSchema = z
+const interfaceInputFieldSchema = z
   .object({
     type: z.union([interfaceValueTypeSchema, z.literal("formatted_text")]),
     required: z.boolean(),
@@ -246,7 +205,7 @@ export const interfaceInputFieldSchema = z
         message: "An action subject input is a record reference",
       });
   });
-export const interfaceOutputFieldSchema = z
+const interfaceOutputFieldSchema = z
   .object({
     type: interfaceValueTypeSchema,
     required: z.boolean(),
@@ -281,7 +240,7 @@ export const interfaceOutputFieldSchema = z
         message: "Query page information has a fixed value type",
       });
   });
-export const interfaceOperationSchema = z
+const interfaceOperationSchema = z
   .object({
     operationId: platformIdSchema,
     key: builderKeySchema,
@@ -351,30 +310,7 @@ export const interfaceDefinitionSchema = z
     operations: z.array(interfaceOperationSchema).min(1),
   })
   .strict();
-export const interfaceDependencySchema = z
-  .object({
-    interfaceId: interfaceIdSchema,
-    minimumVersion: semanticVersionSchema,
-    maximumVersion: semanticVersionSchema.optional(),
-  })
-  .strict();
-
-export const federatedRefusalCodeSchema = z.enum([
-  "access_refused",
-  "grant_inactive",
-  "request_invalid",
-]);
 
 export type ConnectionType = z.infer<typeof connectionTypeSchema>;
-export type ConnectionAuthentication = z.infer<typeof connectionAuthenticationSchema>;
 export type ConnectionOperation = z.infer<typeof connectionOperationSchema>;
-export type IncomingMessageType = z.infer<typeof incomingMessageTypeSchema>;
-export type ConnectionInstance = z.infer<typeof connectionInstanceSchema>;
-export type ConnectionInstanceStatus = z.infer<typeof connectionInstanceStatusSchema>;
 export type IncomingMessage = z.infer<typeof incomingMessageSchema>;
-export type InterfaceValueType = z.infer<typeof interfaceValueTypeSchema>;
-export type InterfaceInputField = z.infer<typeof interfaceInputFieldSchema>;
-export type InterfaceOutputField = z.infer<typeof interfaceOutputFieldSchema>;
-export type InterfaceOperation = z.infer<typeof interfaceOperationSchema>;
-export type InterfaceDefinition = z.infer<typeof interfaceDefinitionSchema>;
-export type InterfaceDependency = z.infer<typeof interfaceDependencySchema>;

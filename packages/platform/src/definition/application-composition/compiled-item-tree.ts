@@ -53,9 +53,3 @@ export const compiledPageDataOf = (composition: AnyPageComposition): PageComposi
 /** The application shell a page's frame uses, or null for the platform default frame. */
 export const compiledPageShellId = (composition: AnyPageComposition): string | null =>
   compiledPageDataOf(composition)[0]?.root.props.vortex.shellId ?? null;
-
-/** Every item a page places, in every step and zone, depth first. */
-export const compiledPageItems = (composition: AnyPageComposition): CompiledItem[] =>
-  compiledPageDataOf(composition).flatMap((data) =>
-    compiledPageZones(data).flatMap(([, items]) => compiledItemTree(items)),
-  );

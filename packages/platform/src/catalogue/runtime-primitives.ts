@@ -10,6 +10,17 @@ export const sameId = (
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+/**
+ * Freezes one value and every object inside it. A value that is already frozen is returned as it
+ * is, so catalogues built from shared parts freeze each part once. Only objects and arrays freeze;
+ * a primitive passes through.
+ */
+export const deepFreeze = <Value>(value: Value): Value => {
+  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const key of Reflect.ownKeys(value)) deepFreeze(Reflect.get(value, key));
+  return Object.freeze(value);
+};
+
 /** The value as a plain object, or undefined when it is not one. */
 export const asRecord = (value: unknown): Readonly<Record<string, unknown>> | undefined =>
   isRecord(value) ? value : undefined;

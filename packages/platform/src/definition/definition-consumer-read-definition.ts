@@ -1,4 +1,5 @@
 import "server-only";
+import { definitionContractVersion } from "./application-contract-versions";
 
 import type { SessionContext } from "../access/identity-access";
 import {
@@ -9,7 +10,7 @@ import {
   revisionSchema,
   semanticVersionSchema,
 } from "../catalogue/identifiers";
-import { selectApplicationContractPair } from "./application-contract-versions";
+import { assertDefinitionContractPair } from "./application-contract-versions";
 import {
   definitionCompilationOutputSchema,
   definitionResolutionSnapshotSchema,
@@ -19,7 +20,6 @@ import {
   definitionConsumerReadResultSchema,
   type DefinitionConsumerReadResult,
 } from "./definition-consumer-read";
-import { assertModuleContractPair } from "./definition-source";
 import type { ExactDefinitionDependency } from "./definition-store-contracts";
 import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 import { flowRefusalFeedbackSentences } from "../workflows/flow-refusal-feedback";
@@ -77,9 +77,7 @@ const selectReleaseContract = (candidate: unknown): void => {
   )
     throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
   try {
-    if (record.kind === "application")
-      selectApplicationContractPair(record.sourceContractVersion, record.validationContractVersion);
-    else assertModuleContractPair(record.sourceContractVersion, record.validationContractVersion);
+    assertDefinitionContractPair(record.sourceContractVersion, record.validationContractVersion);
   } catch (cause) {
     throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED", { cause });
   }
@@ -144,7 +142,7 @@ export const verifyDefinitionCatalogueDependencies = async (
       continue;
     }
     if (dependency.kind === "platform_block") {
-      if (validationContractVersion !== "4.2.0") return "invalid";
+      if (validationContractVersion !== definitionContractVersion) return "invalid";
       const release = await catalogue.readPlatformBlockRelease(
         dependency.blockId,
         dependency.releaseVersion,
@@ -162,7 +160,7 @@ export const verifyDefinitionCatalogueDependencies = async (
       dependency.kind === "protected_operation" &&
       dependency.operation.owner.kind === "platform_service"
     ) {
-      if (validationContractVersion !== "4.2.0") return "invalid";
+      if (validationContractVersion !== definitionContractVersion) return "invalid";
       const release = await catalogue.readPlatformServiceOperationRelease?.(
         dependency.operation.owner.serviceId,
         dependency.operation.operationId,
@@ -190,8 +188,8 @@ export const verifyDefinitionCatalogueDependencies = async (
     )
       continue;
     // A platform-theme dependency exists only in an Application manifest, and the sole
-    // Application validation contract is 4.2.0.
-    if (validationContractVersion !== "4.2.0") return "invalid";
+    // Application validation contract is the current definition contract.
+    if (validationContractVersion !== definitionContractVersion) return "invalid";
     const catalogueThemeId = platformIdSchema.safeParse(dependency.catalogueThemeId);
     if (!catalogueThemeId.success) return "invalid";
     const release = await catalogue.readPlatformThemeRelease(

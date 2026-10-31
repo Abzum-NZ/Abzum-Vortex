@@ -10,6 +10,9 @@ import {
 } from "./records-table-features";
 import {
   UnreadableSettingError,
+  optionalField,
+  optionalPage,
+  optionalQuery,
   optionalText,
   recordsTableColumnPins,
   recordsTableDensities,
@@ -20,11 +23,13 @@ import {
   requiredFieldList,
   requiredGroup,
   requiredItems,
+  requiredText,
   requiredNumber,
   unreadable,
   type SettingsRecord,
   type GridFeatureSettingsDeclaration,
 } from "./records-table-features/shared";
+import type { ComponentSettingValue } from "./block-property-schema";
 export {
   UnreadableSettingError,
   recordsTableColumnPins,
@@ -123,6 +128,10 @@ type RecordsTableRowBehaviourContract = Readonly<{
  * source is the placement's own bound query; every field here must be a field that query allows.
  */
 export type RecordsTableContract = Readonly<{
+  /** The authored one-line purpose shown above the rows. */
+  purpose?: string;
+  /** Adding a record from the list: the create form page it opens, when the block offers one. */
+  createPage?: string;
   columns: readonly RecordsTableColumnContract[];
   /** The authored ordered default sort; empty orders by the bound query's own sort. */
   defaultSort: readonly RecordsTableSortContract[];
@@ -150,9 +159,33 @@ type RecordDetailFieldContract = Readonly<{
   format: RecordsDisplayFormat;
 }>;
 
-/** The declared list of detail fields a Record detail placement shows. */
-type RecordDetailContract = Readonly<{
+/** One card of a Record detail page: its stable key, optional heading and its fields. */
+type RecordDetailSectionContract = Readonly<{
+  key: string;
+  title?: string;
   fields: readonly RecordDetailFieldContract[];
+}>;
+
+/** One related-list card: the query it lists, its columns and where a new record opens. */
+type RecordDetailRelatedListContract = Readonly<{
+  key: string;
+  title: string;
+  query: string;
+  /** The query input that takes the record this detail shows. */
+  parentInput: string;
+  columns: readonly Readonly<{ field: string; label?: string }>[];
+  addPage?: string;
+  addField?: string;
+}>;
+
+/** The declared shape of a Record detail placement. */
+type RecordDetailContract = Readonly<{
+  /** Up to four key facts shown beside the heading. */
+  headerFields: readonly string[];
+  /** The choice field whose pipeline shows as the record's stage strip. */
+  stageField?: string;
+  sections: readonly RecordDetailSectionContract[];
+  relatedLists: readonly RecordDetailRelatedListContract[];
   headingField?: string;
   messages: RecordsDisplayMessages;
 }>;
@@ -229,7 +262,14 @@ const readContract = (settings: SettingsRecord): RecordsTableContract => {
   );
   const features = readRecordsTableFeatures(settings["features"]);
   if (features.kind === "unreadable") return unreadable(features.path);
+  const purpose = optionalText(settings["purpose"], "purpose");
+  // Adding from the list is off unless it is on, and an on list names the form it opens.
+  const createPage = requiredBoolean(settings["inline_create"], "inline_create")
+    ? (optionalPage(settings["create_page"], "create_page") ?? unreadable("create_page"))
+    : undefined;
   return {
+    ...(purpose === undefined ? {} : { purpose }),
+    ...(createPage === undefined ? {} : { createPage }),
     columns,
     defaultSort,
     sortableFields: requiredFieldList(settings["sortable_fields"], "sortable_fields"),
@@ -291,27 +331,80 @@ export const recordsTableContractOrLog = (
 };
 
 /**
- * Reads a Record detail placement's declared detail fields; undefined when the settings are not a
- * detail's or a field entry cannot be read whole. A placement that is not a detail block has no
- * `detail_fields`, which is how a caller tells the two apart.
+ * Reads a Record detail placement's declared shape: its sections of fields, its header key facts,
+ * its stage field and its related lists. Undefined when the settings are not a detail's or a
+ * setting cannot be read whole. A placement that is not a detail block has no `sections`, which is
+ * how a caller tells the two apart.
  */
 export const readRecordDetailContract = (
   settings: SettingsRecord,
 ): RecordDetailContract | undefined => {
-  if (settings["detail_fields"] === undefined) return undefined;
+  if (settings["sections"] === undefined) return undefined;
   try {
-    const fields = requiredItems(settings["detail_fields"], "detail_fields").map(
-      (item, index): RecordDetailFieldContract => {
-        const at = `detail_fields[${index}]`;
+    const detailField = (
+      item: ComponentSettingValue | undefined,
+      at: string,
+    ): RecordDetailFieldContract => {
+      const entry = requiredGroup(item, at);
+      const label = optionalText(entry["label"], `${at}.label`);
+      return {
+        field: requiredField(entry["field"], `${at}.field`),
+        ...(label === undefined ? {} : { label }),
+        format: requiredChoice(entry["format"], recordsDisplayFormats, `${at}.format`),
+      };
+    };
+    const sections = requiredItems(settings["sections"], "sections").map(
+      (item, index): RecordDetailSectionContract => {
+        const at = `sections[${index}]`;
         const entry = requiredGroup(item, at);
-        const label = optionalText(entry["label"], `${at}.label`);
+        const title = optionalText(entry["title"], `${at}.title`);
         return {
-          field: requiredField(entry["field"], `${at}.field`),
-          ...(label === undefined ? {} : { label }),
-          format: requiredChoice(entry["format"], recordsDisplayFormats, `${at}.format`),
+          key: requiredText(entry["key"], `${at}.key`),
+          ...(title === undefined ? {} : { title }),
+          fields: requiredItems(entry["fields"], `${at}.fields`).map((field, fieldIndex) =>
+            detailField(field, `${at}.fields[${fieldIndex}]`),
+          ),
         };
       },
     );
+    const headerFields =
+      settings["header_fields"] === undefined
+        ? []
+        : requiredItems(settings["header_fields"], "header_fields").map((item, index) => {
+            const at = `header_fields[${index}]`;
+            return requiredField(requiredGroup(item, at)["field"], `${at}.field`);
+          });
+    const relatedLists =
+      settings["related_lists"] === undefined
+        ? []
+        : requiredItems(settings["related_lists"], "related_lists").map(
+            (item, index): RecordDetailRelatedListContract => {
+              const at = `related_lists[${index}]`;
+              const entry = requiredGroup(item, at);
+              const addPage = optionalPage(entry["add_page"], `${at}.add_page`);
+              const addField = optionalField(entry["add_field"], `${at}.add_field`);
+              if ((addPage === undefined) !== (addField === undefined)) unreadable(at);
+              return {
+                key: requiredText(entry["key"], `${at}.key`),
+                title: requiredText(entry["title"], `${at}.title`),
+                query: optionalQuery(entry["query"], `${at}.query`) ?? unreadable(`${at}.query`),
+                parentInput: requiredText(entry["parent_input"], `${at}.parent_input`),
+                columns: requiredItems(entry["columns"], `${at}.columns`).map(
+                  (column, columnIndex) => {
+                    const columnAt = `${at}.columns[${columnIndex}]`;
+                    const group = requiredGroup(column, columnAt);
+                    const label = optionalText(group["label"], `${columnAt}.label`);
+                    return {
+                      field: requiredField(group["field"], `${columnAt}.field`),
+                      ...(label === undefined ? {} : { label }),
+                    };
+                  },
+                ),
+                ...(addPage === undefined ? {} : { addPage }),
+                ...(addField === undefined ? {} : { addField }),
+              };
+            },
+          );
     const headingSource = requiredChoice(
       settings["heading_source"],
       ["title", "field"] as const,
@@ -322,7 +415,12 @@ export const readRecordDetailContract = (
         ? requiredField(settings["heading_field"], "heading_field")
         : undefined;
     return {
-      fields,
+      headerFields,
+      ...(settings["stage_field"] === undefined
+        ? {}
+        : { stageField: requiredField(settings["stage_field"], "stage_field") }),
+      sections,
+      relatedLists,
       ...(headingField === undefined ? {} : { headingField }),
       messages: displayMessages(settings),
     };

@@ -3,21 +3,26 @@ import { flowTaskChildLists, type FlowTask } from "../workflows/flow-contracts";
 import type { FlowValue } from "../workflows/flow-values";
 
 /**
- * The closed settings of contract 4's steps and bindings, checked at publication: the values each
- * setting may take, and the ones whose runtime has not landed yet. A setting that does not run yet
- * is refused by name, so nothing publishes that the page or the server would ignore; the batch that
- * lands its runtime removes the refusal.
+ * The closed settings of steps and bindings, checked at publication: the values each setting may
+ * take. A value outside the closed set is refused by name, so nothing publishes that the page or
+ * the server would ignore.
  */
 
 /** Where a message shows. `dialog` blocks until read; the others are part of the page. */
-const flowMessageTargets = ["dialog", "toast", "banner", "inline", "slot"] as const;
-const flowMessageSeverities = ["info", "success", "warning", "error"] as const;
+/** @knipignore */
+export const flowMessageTargets = ["dialog", "toast", "banner", "inline", "slot"] as const;
+/** @knipignore */
+export type FlowMessageTarget = (typeof flowMessageTargets)[number];
+/** @knipignore */
+export const flowMessageSeverities = ["info", "success", "warning", "error"] as const;
+/** @knipignore */
+export type FlowMessageSeverity = (typeof flowMessageSeverities)[number];
+/** @knipignore */
+export const flowMessageDismissBounds = Object.freeze({ minimumMs: 2_000, maximumMs: 30_000 });
 
-export type FlowStepSettingIssue = Readonly<{
+type FlowStepSettingIssue = Readonly<{
   path: (string | number)[];
   message: string;
-  /** True when the value is valid contract but does not run yet. */
-  notYetRunnable: boolean;
 }>;
 
 const literalText = (value: FlowValue | undefined): string | undefined =>
@@ -34,8 +39,7 @@ export const flowStepSettingIssues = (
   }>,
 ): FlowStepSettingIssue[] => {
   const issues: FlowStepSettingIssue[] = [];
-  const invalid = (path: (string | number)[], message: string) =>
-    issues.push({ path, message, notYetRunnable: false });
+  const invalid = (path: (string | number)[], message: string) => issues.push({ path, message });
   const visit = (tasks: readonly FlowTask[], base: (string | number)[]) =>
     tasks.forEach((task, index) => {
       const path = [...base, index];
@@ -90,8 +94,8 @@ export const flowStepSettingIssues = (
           dismiss.literal.type !== "whole_number" ||
           typeof milliseconds !== "number" ||
           !Number.isInteger(milliseconds) ||
-          milliseconds < 2_000 ||
-          milliseconds > 30_000
+          milliseconds < flowMessageDismissBounds.minimumMs ||
+          milliseconds > flowMessageDismissBounds.maximumMs
         )
           invalid(
             [...path, "dismiss_after_ms"],

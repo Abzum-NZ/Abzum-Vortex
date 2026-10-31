@@ -5,11 +5,7 @@ import {
   type AlertRecord,
   type ServiceTelemetryPort,
 } from "../events/telemetry";
-import { withRuntimeTransaction, type RequestDatabaseTransaction } from "../db/request-transaction";
-
-type RuntimeTransactionRunner = <Result>(
-  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
-) => Promise<Result>;
+import { withRuntimeTransaction, type RuntimeTransactionRunner } from "../db/request-transaction";
 
 interface OperationsAlertSinkDependencies {
   readonly runtimeTransaction?: RuntimeTransactionRunner;

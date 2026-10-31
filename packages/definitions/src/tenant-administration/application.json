@@ -1,5 +1,5 @@
 {
-  "source_contract_version": "4.2.0",
+  "source_contract_version": "4.3.0",
   "root_alias": "app_tenant_administration",
   "key": "vortex.app.tenant_administration",
   "kind": "application",
@@ -23,14 +23,6 @@
         "action_kind": "named",
         "named_action": "open",
         "administrative": false
-      },
-      {
-        "id": "app_permission_manage",
-        "key": "application.tenant_administration.manage",
-        "label": "Manage Tenant Administration",
-        "description": "Allows managing Tenant Administration definition-level administration.",
-        "action_kind": "manage",
-        "administrative": true
       },
       {
         "id": "app_permission_organization_read",
@@ -219,7 +211,6 @@
       }
     ],
     "public_addresses": [],
-    "platform_block_dependencies": [],
     "shells": [
       {
         "id": "shell_tenant_administration",
@@ -1042,26 +1033,32 @@
                     "heading_source": "field",
                     "heading_field": "vortex.system_directory:organization.display_name",
                     "title": "Organisation details",
-                    "detail_fields": [
+                    "sections": [
                       {
-                        "field": "vortex.system_directory:organization.display_name",
-                        "label": "Organisation"
-                      },
-                      {
-                        "field": "vortex.system_directory:organization.short_name",
-                        "label": "Short name"
-                      },
-                      {
-                        "field": "vortex.system_directory:organization.state",
-                        "label": "State"
-                      },
-                      {
-                        "field": "vortex.system_directory:organization.state_changed_at",
-                        "label": "State changed"
-                      },
-                      {
-                        "field": "vortex.system_directory:organization.created_at",
-                        "label": "Created"
+                        "key": "details",
+                        "title": "Details",
+                        "fields": [
+                          {
+                            "field": "vortex.system_directory:organization.display_name",
+                            "label": "Organisation"
+                          },
+                          {
+                            "field": "vortex.system_directory:organization.short_name",
+                            "label": "Short name"
+                          },
+                          {
+                            "field": "vortex.system_directory:organization.state",
+                            "label": "State"
+                          },
+                          {
+                            "field": "vortex.system_directory:organization.state_changed_at",
+                            "label": "State changed"
+                          },
+                          {
+                            "field": "vortex.system_directory:organization.created_at",
+                            "label": "Created"
+                          }
+                        ]
                       }
                     ],
                     "vortex": {
@@ -1249,26 +1246,32 @@
                     "id": "tenant_administrator_detail",
                     "heading_source": "title",
                     "title": "Tenant administrator details",
-                    "detail_fields": [
+                    "sections": [
                       {
-                        "field": "vortex.system_directory:tenant_administrator.identity_id",
-                        "label": "Identity"
-                      },
-                      {
-                        "field": "vortex.system_directory:tenant_administrator.capability_keys",
-                        "label": "Capabilities"
-                      },
-                      {
-                        "field": "vortex.system_directory:tenant_administrator.starts_at",
-                        "label": "Starts"
-                      },
-                      {
-                        "field": "vortex.system_directory:tenant_administrator.expires_at",
-                        "label": "Expires"
-                      },
-                      {
-                        "field": "vortex.system_directory:tenant_administrator.state",
-                        "label": "State"
+                        "key": "details",
+                        "title": "Details",
+                        "fields": [
+                          {
+                            "field": "vortex.system_directory:tenant_administrator.identity_id",
+                            "label": "Identity"
+                          },
+                          {
+                            "field": "vortex.system_directory:tenant_administrator.capability_keys",
+                            "label": "Capabilities"
+                          },
+                          {
+                            "field": "vortex.system_directory:tenant_administrator.starts_at",
+                            "label": "Starts"
+                          },
+                          {
+                            "field": "vortex.system_directory:tenant_administrator.expires_at",
+                            "label": "Expires"
+                          },
+                          {
+                            "field": "vortex.system_directory:tenant_administrator.state",
+                            "label": "State"
+                          }
+                        ]
                       }
                     ],
                     "vortex": {

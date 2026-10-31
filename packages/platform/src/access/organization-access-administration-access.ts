@@ -22,7 +22,7 @@ import { createAccessAdministrationGroupOperations } from "./organization-access
 import { createAccessAdministrationRoleOperations } from "./organization-access-administration-roles";
 import { createAccessAdministrationAssignmentOperations } from "./organization-access-administration-assignments";
 
-export type OrganizationAccessAdministrationDependencies = HumanOrganizationRequestDependencies &
+type OrganizationAccessAdministrationDependencies = HumanOrganizationRequestDependencies &
   Readonly<{
     groupId?: () => string;
     membershipId?: () => string;

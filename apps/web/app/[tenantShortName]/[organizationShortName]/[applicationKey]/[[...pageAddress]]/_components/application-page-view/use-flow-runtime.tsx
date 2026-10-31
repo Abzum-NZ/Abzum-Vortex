@@ -24,7 +24,7 @@ import {
   type PlatformThemeTokens,
 } from "@vortex/ui";
 import {
-  formContinuationAnswerSchema,
+  formAnswerSchema,
   type ComponentFlowBinding,
   isRecord,
   sameId,
@@ -295,7 +295,7 @@ export function useFlowRuntime({
           events.form_submit = (event: ControlSemanticEvent) => {
             if (event.event !== "form_submit") return;
             const values = event.readValues();
-            const answer = formContinuationAnswerSchema.safeParse({
+            const answer = formAnswerSchema.safeParse({
               kind: "submit",
               values,
             });

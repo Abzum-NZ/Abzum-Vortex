@@ -584,7 +584,7 @@ const loadApplicationPageJoined = async (
               ? readSubject(String(subjectType.recordTypeId), subjectId.data)
               : Promise.resolve({ kind: "refused" }),
     subjectRecordTypeId: subjectType === undefined ? undefined : String(subjectType.recordTypeId),
-    readViewerTeams: services.readViewerTeams,
+    readViewerGroups: services.readViewerGroups,
     readTimeZone: services.readTimeZone,
   });
   const pageSubjectRecordTypeId =

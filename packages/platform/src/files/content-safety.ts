@@ -171,7 +171,7 @@ export const normalizeMediaType = (detectedMediaType: string): string =>
  * Categorises a verified detected media type into a canonical Vortex content kind.
  * Browser-supplied headers are never used as detected content.
  */
-export const detectContentKind = (detectedMediaType: string): ContentKind => {
+const detectContentKind = (detectedMediaType: string): ContentKind => {
   const normalized = normalizeMediaType(detectedMediaType);
 
   if (EXECUTABLE_MEDIA_TYPES.has(normalized)) {
@@ -244,7 +244,7 @@ export const isExecutableContent = (detectedMediaType: string, extension: string
  * An extension this platform does not recognise is not treated as a disagreement;
  * the allowed-kind and allowed-extension settings decide those.
  */
-export const isDisguisedContent = (detectedMediaType: string, extension: string): boolean => {
+const isDisguisedContent = (detectedMediaType: string, extension: string): boolean => {
   const expectedKinds = EXPECTED_EXTENSION_KINDS.get(normalizeFileExtension(extension));
   if (expectedKinds === undefined) {
     return false;
@@ -252,7 +252,7 @@ export const isDisguisedContent = (detectedMediaType: string, extension: string)
   return !expectedKinds.has(detectContentKind(detectedMediaType));
 };
 
-export type ContentSafetyCheckInput = Readonly<{
+type ContentSafetyCheckInput = Readonly<{
   detectedMediaType: string;
   extension: string;
   sizeBytes: number;
@@ -264,7 +264,7 @@ export type ContentSafetyCheckInput = Readonly<{
   maxFiles?: number;
 }>;
 
-export type ContentSafetyCheckResult =
+type ContentSafetyCheckResult =
   | Readonly<{ accepted: true; outcome: "clean"; detectedKind: ContentKind }>
   | Readonly<{
       accepted: false;

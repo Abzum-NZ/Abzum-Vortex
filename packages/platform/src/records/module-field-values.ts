@@ -60,7 +60,7 @@ export const recordLinkValueSchema = z.custom<{ recordTypeId: RecordTypeId; reco
 export const attachmentValueSchema = z.array(fileIdSchema);
 
 /** Record-only blocks extend, but never mutate, the neutral Page-safe grammar. */
-export const recordRichTextBlockSchema = z
+const recordRichTextBlockSchema = z
   .custom<RecordRichTextBlock>(isRecordRichTextBlock, { error: "Use a valid rich-text block" })
   .transform(normalizeRecordRichTextBlock);
 

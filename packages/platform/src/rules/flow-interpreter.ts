@@ -4,7 +4,6 @@ import type { FlowValue } from "../workflows/flow-values";
 import { flowOperationOutputMembers } from "../workflows/flow-operation-output-members";
 import {
   resumeFlowRun as resumeCore,
-  startFlowSegment as segmentCore,
   continueFlowRun as continueCore,
   evaluateFlowValue as evaluateCore,
   startFlowRun as startCore,
@@ -16,8 +15,10 @@ import {
   type FlowTaskTraceObserver,
   type FlowSegmentReplay,
 } from "./flow-interpreter-core";
+import { startFlowSegment as segmentCore } from "./flow-interpreter-segments";
 
 export * from "./flow-interpreter-core";
+export * from "./flow-interpreter-segments";
 
 /** The server resolves operation output types from its protected operation catalogue. */
 const serverOutputMemberType: FlowOutputMemberTypeResolver = (task, _taskId, outputKey, path) => {

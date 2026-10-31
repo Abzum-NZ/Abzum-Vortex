@@ -5,7 +5,6 @@ import {
 } from "./application-source-contracts";
 import type { ModuleFieldPublication } from "./module-field-edit";
 import { applicationUses, type ApplicationUsePlace } from "./application-uses";
-import type { PipelineStageTone } from "./record-type-pipelines";
 
 type InlineModule = ApplicationSourceDocument["body"]["modules"][number];
 type RecordType = InlineModule["record_types"][number];
@@ -14,9 +13,10 @@ type ModuleAction = InlineModule["actions"][number];
 
 /**
  * One pipeline of an owned Module's record type as Studio edits it: its name, the choice field it
- * follows, its stages in board order with their colour roles, the moves between them, and the named
- * action that owns each gated stage. Gating is the action model's: an action that sets the stage's
- * option owns it, so saving that option anywhere runs the action with its permission and condition.
+ * follows, its stages in board order, the moves between them, and the named action that owns each
+ * gated stage. The stage field's options carry the colour roles. Gating is the action model's: an
+ * action that sets the stage's option owns it, so saving that option anywhere runs the action with
+ * its permission and condition.
  */
 export type InlinePipelineChange = Readonly<{
   moduleKey: string;
@@ -26,7 +26,7 @@ export type InlinePipelineChange = Readonly<{
   name: string;
   /** The choice field's key; fixed once the pipeline exists. */
   stageField: string;
-  stages: readonly Readonly<{ option: string; tone: PipelineStageTone }>[];
+  stages: readonly Readonly<{ option: string }>[];
   transitions: readonly Readonly<{ from: string; to: string }>[];
   /** The key of the action that owns each gated stage, by option; a stage not named is not gated. */
   gates: Readonly<Record<string, string>>;
@@ -34,7 +34,7 @@ export type InlinePipelineChange = Readonly<{
   removedOptions: readonly string[];
 }>;
 
-export type InlinePipelineResult =
+type InlinePipelineResult =
   | Readonly<{ kind: "changed"; source: ApplicationSourceDocument; pipelineKey: string }>
   | Readonly<{ kind: "invalid"; issues: readonly string[] }>
   | Readonly<{
@@ -323,7 +323,7 @@ export const saveInlinePipeline = (
     key,
     name,
     stage_field: field.key,
-    stages: stages.map((stage) => ({ option: stage.option, tone: stage.tone })),
+    stages: stages.map((stage) => ({ option: stage.option })),
     transitions: transitions.map((move) => ({ from: move.from, to: move.to })),
   } as Pipeline;
   const pipelines = record.pipelines as Pipeline[];
@@ -368,7 +368,7 @@ export const deleteInlinePipeline = (
 
 /**
  * Keeps a choice field's pipeline in step with its options after the field editor changed them: a new
- * option becomes the last stage, in the neutral colour role, and a removed option's stage and moves go.
+ * option becomes the last stage and a removed option's stage and moves go.
  */
 export const syncInlinePipelineStages = (record: RecordType, fieldKey: string): void => {
   const options = choiceOptions(record, fieldKey);
@@ -384,7 +384,7 @@ export const syncInlinePipelineStages = (record: RecordType, fieldKey: string): 
       ...pipeline.stages.filter((stage) => values.includes(stage.option)),
       ...values
         .filter((value) => !pipeline.stages.some((stage) => stage.option === value))
-        .map((option) => ({ option, tone: "neutral" as const })),
+        .map((option) => ({ option })),
     ],
     transitions: pipeline.transitions.filter(
       (move) => values.includes(move.from) && values.includes(move.to),

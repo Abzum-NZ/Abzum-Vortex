@@ -140,7 +140,8 @@ export function applicationFlowBindingPageEventRule(
       if (raised) return [];
     } else if (placement === undefined) return [];
     const guided = placement?.pageType === "guided_form";
-    const guidedOnly = event === "form_cancel" || event === "guided_step_changed";
+    // A plain form and a guided form both cancel through form_cancel; only the step change is guided-only.
+    const guidedOnly = event === "guided_step_changed";
     // A guided step's Continue is its step change; only the summary form's submit runs a flow.
     const submitsBeforeSummary =
       guided &&

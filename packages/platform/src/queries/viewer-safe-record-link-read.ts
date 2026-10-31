@@ -80,7 +80,7 @@ const viewerSafeRecordLinkFieldValuesSchema = z
       });
   });
 
-export const viewerSafeRecordLinkFieldsReadResultSchema = z.discriminatedUnion("outcome", [
+const viewerSafeRecordLinkFieldsReadResultSchema = z.discriminatedUnion("outcome", [
   z
     .object({
       outcome: z.literal("read"),
@@ -90,7 +90,7 @@ export const viewerSafeRecordLinkFieldsReadResultSchema = z.discriminatedUnion("
   z.object({ outcome: z.literal("unavailable") }).strict(),
 ]);
 
-export type ViewerSafeRecordLinkFieldsReadResult = z.infer<
+type ViewerSafeRecordLinkFieldsReadResult = z.infer<
   typeof viewerSafeRecordLinkFieldsReadResultSchema
 >;
 
@@ -300,7 +300,7 @@ export const viewerSafeRecordLinkTitleKey = (recordTypeId: string, recordId: str
   `${recordTypeId.toLowerCase()}:${recordId.toLowerCase()}`;
 
 /** The titles of the linked records of every requested record type. */
-export type ViewerSafeRecordLinkTitlesReadResult =
+type ViewerSafeRecordLinkTitlesReadResult =
   | Readonly<{
       outcome: "read";
       /**

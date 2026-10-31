@@ -1,0 +1,1036 @@
+{
+  "id": "mod_iam_core",
+  "key": "vortex.iam.core",
+  "name": "IAM",
+  "description": "Ordinary access request and request item records for the IAM application. These records describe intent only; they confer no access.",
+  "record_types": [
+    {
+      "id": "rt_iam_access_request",
+      "key": "access_request",
+      "name": "Access request",
+      "plural_name": "Access requests",
+      "title_field": "title",
+      "storage_contract_id": "srt_iam_access_request",
+      "storage_scope": "application_contained",
+      "ownership_mode": "organization_account",
+      "standard_actions": ["create", "read", "update", "soft_delete", "restore", "export"],
+      "custom_actions": [],
+      "before_save_rules": [],
+      "fields": [
+        {
+          "id": "fld_iam_request_number",
+          "key": "request_number",
+          "label": "Request number",
+          "required": true,
+          "unique": true,
+          "filterable": true,
+          "sortable": true,
+          "search_priority": "first",
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "reference_number",
+          "settings": {
+            "prefix": "IAM-",
+            "digits": 6
+          }
+        },
+        {
+          "id": "fld_iam_request_title",
+          "key": "title",
+          "label": "Title",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "search_priority": "first",
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 120
+          }
+        },
+        {
+          "id": "fld_iam_request_type",
+          "key": "request_type",
+          "label": "Request type",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "choice",
+          "settings": {
+            "options": [
+              {
+                "value": "grant_role",
+                "label": "Grant role"
+              },
+              {
+                "value": "remove_role",
+                "label": "Remove role"
+              },
+              {
+                "value": "group_membership",
+                "label": "Group membership"
+              },
+              {
+                "value": "delegation",
+                "label": "Delegated management"
+              },
+              {
+                "value": "group_change",
+                "label": "Change a group"
+              },
+              {
+                "value": "other",
+                "label": "Other"
+              }
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
+          }
+        },
+        {
+          "id": "fld_iam_request_state",
+          "key": "state",
+          "label": "State",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "choice",
+          "settings": {
+            "options": [
+              {
+                "value": "draft",
+                "label": "Draft"
+              },
+              {
+                "value": "submitted",
+                "label": "Submitted"
+              },
+              {
+                "value": "in_review",
+                "label": "In review"
+              },
+              {
+                "value": "approved",
+                "label": "Approved"
+              },
+              {
+                "value": "refused",
+                "label": "Refused"
+              },
+              {
+                "value": "cancelled",
+                "label": "Cancelled"
+              },
+              {
+                "value": "expired",
+                "label": "Expired"
+              }
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
+          },
+          "default": "draft"
+        },
+        {
+          "id": "fld_iam_request_beneficiary",
+          "key": "beneficiary",
+          "label": "Beneficiary",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "personal",
+          "public_display": "refused",
+          "type": "link",
+          "settings": {
+            "target": "vortex.system_directory:person",
+            "reverse_key": "beneficiary_references",
+            "reverse_name": "Beneficiary references",
+            "on_parent_delete": "empty_optional",
+            "application_root_required": false,
+            "options_source": {
+              "kind": "query"
+            }
+          }
+        },
+        {
+          "id": "fld_iam_request_role",
+          "key": "target_role_key",
+          "label": "Target role",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 120
+          }
+        },
+        {
+          "id": "fld_iam_request_group",
+          "key": "target_group_key",
+          "label": "Target group",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 120
+          }
+        },
+        {
+          "id": "fld_iam_request_group_record",
+          "key": "target_group",
+          "label": "Target group record",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "link",
+          "settings": {
+            "target": "vortex.system_directory:group",
+            "reverse_key": "access_requests",
+            "reverse_name": "Access requests",
+            "on_parent_delete": "empty_optional",
+            "application_root_required": false,
+            "options_source": {
+              "kind": "query"
+            }
+          }
+        },
+        {
+          "id": "fld_iam_request_application",
+          "key": "application_context",
+          "label": "Application context",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 120
+          }
+        },
+        {
+          "id": "fld_iam_request_reason",
+          "key": "reason",
+          "label": "Reason",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "personal",
+          "public_display": "refused",
+          "type": "long_text",
+          "settings": {
+            "max_length": 2000
+          }
+        },
+        {
+          "id": "fld_iam_request_starts",
+          "key": "starts_on",
+          "label": "Starts on",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "date",
+          "settings": {}
+        },
+        {
+          "id": "fld_iam_request_expires",
+          "key": "expires_on",
+          "label": "Expires on",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "date",
+          "settings": {}
+        },
+        {
+          "id": "fld_iam_request_submitted",
+          "key": "submitted_at",
+          "label": "Submitted at",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "date_time",
+          "settings": {}
+        },
+        {
+          "id": "fld_iam_request_decided",
+          "key": "decided_at",
+          "label": "Decided at",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "date_time",
+          "settings": {}
+        }
+      ],
+      "relationships": [
+        {
+          "id": "rel_iam_request_beneficiary",
+          "key": "beneficiary",
+          "from_field": "beneficiary",
+          "to_record_type": "vortex.system_directory:person",
+          "cardinality": "many_to_one",
+          "on_parent_delete": "empty_optional"
+        },
+        {
+          "id": "rel_iam_request_group_record",
+          "key": "target_group",
+          "from_field": "target_group",
+          "to_record_type": "vortex.system_directory:group",
+          "cardinality": "many_to_one",
+          "on_parent_delete": "empty_optional"
+        }
+      ],
+      "pipelines": []
+    },
+    {
+      "id": "rt_iam_access_request_item",
+      "key": "access_request_item",
+      "name": "Access request item",
+      "plural_name": "Access request items",
+      "title_field": "target_key",
+      "storage_contract_id": "srt_iam_access_request_item",
+      "storage_scope": "application_contained",
+      "ownership_mode": "inherited",
+      "ownership_relationship": "request",
+      "standard_actions": ["create", "read", "update", "soft_delete", "restore", "export"],
+      "custom_actions": [],
+      "before_save_rules": [],
+      "fields": [
+        {
+          "id": "fld_iam_item_request",
+          "key": "request",
+          "label": "Request",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "link",
+          "settings": {
+            "target": "vortex.iam.core:access_request",
+            "reverse_key": "items",
+            "reverse_name": "Items",
+            "on_parent_delete": "soft_delete_dependent",
+            "options_source": {
+              "kind": "query"
+            }
+          }
+        },
+        {
+          "id": "fld_iam_item_type",
+          "key": "item_type",
+          "label": "Item type",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "choice",
+          "settings": {
+            "options": [
+              {
+                "value": "role",
+                "label": "Role"
+              },
+              {
+                "value": "permission",
+                "label": "Permission"
+              },
+              {
+                "value": "group",
+                "label": "Group"
+              },
+              {
+                "value": "delegation",
+                "label": "Delegation"
+              }
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
+          }
+        },
+        {
+          "id": "fld_iam_item_target",
+          "key": "target_key",
+          "label": "Target",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "search_priority": "normal",
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 120
+          }
+        },
+        {
+          "id": "fld_iam_item_change",
+          "key": "change",
+          "label": "Change",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "choice",
+          "settings": {
+            "options": [
+              {
+                "value": "add",
+                "label": "Add"
+              },
+              {
+                "value": "remove",
+                "label": "Remove"
+              }
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
+          }
+        },
+        {
+          "id": "fld_iam_item_application",
+          "key": "application_key",
+          "label": "Application",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 120
+          }
+        }
+      ],
+      "relationships": [
+        {
+          "id": "rel_iam_item_request",
+          "key": "request",
+          "from_field": "request",
+          "to_record_type": "vortex.iam.core:access_request",
+          "cardinality": "many_to_one",
+          "on_parent_delete": "soft_delete_dependent"
+        }
+      ],
+      "pipelines": []
+    }
+  ],
+  "permissions": [
+    {
+      "id": "perm_access_request_create",
+      "key": "vortex.iam.core.access_request.create",
+      "label": "access request create",
+      "description": "Allows the standard create operation for access request records.",
+      "record_type": "access_request",
+      "action_kind": "create",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "request_number",
+          "title",
+          "request_type",
+          "state",
+          "beneficiary",
+          "target_role_key",
+          "target_group_key",
+          "target_group",
+          "application_context",
+          "reason",
+          "starts_on",
+          "expires_on",
+          "submitted_at",
+          "decided_at"
+        ],
+        "changeable_fields": [
+          "title",
+          "request_type",
+          "target_role_key",
+          "target_group_key",
+          "target_group",
+          "application_context",
+          "reason",
+          "starts_on",
+          "expires_on"
+        ]
+      }
+    },
+    {
+      "id": "perm_access_request_read",
+      "key": "vortex.iam.core.access_request.read",
+      "label": "access request read",
+      "description": "Allows the standard read operation for access request records.",
+      "record_type": "access_request",
+      "action_kind": "read",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "request_number",
+          "title",
+          "request_type",
+          "state",
+          "beneficiary",
+          "target_role_key",
+          "target_group_key",
+          "target_group",
+          "application_context",
+          "reason",
+          "starts_on",
+          "expires_on",
+          "submitted_at",
+          "decided_at"
+        ],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_access_request_update",
+      "key": "vortex.iam.core.access_request.update",
+      "label": "access request update",
+      "description": "Allows the standard update operation for access request records.",
+      "record_type": "access_request",
+      "action_kind": "update",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ],
+        "saved_condition": {
+          "condition": "draft_request",
+          "parameter_bindings": []
+        }
+      },
+      "field_policy": {
+        "readable_fields": [
+          "request_number",
+          "title",
+          "request_type",
+          "state",
+          "beneficiary",
+          "target_role_key",
+          "target_group_key",
+          "target_group",
+          "application_context",
+          "reason",
+          "starts_on",
+          "expires_on",
+          "submitted_at",
+          "decided_at"
+        ],
+        "changeable_fields": [
+          "title",
+          "request_type",
+          "target_role_key",
+          "target_group_key",
+          "target_group",
+          "application_context",
+          "reason",
+          "starts_on",
+          "expires_on"
+        ]
+      }
+    },
+    {
+      "id": "perm_access_request_soft_delete",
+      "key": "vortex.iam.core.access_request.soft_delete",
+      "label": "access request soft delete",
+      "description": "Allows the standard soft_delete operation for access request records.",
+      "record_type": "access_request",
+      "action_kind": "delete",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_access_request_restore",
+      "key": "vortex.iam.core.access_request.restore",
+      "label": "access request restore",
+      "description": "Allows the standard restore operation for access request records.",
+      "record_type": "access_request",
+      "action_kind": "restore",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_access_request_export",
+      "key": "vortex.iam.core.access_request.export",
+      "label": "access request export",
+      "description": "Allows the standard export operation for access request records.",
+      "record_type": "access_request",
+      "action_kind": "export",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "request_number",
+          "title",
+          "request_type",
+          "state",
+          "beneficiary",
+          "target_role_key",
+          "target_group_key",
+          "target_group",
+          "application_context",
+          "reason",
+          "starts_on",
+          "expires_on",
+          "submitted_at",
+          "decided_at"
+        ],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_access_request_item_create",
+      "key": "vortex.iam.core.access_request_item.create",
+      "label": "access request item create",
+      "description": "Allows the standard create operation for access request item records.",
+      "record_type": "access_request_item",
+      "action_kind": "create",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["request", "item_type", "target_key", "change", "application_key"],
+        "changeable_fields": ["request", "item_type", "target_key", "change", "application_key"]
+      }
+    },
+    {
+      "id": "perm_access_request_item_read",
+      "key": "vortex.iam.core.access_request_item.read",
+      "label": "access request item read",
+      "description": "Allows the standard read operation for access request item records.",
+      "record_type": "access_request_item",
+      "action_kind": "read",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["request", "item_type", "target_key", "change", "application_key"],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_access_request_item_update",
+      "key": "vortex.iam.core.access_request_item.update",
+      "label": "access request item update",
+      "description": "Allows the standard update operation for access request item records.",
+      "record_type": "access_request_item",
+      "action_kind": "update",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["request", "item_type", "target_key", "change", "application_key"],
+        "changeable_fields": ["item_type", "target_key", "change", "application_key"]
+      }
+    },
+    {
+      "id": "perm_access_request_item_soft_delete",
+      "key": "vortex.iam.core.access_request_item.soft_delete",
+      "label": "access request item soft delete",
+      "description": "Allows the standard soft_delete operation for access request item records.",
+      "record_type": "access_request_item",
+      "action_kind": "delete",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_access_request_item_restore",
+      "key": "vortex.iam.core.access_request_item.restore",
+      "label": "access request item restore",
+      "description": "Allows the standard restore operation for access request item records.",
+      "record_type": "access_request_item",
+      "action_kind": "restore",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_access_request_item_export",
+      "key": "vortex.iam.core.access_request_item.export",
+      "label": "access request item export",
+      "description": "Allows the standard export operation for access request item records.",
+      "record_type": "access_request_item",
+      "action_kind": "export",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["request", "item_type", "target_key", "change", "application_key"],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_access_request_create_own",
+      "key": "vortex.iam.core.access_request.create_own",
+      "label": "access request create own",
+      "description": "Allows create on own access request records only.",
+      "record_type": "access_request",
+      "action_kind": "create",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "ownership"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "request_number",
+          "title",
+          "request_type",
+          "state",
+          "beneficiary",
+          "target_role_key",
+          "target_group_key",
+          "target_group",
+          "application_context",
+          "reason",
+          "starts_on",
+          "expires_on",
+          "submitted_at",
+          "decided_at"
+        ],
+        "changeable_fields": [
+          "title",
+          "request_type",
+          "target_role_key",
+          "target_group_key",
+          "target_group",
+          "application_context",
+          "reason",
+          "starts_on",
+          "expires_on"
+        ]
+      }
+    },
+    {
+      "id": "perm_access_request_read_own",
+      "key": "vortex.iam.core.access_request.read_own",
+      "label": "access request read own",
+      "description": "Allows read on own access request records only.",
+      "record_type": "access_request",
+      "action_kind": "read",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "ownership"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "request_number",
+          "title",
+          "request_type",
+          "state",
+          "beneficiary",
+          "target_role_key",
+          "target_group_key",
+          "target_group",
+          "application_context",
+          "reason",
+          "starts_on",
+          "expires_on",
+          "submitted_at",
+          "decided_at"
+        ],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_access_request_update_own",
+      "key": "vortex.iam.core.access_request.update_own",
+      "label": "access request update own",
+      "description": "Allows update on own access request records only.",
+      "record_type": "access_request",
+      "action_kind": "update",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "ownership"
+          }
+        ],
+        "saved_condition": {
+          "condition": "draft_request",
+          "parameter_bindings": []
+        }
+      },
+      "field_policy": {
+        "readable_fields": [
+          "request_number",
+          "title",
+          "request_type",
+          "state",
+          "beneficiary",
+          "target_role_key",
+          "target_group_key",
+          "target_group",
+          "application_context",
+          "reason",
+          "starts_on",
+          "expires_on",
+          "submitted_at",
+          "decided_at"
+        ],
+        "changeable_fields": [
+          "title",
+          "request_type",
+          "target_role_key",
+          "target_group_key",
+          "target_group",
+          "application_context",
+          "reason",
+          "starts_on",
+          "expires_on"
+        ]
+      }
+    },
+    {
+      "id": "perm_access_request_soft_delete_own",
+      "key": "vortex.iam.core.access_request.soft_delete_own",
+      "label": "access request soft delete own",
+      "description": "Allows soft_delete on own access request records only.",
+      "record_type": "access_request",
+      "action_kind": "delete",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "ownership"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_access_request_item_create_own",
+      "key": "vortex.iam.core.access_request_item.create_own",
+      "label": "access request item create own",
+      "description": "Allows create on own access request item records only.",
+      "record_type": "access_request_item",
+      "action_kind": "create",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "ownership"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["request", "item_type", "target_key", "change", "application_key"],
+        "changeable_fields": ["request", "item_type", "target_key", "change", "application_key"]
+      }
+    },
+    {
+      "id": "perm_access_request_item_read_own",
+      "key": "vortex.iam.core.access_request_item.read_own",
+      "label": "access request item read own",
+      "description": "Allows read on own access request item records only.",
+      "record_type": "access_request_item",
+      "action_kind": "read",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "ownership"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["request", "item_type", "target_key", "change", "application_key"],
+        "changeable_fields": []
+      }
+    }
+  ],
+  "actions": [],
+  "events": [],
+  "flows": [],
+  "extension_points": [],
+  "sharing_conditions": [
+    {
+      "id": "condition_iam_draft_request",
+      "source_record_type": "access_request",
+      "key": "draft_request",
+      "parameters": [],
+      "condition": {
+        "field": "state",
+        "operator": "equals",
+        "value": "draft"
+      },
+      "declared_fields": ["state"],
+      "publication_tests": [
+        {
+          "name": "Draft request may be edited",
+          "parameters": {},
+          "field_values": {
+            "state": "draft"
+          },
+          "expected": true
+        },
+        {
+          "name": "Submitted request cannot be edited",
+          "parameters": {},
+          "field_values": {
+            "state": "submitted"
+          },
+          "expected": false
+        }
+      ]
+    }
+  ],
+  "queries": [
+    {
+      "id": "qry_iam_access_requests",
+      "key": "iam_access_requests",
+      "label": "Access requests",
+      "exposure": "private",
+      "record_type": "access_request",
+      "inputs": [],
+      "select": ["request_number", "title", "request_type", "state", "beneficiary", "submitted_at"],
+      "filter": null,
+      "group_by": [],
+      "aggregates": [],
+      "sort": [
+        {
+          "field": "request_number",
+          "direction": "descending"
+        }
+      ],
+      "page_size": 50,
+      "relationship_hops": 0
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import { connectionTypeSourceDocumentSchema } from "./connection-source-contracts";
 import { platformConnectionTypeReleaseContentHash } from "../definition/catalogue-release-content-hashes";
 import source from "../catalogue/catalogue/platform-connection-type-catalogue.source.json";
+import { deepFreeze } from "../catalogue/runtime-primitives";
 import type { ConnectionTypeSourceDocument } from "../definition/definition-source";
 import {
   connectionTypeIdSchema,
@@ -10,13 +11,7 @@ import {
   type SemanticVersion,
 } from "../catalogue/identifiers";
 
-const deepFreeze = <Value>(value: Value): Value => {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const key of Reflect.ownKeys(value)) deepFreeze(Reflect.get(value, key));
-  return Object.freeze(value);
-};
-
-export type PlatformConnectionTypeCatalogueRelease = Readonly<{
+type PlatformConnectionTypeCatalogueRelease = Readonly<{
   source: ConnectionTypeSourceDocument;
   rootId: ConnectionTypeId;
   releaseVersion: SemanticVersion;

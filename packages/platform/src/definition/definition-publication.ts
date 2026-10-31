@@ -128,7 +128,7 @@ const peopleDirectoryOwnerOf = (release: ResolvableModuleRelease): PeopleDirecto
 };
 
 /** Authoring metadata from the very same verified dependency resolution as compilation. */
-export type ApplicationDraftConditionContext = Readonly<{
+type ApplicationDraftConditionContext = Readonly<{
   sourceFingerprint: Fingerprint;
   bindingsSignature: string;
   pageAlias: string;

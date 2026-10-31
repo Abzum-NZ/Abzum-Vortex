@@ -22,7 +22,7 @@ import { linkDependencyCandidates, type LinkDependencyField } from "./module-lin
 export type ModuleFieldType = (typeof fieldTypeKeys)[number];
 type Declaration = BlockPropertySchemaContract;
 type Typed = SourceBlockPropertyValueContract;
-export type ModuleFieldTypedSettings = Readonly<Record<string, Typed>>;
+type ModuleFieldTypedSettings = Readonly<Record<string, Typed>>;
 
 /** A field type as a person reads it, for the type picker. */
 export const moduleFieldTypeLabels: Readonly<Record<ModuleFieldType, string>> = {
@@ -50,7 +50,7 @@ export const moduleFieldTypeLabels: Readonly<Record<ModuleFieldType, string>> = 
 };
 
 /** What a field's settings can refer to in its module. */
-export type ModuleFieldSettingsContext = Readonly<{
+type ModuleFieldSettingsContext = Readonly<{
   /** The other fields of the field's own record type, by local key. */
   fields: readonly Readonly<{ key: string; label: string; type: string }>[];
   /** The module's permissions, which may control who can choose a choice option. */
@@ -149,6 +149,17 @@ const currencyModes = [
   ["organization_default", "The organisation's currency"],
   ["fixed", "One fixed currency"],
 ] as const;
+/** The theme colour roles a choice option may take, as the option form lists them. */
+const optionTones = [
+  ["neutral", "Neutral"],
+  ["primary", "Primary"],
+  ["destructive", "Destructive"],
+  ["chart_1", "Chart 1"],
+  ["chart_2", "Chart 2"],
+  ["chart_3", "Chart 3"],
+  ["chart_4", "Chart 4"],
+  ["chart_5", "Chart 5"],
+] as const;
 /** Fields and table columns author the same money settings, including their stored default. */
 const moneyCurrencyDeclarations = (subject: "field" | "column"): Declaration[] => [
   choice("currency_mode", "Currency", true, currencyModes, undefined, {
@@ -182,6 +193,13 @@ const optionItem = (
       1,
       120,
       "Made from the label when added. Renaming the option keeps this value.",
+    ),
+    choice(
+      "tone",
+      "Colour",
+      false,
+      optionTones,
+      "The colour a board column, list badge and record page give this option. No colour is neutral.",
     ),
     choice(
       "required_permission",
@@ -575,7 +593,7 @@ const storedColumn = (flat: Record<string, unknown>): Record<string, unknown> =>
   return { key: flat.key, required: flat.required === true, type, settings };
 };
 /** Where a field's current settings could not be read as typed settings, as located failures. */
-export type ModuleFieldSettingsReading = Readonly<{
+type ModuleFieldSettingsReading = Readonly<{
   values: ModuleFieldTypedSettings;
   failures: readonly ComponentSettingFailure[];
 }>;

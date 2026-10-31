@@ -12,7 +12,7 @@ export type ExactDecimal = Readonly<{
   readonly [exactDecimalBrand]: true;
 }>;
 
-export type ExactDecimalDigitCounts = Readonly<{
+type ExactDecimalDigitCounts = Readonly<{
   digitsBeforeDecimal: number;
   decimalPlaces: number;
 }>;

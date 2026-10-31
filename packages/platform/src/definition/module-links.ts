@@ -45,7 +45,7 @@ export type InlineRecordTypeLink = Readonly<{
 }>;
 
 /** A link of another owned record type that points at this record type. */
-export type InlineRecordTypeIncomingLink = InlineRecordTypeLink &
+type InlineRecordTypeIncomingLink = InlineRecordTypeLink &
   Readonly<{
     moduleKey: string;
     recordKey: string;

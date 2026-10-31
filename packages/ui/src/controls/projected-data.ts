@@ -1,7 +1,7 @@
 import {
-  choiceOptionsSchema,
   isRecord,
-  type ChoiceOption,
+  pipelineStageTones,
+  type PipelineStageTone,
   type RecordChoicePage,
   type RichTextInputPayload,
   type TypedFieldValue,
@@ -15,7 +15,6 @@ export {
   type BooleanInputPayload,
   type ButtonPayload,
   type ChoiceInputPayload,
-  type ChoiceOption,
   type DateInputPayload,
   type DateTimeInputPayload,
   type DialogPayload,
@@ -166,8 +165,51 @@ const controlParser =
     );
   };
 
-/** Bounded choice options, refusing duplicate values so every option has one identity. */
-export const parseChoiceOptions = controlParser(choiceOptionsSchema, "Choice options are invalid");
+/**
+ * One choice the browser offers: the stored value, its label and the colour role the definition gave
+ * it. The placement's own setting list and a page's answer to an options request share this shape;
+ * the role is absent when the definition declares none.
+ */
+export type ChoiceOption = Readonly<{ key: string; label: string; tone?: PipelineStageTone }>;
+
+const maximumChoiceOptions = 200;
+const choiceOptionTones: ReadonlySet<string> = new Set(pipelineStageTones);
+
+/**
+ * Bounded choice options, each key once so every option has one identity, with the option's colour
+ * role when one is declared. A tone outside the theme's roles, or a repeated key, is a defect.
+ */
+export const parseChoiceOptions = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation = {},
+): readonly ChoiceOption[] => {
+  if (!Array.isArray(value) || value.length > maximumChoiceOptions)
+    return fail("Choice options are invalid", location);
+  const keys = new Set<string>();
+  return value.map((candidate, index): ChoiceOption => {
+    const propertyPath = [`options[${index}]`];
+    if (
+      !isRecord(candidate) ||
+      typeof candidate.key !== "string" ||
+      candidate.key.length === 0 ||
+      typeof candidate.label !== "string" ||
+      (candidate.tone !== undefined &&
+        (typeof candidate.tone !== "string" || !choiceOptionTones.has(candidate.tone)))
+    )
+      return fail("Choice options are invalid", { ...location, propertyPath });
+    if (keys.has(candidate.key))
+      return fail("Choice options are invalid: a choice option value repeats", {
+        ...location,
+        propertyPath,
+      });
+    keys.add(candidate.key);
+    return {
+      key: candidate.key,
+      label: candidate.label,
+      ...(candidate.tone === undefined ? {} : { tone: candidate.tone as PipelineStageTone }),
+    };
+  });
+};
 
 /**
  * One page of pickable records as the server answered a records request: an object with its

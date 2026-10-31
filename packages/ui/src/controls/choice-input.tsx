@@ -76,7 +76,8 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const draftFeedback = useFieldFeedback(fieldKey);
   const explicitlyDisabled =
     context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
-  const baseOptions = context.values?.options ?? settings.options("options");
+  const baseOptions: readonly ChoiceOption[] =
+    context.values?.options ?? settings.options("options");
   // The options of a field whose source the page runs are the page's answers; until the first one
   // the field offers only what it holds, never the declared list the source may narrow.
   const remoteOptions = context.events?.options_requested !== undefined;

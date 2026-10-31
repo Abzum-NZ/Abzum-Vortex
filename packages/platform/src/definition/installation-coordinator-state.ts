@@ -56,7 +56,7 @@ const installationBindingsSchema = z
   })
   .strict();
 
-export const accessChangeSchema = z
+const accessChangeSchema = z
   .object({
     outcome: z.enum(["changed", "unchanged"]),
     operation: z.enum(["register", "update", "reactivate", "withdraw"]),

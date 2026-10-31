@@ -15,7 +15,7 @@ import { blockPropertyVisibilityIssues, blockPropertySchema } from "./block-prop
 import { customComponentReleaseSchema } from "./custom-components";
 import { releaseSettingDeclarations } from "./placement-slots";
 
-export const blockSlotDeclarationSchema = z
+const blockSlotDeclarationSchema = z
   .object({
     key: sourceProvenanceUnchanged(builderKeySchema),
     label: sourceProvenanceUnchanged(labelSchema),
@@ -69,7 +69,7 @@ const blockCapabilitiesSchema = z.discriminatedUnion("accessibleName", [
  * State operations a flow may apply to a placed component. A release lists exactly the
  * operations it supports; none is implied by its palette group or renderer.
  */
-export const componentStateOperationKindSchema = z.enum([
+const componentStateOperationKindSchema = z.enum([
   "set_value",
   "reset",
   "select_tab",
@@ -310,7 +310,7 @@ export const immutablePlatformBlockCatalogueSchema = z
     }
   });
 
-export const platformBlockDependencySchema = z
+const platformBlockDependencySchema = z
   .object({
     kind: sourceProvenanceUnchanged(z.literal("platform_block")),
     blockId: sourceProvenanceUnchanged(blockIdSchema),
@@ -319,7 +319,7 @@ export const platformBlockDependencySchema = z
   })
   .strict();
 
-export const sourcePlatformBlockDependencySchema = z
+const sourcePlatformBlockDependencySchema = z
   .object({
     kind: sourceProvenanceUnchanged(z.literal("platform_block")),
     block_id: sourceProvenanceTarget(blockIdSchema, ["blockId"]),

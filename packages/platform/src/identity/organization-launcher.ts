@@ -11,13 +11,9 @@ import {
 import {
   withRuntimeTransaction,
   type DatabaseRow,
-  type RequestDatabaseTransaction,
+  type RuntimeTransactionRunner,
 } from "../db/request-transaction";
 import { describeFailure } from "../catalogue/runtime-primitives";
-
-type RuntimeTransactionRunner = <Result>(
-  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
-) => Promise<Result>;
 
 type LauncherRow = DatabaseRow & {
   organization_id: unknown;
@@ -28,7 +24,7 @@ type LauncherRow = DatabaseRow & {
   account_display_name: unknown;
 };
 
-export type OrganizationLauncherServiceDependencies = Readonly<{
+type OrganizationLauncherServiceDependencies = Readonly<{
   runtimeTransaction?: RuntimeTransactionRunner;
 }>;
 

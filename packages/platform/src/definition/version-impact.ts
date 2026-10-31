@@ -1,3 +1,5 @@
+import { definitionContractVersion } from "./application-contract-versions";
+import { inc } from "semver";
 import { z } from "zod";
 import {
   applicationDraftSchema,
@@ -14,14 +16,9 @@ import {
   platformIdSchema,
   stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
-import {
-  moduleContentSchema,
-  moduleDraftSchema,
-  moduleValidationContractVersion,
-} from "./module-contracts";
+import { moduleContentSchema, moduleDraftSchema } from "./module-contracts";
 
 export const versionImpactSchema = z.enum(["patch", "minor", "major"]);
-export const moduleVersionImpactPolicyVersion = "4.0.0" as const;
 export { stableDefinitionReleaseVersionSchema };
 
 export const versionImpactReasonCodes = [
@@ -42,7 +39,7 @@ export const versionImpactReasonCodes = [
   "dependency_requirement_changed",
   "existing_behavior_changed",
 ] as const;
-export const versionImpactReasonCodeSchema = z.enum(versionImpactReasonCodes);
+const versionImpactReasonCodeSchema = z.enum(versionImpactReasonCodes);
 
 export const versionImpactComponentKinds = [
   "module",
@@ -80,7 +77,7 @@ export const versionImpactComponentKinds = [
   "flow_edge",
   "flow_binding",
 ] as const;
-export const versionImpactComponentKindSchema = z.enum(versionImpactComponentKinds);
+const versionImpactComponentKindSchema = z.enum(versionImpactComponentKinds);
 
 export const versionImpactProperties = [
   "definition",
@@ -103,9 +100,9 @@ export const versionImpactProperties = [
   "icon",
   "presentation",
 ] as const;
-export const versionImpactPropertySchema = z.enum(versionImpactProperties);
+const versionImpactPropertySchema = z.enum(versionImpactProperties);
 
-export const versionImpactLocationSchema = z
+const versionImpactLocationSchema = z
   .object({
     componentKind: versionImpactComponentKindSchema,
     componentId: platformIdSchema.optional(),
@@ -168,7 +165,7 @@ const nextStableVersion = (
       : `${major + 1n}.0.0`;
 };
 
-export const definitionVersionSubjectSchema = z.discriminatedUnion("definitionKind", [
+const definitionVersionSubjectSchema = z.discriminatedUnion("definitionKind", [
   z.object({ definitionKind: z.literal("module"), rootId: moduleRootIdSchema }).strict(),
   z.object({ definitionKind: z.literal("application"), rootId: applicationRootIdSchema }).strict(),
 ]);
@@ -190,17 +187,17 @@ const historyLimit = 10_000;
 export const applicationVersionImpactRequestSchema = z
   .object({
     kind: z.literal("application"),
-    validationContractVersion: z.literal("4.2.0"),
+    validationContractVersion: z.literal(definitionContractVersion),
     history: z.array(publishedApplicationDefinitionSchema).max(historyLimit),
     candidate: applicationDraftSchema,
   })
   .strict();
 
-/** Immutable Module history evidence; publication dispatch requires the exact 4.2.0 pair. */
+/** Immutable Module history evidence; publication dispatch requires the exact current contract pair. */
 export const moduleVersionImpactHistoryEntrySchema = z
   .object({
     publication: publishedModuleReferenceSchema.extend({
-      validationContractVersion: z.literal("4.2.0"),
+      validationContractVersion: z.literal(definitionContractVersion),
     }),
     content: moduleContentSchema,
     dependencyManifest: z.array(publishedDefinitionReferenceSchema),
@@ -214,7 +211,7 @@ export const moduleVersionImpactHistoryEntrySchema = z
 export const moduleVersionImpactRequestSchema = z
   .object({
     kind: z.literal("module"),
-    validationContractVersion: z.literal(moduleValidationContractVersion),
+    validationContractVersion: z.literal(definitionContractVersion),
     history: z.array(moduleVersionImpactHistoryEntrySchema).max(historyLimit),
     candidate: moduleDraftSchema,
   })
@@ -229,7 +226,7 @@ const resultCommon = {
   subject: definitionVersionSubjectSchema,
 };
 
-export const noDefinitionChangeResultSchema = z
+const noDefinitionChangeResultSchema = z
   .object({
     ...resultCommon,
     outcome: z.literal("no_change"),
@@ -238,7 +235,7 @@ export const noDefinitionChangeResultSchema = z
   })
   .strict();
 
-export const initialDefinitionReleaseResultSchema = z
+const initialDefinitionReleaseResultSchema = z
   .object({
     ...resultCommon,
     outcome: z.literal("initial_release"),
@@ -247,7 +244,7 @@ export const initialDefinitionReleaseResultSchema = z
   })
   .strict();
 
-export const requiredDefinitionReleaseResultSchema = z
+const requiredDefinitionReleaseResultSchema = z
   .object({
     ...resultCommon,
     outcome: z.literal("release_required"),
@@ -301,6 +298,17 @@ export const definitionVersionImpactResultSchema = z.discriminatedUnion("outcome
 
 export type VersionImpact = z.infer<typeof versionImpactSchema>;
 export type VersionImpactReason = z.infer<typeof versionImpactReasonSchema>;
+
+/**
+ * The stable release version after one for an impact, using semver's own increment: a patch raises
+ * the patch, a minor raises the minor and clears the patch, a major raises the major and clears
+ * both. The stored version is validated before and after, so an unassignable version is refused.
+ */
+export const nextDefinitionVersion = (currentVersion: string, impact: VersionImpact): string => {
+  const next = inc(stableDefinitionReleaseVersionSchema.parse(currentVersion), impact);
+  if (next === null) throw new TypeError("STABLE_RELEASE_VERSION_UNASSIGNABLE");
+  return stableDefinitionReleaseVersionSchema.parse(next);
+};
 export type DefinitionVersionSubject = z.infer<typeof definitionVersionSubjectSchema>;
 export type DefinitionVersionImpactFailureCode = z.infer<
   typeof definitionVersionImpactFailureCodeSchema

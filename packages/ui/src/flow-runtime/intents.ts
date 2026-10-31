@@ -5,7 +5,7 @@ import {
   flowMessageTargets,
   type FlowMessageSeverity,
   type FlowMessageTarget,
-  type FormContinuationAnswer,
+  type FormAnswer,
   type JsonValue,
 } from "@vortex/platform/schema";
 import type { NoticeSeverity } from "../components/notice";
@@ -38,7 +38,7 @@ export type FlowIntentKind = FlowIntent["kind"];
  * The person's answer to a form intent, using the same shape sent to the server. Cancel is an
  * answer: the run resumes and the flow's own `submitted` branch decides what a cancel means.
  */
-export type FlowFormAnswer = Extract<FormContinuationAnswer, { kind: "submit" | "cancel" }>;
+export type FlowFormAnswer = Extract<FormAnswer, { kind: "submit" | "cancel" }>;
 
 /**
  * The one rejection of an interactive surface that went away unanswered: the page unmounted or the
@@ -70,6 +70,9 @@ export type FlowMessageIntent = Readonly<{
   subject?: FlowSubjectContext;
   sourceTablePlacementId?: string;
 }>;
+/** One review line, or a role line with the lines that belong under it. */
+// item 10: CRM-FIX-PLATFORM
+export type FlowConfirmationDetail = string | Readonly<{ text: string; lines: readonly string[] }>;
 /**
  * A confirmation: its question, what it covers line by line, and one optional opt-in that goes with
  * a yes. `confirmLabel` names the answering button.
@@ -77,7 +80,7 @@ export type FlowMessageIntent = Readonly<{
 export type FlowConfirmIntent = Readonly<{
   title: string | undefined;
   message: string;
-  details: readonly string[];
+  details: readonly FlowConfirmationDetail[];
   choice: string | undefined;
   confirmLabel: string | undefined;
   destructive: boolean | undefined;
@@ -148,17 +151,43 @@ export const readMessageIntent = (intent: FlowIntent): FlowMessageIntent | undef
 
 /**
  * A bounded number of complete review entries, or none. An entry can describe a role's entire
- * permission set and field changes, so it must not inherit the short message-text limit.
+ * permission set and field changes, so it must not inherit the short message-text limit. A role
+ * entry carries the role line and the lines that belong under it.
  */
-const detailLines = (candidate: JsonValue | undefined): readonly string[] | undefined => {
+// item 10: CRM-FIX-PLATFORM
+const detailEntries = (
+  candidate: JsonValue | undefined,
+): readonly FlowConfirmationDetail[] | undefined => {
   if (candidate === undefined || candidate === null) return [];
+  // item 10: CRM-FIX-PLATFORM
   if (!Array.isArray(candidate) || candidate.length > maximumFlowConfirmationDetailLines)
     return undefined;
-  const lines = candidate.map((line) =>
-    typeof line === "string" && line.length > 0 ? line : undefined,
-  );
-  return lines.every((line): line is string => line !== undefined) ? lines : undefined;
+  const details: FlowConfirmationDetail[] = [];
+  for (const entry of candidate) {
+    if (typeof entry === "string" && entry.length > 0) {
+      details.push(entry);
+      continue;
+    }
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return undefined;
+    const text = entry.text;
+    const lines = entry.lines;
+    // item 10: CRM-FIX-PLATFORM
+    if (
+      typeof text !== "string" ||
+      text.length === 0 ||
+      !Array.isArray(lines) ||
+      lines.length > maximumFlowConfirmationDetailLines ||
+      !lines.every((line): line is string => typeof line === "string" && line.length > 0)
+    )
+      return undefined;
+    details.push({ text, lines });
+  }
+  return details;
 };
+
+const detailLines = (
+  candidate: JsonValue | undefined,
+): readonly FlowConfirmationDetail[] | undefined => detailEntries(candidate);
 
 /** Undefined when the message is missing or the review entries are not a bounded list of texts. */
 export const readConfirmIntent = (intent: FlowIntent): FlowConfirmIntent | undefined => {
@@ -183,7 +212,7 @@ export const readConfirmIntent = (intent: FlowIntent): FlowConfirmIntent | undef
 export const confirmAnswer = (
   confirmation: FlowConfirmIntent,
   answer: FlowConfirmAnswer,
-): Extract<FormContinuationAnswer, { kind: "confirm" }> => ({
+): Extract<FormAnswer, { kind: "confirm" }> => ({
   kind: "confirm",
   confirmed: answer.confirmed,
   ...(confirmation.choice === undefined

@@ -324,13 +324,22 @@ export const withContributedPlacements = (
         blockIdOf(placement.vortex) === undefined ||
         !sameId(blockIdOf(placement.vortex)!, RECORD_DETAIL_BLOCK_RELEASE.blockId) ||
         placement.vortex.queryId !== undefined ||
-        !Array.isArray(placement.props.detail_fields)
+        !Array.isArray(placement.props.sections)
       )
         continue;
-      const shown: unknown[] = placement.props.detail_fields;
+      const sections: unknown[] = placement.props.sections;
+      const last = sections.at(-1);
+      if (!isRecord(last) || !Array.isArray(last.fields)) continue;
+      const shown: unknown[] = last.fields;
       const present = new Set(
-        shown.flatMap((entry) =>
-          isRecord(entry) && typeof entry.field === "string" ? [entry.field.toLowerCase()] : [],
+        sections.flatMap((section) =>
+          isRecord(section) && Array.isArray(section.fields)
+            ? section.fields.flatMap((entry: unknown) =>
+                isRecord(entry) && typeof entry.field === "string"
+                  ? [entry.field.toLowerCase()]
+                  : [],
+              )
+            : [],
         ),
       );
       for (const field of contributed) {
@@ -362,18 +371,21 @@ export const omitUnreadableContributedFields = (
     if (
       blockIdOf(placement.vortex) === undefined ||
       !sameId(blockIdOf(placement.vortex)!, RECORD_DETAIL_BLOCK_RELEASE.blockId) ||
-      !Array.isArray(placement.props.detail_fields)
+      !Array.isArray(placement.props.sections)
     )
       continue;
-    placement.props.detail_fields = placement.props.detail_fields.filter(
-      (entry: unknown) =>
-        !(
-          isRecord(entry) &&
-          typeof entry.field === "string" &&
-          contributedFieldIds.has(entry.field.toLowerCase()) &&
-          !readable.has(entry.field.toLowerCase())
-        ),
-    );
+    for (const section of placement.props.sections) {
+      if (!isRecord(section) || !Array.isArray(section.fields)) continue;
+      section.fields = section.fields.filter(
+        (entry: unknown) =>
+          !(
+            isRecord(entry) &&
+            typeof entry.field === "string" &&
+            contributedFieldIds.has(entry.field.toLowerCase()) &&
+            !readable.has(entry.field.toLowerCase())
+          ),
+      );
+    }
   }
 };
 

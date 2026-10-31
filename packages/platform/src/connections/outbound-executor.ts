@@ -11,7 +11,7 @@ type ConnectionType = ConnectionTypeSourceDocument["body"];
 type ConnectionOperation = ConnectionType["operations"][number];
 
 /** Provider code supplies a request and interprets a response; only this executor sends it. */
-export interface ConnectionProviderAdapter {
+interface ConnectionProviderAdapter {
   prepareRequest(
     operation: ConnectionOperation,
     secret: string,
@@ -27,7 +27,7 @@ export interface ConnectionProviderAdapter {
 /** Releases without a registered provider have no executable adapter. */
 export const connectionProviderAdapters: ReadonlyMap<string, ConnectionProviderAdapter> = new Map();
 
-export type OutboundOutcome = Readonly<{
+type OutboundOutcome = Readonly<{
   outcome: "success" | "retryable" | "terminal" | "unknown";
   code: string;
 }>;

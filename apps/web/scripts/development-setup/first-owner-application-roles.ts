@@ -31,10 +31,7 @@ type ProjectedAssignment = Extract<
 >["value"][number];
 
 /** The accepted role a grant needs: its identity, live revision, lifecycle and assignment policy. */
-type GrantableRole = Pick<
-  ProjectedRole,
-  "roleId" | "label" | "liveRevision" | "lifecycle" | "assignmentPolicy"
->;
+type GrantableRole = Pick<ProjectedRole, "roleId" | "label" | "liveRevision" | "lifecycle">;
 
 export type FirstOwnerApplicationRoleFacts = Readonly<{
   identityAuthorityId: IdentityAuthorityId;
@@ -50,7 +47,6 @@ const grantable = (role: OrganizationAdministrationRoleSummary): GrantableRole =
   label: role.label,
   liveRevision: role.liveRevision,
   lifecycle: role.lifecycle,
-  assignmentPolicy: role.assignmentPolicy.kind,
 });
 
 /** Every page of the organisation's roles, through the protected roles projection. */
@@ -202,8 +198,7 @@ export const grantFirstOwnerApplicationRoles = async (
         assignment.organizationAccountId !== null &&
         sameId(assignment.organizationAccountId, facts.stewardOrganizationAccountId) &&
         assignment.state === "live" &&
-        assignment.temporalState === "active" &&
-        assignment.assignmentKind === "standing",
+        assignment.temporalState === "active",
     );
 
   let ensuredGrants = 0;
@@ -235,10 +230,6 @@ export const grantFirstOwnerApplicationRoles = async (
         throw new Error(
           `Accepted role ${role.label} from template ${template.key} is ${role.lifecycle}`,
         );
-      if (role.assignmentPolicy !== "standing")
-        throw new Error(
-          `Role ${role.label} from template ${template.key} requires activation and cannot open an application immediately`,
-        );
 
       if (ownerHolds(role.roleId)) {
         log(`first owner already holds ${applicationName} role ${role.label}`);
@@ -254,7 +245,6 @@ export const grantFirstOwnerApplicationRoles = async (
           expectedRoleRevision: role.liveRevision,
           assigneeKind: "organization_account",
           organizationAccountId: facts.stewardOrganizationAccountId,
-          assignmentKind: "standing",
           startsAt: new Date(Date.now() - 1_000).toISOString(),
         }),
       );
@@ -265,7 +255,6 @@ export const grantFirstOwnerApplicationRoles = async (
       if (
         assigned.value.assignment.state !== "live" ||
         assigned.value.assignment.temporalState !== "active" ||
-        assigned.value.assignment.assignmentKind !== "standing" ||
         !sameId(assigned.value.assignment.role.roleId, role.roleId) ||
         assigned.value.assignment.assignee.kind !== "organization_account" ||
         !sameId(

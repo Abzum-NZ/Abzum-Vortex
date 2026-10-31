@@ -179,7 +179,6 @@ export function StudioPermissionDeclaration({
           <StudioRecordScopeField
             record={record}
             scope={scope}
-            allowShared
             disabled={disabled}
             onChange={setScope}
           />

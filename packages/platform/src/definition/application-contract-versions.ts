@@ -1,40 +1,28 @@
+import { z } from "zod";
 import { DefinitionError } from "./definition-error";
-export const applicationSourceContractVersion = "4.2.0" as const;
-export const applicationValidationContractVersion = "4.2.0" as const;
 
-export const applicationContractVersionErrorCodes = [
-  "UNKNOWN_APPLICATION_SOURCE_CONTRACT_VERSION",
-  "UNKNOWN_APPLICATION_VALIDATION_CONTRACT_VERSION",
-  "APPLICATION_SOURCE_METADATA_MISMATCH",
-] as const;
+/**
+ * The one current definition contract. Every definition kind accepts exactly this version, in its
+ * source and in its validation output alike; `supabase/schemas/vortex_definition/accepted_contract_version.sql`
+ * holds the same value for the database, and the guard compares the two.
+ */
+export const definitionContractVersion = "4.3.0" as const;
 
-export type ApplicationContractVersionErrorCode =
-  (typeof applicationContractVersionErrorCodes)[number];
+/** The source and validation pair every stored and authored definition carries. */
+export const definitionContractVersionPairSchema = z
+  .object({
+    sourceContractVersion: z.literal(definitionContractVersion),
+    validationContractVersion: z.literal(definitionContractVersion),
+  })
+  .strict();
 
-export const applicationContractPair = {
-  sourceContractVersion: applicationSourceContractVersion,
-  validationContractVersion: applicationValidationContractVersion,
-} as const;
-
-export type ApplicationContractPair = typeof applicationContractPair;
-
-export const selectApplicationContractPair = (
+/** Refuses any source and validation pair other than the one current definition contract. */
+export const assertDefinitionContractPair = (
   sourceContractVersion: string,
   validationContractVersion: string,
-): ApplicationContractPair => {
-  if (sourceContractVersion !== applicationSourceContractVersion)
-    throw new DefinitionError("UNKNOWN_APPLICATION_SOURCE_CONTRACT_VERSION");
-  if (validationContractVersion !== applicationValidationContractVersion)
-    throw new DefinitionError("UNKNOWN_APPLICATION_VALIDATION_CONTRACT_VERSION");
-  return applicationContractPair;
-};
-
-export const selectStoredApplicationSourceContract = (
-  sourceContractVersion: string,
-  intrinsicSourceContractVersion: string,
 ): void => {
-  if (sourceContractVersion !== intrinsicSourceContractVersion)
-    throw new DefinitionError("APPLICATION_SOURCE_METADATA_MISMATCH");
-  if (sourceContractVersion !== applicationSourceContractVersion)
-    throw new DefinitionError("UNKNOWN_APPLICATION_SOURCE_CONTRACT_VERSION");
+  if (sourceContractVersion !== definitionContractVersion)
+    throw new DefinitionError("UNKNOWN_DEFINITION_CONTRACT_VERSION");
+  if (validationContractVersion !== definitionContractVersion)
+    throw new DefinitionError("UNKNOWN_DEFINITION_CONTRACT_VERSION");
 };

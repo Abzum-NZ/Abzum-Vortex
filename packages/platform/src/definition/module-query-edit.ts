@@ -67,7 +67,7 @@ export const queryTotalReferenceProblem = (
       : `${label} must be one of the query's totals: ${totals.map((total) => total.label).join(", ")}`;
 
 /** What a query edit makes of the Application source, or why it was refused, in plain words. */
-export type InlineQueryResult =
+type InlineQueryResult =
   | Readonly<{
       kind: "changed";
       source: ApplicationSourceDocument;
@@ -230,7 +230,7 @@ const filterParameters = (filter: unknown): string[] => {
  * What a query must hold to be published, checked against its own record type and said in the
  * words of the query editor's sections. The schema and the compiler check the rest.
  */
-export const inlineQueryProblems = (record: RecordType, query: InlineQuery): string[] => {
+const inlineQueryProblems = (record: RecordType, query: InlineQuery): string[] => {
   const problems: string[] = [];
   const byKey = new Map(record.fields.map((field) => [field.key, field]));
   const readTime = readTimeCalculations(byKey);
@@ -343,7 +343,7 @@ export const inlineQueryProblems = (record: RecordType, query: InlineQuery): str
 };
 
 /** A new query of a record type, as a person names it. */
-export type InlineQueryCreation = Readonly<{
+type InlineQueryCreation = Readonly<{
   moduleKey: string;
   recordKey: string;
   label: string;

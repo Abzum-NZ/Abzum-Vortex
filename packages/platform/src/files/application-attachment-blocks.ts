@@ -29,7 +29,7 @@ const protectedDownloadHrefSchema = z
   });
 
 /** Safe metadata for one attachment that passed the current protected File read decision. */
-export const attachmentListItemSchema = z
+const attachmentListItemSchema = z
   .object({
     displayName: safeDisplayNameSchema,
     mediaType: verifiedMediaTypeSchema,
@@ -57,6 +57,4 @@ export const attachmentListPayloadSchema = z
       links.add(file.downloadHref);
     });
   });
-
-export type AttachmentListItem = z.infer<typeof attachmentListItemSchema>;
 export type AttachmentListPayload = z.infer<typeof attachmentListPayloadSchema>;

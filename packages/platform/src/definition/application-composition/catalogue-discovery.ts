@@ -17,7 +17,7 @@ import type {
  */
 
 /** Property kinds whose value names an application-scoped or stored target. */
-export const blockReferencePropertyKinds = [
+const blockReferencePropertyKinds = [
   "total_reference",
   "field_reference",
   "relationship_reference",
@@ -32,12 +32,12 @@ export type BlockReferencePropertyKind = (typeof blockReferencePropertyKinds)[nu
 
 const blockReferencePropertyKindSet: ReadonlySet<string> = new Set(blockReferencePropertyKinds);
 
-export const isBlockReferencePropertyKind = (
+const isBlockReferencePropertyKind = (
   kind: BlockPropertySchemaContract["kind"],
 ): kind is BlockReferencePropertyKind => blockReferencePropertyKindSet.has(kind);
 
 /** A public page admits only releases whose capabilities allow the public surface. */
-export type CompositionSurface = "authenticated" | "public";
+type CompositionSurface = "authenticated" | "public";
 
 /** Exact release identity and palette metadata; its fingerprints fill a dependency manifest. */
 export type PlatformBlockReleaseSummary = Readonly<
@@ -70,7 +70,7 @@ export type ComponentPropertyControl = Readonly<{
 }>;
 
 /** Placement layout choices; content width, fill width and content height are always available. */
-export type ComponentLayoutOperations = Readonly<{
+type ComponentLayoutOperations = Readonly<{
   /** Visibility may differ between desktop, tablet and phone. */
   responsiveVisibility: boolean;
   /** Placements inside this component's slots may use a different order per breakpoint. */
@@ -81,7 +81,7 @@ export type ComponentLayoutOperations = Readonly<{
   boundedHeight: boolean;
 }>;
 
-export type ComponentDiscoverySlot = Readonly<{
+type ComponentDiscoverySlot = Readonly<{
   key: string;
   label: string;
   required: boolean;

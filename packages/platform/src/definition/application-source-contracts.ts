@@ -2,7 +2,7 @@ import { z } from "zod";
 import { previewApplicationKeyNamespace } from "./preview-application-key";
 import { applicationExperienceStateSchema } from "../catalogue/catalogues";
 import { inspectApplicationPageReplacements } from "../pages/application-page-replacement";
-import { applicationSourceContractVersion } from "./application-contract-versions";
+import { definitionContractVersion } from "./application-contract-versions";
 import { maximumApplicationRoles, pageValueDeclarationsSchema } from "./application-contracts";
 import {
   builderKeySchema,
@@ -253,7 +253,7 @@ const sourceGuidedFormStepSchema = z
   })
   .strict();
 
-export const sourcePageDefinitionSchema = z.discriminatedUnion("type", [
+const sourcePageDefinitionSchema = z.discriminatedUnion("type", [
   sourceListPageSchema,
   z
     .object({
@@ -984,7 +984,7 @@ export const sourceApplicationBodySchema = z
 
 export const applicationSourceDocumentSchema = z
   .object({
-    source_contract_version: sourceProvenanceUnchanged(z.literal(applicationSourceContractVersion)),
+    source_contract_version: sourceProvenanceUnchanged(z.literal(definitionContractVersion)),
     root_alias: sourceProvenanceTarget(sourceAliasSchema, ["rootId"]),
     // The preview namespace addresses previews of drafts, so no Application can take it.
     key: sourceProvenanceUnchanged(
@@ -998,5 +998,3 @@ export const applicationSourceDocumentSchema = z
   .strict();
 
 export type ApplicationSourceDocument = z.infer<typeof applicationSourceDocumentSchema>;
-export type SourceApplicationBody = z.infer<typeof sourceApplicationBodySchema>;
-export type SourcePageDefinition = z.infer<typeof sourcePageDefinitionSchema>;

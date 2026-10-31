@@ -6,7 +6,7 @@ import { projectedRecordPinTargetSchema } from "../records/record-links";
 const openBehaviour = z.enum(["replace", "new_page"]);
 
 /** One typed target per tile, discriminated by kind; application and page evidence never manufactures Record identity. */
-export const projectedLinkTileTargetSchema = z.union([
+const projectedLinkTileTargetSchema = z.union([
   projectedRecordPinTargetSchema,
   applicationPageLinkTargetSchema.options[0].extend({ openBehaviour }).strict(),
   applicationPageLinkTargetSchema.options[1].extend({ openBehaviour }).strict(),

@@ -21,22 +21,6 @@ import {
   unexpectedDefinitionFailure,
 } from "./definition-error";
 
-export const definitionStoreErrorCodes = [
-  "INVALID_DEFINITION_COMMAND",
-  "INVALID_DEFINITION_SOURCE",
-  "INVALID_DEFINITION_STORAGE_RESULT",
-  "DEFINITION_DRAFT_STALE_OR_MISSING",
-  "DEFINITION_ROOT_ALREADY_EXISTS",
-  "DEFINITION_ROOT_MISSING",
-  "DEFINITION_IDENTITY_ALIAS_CONFLICT",
-  "DEFINITION_IDENTITY_RETIRED",
-  "DEFINITION_CONTEXT_REFUSED",
-  "DEFINITION_STORAGE_VALIDATION_FAILED",
-  "DEFINITION_STORAGE_FAILED",
-] as const;
-
-export type DefinitionStoreErrorCode = (typeof definitionStoreErrorCodes)[number];
-
 type StoredDraftRow = DatabaseRow & {
   root_id: unknown;
   organization_id: unknown;

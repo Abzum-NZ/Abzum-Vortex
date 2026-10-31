@@ -10,7 +10,7 @@ import { walkPlacementData, type VisitedPlacement } from "./placement-walk";
  */
 export type ProjectedPlacementRefusal = "placement_not_on_page" | "placement_not_usable";
 
-export type ProjectedPlacementGate =
+type ProjectedPlacementGate =
   | Readonly<{ kind: "on_page"; placement: VisitedPlacement }>
   | Readonly<{ kind: "refused"; reason: ProjectedPlacementRefusal }>;
 

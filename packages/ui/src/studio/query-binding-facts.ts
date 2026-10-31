@@ -89,7 +89,7 @@ export function studioQueryBindingFacts(
     (reference === peopleDirectory.recordType
       ? "person"
       : reference === peopleDirectory.groupRecordType
-        ? "team"
+        ? "group"
         : "record");
   const page = pageBindingFacts({
     currentPersonRecordType:
@@ -97,7 +97,7 @@ export function studioQueryBindingFacts(
       records.some((record) => record.reference === peopleDirectory.recordType)
         ? peopleDirectory.recordType
         : undefined,
-    currentTeamRecordType:
+    currentGroupRecordType:
       source.body.uses.some((use) => use.module === peopleDirectory.module) ||
       records.some((record) => record.reference === peopleDirectory.groupRecordType)
         ? peopleDirectory.groupRecordType

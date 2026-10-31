@@ -17,9 +17,6 @@ import type { DisplayDetailField, RecordDetailPayload } from "./projected-data";
 type RecordDetailSection = RecordDetailPayload["sections"][number];
 type RecordDetailRelatedList = RecordDetailPayload["relatedLists"][number];
 
-type RecordDetailSection = RecordDetailPayload["sections"][number];
-type RecordDetailRelatedList = RecordDetailPayload["relatedLists"][number];
-
 /**
  * The projected sections the placement declares, in declared order, each field's declared label
  * overriding the projected one. A field the viewer cannot read is absent from the projection and

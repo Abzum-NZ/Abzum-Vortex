@@ -16,7 +16,7 @@ export type OptionMembershipCheck = (
   }>,
 ) => Promise<boolean>;
 
-export type OptionSourceRefusal = Readonly<{
+type OptionSourceRefusal = Readonly<{
   fieldId: string;
   reason: "not_offered" | "unchecked";
 }>;

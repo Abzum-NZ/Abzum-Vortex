@@ -4,7 +4,7 @@ import type {
   DefinitionValidationLocation,
 } from "../catalogue/validation-errors";
 
-export const definitionCompilerRefusalCodes = Object.freeze([
+const definitionCompilerRefusalCodes = Object.freeze([
   "vortex.definition.ambiguous_definition",
   "vortex.definition.ambiguous_identity",
   "vortex.definition.application_action_references",
@@ -135,7 +135,7 @@ export const isDefinitionCompilerRefusalCode = (
  * the compiler error boundary. This keeps the public error surface closed even
  * where validation produces a dynamically selected rule failure.
  */
-export function assertDefinitionCompilerRefusalCode(
+function assertDefinitionCompilerRefusalCode(
   value: string,
 ): asserts value is DefinitionCompilerRefusalCode {
   if (!isDefinitionCompilerRefusalCode(value)) {

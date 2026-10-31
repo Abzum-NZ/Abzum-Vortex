@@ -1,6 +1,7 @@
 import "server-only";
 
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import { uuidFromText } from "./derived-definition-id";
 import {
   identitySessionSchema,
   organizationSelectionCandidateSchema,
@@ -12,7 +13,6 @@ import {
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
   changeOrganizationAdministrationRoleAuthorityCommandSchema,
   createOrganizationAdministrationGroupCommandSchema,
-  deactivateOrganizationAdministrationRoleActivationCommandSchema,
   prepareOrganizationAdministrationRoleChangeCommandSchema,
   removeOrganizationAdministrationMembershipCommandSchema,
   renameOrganizationAdministrationGroupCommandSchema,
@@ -207,7 +207,6 @@ type ProtectedOperationServices = Readonly<{
     | "readGroup"
     | "readOrganizationAccount"
     | "revokeRoleAssignment"
-    | "deactivateRoleActivation"
     | "revokeDelegationAuthority"
     | "grantDelegationAuthority"
     | "suspendOrganizationAccount"
@@ -305,14 +304,7 @@ const duplicateKeyFor = (
   generate: () => string,
 ): string => {
   if (effectKey === undefined) return generate();
-  const bytes = createHash("sha256")
-    .update([effectKey.runId, effectKey.taskPath, effectKey.iteration].join("|"))
-    .digest()
-    .subarray(0, 16);
-  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
-  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
-  const hex = bytes.toString("hex");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  return uuidFromText([effectKey.runId, effectKey.taskPath, effectKey.iteration].join("|"), 4);
 };
 
 /**
@@ -560,7 +552,6 @@ const roleAssignmentCommand = (inputs: Inputs) => ({
   assigneeKind: inputs.assignee_kind,
   organizationAccountId: optionalText(inputs.organization_account_id),
   groupId: optionalText(inputs.group_id),
-  assignmentKind: inputs.assignment_kind,
   startsAt: optionalText(inputs.starts_at),
   expiresAt: optionalText(inputs.expires_at),
 });
@@ -818,34 +809,6 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
           access_version: value.accessVersion,
         }),
       ),
-  }),
-  deactivate_role_activation: operation({
-    schema: deactivateOrganizationAdministrationRoleActivationCommandSchema,
-    command: (inputs) => ({
-      roleActivationId: inputs.role_activation_id,
-      expectedActivationRevision: inputs.expected_activation_revision,
-    }),
-    run: async (services, caller, command) => {
-      const result = await services.accessAdministration.deactivateRoleActivation(
-        caller.session,
-        caller.selection,
-        command,
-      );
-      if (result.kind === "unavailable") {
-        if (result.code === "permission_denied" || result.code === "activation_not_found")
-          return { kind: "unavailable" };
-        return {
-          kind: "unavailable",
-          ...(result.code === undefined ? {} : { code: result.code }),
-          ...(result.cause === undefined ? {} : { cause: result.cause }),
-        };
-      }
-      return mapAvailable(result, (value) => ({
-        role_activation_id: value.activation.roleActivationId,
-        revision: value.activation.revision,
-        access_version: value.accessVersion,
-      }));
-    },
   }),
   grant_delegation_authority: operation({
     schema: grantOrganizationAdministrationDelegationAuthorityCommandSchema,

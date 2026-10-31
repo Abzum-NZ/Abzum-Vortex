@@ -1,12 +1,8 @@
 import "server-only";
 
 import { createHash, type KeyObject } from "node:crypto";
-import {
-  customComponentBundleSchema,
-  type CustomComponentRelease,
-} from "../definition/application-composition/custom-components";
 import { z } from "zod";
-import { logRefusal, unavailableError } from "../catalogue/runtime-primitives";
+import { unavailableError } from "../catalogue/runtime-primitives";
 import { createStorageSignerFromPrivateKey, type StorageKeySigner } from "./storage-credentials";
 
 /**
@@ -15,11 +11,11 @@ import { createStorageSignerFromPrivateKey, type StorageKeySigner } from "./stor
  * bundle is read only through the serving credential minted for one exact
  * content address.
  */
-export const COMPONENT_BUNDLE_BUCKET = "component_bundles";
+const COMPONENT_BUNDLE_BUCKET = "component_bundles";
 
 /** The two content-addressed namespaces inside the bucket. */
-export const COMPONENT_BUNDLE_MANIFEST_PREFIX = "manifests";
-export const COMPONENT_BUNDLE_FILES_PREFIX = "bundles";
+const COMPONENT_BUNDLE_MANIFEST_PREFIX = "manifests";
+const COMPONENT_BUNDLE_FILES_PREFIX = "bundles";
 
 /** A published bundle is immutable, so every response may be cached forever. */
 export const COMPONENT_BUNDLE_IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable";
@@ -33,7 +29,7 @@ export const COMPONENT_BUNDLE_CORS_ORIGIN = "*";
 
 /** A content address is the 96-character lowercase hex form of a SHA-384 digest. */
 export const COMPONENT_BUNDLE_CONTENT_ADDRESS_LENGTH = 96;
-export const COMPONENT_BUNDLE_MAXIMUM_OPERATION_SECONDS = 60;
+const COMPONENT_BUNDLE_MAXIMUM_OPERATION_SECONDS = 60;
 
 const componentBundleContentAddressSchema = z
   .string()
@@ -50,7 +46,7 @@ const componentBundleFileDigestSchema = z
  * with no scheme, absolute leading slash, empty segment or `.`/`..` step, so a
  * bundle file can never escape its content-address directory.
  */
-export const componentBundleRelativePathSchema = z
+const componentBundleRelativePathSchema = z
   .string()
   .min(1)
   .max(500)
@@ -68,7 +64,7 @@ export const isSafeComponentBundlePath = (value: string): boolean =>
  * is the bundle's content address and its Subresource Integrity value; every
  * file carries its own digest so the serving route can verify each served byte.
  */
-export const componentBundleManifestSchema = z
+const componentBundleManifestSchema = z
   .object({
     digest: componentBundleDigestSchema,
     entryFile: componentBundleRelativePathSchema,
@@ -88,9 +84,6 @@ export const componentBundleManifestSchema = z
 
 export type ComponentBundleManifest = z.infer<typeof componentBundleManifestSchema>;
 
-/** One file supplied to publication: a relative path and its exact bytes. */
-export type ComponentBundleFile = Readonly<{ path: string; bytes: Uint8Array }>;
-
 /**
  * A closed refusal reason. `digest_mismatch` refuses a supplied bundle whose
  * entry bytes do not match the digest recorded in its custom component release;
@@ -105,7 +98,7 @@ export type ComponentBundleRefusalReason =
   | "bundle_conflict"
   | "storage_unavailable";
 
-export class ComponentBundleStorageError extends Error {
+class ComponentBundleStorageError extends Error {
   readonly reason: ComponentBundleRefusalReason;
 
   constructor(reason: ComponentBundleRefusalReason) {
@@ -118,13 +111,6 @@ export class ComponentBundleStorageError extends Error {
 const refuse = (reason: ComponentBundleRefusalReason): never => {
   throw new ComponentBundleStorageError(reason);
 };
-
-/**
- * The Subresource Integrity digest of one bundle's bytes, formatted exactly as
- * the custom component release records it.
- */
-export const computeComponentBundleDigest = (bytes: Uint8Array): string =>
-  `sha384-${createHash("sha384").update(bytes).digest("base64")}`;
 
 /** The lowercase hex digest of one bundle file's bytes. */
 export const componentBundleFileDigest = (bytes: Uint8Array): string =>
@@ -159,18 +145,6 @@ export const componentBundleFileObjectPath = (
 const encodeObjectPath = (objectPath: string): string =>
   objectPath.split("/").map(encodeURIComponent).join("/");
 
-/** Serialises a manifest deterministically so the same bundle always hashes alike. */
-export const encodeComponentBundleManifest = (manifest: ComponentBundleManifest): Uint8Array => {
-  const parsed = componentBundleManifestSchema.parse({
-    digest: manifest.digest,
-    entryFile: manifest.entryFile,
-    files: [...manifest.files].sort((left, right) =>
-      left.path < right.path ? -1 : left.path > right.path ? 1 : 0,
-    ),
-  });
-  return new TextEncoder().encode(JSON.stringify(parsed));
-};
-
 export const decodeComponentBundleManifest = (bytes: Uint8Array): ComponentBundleManifest => {
   const parsed = componentBundleManifestSchema.safeParse(
     JSON.parse(new TextDecoder().decode(bytes)) as unknown,
@@ -179,17 +153,13 @@ export const decodeComponentBundleManifest = (bytes: Uint8Array): ComponentBundl
   return parsed.data;
 };
 
-const bytesEqual = (left: Uint8Array, right: Uint8Array): boolean =>
-  left.byteLength === right.byteLength &&
-  Buffer.compare(Buffer.from(left), Buffer.from(right)) === 0;
-
-export type ComponentBundleStorageOperation = "upload" | "read";
+type ComponentBundleStorageOperation = "upload" | "read";
 
 /**
  * Mints one server-held Storage credential for one operation on one content
  * address. The credential is short-lived and never projected to a browser.
  */
-export type MintComponentBundleStorageCredential = (
+type MintComponentBundleStorageCredential = (
   input: Readonly<{ operation: ComponentBundleStorageOperation; objectPath: string }>,
 ) => Promise<Readonly<{ token: string }>>;
 
@@ -206,12 +176,12 @@ type ComponentBundleStorageClaims = Readonly<{
   exp: number;
 }>;
 
-export type ComponentBundleSigningKey = Readonly<{
+type ComponentBundleSigningKey = Readonly<{
   keyId: string;
   signer: StorageKeySigner | KeyObject | string | Buffer;
 }>;
 
-export type ComponentBundleStorageSigningConfig = Readonly<{
+type ComponentBundleStorageSigningConfig = Readonly<{
   destinationProject: string;
   issuer: string;
   activeKeyId: string;
@@ -289,7 +259,7 @@ export const createComponentBundleStorageCredentialMinter = (
   };
 };
 
-export type SupabaseComponentBundleObjectStoreConfig = Readonly<{
+type SupabaseComponentBundleObjectStoreConfig = Readonly<{
   supabaseUrl: string;
   mintCredential: MintComponentBundleStorageCredential;
   fetchImplementation?: typeof fetch;
@@ -364,30 +334,6 @@ export type ComponentBundleObjectStore = ReturnType<
   typeof createSupabaseComponentBundleObjectStore
 >;
 
-const readObjectOrRefuse = async (
-  store: ComponentBundleObjectStore,
-  objectPath: string,
-): Promise<Uint8Array | undefined> => {
-  try {
-    return await store.readObject({ objectPath });
-  } catch (error) {
-    logRefusal("files", "component bundle object read", "storage_unavailable", error);
-    return refuse("storage_unavailable");
-  }
-};
-
-const writeObjectOrRefuse = async (
-  store: ComponentBundleObjectStore,
-  input: Readonly<{ objectPath: string; bytes: Uint8Array; contentType: string }>,
-): Promise<void> => {
-  try {
-    await store.writeObject(input);
-  } catch (error) {
-    logRefusal("files", "component bundle object write", "storage_unavailable", error);
-    refuse("storage_unavailable");
-  }
-};
-
 const MEDIA_TYPES: Readonly<Record<string, string>> = Object.freeze({
   js: "text/javascript; charset=utf-8",
   mjs: "text/javascript; charset=utf-8",
@@ -412,117 +358,4 @@ export const componentBundleMediaType = (relativePath: string): string => {
   const separator = relativePath.lastIndexOf(".");
   const extension = separator < 0 ? "" : relativePath.slice(separator + 1).toLowerCase();
   return MEDIA_TYPES[extension] ?? "application/octet-stream";
-};
-
-export type PublishedComponentBundle = Readonly<{
-  /** The custom component release with its verified digest recorded. */
-  release: CustomComponentRelease;
-  digest: string;
-  contentAddress: string;
-  entryFile: string;
-  entryObjectPath: string;
-  manifestObjectPath: string;
-  files: readonly Readonly<{ path: string; sha384: string; objectPath: string }>[];
-}>;
-
-/**
- * The publication step for one custom component bundle.
- *
- * 1. It validates the custom component bundle manifest.
- * 2. It computes the SHA-384 Subresource Integrity digest of the supplied entry
- *    bytes and refuses the bundle unless it matches the digest the release
- *    records.
- * 3. It writes the bundle manifest and every bundle file beneath the entry
- *    digest's content address, so the release's digest is the immutable address
- *    the bootstrap document loads.
- *
- * The content address describes one manifest; a different file set for the same
- * entry digest, or a stored object whose bytes differ from the supplied file, is
- * refused rather than overwritten.
- */
-export const publishComponentBundle = async (
-  input: Readonly<{ release: CustomComponentRelease; files: readonly ComponentBundleFile[] }>,
-  store: ComponentBundleObjectStore,
-): Promise<PublishedComponentBundle> => {
-  const parsedBundle = customComponentBundleSchema.safeParse(input.release.bundle);
-  if (!parsedBundle.success) return refuse("malformed_bundle");
-  const bundle = parsedBundle.data;
-
-  const byPath = new Map<string, Uint8Array>();
-  for (const file of input.files) {
-    if (!isSafeComponentBundlePath(file.path) || byPath.has(file.path))
-      return refuse("malformed_bundle");
-    byPath.set(file.path, file.bytes);
-  }
-  const entryBytes = byPath.get(bundle.entryFile);
-  if (entryBytes === undefined) return refuse("malformed_bundle");
-
-  const digest = computeComponentBundleDigest(entryBytes);
-  if (digest !== bundle.digest) return refuse("digest_mismatch");
-
-  const contentAddress = componentBundleContentAddress(digest);
-  const files = [...byPath.entries()]
-    .map(([path, bytes]) => ({
-      path,
-      sha384: componentBundleFileDigest(bytes),
-      objectPath: componentBundleFileObjectPath(contentAddress, path),
-    }))
-    .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
-  const manifest: ComponentBundleManifest = {
-    digest,
-    entryFile: bundle.entryFile,
-    files: files.map(({ path, sha384 }) => ({ path, sha384 })),
-  };
-  const manifestObjectPath = componentBundleManifestObjectPath(contentAddress);
-  const encodedManifest = encodeComponentBundleManifest(manifest);
-
-  const existingManifest = await readObjectOrRefuse(store, manifestObjectPath);
-  if (existingManifest !== undefined) {
-    let decoded: ComponentBundleManifest;
-    try {
-      decoded = decodeComponentBundleManifest(existingManifest);
-    } catch (error) {
-      logRefusal("files", "component bundle existing manifest decode", "bundle_conflict", error);
-      return refuse("bundle_conflict");
-    }
-    if (!bytesEqual(encodeComponentBundleManifest(decoded), encodedManifest))
-      return refuse("bundle_conflict");
-  }
-
-  // The files are written first and the manifest last, so the manifest is the
-  // address's commit point: a partial write leaves no address to serve. Writes
-  // never overwrite, so an object left by an earlier interrupted or concurrent
-  // publication survives; each stored object is read back and must hold exactly
-  // the bytes this bundle records, otherwise the address is refused rather than
-  // committed over bytes it does not describe.
-  for (const file of files) {
-    await writeObjectOrRefuse(store, {
-      objectPath: file.objectPath,
-      bytes: byPath.get(file.path) as Uint8Array,
-      contentType: componentBundleMediaType(file.path),
-    });
-    const stored = await readObjectOrRefuse(store, file.objectPath);
-    if (stored === undefined) return refuse("storage_unavailable");
-    if (componentBundleFileDigest(stored) !== file.sha384) return refuse("bundle_conflict");
-  }
-  if (existingManifest === undefined) {
-    await writeObjectOrRefuse(store, {
-      objectPath: manifestObjectPath,
-      bytes: encodedManifest,
-      contentType: "application/json; charset=utf-8",
-    });
-    const storedManifest = await readObjectOrRefuse(store, manifestObjectPath);
-    if (storedManifest === undefined) return refuse("storage_unavailable");
-    if (!bytesEqual(storedManifest, encodedManifest)) return refuse("bundle_conflict");
-  }
-
-  return Object.freeze({
-    release: Object.freeze({ ...input.release, bundle: Object.freeze({ ...bundle, digest }) }),
-    digest,
-    contentAddress,
-    entryFile: bundle.entryFile,
-    entryObjectPath: componentBundleFileObjectPath(contentAddress, bundle.entryFile),
-    manifestObjectPath,
-    files: Object.freeze(files),
-  });
 };

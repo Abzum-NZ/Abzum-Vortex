@@ -12,7 +12,6 @@ export * from "./choice-option-permission";
 export * from "./named-action-inputs";
 export * from "./action-record-port";
 export * from "./record-lifecycle-policy-record";
-export * from "./delete-record";
 export * from "./derived-field-backfill";
 export * from "./derived-field-consumer";
 export * from "./action-record-availability";

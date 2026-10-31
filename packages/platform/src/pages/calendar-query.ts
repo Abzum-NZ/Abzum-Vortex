@@ -170,7 +170,7 @@ const calendarTitle = (
 };
 
 /** The Query engine's `run`, supplied by the composition root; it authorises the viewer itself. */
-export type CalendarQueryRunner = Readonly<{
+type CalendarQueryRunner = Readonly<{
   run(
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
@@ -178,7 +178,7 @@ export type CalendarQueryRunner = Readonly<{
   ): Promise<HumanOrganizationRequestResult<ProtectedQueryResult>>;
 }>;
 
-export type CalendarPlacementProjectionInput = Readonly<{
+type CalendarPlacementProjectionInput = Readonly<{
   bound: Readonly<{ module: ModuleRelease; query: ModuleQuery }>;
   contract: CalendarPlacementContract;
   /** The organisation's IANA time zone, read by the caller after its own authorisation. */
@@ -195,7 +195,7 @@ export type CalendarPlacementProjectionInput = Readonly<{
   resolveRecordLinks: RecordLinkResolver;
 }>;
 
-export type CalendarPlacementFailureCause =
+type CalendarPlacementFailureCause =
   | "calendar_settings_invalid"
   | "calendar_range_unsupported"
   | "calendar_query_invalid"
@@ -203,13 +203,13 @@ export type CalendarPlacementFailureCause =
   | "calendar_query_refused"
   | "calendar_arrangement_refused";
 
-export type CalendarPlacementValues = z.input<typeof calendarPayloadSchema>;
+type CalendarPlacementValues = z.input<typeof calendarPayloadSchema>;
 
 /**
  * One calendar placement read. A refusal names its cause for the server log; `unavailable` is a
  * temporary failure the placement may retry, `refused` a settled one.
  */
-export type CalendarPlacementProjection =
+type CalendarPlacementProjection =
   | Readonly<{ outcome: "ready"; values: CalendarPlacementValues }>
   | Readonly<{
       outcome: "refused" | "unavailable";

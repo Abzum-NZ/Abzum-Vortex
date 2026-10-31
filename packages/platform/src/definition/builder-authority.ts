@@ -73,7 +73,7 @@ export type BuilderTargetFacts = Readonly<{
   isSystemApplication: boolean;
 }>;
 
-export type BuilderRequirements = Readonly<{
+type BuilderRequirements = Readonly<{
   /** Every one of these permissions must be held. */
   permissionKeys: readonly BuilderPermissionKey[];
   recentAuthentication: boolean;
@@ -163,7 +163,7 @@ export const builderAuthorityErrorCodes = [
   "BUILDER_MULTI_FACTOR_REQUIRED",
 ] as const;
 
-export type BuilderAuthorityErrorCode = (typeof builderAuthorityErrorCodes)[number];
+type BuilderAuthorityErrorCode = (typeof builderAuthorityErrorCodes)[number];
 
 /**
  * A builder operation was refused before any write. It carries only its code and the correlation

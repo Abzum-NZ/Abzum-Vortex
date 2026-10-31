@@ -24,7 +24,7 @@ type InlineModuleActionEffect = Readonly<{ field: string; value: unknown }>;
  * Saving that option anywhere else (a form, a board card, a Save record step) then runs this action.
  * What the action does is its flow, edited in the flow editor.
  */
-export type InlineModuleActionChange = Readonly<{
+type InlineModuleActionChange = Readonly<{
   moduleKey: string;
   recordKey: string;
   /** The action's key; absent for a new action. */
@@ -39,7 +39,7 @@ export type InlineModuleActionChange = Readonly<{
   initialEffect?: Readonly<{ field: string; option: string }>;
 }>;
 
-export type InlineModuleActionResult =
+type InlineModuleActionResult =
   | Readonly<{
       kind: "changed";
       source: ApplicationSourceDocument;
@@ -207,7 +207,7 @@ const starterActionFlow = (
  * the record, the fields its flow sets, the carried fields of the events it announces and the link
  * fields of the relationships it copies.
  */
-export const actionFieldPolicy = (
+const actionFieldPolicy = (
   module: InlineModule,
   record: RecordType,
   action: ModuleAction,

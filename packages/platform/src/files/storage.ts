@@ -2,15 +2,11 @@ import { z } from "zod";
 import {
   applicationRootIdSchema,
   fieldIdSchema,
-  fingerprintSchema,
   moduleRootIdSchema,
   organizationIdSchema,
-  recordTypeIdSchema,
   revisionSchema,
   storageContractIdSchema,
 } from "../catalogue/identifiers";
-
-export const recordStorageSchemaTokenSchema = z.literal("record_data");
 
 export const recordStorageTableTokenSchema = z
   .string()
@@ -21,77 +17,6 @@ export const recordStorageColumnTokenSchema = z
   .string()
   .length(34)
   .regex(/^f_[a-f0-9]{32}$/, "Record field tokens retain the complete field identity");
-
-export const compatibleRevisionRangeSchema = z
-  .object({ firstRevision: revisionSchema, lastRevision: revisionSchema.optional() })
-  .strict()
-  .refine(
-    (range) => range.lastRevision === undefined || range.lastRevision >= range.firstRevision,
-    {
-      message: "The last compatible revision cannot precede the first",
-    },
-  );
-
-export const storageCatalogEntrySchema = z
-  .object({
-    storageContractId: storageContractIdSchema,
-    owningService: z.literal("record"),
-    physicalSchemaToken: recordStorageSchemaTokenSchema,
-    physicalTableToken: recordStorageTableTokenSchema,
-    moduleRootId: moduleRootIdSchema,
-    recordTypeId: recordTypeIdSchema,
-    storageScope: z.enum(["organization_shared", "application_contained"]),
-    compatibleRevisions: compatibleRevisionRangeSchema,
-    state: z.enum(["planned", "active", "retired"]),
-    contentFingerprint: fingerprintSchema,
-  })
-  .strict();
-
-export const fieldStorageMappingSchema = z
-  .object({
-    storageContractId: storageContractIdSchema,
-    fieldId: fieldIdSchema,
-    physicalColumnToken: recordStorageColumnTokenSchema,
-    databaseValueType: z.enum([
-      "boolean",
-      "date",
-      "decimal",
-      "integer",
-      "json",
-      "text",
-      "timestamp_with_time_zone",
-      "uuid",
-    ]),
-    introducedByModuleRootId: moduleRootIdSchema,
-    introducedAtReleaseRevision: revisionSchema,
-    retiredByModuleRootId: moduleRootIdSchema.optional(),
-    retiredAtReleaseRevision: revisionSchema.optional(),
-    state: z.enum(["planned", "active", "retired"]),
-  })
-  .strict()
-  .superRefine((value, context) => {
-    if (
-      (value.retiredByModuleRootId === undefined) !==
-      (value.retiredAtReleaseRevision === undefined)
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["retiredAtReleaseRevision"],
-        message: "Field retirement requires one exact owning module release",
-      });
-    if (value.state === "retired" && value.retiredAtReleaseRevision === undefined)
-      context.addIssue({
-        code: "custom",
-        path: ["state"],
-        message: "A retired field mapping requires retirement provenance",
-      });
-    if (value.state !== "retired" && value.retiredAtReleaseRevision !== undefined)
-      context.addIssue({
-        code: "custom",
-        path: ["state"],
-        message: "Only a retired field mapping carries retirement provenance",
-      });
-  });
 
 export const moduleInstallationStorageCommandSchema = z
   .object({
@@ -324,18 +249,6 @@ export const applicationInstallationLifecycleErrorCodeSchema = z.enum([
   "APPLICATION_INSTALLATION_BINDINGS_INCOMPLETE",
   "APPLICATION_INSTALLATION_CHANGE_FAILED",
 ]);
-
-export const recordStorageReleaseProvisionSchema = z
-  .object({
-    moduleRootId: moduleRootIdSchema,
-    releaseRevision: revisionSchema,
-    storageContractIds: canonicalStorageContractIdsSchema,
-  })
-  .strict();
-
-export type StorageCatalogEntry = z.infer<typeof storageCatalogEntrySchema>;
-export type FieldStorageMapping = z.infer<typeof fieldStorageMappingSchema>;
-export type CompatibleRevisionRange = z.infer<typeof compatibleRevisionRangeSchema>;
 export type ModuleInstallationStorageCommand = z.infer<
   typeof moduleInstallationStorageCommandSchema
 >;
@@ -360,4 +273,3 @@ export type ApplicationInstallationLifecycleResult = z.infer<
 export type ApplicationInstallationLifecycleErrorCode = z.infer<
   typeof applicationInstallationLifecycleErrorCodeSchema
 >;
-export type RecordStorageReleaseProvision = z.infer<typeof recordStorageReleaseProvisionSchema>;
