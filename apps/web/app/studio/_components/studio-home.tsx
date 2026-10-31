@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { NavigationLink } from "@vortex/ui/routing";
 import { VORTEX_ICON_NAMES } from "@vortex/platform/schema";
 import type { OrganizationBuilderRoot } from "@vortex/platform/server";
 import { AppearanceToggle } from "@vortex/ui/appearance-toggle";
@@ -49,7 +49,7 @@ function NewApplication({
     <Button
       variant={variant}
       nativeButton={false}
-      render={<Link href={`/studio/${organizationId}/new`} />}
+      render={<NavigationLink href={`/studio/${organizationId}/new`} />}
     >
       <Icon name="plus" />
       New application
@@ -90,7 +90,7 @@ export async function StudioHome({
                 {organizations.map((organization) => (
                   <DropdownMenuItem
                     key={organization.organizationId}
-                    render={<Link href={`/studio/${organization.organizationId}/new`} />}
+                    render={<NavigationLink href={`/studio/${organization.organizationId}/new`} />}
                   >
                     {organization.name}
                   </DropdownMenuItem>
@@ -98,7 +98,11 @@ export async function StudioHome({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <Button variant="outline" nativeButton={false} render={<Link href="/signed-in" />}>
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<NavigationLink href="/signed-in" />}
+          >
             <Icon name="chevron-left" />
             Back to applications
           </Button>
@@ -143,7 +147,11 @@ export async function StudioHome({
                       variant="outline"
                     />
                   ) : (
-                    <Button variant="outline" nativeButton={false} render={<Link href={base} />}>
+                    <Button
+                      variant="outline"
+                      nativeButton={false}
+                      render={<NavigationLink href={base} />}
+                    >
                       First page
                     </Button>
                   )}
@@ -179,7 +187,9 @@ export async function StudioHome({
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem
-                                render={<Link href={`${href}?tab=releases&section=history`} />}
+                                render={
+                                  <NavigationLink href={`${href}?tab=releases&section=history`} />
+                                }
                               >
                                 Published versions
                               </DropdownMenuItem>
@@ -187,13 +197,12 @@ export async function StudioHome({
                           </DropdownMenu>
                         </div>
                         <h3 className="text-base font-semibold">
-                          <Link
+                          <NavigationLink
                             href={href}
-                            prefetch={false}
                             className="outline-none after:absolute after:inset-0 after:rounded-xl"
                           >
                             {root.name}
-                          </Link>
+                          </NavigationLink>
                         </h3>
                       </CardHeader>
                       <CardContent className="flex-1">

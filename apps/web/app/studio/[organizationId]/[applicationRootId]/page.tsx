@@ -1,5 +1,5 @@
 import { loadStudioApplicationDraft } from "../../../_lib/studio-application-draft";
-import { organizationAddressPath } from "../../../_lib/address-paths";
+import { applicationPageAddressPath, organizationAddressPath } from "../../../_lib/address-paths";
 import {
   loadOrganizationLauncher,
   loadPermittedApplicationsAtAddress,
@@ -93,6 +93,21 @@ const loadWorkspacePlace = async (
     console.error(
       `[studio] installed applications could not be read: ${applications.kind}${applications.kind === "temporarily_unavailable" && applications.cause !== undefined ? ` (${applications.cause})` : ""}`,
     );
+  // Links name an installed application's home page, never its address that would redirect there.
+  const pathOf = (key: string): string => {
+    const application =
+      applications.kind === "available"
+        ? applications.applications.find((candidate) => candidate.key === key)
+        : undefined;
+    return application === undefined
+      ? `${organizationPath}/${encodeURIComponent(key)}`
+      : applicationPageAddressPath(
+          entry.tenantShortName,
+          entry.organizationShortName,
+          application.key,
+          application.homePageKey,
+        );
+  };
   const installed =
     applications.kind === "available" &&
     applications.applications.some((candidate) => candidate.key === applicationKey);
@@ -100,8 +115,8 @@ const loadWorkspacePlace = async (
     kind: "available",
     place: {
       organizationName: entry.organizationDisplayName,
-      applicationHref: `${organizationPath}/${encodeURIComponent(applicationKey)}`,
-      appStoreHref: `${organizationPath}/${encodeURIComponent(settings.value)}`,
+      applicationHref: pathOf(applicationKey),
+      appStoreHref: pathOf(settings.value),
       installed,
     },
   };
