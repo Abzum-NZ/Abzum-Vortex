@@ -81,6 +81,10 @@ export const addRecordPage = (
     if (found.detail === undefined) addDetail(context, plan, resolved, companionCommand);
     if (found.create === undefined && resolved.record.standard_actions.includes("create"))
       addForm(context, plan, resolved, companionCommand, "create");
+    // The Edit form belongs with List, Detail and Create: a member can change a record from the
+    // detail page's header and from each row's menu.
+    if (found.edit === undefined && resolved.record.standard_actions.includes("update"))
+      addForm(context, plan, resolved, companionCommand, "update");
   }
   const page =
     command.type === "list"

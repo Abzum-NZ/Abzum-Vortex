@@ -2,7 +2,6 @@ import {
   changeableByPeople,
   defaultSaveFlowSource,
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
-  sourcePageItems,
   sourcePageZones,
   type DefaultFlowAfter,
 } from "@vortex/platform/schema";
@@ -13,9 +12,12 @@ import {
   lowerFirst,
   type StudioRecordPageCommand,
 } from "./application-record-page-kinds";
+import { ensureRelatedAdds } from "./application-record-page-detail";
 import { bindDefault, flowCreate, freshAlias, type Plan } from "./application-record-plan";
 import {
   companions,
+  ensureDetailEdit,
+  ensureListEdit,
   field,
   openButton,
   opensAny,
@@ -102,7 +104,10 @@ const saveFlow = (
   });
 };
 
-/** A readable-width frame holding one form of field inputs and its submit button. */
+/**
+ * One form of field inputs and its submit button, placed straight in the page's content area: no
+ * wrapper block, so the generated page carries no empty slot for the canvas to draw.
+ */
 const formBlock = (
   context: StudioStructureContext,
   plan: Plan,
@@ -132,13 +137,7 @@ const formBlock = (
     { title },
     { content: [...inputs, button] },
   );
-  const frame = blockItem(
-    release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.CONTAINER_BLOCK_RELEASE, "container"),
-    freshAlias(plan, `${formAlias}_frame`),
-    { direction: "column", gap: "medium", padding: "medium", content_width: "readable" },
-    { content: [form] },
-  );
-  return { frame, formAlias };
+  return { frame: form, formAlias };
 };
 
 export const addForm = (
@@ -246,6 +245,8 @@ const linkFormBack = (
       );
       plan.details.push(`A ${quoted(label)} button on ${quoted(list.name)} opens this form.`);
     }
+    // A related list elsewhere asks for this record type: the create form makes its Add action.
+    ensureRelatedAdds(context, plan, resolved);
     return;
   }
   const detail = found.detail;
@@ -253,31 +254,11 @@ const linkFormBack = (
     plan.details.push(
       `Nothing opens this form yet: ${resolved.record.plural_name.toLowerCase()} have no detail page. Adding one puts an Edit button there.`,
     );
+    ensureListEdit(context, plan, resolved);
     return;
   }
-  if (opensAny(plan.source, detail, [page.key])) return;
-  const shown = sourcePageItems(detail.composition).find(
-    (item) => String(item.type) === "platform.renderer.record_detail",
-  );
-  const data = detail.composition as unknown as Parameters<typeof sourcePageZones>[0];
-  openButton(
-    context,
-    plan,
-    "Edit",
-    resolved.permission(plan.source, "update", plan.details),
-    page,
-    resolved,
-    shown === undefined
-      ? {
-          items:
-            sourcePageZones(data).find(([, items]) => items.length > 0)?.[1] ??
-            sourcePageZones(data).at(-1)![1],
-        }
-      : { beside: shown.props.id },
-  );
-  plan.details.push(
-    `An ${quoted("Edit")} button on ${quoted(detail.name)} opens this form with the shown ${lowerFirst(resolved.record.name)}.`,
-  );
+  ensureDetailEdit(context, plan, resolved);
+  ensureListEdit(context, plan, resolved);
 };
 
 export const addGuided = (

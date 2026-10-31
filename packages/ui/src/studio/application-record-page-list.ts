@@ -5,6 +5,8 @@ import {
   bindDelete,
   companions,
   ensureDetailDelete,
+  ensureDetailEdit,
+  ensureListEdit,
   field,
   keyColumns,
   listQuery,
@@ -118,6 +120,8 @@ export const addList = (
     );
   }
   ensureDetailDelete(context, plan, resolved);
+  ensureDetailEdit(context, plan, resolved);
+  ensureListEdit(context, plan, resolved);
   return placedPage.page;
 };
 

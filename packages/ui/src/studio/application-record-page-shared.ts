@@ -276,14 +276,18 @@ export const tableColumns = (
   }));
 };
 
-/** A flow bound to a row click or an action that opens one page, with the clicked or current record when given. */
+/** A flow bound to a row click, a row menu action or an action that opens one page, with the clicked or current record when given. */
 export const openFlow = (
   plan: Plan,
   controlAlias: string,
-  event: "row_clicked" | "action",
+  event: "row_clicked" | "row_action" | "action",
   name: string,
   target: Page,
   resolved: Resolved | undefined,
+  extra: Readonly<{
+    rowActionLabel?: string;
+    rowActionCapability?: "update" | "delete" | "restore";
+  }> = {},
 ) =>
   bindDefault(
     plan,
@@ -297,6 +301,7 @@ export const openFlow = (
       ...(resolved === undefined ? {} : { recordType: resolved.qualified }),
     }),
     name,
+    extra,
   );
 
 /** Finds a placed block by alias in the current draft, with the list that holds it. */
@@ -357,6 +362,7 @@ export const placeButton = (
   permission: string,
   place: Readonly<{ beside: string }> | Readonly<{ items: SourceItem[] }>,
   variant: "primary" | "danger" = "primary",
+  order: "first" | "last" = "last",
 ): string => {
   const alias = freshAlias(plan, `button_${uniqueKey(label, "", new Set(), 40)}`);
   const button = blockItem(
@@ -384,7 +390,10 @@ export const placeButton = (
       holder.siblings.splice(holder.siblings.indexOf(holder.item), 0, button);
     else {
       if (!Array.isArray(header.props.actions)) header.props.actions = [];
-      (header.props.actions as SourceItem[]).push(button);
+      const actions = header.props.actions as SourceItem[];
+      // A page header's primary action comes first and its last action (Delete) stays last.
+      if (order === "first") actions.unshift(button);
+      else actions.push(button);
     }
   }
   return alias;
@@ -600,3 +609,100 @@ export const ensureDetailDelete = (
   );
 };
 
+/** Whether a control's binding already opens one of the given pages. */
+export const controlOpens = (
+  source: Source,
+  controlAlias: string,
+  targets: readonly string[],
+): boolean =>
+  source.body.flow_bindings.some(
+    (binding) =>
+      binding.control === controlAlias &&
+      source.body.flows.some(
+        (flow) =>
+          (flow.key === binding.flow || flow.id === binding.flow) &&
+          flow.tasks.some(
+            (task) =>
+              task.type === "interface.navigate" &&
+              targets.includes(
+                String(
+                  (task.properties as { page?: { literal?: { value?: unknown } } }).page?.literal
+                    ?.value,
+                ),
+              ),
+          ),
+      ),
+  );
+
+/**
+ * Edit in the detail page's header actions, first, so it reads as the main action and Delete stays
+ * last. Added when the edit page exists (the generator's own page, or one added later).
+ */
+export const ensureDetailEdit = (
+  context: StudioStructureContext,
+  plan: Plan,
+  resolved: Resolved,
+): void => {
+  const found = companions(plan.source, resolved.qualified);
+  if (
+    found.detail === undefined ||
+    found.edit === undefined ||
+    !resolved.record.standard_actions.includes("update")
+  )
+    return;
+  const detail = plan.source.body.pages.find((entry) => entry.id === found.detail!.id);
+  if (detail === undefined) return;
+  if (opensAny(plan.source, detail, [found.edit.key])) return;
+  const shown = sourcePageItems(detail.composition).find(
+    (item) => String(item.type) === "platform.renderer.record_detail",
+  );
+  const data = detail.composition as unknown as Parameters<typeof sourcePageZones>[0];
+  const alias = placeButton(
+    context,
+    plan,
+    "Edit",
+    resolved.permission(plan.source, "update", plan.details),
+    shown === undefined
+      ? {
+          items:
+            sourcePageZones(data).find(([, items]) => items.length > 0)?.[1] ??
+            sourcePageZones(data).at(-1)![1],
+        }
+      : { beside: shown.props.id },
+    "primary",
+    "first",
+  );
+  openFlow(plan, alias, "action", `Edit ${lowerFirst(resolved.record.name)}`, found.edit, resolved);
+  plan.details.push(
+    `An ${quoted("Edit")} button in the header of ${quoted(detail.name)} opens ${quoted(found.edit.name)} with this ${lowerFirst(resolved.record.name)}.`,
+  );
+};
+
+/** Edit in each list's row menu, once, wherever an edit page exists. */
+export const ensureListEdit = (
+  context: StudioStructureContext,
+  plan: Plan,
+  resolved: Resolved,
+): void => {
+  const found = companions(plan.source, resolved.qualified);
+  if (found.edit === undefined || !resolved.record.standard_actions.includes("update")) return;
+  for (const listId of found.list.map((entry) => entry.id)) {
+    const list = plan.source.body.pages.find((entry) => entry.id === listId);
+    if (list === undefined) continue;
+    const table = recordTables(plan.source, list, resolved)[0];
+    if (table === undefined || controlOpens(plan.source, table.props.id, [found.edit.key]))
+      continue;
+    openFlow(
+      plan,
+      table.props.id,
+      "row_action",
+      `Edit ${lowerFirst(resolved.record.name)}`,
+      found.edit,
+      resolved,
+      { rowActionLabel: "Edit", rowActionCapability: "update" },
+    );
+    plan.details.push(
+      `Each row of ${quoted(list.name)} has an ${quoted("Edit")} action: it opens ${quoted(found.edit.name)} with that ${lowerFirst(resolved.record.name)}.`,
+    );
+  }
+};
