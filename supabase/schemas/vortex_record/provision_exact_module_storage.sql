@@ -48,6 +48,8 @@ declare
   any_change boolean := false;
   is_projection boolean;
   protected_view_key text;
+  removed_option_values text[];
+  removed_option_in_use boolean;
 begin
   if not vortex_platform.is_non_nil_uuid(p_module_root_id::text)
     or p_module_release_revision not between 1 and 9007199254740991 then
@@ -359,6 +361,54 @@ begin
       where mapping.storage_contract_id = storage_id and mapping.field_id = field_id_value
       for update;
       if found then
+        -- A newer release may drop a choice option that no stored row holds: the stored
+        -- definition stops offering it before the compatibility check, in this transaction,
+        -- with the table locked against concurrent writes. An option a row holds is refused.
+        if stored_catalogue.storage_contract_id is not null
+          and p_module_release_revision > stored_catalogue.last_compatible_release_revision
+          and field_value ->> 'type' in ('choice', 'several_choices')
+          and stored_field.field_definition ->> 'type' = field_value ->> 'type'
+          and pg_catalog.jsonb_typeof(stored_field.field_definition #> '{settings,options}') = 'array'
+          and pg_catalog.jsonb_typeof(field_value #> '{settings,options}') = 'array' then
+          select coalesce(pg_catalog.array_agg(before.value ->> 'value' order by before.ordinality),
+              array[]::text[])
+          into removed_option_values
+          from pg_catalog.jsonb_array_elements(
+            stored_field.field_definition #> '{settings,options}'
+          ) with ordinality as before(value, ordinality)
+          where not exists (
+            select 1
+            from pg_catalog.jsonb_array_elements(field_value #> '{settings,options}') as after(value)
+            where after.value -> 'value' = before.value -> 'value'
+          );
+          if pg_catalog.cardinality(removed_option_values) > 0 then
+            if not is_projection then
+              execute pg_catalog.format('lock table record_data.%I in share mode', table_token);
+              execute pg_catalog.format(
+                case when stored_field.database_value_type = 'json'
+                  then 'select exists (select 1 from record_data.%I where %I ?| $1)'
+                  else 'select exists (select 1 from record_data.%I where %I = any ($1))'
+                end,
+                table_token, column_token
+              ) into removed_option_in_use using removed_option_values;
+              if removed_option_in_use then
+                raise exception using errcode = '55000', message = 'Existing record field storage is incompatible';
+              end if;
+            end if;
+            stored_field.field_definition := pg_catalog.jsonb_set(
+              stored_field.field_definition, '{settings,options}', (
+                select coalesce(pg_catalog.jsonb_agg(before.value order by before.ordinality), '[]'::jsonb)
+                from pg_catalog.jsonb_array_elements(
+                  stored_field.field_definition #> '{settings,options}'
+                ) with ordinality as before(value, ordinality)
+                where (before.value ->> 'value') <> all (removed_option_values)
+              )
+            );
+            update vortex_record.field_storage_mappings as mapping
+            set field_definition = stored_field.field_definition
+            where mapping.storage_contract_id = storage_id and mapping.field_id = field_id_value;
+          end if;
+        end if;
         if stored_field.physical_column_token <> column_token
           or stored_field.database_value_type <> database_type
           or stored_field.state <> 'active'
@@ -426,9 +476,12 @@ begin
 
     -- Only a field this Module itself introduced can prove a removed field. A
     -- field another Module contributed keeps its retained lineage and never
-    -- refuses this Module's own storage.
-    if exists (
-      select 1 from vortex_record.field_storage_mappings as mapping
+    -- refuses this Module's own storage. The newest release may remove a field
+    -- of a system projection: the protected reader supplies every value, so the
+    -- mapping holds none and is removed when nothing stored refers to it. Every
+    -- other removed field is refused.
+    for stored_field in
+      select mapping.* from vortex_record.field_storage_mappings as mapping
       where mapping.storage_contract_id = storage_id and mapping.state = 'active'
         and mapping.introduced_by_module_root_id = p_module_root_id
         and mapping.introduced_at_release_revision <= p_module_release_revision
@@ -436,9 +489,40 @@ begin
           select 1 from pg_catalog.jsonb_array_elements(record_type -> 'fields') as item(value)
           where item.value ->> 'fieldId' = mapping.field_id::text
         )
-    ) then
-      raise exception using errcode = '55000', message = 'Compatible storage upgrades cannot remove fields';
-    end if;
+      order by mapping.field_id
+      for update
+    loop
+      if not is_projection
+        or stored_catalogue.storage_contract_id is null
+        or stored_catalogue.last_compatible_release_revision > p_module_release_revision
+        or pg_catalog.to_regclass(pg_catalog.format('%I.%I', 'record_data', table_token)) is not null
+        or exists (
+          select 1 from vortex_record.index_catalogue as stored_index
+          where stored_index.storage_contract_id = storage_id
+            and stored_index.field_id = stored_field.field_id
+        )
+        or exists (
+          select 1 from vortex_record.record_reference_counters as counter
+          where counter.storage_contract_id = storage_id
+            and counter.field_id = stored_field.field_id
+        )
+        or exists (
+          select 1 from vortex_record.preview_reference_counters as counter
+          where counter.storage_contract_id = storage_id
+            and counter.field_id = stored_field.field_id
+        )
+        or exists (
+          select 1 from vortex_record.relationship_storage_mappings as relationship
+          where relationship.source_storage_contract_id = storage_id
+            and relationship.source_field_id = stored_field.field_id
+        ) then
+        raise exception using errcode = '55000', message = 'Compatible storage upgrades cannot remove fields';
+      end if;
+      delete from vortex_record.field_storage_mappings as mapping
+      where mapping.storage_contract_id = storage_id
+        and mapping.field_id = stored_field.field_id;
+      any_change := true;
+    end loop;
 
     if stored_catalogue.storage_contract_id is not null
       and stored_catalogue.last_compatible_release_revision < p_module_release_revision then
@@ -482,6 +566,96 @@ begin
   ) then
     raise exception using errcode = '55000', message = 'Compatible storage upgrades cannot remove relationships';
   end if;
+
+  -- The newest release may drop a system projection record type of this Module.
+  -- Its storage holds no rows (the protected reader supplies them), so its
+  -- catalogue entry, field mappings and lifecycle policy are removed when nothing
+  -- stored refers to it; otherwise the upgrade is refused. Any other record type
+  -- a release drops keeps its storage.
+  for storage_id in
+    select catalogue.storage_contract_id
+    from vortex_record.storage_catalogue as catalogue
+    where catalogue.module_root_id = p_module_root_id
+      and catalogue.physical_schema_token = 'system_projection'
+      and catalogue.last_compatible_release_revision <= p_module_release_revision
+      and not (catalogue.storage_contract_id = any (result_storage_ids))
+    order by catalogue.storage_contract_id
+  loop
+    perform pg_catalog.pg_advisory_xact_lock(
+      pg_catalog.hashtextextended('vortex_record.storage:' || storage_id::text, 0)
+    );
+    select catalogue.* into strict stored_catalogue
+    from vortex_record.storage_catalogue as catalogue
+    where catalogue.storage_contract_id = storage_id
+    for update;
+    if stored_catalogue.state <> 'active'
+      or stored_catalogue.module_root_id <> p_module_root_id
+      or stored_catalogue.physical_schema_token <> 'system_projection'
+      or stored_catalogue.last_compatible_release_revision > p_module_release_revision
+      or pg_catalog.to_regclass(
+        pg_catalog.format('%I.%I', 'record_data', stored_catalogue.physical_table_token)
+      ) is not null
+      or exists (
+        select 1 from vortex_record.field_storage_mappings as mapping
+        where mapping.storage_contract_id = storage_id
+          and (mapping.state <> 'active'
+            or mapping.introduced_by_module_root_id <> p_module_root_id)
+      )
+      or exists (
+        select 1 from vortex_record.index_catalogue as stored_index
+        where stored_index.storage_contract_id = storage_id
+      )
+      or exists (
+        select 1 from vortex_record.record_reference_counters as counter
+        where counter.storage_contract_id = storage_id
+      )
+      or exists (
+        select 1 from vortex_record.preview_reference_counters as counter
+        where counter.storage_contract_id = storage_id
+      )
+      or exists (
+        select 1 from vortex_record.preview_storage_bindings as preview
+        where storage_id in (preview.storage_contract_id, preview.release_storage_contract_id)
+      )
+      or exists (
+        select 1 from vortex_record.relationship_storage_mappings as relationship
+        where relationship.source_storage_contract_id = storage_id
+          or stored_catalogue.record_type_id = any (relationship.target_record_type_ids)
+      )
+      or exists (
+        select 1 from vortex_record.relationship_edges as edge
+        where storage_id in (edge.from_storage_contract_id, edge.to_storage_contract_id)
+      )
+      or exists (
+        select 1 from vortex_access.organization_direct_record_shares as share
+        where share.storage_contract_id = storage_id
+      )
+      or exists (
+        select 1 from vortex_access.record_share_grants as grant_row
+        where grant_row.record_type_id = stored_catalogue.record_type_id
+      )
+      or exists (
+        select 1 from vortex_record.record_lifecycle_command_effects as effect
+        where effect.storage_contract_id = storage_id
+      )
+      or exists (
+        select 1 from vortex_record.documents as document
+        where document.record_type_id = stored_catalogue.record_type_id
+      )
+      or exists (
+        select 1 from vortex_platform.event_outbox as event
+        where event.storage_contract_id = storage_id
+      ) then
+      raise exception using errcode = '55000', message = 'Compatible storage upgrades cannot remove record types';
+    end if;
+    delete from vortex_record.record_type_lifecycle_policies as policy
+    where policy.storage_contract_id = storage_id;
+    delete from vortex_record.field_storage_mappings as mapping
+    where mapping.storage_contract_id = storage_id;
+    delete from vortex_record.storage_catalogue as catalogue
+    where catalogue.storage_contract_id = storage_id;
+    any_change := true;
+  end loop;
 
   for record_type in select item.value from pg_catalog.jsonb_array_elements(record_types) as item(value)
   loop
@@ -556,4 +730,4 @@ revoke all on function vortex_record.provision_exact_module_storage(uuid, bigint
 grant execute on function vortex_record.provision_exact_module_storage(uuid, bigint)
   to vortex_owner;
 comment on function vortex_record.provision_exact_module_storage(uuid, bigint) is
-  'Private exact-release Module storage provisioner: creates or evolves generated record_data storage, or registers definition and field mappings for a system projection read only through its bounded protected reader, for one published Module release.';
+  'Private exact-release Module storage provisioner: creates or evolves generated record_data storage, or registers definition and field mappings for a system projection read only through its bounded protected reader, for one published Module release; removes a system projection record type or field, or a choice option, that the newest release drops when nothing stored holds or refers to it.';
