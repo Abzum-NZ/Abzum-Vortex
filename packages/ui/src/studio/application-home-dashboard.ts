@@ -34,7 +34,8 @@ const homeBlockQueries = (page: Page): ReadonlySet<string> =>
 
 const countQuery = (plan: Plan, resolved: Resolved): string => {
   const { module, record, title } = resolved;
-  const key = uniqueKey(`${record.key}_count`, "", new Set(module.queries.map((q) => q.key)), 40);
+  // The home page owns this one key: asking again finds the query it made, never a second one.
+  const key = uniqueKey(`${record.key}_count`, "", new Set(), 40);
   const existing = module.queries.find((query) => query.key === key);
   if (existing !== undefined) return `${module.key}:${existing.key}`;
   if (module.queries.length >= 100)
@@ -62,12 +63,7 @@ const countQuery = (plan: Plan, resolved: Resolved): string => {
 
 const recentQuery = (plan: Plan, resolved: Resolved): string => {
   const { module, record, title } = resolved;
-  const key = uniqueKey(
-    `${record.key}_recent`,
-    "",
-    new Set(module.queries.map((query) => query.key)),
-    40,
-  );
+  const key = uniqueKey(`${record.key}_recent`, "", new Set(), 40);
   const existing = module.queries.find((query) => query.key === key);
   if (existing !== undefined) return `${module.key}:${existing.key}`;
   if (module.queries.length >= 100)
@@ -102,12 +98,7 @@ const stageAmountQuery = (plan: Plan, resolved: Resolved): string | undefined =>
   const stage = record.fields.find((entry) => entry.key === pipeline.stage_field);
   const amount = record.fields.find((entry) => entry.type === "money");
   if (stage === undefined || stage.type !== "choice" || amount === undefined) return undefined;
-  const key = uniqueKey(
-    `${record.key}_by_stage`,
-    "",
-    new Set(module.queries.map((query) => query.key)),
-    40,
-  );
+  const key = uniqueKey(`${record.key}_by_stage`, "", new Set(), 40);
   const existing = module.queries.find((query) => query.key === key);
   if (existing !== undefined) return `${module.key}:${existing.key}`;
   if (module.queries.length >= 100) return undefined;
