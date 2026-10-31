@@ -102,6 +102,25 @@ export const titleLinkInputs = async (
 };
 
 /**
+ * The page parameter that starts a link field: the one the control publishes, otherwise the
+ * field's own identity, which is the name a record page's related-list add link gives it.
+ */
+const initialValueParameterOf = (
+  placement: ReturnType<typeof collectPlacements>[number],
+): string | undefined => {
+  const parameter = placement.settings.publishes_parameter;
+  if (isRecord(parameter) && parameter.kind === "text" && typeof parameter.value === "string")
+    return parameter.value;
+  const field = placement.settings.field;
+  return isLinkInputPlacement(placement) &&
+    isRecord(field) &&
+    field.kind === "field_reference" &&
+    typeof field.fieldId === "string"
+    ? field.fieldId.toLowerCase()
+    : undefined;
+};
+
+/**
  * Starts a link field with the record its page address names under the page parameter the control
  * publishes (it reads and writes that one name). The record shows only when the viewer may read
  * its title; any other value starts the field empty and is logged.
@@ -121,10 +140,9 @@ export const projectInitialLinkInputs = async (
   }>,
 ): Promise<RuntimePreviewDemandResult> => {
   const starts = input.placements.flatMap((placement) => {
-    const parameter = placement.settings.publishes_parameter;
-    if (!isRecord(parameter) || parameter.kind !== "text" || typeof parameter.value !== "string")
-      return [];
-    const raw = first(input.parameters[parameter.value]);
+    const name = initialValueParameterOf(placement);
+    if (name === undefined) return [];
+    const raw = first(input.parameters[name]);
     if (raw === undefined) return [];
     const recordId = recordIdSchema.safeParse(raw);
     const targets = linkInputTargets(placement.settings);

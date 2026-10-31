@@ -201,7 +201,7 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
   const create =
     createHref === undefined || values?.create === undefined
       ? undefined
-      : { href: createHref, label: addLabelOf(values.create.pageKey) };
+      : { href: createHref, label: addLabelOf(createHref) };
   // The grid features this viewer may use on this read, as the server projected them. While the
   // next page is being read the last projection stays, so the search box and filters keep focus.
   // An open group's page carries its own projection, which follows the rows it shows.

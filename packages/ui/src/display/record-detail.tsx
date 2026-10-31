@@ -249,10 +249,10 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
                       <Link
                         href={href}
                         prefetch={false}
-                        aria-label={`${addLabelOf(list.add!.pageKey)} to ${list.title}`}
+                        aria-label={`${addLabelOf(href)} to ${list.title}`}
                         className="shrink-0 text-sm font-medium underline-offset-4 hover:underline"
                       >
-                        {addLabelOf(list.add!.pageKey)}
+                        {addLabelOf(href)}
                       </Link>
                     )}
                   </CardHeader>
