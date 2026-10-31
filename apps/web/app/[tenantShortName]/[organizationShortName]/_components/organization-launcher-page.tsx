@@ -70,9 +70,7 @@ function OrganizationShellPage({
         account,
         organizationName,
         organizationShortName,
-        chooseOrganization: () => router.push("/signed-in"),
         signOut,
-        openApplication: (href) => router.push(href),
       }}
     >
       <PagePuckRenderer

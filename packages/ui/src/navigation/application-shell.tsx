@@ -37,6 +37,8 @@ import { SidebarProvider, SidebarTrigger } from "../components/sidebar";
 import { FlowSurfaceContext } from "../flow-runtime/flow-surface-context";
 import { Icon } from "../icons/icon";
 import { NavigationLink } from "../routing/navigation-link";
+import { SIGNED_IN_LANDING_PATH } from "../routing/destination";
+import { useNavigator } from "../routing/navigator";
 import { resolveVortexIconName } from "../icons/icon-names";
 import { AppearanceToggle } from "./appearance-toggle";
 import { ApplicationAccountMenu, useApplicationAccountActions } from "./account-actions";
@@ -220,6 +222,7 @@ function OrganizationSwitcher({
   runtime,
 }: Readonly<{ runtime: ApplicationShellRuntime | undefined }>): ReactElement {
   const actions = useApplicationAccountActions();
+  const navigator = useNavigator();
   const organizationName = runtime?.organizationName ?? actions?.organizationName ?? "Organisation";
   const organizationShortName = runtime?.organizationShortName ?? actions?.organizationShortName;
   return (
@@ -245,7 +248,7 @@ function OrganizationSwitcher({
         <DropdownMenuSeparator />
         <DropdownMenuItem
           disabled={actions === null}
-          onClick={() => void actions?.chooseOrganization()}
+          onClick={() => navigator.navigate(SIGNED_IN_LANDING_PATH)}
         >
           Switch organisation
         </DropdownMenuItem>
@@ -260,6 +263,7 @@ function ApplicationSwitcher({
 }: Readonly<{ shellName: string; runtime: ApplicationShellRuntime | undefined }>): ReactElement {
   const applicationName = runtime?.applicationName ?? shellName;
   const actions = useApplicationAccountActions();
+  const navigator = useNavigator();
   const source = useContext(ApplicationSwitcherContext);
   const [switcher, setSwitcher] = useState<ApplicationSwitcherData>();
   const [searchExpression, setSearchExpression] = useState("");
@@ -463,7 +467,7 @@ function ApplicationSwitcher({
               <DropdownMenuRadioItem
                 key={application.key}
                 value={application.key}
-                onClick={() => void actions?.openApplication(application.href)}
+                onClick={() => navigator.navigate(application.href)}
                 disabled={actions === null}
               >
                 <Icon

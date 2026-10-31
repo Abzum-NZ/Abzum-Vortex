@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, type RefObject } from "react";
 import type { useRouter } from "next/navigation";
-import type { useUnsavedWorkGuard, useUnsavedWorkRegistry } from "@vortex/ui";
+import type { useUnsavedWorkRegistry } from "@vortex/ui";
 import {
   createFlowInvokeClient,
   createFlowRuntime,
@@ -32,6 +32,7 @@ import {
 } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { DialogFooter } from "@vortex/ui/components/dialog";
+import { useNavigator } from "@vortex/ui/routing";
 import { useApplicationFrame } from "../../../_components/application-frame-state";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import type { SubmittedForm, PageMessageDraft } from "./types";
@@ -48,7 +49,6 @@ export function useFlowRuntime({
   submittedFormsRef,
   router,
   resolvePageHref,
-  unsavedWork,
   model,
   platformComponentRegistry,
   runtimeInputsRef,
@@ -72,7 +72,6 @@ export function useFlowRuntime({
   router: ReturnType<typeof useRouter>;
   resolvePageHref: (pageId: string) => string;
   basePath: string;
-  unsavedWork: ReturnType<typeof useUnsavedWorkGuard>["guard"];
   model: ApplicationPageModel;
   platformComponentRegistry: ReturnType<typeof createPlatformComponentRegistryForReleases>;
   runtimeInputsRef: RefObject<Readonly<Record<string, unknown>>>;
@@ -174,11 +173,10 @@ export function useFlowRuntime({
     unsavedWorkRegistry,
   ]);
   const applicationFrame = useApplicationFrame();
-  const startPageChange = applicationFrame?.startPageChange;
+  const navigator = useNavigator();
   const navigation = model.navigation ?? applicationFrame?.navigation;
   const navigationEnvironment = useMemo<LinkNavigationEnvironment>(
     () => ({
-      unsavedWork,
       recheckInternalTarget: async (target) => {
         if (model.pages.some((page) => sameId(page.pageId, target.pageId))) return true;
         // The projected page list is a rendering hint; the destination still authorises its read.
@@ -194,20 +192,12 @@ export function useFlowRuntime({
         const query = parameters.toString();
         const address = `${resolvePageHref(target.pageId)}${query === "" ? "" : `?${query}`}`;
         runtimeState.messages.carryToasts();
-        // Inside the frame the change runs in its page transition (dimmed page, progress line).
-        if (startPageChange === undefined) router.push(address);
-        else startPageChange(() => router.push(address));
+        // The navigator in force asks before discarding unsaved work and, inside the frame, runs
+        // the change in its page transition (dimmed page, progress line).
+        navigator.navigate(address);
       },
     }),
-    [
-      model.pages,
-      resolvePageHref,
-      router,
-      runtimeState,
-      showPageMessage,
-      startPageChange,
-      unsavedWork,
-    ],
+    [model.pages, navigator, resolvePageHref, runtimeState, showPageMessage],
   );
   // A dialog's form registers in its own scope: the form's placement and the dialog's run.
   const dialogStatesRef = useRef(new Map<string, FlowRuntimeState>());

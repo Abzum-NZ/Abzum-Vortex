@@ -7,7 +7,6 @@ import {
   useId,
   useRef,
   useState,
-  type MouseEvent,
   type ReactElement,
 } from "react";
 import { motion, useReducedMotion } from "motion/react";
@@ -36,6 +35,7 @@ import {
 import { getAccessibleName } from "../display/display-state-container";
 import { cn } from "../lib/utils";
 import type { PlatformBlockRenderProps } from "../registry";
+import { NavigationLink } from "../routing/navigation-link";
 
 type ApplicationNavigationProps = Readonly<{
   /** The viewer's already permission-filtered navigation, in definition order. */
@@ -54,12 +54,6 @@ type ApplicationNavigationProps = Readonly<{
    * viewport query would not; the same data and DOM are used either way.
    */
   breakpoint?: Breakpoint;
-  /**
-   * Internal page activation. The shell performs the client-side transition so the shell and
-   * this navigation stay mounted. The event is passed through unchanged, so the shell decides
-   * how to treat modifier and middle clicks; when this is omitted the browser follows the href.
-   */
-  onNavigate?: (pageId: string, event: MouseEvent<HTMLAnchorElement>) => void;
   className?: string;
 }>;
 
@@ -83,7 +77,8 @@ type NavigationListProps = Readonly<{
    * so a choice is acknowledged at once. `aria-current` stays on the page actually shown.
    */
   pendingPageId: string | undefined;
-  onNavigate: ((pageId: string, event: MouseEvent<HTMLAnchorElement>) => void) | undefined;
+  /** A page item started an in-place page change (the navigator in force carries it out). */
+  onNavigate: (pageId: string) => void;
   /** The one selected-item indicator's layout identity and its slide timing. */
   indicator: Readonly<{ layoutId: string; timing: MotionTiming | undefined }>;
 }>;
@@ -166,11 +161,7 @@ function NavigationList({
               data-vortex-navigation-item-type="external"
             >
               {renderLink(
-                <a
-                  href={item.address}
-                  rel="noopener noreferrer"
-                  aria-label={`${item.label} (external)`}
-                />,
+                <NavigationLink href={item.address} aria-label={`${item.label} (external)`} />,
                 <>
                   <Icon name={item.icon} aria-hidden="true" />
                   <span
@@ -207,12 +198,12 @@ function NavigationList({
               />
             )}
             {renderLink(
-              <a
+              <NavigationLink
                 href={resolvePageHref(item.pageId)}
                 aria-label={item.label}
                 {...(current ? { "aria-current": "page" as const } : {})}
                 {...(pending ? { "data-vortex-navigation-pending": "" } : {})}
-                onClick={(event) => onNavigate?.(item.pageId, event)}
+                onNavigate={() => onNavigate(item.pageId)}
               />,
               <>
                 <Icon name={item.icon} aria-hidden="true" />
@@ -244,7 +235,6 @@ function ApplicationNavigation({
   resolvePageHref,
   currentPageId,
   breakpoint,
-  onNavigate,
   className,
 }: ApplicationNavigationProps): ReactElement {
   const [open, setOpen] = useState(false);
@@ -255,14 +245,12 @@ function ApplicationNavigation({
   const listId = `${baseId}-list`;
   const headingId = (itemId: string): string => `${baseId}-heading-${itemId}`;
   const compact = breakpoint === "phone";
-  // Choosing a page closes the compact disclosure so the destination is visible; the shell still
-  // performs the transition and this component stays mounted.
-  const activatePage = (pageId: string, event: MouseEvent<HTMLAnchorElement>): void => {
+  // Choosing a page closes the compact disclosure so the destination is visible; the page changes
+  // in place and this component stays mounted. The chosen item is selected at once; it is dropped
+  // as soon as the shown page changes, so it never outlives that change.
+  const activatePage = (pageId: string): void => {
     setOpen(false);
-    onNavigate?.(pageId, event);
-    // When the shell took over the transition, the chosen item is selected at once; it is
-    // dropped as soon as the shown page changes, so it never outlives that transition.
-    if (event.defaultPrevented && !(currentPageId !== undefined && samePage(pageId, currentPageId)))
+    if (!(currentPageId !== undefined && samePage(pageId, currentPageId)))
       setPending({ pageId, from: currentPageId });
   };
   // A transition ends when the shown page changes (including Back/Forward), so the pending choice
@@ -400,7 +388,6 @@ export function ApplicationNavigationBlock(props: PlatformBlockRenderProps): Rea
       label={label}
       resolvePageHref={resolvePageHref}
       {...(props.currentPageId === undefined ? {} : { currentPageId: props.currentPageId })}
-      {...(props.onNavigatePage === undefined ? {} : { onNavigate: props.onNavigatePage })}
       breakpoint={props.breakpoint}
     />
   );

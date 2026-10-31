@@ -173,7 +173,7 @@ export function ApplicationPageViewContent({
   const submittedFormsRef = useRef(new Map<string, SubmittedForm>());
   /** Set when the person cancels a form a running flow paused at; a board move clears it when it starts. */
   const formCancelledRef = useRef(false);
-  const { unsavedWorkRegistry, unsavedWork, confirmDialog } = useUnsavedWorkPrompt({ router });
+  const { unsavedWorkRegistry, unsavedWork, confirmDialog } = useUnsavedWorkPrompt();
 
   const application = model.invocation;
   const formOwners = useMemo(
@@ -295,7 +295,6 @@ export function ApplicationPageViewContent({
     router,
     resolvePageHref,
     basePath,
-    unsavedWork,
     model,
     platformComponentRegistry,
     runtimeInputsRef,
@@ -678,9 +677,6 @@ export function ApplicationPageViewContent({
           theme={model.theme}
           {...(navigation === undefined ? {} : { projectedNavigation: navigation })}
           resolvePageHref={resolvePageHref}
-          {...(applicationFrame === null
-            ? {}
-            : { onNavigatePage: applicationFrame.navigateToPage })}
           currentPageId={model.pageId}
           {...(model.guidedForm === undefined
             ? {}

@@ -5,7 +5,6 @@ import { Puck, createUsePuck, useGetPuck, type Content, type Data } from "@pucke
 import {
   useEffect,
   useRef,
-  type MouseEvent,
   type ReactNode,
   type RefObject,
   type SyntheticEvent,
@@ -263,8 +262,6 @@ export function StudioCanvasBridge({
     shellId === undefined
       ? undefined
       : frame.shells.find((candidate) => String(candidate.shellId) === shellId);
-  const ignoreNavigation = (_pageId: string, event: MouseEvent<HTMLAnchorElement>) =>
-    event.preventDefault();
   return (
     <div
       className="contents"
@@ -283,7 +280,6 @@ export function StudioCanvasBridge({
         theme={frame.theme}
         projectedNavigation={frame.navigation}
         resolvePageHref={() => "#"}
-        onNavigatePage={ignoreNavigation}
         currentPageId={frame.pageId}
         // The switcher names only the application being designed.
         applicationSwitcherSource={async () => ({

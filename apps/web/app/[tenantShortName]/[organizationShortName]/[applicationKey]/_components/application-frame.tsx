@@ -7,7 +7,6 @@ import {
   useRef,
   useState,
   useTransition,
-  type MouseEvent,
   type ReactElement,
   type ReactNode,
 } from "react";
@@ -28,6 +27,7 @@ import {
   type ApplicationShellRuntime,
   type PagePuckRendererProps,
 } from "@vortex/ui";
+import { NavigatorProvider, type Navigator } from "@vortex/ui/routing";
 import type { ApplicationFrameModel } from "../../../../_lib/application-frame";
 import { signOut } from "../../../../auth/actions";
 import {
@@ -133,38 +133,7 @@ export function ApplicationFrame({
     : undefined;
   const currentPage = model.pages.find((page) => encodeURIComponent(page.key) === currentSegment);
 
-  // A plain click on a menu page link is a client-side transition: the frame stays mounted and only
-  // the next page's server render is fetched. Modified, middle and targeted clicks keep the
-  // browser's own behaviour. The next page is still composed and authorised on the server for its
-  // own request, exactly as a document load is.
   const [pageTransitionPending, startPageTransition] = useTransition();
-  const navigateToPage = useCallback(
-    (pageId: string, event: MouseEvent<HTMLAnchorElement>) => {
-      if (
-        event.defaultPrevented ||
-        event.button !== 0 ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.shiftKey ||
-        event.altKey ||
-        (event.currentTarget.target !== "" && event.currentTarget.target !== "_self")
-      )
-        return;
-      event.preventDefault();
-      startPageTransition(() => router.push(resolvePageHref(pageId)));
-    },
-    [resolvePageHref, router],
-  );
-  // A page change the page itself starts (a row opening a record, a flow's Navigate) runs in the
-  // same transition, so it dims the page and shows the progress line exactly as a menu click does.
-  // Back and Forward cannot join it: the router carries those out itself and renders the next
-  // address in full before anything commits, so the frame has no moment to show a busy state.
-  const startPageChange = useCallback<ApplicationFrameStateValue["startPageChange"]>(
-    (navigate) => startPageTransition(navigate),
-    [],
-  );
-  // Dynamic pages are never prefetched: with `staleTimes.dynamic` at 0 (next.config.ts) a prefetch
-  // is never reused, so it is one request per approach that the click then repeats.
 
   // The header search follows the address. The layout searched for the address it was rendered
   // for; a later query change without a new document searches again through the server.
@@ -299,18 +268,32 @@ export function ApplicationFrame({
       (await unsavedWork.confirmDiscardUnsavedWork()),
     [unsavedWork],
   );
+  // Every in-place page change inside the frame (a link, a menu item, a flow's Navigate, a toast
+  // action) asks before discarding unsaved work, then runs in the frame's page transition: the
+  // frame stays mounted, the page dims and the progress line shows until the next page is ready.
+  // The next page is still composed and authorised on the server for its own request. Back and
+  // Forward cannot join the transition: the router carries those out itself.
+  const leaveIfConfirmedRef = useRef(leaveIfConfirmed);
+  leaveIfConfirmedRef.current = leaveIfConfirmed;
+  const navigator = useMemo<Navigator>(
+    () => ({
+      navigate: (path, options) => {
+        void (async () => {
+          if (!(await leaveIfConfirmedRef.current())) return;
+          startPageTransition(() =>
+            options?.replace === true ? router.replace(path) : router.push(path),
+          );
+        })();
+      },
+    }),
+    [router],
+  );
   const accountActions: ApplicationAccountActions = {
     account: model.account,
     organizationName: application.organizationDisplayName,
     organizationShortName: application.organizationShortName,
     ...(model.studioHref === undefined ? {} : { studioHref: model.studioHref }),
     ...(adoptRelease === undefined ? {} : { readReleaseAdoption }),
-    chooseOrganization: async () => {
-      if (await leaveIfConfirmed()) router.push("/signed-in");
-    },
-    openApplication: async (href: string) => {
-      if (await leaveIfConfirmed()) router.push(href);
-    },
     signOut: async () => {
       if (!(await leaveIfConfirmed())) return;
       // A read still in flight settles before the one sign-out request is sent.
@@ -354,8 +337,6 @@ export function ApplicationFrame({
       navigation,
       setPageState,
       clearPageState,
-      navigateToPage,
-      startPageChange,
       applicationSearch,
       applicationSearchPageSubject,
       locale: model.locale,
@@ -367,14 +348,13 @@ export function ApplicationFrame({
       applicationSearch,
       applicationSearchPageSubject,
       clearPageState,
-      navigateToPage,
       setPageState,
-      startPageChange,
       navigation,
     ],
   );
 
   return (
+    <NavigatorProvider navigator={navigator}>
     <ApplicationFrameStateProvider value={frameState}>
       <ApplicationAccountActionsProvider actions={accountActions}>
         <PageNavigationBusyContext.Provider value={pageTransitionPending}>
@@ -412,7 +392,6 @@ export function ApplicationFrame({
             projectedNavigation={navigation}
             {...(frameRuntimeInputs === undefined ? {} : { runtimeInputs: frameRuntimeInputs })}
             resolvePageHref={resolvePageHref}
-            onNavigatePage={navigateToPage}
             {...(currentPage === undefined ? {} : { currentPageId: currentPage.pageId })}
             outlet={{
               location: frame.outlet,
@@ -430,5 +409,6 @@ export function ApplicationFrame({
         </PageNavigationBusyContext.Provider>
       </ApplicationAccountActionsProvider>
     </ApplicationFrameStateProvider>
+    </NavigatorProvider>
   );
 }

@@ -27,19 +27,17 @@ export type UnsavedWorkGuard = Readonly<{
 
 /** Shell services a link activation needs; all browser and server effects stay with the shell. */
 export type LinkNavigationEnvironment = Readonly<{
-  unsavedWork?: UnsavedWorkGuard;
   /**
    * Re-checks an internal target on the server through the page/access projection at the moment of
    * activation. A target that is missing, refused or withdrawn returns false and is not opened.
    */
   recheckInternalTarget: (target: LinkTarget) => Promise<boolean> | boolean;
-  /** Performs the client-side transition for an internal target; the shell stays mounted. */
+  /**
+   * Changes the page in place through the navigator in force, which asks before discarding unsaved
+   * work; the shell stays mounted.
+   */
   navigateInternal: (target: LinkTarget) => void;
 }>;
-
-/** True when leaving the current surface may proceed; absent guard means nothing to protect. */
-const mayDiscardUnsavedWork = async (guard: UnsavedWorkGuard | undefined): Promise<boolean> =>
-  guard === undefined || !guard.hasUnsavedWork() || (await guard.confirmDiscardUnsavedWork());
 
 /** The page target a Navigate task intent names; undefined when it names no valid page. */
 const linkTargetForNavigateIntent = (intent: FlowIntent): LinkTarget | undefined => {
@@ -53,9 +51,9 @@ const linkTargetForNavigateIntent = (intent: FlowIntent): LinkTarget | undefined
 };
 
 /**
- * The browser implementation of the Navigate task (`interface.navigate`). The page is re-checked on
- * the server first and refused when it is no longer available; navigation then follows unsaved-work
- * protection. Returns true only when navigation was started.
+ * The browser implementation of the Navigate task (`interface.navigate`). The page is re-checked
+ * first and refused when it is no longer available; the navigator then carries out the change.
+ * Returns true only when navigation was started.
  */
 export async function performNavigateTask(
   intent: FlowIntent,
@@ -65,7 +63,6 @@ export async function performNavigateTask(
   const target = linkTargetForNavigateIntent(intent);
   if (target === undefined) return false;
   if (!(await environment.recheckInternalTarget(target))) return false;
-  if (!(await mayDiscardUnsavedWork(environment.unsavedWork))) return false;
   environment.navigateInternal(target);
   return true;
 }

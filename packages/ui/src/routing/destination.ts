@@ -33,3 +33,9 @@ export function destinationOf(address: string): Destination | undefined {
     return undefined;
   }
 }
+
+/**
+ * The one landing resolver after sign-in: it opens the person's only organisation's application
+ * page, or offers the organisation chooser when there are several.
+ */
+export const SIGNED_IN_LANDING_PATH = "/signed-in";

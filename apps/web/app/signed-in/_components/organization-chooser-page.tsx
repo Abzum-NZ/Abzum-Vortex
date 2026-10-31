@@ -3,7 +3,6 @@
 import { readCompiledItemSettings } from "@vortex/platform/schema";
 import type { ReactElement } from "react";
 import { useMemo } from "react";
-import { useRouter } from "next/navigation";
 import type {
   ApplicationShell,
   PageDefinition,
@@ -48,7 +47,6 @@ export function OrganizationChooserPage({
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
 }>): ReactElement {
-  const router = useRouter();
   const registry = useMemo(
     () => createPlatformComponentRegistryForReleases(platformBlockReleases),
     [platformBlockReleases],
@@ -59,9 +57,7 @@ export function OrganizationChooserPage({
       actions={{
         account,
         organizationName: page.name,
-        chooseOrganization: () => router.push("/signed-in"),
         signOut,
-        openApplication: (href) => router.push(href),
       }}
     >
       <PagePuckRenderer

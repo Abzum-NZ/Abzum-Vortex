@@ -1,4 +1,4 @@
-export { destinationOf, type Destination } from "./destination";
+export { destinationOf, SIGNED_IN_LANDING_PATH, type Destination } from "./destination";
 export { NavigationLink, type NavigationLinkProps } from "./navigation-link";
 export {
   NavigatorProvider,
