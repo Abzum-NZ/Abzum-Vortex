@@ -1,6 +1,6 @@
 # 14. Activity history, privacy and retention
 
-[Previous: Connections, programmable interfaces and MCP](12-connections-and-interfaces.md) · [Specification index](README.md) · Next: [Entitlements and metering](15-entitlements-and-metering.md)
+[Previous: Connections and interfaces](12-connections-and-interfaces.md) · [Specification index](README.md) · Next: [Entitlements and metering](15-entitlements-and-metering.md)
 
 ## Data inventory
 
@@ -38,13 +38,7 @@ Failures before a local organisation/account scope is established cannot nominat
 an organisation to log in. Failure to record Activity never makes an operation
 successful or permits a claim that the refusal was recorded.
 
-[Access Activity integration #41](https://github.com/Abzum-NZ/Abzum-Vortex/issues/41) connects
-this behavior to real Phase 3 owners without duplicating existing success entries.
-[Activity views #115](https://github.com/Abzum-NZ/Abzum-Vortex/issues/115) owns later
-permitted browsing, aggregate read evidence and remaining service integrations.
-Ordinary record reads are not logged individually merely to generate counts.
-
-When a protected flow task runs under a specified account or System actor, the owning operation records its ordinary operation activity for that effective actor. When an initiating organisation account exists, use of the separate execution delegation also records an initiator-account delegation-use entry with the same correlation identifier. A system-started flow has no fabricated human initiator; its existing Activity entries identify the actual verified system actor and triggering cause. These are linked entries in the existing Activity store, not a new flow envelope, history table or substitute for the operation's own evidence.
+Access administration operations record their activity through the same append. Ordinary record reads are not logged individually merely to generate counts.
 
 ## Personal-data classification
 
@@ -62,7 +56,7 @@ Every installed record type has the explicit age/count and end-of-life policy in
 [record-type lifecycle policies](appendices/record-ownership-and-lifecycle.md#record-type-lifecycle-policy).
 Organisation ceilings constrain it; application setup selects it. Reuse this
 retention engine for selection, holds, bounded execution and removal evidence,
-including verified workflow archival. Do not apply a single tenant's policy to
+including flow-run archival. Do not apply a single tenant's policy to
 an entire physical table shared by multiple organisations.
 
 An organisation can choose approved retention periods within legal and platform safety bounds. A policy names the data category, optional version-pinned saved condition, active retention period, recovery period, removal schedule, and applicable legal-constraint keys. Commercial status never weakens privacy or retention correctness.
@@ -77,8 +71,6 @@ An organisation can choose approved retention periods within legal and platform 
 
 The platform supplies protected discovery, export and removal operations because they must consistently cover arbitrary application records, files, search, caches and derived data. A removal command names its tenant, organisations, data categories, optional version-pinned saved condition or protected subject fingerprint, requesting and authorising actors, issue time and correlation identifier. It does not contain a business request lifecycle, findings queue or approval case.
 
-Privacy request intake, identity verification, findings, correspondence, decisions and case progress are ordinary records in a platform-supplied Privacy Operations application whose protected-operation bindings stay platform-owned, as for [system applications](07-applications-pages-and-themes.md#system-applications). That application invokes the protected operations after its own authorised workflow has reached the required outcome.
-
 An **organisation-scoped request** covers one organisation account and the personal data that organisation controls. It must not delete the global identity or affect accounts in other organisations. A **global identity closure** verifies the person, coordinates an organisation-scoped request for every account, closes tenant-administrator assignments, and removes the identity only after required organisation work and lawful exceptions are complete. A tenant-wide request is a tracked batch of organisation-scoped requests, not a shortcut around each organisation's responsibility.
 
 Protected discovery and execution must cover:
@@ -86,7 +78,7 @@ Protected discovery and execution must cover:
 - Global identity and organisation accounts.
 - Record fields and linked records.
 - Files, previews, search entries, and caches.
-- Events and workflow payloads.
+- Events and flow payloads.
 - Activity values where removal is legally permitted.
 - Exports awaiting download.
 - Connected systems where the organisation has configured a deletion operation.
@@ -96,21 +88,9 @@ Protected discovery and execution must cover:
 
 A legal hold is an organisation-owned record with a versioned matching scope, reason, authorised creator, start time, review date, and release decision. It prevents permanent removal only for data that matches that scope; it never skips an entire organisation unless the authorised scope explicitly and lawfully matches all of its data. A hold does not make data more visible. Creating, changing, or releasing a hold requires a dedicated permission and recent sign-in confirmation.
 
-## Shared-record accountability
-
-Creating, consenting to, refusing, activating, using, changing, expiring, or revoking a cross-organisation grant is material activity. The source history records the source and recipient clusters, source and recipient organisations, acting global identity, acting organisation account, grant, consented scope, action, outcome, and correlation identifier. One federated query produces one safe request-level activity entry rather than one entry for every returned row. The recipient history records its local request, remote outcome, and correlation identifier without copying source record values.
-
-The source organisation remains responsible for record retention, legal hold, correction, and erasure. A recipient cannot extend retention or prevent source deletion merely because it can read the record. When an erasure, field removal, or legal restriction changes what may be shared, the next list, detail, search, report, dashboard, or export request applies the new result. The recipient holds no search document, materialised report result, or shared-record cache to remove.
-
-A grant never authorises the recipient to include shared personal data in a workflow payload, connection message, recipient search index, or recipient-owned bulk operation. Shared search and reports run at the source and return only fields permitted by the grant. Export is a separate approval that defaults to refused.
-
-Authorised record values may pass through the recipient service and browser for the requested display, search, report, or action, but persistent recipient-cluster business-data storage is forbidden in the first release. The source sharing policy checks the recipient cluster and region before grant activation. Logs, traces, request mirrors, retry records, saved shared-report definitions, and signed receipts contain identifiers and fingerprints only, not shared field values.
-
-An approved export is a deliberate transfer outside live sharing. The source owns the temporary export job and short-lived file, while the recipient cluster retains neither. Once the recipient downloads the file, Vortex cannot recall or remotely erase that copy when the grant is revoked or source data later changes. Both approval screens state this consequence, both histories record the transfer, and the recipient accepts responsibility for permitted storage, onward disclosure, retention, and deletion. A source that requires revocable access leaves export refused.
-
 ## Isolation and administration
 
-Privacy administrators act within one organisation. A tenant administrator may coordinate and monitor a batch across the tenant but gains no record access from that role; each organisation's authorised privacy process performs its own search and decision. Support access is time limited, purpose bound, approved, and recorded. Privacy export packages are encrypted, short lived, access checked at every download, and never delivered through an ordinary public file link.
+Privacy administrators act within one organisation. A tenant administrator may coordinate and monitor a batch across the tenant but gains no record access from that role; each organisation's authorised privacy process performs its own search and decision.  Privacy export packages are encrypted, short lived, access checked at every download, and never delivered through an ordinary public file link.
 
 ## Acceptance examples
 
@@ -121,17 +101,12 @@ Privacy administrators act within one organisation. A tenant administrator may c
 - Restoring an older backup does not resurrect data with a later permanent-removal receipt.
 - A legal hold stops deletion without granting the hold administrator read access to the held records.
 - An erasure request reports every category searched and any lawful exception rather than claiming success after deleting only the main record.
-- Revoking a grant removes future access without erasing the immutable record that approval and authorised use occurred.
-- A recipient organisation cannot use a shared record to place a legal hold on the source organisation's data.
-- Shared search and reports leave no recipient index or materialised result; the next request reflects source correction, restriction, or erasure.
 - A downloaded approved export is recorded as an intentional transfer and is not presented as revocable live access.
+
+
 
 ## Foundation before integration
 
-[Activity append #252](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252) is delivered before Access/Record operations require atomic success evidence. Failed mutations create no success activity. A supported owner may record a clean pre-write permission refusal in that request transaction; other failures record nothing. [#115](https://github.com/Abzum-NZ/Abzum-Vortex/issues/115) adds permitted views and complete service coverage to the same boundary.
+Activity append is delivered before Access and Record operations require atomic success evidence. Failed mutations create no success activity. A supported owner may record a clean pre-write permission refusal in that request transaction; other failures record nothing.
 
-The [Activity foundation issue](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252) owns one private append-only store, not a new runtime service. Its append function is owner-only; no browser, Data API, runtime or request role can append or read entries directly. A protected owning operation derives scope, actor and action and appends successful evidence inside its existing mutation transaction. It may append a clean pre-write refusal in that transaction using only established local identifiers. Logging failure cannot convert refusal into success. This foundation does not claim that every existing service has already integrated it.
-
-[File-removal eligibility #253](https://github.com/Abzum-NZ/Abzum-Vortex/issues/253) supplies current recovery/hold checks before automated purge. [#117](https://github.com/Abzum-NZ/Abzum-Vortex/issues/117) extends selection policies and all-store handling, not a duplicate deletion engine. Complete organisation archive/restore follows these policies in [#255](https://github.com/Abzum-NZ/Abzum-Vortex/issues/255).
-
-Completed removal/revocation evidence must survive loss of the source project. Follow the [external removal journal and restore completeness rules](19-operations-backup-and-recovery.md); a database backup alone is not evidence that later erasures stayed erased. This remains later recovery delivery, not a Kestra maintenance prerequisite for core engines.
+One private append-only store backs activity. Its append function is owner-only; no browser, Data API, runtime or request role can append or read entries directly. A protected owning operation derives scope, actor and action and appends successful evidence inside its existing mutation transaction. It may append a clean pre-write refusal in that transaction using only established local identifiers. Logging failure cannot convert refusal into success.

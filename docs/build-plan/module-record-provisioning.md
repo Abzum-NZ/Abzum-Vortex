@@ -17,16 +17,16 @@
 ## Protected save
 
 - Adapters submit a closed command: operation, target, expected revision, command identity and proposed writable values/relationships. They cannot submit generated values, SQL, helper names or a final mutation plan.
-- The trusted server prepares final values from locked authoritative state using field preparation, the shared Rule interpreter, calculations and totals. Submitted changes obey changeable-field bounds; generated changes must match installed rule write sets or derived-field declarations. Revalidate the final values and live references before writing.
+- The trusted server prepares final values from locked authoritative state using field preparation, BeforeSave rules, calculations and totals. Submitted changes obey changeable-field bounds; generated changes must match installed rule write sets or derived-field declarations. Revalidate the final values and live references before writing.
 - Preparation and persistence use one short existing request transaction. A changed dependency set requires a transaction retry. No transaction spans user input, external services or background execution.
 - One fixed terminal Record writer enforces context, current Access, exact installation, revision, field/reference constraints and the retry receipt. It commits records, content-free success Activity, declared events and queue entries together. Failure commits none of those effects; safe request-refusal Activity is separately specified.
 - Runtime may invoke the fixed terminal writer without receiving raw-table or private Event-helper access. This is a trusted backend boundary, not a sandbox for arbitrary hostile SQL; protected adapters accept only fixed parameterized operations.
 - An exact command retry returns the recorded result. Reusing that command identity with different inputs is refused. Dispatch after commit cannot turn a successful save into a false save failure.
-- Record defines the closed Event participant interface; Application composition wires the Event implementation. Record does not import a higher-tier engine. The private writer unconditionally includes Activity and Event participation; no optional no-op hook or alternate effect-free save endpoint exists.
+- Record defines the closed Event participant interface; Application composition wires the Event implementation. The private writer unconditionally includes Activity and Event participation; no optional no-op hook or alternate effect-free save endpoint exists.
 
 ## Ownership, links and numbering
 
-- Initial account ownership derives from the current account. Initial Group ownership requires current membership. Ownership uses the current Group vocabulary; [#283](https://github.com/Abzum-NZ/Abzum-Vortex/issues/283) removes the obsolete `team` spelling and its translation adapter.
+- Initial account ownership derives from the current account. Initial Group ownership requires current membership.
 - Reference allocation starts at one when omitted, honours an explicit start and treats digit width as a minimum. Allocation serializes within its null-safe counter scope.
 - Link values and canonical edges change atomically. Link changes and target deletion lock affected rows and reread the actual link before applying declared behaviour. Optional clearing needs child update authority; dependent deletion needs child delete authority.
 - Restore uses retained data but rechecks current definition, access, required values and fixed-target relationship consistency after locking targets. Full final-value and live-reference checks belong to the complete save operation.
@@ -34,8 +34,8 @@
 
 ## Event ownership
 
-- Only the protected Record owner calls the private Event append helper. Request, browser and general runtime callers cannot fabricate outbox entries or choose queue, actor, sequence or save-success claims.
+- Only the protected Record owner calls the private Event append helper. Request, browser and general runtime callers cannot fabricate outbox entries or choose actor, sequence or save-success claims.
 - Append shares the lifecycle lock, then rereads current binding/release and the actual locked Record row. Lifecycle replacement/detachment uses the conflicting lock. Derive scope, actor, time and per-record occurrence sequence from trusted facts.
-- Use one private immutable outbox and the existing logged queue. Each occurrence has its own identifier; the transport message identifier is separate. Several occurrences from one save retain distinct sequence positions.
+- Use one private immutable outbox, `event_outbox`, as the one delivery path. Each occurrence has its own identifier; the transport message identifier is separate. Several occurrences from one save retain distinct sequence positions.
 - Fresh user operations have no parent cause. Caused work accepts only a trusted parent handoff; caller-authored causal claims cannot acquire authority.
-- Atomic append belongs to the save foundation. Ordered dispatch, duplicate-safe consumers and recovery belong to the subsequent Event delivery issues.
+- Atomic append belongs to the save foundation. Ordered dispatch, duplicate-safe consumers and recovery are the event dispatcher's.

@@ -1,12 +1,12 @@
-# Page builder contracts and Fluid adaptation
+# Page builder contracts
 
-[Specification index](../README.md) · [Pages](../07-applications-pages-and-themes.md) · [Core boundary](core-contract-boundary.md) · [Architecture decisions](../../build-plan/architecture-decisions-2026-09-25.md)
+[Specification index](../README.md) · [Pages](../07-applications-pages-and-themes.md) · [Core boundary](core-contract-boundary.md) · [Architecture decisions](../../build-plan/architecture-decisions.md)
 
 ## Status and boundaries
 
-This specifies the single Application contract consolidated under [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) and the richer data and form bindings still required in [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250). The surviving Application contract pair (`sourceContractVersion: "2.0.0"`, `validationContractVersion: "2.0.0"`) is the sole Application format across authoring, validation, compilation, storage and consumer reads. The authoring canvas, preview and page rendering described here remain required design; do not mistake this specification update for delivered engine code.
+This specifies the single Application contract. The current Application contract (`4.3.0` for both source and validation, through the one `definitionContractVersion` constant) is the sole Application format across authoring, validation, compilation, storage and consumer reads.
 
-Adapt the useful authoring experience inspected in Fluid, not its prototype persistence or authority model. Fluid is the local reference at `C:/Apps/fluid`, with [its running editor](http://localhost:3001/builder/edit/projects). Its Puck canvas, outline, palette, inspector, shell/outlet editing and viewport previews are useful. Its filesystem JSON store, seed-on-read-error fallback, label-derived identities, client-only shell locks, unauthorised server actions, global refreshes and static demonstration rows are not Vortex implementations.
+The authoring canvas is built on Puck: canvas, outline, palette, inspector, shell/outlet editing and viewport previews. Persistence, identity and authority belong to Vortex: drafts are revision-checked, identities are permanent, every operation is checked on the server, and the canvas shows real data through preview. There is no filesystem store, label-derived identity, client-only shell lock, unauthorised server action or static demonstration row.
 
 The user approved a normal editable HR application as the example; it is built in App Studio, not shipped with the platform. There is no customer-uploaded executable module, HR engine, HR schema in core, or new independent publication kind.
 
@@ -58,7 +58,7 @@ flowchart TD
     SECONDSLOTS --> SECONDBLOCKS[Distinct ordered blocks]
 ```
 
-Validation, identity extraction, dependency discovery, fingerprints and the editor adapter traverse every step's content. Placement identities remain unique across the application, including shell content and different steps. Every step retains its own identity, blocks and authored order in declared shell slots. The flow/form contract in [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) and [#58](https://github.com/Abzum-NZ/Abzum-Vortex/issues/58) supports the configured completion outcomes and sequential operations described in [forms and guided forms](../07-applications-pages-and-themes.md#forms-and-guided-forms).
+Validation, identity extraction, dependency discovery, fingerprints and the editor adapter traverse every step's content. Placement identities remain unique across the application, including shell content and different steps. Every step retains its own identity, blocks and authored order in declared shell slots. The flow and form contract supports the configured completion outcomes and sequential operations described in [forms and guided forms](../07-applications-pages-and-themes.md#forms-and-guided-forms).
 
 A placement has a permanent identity, registered block and version, schema-validated settings, named child slots, optional binding context, visibility/use constraints and layout overrides. The ordered children of each declared slot are the one source of sibling order. Do not duplicate order in a second page-wide array and a third phone-order field.
 
@@ -69,8 +69,7 @@ including nested shell content and every guided step. Their absence stays absent
 reading or publishing does not inject new defaults into historical definitions.
 Changing conditional visibility or query selection has major access/data meaning,
 not a presentation-only change. These references preserve configuration; they do
-not grant permission to read records or implement the richer runtime bindings in
-[#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250).
+not grant permission to read records or implement the runtime bindings.
 
 Stored authenticated Page projection evaluates literal operands and fields of the
 exact declared Page subject through the existing typed-condition engine. The
@@ -153,7 +152,7 @@ The Action inspector offers quick one-task flows, Create flow and Use existing f
 
 Presentation-only flows may finish without any business commit or artificial record. A `record.save` task uses the exact protected commit operation, never a page-side writer. All current actions use explicit flow bindings. Remove obsolete direct-binding readers and conversions; rendering never manufactures default flows.
 
-Tabs, dialogs, drawers, query controls and forms carry semantic IDs. The same operation meaning serves web, keyboard and [MCP](../12-connections-and-interfaces.md#governed-mcp-access). Geometry and animation do not become MCP actions.
+Tabs, dialogs, drawers, query controls and forms carry semantic IDs. The same operation meaning serves web, keyboard and page-model callers.
 
 ### Forms inside a rule flow
 
@@ -161,13 +160,13 @@ The [Show form task](frontend-rule-designer.md#custom-forms-and-all-or-nothing-s
 
 Continue validates answers into the private journey draft. Protected tasks determine when business operations commit. In the collect-first pattern all required forms precede one atomic operation; in a sequential flow Cancel or a failed later form preserves earlier confirmed commits. The server validates required answers/path, current authority and expected revisions instead of trusting client progress. No request or transaction spans human input. Reuse the scoped draft revisions and operation outcomes planned in [#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68) and [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47)/[#50](https://github.com/Abzum-NZ/Abzum-Vortex/issues/50) to resume safely; no separate durable frontend scheduler.
 
-The typed draft scope includes person, organisation, installation, exact flow/form/task versions and optional subject. Stale installation versions require restart rather than silently combining answers with changed definitions. Invalid, duplicate, concurrent and revoked-access submissions have safe outcomes. Semantic controls expose Continue, Cancel, final Submit, current fields and validation to web and authorised MCP clients through the same contract. Durable workflow requests reuse this renderer and draft capability through [#81](https://github.com/Abzum-NZ/Abzum-Vortex/issues/81) and [#83](https://github.com/Abzum-NZ/Abzum-Vortex/issues/83), not an open database transaction.
+The typed draft scope includes person, organisation, installation, exact flow/form/task versions and optional subject. Stale installation versions require restart rather than silently combining answers with changed definitions. Invalid, duplicate, concurrent and revoked-access submissions have safe outcomes. Semantic controls expose Continue, Cancel, final Submit, current fields and validation to the web page and an authorised agent through the same page-model contract. No request or transaction spans human input.
 
 ## Draft, preview, publication and activation
 
 ```mermaid
 flowchart LR
-    E[Fluid-adapted editor] <--> A[Typed Vortex adapter]
+    E[Puck editor] <--> A[Typed Vortex adapter]
     A --> D[Revision-checked application draft]
     D --> V[Validate and preview same renderer]
     V --> P[Publish immutable application release]
@@ -178,31 +177,31 @@ flowchart LR
 
 Save updates the draft only. Preview renders that exact draft revision under current permissions and does not silently show an older live page. Preview does not bypass access or perform real business mutations by default; simulated interactions are labelled. Publication creates immutable content; activation deliberately selects the installed release. Neither save nor publication silently changes existing consumers.
 
-Use the same Puck config and registered React components for preview and live rendering. The [shared Puck adapter](../../../packages/ui/src/vortex-puck-adapter.ts) maps between native Vortex shells, placement slots and blocks and Puck Data. The page renderer resolves the compiled definition, converts its placement tree to Puck Data (root props, content and slots), and renders it with Puck Render. Studio uses the same adapter for authoring. Puck Data is an internal representation: Definition drafts and published releases persist the native Application contract, and consumer reads and public contracts do not expose Puck internals. Follow [Puck slot guidance](https://puckeditor.com/docs/guides/migrations/dropzones-to-slots) and [Next.js layouts](https://nextjs.org/docs/app/getting-started/layouts-and-pages). Preserve server-side service boundaries and keep interactive canvas code in client components.
+Use the same Puck config and registered React components for preview and live rendering. The [shared Puck config](../../../packages/ui/src/puck-config.tsx) maps between native Vortex shells, placement slots and blocks and Puck Data. The page renderer resolves the compiled definition, converts its placement tree to Puck Data (root props, content and slots), and renders it with Puck Render. Studio uses the same adapter for authoring. Puck Data is an internal representation: Definition drafts and published releases persist the native Application contract, and consumer reads and public contracts do not expose Puck internals. Follow [Puck slot guidance](https://puckeditor.com/docs/guides/migrations/dropzones-to-slots) and [Next.js layouts](https://nextjs.org/docs/app/getting-started/layouts-and-pages). Preserve server-side service boundaries and keep interactive canvas code in client components.
 
-Before copying source, inventory Fluid-owned code, third-party licenses and assets. Copy only required generic authoring/components; do not import its demo applications, broad local MCP server or entire dependency tree. Local tabs/drafts must be scoped by current account, organisation, app and revision; do not persist sensitive HR labels in unscoped browser storage.
+Local tabs/drafts are scoped by current account, organisation, app and revision; do not persist sensitive HR labels in unscoped browser storage.
 
 The implementation supplies revision handling, permissions, persistence, keyboard control and semantic operations.
 
 ## Current representation
 
-Vortex is a new application. The complete shell, slot, nested placement, guided-step, typed setting and responsive layout model is the sole Application representation across the platform. There is no Application V1 format, no dual-format representation, no V1-to-V2 conversion path, and no legacy fallback reader. All contracts, the compiler, Definition storage, history, restore, consumer reads, Page capability projection, installation provisioning, and the Puck adapter operate exclusively on the surviving `2.0.0` contract pair (`sourceContractVersion: "2.0.0"`, `validationContractVersion: "2.0.0"`).
+Vortex is a new application. The complete shell, slot, nested placement, guided-step, typed setting and responsive layout model is the sole Application representation across the platform. There is one current Application contract, `4.3.0` for both `sourceContractVersion` and `validationContractVersion`, through the one `definitionContractVersion` constant and one contract-pair check. There is no earlier format, dual reader, conversion path or fallback. All contracts, the compiler, Definition storage, history, restore, consumer reads, page capability projection, installation provisioning and the Puck config operate exclusively on that contract.
 
 The one editable draft stores the authored Application source document under revision-checked Definition save. Shell and slot aliases resolve to permanent source identities. Duplicate identities, stale revisions and invalid mappings refuse the whole save. Saving modifies only the editable draft and does not publish or select an installed release.
 
-Publication stores the exact authored source, the canonical compilation output and the exact resolution snapshot for that release, together with the declared `2.0.0` source and validation contract versions. The source and validation metadata must agree with the decoder; an unknown source version, an unknown validation version, and stored source metadata that disagrees with the authored source each refuse the operation with their own explicit error (`UNKNOWN_APPLICATION_SOURCE_CONTRACT_VERSION`, `UNKNOWN_APPLICATION_VALIDATION_CONTRACT_VERSION`, `APPLICATION_SOURCE_METADATA_MISMATCH`). Immutable release identity, dependency manifests, canonical fingerprints (content fingerprint and resolution-snapshot fingerprint) and explicit installation selection remain strict product behavior. They do not require a second platform format or an old-reader compatibility service.
+Publication stores the exact authored source, the canonical compilation output and the exact resolution snapshot for that release, together with the declared `4.3.0` source and validation contract versions. The source and validation metadata must agree with the decoder; an unknown source version, an unknown validation version, and stored source metadata that disagrees with the authored source each refuse the operation with their own explicit error (`UNKNOWN_APPLICATION_SOURCE_CONTRACT_VERSION`, `UNKNOWN_APPLICATION_VALIDATION_CONTRACT_VERSION`, `APPLICATION_SOURCE_METADATA_MISMATCH`). Immutable release identity, dependency manifests, canonical fingerprints (content fingerprint and resolution-snapshot fingerprint) and explicit installation selection remain strict product behavior. They do not require a second platform format or an old-reader compatibility service.
 
-History and restore operate exclusively on the surviving `2.0.0` representation. Release history is an immutable, append-only ledger of published versions. History listing reads immutable release metadata without returning raw source or content. Restore reads the exact release's stored authored source, verifies stored release integrity against the surviving Application contract pair, derives the restored draft identity requirements from the verified source, and creates an editable draft with complete restore provenance (`restoredFromReleaseRevision`, `restoredFromSourceFingerprint`, `restoredBy`, `restoredAt`, `restoreCorrelationId`). Restore never rewrites publication history, creates a release, advances the current discovery pointer, or retargets existing consumers pinned to a specific release revision.
+History and restore operate exclusively on the current `4.3.0` representation. Release history is an immutable, append-only ledger of published versions. History listing reads immutable release metadata without returning raw source or content. Restore reads the exact release's stored authored source, verifies stored release integrity against the surviving Application contract pair, derives the restored draft identity requirements from the verified source, and creates an editable draft with complete restore provenance (`restoredFromReleaseRevision`, `restoredFromSourceFingerprint`, `restoredBy`, `restoredAt`, `restoreCorrelationId`). Restore never rewrites publication history, creates a release, advances the current discovery pointer, or retargets existing consumers pinned to a specific release revision.
 
 Correct development data and checked-in definitions at the same owning boundary when the platform schema changes. Applied database corrections use a forward migration; this instruction does not reset shared environments.
 
-Typed placement visibility and query selection remain first-class properties. Richer data/form/flow bindings belong to [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250). No setting bag or editor-specific JSON may replace these semantics.
+Typed placement visibility and query selection remain first-class properties. Data, form and flow bindings are typed contracts of their own. No setting bag or editor-specific JSON may replace these semantics.
 
 Visible behaviour follows the local application walkthrough in [quality and acceptance](../20-quality-and-acceptance.md), with screenshots included in pull requests.
 
 ## HR example policy
 
-The HR application in [#251](https://github.com/Abzum-NZ/Abzum-Vortex/issues/251) is an ordinary editable example, not a platform rule and not a shipped application.
+The HR application is an ordinary editable example, not a platform rule and not a shipped application.
 
 | Area             | Approved example behavior                                                                                                                                                                  |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -218,33 +217,27 @@ The user approved the no-self-approval rule for this example; it is not a legal 
 
 The Employee record links to the People system record type through an ordinary link. Organisation-wide person details are organisation-added fields on that system record type, and a link to a person or a group is an ordinary link to the People or Group system record type, so the example builds no second people directory and needs no special person field type.
 
-Write the full HR JSON fixture set first, including the future workflow definition. The editable HR application is authored in App Studio; its workflow is added through the generic workflow owners.
+The editable HR application is authored in App Studio; its actions are ordinary flows.
 
-### Approvals are workflows, not custom code
+### Approvals are ordinary actions, not custom code
 
-Leave submission emits an ordinary application event. The HR workflow resolves an eligible responder from declared relationships/roles, uses the durable **Wait for a person** task that Kestra runs, branches on the validated response and invokes the named approve/refuse action. Request/response history and status are ordinary HR records. Responder eligibility and the no-self-approval rule live in the workflow's human-task assignment, not in a named-action precondition. The approve/refuse action is granted only to the workflow's run-as actor, never to the Employee, Manager or HR administrator roles, so a direct call cannot bypass the wait; the response never enlarges the responder's own authority. No custom JavaScript, HR-specific route, approval node or privileged approval table is required.
-
-[Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34), [conditions #57](https://github.com/Abzum-NZ/Abzum-Vortex/issues/57) and [bindings #250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) must supply the generic actor-relative relationship/condition support already promised by section 4. Trusted current-account parameters come from the server, never from a form value purporting to identify the approver.
+Leave submission saves an ordinary request record. The current designated manager approves or refuses it through a named action bound to that request type; an authorised HR administrator is the fallback when no eligible manager exists. Responder eligibility and the no-self-approval rule live in the editable definition's permission and condition declarations, not in a hardcoded approval node. Request and decision history are ordinary HR records. No custom JavaScript, HR-specific route, approval node or privileged approval table is required.
 
 ```mermaid
 flowchart LR
-    S[Submit leave action] --> E[Ordinary application event]
-    E --> W[HR workflow]
-    W --> R[Resolve eligible responder]
-    R --> F[Wait for a person task]
-    R -->|none eligible| P[Pending assignment]
-    F --> A[Named approve or refuse action]
+    S[Submit leave action] --> R[Ordinary request record]
+    R --> A[Named approve or refuse action]
     A --> H[Ordinary record and event history]
 ```
 
 ## Literal data is not a reference
 
-Acceptance by a JSON value contract does not authorize every registered control to accept every JSON shape. Existing scalar controls continue to reject object/array values that do not match their declared types. [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) adds the richer setting declarations and publication validation; [#258](https://github.com/Abzum-NZ/Abzum-Vortex/issues/258) must not weaken current control validation to imitate that later feature. User-defined input-map keys are also data labels, not platform reference properties.
+Acceptance by a JSON value contract does not authorize every registered control to accept every JSON shape. Existing scalar controls continue to reject object/array values that do not match their declared types. Setting declarations and publication validation define which shapes each control accepts. User-defined input-map keys are also data labels, not platform reference properties.
 
 Reference traversal follows declared contract positions and discriminated value kinds. An explicitly literal value remains data even if it contains keys named `state`, `qualifiedKey`, `rootId` or `fieldId`. Do not infer platform authority or unresolved references from arbitrary object shape. Literal content still participates in schema validation, fingerprints and its owning component's version-impact policy. [#258](https://github.com/Abzum-NZ/Abzum-Vortex/issues/258) corrects the delivered shape-based scanner before [#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) expands the representation.
 
 ## Component data and flow bindings
 
-A data component binds a [configured data flow](frontend-rule-designer.md#component-data-flows), not a hidden fetch handler. A default Query records and Return data task list can be extended with typed transforms, conditions and protected write tasks. Record identity, revisions, source/capability data and query pagination remain authoritative. The Data inspector exposes exact query/parameter/column maps and declared load/refresh/filter/sort/page events; rendering alone executes no writes.
+A data component binds a [configured data flow](frontend-rule-designer.md#component-data-flows), not a hidden fetch handler. A default Query records flow can be extended with typed transforms, conditions and protected write tasks. Record identity, revisions, source/capability data and query pagination remain authoritative. The Data inspector exposes exact query/parameter/column maps and declared load/refresh/filter/sort/page events; rendering alone executes no writes.
 
-Flow configuration is enforced by server-owned definition permissions. Every flow has exactly one owner: the module or application release that contains it, so there are no hidden graph internals or separate extension slots. Flow-level [run-as](frontend-rule-designer.md#run-as) uses independently authorised execution grants where required, never a client-supplied identity or role label. Effects and partial outcomes are shown truthfully in preview and live states.
+Flow configuration is enforced by server-owned definition permissions. Every flow has exactly one owner: the module or application release that contains it, so there are no hidden graph internals or separate extension slots. Flow-level [run-as](frontend-rule-designer.md#run-as) never accepts a client-supplied identity or role label. Effects and partial outcomes are shown truthfully in preview and live states.

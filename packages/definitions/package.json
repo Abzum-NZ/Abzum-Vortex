@@ -12,10 +12,5 @@
   },
   "dependencies": {
     "@vortex/platform": "workspace:*"
-  },
-  "vortex": {
-    "tier": 1,
-    "environment": "shared",
-    "ships": true
   }
 }
