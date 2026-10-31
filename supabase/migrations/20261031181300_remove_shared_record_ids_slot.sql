@@ -416,7 +416,7 @@ begin
       if pg_catalog.jsonb_typeof(board_option) is distinct from 'object' then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
       end if;
-      if board_option - array['value', 'label', 'requiredPermissionId']::text[] <> '{}'::jsonb
+      if board_option - array['value', 'label', 'tone', 'requiredPermissionId']::text[] <> '{}'::jsonb
         or not (board_option ? 'value') or not (board_option ? 'label')
         or pg_catalog.jsonb_typeof(board_option -> 'value') is distinct from 'string'
         or coalesce(pg_catalog.length(board_option ->> 'value'), 0) not between 1 and 120
