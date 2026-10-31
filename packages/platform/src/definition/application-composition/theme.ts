@@ -349,7 +349,6 @@ export const platformThemeTokenRoles = [
   { key: "text", kind: "color_pair", colorRole: "foreground" },
   { key: "muted_text", kind: "color_pair", colorRole: "foreground" },
   { key: "border_color", kind: "color_pair" },
-  { key: "border", kind: "border" },
   { key: "primary", kind: "color_pair" },
   { key: "primary_foreground", kind: "color_pair", colorRole: "foreground" },
   { key: "secondary", kind: "color_pair" },
@@ -390,14 +389,7 @@ export const platformThemeTokenRoles = [
   { key: "space_xs", kind: "spacing" },
   { key: "space_sm", kind: "spacing" },
   { key: "space_md", kind: "spacing" },
-  { key: "space_lg", kind: "spacing" },
-  { key: "radius_sm", kind: "corners" },
-  { key: "radius_md", kind: "corners" },
-  { key: "radius_lg", kind: "corners" },
   { key: "radius_base", kind: "corners" },
-  { key: "elevation_low", kind: "elevation" },
-  { key: "elevation_high", kind: "elevation" },
-  { key: "density", kind: "density" },
 ] as const satisfies readonly PlatformThemeTokenRole[];
 
 /** Every token-role key a complete platform theme release must map. */
