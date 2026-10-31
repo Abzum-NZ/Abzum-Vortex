@@ -165,7 +165,7 @@ flowchart LR
     TOKEN -. ignored for Vortex authority .-> EXTRA[Provider role, phone and metadata]
 ```
 
-The identity token proves the person; it does not grant tenant administration, organisation membership, or data access. A [cross-cluster shared-record request](17-runtime-storage-and-caching.md) carries a short-lived assertion signed by the recipient cluster and is still evaluated by the source organisation.
+The identity token proves the person; it does not grant tenant administration, organisation membership, or data access.
 
 ### First-release sign-in methods
 

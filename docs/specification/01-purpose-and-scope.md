@@ -33,7 +33,7 @@ An organisation can:
 3. Control who can discover, read, create, change, delete, export, or administer information through [access and permissions](04-access-and-permissions.md).
 4. Guide work through [forms, rules and events](08-forms-actions-rules-and-events.md) and [workflows and process pipelines](09-workflows-and-pipelines.md).
 5. Read information through [queries, reports, search and live updates](10-queries-reports-search.md).
-6. Exchange information through [files](11-files-and-attachments.md), [connections and interfaces](12-connections-and-interfaces.md), and explicit [sharing, import, and export](16-copying-import-export.md).
+6. Exchange information through [files](11-files-and-attachments.md), [connections and interfaces](12-connections-and-interfaces.md), and explicit [copying, import, and export](16-copying-import-export.md).
 7. Meet operational obligations through [privacy and retention](14-activity-privacy-and-retention.md), [delivery and testing](18-delivery-and-testing.md), and [backup and recovery](19-operations-backup-and-recovery.md).
 
 ## Product boundaries
@@ -57,7 +57,7 @@ The first complete release does not include:
 - Automatic sharing of records, definitions, files, or learned information between organisations.
 - Directly connecting customer databases or replicating records across clusters.
 - A marketplace in which unreviewed packages become automatically trusted.
-- A Vortex-provided artificial-intelligence assistant, hosted model, model-generated work, autonomous execution, or model-assisted workflow step. The governed MCP surfaces are interoperability boundaries for an agent the person brings, in their browser or as a remote client; they do not add a model or assistant to Vortex.
+- A Vortex-provided artificial-intelligence assistant, hosted model, model-generated work, autonomous execution, or model-assisted workflow step. The page model is an interoperability boundary for an agent the person brings, in their browser; it does not add a model or assistant to Vortex.
 - Privileged business domains. Commercial billing, ordinary approvals, tasks, comments, notices, business calendars and operational case management are built as ordinary applications under the [core contract boundary](appendices/core-contract-boundary.md).
 
 ## Product principles
@@ -76,4 +76,4 @@ The first complete release does not include:
 
 - A builder can explain whether a requirement belongs to a [module](05-modules-fields-and-relationships.md), an [application](07-applications-pages-and-themes.md), or organisation data in [records](06-records-and-lifecycle.md).
 - A developer can follow links from a product requirement to its [data contract](appendices/data-contracts.md), [code-review acceptance](20-quality-and-acceptance.md), and [build plan](../build-plan/README.md).
-- No core feature automatically shares one organisation's private state with another. Every cross-organisation grant is explicit, limited, approved by both organisations, revocable, independently testable, and enforced by the source organisation's cluster.
+- No core feature shares one organisation's private state with another. Organisations exchange information only through copied definition packages, files and connections.

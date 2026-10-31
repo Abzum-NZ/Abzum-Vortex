@@ -16,7 +16,7 @@
         "instrumentation.{js,ts}",
         "scripts/**/*.{js,mjs,ts}"
       ],
-      "project": ["**/*.{js,jsx,mjs,ts,tsx}"]
+      "project": ["**/*.{js,jsx,mjs,ts,tsx,css}"]
     },
     "packages/definitions": {
       "includeEntryExports": false,

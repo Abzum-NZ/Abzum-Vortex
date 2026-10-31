@@ -1,6 +1,6 @@
 # Data contracts
 
-[Specification index](../README.md) ? [Glossary](glossary.md)
+[Specification index](../README.md) · [Glossary](glossary.md)
 
 These contracts name the information that must exist. They do not prescribe a database library or generated code structure. A value described as an identifier is an opaque platform-issued value; callers must not derive meaning from its characters.
 
@@ -403,7 +403,7 @@ flowchart LR
     CHECK -->|No| ROLLBACK[Roll back the complete change]
 ```
 
-The Access service owns an `access_version` per organisation. Every access-affecting organisation-account, role, assignment, group, sharing, public-policy, or application-access change increases it in the same transaction as the owning state change.
+The Access service owns an `access_version` per organisation. Every access-affecting organisation-account, role, assignment, group, public-policy, or application-access change increases it in the same transaction as the owning state change.
 
 The closed reasons distinguish standalone `role_catalogue_changed`, `role_assignment_changed` and `delegation_changed`. Activation changes an individual use window without changing its eligibility assignment. Explicit stewardship adoption or a management-application requirement change uses `stewardship_changed` once for its whole composition; existing guarded role, assignment, delegation and account changes retain their own reason. The spelling is shared by current and stored contracts; current change records use Group terminology without an obsolete-name conversion path. A coordinated application catalogue/continuity/role change uses `application_access_changed` once for the whole transaction, not another increment per changed role. A refused or unchanged replay increments nothing. Add new reasons to the existing contract and database allowlist without rewriting old change records or creating another counter.
 

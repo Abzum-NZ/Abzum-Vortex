@@ -68,9 +68,9 @@ The idempotency key of a server segment is (gesture or form-instance id, segment
 
 ## Task types in the shared registry
 
-Every flow uses the same task types. There is no second frontend, background or workflow catalogue: every task type is registered once in the one task registry ([`flow-task-registry.ts`](../../packages/platform/src/workflows/flow-task-registry.ts), [#983](https://github.com/Abzum-NZ/Abzum-Vortex/issues/983)) with its version, its typed properties, outputs and outcomes, its default policy, its effect class (**pure**, **read**, **change** or **interface**) and its `runs` flags: where an implementation exists (**page**, **server**, **backend**). The page and server implementation maps are typed from the flags, so a flag without an implementation, or the reverse, fails the type check. Studio's palette offers a step only where it runs, and publication refuses a step placed where it has no implementation, naming the step. 
+Every flow uses the same task types. There is no second frontend, background or workflow catalogue: every task type is registered once in the one task registry ([`flow-task-registry.ts`](../../packages/platform/src/workflows/flow-task-registry.ts), [#983](https://github.com/Abzum-NZ/Abzum-Vortex/issues/983)) with its version, its typed properties, outputs and outcomes, its default policy, its effect class (**pure**, **read**, **change**, **background start** or **interface**) and its `runs` flags: where an implementation exists (**page**, **server**, **backend**). The page and server implementation maps are typed from the flags, so a flag without an implementation, or the reverse, fails the type check. Studio's palette offers a step only where it runs, and publication refuses a step placed where it has no implementation, naming the step. 
 
-Control tasks give the ordered step list its structure: **If**, **Switch**, **For each**, **Sequential**, **Run flow** and **Stop** run wherever their children run. A **For each** over record steps inside a server segment compiles to one set-based change.
+Control tasks give the ordered step list its structure: **If**, **Switch**, **For each**, **Sequential** and **Stop** run wherever their children run; **Run flow** runs on the server and back end. A **For each** over record steps inside a server segment compiles to one set-based change.
 
 The registered task types:
 
@@ -78,10 +78,11 @@ The registered task types:
 | --- | --- | --- | --- |
 | Record | Save record, Create record, Set fields, Link records, Delete record, Restore record and Apply record changes | Server and back end | Change |
 | Query | Query records (server and back end); Read selected record fields and Acquire record pin identity (server) | Read |
-| Data | Calculate, Set values, Set variable and Build record link value (page, server and back end); Format value and Build record link value (server and back end) | Pure |
+| Data | Calculate, Set variable and Build list (page, server and back end); Format value and Build record link value (server and back end) | Pure |
 | Save rules | Require field, Warn and Refuse save | Server, in the save transaction | Pure |
-| Interface | Show message (target, severity, one optional action), Clear message, Set page value, Validate form, Show form, Confirm, Navigate, Refresh, Open or close panel and Set filter | Page | Interface |
-| Back end | Run on back end (`await` or `start`) | Server and back end; the child runs on the back-end adapter | Change |
+| Interface | Show message (target, severity, one optional action), Clear message, Set value, Validate form, Show form, Confirm, Navigate, Refresh, Open or close panel and Set filter | Page | Interface |
+| Back end | Run on back end (`await` or `start`) | Server and back end; the child runs on the back-end adapter | Background start |
+| Guided form | Save guided-form draft and Discard guided-form draft | Server | Change |
 | Events | Announce event | Server, in the save transaction for the record being saved | Change |
 | Protected operation | Call protected operation, whose operation descriptor declares its own effect | Server and back end | Change, as declared by the called operation |
 

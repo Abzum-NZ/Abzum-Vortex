@@ -44,7 +44,7 @@ meanings are maintained in the [glossary](appendices/glossary.md).
 13. A Vortex-provided model or assistant is deliberately outside this release.
 14. [Activity history, privacy and retention](14-activity-privacy-and-retention.md)
 15. [Entitlements and metering](15-entitlements-and-metering.md)
-16. [Copying, sharing, import and export](16-copying-import-export.md)
+16. [Copying, import and export](16-copying-import-export.md)
 
 ### Platform safety and delivery
 

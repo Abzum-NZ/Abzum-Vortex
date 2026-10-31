@@ -97,11 +97,12 @@ The [rules domain](../../packages/platform/src/rules) is shared by Definition an
 
 ## Events
 
-Every record type provides seven standard events:
+Every record type provides eight standard events:
 
 - Created.
 - Changed, with changed field names.
 - Deleted, with record identifier and record type.
+- Restored.
 - Linked.
 - Unlinked.
 - Reassigned.

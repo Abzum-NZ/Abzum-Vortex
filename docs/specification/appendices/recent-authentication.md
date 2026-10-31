@@ -1,6 +1,6 @@
 # Verified recent authentication
 
-[Identity](../02-people-organisations-and-sign-in.md#recent-authentication-evidence) ? [Access](../04-access-and-permissions.md#where-access-is-enforced) ? [Roles and Groups](groups-and-privileged-access.md)
+[Identity](../02-people-organisations-and-sign-in.md#recent-authentication-evidence) · [Access](../04-access-and-permissions.md#where-access-is-enforced) · [Roles and Groups](groups-and-privileged-access.md)
 
 ## User-visible rule
 

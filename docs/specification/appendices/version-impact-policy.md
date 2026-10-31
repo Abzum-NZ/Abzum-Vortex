@@ -161,7 +161,7 @@ The governed [task types in the shared registry](../09-workflows-and-pipelines.m
 | Call protected operation | Operation and typed inputs |
 | Announce event | Event and record |
 | Calculate / Format value | Formula or formatter and inputs |
-| Set values / Set variable | Target and values |
+| Set variable / Build list / Build record link value | Target and values |
 | Require field / Warn / Refuse save | Field, condition and safe message |
 | Show message / Show form / Confirm | Form, safe message, defaults and declared outputs |
 | Navigate / Refresh / Open or close panel / Set filter | Semantic target and declared parameters |

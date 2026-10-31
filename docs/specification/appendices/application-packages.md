@@ -203,7 +203,7 @@ Every builder operation is one typed, revision-checked operation, shared by App 
   - expiry removes its storage, records and registrations;
 - publishing, installing, upgrading and uninstalling.
 
-Validation returns located errors, so an agent can correct its draft and try again. An agent holds only the permissions of the person it acts for. Its MCP grant must include explicit build and install scopes.
+Validation returns located errors, so an agent can correct its draft and try again. An agent holds only the permissions of the person it acts for. Its grant must include explicit build and install scopes.
 
 ## Acceptance examples
 

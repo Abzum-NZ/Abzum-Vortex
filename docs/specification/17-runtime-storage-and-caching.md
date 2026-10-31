@@ -1,6 +1,6 @@
 # 17. Runtime services, storage and caching
 
-[Previous: Copying, import and export](16-copying-import-export.md) ? [Specification index](README.md) ? Next: [Development delivery and environment boundaries](18-delivery-and-testing.md)
+[Previous: Copying, import and export](16-copying-import-export.md) · [Specification index](README.md) · Next: [Development delivery and environment boundaries](18-delivery-and-testing.md)
 
 ## Hosting boundaries
 
@@ -497,12 +497,7 @@ its later immutable-definition and resolved-application cache integration.
 - Suspending an organisation account makes the next request refuse before any person-specific cache value is used.
 - Publishing a definition makes explicit discovery and Studio views see the new current release without waiting for cache expiry, while existing consumers remain pinned to their previously selected exact releases.
 - Changing a record makes a cached data result under the old record-type data version unreachable.
-- A cross-organisation shared-record query bypasses the cross-request data-result cache.
 - A query cannot expose an identity, connection, activity, entitlement-policy or access-control row.
-- A same-cluster request and its cross-cluster equivalent produce the same allowed fields, action outcome, and stable refusal code.
-- A remote request with an altered body, reused nonce, expired signature, unregistered cluster, or incompatible contract version is refused before record access.
-- Source revocation refuses a cross-cluster request even while the recipient mirror still says active.
-- No cross-cluster request requires a database password for another cluster.
 
 ## Builder and cross-cutting delivery foundations
 
