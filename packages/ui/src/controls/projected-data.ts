@@ -133,38 +133,6 @@ const fail = (message: string, location: DefinitionRenderErrorLocation): never =
   throw new DefinitionRenderError("INVALID_COMPOSITION", message, location);
 };
 
-/** A Zod issue path as a property path: an index joins the property before it (`options[3]`). */
-const propertyPathOf = (path: readonly PropertyKey[]): string[] =>
-  path.reduce<string[]>((parts, segment) => {
-    const last = parts.at(-1);
-    return typeof segment === "number" && last !== undefined
-      ? [...parts.slice(0, -1), `${last}[${segment}]`]
-      : [...parts, String(segment)];
-  }, []);
-
-type ControlPayloadSchema<Output> = {
-  safeParse(value: unknown):
-    | { success: true; data: Output }
-    | {
-        success: false;
-        error: { issues: readonly { path: readonly PropertyKey[]; message: string }[] };
-      };
-};
-
-/** One control payload parser: its platform schema, refused with a located error. */
-const controlParser =
-  <Output>(schema: ControlPayloadSchema<Output>, message: string) =>
-  (value: unknown, location: DefinitionRenderErrorLocation = {}): Output => {
-    const parsed = schema.safeParse(value);
-    if (parsed.success) return parsed.data;
-    const issue = parsed.error.issues[0];
-    const issuePath = propertyPathOf(issue?.path ?? []);
-    return fail(
-      `${message}: ${issue?.message ?? "invalid"}`,
-      issuePath.length === 0 ? location : { ...location, propertyPath: issuePath },
-    );
-  };
-
 /**
  * One choice the browser offers: the stored value, its label and the colour role the definition gave
  * it. The placement's own setting list and a page's answer to an options request share this shape;
