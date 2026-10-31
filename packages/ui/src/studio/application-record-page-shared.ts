@@ -277,7 +277,7 @@ export const tableColumns = (
 };
 
 /** A flow bound to a row click, a row menu action or an action that opens one page, with the clicked or current record when given. */
-export const openFlow = (
+const openFlow = (
   plan: Plan,
   controlAlias: string,
   event: "row_clicked" | "row_action" | "action",
@@ -355,7 +355,7 @@ export const openRows = (
 };
 
 /** A button placed before the block in `place.beside`, or at the start of `place.items`, seen only with `permission`. */
-export const placeButton = (
+const placeButton = (
   context: StudioStructureContext,
   plan: Plan,
   label: string,
@@ -399,23 +399,8 @@ export const placeButton = (
   return alias;
 };
 
-/** A button that opens a page, placed before the block in `place.beside` or at the start of `place.items`, and its flow. */
-export const openButton = (
-  context: StudioStructureContext,
-  plan: Plan,
-  label: string,
-  permission: string,
-  target: Page,
-  resolved: Resolved | undefined,
-  place: Readonly<{ beside: string }> | Readonly<{ items: SourceItem[] }>,
-): string => {
-  const alias = placeButton(context, plan, label, permission, place);
-  openFlow(plan, alias, "action", label, target, resolved);
-  return alias;
-};
-
 /** The flow that brings a deleted record of the type back: made once, started by the Undo of a Deleted message. */
-export const restoreFlowKey = (plan: Plan, resolved: Resolved): string => {
+const restoreFlowKey = (plan: Plan, resolved: Resolved): string => {
   const existing = plan.source.body.flows.find((flow) =>
     flow.tasks.some(
       (task) =>
@@ -529,7 +514,7 @@ export const linkTablesToDetail = (
 };
 
 /** Whether any control on the page opens one of the given pages. */
-export const opensAny = (source: Source, page: Page, targets: readonly string[]): boolean => {
+const opensAny = (source: Source, page: Page, targets: readonly string[]): boolean => {
   const controls = new Set(sourcePageItems(page.composition).map((item) => item.props.id));
   return source.body.flow_bindings.some(
     (binding) =>
@@ -552,7 +537,7 @@ export const opensAny = (source: Source, page: Page, targets: readonly string[])
 };
 
 /** Whether a control of the page already starts a flow that deletes the record type's records. */
-export const deletesFrom = (source: Source, page: Page, qualified: string): boolean => {
+const deletesFrom = (source: Source, page: Page, qualified: string): boolean => {
   const controls = new Set(sourcePageItems(page.composition).map((item) => item.props.id));
   const started = new Set(
     source.body.flow_bindings.filter((b) => controls.has(b.control)).map((b) => b.flow),

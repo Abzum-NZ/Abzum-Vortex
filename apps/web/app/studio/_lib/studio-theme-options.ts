@@ -29,7 +29,7 @@ export type StudioThemeDimension = Readonly<{
 }>;
 
 /** The colours a theme preset's preview card draws its header, card, badge and button in. */
-export type StudioThemePresetPreview = Readonly<{
+type StudioThemePresetPreview = Readonly<{
   light: Readonly<{
     background: string;
     card: string;
