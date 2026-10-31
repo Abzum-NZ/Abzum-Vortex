@@ -63,6 +63,22 @@ begin
     raise exception using errcode = '40001', message = 'Access version is unavailable';
   end if;
 
+  -- The request that made this change continues at the version it produced, so its later
+  -- statements (Activity, flow effects, receipts) validate against current access. Only this
+  -- transaction's own context for this organisation moves, one step from the version it was
+  -- admitted at, while the exclusive version lock is held until commit; identity, session,
+  -- authentication, correlation and scope stay pinned, and rollback restores the context too.
+  update vortex_platform.request_contexts as established
+  set context = pg_catalog.jsonb_set(
+    established.context, '{accessVersion}', pg_catalog.to_jsonb(version.current_version)
+  )
+  from vortex_access.organization_access_versions as version
+  where version.organization_id = p_organization_id
+    and established.backend_pid = pg_catalog.pg_backend_pid()
+    and established.transaction_id = pg_catalog.pg_current_xact_id()
+    and established.context ->> 'organizationId' = p_organization_id::text
+    and established.context ->> 'accessVersion' = (version.current_version - 1)::text;
+
   -- A preview's copied live rows and fields were admitted under the previous access.
   -- Invalidate every builder's snapshot atomically with the version advance, while the
   -- access-change scope excludes preview requests. The next open seeds a new preview

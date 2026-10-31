@@ -114,6 +114,7 @@ begin
       delegation.revision,
       pg_catalog.jsonb_build_object(
         'holder_kind', delegation.holder_kind,
+        'holder_display_name', coalesce(holder_account.display_name, holder_group.label),
         'organization_account_id', delegation.organization_account_id,
         'group_id', delegation.group_id,
         'scope_kind', delegation.scope_kind,
@@ -127,6 +128,14 @@ begin
             and delegation.expires_at <= $5 then 'expired'
           else 'active' end)
     from vortex_access.organization_delegation_authorities as delegation
+    left join vortex_identity.organization_accounts as holder_account
+      on delegation.holder_kind = 'organization_account'
+      and holder_account.organization_id = delegation.organization_id
+      and holder_account.organization_account_id = delegation.organization_account_id
+    left join vortex_access.organization_groups as holder_group
+      on delegation.holder_kind = 'group'
+      and holder_group.organization_id = delegation.organization_id
+      and holder_group.group_id = delegation.group_id
     where delegation.organization_id = $1
       and ($2 is null or delegation.delegation_authority_id = any($2))
   $scan$ || coalesce(' and ' || (predicate_plan ->> 'predicate'), '') || keyset_sql || pg_catalog.format(' order by %s limit $6', order_sql);

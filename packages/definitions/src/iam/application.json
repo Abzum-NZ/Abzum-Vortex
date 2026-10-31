@@ -242,6 +242,7 @@
         },
         "field_policy": {
           "readable_fields": [
+            "holder_display_name",
             "holder_kind",
             "group_id",
             "scope_kind",
@@ -2277,10 +2278,16 @@
                     "empty_message": "No delegated authority yet",
                     "columns": [
                       {
-                        "field": "vortex.system_directory:delegation.holder_kind",
+                        "field": "vortex.system_directory:delegation.holder_display_name",
                         "label": "Holder",
                         "visible": true,
                         "pin": "start"
+                      },
+                      {
+                        "field": "vortex.system_directory:delegation.holder_kind",
+                        "label": "Holder kind",
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:delegation.scope_kind",
@@ -4202,7 +4209,7 @@
                 "kind": "literal",
                 "literal": {
                   "type": "text",
-                  "value": "Make the person in this row an organisation steward with permanent management access and organisation-catalogue delegation? The existing steward keeps their access until it is explicitly revoked."
+                  "value": "Make the person in this row an organisation steward with permanent management access and organisation-catalogue delegation? Stewardship does not include the IAM administrator role: to use IAM, the person also needs that role, assigned through Roles. The existing steward keeps their access until it is explicitly revoked."
                 }
               }
             }
