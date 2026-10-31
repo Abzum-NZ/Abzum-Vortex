@@ -36,6 +36,7 @@ import { Skeleton } from "../components/skeleton";
 import { SidebarProvider, SidebarTrigger } from "../components/sidebar";
 import { FlowSurfaceContext } from "../flow-runtime/flow-surface-context";
 import { Icon } from "../icons/icon";
+import { NavigationLink } from "../routing/navigation-link";
 import { resolveVortexIconName } from "../icons/icon-names";
 import { AppearanceToggle } from "./appearance-toggle";
 import { ApplicationAccountMenu, useApplicationAccountActions } from "./account-actions";
@@ -196,7 +197,10 @@ function Breadcrumbs({
           {runtime === undefined ? (
             <span className="truncate">{applicationName}</span>
           ) : (
-            <BreadcrumbLink href={runtime.applicationHref} className="truncate">
+            <BreadcrumbLink
+              render={<NavigationLink href={runtime.applicationHref} />}
+              className="truncate"
+            >
               {applicationName}
             </BreadcrumbLink>
           )}
