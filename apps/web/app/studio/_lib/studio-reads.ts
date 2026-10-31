@@ -2,6 +2,7 @@ import type { readStudioCanvasRecords as canvasRead } from "../../_lib/studio-ca
 import type { readStudioDataRecords as dataRead } from "../../_lib/studio-data-records";
 import type { loadStudioApplicationDraft } from "../../_lib/studio-application-draft";
 import type { prepareStudioPreview as previewRead } from "../../_lib/studio-application-preview";
+import { postJson } from "../../_lib/post-json";
 import type { StudioViewRequest } from "./studio-view-request";
 
 const read = async <Result>(
@@ -10,16 +11,13 @@ const read = async <Result>(
   candidate: unknown,
   signal?: AbortSignal,
 ): Promise<Result> => {
-  const response = await fetch("/api/studio/read", {
-    signal: signal ?? null,
-    method: "POST",
-    credentials: "same-origin",
-    cache: "no-store",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ organizationId, operation, candidate }),
-  });
-  if (!response.ok) throw new Error(`STUDIO_READ_HTTP_${response.status}`);
-  return response.json() as Promise<Result>;
+  const result = await postJson<Result>(
+    "/api/studio/read",
+    { organizationId, operation, candidate },
+    signal === undefined ? undefined : { signal },
+  );
+  if (!result.ok) throw new Error(`STUDIO_READ_HTTP_${result.status}`);
+  return result.body;
 };
 
 export const readStudioCanvasRecords = (

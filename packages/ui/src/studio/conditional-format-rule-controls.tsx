@@ -15,7 +15,7 @@ import {
 import { Badge } from "../components/badge";
 import { Input } from "../components/input";
 import { Label } from "../components/label";
-import { NativeSelect, NativeSelectOption } from "../components/native-select";
+import { StudioOptionControl } from "./studio-setting-controls";
 import { Switch } from "../components/switch";
 import { ToggleGroup, ToggleGroupItem } from "../components/toggle-group";
 import { Icon } from "../icons/icon";
@@ -343,26 +343,19 @@ export function ConditionalFormatStyleControls({
           <Label htmlFor={`${idPrefix}-icon`} className="text-sm">
             Icon
           </Label>
-          <NativeSelect
+          <StudioOptionControl
             id={`${idPrefix}-icon`}
-            size="sm"
-            className="w-full"
             value={style.icon ?? "none"}
             disabled={disabled}
-            onChange={(event) => {
-              const icon = conditionalFormatIcons.find(
-                (candidate) => candidate === event.target.value,
-              );
+            options={[
+              { value: "none", label: "None" },
+              ...conditionalFormatIcons.map((icon) => ({ value: icon, label: iconLabels[icon] })),
+            ]}
+            onChange={(value) => {
+              const icon = conditionalFormatIcons.find((candidate) => candidate === value);
               withStyle({ icon });
             }}
-          >
-            <NativeSelectOption value="none">None</NativeSelectOption>
-            {conditionalFormatIcons.map((icon) => (
-              <NativeSelectOption key={icon} value={icon}>
-                {iconLabels[icon]}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+          />
         </div>
         <div className="space-y-1">
           <Label htmlFor={`${idPrefix}-badge`} className="text-sm">

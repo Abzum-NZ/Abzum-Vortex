@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useEffect, useState } from "react";
 import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
@@ -338,9 +339,9 @@ export function StudioFlowStartEditor({
   );
   if (projection.kind === "unavailable")
     return (
-      <p role="alert" className="text-sm">
-        {projection.reason}
-      </p>
+      <Alert variant="destructive">
+        <AlertDescription>{projection.reason}</AlertDescription>
+      </Alert>
     );
   // Every edit starts from the start as the draft holds it now, so renaming an input always renames its stored name.
   const shown = projection.draft;
@@ -593,9 +594,9 @@ export function StudioFlowStartEditor({
         </div>
       )}
       {problem === "" ? null : (
-        <p role="alert" className="text-sm text-destructive">
-          {problem}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{problem}</AlertDescription>
+        </Alert>
       )}
     </section>
   );

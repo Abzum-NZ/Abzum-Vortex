@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
@@ -306,9 +307,11 @@ function FieldValues({
       {mode === "fields" && (
         <>
           {fields.length === 0 && (
-            <p role="alert" className="text-sm text-destructive">
-              Choose the record type first; its fields are listed here.
-            </p>
+            <Alert variant="destructive">
+              <AlertDescription>
+                Choose the record type first; its fields are listed here.
+              </AlertDescription>
+            </Alert>
           )}
           {entries.length === 0 && fields.length > 0 && <StudioHelp hint="No field is set yet." />}
           <StudioEntryList
@@ -632,11 +635,13 @@ function ConditionControl({
   if (projected.kind === "unsupported" && !replaced)
     return (
       <div className="space-y-2 text-sm" id={id}>
-        <p role="alert">
-          This condition reads values this step can no longer read, or uses a calculation the
-          condition controls do not show. Change it with Import from source in the Releases tab, or
-          replace it below.
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>
+            This condition reads values this step can no longer read, or uses a calculation the
+            condition controls do not show. Change it with Import from source in the Releases tab,
+            or replace it below.
+          </AlertDescription>
+        </Alert>
         <Button
           type="button"
           variant="outline"

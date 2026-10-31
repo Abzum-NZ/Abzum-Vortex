@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "../components/alert";
 import { StudioReferencePicker } from "./studio-reference-picker";
 import { StudioField } from "./studio-field";
 import { Button } from "@vortex/ui/components/button";
@@ -634,7 +635,11 @@ export function StudioConditionControls({
     <section aria-label={label} className="space-y-4 text-sm">
       {validationSummary}
       {contextIsInvalid ? (
-        <p role="alert">These conditions cannot be edited with the available fields and inputs.</p>
+        <Alert variant="destructive">
+          <AlertDescription>
+            These conditions cannot be edited with the available fields and inputs.
+          </AlertDescription>
+        </Alert>
       ) : !current ? (
         <div className="space-y-2">
           <p className="text-muted-foreground">No condition has been configured.</p>
@@ -710,7 +715,9 @@ export function StudioConditionControls({
         </>
       )}
       {validation.condition && !validation.isValid && (
-        <p role="alert">Finish the conditions marked above before saving.</p>
+        <Alert variant="destructive">
+          <AlertDescription>Finish the conditions marked above before saving.</AlertDescription>
+        </Alert>
       )}
     </section>
   );

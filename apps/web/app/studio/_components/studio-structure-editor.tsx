@@ -16,7 +16,6 @@ import {
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { Input } from "@vortex/ui/components/input";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import {
   Dialog,
   DialogContent,
@@ -24,7 +23,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@vortex/ui/components/dialog";
-import { toast } from "@vortex/ui/components/sonner";
+import { studioNotice } from "./studio-save-state";
 import type { StudioSemanticSelection } from "@vortex/ui/studio";
 import {
   studioStructureDefaultShell,
@@ -35,7 +34,7 @@ import {
   type StudioStructureCommand,
   type StudioStructureResult,
 } from "@vortex/ui/studio";
-import { studioAccessGateChoices } from "@vortex/ui/studio";
+import { StudioOptionControl, studioAccessGateChoices } from "@vortex/ui/studio";
 import { StudioField } from "./studio-field";
 import { StudioRecordPageForm } from "./studio-record-page-form";
 import { StudioPlaceList } from "./studio-used-in";
@@ -113,7 +112,7 @@ export function StudioStructureEditor({
     const result = onCommand(command, merge);
     if (result.kind === "refused") {
       const hasReferences = result.where !== undefined && result.where.length > 0;
-      toast.error("Nothing was changed", {
+      studioNotice("Nothing was changed", "error", undefined, {
         id: "studio-structure-refusal",
         description: <span className="text-muted-foreground">{result.message}</span>,
         duration: Infinity,
@@ -218,17 +217,16 @@ export function StudioStructureEditor({
             <>
               <StudioField label="Page kind">
                 {(control) => (
-                  <NativeSelect
+                  <StudioOptionControl
                     {...control}
                     value={pageKind}
                     disabled={disabled}
-                    onChange={(event) =>
-                      setPageKind(event.target.value === "form" ? "form" : "dashboard")
-                    }
-                  >
-                    <NativeSelectOption value="dashboard">Dashboard</NativeSelectOption>
-                    <NativeSelectOption value="form">Form</NativeSelectOption>
-                  </NativeSelect>
+                    options={[
+                      { value: "dashboard", label: "Dashboard" },
+                      { value: "form", label: "Form" },
+                    ]}
+                    onChange={(value) => setPageKind(value === "form" ? "form" : "dashboard")}
+                  />
                 )}
               </StudioField>
               {pageKind === "form" && (
@@ -238,20 +236,17 @@ export function StudioStructureEditor({
                     hint="Required. Choose the record type this form works with. Add inputs and bind its Submit event to an operation flow in the page editor."
                   >
                     {(control) => (
-                      <NativeSelect
+                      <StudioOptionControl
                         {...control}
                         value={recordType}
-                        required
                         disabled={disabled}
-                        onChange={(event) => setRecordType(event.target.value)}
-                      >
-                        <NativeSelectOption value="">Choose a record type</NativeSelectOption>
-                        {studioRecordPageChoices(source).map((choice) => (
-                          <NativeSelectOption key={choice.recordType} value={choice.recordType}>
-                            {choice.label}
-                          </NativeSelectOption>
-                        ))}
-                      </NativeSelect>
+                        unset="Choose a record type"
+                        options={studioRecordPageChoices(source).map((choice) => ({
+                          value: choice.recordType,
+                          label: choice.label,
+                        }))}
+                        onChange={setRecordType}
+                      />
                     )}
                   </StudioField>
                   {source.body.modules.every((module) => module.record_types.length === 0) && (
@@ -266,21 +261,16 @@ export function StudioStructureEditor({
                 hint="The frame the page is drawn in. People who can open the home page can open the new page."
               >
                 {(control) => (
-                  <NativeSelect
+                  <StudioOptionControl
                     {...control}
                     value={shellChoice}
                     disabled={disabled}
-                    onChange={(event) => setShellChoice(event.target.value)}
-                  >
-                    {choices.map((choice) => (
-                      <NativeSelectOption
-                        key={choice.shellAlias ?? ""}
-                        value={choice.shellAlias ?? ""}
-                      >
-                        {choice.label}
-                      </NativeSelectOption>
-                    ))}
-                  </NativeSelect>
+                    options={choices.map((choice) => ({
+                      value: choice.shellAlias ?? "",
+                      label: choice.label,
+                    }))}
+                    onChange={setShellChoice}
+                  />
                 )}
               </StudioField>
               <label className="flex items-center gap-2 text-sm">
@@ -364,25 +354,20 @@ export function StudioStructureEditor({
           {page !== undefined && (
             <StudioField label="Layout" hint="Choose where your blocks go when you change layout.">
               {(control) => (
-                <NativeSelect
+                <StudioOptionControl
                   {...control}
                   value={pageShell ?? ""}
                   disabled={disabled}
-                  onChange={(event) => {
-                    const shellAlias = event.target.value === "" ? null : event.target.value;
+                  options={choices.map((choice) => ({
+                    value: choice.shellAlias ?? "",
+                    label: choice.label,
+                  }))}
+                  onChange={(value) => {
+                    const shellAlias = value === "" ? null : value;
                     if (shellAlias !== pageShell)
                       setLayoutChange({ pageAlias: page.id, shellAlias });
                   }}
-                >
-                  {choices.map((choice) => (
-                    <NativeSelectOption
-                      key={choice.shellAlias ?? ""}
-                      value={choice.shellAlias ?? ""}
-                    >
-                      {choice.label}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                />
               )}
             </StudioField>
           )}

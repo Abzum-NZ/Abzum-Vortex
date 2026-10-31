@@ -9,7 +9,7 @@ import {
 } from "@vortex/platform/schema";
 import { applyStudioFlowCreate } from "./application-flow-create";
 import { projectStudioFlowDraftChoices } from "./application-flow-step-form";
-import { companions, placed } from "./application-record-pages";
+import { companions, placed } from "./application-record-page-shared";
 import { takenIds } from "./application-record-page-kinds";
 
 type QuickAddResult =

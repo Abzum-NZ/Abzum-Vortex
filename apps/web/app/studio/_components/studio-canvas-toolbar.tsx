@@ -1,7 +1,7 @@
 "use client";
+import { StudioOptionControl } from "@vortex/ui/studio";
 import { Icon, type VortexIconName } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@vortex/ui/components/tooltip";
 import { ToggleGroup, ToggleGroupItem } from "@vortex/ui/components/toggle-group";
 import { Kbd } from "@vortex/ui/components/kbd";
@@ -97,22 +97,14 @@ export function StudioCanvasToolbar({
             </Tooltip>
             <label className="flex items-center gap-2 text-sm">
               <span>View as:</span>
-              <NativeSelect
-                size="sm"
+              <StudioOptionControl
                 value={viewAs.value ?? ""}
                 aria-label="Who can see this: view the canvas as a role"
-                className="w-32 [&>select]:w-full [&>select]:truncate"
-                onChange={(event) =>
-                  viewAs.onChange(event.target.value === "" ? null : event.target.value)
-                }
-              >
-                <NativeSelectOption value="">Builder</NativeSelectOption>
-                {viewAs.roles.map((role) => (
-                  <NativeSelectOption key={role.key} value={role.key}>
-                    {role.name}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+                disabled={false}
+                unset="Builder"
+                options={viewAs.roles.map((role) => ({ value: role.key, label: role.name }))}
+                onChange={(value) => viewAs.onChange(value === "" ? null : value)}
+              />
             </label>
             <ToggleGroup
               aria-label="Screen size"
@@ -174,25 +166,21 @@ export function StudioCanvasToolbar({
               >
                 <Icon name="minus" />
               </Button>
-              <NativeSelect
-                size="sm"
+              <StudioOptionControl
                 aria-label="Canvas zoom"
-                value={zoom}
-                onChange={(event) =>
-                  onZoom(
-                    event.target.value === "fit"
-                      ? "fit"
-                      : (Number(event.target.value) as StudioCanvasZoom),
-                  )
+                value={String(zoom)}
+                disabled={false}
+                options={[
+                  { value: "fit", label: "Fit" },
+                  ...studioCanvasZooms.map((value) => ({
+                    value: String(value),
+                    label: `${value}%`,
+                  })),
+                ]}
+                onChange={(value) =>
+                  onZoom(value === "fit" ? "fit" : (Number(value) as StudioCanvasZoom))
                 }
-              >
-                <NativeSelectOption value="fit">Fit</NativeSelectOption>
-                {studioCanvasZooms.map((value) => (
-                  <NativeSelectOption key={value} value={value}>
-                    {value}%
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              />
               <Button
                 type="button"
                 size="icon-sm"

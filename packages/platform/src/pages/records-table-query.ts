@@ -148,6 +148,8 @@ type RecordsTableQueryRequest = Readonly<{
    * are taken in this zone. A date-and-time filter without it is refused.
    */
   timeZone?: string;
+  /** The plural name of the record type the table lists, from the installed definition; the summary row names its records with it. */
+  recordNoun?: string;
   /** Headings from the installed definition for declared columns that set no label (field identity to label). */
   fieldLabels?: Readonly<Record<string, string>>;
   /** Labels of the choices each choice field offers (field identity to options). */
@@ -1088,6 +1090,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
           titleFieldId: request.titleFieldId,
           filterFields: built.filterFields,
           ...(recordLinks === undefined ? {} : { recordLinks }),
+          ...(request.recordNoun === undefined ? {} : { recordNoun: request.recordNoun }),
           ...(request.fieldLabels === undefined ? {} : { fieldLabels: request.fieldLabels }),
           ...(request.fieldChoiceLabels === undefined
             ? {}

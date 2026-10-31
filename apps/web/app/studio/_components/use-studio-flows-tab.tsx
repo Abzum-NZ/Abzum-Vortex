@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useIntentPreload } from "../_lib/use-intent-preload";
 import dynamic from "next/dynamic";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
@@ -489,9 +490,11 @@ export function useStudioFlowsTab({
         Choose a flow in the Flows panel to see it on the canvas, or create a new one.
       </p>
     ) : outline === null ? (
-      <p role="alert" className="text-sm">
-        This flow cannot be drawn because it could not be read from the draft.
-      </p>
+      <Alert variant="destructive">
+        <AlertDescription>
+          This flow cannot be drawn because it could not be read from the draft.
+        </AlertDescription>
+      </Alert>
     ) : (
       <div className="flex h-full min-h-96 flex-col">
         <StudioFlowCanvas
@@ -709,9 +712,9 @@ export function useStudioFlowsTab({
     <>
       {confirmDialog}
       {deleteProblem?.key === selectionKey && (
-        <p role="alert" className="text-sm text-destructive">
-          {deleteProblem.text}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{deleteProblem.text}</AlertDescription>
+        </Alert>
       )}
       {deleteRefusal?.key === selectionKey && (
         <StudioReferencesAlert

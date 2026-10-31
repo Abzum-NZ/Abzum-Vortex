@@ -1,4 +1,5 @@
 "use client";
+import { formatBytes } from "@vortex/ui/display/date-format";
 import { Button } from "@vortex/ui/components/button";
 import { StudioInspectorGroup, StudioSourceView } from "@vortex/ui/studio";
 import { Icon } from "@vortex/ui";
@@ -505,7 +506,7 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
       </Card>
       {text !== "" && (
         <p className="text-sm text-muted-foreground">
-          Source ready · {new TextEncoder().encode(text).byteLength.toLocaleString()} bytes
+          Source ready · {formatBytes(new TextEncoder().encode(text).byteLength)}
         </p>
       )}
       <Collapsible open={pasteOpen} onOpenChange={setPasteOpen}>

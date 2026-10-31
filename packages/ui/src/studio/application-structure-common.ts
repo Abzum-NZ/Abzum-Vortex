@@ -14,6 +14,7 @@ import {
 import type { StudioPlacementDescriber } from "./semantic-outline";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import { applyStudioMenuCommand } from "./application-menu-commands";
+import type { projectStudioFlowDraftChoices } from "./application-flow-step-form";
 import { tokenName } from "./studio-words";
 
 /**
@@ -46,6 +47,8 @@ export type StudioStructureContext = Readonly<{
   source: Source;
   catalogue: ImmutablePlatformBlockCatalogue;
   describePlacement: StudioPlacementDescriber;
+  /** The draft's root identity, for the flow projection of a form the edit places. */
+  rootId: Parameters<typeof projectStudioFlowDraftChoices>[0]["rootId"];
   /**
    * The fields of the application's own modules whose stored shape a published version fixed, as
    * `module.key:record_key.field_key`: their filter and sort choices can't change any more.

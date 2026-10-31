@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type FormEvent } from "react";
 import { saveInlineModuleEvent, type ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
@@ -6,7 +7,7 @@ import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
+import { StudioOptionControl } from "@vortex/ui/studio";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import {
   Dialog,
@@ -85,22 +86,20 @@ function EventDialog({
           </StudioField>
           <StudioField label="Record type" error={problemField === "record" ? problem : undefined}>
             {(control) => (
-              <NativeSelect
+              <StudioOptionControl
                 {...control}
-                className="w-full"
                 value={selectedRecord}
-                onChange={(change) => {
-                  setSelectedRecord(change.target.value);
+                disabled={false}
+                options={module.record_types.map((entry) => ({
+                  value: entry.key,
+                  label: entry.name,
+                }))}
+                onChange={(value) => {
+                  setSelectedRecord(value);
                   setCarries([]);
                   setProblem(undefined);
                 }}
-              >
-                {module.record_types.map((entry) => (
-                  <NativeSelectOption key={entry.key} value={entry.key}>
-                    {entry.name}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              />
             )}
           </StudioField>
           <fieldset
@@ -134,18 +133,18 @@ function EventDialog({
               </div>
             ))}
             {problemField === "carries" && problem !== undefined ? (
-              <p id="event-carries-problem" role="alert" className="text-sm text-destructive">
-                {problem}
-              </p>
+              <Alert variant="destructive" id="event-carries-problem">
+                <AlertDescription>{problem}</AlertDescription>
+              </Alert>
             ) : null}
           </fieldset>
           <p className="text-sm text-muted-foreground">
             Only fields without personal or sensitive data can be carried.
           </p>
           {problem === undefined || problemField !== undefined ? null : (
-            <p role="alert" className="text-sm text-destructive">
-              {problem}
-            </p>
+            <Alert variant="destructive">
+              <AlertDescription>{problem}</AlertDescription>
+            </Alert>
           )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={close}>

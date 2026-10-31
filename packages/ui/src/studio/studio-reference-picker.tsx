@@ -64,6 +64,13 @@ export function StudioReferencePicker({
       .includes(query.trim().toLocaleLowerCase()),
   );
   const groups = [...new Set(matches.map((entry) => entry.group ?? ""))];
+  // The search text is empty whenever the list is open: what is shown before typing is the
+  // current selection inside the list (with its check), never text the person has to clear.
+  const startSearch = () => {
+    if (open) return;
+    setQuery("");
+    setOpen(true);
+  };
   return (
     <Combobox
       items={groups.flatMap((group) => matches.filter((entry) => (entry.group ?? "") === group))}
@@ -74,9 +81,7 @@ export function StudioReferencePicker({
         if (!next) setQuery("");
       }}
       inputValue={open ? query : (selected?.label ?? "")}
-      onInputValueChange={(text, details) => {
-        if (details.reason === "input-change" || details.reason === "input-clear") setQuery(text);
-      }}
+      onInputValueChange={(text) => setQuery(text)}
       filter={null}
       disabled={disabled}
       itemToStringLabel={(entry: StudioReferencePickerOption) => entry.label}
@@ -91,6 +96,8 @@ export function StudioReferencePicker({
           id={id}
           placeholder={unset ?? "Search…"}
           {...accessibility}
+          onFocus={startSearch}
+          onPointerDown={startSearch}
           aria-invalid={accessibility["aria-invalid"] || !known}
         />
         <InputGroupAddon align="inline-end">

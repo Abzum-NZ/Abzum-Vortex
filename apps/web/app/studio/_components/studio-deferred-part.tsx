@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import dynamic from "next/dynamic";
 import { Component, type ComponentType, type ReactNode } from "react";
 
@@ -19,10 +20,12 @@ class DeferredPartBoundary extends Component<
 
   override render() {
     return this.state.failed ? (
-      <p role="alert" className="p-4 text-sm text-destructive">
-        The {this.props.what} could not be loaded. Your changes are kept. Reload Studio and try
-        again.
-      </p>
+      <Alert variant="destructive" className="p-4">
+        <AlertDescription>
+          The {this.props.what} could not be loaded. Your changes are kept. Reload Studio and try
+          again.
+        </AlertDescription>
+      </Alert>
     ) : (
       this.props.children
     );
