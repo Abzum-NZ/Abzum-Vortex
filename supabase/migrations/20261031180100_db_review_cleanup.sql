@@ -88,7 +88,6 @@ drop function vortex_identity.tenant_capabilities_from_json(p_capabilities jsonb
 drop function vortex_platform.append_detached_offboarding_reassignment_internal(p_storage_contract_id uuid, p_record_id uuid, p_record_type_id uuid, p_occurrence_id uuid);
 drop function vortex_platform.list_connection_instances_for_administration(p_organization_id uuid, p_after_connection_instance_id uuid, p_page_size integer);
 drop function vortex_platform.read_versioned_file_metadata(p_file_id uuid);
-drop function vortex_record.initialize_organization_lifecycle_limits(p_organization_id uuid, p_limits jsonb);
 drop function vortex_record.save_record_type_lifecycle_policy_for_administration(p_storage_contract_id uuid, p_application_root_id uuid, p_expected_settings_revision bigint, p_expected_policy_revision bigint, p_activity_id uuid, p_policy jsonb);
 
 -- DF-12: policies for vortex_owner and postgres, which both have BYPASSRLS, never apply. Every
