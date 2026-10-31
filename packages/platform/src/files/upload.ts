@@ -639,7 +639,6 @@ export const reservePendingUpload = async (
     ownerRecordTypeId: owner.recordTypeId,
     ownerRecordId: owner.recordId,
     ownerFieldId: owner.fieldId,
-    legalHold: { isHeld: false },
   });
   if (!pendingRecord.success) return refuse("malformed_request");
 

@@ -18,8 +18,6 @@ begin
       message = 'Account-deletion fence storage is unavailable';
   end if;
 
-  perform vortex_record.ensure_offboarding_owner_index_internal(p_physical_table_token);
-
   execute pg_catalog.format(
     'grant select on record_data.%I to vortex_record_inventory', p_physical_table_token
   );
@@ -52,6 +50,6 @@ $_$;
 alter function vortex_record.ensure_account_deletion_fence_internal(text) owner to vortex_owner;
 
 
-COMMENT ON FUNCTION vortex_record.ensure_account_deletion_fence_internal(p_physical_table_token text) IS 'Private provisioner for one Record table: owner index, inventory read policy and the ownership fence trigger.';
+COMMENT ON FUNCTION vortex_record.ensure_account_deletion_fence_internal(p_physical_table_token text) IS 'Private provisioner for one Record table: inventory read policy and the ownership fence trigger.';
 
 REVOKE ALL ON FUNCTION vortex_record.ensure_account_deletion_fence_internal(p_physical_table_token text) FROM PUBLIC;

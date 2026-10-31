@@ -12,7 +12,6 @@ import type {
 } from "../catalogue/identifiers";
 import {
   fileRecordSchema,
-  type FileLegalHoldProjection,
   type FileLifecycleState,
   type FileRecord,
   type VerifiedFileActor,
@@ -187,6 +186,5 @@ export type CreateFileRecordInput = Readonly<{
   uploader: VerifiedFileActor;
   fileId?: FileId;
   owningAttachmentReferences?: readonly PlatformId[];
-  legalHold?: FileLegalHoldProjection;
   clock?: () => Date;
 }>;

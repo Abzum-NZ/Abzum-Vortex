@@ -514,9 +514,8 @@ begin
   for role_record in
     select role.role_id, role.source_role_id, role.live_revision,
       revision.lifecycle, revision.privilege_classification,
-      revision.assignment_policy, revision.policy_continuity_revision,
+      revision.policy_continuity_revision,
       revision.authority_continuity_revision,
-      revision.activation_policy_id, revision.activation_policy_revision,
       revision.role_key,
       revision.label, revision.description, revision.source_definition_key,
       revision.source_release_revision, revision.source_release_version,
@@ -705,10 +704,9 @@ begin
 
     insert into vortex_access.organization_role_revisions (
       organization_id, role_id, revision, role_kind, application_root_id,
-      lifecycle, privilege_classification, assignment_policy,
+      lifecycle, privilege_classification,
       policy_continuity_revision, authority_continuity_revision,
-      activation_policy_id,
-      activation_policy_revision, role_key,
+      role_key,
       label, description, source_definition_key, source_release_revision,
       source_release_version, source_validation_contract_version, accepted_registration_revision,
       template_continuity_revision,
@@ -716,10 +714,9 @@ begin
     ) values (
       p_organization_id, role_record.role_id, next_role_revision, 'application',
       p_application_root_id, target_lifecycle,
-      role_record.privilege_classification, role_record.assignment_policy,
+      role_record.privilege_classification,
       role_record.policy_continuity_revision,
-      next_authority_continuity_revision, role_record.activation_policy_id,
-      role_record.activation_policy_revision,
+      next_authority_continuity_revision,
       role_record.role_key,
       role_record.label, role_record.description,
       role_record.source_definition_key, role_record.source_release_revision,

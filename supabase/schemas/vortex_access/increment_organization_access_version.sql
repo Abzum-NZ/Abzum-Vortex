@@ -15,7 +15,6 @@ begin
       'organization_account_suspended',
       'organization_account_closed',
       'role_assignment_changed',
-      'role_activation_changed',
       'delegation_changed',
       'stewardship_changed',
       'invitation_access_accepted',

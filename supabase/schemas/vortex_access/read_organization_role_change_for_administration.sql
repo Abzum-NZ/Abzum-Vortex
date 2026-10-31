@@ -156,19 +156,6 @@ begin
       'label', current_revision.label,
       'description', current_revision.description,
       'privilegeClassification', current_revision.privilege_classification,
-      'assignmentPolicy', case current_revision.assignment_policy
-        when 'standing' then pg_catalog.jsonb_build_object('kind', 'standing')
-        else pg_catalog.jsonb_build_object(
-          'kind', 'activation_required',
-          'activationPolicy', pg_catalog.jsonb_build_object(
-            'selection', 'existing',
-            'reference', pg_catalog.jsonb_build_object(
-              'activationPolicyId', current_revision.activation_policy_id,
-              'revision', current_revision.activation_policy_revision
-            )
-          )
-        )
-      end,
       'sourceRoleId', role_identity.source_role_id
     );
   end if;
@@ -360,14 +347,11 @@ begin
       )
     ) into authority_broadened;
 
-    -- The candidate preserves the current assignment policy and either moves from
-    -- acceptance_required to active or keeps an active revision active. This is the writer's
-    -- manifest predicate, so the only additional true term for this operation is a broadened
-    -- permission projection.
+    -- The candidate either moves from acceptance_required to active or keeps an active revision
+    -- active. This is the writer's manifest predicate, so the only additional true term for this
+    -- operation is a broadened permission projection.
     manifest_required :=
-      current_revision.assignment_policy is distinct from
-        (role_configuration #>> '{assignmentPolicy,kind}')
-      or (
+      (
         current_revision.lifecycle in ('unavailable', 'retired')
         and target_lifecycle in ('active', 'acceptance_required')
       )

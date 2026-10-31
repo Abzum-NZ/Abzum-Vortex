@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.validate_organization_role_assignment_insert() RETURNS trigger
+CREATE OR REPLACE FUNCTION vortex_access.validate_organization_role_assignment_insert() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$

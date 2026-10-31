@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.protect_organization_role_assignment() RETURNS trigger
+CREATE OR REPLACE FUNCTION vortex_access.protect_organization_role_assignment() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$

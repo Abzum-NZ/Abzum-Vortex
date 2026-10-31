@@ -115,20 +115,6 @@ export const fileStorageOperationClaimsSchema = z
   });
 
 /**
- * Non-authoritative legal-hold projection for display or query purposes only.
- * A boolean flag or display projection confers no removal authority; file removal
- * eligibility must be authoritatively evaluated by the resolver-backed File service
- * against active protected organisation legal holds and retention policies.
- */
-const fileLegalHoldProjectionSchema = z
-  .object({
-    isHeld: z.boolean(),
-  })
-  .strict();
-
-export type FileLegalHoldProjection = z.infer<typeof fileLegalHoldProjectionSchema>;
-
-/**
  * Versioned scope of a protected legal hold under Specification 14.
  * A legal hold protects only data matching its authorised, versioned scope.
  */
@@ -478,7 +464,6 @@ export const fileRecordSchema = z
     ownerRecordTypeId: recordTypeIdSchema.optional(),
     ownerRecordId: recordIdSchema.optional(),
     ownerFieldId: fieldIdSchema.optional(),
-    legalHold: fileLegalHoldProjectionSchema,
   })
   .strict()
   .superRefine((value, context) => {

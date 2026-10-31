@@ -3,6 +3,12 @@ CREATE OR REPLACE FUNCTION vortex_platform.refuse_event_outbox_change() RETURNS 
     SET search_path TO ''
     AS $$
 begin
+  -- An occurrence is immutable evidence. Only retention removes one, and only once it is
+  -- older than the 30-day delivery window event_dispatch_backlog_status trims after.
+  if tg_op = 'DELETE'
+    and old.occurred_at < pg_catalog.statement_timestamp() - interval '30 days' then
+    return old;
+  end if;
   raise exception using errcode = '23514', message = 'Event outbox evidence is immutable';
 end
 $$;

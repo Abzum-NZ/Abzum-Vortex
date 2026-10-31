@@ -1,7 +1,8 @@
-CREATE FUNCTION vortex_identity.protect_identity_projection() RETURNS trigger
-    LANGUAGE plpgsql
-    SET search_path TO ''
-    AS $$
+create or replace function vortex_identity.protect_identity_projection()
+returns trigger
+language plpgsql
+set search_path = ''
+as $function$
 begin
   if new.identity_id is distinct from old.identity_id
     or new.created_at is distinct from old.created_at then
@@ -12,11 +13,6 @@ begin
     raise exception using errcode = '23514', message = 'A closed identity projection cannot be reactivated';
   end if;
 
-  if new.state = 'active' and old.state <> 'active'
-    and vortex_identity.identity_is_disabled(new.identity_id) then
-    raise exception using errcode = '23514', message = 'A disabled identity projection cannot be reactivated';
-  end if;
-
   if new.revision <> old.revision + 1
     or new.revision > 9007199254740991
     or new.state_changed_at < old.state_changed_at then
@@ -25,10 +21,10 @@ begin
 
   return new;
 end
-$$;
+$function$;
 
 alter function vortex_identity.protect_identity_projection() owner to vortex_owner;
 
-REVOKE ALL ON FUNCTION vortex_identity.protect_identity_projection() FROM PUBLIC;
+revoke all on function vortex_identity.protect_identity_projection() from public;
 
 grant execute on function vortex_identity.protect_identity_projection() to postgres;
