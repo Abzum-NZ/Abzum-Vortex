@@ -20,7 +20,6 @@ import {
 import { Button } from "../../components/button";
 import { Checkbox } from "../../components/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/popover";
-import { Spinner } from "../../components/spinner";
 import { useUnsavedWorkRegistry } from "../../controls/unsaved-work";
 import { useDateFormatOptions } from "../date-format-context";
 import { DisplayCellView } from "../cell";
@@ -332,10 +331,9 @@ function EditableCell({
     <Popover open={message !== undefined}>
       <PopoverTrigger
         nativeButton={false}
-        render={<span className="flex min-w-0 items-center gap-2" />}
+        render={<span className="flex min-w-0 items-center gap-[var(--vortex-space-sm)]" />}
       >
         {control}
-        {phase === "saving" ? <Spinner /> : null}
       </PopoverTrigger>
       <PopoverContent align="start" initialFocus={false} finalFocus={false} className="w-80">
         {notice}

@@ -96,7 +96,10 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
     gesture.track(pending);
   };
   return (
-    <span className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
+    <span
+      className="flex items-center gap-[var(--vortex-space-xs)]"
+      onClick={(event) => event.stopPropagation()}
+    >
       {inline.map(({ action, reason }) => (
         <Tooltip key={action.eventId}>
           <TooltipTrigger render={<span className="inline-flex" />}>

@@ -43,7 +43,7 @@ const FULL_SCREEN_ARIA_KEYS = "Control+Shift+F Meta+Shift+F";
 
 /** The classes of a table expanded to fill the window, as an in-app layer over the page. */
 export const FULL_SCREEN_CLASS =
-  "fixed inset-0 z-50 flex flex-col overflow-hidden bg-background p-4";
+  "fixed inset-0 z-50 flex flex-col overflow-hidden bg-background p-[var(--vortex-space-md)]";
 
 /** Keys inside a cell's own control or a text box keep their meaning; Escape there is not "leave". */
 const ownsEscape = (target: EventTarget | null): boolean => {
@@ -315,17 +315,33 @@ export function GridToolbar({
     <div
       role="group"
       aria-label={`Tools for ${accessibleName}`}
-      className="mb-2 flex h-11 min-w-0 shrink-0 items-center gap-2 overflow-x-auto whitespace-nowrap"
+      className="mb-2 flex h-11 min-w-0 shrink-0 items-center gap-[var(--vortex-space-sm)] overflow-x-auto whitespace-nowrap"
     >
-      <div className={selectionActive ? "flex min-w-max flex-1 items-center gap-2" : "hidden"}>
+      <div
+        className={
+          selectionActive
+            ? "flex min-w-max flex-1 items-center gap-[var(--vortex-space-sm)]"
+            : "hidden"
+        }
+      >
         {selectionBanner}
       </div>
-      <div className={selectionActive ? "hidden" : "flex min-w-max flex-1 items-center gap-2"}>
+      <div
+        className={
+          selectionActive
+            ? "hidden"
+            : "flex min-w-max flex-1 items-center gap-[var(--vortex-space-sm)]"
+        }
+      >
         {featureItems}
       </div>
       <div
         ref={supplementRef}
-        className={selectionActive ? "hidden" : "flex min-w-0 shrink-0 items-center gap-2"}
+        className={
+          selectionActive
+            ? "hidden"
+            : "flex min-w-0 shrink-0 items-center gap-[var(--vortex-space-sm)]"
+        }
       />
       {selectionActive ? null : (
         <>

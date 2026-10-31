@@ -275,20 +275,6 @@ export const LAYOUT_ONLY_STYLES_CSS = `
   display: none;
 }
 
-/* A records table whose presentation is not yet known (server render and hydration) draws its grid;
-   on a phone, which may show cards instead, the skeleton stands in for it until the cards are drawn. */
-[data-vortex-table-presentation="pending"] > [data-vortex-table-phone-skeleton] {
-  display: none;
-}
-@media ${LAYOUT_BREAKPOINT_MEDIA.phone} {
-  [data-vortex-table-presentation="pending"] > [data-vortex-table-body] {
-    display: none;
-  }
-  [data-vortex-table-presentation="pending"] > [data-vortex-table-phone-skeleton] {
-    display: contents;
-  }
-}
-
 /* A record page's header actions are one row: the page's own actions with Refresh among them,
    primary first, Refresh next, destructive last. */
 [data-vortex-record-actions] {

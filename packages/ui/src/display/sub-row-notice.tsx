@@ -10,7 +10,7 @@ export function SubRowNoticeView({ notice }: Readonly<{ notice: SubRowNotice }>)
     <div
       role={notice.tone === "alert" ? "alert" : "status"}
       {...(notice.busy === true ? { "aria-busy": true } : {})}
-      className="flex flex-wrap items-center gap-2 text-sm"
+      className="flex flex-wrap items-center gap-[var(--vortex-space-sm)] text-sm"
     >
       {notice.message === undefined ? null : (
         <span className="text-muted-foreground">{notice.message}</span>

@@ -80,8 +80,11 @@ export default function Undo({
   if (depth.undo === 0 && depth.redo === 0) return null;
 
   return (
-    <div className="flex items-center gap-2" aria-busy={batch.busy || undefined}>
-      <div className="flex items-center gap-2">
+    <div
+      className="flex items-center gap-[var(--vortex-space-sm)]"
+      aria-busy={batch.busy || undefined}
+    >
+      <div className="flex items-center gap-[var(--vortex-space-sm)]">
         <Button
           type="button"
           variant="outline"

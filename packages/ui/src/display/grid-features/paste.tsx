@@ -204,7 +204,10 @@ export default function Paste({ context, surface }: GridFeatureInteractionProps)
   }, [surface.rootRef]);
 
   return (
-    <div className="sticky left-0 flex flex-col gap-2 px-2" aria-busy={batch.busy || undefined}>
+    <div
+      className="sticky left-0 flex flex-col gap-[var(--vortex-space-sm)] px-[var(--vortex-space-sm)]"
+      aria-busy={batch.busy || undefined}
+    >
       {batch.notice}
     </div>
   );

@@ -605,7 +605,7 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
               {},
             )}
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-[var(--vortex-space-sm)]">
             {drawPoint(
               active.filter((key) => key !== recordsTableSearchFeature.key),
               "ToolbarItems",
