@@ -27,6 +27,10 @@ import type {
   BackendRunOutcome,
   ClaimedBackendRun,
 } from "../workflows/backend-adapters";
+import type { QueryContinuationKey } from "../queries/continuation-token";
+import { createNamedActionRecordPort } from "../records/action-record-port";
+import { createFlowQueryReader } from "./flow-query-reader";
+import { createFlowOrchestrator } from "./flow-orchestrator";
 import { createFlowCurrentRecordReader } from "./flow-current-record";
 import { createFlowRecordChangePort } from "./flow-record-changes";
 import { installedFlowRelease } from "./flow-installed-release";
@@ -80,6 +84,8 @@ export type BackgroundRunDependencies = Readonly<{
   /** The request dependencies the host's other flow services run under. */
   requests: HumanOrganizationRequestDependencies;
   applicationStore: ApplicationStoreService;
+  /** Server-held key that opens the sealed tokens a back-end run reads (a table's matching selection). */
+  continuationKey: QueryContinuationKey;
   /** The adapter a back-end flow's own Run on back end step hands its child to. */
   backend: () => Pick<BackendAdapter, "run">;
 }>;
@@ -181,6 +187,7 @@ export const runBackendFlow = async (
     admitPageStart: () => Promise.reject(new Error("BACKEND_RUN_HAS_NO_PAGE")),
     executor: createFlowProtectedExecutor(requestDependencies, dependencies.applicationStore),
     records: createRecordSaveService(requestDependencies),
+    actionRecords: createNamedActionRecordPort(requestDependencies),
     recordChanges: {
       readTargets: (targets, lock) =>
         inActor((bound) => createFlowRecordChangePort(bound).readTargets(targets, lock)),
@@ -207,6 +214,10 @@ export const runBackendFlow = async (
       installation,
       identityId,
     }),
+    queryRecords: createFlowQueryReader(
+      { ...requestDependencies, continuationKey: dependencies.continuationKey },
+      installation,
+    ),
     backend: { run: (request) => dependencies.backend().run(request) },
     resolveActor: () => Promise.resolve(claimed.actorId),
     resolveRelease: () => Promise.resolve(release),
@@ -260,7 +271,7 @@ export const runBackendFlow = async (
     sensitive: [],
     selectedRecordReadSeen: false,
   };
-  const runner = createFlowTaskRunner(ports, () => Promise.resolve({ kind: "unavailable" }));
+  const runner = createFlowTaskRunner(ports, createFlowOrchestrator(ports).namedActionRunner);
 
   let step: FlowRunStep = startFlowRun(
     {

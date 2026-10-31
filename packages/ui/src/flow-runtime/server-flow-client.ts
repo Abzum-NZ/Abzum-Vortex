@@ -1,6 +1,8 @@
 import {
   describeFailure,
   flowRefusalFeedbackSchema,
+  recordsTableBatchEditProblemSchema,
+  type RecordsTableBatchEditProblem,
   type FlowWarningNotice,
   type FlowBindingInvocation,
   type FlowRefusalFeedback,
@@ -61,6 +63,8 @@ export type ServerFlowResponse =
       receipt?: FormContinuationReceipt;
     }>
   | Readonly<{ kind: "refused"; reason?: "this step was already answered" }>
+  /** A pasted, filled or undone batch stopped before any cell was written: every cell that stopped it. */
+  | Readonly<{ kind: "cells_refused"; problems: readonly RecordsTableBatchEditProblem[] }>
   | Readonly<{ kind: "unavailable" }>
   | Readonly<{ kind: "unknown" }>;
 
@@ -167,6 +171,16 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         : refused;
     case "unavailable":
       return unavailable;
+    case "cells_refused": {
+      const problems = recordsTableBatchEditProblemSchema
+        .array()
+        .min(1)
+        .max(1000)
+        .safeParse(candidate.problems);
+      return problems.success
+        ? { kind: "cells_refused", problems: problems.data }
+        : invalidServerResponse();
+    }
     case "reload":
       return typeof candidate.installationRevision === "number"
         ? { kind: "reload", installationRevision: candidate.installationRevision }

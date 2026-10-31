@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { JsonValue } from "../catalogue/common";
 import { builderKeySchema, fieldIdSchema, recordTypeIdSchema } from "../catalogue/identifiers";
-import { isRecord } from "../catalogue/runtime-primitives";
+import { describeFailure, isRecord } from "../catalogue/runtime-primitives";
 import {
   flowReadFieldsProjectionSchema,
   flowReadFieldsScalarTypeSchema,
@@ -11,7 +11,11 @@ import {
   type FlowDefinition,
   type FlowTask,
 } from "../workflows/flow-contracts";
-import type { FlowFieldCorrection } from "../workflows/flow-refusal-feedback";
+import {
+  flowRefusalFeedbackSchema,
+  type FlowFieldCorrection,
+  type FlowRefusalFeedback,
+} from "../workflows/flow-refusal-feedback";
 import type { FlowValue } from "../workflows/flow-values";
 import { typedValueMatchesType } from "../rules/condition-types";
 import type {
@@ -297,4 +301,21 @@ export const selectedRecordProjectionForTask = (
       return undefined;
   }
   return projection.data;
+};
+
+/** The rule's authored refusal of a protected record path, when its safe error carries one. */
+export const ruleRefusalResult = (
+  error: Readonly<{
+    code: string;
+    reason?: Readonly<{ code: string; message: string }> | undefined;
+  }>,
+): Readonly<{ diagnostic?: FlowRefusalFeedback }> => {
+  if (error.reason === undefined) return {};
+  const diagnostic = flowRefusalFeedbackSchema.safeParse({
+    code: "invalid_command",
+    ruleRefusal: error.reason,
+  });
+  if (diagnostic.success) return { diagnostic: diagnostic.data };
+  console.error(`[flows] rule refusal not carried: ${describeFailure(diagnostic.error)}`);
+  return {};
 };

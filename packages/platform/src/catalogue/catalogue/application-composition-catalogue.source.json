@@ -3421,6 +3421,7 @@
       "inline_edit",
       "row_edit",
       "row_expanded",
+      "batch_edit",
       "card_moved",
       "card_added"
     ],

@@ -1,7 +1,5 @@
 import "server-only";
 
-import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
-import type { ExecuteNamedActionCommand } from "../records/named-actions";
 import {
   continueFlowRun,
   resumeFlowRun,
@@ -16,7 +14,7 @@ import type { FlowSegmentReceipt } from "../workflows/start";
 import { createFlowTaskRunner } from "./flow-task-runner";
 import type {
   FlowOrchestratorDependencies,
-  NamedActionExecutionResult,
+  NamedActionRunner,
   Run,
 } from "./flow-orchestrator-types";
 
@@ -45,11 +43,7 @@ const withSaveWarning = (
 /** Runs only the admitted segment. The host constructs a fresh frame and bound ports per attempt. */
 export const runFlowSegment = async (
   dependencies: FlowOrchestratorDependencies,
-  runNamedAction: (
-    session: IdentitySession,
-    selection: OrganizationSelectionCandidate,
-    command: ExecuteNamedActionCommand,
-  ) => Promise<NamedActionExecutionResult>,
+  runNamedAction: NamedActionRunner,
   run: Run,
   segment: FlowServerSegment,
   first: FlowRunStep,

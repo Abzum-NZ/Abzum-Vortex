@@ -10,6 +10,7 @@ import {
   type IdentitySession,
   type OrganizationSelectionCandidate,
 } from "../access/identity-access";
+import type { RecordsTableBatchEditResult } from "../pages/records-table-batch-edit-request";
 import type { JsonValue } from "../catalogue/common";
 import { recordIdSchema, recordTypeIdSchema } from "../catalogue/identifiers";
 import { describeFailure, isRecord, sameId } from "../catalogue/runtime-primitives";
@@ -173,6 +174,19 @@ export type FlowBindingEndpointDependencies = Readonly<{
     installation: InstalledFlowBindings,
   ) => Promise<Readonly<Record<string, unknown>> | undefined>;
   /**
+   * THE SEAM for a batch edit: decides every pasted, filled or undone cell under the person's
+   * current access and turns the batch into the rows its flow saves, or names the cells that stop it.
+   */
+  adaptBatchEdit?: (
+    binding: ComponentFlowBinding,
+    callerInputs: Readonly<Record<string, unknown>>,
+    installation: InstalledFlowBindings,
+  ) => Promise<
+    | Readonly<{ kind: "adapted"; inputs: Readonly<Record<string, unknown>> }>
+    | Extract<RecordsTableBatchEditResult, { kind: "cells_refused" }>
+    | undefined
+  >;
+  /**
    * THE SEAM for the form request's continuation adapter: forwards an exact paused target and its
    * run receipt to the web-independent form continuation interface, which compares them with
    * trusted state.
@@ -222,6 +236,11 @@ export type FlowBindingEndpointResult = (
       target: FormContinuationTarget;
       receipt?: FormContinuationReceipt;
       unavailable: readonly FlowUnavailableNotice[];
+    }>
+  /** A pasted, filled or undone batch stopped before any cell was written: each cell that stopped it. */
+  | Readonly<{
+      kind: "cells_refused";
+      problems: Extract<RecordsTableBatchEditResult, { kind: "cells_refused" }>["problems"];
     }>
   /** Unknown, not installed, foreign, expired or not permitted: one neutral result. */
   | Readonly<{ kind: "refused"; reason?: "this step was already answered" }>
@@ -932,6 +951,13 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           if (adapted === undefined || !isRecord(adapted))
             return refuse("FLOW_INVOKE_FORM_SUBMIT_NOT_ADAPTED");
           callerInputs = adapted;
+        }
+        if (binding.event === "batch_edit") {
+          const adapted = await dependencies.adaptBatchEdit?.(binding, callerInputs, installation);
+          if (adapted === undefined) return refuse("FLOW_INVOKE_BATCH_EDIT_NOT_ADAPTED");
+          if (adapted.kind === "cells_refused")
+            return { kind: "cells_refused", problems: adapted.problems, committedNow: false };
+          callerInputs = adapted.inputs;
         }
         const selectedRecordReadInputs =
           installation.selectedRecordReadInputs?.get(String(binding.flow.flowId).toLowerCase()) ??

@@ -17,6 +17,7 @@ import {
   flowRunStateVersion,
   advanceFrame,
   declaredOutputs,
+  storeSetOutputs,
   failActivation,
   pushFrame,
   storeTaskOutputs,
@@ -1339,21 +1340,7 @@ export const resumeFlowRun = (
       )
         return mismatch();
       if (resume.outcome === "committed") machine.state.committedEffects += 1;
-      replaceTop(
-        machine,
-        awaiting.calls.reduce(
-          (top, call, index) =>
-            storeTaskOutputs(
-              top,
-              call.taskId,
-              declaredOutputs(
-                call.taskType,
-                produced[index] as Readonly<Record<string, JsonValue>>,
-              ),
-            ),
-          activation,
-        ),
-      );
+      replaceTop(machine, storeSetOutputs(activation, awaiting, produced as never));
       return drive(machine, observer);
     }
     // A refused set names the call whose change was refused under `task`; it ends as that task.

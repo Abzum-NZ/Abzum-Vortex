@@ -428,7 +428,59 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
       ? { kind: "available", value, warnings: outcome.warnings }
       : { kind: "available", value };
   };
+  /** One command serves one record type, one action and one gesture identity, of 1 to 200 subjects. */
+  const batchOf = (candidates: readonly unknown[]): ExecuteNamedActionCommand[] | undefined => {
+    if (candidates.length === 0 || candidates.length > namedActionBatchMaximum) return undefined;
+    const commands: ExecuteNamedActionCommand[] = [];
+    for (const candidate of candidates) {
+      const command = parsedCommand(candidate);
+      if (command === undefined) return undefined;
+      commands.push(command);
+    }
+    const head = commands[0]!;
+    if (
+      commands.some(
+        (command) =>
+          command.commandId !== head.commandId ||
+          command.recordTypeId.toLowerCase() !== head.recordTypeId.toLowerCase() ||
+          JSON.stringify(command.action) !== JSON.stringify(head.action) ||
+          JSON.stringify(command.inputs) !== JSON.stringify(head.inputs),
+      )
+    ) {
+      console.error("[named-action] refused NAMED_ACTION_BATCH_MIXED");
+      return undefined;
+    }
+    return commands;
+  };
   return Object.freeze({
+    /**
+     * Runs one named action over several records as ONE command inside the caller's verified
+     * request transaction. A refusal is returned for the caller to roll the transaction back with.
+     */
+    async executeManyInTransaction(
+      transaction: RequestDatabaseTransaction,
+      issuedAt: string,
+      selection: OrganizationSelectionCandidate,
+      commandCandidates: readonly unknown[],
+      run: NamedActionFlowRunner,
+    ): Promise<NamedActionBatchResult> {
+      const commands = batchOf(commandCandidates);
+      if (commands === undefined || selection.applicationRootId === undefined)
+        return { kind: "unavailable" };
+      const outcome = await runNamedCommand(
+        transaction,
+        issuedAt,
+        commands[0]!.commandId,
+        commands,
+        run,
+        ids,
+      );
+      if (outcome.kind === "restart") throw new HumanOrganizationRequestRestart();
+      return outcome.kind === "refused"
+        ? { kind: "refused", index: outcome.index, result: outcome.result }
+        : { kind: "completed", results: outcome.results, warnings: outcome.warnings };
+    },
+
     /** Runs one named action inside the caller's verified request transaction. */
     async executeInTransaction(
       transaction: RequestDatabaseTransaction,
@@ -484,29 +536,10 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
       commandCandidates: readonly unknown[],
       run: NamedActionFlowRunner,
     ): Promise<NamedActionBatchResult> {
-      if (commandCandidates.length === 0 || commandCandidates.length > namedActionBatchMaximum)
+      const commands = batchOf(commandCandidates);
+      if (commands === undefined || selection.applicationRootId === undefined)
         return { kind: "unavailable" };
-      if (selection.applicationRootId === undefined) return { kind: "unavailable" };
-      const commands: ExecuteNamedActionCommand[] = [];
-      for (const candidate of commandCandidates) {
-        const command = parsedCommand(candidate);
-        if (command === undefined) return { kind: "unavailable" };
-        commands.push(command);
-      }
-      // One command serves one record type, one action and one gesture identity.
       const head = commands[0]!;
-      if (
-        commands.some(
-          (command) =>
-            command.commandId !== head.commandId ||
-            command.recordTypeId.toLowerCase() !== head.recordTypeId.toLowerCase() ||
-            JSON.stringify(command.action) !== JSON.stringify(head.action) ||
-            JSON.stringify(command.inputs) !== JSON.stringify(head.inputs),
-        )
-      ) {
-        console.error("[named-action] refused NAMED_ACTION_BATCH_MIXED");
-        return { kind: "unavailable" };
-      }
       const rollback = new Error("NAMED_ACTION_BATCH_ROLLED_BACK");
       let stopped: NamedCommandOutcome | undefined;
       const result = await requests.runChange(

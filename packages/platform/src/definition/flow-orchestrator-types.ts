@@ -42,6 +42,8 @@ import type { RecordSaveServiceResult } from "../records/save-record";
 import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
 import type { QueryContinuationKey } from "../queries/continuation-token";
 import type { NamedActionFlowRunner } from "./flow-action-run";
+import type { NamedActionBatchResult } from "../records/action-record-port";
+import type { ExecuteNamedActionCommand } from "../records/named-actions";
 import type { BeforeSaveRuleWarning } from "../rules/before-save-flow-run";
 import type {
   FlowFailureCode,
@@ -197,9 +199,30 @@ type NamedActionRecordPort = Readonly<{
     HumanOrganizationRequestResult<ExecuteNamedActionResult> &
       Readonly<{ warnings?: readonly BeforeSaveRuleWarning[] }>
   >;
+  /** One named action over up to 200 records as one command: every record completes or none does. */
+  executeMany(
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    commands: readonly unknown[],
+    run: NamedActionFlowRunner,
+  ): Promise<NamedActionBatchResult>;
 }>;
 
 export type NamedActionExecutionResult = Awaited<ReturnType<NamedActionRecordPort["execute"]>>;
+
+/** The orchestrator's one named-action path: one record, or one command over several. */
+export type NamedActionRunner = {
+  (
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    command: ExecuteNamedActionCommand,
+  ): Promise<NamedActionExecutionResult>;
+  (
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    commands: readonly ExecuteNamedActionCommand[],
+  ): Promise<NamedActionBatchResult>;
+};
 
 /** The guided-form draft steps of one page: both calls check the draft is the caller's own at the sent revision. */
 export type FlowGuidedDraftPort = Readonly<{
@@ -278,6 +301,11 @@ export type FlowOrchestratorDependencies = Readonly<{
         pageSize: number | undefined;
         /** Empty for the first page. */
         continuation: string;
+        /**
+         * A table's sealed "every matching record" descriptor, as the page issued it: the page is
+         * read from the table's own query state, without the records in `excluded`.
+         */
+        matching?: Readonly<{ token: string; excluded: readonly string[] }>;
       }>,
     ): Promise<
       HumanOrganizationRequestResult<

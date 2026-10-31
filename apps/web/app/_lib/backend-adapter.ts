@@ -8,6 +8,7 @@ import {
 } from "@vortex/platform/server";
 import { requestDependencies } from "./application-page/installed-context";
 import { applicationStoreService } from "./application-store-service";
+import { getQueryContinuationKey } from "./query-continuation-key";
 
 let adapter: BackendAdapter | undefined;
 
@@ -17,6 +18,7 @@ export const backendAdapter = (): BackendAdapter => {
     execute: createBackgroundFlowExecutor({
       requests: requestDependencies(),
       applicationStore: applicationStoreService(),
+      continuationKey: getQueryContinuationKey(),
       backend: backendAdapter,
     }),
     schedule: (work) => after(work),

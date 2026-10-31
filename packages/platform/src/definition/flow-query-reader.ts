@@ -1,6 +1,7 @@
 import "server-only";
 
 import { sameId } from "../catalogue/runtime-primitives";
+import { createMatchingPageReader } from "../pages/records-table-features/matching-page";
 import { createProtectedQueryService } from "../queries/protected-query-service";
 import type { ProtectedQueryServiceDependencies } from "../queries/protected-query-types";
 import type { InstalledFlowBindings } from "./flow-binding-endpoint";
@@ -12,6 +13,7 @@ export const createFlowQueryReader = (
   installation: Pick<InstalledFlowBindings, "organizationId" | "applicationRootId" | "modules">,
 ): NonNullable<FlowOrchestratorDependencies["queryRecords"]> => {
   const queries = createProtectedQueryService(dependencies);
+  const matching = createMatchingPageReader(dependencies);
   return {
     async read(session, selection, target) {
       if (
@@ -20,6 +22,13 @@ export const createFlowQueryReader = (
         !sameId(selection.applicationRootId, installation.applicationRootId)
       )
         return { kind: "unavailable" };
+      if (target.matching !== undefined)
+        return matching(session, selection, {
+          queryId: target.queryId,
+          token: target.matching.token,
+          excluded: new Set(target.matching.excluded.map((recordId) => recordId.toLowerCase())),
+          continuation: target.continuation,
+        });
       const matches = (installation.modules ?? []).flatMap((module) =>
         module.content.queries
           .filter((query) => sameId(query.queryId, target.queryId))

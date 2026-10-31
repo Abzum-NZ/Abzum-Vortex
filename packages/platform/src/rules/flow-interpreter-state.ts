@@ -154,6 +154,28 @@ export const storeTaskOutputs = (
   outputs: FlowRuntimeValues,
 ): Activation => ({ ...activation, outputs: { ...activation.outputs, [taskId]: outputs } });
 
+/**
+ * Stores the outputs of a set-based For each's calls, and the For each's own `applied` output:
+ * each record its field changes touched, with the revision it now has and the values it replaced,
+ * in the order of the items.
+ */
+export const storeSetOutputs = (
+  activation: Activation,
+  awaiting: Readonly<{
+    taskId: string;
+    calls: readonly Readonly<{ taskId: string; taskType: string }>[];
+  }>,
+  produced: readonly Readonly<Record<string, JsonValue>>[],
+): Activation => {
+  const stored = awaiting.calls.reduce(
+    (top, call, index) =>
+      storeTaskOutputs(top, call.taskId, declaredOutputs(call.taskType, produced[index])),
+    activation,
+  );
+  const applied = produced.filter((entry) => Object.hasOwn(entry, "previous"));
+  return storeTaskOutputs(stored, awaiting.taskId, declaredOutputs("for_each", { applied }));
+};
+
 const outputTypes = (taskType: string): Readonly<Record<string, string>> =>
   Object.fromEntries(
     (flowTaskRegistry[taskType as keyof typeof flowTaskRegistry]?.outputs ?? []).map((output) => [

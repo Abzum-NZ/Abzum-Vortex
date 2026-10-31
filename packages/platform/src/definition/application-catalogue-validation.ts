@@ -353,7 +353,7 @@ export function validateApplicationSourceCatalogue(
         key: string,
         eventId: string,
         expectedEvent: string,
-        requiredInputType: "record_reference" | "record_reference_list",
+        requiredInputType: "record_reference" | "record_reference_list" | "json",
       ): void => {
         const previous = boundEventIds.get(eventId);
         if (previous !== undefined) {
@@ -403,11 +403,11 @@ export function validateApplicationSourceCatalogue(
             "broken_reference",
             at("row_actions"),
           );
-      // A bulk action runs a named action of the bound record type, never a flow binding, so no
-      // flow binds the table's bulk action event.
-      for (const binding of source.body.flow_bindings)
-        if (binding.control === placementAlias && binding.event === "bulk_action")
-          report("vortex.definition.application_block_settings", "invalid_value", at("features"));
+      // A bulk action runs the flow its declared event names, over the selected records.
+      if (features.bulkActions.enabled)
+        for (const action of features.bulkActions.actions)
+          if (action.eventId !== undefined)
+            checkRowBehaviour("features", action.eventId, "bulk_action", "json");
       // An enabled inline-edit feature binds its commit to a flow; a feature that is off binds
       // nothing, and the compiler drops any flow binding left for it.
       // A draft may hold a feature that is not possible yet; publication refuses it with the
@@ -430,6 +430,9 @@ export function validateApplicationSourceCatalogue(
           "invalid_value",
         );
       }
+      // Paste, fill and undo bind their batch to a flow that takes the rows as JSON.
+      if (features.spreadsheet.enabled && features.spreadsheet.eventId !== undefined)
+        checkRowBehaviour("features", features.spreadsheet.eventId, "batch_edit", "json");
       if (features.rowEdit.enabled) {
         if (features.rowEdit.eventId !== undefined)
           checkRowBehaviour(

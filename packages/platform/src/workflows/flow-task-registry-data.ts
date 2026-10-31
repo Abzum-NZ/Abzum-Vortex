@@ -69,13 +69,13 @@ export const flowTaskRuns = Object.freeze({
   "record.delete": serverAndBackend,
   "record.restore": serverAndBackend,
   "record.changes": serverAndBackend,
-  "record.query": server,
+  "record.query": serverAndBackend,
   "record.read_fields": server,
   "record.pin_identity": server,
   "form.save_draft": server,
   "form.discard_draft": server,
   "operation.call": serverAndBackend,
-  "backend.run": server,
+  "backend.run": serverAndBackend,
   "event.announce": server,
   "data.calculate": everywhere,
   "data.record_link": serverAndBackend,
@@ -164,6 +164,8 @@ const controlDefinitions: Record<FlowControlTaskTypeKey, DefinitionInput> = {
     summary: "Runs a list of tasks for every item, within the flow's item limit.",
     runLocations: allLocations,
     effect: "pure",
+    // Only a set-based For each applies its record steps as one change and reports them here.
+    outputs: [output("applied", "json")],
   },
   sequential: {
     title: "Sequential",
@@ -230,8 +232,14 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       record_type: optional("record_type_id"),
       record: optional("record_reference"),
       values: required("field_values"),
+      // The revision the person saw; the change is refused when the record is no longer at it.
+      expected_revision: optional("whole_number"),
     },
-    outputs: [output("record", "record_reference")],
+    outputs: [
+      output("record", "record_reference"),
+      output("revision", "whole_number"),
+      output("previous", "json"),
+    ],
   },
   "record.link": {
     title: "Link records",
@@ -285,6 +293,10 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       parameters: optional("input_map"),
       page_size: optional("whole_number"),
       continuation: optional("text"),
+      // The sealed "every matching record" token of a table that reads the query, and the records
+      // left out of it: the page is the table's own filtered and searched rows, never wider.
+      selection: optional("text"),
+      excluded: optional("json"),
     },
     outputs: [output("records", "record_reference_list"), output("continuation", "text")],
     redaction: "safe_fields",
@@ -359,10 +371,12 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     properties: {
       operation: required("protected_operation_key"),
       record: optional("record_reference"),
+      // A named action over several records as one command: each record with the revision seen.
+      subjects: optional("json"),
       inputs: optional("input_map"),
       refusal_feedback: optional("input_map"),
     },
-    outputs: [output("result", "json")],
+    outputs: [output("result", "json"), output("count", "whole_number")],
   },
   "backend.run": {
     title: "Run on back end",

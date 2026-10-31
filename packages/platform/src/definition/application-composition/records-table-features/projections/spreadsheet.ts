@@ -15,6 +15,8 @@ const spreadsheetSchema = z
     paste: onlyTrue.optional(),
     fill: onlyTrue.optional(),
     undo: onlyTrue.optional(),
+    /** The binding that saves a batch of pasted, filled or undone cells. */
+    eventId: z.string().min(1).max(60).optional(),
     /**
      * The status bar of a selected range: the configured fields (every one is shown, a field the
      * viewer cannot read as "Not available") and the totals. Absent while the status bar is off.
