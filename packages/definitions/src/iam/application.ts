@@ -170,24 +170,6 @@ export const iamApplication: ApplicationSourceDocument = loadApplicationSource(
     },
     {
       ...defaultOperationFlowSource({
-        id: "flow_deactivate_role_activation",
-        key: "deactivate_role_activation",
-        operation: "platform.deactivate_role_activation",
-        inputs: {
-          role_activation_id: {
-            type: "record_reference",
-            required: true,
-            recordTypeIds: ["vortex.system_directory:role_activation"],
-          },
-          expected_activation_revision: { type: "whole_number", required: true },
-        },
-        returnsResult: true,
-        done: "Role activation deactivated.",
-      }),
-      labels: { name: "Deactivate role activation" },
-    },
-    {
-      ...defaultOperationFlowSource({
         id: "flow_revoke_delegation_authority",
         key: "revoke_delegation_authority",
         operation: "platform.revoke_delegation_authority",

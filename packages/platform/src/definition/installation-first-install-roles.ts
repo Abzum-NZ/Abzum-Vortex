@@ -110,7 +110,6 @@ const assignmentDeclined = async (
 type AssignedMemberRole = Readonly<{
   state: string;
   temporalState: string;
-  assignmentKind: string;
   role: Readonly<{ roleId: string }>;
   assignee: Readonly<{ kind: string; organizationAccountId?: string }>;
 }>;
@@ -337,8 +336,7 @@ const applyFirstInstallRoles = async (
     choice.kind === "accept" &&
     member !== undefined &&
     member.installerAssignment === null &&
-    (!["active", "acceptance_required"].includes(member.lifecycle) ||
-      member.assignmentPolicy !== "standing")
+    !["active", "acceptance_required"].includes(member.lifecycle)
   )
     refusedFor("first_install_member_role_unavailable_role", "role_unavailable");
 
@@ -400,7 +398,7 @@ const applyFirstInstallRoles = async (
     containsCustomComponents,
   );
   const role = after.roles.find((candidateRole) => isMember(candidateRole.sourceRoleId));
-  if (role === undefined || role.lifecycle !== "active" || role.assignmentPolicy !== "standing")
+  if (role === undefined || role.lifecycle !== "active")
     return refusedFor("first_install_member_role_unavailable_role", "role_unavailable");
   if (role.installerAssignment !== null) return false;
   const organizationAccountId = after.organizationAccountId;
@@ -410,7 +408,6 @@ const applyFirstInstallRoles = async (
       live === undefined ||
       live.state !== "live" ||
       live.temporalState !== "active" ||
-      live.assignmentKind !== "standing" ||
       !sameId(live.role.roleId, role.roleId) ||
       live.assignee.kind !== "organization_account" ||
       !sameId(live.assignee.organizationAccountId ?? "", organizationAccountId)
@@ -426,7 +423,6 @@ const applyFirstInstallRoles = async (
       expectedRoleRevision: role.liveRevision,
       assigneeKind: "organization_account",
       organizationAccountId,
-      assignmentKind: "standing",
     }),
   );
   if (assignResult.kind !== "available" || !("assignment" in assignResult.value))

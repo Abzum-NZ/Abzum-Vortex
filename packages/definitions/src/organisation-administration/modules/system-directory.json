@@ -588,13 +588,7 @@
         "protected_view": "roles",
         "organization_field": "organization_id",
         "revision_field": "revision",
-        "filterable_fields": [
-          "lifecycle",
-          "role_kind",
-          "privilege_classification",
-          "assignment_policy",
-          "label"
-        ],
+        "filterable_fields": ["lifecycle", "role_kind", "privilege_classification", "label"],
         "sortable_fields": ["key", "label", "lifecycle"]
       },
       "fields": [
@@ -755,33 +749,6 @@
               {
                 "value": "privileged",
                 "label": "Privileged"
-              }
-            ],
-            "options_source": {
-              "kind": "fixed"
-            }
-          }
-        },
-        {
-          "id": "fld_role_assignment_policy",
-          "key": "assignment_policy",
-          "label": "Assignment policy",
-          "required": false,
-          "unique": false,
-          "filterable": true,
-          "sortable": false,
-          "personal_data": "none",
-          "public_display": "refused",
-          "type": "choice",
-          "settings": {
-            "options": [
-              {
-                "value": "standing",
-                "label": "Standing"
-              },
-              {
-                "value": "activation_required",
-                "label": "Activation required"
               }
             ],
             "options_source": {
@@ -1058,257 +1025,6 @@
               {
                 "value": "scheduled",
                 "label": "Scheduled"
-              },
-              {
-                "value": "expired",
-                "label": "Expired"
-              },
-              {
-                "value": "revoked",
-                "label": "Revoked"
-              }
-            ],
-            "options_source": {
-              "kind": "fixed"
-            }
-          }
-        }
-      ],
-      "pipelines": [],
-      "relationships": [],
-      "before_save_rules": []
-    },
-    {
-      "id": "rt_system_directory_role_activation",
-      "key": "role_activation",
-      "name": "Role activation",
-      "plural_name": "Role activations",
-      "title_field": "account_display_name",
-      "storage_contract_id": "srt_system_directory_role_activation",
-      "storage_scope": "organization_shared",
-      "ownership_mode": "none",
-      "standard_actions": ["read"],
-      "custom_actions": [],
-      "system_projection": {
-        "protected_view": "role_activations",
-        "organization_field": "organization_id",
-        "revision_field": "revision",
-        "filterable_fields": [
-          "organization_account_id",
-          "role_id",
-          "eligibility_source_kind",
-          "state",
-          "temporal_state",
-          "account_display_name"
-        ],
-        "sortable_fields": ["activated_at", "expires_at", "state"]
-      },
-      "fields": [
-        {
-          "id": "fld_role_activation_organization_id",
-          "key": "organization_id",
-          "label": "Organisation",
-          "required": true,
-          "unique": false,
-          "filterable": false,
-          "sortable": false,
-          "personal_data": "none",
-          "public_display": "refused",
-          "type": "text",
-          "settings": {
-            "max_length": 36
-          }
-        },
-        {
-          "id": "fld_role_activation_revision",
-          "key": "revision",
-          "label": "Revision",
-          "required": true,
-          "unique": false,
-          "filterable": false,
-          "sortable": false,
-          "personal_data": "none",
-          "public_display": "refused",
-          "type": "whole_number",
-          "settings": {}
-        },
-        {
-          "id": "fld_role_activation_organization_account_id",
-          "key": "organization_account_id",
-          "label": "Organisation account",
-          "required": false,
-          "unique": false,
-          "filterable": true,
-          "sortable": false,
-          "personal_data": "none",
-          "public_display": "refused",
-          "type": "text",
-          "settings": {
-            "max_length": 36
-          }
-        },
-        {
-          "id": "fld_role_activation_account_display_name",
-          "key": "account_display_name",
-          "label": "Account display name",
-          "required": false,
-          "unique": false,
-          "filterable": true,
-          "sortable": false,
-          "search_priority": "first",
-          "personal_data": "personal",
-          "public_display": "refused",
-          "type": "text",
-          "settings": {
-            "max_length": 120
-          }
-        },
-        {
-          "id": "fld_role_activation_role_id",
-          "key": "role_id",
-          "label": "Role",
-          "required": false,
-          "unique": false,
-          "filterable": true,
-          "sortable": false,
-          "personal_data": "none",
-          "public_display": "refused",
-          "type": "text",
-          "settings": {
-            "max_length": 36
-          }
-        },
-        {
-          "id": "fld_role_activation_role_key",
-          "key": "role_key",
-          "label": "Role key",
-          "required": false,
-          "unique": false,
-          "filterable": false,
-          "sortable": false,
-          "search_priority": "normal",
-          "personal_data": "none",
-          "public_display": "refused",
-          "type": "text",
-          "settings": {
-            "max_length": 40
-          }
-        },
-        {
-          "id": "fld_role_activation_role_label",
-          "key": "role_label",
-          "label": "Role label",
-          "required": false,
-          "unique": false,
-          "filterable": false,
-          "sortable": false,
-          "personal_data": "none",
-          "public_display": "refused",
-          "type": "text",
-          "settings": {
-            "max_length": 60
-          }
-        },
-        {
-          "id": "fld_role_activation_eligibility_source_kind",
-          "key": "eligibility_source_kind",
-          "label": "Eligibility source",
-          "required": false,
-          "unique": false,
-          "filterable": true,
-          "sortable": false,
-          "personal_data": "none",
-          "public_display": "refused",
-          "type": "choice",
-          "settings": {
-            "options": [
-              {
-                "value": "direct",
-                "label": "Direct"
-              },
-              {
-                "value": "group",
-                "label": "Group"
-              }
-            ],
-            "options_source": {
-              "kind": "fixed"
-            }
-          }
-        },
-        {
-          "id": "fld_role_activation_activated_at",
-          "key": "activated_at",
-          "label": "Activated at",
-          "required": false,
-          "unique": false,
-          "filterable": false,
-          "sortable": true,
-          "personal_data": "none",
-          "public_display": "refused",
-          "type": "date_time",
-          "settings": {
-            "display_time_zone": "organization"
-          }
-        },
-        {
-          "id": "fld_role_activation_expires_at",
-          "key": "expires_at",
-          "label": "Expires at",
-          "required": false,
-          "unique": false,
-          "filterable": false,
-          "sortable": true,
-          "personal_data": "none",
-          "public_display": "refused",
-          "type": "date_time",
-          "settings": {
-            "display_time_zone": "organization"
-          }
-        },
-        {
-          "id": "fld_role_activation_state",
-          "key": "state",
-          "label": "State",
-          "required": false,
-          "unique": false,
-          "filterable": true,
-          "sortable": true,
-          "personal_data": "none",
-          "public_display": "refused",
-          "type": "choice",
-          "settings": {
-            "options": [
-              {
-                "value": "live",
-                "label": "Live"
-              },
-              {
-                "value": "revoked",
-                "label": "Revoked"
-              }
-            ],
-            "options_source": {
-              "kind": "fixed"
-            }
-          }
-        },
-        {
-          "id": "fld_role_activation_temporal_state",
-          "key": "temporal_state",
-          "label": "Temporal state",
-          "required": false,
-          "unique": false,
-          "filterable": true,
-          "sortable": false,
-          "personal_data": "none",
-          "public_display": "refused",
-          "type": "choice",
-          "settings": {
-            "options": [
-              {
-                "value": "active",
-                "label": "Active"
               },
               {
                 "value": "expired",
@@ -2250,7 +1966,6 @@
         "lifecycle",
         "role_kind",
         "privilege_classification",
-        "assignment_policy",
         "accepted_permission_count",
         "revision"
       ],
@@ -2340,34 +2055,6 @@
       "sort": [
         {
           "field": "starts_at",
-          "direction": "ascending"
-        }
-      ],
-      "page_size": 50,
-      "relationship_hops": 0
-    },
-    {
-      "id": "qry_role_activations",
-      "key": "role_activations",
-      "exposure": "exposed",
-      "label": "Role activations",
-      "record_type": "role_activation",
-      "inputs": [],
-      "select": [
-        "account_display_name",
-        "role_key",
-        "role_label",
-        "activated_at",
-        "expires_at",
-        "state",
-        "temporal_state"
-      ],
-      "filter": null,
-      "group_by": [],
-      "aggregates": [],
-      "sort": [
-        {
-          "field": "activated_at",
           "direction": "ascending"
         }
       ],

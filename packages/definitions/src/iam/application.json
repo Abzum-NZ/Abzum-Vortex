@@ -89,7 +89,6 @@
             "lifecycle",
             "role_kind",
             "privilege_classification",
-            "assignment_policy",
             "accepted_permission_count",
             "revision"
           ],
@@ -192,34 +191,6 @@
             "organization_account_id",
             "group_id",
             "revision"
-          ],
-          "changeable_fields": []
-        }
-      },
-      {
-        "id": "perm_app_iam_role_activation_read",
-        "key": "application.iam.directory.role_activation.read",
-        "label": "Read IAM role activations",
-        "description": "Read IAM role activations under current role authority.",
-        "record_type": "vortex.system_directory:role_activation",
-        "action_kind": "read",
-        "administrative": true,
-        "record_scope": {
-          "routes": [
-            {
-              "kind": "all_records"
-            }
-          ]
-        },
-        "field_policy": {
-          "readable_fields": [
-            "account_display_name",
-            "role_key",
-            "role_label",
-            "activated_at",
-            "expires_at",
-            "state",
-            "temporal_state"
           ],
           "changeable_fields": []
         }
@@ -352,7 +323,6 @@
           "application.iam.directory.group.read",
           "application.iam.directory.group_membership.read",
           "application.iam.directory.role_assignment.read",
-          "application.iam.directory.role_activation.read",
           "application.iam.directory.delegation.read",
           "application.iam.directory.installed_application.read",
           "application.iam.directory.application_role_template.read"
@@ -545,14 +515,6 @@
         "key": "vortex.app.iam.revoke_role_assignment",
         "label": "Revoke role assignment",
         "record_type": "vortex.system_directory:role_assignment",
-        "carries": [],
-        "personal_or_sensitive_values_allowed": false
-      },
-      {
-        "id": "event_deactivate_role_activation",
-        "key": "vortex.app.iam.deactivate_role_activation",
-        "label": "Deactivate role activation",
-        "record_type": "vortex.system_directory:role_activation",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       },
@@ -1260,12 +1222,6 @@
                       {
                         "field": "vortex.system_directory:role.privilege_classification",
                         "label": "Privilege",
-                        "visible": true,
-                        "pin": "unpinned"
-                      },
-                      {
-                        "field": "vortex.system_directory:role.assignment_policy",
-                        "label": "Assignment policy",
                         "visible": true,
                         "pin": "unpinned"
                       },
@@ -2657,87 +2613,6 @@
                             "kind": "content"
                           }
                         }
-                      }
-                    }
-                  }
-                },
-                {
-                  "type": "platform.renderer.table",
-                  "props": {
-                    "presentation": "grid",
-                    "id": "iam_role_activations_region",
-                    "title": "Active roles",
-                    "empty_message": "No active roles",
-                    "columns": [
-                      {
-                        "field": "vortex.system_directory:role_activation.account_display_name",
-                        "label": "Person",
-                        "visible": true,
-                        "pin": "start"
-                      },
-                      {
-                        "field": "vortex.system_directory:role_activation.role_label",
-                        "label": "Role",
-                        "visible": true,
-                        "pin": "unpinned"
-                      },
-                      {
-                        "field": "vortex.system_directory:role_activation.activated_at",
-                        "label": "Activated at",
-                        "visible": true,
-                        "pin": "unpinned"
-                      },
-                      {
-                        "field": "vortex.system_directory:role_activation.expires_at",
-                        "label": "Expires at",
-                        "visible": true,
-                        "pin": "unpinned"
-                      },
-                      {
-                        "field": "vortex.system_directory:role_activation.state",
-                        "label": "State",
-                        "visible": true,
-                        "pin": "unpinned"
-                      }
-                    ],
-                    "row_actions": [
-                      {
-                        "event_id": "event_deactivate_role_activation",
-                        "label": "Deactivate role",
-                        "icon": "workflow",
-                        "placement": "menu"
-                      }
-                    ],
-                    "vortex": {
-                      "block": {
-                        "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "2.0.0"
-                      },
-                      "query": "vortex.system_directory:role_activations",
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      }
-                    },
-                    "features": {
-                      "pinning": {
-                        "enabled": true
-                      },
-                      "pivot": {
-                        "enabled": false
-                      },
-                      "spreadsheet": {
-                        "enabled": false
-                      },
-                      "row_actions": {
-                        "enabled": true
                       }
                     }
                   }
@@ -6922,30 +6797,6 @@
             "name": "record_id"
           },
           "expected_assignment_revision": {
-            "kind": "caller",
-            "name": "revision"
-          }
-        },
-        "settings": {
-          "condition": null,
-          "debounceMs": 0,
-          "concurrency": "ignore_while_running",
-          "exclusive": "none",
-          "timeoutMs": null
-        }
-      },
-      {
-        "id": "binding_deactivate_role_activation",
-        "control": "iam_role_activations_region",
-        "event_id": "event_deactivate_role_activation",
-        "event": "row_action",
-        "flow": "flow_deactivate_role_activation",
-        "inputs": {
-          "role_activation_id": {
-            "kind": "caller",
-            "name": "record_id"
-          },
-          "expected_activation_revision": {
             "kind": "caller",
             "name": "revision"
           }

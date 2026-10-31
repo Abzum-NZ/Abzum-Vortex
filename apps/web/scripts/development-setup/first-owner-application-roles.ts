@@ -31,10 +31,7 @@ type ProjectedAssignment = Extract<
 >["value"][number];
 
 /** The accepted role a grant needs: its identity, live revision, lifecycle and assignment policy. */
-type GrantableRole = Pick<
-  ProjectedRole,
-  "roleId" | "label" | "liveRevision" | "lifecycle" | "assignmentPolicy"
->;
+type GrantableRole = Pick<ProjectedRole, "roleId" | "label" | "liveRevision" | "lifecycle">;
 
 export type FirstOwnerApplicationRoleFacts = Readonly<{
   identityAuthorityId: IdentityAuthorityId;
@@ -50,7 +47,6 @@ const grantable = (role: OrganizationAdministrationRoleSummary): GrantableRole =
   label: role.label,
   liveRevision: role.liveRevision,
   lifecycle: role.lifecycle,
-  assignmentPolicy: role.assignmentPolicy.kind,
 });
 
 /** Every page of the organisation's roles, through the protected roles projection. */
@@ -233,10 +229,6 @@ export const grantFirstOwnerApplicationRoles = async (
       if (role.lifecycle !== "active")
         throw new Error(
           `Accepted role ${role.label} from template ${template.key} is ${role.lifecycle}`,
-        );
-      if (role.assignmentPolicy !== "standing")
-        throw new Error(
-          `Role ${role.label} from template ${template.key} requires activation and cannot open an application immediately`,
         );
 
       if (ownerHolds(role.roleId)) {

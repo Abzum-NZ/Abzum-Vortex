@@ -323,6 +323,74 @@ begin
 end
 $function$;
 
+-- Every stored definition that named the removed assignment policy, the eligible assignment kind or a
+-- role activation no longer names them: the field, its readable/select/filter list entries, role
+-- activation record type, query, page blocks, bindings, permission and event.
+create function pg_temp.contract_43_assignment_policy(p_value jsonb)
+returns jsonb
+language plpgsql
+immutable
+set search_path = ''
+as $function$
+declare
+  result jsonb;
+  member record;
+  item jsonb;
+begin
+  case pg_catalog.jsonb_typeof(p_value)
+    when 'object' then
+      if p_value ->> 'protected_view' = 'role_activations'
+        or (p_value ->> 'key' = 'role_activation' and p_value ? 'fields') then
+        return 'null'::jsonb;
+      end if;
+      result := '{}'::jsonb;
+      for member in select entry.key, entry.value from pg_catalog.jsonb_each(p_value) as entry(key, value) loop
+        if member.key = 'assignment_policy' then continue; end if;
+        result := result || pg_catalog.jsonb_build_object(
+          member.key, pg_temp.contract_43_assignment_policy(member.value));
+      end loop;
+      return result;
+    when 'array' then
+      result := '[]'::jsonb;
+      for item in select element.value from pg_catalog.jsonb_array_elements(p_value) as element(value) loop
+        if item = '"assignment_policy"'::jsonb
+          or item = '"eligible"'::jsonb
+          or (pg_catalog.jsonb_typeof(item) = 'object' and (
+            (item ->> 'key') = 'assignment_policy'
+            or (item ->> 'key') = 'role_activation'
+            or (item ->> 'key') = 'application.iam.directory.role_activation.read'
+            or (item ->> 'key') = 'vortex.app.iam.deactivate_role_activation'
+            or (item ->> 'field') like '%.assignment_policy'
+            or (item ->> 'field') like 'vortex.system_directory:role_activation.%'
+            or (item -> 'props' ->> 'name') = 'assignment_policy'
+            or (item ->> 'value') = 'eligible'
+            or (item ->> 'protected_view') = 'role_activations'
+            or (item ->> 'record_type') = 'vortex.system_directory:role_activation'
+            or (item ->> 'flow') = 'flow_deactivate_role_activation'
+            or (item ->> 'control') = 'iam_role_activations_region'
+            or (item ->> 'query') like '%:role_activations'
+            or (item ->> 'id') in (
+              'iam_role_activations_region',
+              'binding_deactivate_role_activation',
+              'event_deactivate_role_activation',
+              'flow_deactivate_role_activation',
+              'perm_app_iam_role_activation_read',
+              'qry_role_activations',
+              'rt_system_directory_role_activation'
+            )
+          )) then
+          continue;
+        end if;
+        result := result || pg_catalog.jsonb_build_array(
+          pg_temp.contract_43_assignment_policy(item));
+      end loop;
+      return result;
+    else
+      return p_value;
+  end case;
+end
+$function$;
+
 do $convert$
 declare
   draft record;
@@ -348,13 +416,14 @@ begin
     else
       body := pg_temp.contract_43_module(body);
     end if;
-    converted := pg_temp.contract_43_assignment_kind(
-      pg_temp.contract_43_direct_share(
-        pg_temp.contract_43_detail_sections(
-          pg_temp.contract_43_groups(
-            pg_catalog.jsonb_set(
-              pg_catalog.jsonb_set(draft.draft_source, '{body}', body),
-              '{source_contract_version}', '"4.3.0"'::jsonb)))));
+    converted := pg_temp.contract_43_assignment_policy(
+      pg_temp.contract_43_assignment_kind(
+        pg_temp.contract_43_direct_share(
+          pg_temp.contract_43_detail_sections(
+            pg_temp.contract_43_groups(
+              pg_catalog.jsonb_set(
+                pg_catalog.jsonb_set(draft.draft_source, '{body}', body),
+                '{source_contract_version}', '"4.3.0"'::jsonb))))));
     update vortex_definition.drafts d set
       draft_source = converted,
       source_contract_version = '4.3.0',
@@ -374,6 +443,7 @@ drop function pg_temp.contract_43_groups(jsonb);
 drop function pg_temp.contract_43_detail_sections(jsonb);
 drop function pg_temp.contract_43_direct_share(jsonb);
 drop function pg_temp.contract_43_assignment_kind(jsonb);
+drop function pg_temp.contract_43_assignment_policy(jsonb);
 drop function pg_temp.contract_43_fingerprint(jsonb);
 drop function pg_temp.contract_43_canonical_json(jsonb);
 

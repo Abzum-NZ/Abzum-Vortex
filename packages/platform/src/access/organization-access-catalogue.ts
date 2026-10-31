@@ -16,8 +16,6 @@ import {
   permissionIdSchema,
   platformIdSchema,
   revisionSchema,
-  roleActivationIdSchema,
-  roleActivationPolicyIdSchema,
   roleAssignmentIdSchema,
   roleIdSchema,
   semanticVersionSchema,
@@ -133,41 +131,6 @@ export const roleRecentAuthenticationRequirementSchema = z.discriminatedUnion("k
     .strict(),
 ]);
 
-/** Exact immutable policy evidence pinned by an activation-required role revision. */
-export const roleActivationPolicyReferenceSchema = z
-  .object({
-    activationPolicyId: roleActivationPolicyIdSchema,
-    revision: revisionSchema,
-  })
-  .strict();
-
-export const roleAssignmentPolicySchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("standing") }).strict(),
-  z
-    .object({
-      kind: z.literal("activation_required"),
-      activationPolicy: roleActivationPolicyReferenceSchema,
-    })
-    .strict(),
-]);
-
-/** Role-scoped immutable activation-policy revision; effective access is the sole decider. */
-export const roleActivationPolicyRevisionSchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    roleId: roleIdSchema,
-    activationPolicyId: roleActivationPolicyIdSchema,
-    revision: revisionSchema,
-    maximumActivationDurationSeconds: javascriptSafeDurationSecondsSchema,
-    reasonRequired: z.boolean(),
-    recentAuthentication: roleRecentAuthenticationRequirementSchema,
-    /** The one published flow execution binding permitted to activate; absent means any eligible caller. */
-    changedByActorId: actorIdSchema,
-    changedAt: timestampSchema,
-    changeCorrelationId: correlationIdSchema,
-  })
-  .strict();
-
 export const applicationRoleSourceReferenceSchema = z
   .object({
     applicationRootId: applicationRootIdSchema,
@@ -220,7 +183,6 @@ const liveRoleFields = {
   description: descriptionSchema,
   liveRevision: revisionSchema,
   privilegeClassification: rolePrivilegeClassificationSchema,
-  assignmentPolicy: roleAssignmentPolicySchema,
   policyContinuityRevision: revisionSchema,
   authorityContinuityRevision: revisionSchema,
   permissions: rolePermissionSetSchema,
@@ -428,135 +390,6 @@ export const roleAssignmentEffectiveStateSchema = z
     {
       path: ["effectiveState"],
       message: "Only a revoked assignment has revoked effective state",
-    },
-  );
-
-const exactEligibilityAssignmentReferenceSchema = z
-  .object({
-    roleAssignmentId: roleAssignmentIdSchema,
-    revision: revisionSchema,
-  })
-  .strict();
-
-const exactOriginatingMembershipReferenceSchema = z
-  .object({
-    membershipId: membershipIdSchema,
-    revision: revisionSchema,
-  })
-  .strict();
-
-export const roleActivationEligibilitySourceSchema = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("direct"),
-      eligibilityAssignment: exactEligibilityAssignmentReferenceSchema,
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("group"),
-      eligibilityAssignment: exactEligibilityAssignmentReferenceSchema,
-      originatingMembership: exactOriginatingMembershipReferenceSchema,
-    })
-    .strict(),
-]);
-
-const addRoleActivationIssues = (
-  value: {
-    state: "live" | "revoked";
-    activatedAt: string;
-    expiresAt: string;
-    changedAt: string;
-    revokedByActorId?: string | undefined;
-    revokedAt?: string | undefined;
-    revocationCorrelationId?: string | undefined;
-  },
-  context: z.RefinementCtx,
-) => {
-  if (Date.parse(value.expiresAt) <= Date.parse(value.activatedAt))
-    context.addIssue({
-      code: "custom",
-      path: ["expiresAt"],
-      message: "Activation expiry must be later than activation",
-    });
-
-  const hasAnyRevocation =
-    value.revokedByActorId !== undefined ||
-    value.revokedAt !== undefined ||
-    value.revocationCorrelationId !== undefined;
-  const hasCompleteRevocation =
-    value.revokedByActorId !== undefined &&
-    value.revokedAt !== undefined &&
-    value.revocationCorrelationId !== undefined;
-  if (
-    (value.state === "live" && hasAnyRevocation) ||
-    (value.state === "revoked" && !hasCompleteRevocation)
-  )
-    context.addIssue({
-      code: "custom",
-      path: ["revokedAt"],
-      message: "Revocation evidence is present exactly when the activation is revoked",
-    });
-  if (value.revokedAt !== undefined && Date.parse(value.revokedAt) < Date.parse(value.activatedAt))
-    context.addIssue({
-      code: "custom",
-      path: ["revokedAt"],
-      message: "Revocation cannot precede activation",
-    });
-  if (Date.parse(value.changedAt) < Date.parse(value.activatedAt))
-    context.addIssue({
-      code: "custom",
-      path: ["changedAt"],
-      message: "The last change cannot precede activation",
-    });
-  if (value.revokedAt !== undefined && Date.parse(value.changedAt) < Date.parse(value.revokedAt))
-    context.addIssue({
-      code: "custom",
-      path: ["changedAt"],
-      message: "The last change cannot precede revocation",
-    });
-};
-
-/** Protected activation evidence only; effective access remains the sole decision boundary. */
-export const roleActivationSchema = z
-  .object({
-    roleActivationId: roleActivationIdSchema,
-    organizationId: organizationIdSchema,
-    organizationAccountId: organizationAccountIdSchema,
-    roleId: roleIdSchema,
-    revision: revisionSchema,
-    historicalRoleRevision: revisionSchema,
-    authorityContinuityRevision: revisionSchema,
-    policyContinuityRevision: revisionSchema,
-    activationPolicy: roleActivationPolicyReferenceSchema,
-    eligibilitySource: roleActivationEligibilitySourceSchema,
-    state: z.enum(["live", "revoked"]),
-    activatedByActorId: actorIdSchema,
-    activatedAt: timestampSchema,
-    expiresAt: timestampSchema,
-    activationCorrelationId: correlationIdSchema,
-    changedByActorId: actorIdSchema,
-    changedAt: timestampSchema,
-    changeCorrelationId: correlationIdSchema,
-    revokedByActorId: actorIdSchema.optional(),
-    revokedAt: timestampSchema.optional(),
-    revocationCorrelationId: correlationIdSchema.optional(),
-  })
-  .strict()
-  .superRefine(addRoleActivationIssues);
-
-/** Timing-only status; successful parsing does not establish current eligibility or permission. */
-export const roleActivationTemporalStateSchema = z
-  .object({
-    activation: roleActivationSchema,
-    temporalState: z.enum(["active", "expired", "revoked"]),
-  })
-  .strict()
-  .refine(
-    (value) => (value.activation.state === "revoked") === (value.temporalState === "revoked"),
-    {
-      path: ["temporalState"],
-      message: "Only a revoked activation has revoked temporal state",
     },
   );
 
@@ -801,9 +634,6 @@ export type RolePrivilegeClassification = z.infer<typeof rolePrivilegeClassifica
 export type RoleRecentAuthenticationRequirement = z.infer<
   typeof roleRecentAuthenticationRequirementSchema
 >;
-export type RoleActivationPolicyReference = z.infer<typeof roleActivationPolicyReferenceSchema>;
-export type RoleAssignmentPolicy = z.infer<typeof roleAssignmentPolicySchema>;
-export type RoleActivationPolicyRevision = z.infer<typeof roleActivationPolicyRevisionSchema>;
 export type ApplicationRoleSourceReference = z.infer<typeof applicationRoleSourceReferenceSchema>;
 export type CustomRoleTemplateProvenance = z.infer<typeof customRoleTemplateProvenanceSchema>;
 export type Role = z.infer<typeof roleSchema>;
@@ -813,9 +643,6 @@ export type GroupMembership = z.infer<typeof groupMembershipSchema>;
 export type GroupMembershipEffectiveState = z.infer<typeof groupMembershipEffectiveStateSchema>;
 export type RoleAssignment = z.infer<typeof roleAssignmentSchema>;
 export type RoleAssignmentEffectiveState = z.infer<typeof roleAssignmentEffectiveStateSchema>;
-export type RoleActivationEligibilitySource = z.infer<typeof roleActivationEligibilitySourceSchema>;
-export type RoleActivation = z.infer<typeof roleActivationSchema>;
-export type RoleActivationTemporalState = z.infer<typeof roleActivationTemporalStateSchema>;
 export type DelegationScope = z.infer<typeof delegationScopeSchema>;
 export type DelegationAuthority = z.infer<typeof delegationAuthoritySchema>;
 export type DelegationAuthorityEffectiveState = z.infer<

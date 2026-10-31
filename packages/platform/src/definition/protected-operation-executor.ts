@@ -13,7 +13,6 @@ import {
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
   changeOrganizationAdministrationRoleAuthorityCommandSchema,
   createOrganizationAdministrationGroupCommandSchema,
-  deactivateOrganizationAdministrationRoleActivationCommandSchema,
   prepareOrganizationAdministrationRoleChangeCommandSchema,
   removeOrganizationAdministrationMembershipCommandSchema,
   renameOrganizationAdministrationGroupCommandSchema,
@@ -208,7 +207,6 @@ type ProtectedOperationServices = Readonly<{
     | "readGroup"
     | "readOrganizationAccount"
     | "revokeRoleAssignment"
-    | "deactivateRoleActivation"
     | "revokeDelegationAuthority"
     | "grantDelegationAuthority"
     | "suspendOrganizationAccount"
@@ -811,34 +809,6 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
           access_version: value.accessVersion,
         }),
       ),
-  }),
-  deactivate_role_activation: operation({
-    schema: deactivateOrganizationAdministrationRoleActivationCommandSchema,
-    command: (inputs) => ({
-      roleActivationId: inputs.role_activation_id,
-      expectedActivationRevision: inputs.expected_activation_revision,
-    }),
-    run: async (services, caller, command) => {
-      const result = await services.accessAdministration.deactivateRoleActivation(
-        caller.session,
-        caller.selection,
-        command,
-      );
-      if (result.kind === "unavailable") {
-        if (result.code === "permission_denied" || result.code === "activation_not_found")
-          return { kind: "unavailable" };
-        return {
-          kind: "unavailable",
-          ...(result.code === undefined ? {} : { code: result.code }),
-          ...(result.cause === undefined ? {} : { cause: result.cause }),
-        };
-      }
-      return mapAvailable(result, (value) => ({
-        role_activation_id: value.activation.roleActivationId,
-        revision: value.activation.revision,
-        access_version: value.accessVersion,
-      }));
-    },
   }),
   grant_delegation_authority: operation({
     schema: grantOrganizationAdministrationDelegationAuthorityCommandSchema,

@@ -9,16 +9,12 @@ import {
   organizationAccountIdSchema,
   recordTypeIdSchema,
   revisionSchema,
-  roleActivationIdSchema,
   roleAssignmentIdSchema,
   roleIdSchema,
   timestampSchema,
 } from "../catalogue/identifiers";
 import { descriptionSchema, labelSchema } from "../catalogue/common";
-import {
-  rolePrivilegeClassificationSchema,
-  roleRecentAuthenticationRequirementSchema,
-} from "./organization-access-catalogue";
+import { rolePrivilegeClassificationSchema } from "./organization-access-catalogue";
 import {
   organizationAccessActionSchema,
   organizationAccessExactPermissionSchema,
@@ -178,18 +174,6 @@ export const organizationAdministrationRoleSourceSchema = z.discriminatedUnion("
     .strict(),
 ]);
 
-export const organizationAdministrationRoleAssignmentPolicySchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("standing") }).strict(),
-  z
-    .object({
-      kind: z.literal("activation_required"),
-      maximumActivationDurationSeconds: revisionSchema,
-      reasonRequired: z.boolean(),
-      recentAuthentication: roleRecentAuthenticationRequirementSchema,
-    })
-    .strict(),
-]);
-
 const organizationAdministrationRoleFields = {
   roleId: roleIdSchema,
   key: builderKeySchema,
@@ -198,7 +182,6 @@ const organizationAdministrationRoleFields = {
   lifecycle: z.enum(["active", "acceptance_required", "unavailable", "retired"]),
   liveRevision: revisionSchema,
   privilegeClassification: rolePrivilegeClassificationSchema,
-  assignmentPolicy: organizationAdministrationRoleAssignmentPolicySchema,
   source: organizationAdministrationRoleSourceSchema,
   acceptedPermissionCount: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
 };
@@ -558,75 +541,6 @@ export const changeOrganizationAdministrationDelegationAuthorityResultSchema = z
   })
   .strict();
 
-export const organizationAdministrationRoleActivationTemporalStateSchema = z.enum([
-  "active",
-  "expired",
-  "revoked",
-]);
-
-const organizationAdministrationRoleActivationFields = {
-  roleActivationId: roleActivationIdSchema,
-  beneficiary: z
-    .object({
-      organizationAccountId: organizationAccountIdSchema,
-      // A person who has just joined has no display name until they set their profile.
-      displayName: z.string().trim().min(1).max(120).optional(),
-    })
-    .strict(),
-  role: organizationAdministrationAssignedRoleSchema,
-  revision: revisionSchema,
-  historicalRoleRevision: revisionSchema,
-  activatedAt: timestampSchema,
-  expiresAt: timestampSchema,
-  state: z.enum(["live", "revoked"]),
-  temporalState: organizationAdministrationRoleActivationTemporalStateSchema,
-};
-
-const addOrganizationAdministrationRoleActivationIssues = (
-  value: {
-    activatedAt: string;
-    expiresAt: string;
-    state: "live" | "revoked";
-    temporalState: "active" | "expired" | "revoked";
-  },
-  context: z.RefinementCtx,
-) => {
-  if (Date.parse(value.expiresAt) <= Date.parse(value.activatedAt))
-    context.addIssue({
-      code: "custom",
-      path: ["expiresAt"],
-      message: "Activation expiry must follow activation",
-    });
-  if ((value.state === "revoked") !== (value.temporalState === "revoked"))
-    context.addIssue({
-      code: "custom",
-      path: ["temporalState"],
-      message: "Only a revoked activation has revoked temporal state",
-    });
-};
-
-export const organizationAdministrationRoleActivationSummarySchema = z
-  .object({
-    ...organizationAdministrationRoleActivationFields,
-    eligibilitySourceKind: z.enum(["direct", "group"]),
-  })
-  .strict()
-  .superRefine(addOrganizationAdministrationRoleActivationIssues);
-
-export const deactivateOrganizationAdministrationRoleActivationCommandSchema = z
-  .object({
-    roleActivationId: roleActivationIdSchema,
-    expectedActivationRevision: revisionSchema,
-  })
-  .strict();
-
-export const changeOrganizationAdministrationRoleActivationResultSchema = z
-  .object({
-    activation: organizationAdministrationRoleActivationSummarySchema,
-    accessVersion: revisionSchema,
-  })
-  .strict();
-
 export type ReadOrganizationAdministrationGroupCommand = z.infer<
   typeof readOrganizationAdministrationGroupCommandSchema
 >;
@@ -689,12 +603,6 @@ export type RevokeOrganizationAdministrationDelegationAuthorityCommand = z.infer
 >;
 export type ChangeOrganizationAdministrationDelegationAuthorityResult = z.infer<
   typeof changeOrganizationAdministrationDelegationAuthorityResultSchema
->;
-export type DeactivateOrganizationAdministrationRoleActivationCommand = z.infer<
-  typeof deactivateOrganizationAdministrationRoleActivationCommandSchema
->;
-export type ChangeOrganizationAdministrationRoleActivationResult = z.infer<
-  typeof changeOrganizationAdministrationRoleActivationResultSchema
 >;
 export type AddOrganizationAdministrationMembershipCommand = z.infer<
   typeof addOrganizationAdministrationMembershipCommandSchema
