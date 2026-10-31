@@ -10,7 +10,9 @@ declare
 begin
   begin
     select scope.organization_id into strict visible_organization_id
-    from vortex_access.organization_groups_administration_scope() as scope;
+    from vortex_access.organization_administration_read_scope(
+      'platform.organization.groups.read', 'Organization Group administration is unavailable'
+    ) as scope;
   exception
     when insufficient_privilege then
       return;

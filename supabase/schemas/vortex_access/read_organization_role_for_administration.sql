@@ -23,7 +23,9 @@ begin
   end if;
 
   select authorized.* into strict scope
-  from vortex_access.organization_roles_administration_scope() as authorized;
+  from vortex_access.organization_administration_read_scope(
+      'platform.organization.roles.read', 'Organization role catalogue is unavailable'
+    ) as authorized;
 
   select pg_catalog.jsonb_build_object(
     'roleId', role.role_id,

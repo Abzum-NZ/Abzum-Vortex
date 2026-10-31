@@ -96,7 +96,9 @@ begin
   );
   begin
     select authorized.* into strict scope_row
-    from vortex_access.organization_roles_administration_scope() as authorized;
+    from vortex_access.organization_administration_read_scope(
+      'platform.organization.roles.read', 'Organization role catalogue is unavailable'
+    ) as authorized;
   exception
     when insufficient_privilege then
       return;
