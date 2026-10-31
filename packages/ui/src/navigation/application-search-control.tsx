@@ -55,11 +55,14 @@ export function ApplicationSearchControl({
   const placeholder = textSetting(settings, "placeholder");
   const submitLabel = textSetting(settings, "submit_label");
   return (
-    <section aria-label="Application search" className="flex min-w-0 flex-col gap-3">
+    <section
+      aria-label="Application search"
+      className="flex min-w-0 flex-col gap-[var(--vortex-space-sm)]"
+    >
       <form
         method="get"
         role="search"
-        className="flex max-w-xl items-center gap-2"
+        className="flex max-w-xl items-center gap-[var(--vortex-space-sm)]"
         onSubmit={
           onSearch === undefined
             ? undefined
@@ -108,15 +111,15 @@ export function ApplicationSearchControl({
         </p>
       ) : applicationSearch.expression === "" ? null : (
         <Card size="sm">
-          <CardContent className="flex flex-col gap-2 text-sm">
+          <CardContent className="flex flex-col gap-[var(--vortex-space-sm)] text-sm">
             {applicationSearch.groups !== undefined ? (
               applicationSearch.groups.length === 0 ? (
                 <p role="status">No results.</p>
               ) : (
                 applicationSearch.groups.map((group) => (
-                  <section key={group.key} className="flex flex-col gap-2">
+                  <section key={group.key} className="flex flex-col gap-[var(--vortex-space-sm)]">
                     <h2 className="font-semibold">{group.title}</h2>
-                    <ul className="flex flex-col gap-2">
+                    <ul className="flex flex-col gap-[var(--vortex-space-sm)]">
                       {group.results.map((result) => (
                         <li key={result.href}>
                           <a
@@ -144,7 +147,7 @@ export function ApplicationSearchControl({
                 No results.
               </p>
             ) : (
-              <ul className="flex flex-col gap-2">
+              <ul className="flex flex-col gap-[var(--vortex-space-sm)]">
                 {applicationSearch.results.map((result) => (
                   <li key={result.href}>
                     <a
