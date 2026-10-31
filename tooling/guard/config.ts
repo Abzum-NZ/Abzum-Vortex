@@ -8,7 +8,7 @@ export const paths = {
   definitions: ["packages/definitions/src/"],
   web: ["apps/web/"],
   // Scripts and development setup name shipped applications on purpose; they are not engines.
-  scripts: ["apps/web/scripts/"],
+  scripts: ["apps/web/scripts/", "apps/web/app/_lib/development-setup/"],
   canonical: "supabase/schemas/",
   migrations: "supabase/migrations/",
   applicationSources: "packages/definitions/src/",
@@ -163,6 +163,8 @@ export const guardRules = {
     tier: "blocking",
     owner: "core-grid",
     reviewBy: "2026-12-15",
+    reviewNote:
+      "Introduced with the grid feature definition contract (#3015 C3); review once the fan-out in docs/build-plan/grid-feature-fanout.md is done",
     description:
       "A Records table grid feature key spelled outside its definition file in the grid code, a feature setting group without a default that turns it off, a refusal code without exactly one declared sentence, a featureNotPossible that does not name its file's own refusal, a row-action binding without its compiler gate, an eager row-command renderer, or a feature chunk imported outside the UI registry",
   },
@@ -181,8 +183,6 @@ export const guardRules = {
 } as const;
 
 export const scannedRuleIds = new Set([
-  "catalogue-release-superseded",
-  "query-input-name-matching",
   "business-name",
   "layering",
   "migration-mismatch",

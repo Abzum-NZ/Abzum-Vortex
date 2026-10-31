@@ -631,7 +631,7 @@ for (const file of [
         "catalogue-release-superseded",
         file,
         current?.line ?? 1,
-        `${key}: compiled releases using these blocks become stale; record the affected lanes in the PR`,
+        `${key}: compiled releases using these blocks become stale; record the STALE-REBUILD lanes in the PR`,
       );
   }
 }
