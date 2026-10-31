@@ -46,6 +46,31 @@
     ) {
     border-color: color-mix(in oklch, var(--input), var(--foreground) 45%);
   }
+
+  /*
+   * A style whose fields draw only an underline (Sera) or no border (Luma, Rhea) sets the field
+   * border colour to transparent; the contrast rule keeps that and draws the underline instead.
+   */
+  [data-vortex-style]
+    :is(.cn-input, .cn-textarea, .cn-select-trigger, .cn-input-group, .cn-native-select):not(
+      :focus-visible,
+      :focus-within,
+      [aria-invalid="true"],
+      [data-invalid]
+    ) {
+    border-color: var(--vs-21ed8fc5, color-mix(in oklch, var(--input), var(--foreground) 45%));
+  }
+
+  /* Sera's underline keeps the same 3:1 contrast as a boxed field's border. */
+  [data-vortex-style="sera"]
+    :is(.cn-input, .cn-textarea, .cn-select-trigger, .cn-native-select):not(
+      :focus-visible,
+      :focus-within,
+      [aria-invalid="true"],
+      [data-invalid]
+    ) {
+    border-bottom-color: color-mix(in oklch, var(--input), var(--foreground) 45%);
+  }
 }
 
 /* Document defaults shared by the application and its account pages. */
