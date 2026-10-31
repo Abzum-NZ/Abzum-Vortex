@@ -72,7 +72,10 @@ export async function runFlowBinding(
     const answer = await pageHost.confirm(
       {
         title: "Allow the agent?",
-        message: `An agent working for you wants to run ${settings.flowName} (${settings.controlName}).`,
+        message:
+          settings.controlName === settings.flowName
+            ? `An agent working for you wants to run ${settings.flowName}.`
+            : `An agent working for you wants to run ${settings.flowName} (${settings.controlName}).`,
         details: [],
         choice: undefined,
         confirmLabel: "Allow",
