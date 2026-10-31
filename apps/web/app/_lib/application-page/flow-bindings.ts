@@ -302,7 +302,6 @@ export const projectFlowBindingTargets = (input: {
   return { refreshPlacementsByBinding, flowsById, selectedReadTypesByFlow };
 };
 
-/** The flow bindings one placement holds, projected for the browser by placement identity. */
 /** The task types an agent may start only with the person's confirmation. */
 const agentConfirmedTaskTypes = new Set(["record.delete", "record.changes", "backend.run"]);
 
@@ -361,6 +360,7 @@ const namedActionsOf = (context: InstalledRuntimeContext) => {
   return actions;
 };
 
+/** The flow bindings one placement holds, projected for the browser by placement identity. */
 export const projectPlacementBindings = (
   input: Readonly<{
     application: InstalledRuntimeContext["releaseSet"]["application"];

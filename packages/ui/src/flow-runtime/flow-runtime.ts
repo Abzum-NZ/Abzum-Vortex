@@ -515,7 +515,7 @@ export type FlowRuntime = Readonly<{
     sourceTablePlacementId?: string,
     cycle?: FlowEventCycle,
   ) => Promise<FlowDispatchResult>;
-  /** Starts one exact server binding and drives its normal intents and continuations. */
+  /** Starts one exact binding through the page runner. */
   dispatchReference: (
     binding: FlowBindingReference,
     callerInputs: CallerInputs | undefined,

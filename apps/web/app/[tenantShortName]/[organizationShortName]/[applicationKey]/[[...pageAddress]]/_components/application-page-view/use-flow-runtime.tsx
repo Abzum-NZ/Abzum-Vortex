@@ -93,9 +93,8 @@ export function useFlowRuntime({
   >;
 }>) {
   /**
-   * The one browser flow client and host: a form submit starts the bound flow on the server
-   * and the runtime carries out every pause (another form or a confirmation) through a continuation,
-   * which is returned exactly as the server issued it.
+   * The one browser flow client and host: the page runner carries out the flow's page steps
+   * (another form or a confirmation) itself and sends each server segment to the endpoint.
    */
   const prepareRefreshRef = useRef(prepareRefresh);
   prepareRefreshRef.current = prepareRefresh;

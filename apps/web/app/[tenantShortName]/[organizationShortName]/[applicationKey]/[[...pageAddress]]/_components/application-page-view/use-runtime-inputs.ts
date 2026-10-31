@@ -719,8 +719,7 @@ export function useRuntimeInputs({
         };
       }
       // A form container emits its one submission for a gesture; it runs the bound flow once
-      // through the runtime, which resumes every pause with the server-issued continuation. The
-      // handler returns that run, so the form shows busy from the press until the run settles.
+      // through the page runner. The handler returns that run, so the form shows busy from the press until the run settles.
       const submitBinding = bindings.find((binding) => binding.event === "form_submit");
       if (
         submitBinding !== undefined ||

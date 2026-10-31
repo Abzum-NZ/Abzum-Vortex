@@ -57,11 +57,10 @@ export function useApplyDispatch({
   refreshTargetsForBinding: (bindingId: string) => readonly string[];
 }>) {
   /**
-   * Reports a server-driven flow's safe outcome for any gesture. The runtime already carried out
-   * every pause through a continuation and every presentation intent through the host; only the
-   * final outcome is shown, and affected placements re-read their persisted data after a write. A
-   * gesture the form block ignored because the same binding is already running leaves the page as
-   * that run set it.
+   * Reports a flow's safe outcome for any gesture. The page runner already carried out every page
+   * step through the host; only the final outcome is shown, and affected placements re-read their
+   * persisted data after a write. A gesture the form block ignored because the same binding is
+   * already running leaves the page as that run set it.
    */
   const applyDispatch = useCallback(
     async (
