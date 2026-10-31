@@ -326,6 +326,7 @@ export type StudioFlowPropertyControl =
   | "relationship"
   | "calculation"
   | "field_values"
+  | "read_fields"
   | "input_map";
 
 /** One field of a record type, as a field mapping row offers it. */
@@ -365,6 +366,8 @@ export type StudioFlowPropertyDraft =
       kind: "fields";
       entries: readonly Readonly<{ field: string; source: StudioFlowValueSource }>[];
     }>
+  /** The fields a selected-record read returns, as `<record type>.<field>` references. */
+  | Readonly<{ kind: "read_fields"; fields: readonly string[] }>
   | Readonly<{
       kind: "map";
       entries: readonly Readonly<{ name: string; source: StudioFlowValueSource }>[];
@@ -615,6 +618,25 @@ const help: Readonly<Record<string, string>> = {
   "interface.navigate parameters": "A record page opens the record you name here.",
 };
 
+/** The selected-record read a step stores: its field references, or the stored value when unreadable. */
+const readFieldsDraft = (value: FlowValue): StudioFlowPropertyDraft => {
+  if (
+    value.kind !== "literal" ||
+    value.literal.type !== "json" ||
+    !Array.isArray(value.literal.value)
+  )
+    return { kind: "kept", value };
+  const fields = value.literal.value.flatMap((entry) =>
+    typeof entry === "object" &&
+    entry !== null &&
+    !Array.isArray(entry) &&
+    typeof (entry as { field?: unknown }).field === "string"
+      ? [(entry as { field: string }).field]
+      : [],
+  );
+  return { kind: "read_fields", fields };
+};
+
 const propertyDraft = (type: FlowTaskPropertyType, value: FlowValue): StudioFlowPropertyDraft => {
   const control = controlFor(type);
   switch (control) {
@@ -762,11 +784,17 @@ export const projectStudioFlowStepForm = (
     )
     .map(([key, declaration]): StudioFlowPropertyField => {
       const control =
-        task.type === "event.announce" && key === "event" ? "field" : controlFor(declaration.type)!;
+        task.type === "event.announce" && key === "event"
+          ? "field"
+          : task.type === "record.read_fields" && key === "fields"
+            ? "read_fields"
+            : controlFor(declaration.type)!;
       const entries =
         control === "input_map" ? expectedEntries(task, key, choices, source) : undefined;
       const recordFieldList =
-        control === "field_values" ? recordFields(source, recordType, moduleKey) : undefined;
+        control === "field_values" || control === "read_fields"
+          ? recordFields(source, recordType, moduleKey)
+          : undefined;
       const messageStep =
         task.type === "interface.show_message" || task.type === "interface.clear_message";
       const options =
@@ -783,9 +811,14 @@ export const projectStudioFlowStepForm = (
                   }))
                 : task.type === "interface.set_value" && key === "value"
                   ? choices.pageValues.map((entry) => ({ value: entry.name, label: entry.label }))
-                  : control === "field"
-                    ? studioFlowFieldOptions(source, flow, moduleKey, task.properties)
-                    : undefined;
+                  : control === "read_fields" && recordType !== undefined
+                    ? (recordFieldList ?? []).map((entry) => ({
+                        value: `${recordType}.${entry.key}`,
+                        label: entry.label,
+                      }))
+                    : control === "field"
+                      ? studioFlowFieldOptions(source, flow, moduleKey, task.properties)
+                      : undefined;
       const valueType =
         control === "value" && declaration.type === "record_change_list"
           ? "json"
@@ -814,7 +847,9 @@ export const projectStudioFlowStepForm = (
     Object.entries(definition.properties).map(([key, declaration]) => [
       key,
       Object.hasOwn(task.properties, key)
-        ? propertyDraft(declaration.type, task.properties[key]!)
+        ? task.type === "record.read_fields" && key === "fields"
+          ? readFieldsDraft(task.properties[key]!)
+          : propertyDraft(declaration.type, task.properties[key]!)
         : null,
     ]),
   );
@@ -895,6 +930,25 @@ const propertyValue = (
         map[entry.field] = studioFlowValueOf(entry.source);
       }
       return { ok: true, value: { kind: "map", entries: map } };
+    }
+    case "read_fields": {
+      if (draft.fields.length === 0)
+        return { ok: false, reason: `${label}: choose at least one field to read.` };
+      if (draft.fields.length > 20)
+        return { ok: false, reason: `${label}: choose at most 20 fields.` };
+      return {
+        ok: true,
+        value: {
+          kind: "literal",
+          literal: {
+            type: "json",
+            value: draft.fields.map((field) => ({
+              alias: field.slice(field.lastIndexOf(".") + 1),
+              field,
+            })),
+          },
+        },
+      };
     }
     case "map": {
       const built = entryMap(draft.entries, label);

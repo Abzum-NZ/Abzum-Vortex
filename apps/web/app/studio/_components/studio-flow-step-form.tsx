@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Button } from "@vortex/ui/components/button";
+import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
 import { Icon } from "@vortex/ui";
@@ -183,6 +184,54 @@ function EntryRows({
 }
 
 /** Field values: one value that holds them all (a form's answers), or the fields one by one. */
+function ReadFields({
+  id,
+  label,
+  field,
+  value,
+  disabled,
+  onChange,
+}: Readonly<{
+  id: string;
+  label: string;
+  field: StudioFlowPropertyField;
+  value: StudioFlowPropertyDraft | null;
+  disabled: boolean;
+  onChange: (value: StudioFlowPropertyDraft | null) => void;
+}>) {
+  const selected = value?.kind === "read_fields" ? value.fields : [];
+  const options = field.options ?? [];
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <p className="text-xs text-muted-foreground">
+        The step returns these fields as its values output, keyed by field name.
+      </p>
+      {options.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Choose the record type first.</p>
+      ) : (
+        options.map((option) => (
+          <label key={option.value} className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={selected.includes(option.value)}
+              disabled={disabled}
+              onCheckedChange={(checked) =>
+                onChange({
+                  kind: "read_fields",
+                  fields: checked
+                    ? [...selected, option.value]
+                    : selected.filter((entry) => entry !== option.value),
+                })
+              }
+            />
+            {option.label}
+          </label>
+        ))
+      )}
+    </div>
+  );
+}
+
 function FieldValues({
   id,
   field,
@@ -456,6 +505,17 @@ function PropertyControl({
           field={field}
           value={value}
           references={references}
+          disabled={disabled}
+          onChange={onChange}
+        />
+      );
+    case "read_fields":
+      return (
+        <ReadFields
+          id={id}
+          label={label}
+          field={field}
+          value={value}
           disabled={disabled}
           onChange={onChange}
         />
