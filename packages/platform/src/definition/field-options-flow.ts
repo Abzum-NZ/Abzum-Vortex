@@ -112,7 +112,11 @@ export const runFieldOptionsFlow = async (
       {
         kind: "task_result",
         outcome: "completed",
-        outputs: { records: [...read.value.recordIds], continuation: read.value.continuation },
+        outputs: {
+          records: [...read.value.recordIds],
+          rows: [...read.value.rows],
+          continuation: read.value.continuation,
+        },
       },
       ports.library,
     );

@@ -49,12 +49,33 @@ export const createFlowQueryReader = (
       if (result.value.outcome !== "completed")
         return { kind: "available", value: { outcome: "unavailable" } };
       // Field values stay inside the protected read. The task returns one bounded page of record
-      // references and the reader's opaque continuation for the next page.
+      // references, the same page's selected field values under their keys, and the reader's
+      // opaque continuation for the next page.
+      const recordTypeId =
+        declared.query.recordType.state === "resolved"
+          ? declared.query.recordType.recordTypeId
+          : undefined;
+      const recordType = (installation.modules ?? [])
+        .flatMap((module) => module.content.recordTypes)
+        .find((type) => sameId(type.recordTypeId, recordTypeId));
+      if (recordType === undefined) return { kind: "unavailable" };
+      const keyOfField = new Map(
+        recordType.fields.map((field) => [field.fieldId.toLowerCase(), field.key] as const),
+      );
       return {
         kind: "available",
         value: {
           outcome: "read",
           recordIds: result.value.rows.map((row) => row.recordId),
+          rows: result.value.rows.map((row) => ({
+            record: { recordTypeId: recordType.recordTypeId, recordId: row.recordId },
+            values: Object.fromEntries(
+              Object.entries(row.values).flatMap(([fieldId, value]) => {
+                const key = keyOfField.get(fieldId.toLowerCase());
+                return key === undefined ? [] : [[key, value] as const];
+              }),
+            ),
+          })),
           continuation: result.value.nextContinuationToken ?? "",
         },
       };

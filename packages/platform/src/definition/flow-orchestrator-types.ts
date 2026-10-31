@@ -309,7 +309,19 @@ export type FlowOrchestratorDependencies = Readonly<{
       }>,
     ): Promise<
       HumanOrganizationRequestResult<
-        | Readonly<{ outcome: "read"; recordIds: readonly string[]; continuation: string }>
+        | Readonly<{
+            outcome: "read";
+            recordIds: readonly string[];
+            /**
+             * One entry per record: its reference and the values of the query's selected fields the
+             * caller may read, keyed by field key. The same page, never a second read.
+             */
+            rows: readonly Readonly<{
+              record: Readonly<{ recordTypeId: string; recordId: string }>;
+              values: Readonly<Record<string, JsonValue>>;
+            }>[];
+            continuation: string;
+          }>
         | Readonly<{ outcome: "unavailable" }>
       >
     >;

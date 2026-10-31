@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useMemo, useState, type FormEvent } from "react";
 import { Icon } from "@vortex/ui";
 import {
@@ -70,6 +70,7 @@ import {
 import { StudioField } from "./studio-field";
 import { StudioReferencesAlert, StudioUsedIn, useStudioPlaceOpener } from "./studio-used-in";
 import { StudioOptionsSourceEditor } from "./studio-options-source-editor";
+import { optionsFlowInputs, optionsFlowSeed } from "./module-field-options-flow";
 import { StudioLinkSection } from "./studio-link-section";
 import { useStudioDraftText } from "./use-studio-draft-text";
 import { useStudioDraftHeld } from "./use-studio-draft-held";
@@ -139,57 +140,6 @@ type FormState = Readonly<{
 
 const computedTypes: ReadonlySet<ModuleFieldType> = new Set(["calculation", "total"]);
 const linkTypes: ReadonlySet<string> = new Set(["link", "link_to_one_of_several"]);
-
-/** The inputs a flow of the draft declares. */
-type FlowInputs = ApplicationSourceDocument["body"]["flows"][number]["inputs"];
-
-/** The flow input a declared action or query input feeds, keeping its type and whether it is required. */
-const flowInputOf = (
-  input: Readonly<{
-    key: string;
-    required: boolean;
-    type: string;
-    record_types?: readonly string[] | undefined;
-  }>,
-): FlowInputs[string] => ({
-  ...(input.type === "record_reference"
-    ? { type: "record_reference" as const, recordTypeIds: [...(input.record_types ?? [])] }
-    : { type: input.type as FlowInputs[string]["type"] }),
-  required: input.required,
-});
-
-/**
- * The inputs a new options flow declares: the ones the field's declared source already reads, so
- * switching a query or flow source to a new flow keeps every input the field maps.
- */
-const optionsFlowInputs = (
-  declared: Readonly<Record<string, unknown>> | undefined,
-  module: NonNullable<Source["body"]["modules"][number]>,
-): FlowInputs => {
-  if (declared?.kind === "query" && typeof declared.query === "string") {
-    const query = module.queries.find((entry) => `${module.key}:${entry.key}` === declared.query);
-    return Object.fromEntries((query?.inputs ?? []).map((input) => [input.key, flowInputOf(input)]));
-  }
-  if (declared?.kind === "flow" && typeof declared.flow === "string") {
-    const flow = module.flows.find(
-      (entry) => entry.id === declared.flow || entry.key === declared.flow,
-    );
-    return Object.fromEntries(
-      Object.entries(flow?.inputs ?? {}).map(([key, declaration]) => [
-        key,
-        {
-          type: declaration.type,
-          required: declaration.required,
-          ...(declaration.recordTypeIds === undefined
-            ? {}
-            : { recordTypeIds: declaration.recordTypeIds }),
-        },
-      ]),
-    );
-  }
-  return {};
-};
-
 
 /**
  * The one field editor of the Data tab. Without a field it is the form that adds a field to a
@@ -501,10 +451,11 @@ export function ModuleFieldsEditor({
         : storedDefault;
     return studioEditProblem(
       edit(
-        (current) => changeInlineModuleField(current, changeOf(next, settings, defaultValue), {
-          publication: context.publication,
-          peopleDirectory: context.peopleDirectory,
-        }),
+        (current) =>
+          changeInlineModuleField(current, changeOf(next, settings, defaultValue), {
+            publication: context.publication,
+            peopleDirectory: context.peopleDirectory,
+          }),
         merge === undefined ? {} : { merge },
       ),
     );
@@ -520,6 +471,7 @@ export function ModuleFieldsEditor({
     if (flowName === "") return "Name the options flow.";
     const declared = (existing.settings as { options_source?: Plain }).options_source;
     const inputs = optionsFlowInputs(declared, module);
+    const seed = optionsFlowSeed(declared, module);
     let flowAlias: string | undefined;
     const problem = studioEditProblem(
       edit((current) => {
@@ -531,10 +483,8 @@ export function ModuleFieldsEditor({
             name: flowName,
             description: `${existing.label}: the options this field offers.`,
             inputs,
-            tasks: [{ id: "done", type: "stop", outcome: "completed" }],
-            outputs: {
-              options: { type: "json", value: { kind: "literal", literal: { type: "json", value: [] } } },
-            },
+            tasks: seed.tasks,
+            outputs: seed.outputs,
           },
           null,
         );
@@ -957,13 +907,21 @@ export function ModuleFieldsEditor({
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 variant="destructive"
-                disabled={disabled}
+                // A published field keeps its stored values, so it is not offered for deletion.
+                disabled={disabled || published}
                 onClick={() => {
                   void remove();
                 }}
               >
-                Remove field
+                {published
+                  ? "Remove field (published: take it off the pages instead)"
+                  : "Remove field"}
               </DropdownMenuItem>
+              {!published && (
+                <p className="px-2 py-1 text-xs text-muted-foreground">
+                  Deletes it from the draft. It was never published, so no stored value is lost.
+                </p>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -1172,17 +1130,15 @@ export function ModuleFieldsEditor({
               required: input.required,
             })),
           }))}
-          flows={(module?.flows ?? [])
-            .filter(isOptionsFlowSource)
-            .map((flow) => ({
-              alias: flow.id,
-              label: flow.labels.name ?? flow.key,
-              inputs: Object.entries(flow.inputs).map(([key, declaration]) => ({
-                key,
-                label: key.replaceAll("_", " "),
-                required: declaration.required,
-              })),
-            }))}
+          flows={(module?.flows ?? []).filter(isOptionsFlowSource).map((flow) => ({
+            alias: flow.id,
+            label: flow.labels.name ?? flow.key,
+            inputs: Object.entries(flow.inputs).map(([key, declaration]) => ({
+              key,
+              label: key.replaceAll("_", " "),
+              required: declaration.required,
+            })),
+          }))}
           // Which values are offered is behaviour, not stored shape, so it changes after publication.
           disabled={disabled}
           onChange={(next) => commit({}, undefined, next)}

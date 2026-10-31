@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { IdentitySession, OrganizationSelectionCandidate } from "../../access/identity-access";
+import type { JsonValue } from "../../catalogue/common";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestResult,
@@ -15,7 +16,16 @@ import { loadRecordsTablePlacement } from "./placement";
 const matchingPageSize = 200;
 
 export type MatchingPage = HumanOrganizationRequestResult<
-  | Readonly<{ outcome: "read"; recordIds: readonly string[]; continuation: string }>
+  | Readonly<{
+      outcome: "read";
+      recordIds: readonly string[];
+      /** The same page's selected field values, keyed by field key, for a flow that reads them. */
+      rows: readonly Readonly<{
+        record: Readonly<{ recordTypeId: string; recordId: string }>;
+        values: Readonly<Record<string, JsonValue>>;
+      }>[];
+      continuation: string;
+    }>
   | Readonly<{ outcome: "unavailable" }>
 >;
 
@@ -82,13 +92,37 @@ export const createMatchingPageReader = (dependencies: RecordsTableBulkDependenc
     });
     if (result.kind !== "available") return result;
     if (result.value.outcome !== "completed") return unavailable(`read_${result.value.reasonCode}`);
+    const recordType = placement.module.content.recordTypes.find((type) =>
+      sameId(
+        type.recordTypeId,
+        placement.query.recordType?.state === "resolved"
+          ? placement.query.recordType.recordTypeId
+          : undefined,
+      ),
+    );
+    const keyOfField = new Map(
+      (recordType?.fields ?? []).map((field) => [field.fieldId.toLowerCase(), field.key] as const),
+    );
+    const kept = result.value.rows.filter(
+      (row) => !target.excluded.has(String(row.recordId).toLowerCase()),
+    );
     return {
       kind: "available",
       value: {
         outcome: "read",
-        recordIds: result.value.rows
-          .map((row) => String(row.recordId).toLowerCase())
-          .filter((recordId) => !target.excluded.has(recordId)),
+        recordIds: kept.map((row) => String(row.recordId).toLowerCase()),
+        rows: kept.map((row) => ({
+          record: {
+            recordTypeId: recordType?.recordTypeId ?? "",
+            recordId: String(row.recordId),
+          },
+          values: Object.fromEntries(
+            Object.entries(row.values).flatMap(([fieldId, value]) => {
+              const key = keyOfField.get(fieldId.toLowerCase());
+              return key === undefined ? [] : [[key, value] as const];
+            }),
+          ),
+        })),
         continuation: result.value.nextContinuationToken ?? "",
       },
     };
