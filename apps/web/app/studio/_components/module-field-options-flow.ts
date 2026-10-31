@@ -108,7 +108,6 @@ export const optionsFlowSeed = (
               ]),
             ),
           },
-          page_size: { kind: "literal", literal: { type: "whole_number", value: 200 } },
         },
       },
       {

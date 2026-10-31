@@ -813,7 +813,11 @@ const loadFlowOptionsPage = async (
   }
   const queryRecords = createFlowQueryReader(
     { ...dependencies, continuationKey: getQueryContinuationKey() },
-    context,
+    {
+      organizationId: String(context.organizationId),
+      applicationRootId: String(context.applicationRootId),
+      modules: context.releaseSet.modules,
+    },
   );
   const ran = await runFieldOptionsFlow(
     {

@@ -1,11 +1,44 @@
 import "server-only";
 
+import type { JsonValue } from "../catalogue/common";
 import { sameId } from "../catalogue/runtime-primitives";
 import { createMatchingPageReader } from "../pages/records-table-features/matching-page";
 import { createProtectedQueryService } from "../queries/protected-query-service";
 import type { ProtectedQueryServiceDependencies } from "../queries/protected-query-types";
 import type { InstalledFlowBindings } from "./flow-binding-endpoint";
 import type { FlowOrchestratorDependencies } from "./flow-orchestrator-types";
+
+/**
+ * A flow holds a record as its id; a query takes a record input as the record and its type. A
+ * record id given for a record input names a record of the input's one record type.
+ */
+const recordReferenceParameters = (
+  inputs: readonly Readonly<{ key: string; type: string; recordTypes?: readonly unknown[] }>[],
+  parameters: Readonly<Record<string, JsonValue>>,
+): Readonly<Record<string, JsonValue>> =>
+  Object.fromEntries(
+    Object.entries(parameters).map(([key, value]) => {
+      const input = inputs.find((entry) => entry.key === key);
+      const types =
+        input?.type === "record_reference"
+          ? (input.recordTypes ?? []).flatMap((type) =>
+              typeof type === "object" &&
+              type !== null &&
+              "state" in type &&
+              type.state === "resolved" &&
+              "recordTypeId" in type
+                ? [String(type.recordTypeId)]
+                : [],
+            )
+          : [];
+      return [
+        key,
+        typeof value === "string" && types.length === 1
+          ? { recordTypeId: types[0]!, recordId: value }
+          : value,
+      ];
+    }),
+  );
 
 /** One bounded page of a declared query, read under the segment's current authority. */
 export const createFlowQueryReader = (
@@ -39,7 +72,7 @@ export const createFlowQueryReader = (
       const result = await queries.run(session, selection, {
         moduleRootId: declared.moduleRootId,
         queryId: declared.query.queryId,
-        inputValues: target.parameters,
+        inputValues: recordReferenceParameters(declared.query.inputs, target.parameters),
         requestedFieldIds: declared.query.selectedFieldIds,
         // Absent, the query's own declared page size (at most 200) applies.
         pageSize: target.pageSize ?? declared.query.pageSize,
