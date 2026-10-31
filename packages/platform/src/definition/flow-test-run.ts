@@ -211,21 +211,9 @@ export const runFlowTest = async (
   const portsFor = (current: BoundHumanOrganizationRequest): FlowOrchestratorDependencies => {
     const runId = randomUUID();
     const inline = inlineFor(current);
-    const admission: Pick<
-      FlowOrchestratorDependencies,
-      "admitSegment" | "admitContinuation" | "admitPageStart"
-    > = {
+    const admission: Pick<FlowOrchestratorDependencies, "admitSegment" | "admitPageStart"> = {
       admitPageStart: () =>
         Promise.resolve({ kind: "completed", value: null, runId, committedNow: false }),
-      admitContinuation: async (_run, _state, execute) => {
-        const executed = await execute();
-        return {
-          kind: "completed",
-          value: executed.kind === "finished" ? executed.value : executed.value(""),
-          runId,
-          committedNow: false,
-        };
-      },
       admitSegment: async (run, _state, segment, execute) => {
         const reason = notRunReason(segment);
         if (reason !== undefined) {

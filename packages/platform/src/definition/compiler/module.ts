@@ -543,15 +543,6 @@ function compileModule(
   return canonical;
 }
 
-export const standardRecordActions = new Set([
-  "create",
-  "read",
-  "update",
-  "soft_delete",
-  "restore",
-  "export",
-]);
-
 export function compileParsedModuleRequest(
   request: ParsedModuleRequest,
   dependencyOutputs: readonly DefinitionCompilationOutput[],

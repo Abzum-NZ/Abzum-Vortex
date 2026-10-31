@@ -1,0 +1,1056 @@
+-- SF-AGENT (#3742, #3751): agents act through the page model and the one page runner.
+set role vortex_owner;
+
+-- The server-driven run is gone: no request pauses a flow on the server or resumes it, so the
+-- continuation store and its functions have no caller left.
+drop function vortex_platform.issue_flow_continuation(text, uuid, uuid, uuid, uuid, uuid, text, jsonb, integer, integer);
+drop function vortex_platform.peek_flow_continuation(text, uuid, uuid, uuid, uuid);
+drop function vortex_platform.admit_flow_continuation(text, uuid, uuid, text, uuid);
+drop function vortex_platform.complete_flow_continuation(text, uuid, text, jsonb, integer, integer, text);
+drop table vortex_platform.flow_continuations;
+
+-- The agent tool bundle is gone: agents use tools the page generates from its own model. Stored
+-- releases lose the compiled bundle and installation runtime bundles lose its section, in place,
+-- so every installed release keeps running without a new publication.
+alter table vortex_definition.releases disable trigger releases_append_only;
+update vortex_definition.releases
+set compilation_output = compilation_output - 'toolBundle'
+where compilation_output ? 'toolBundle';
+alter table vortex_definition.releases enable trigger releases_append_only;
+
+alter table vortex_definition.installation_runtime_bundle_parts
+  drop constraint installation_runtime_bundle_parts_section_check;
+alter table vortex_definition.installation_runtime_bundles
+  drop constraint installation_runtime_bundles_parts_check;
+delete from vortex_definition.installation_runtime_bundle_parts where section = 'tool_bundle';
+update vortex_definition.installation_runtime_bundles as bundle
+set parts = kept.parts, total_size_bytes = kept.total_size_bytes
+from (
+  select
+    stored.organization_id,
+    stored.application_root_id,
+    stored.application_release_revision,
+    stored.bundle_format_version,
+    pg_catalog.jsonb_agg(item.value order by item.ordinality) as parts,
+    pg_catalog.sum((item.value ->> 'byteSize')::bigint)::bigint as total_size_bytes
+  from vortex_definition.installation_runtime_bundles as stored
+  cross join lateral pg_catalog.jsonb_array_elements(stored.parts) with ordinality as item(value, ordinality)
+  where item.value ->> 'section' <> 'tool_bundle'
+  group by stored.organization_id, stored.application_root_id,
+    stored.application_release_revision, stored.bundle_format_version
+) as kept
+where bundle.organization_id = kept.organization_id
+  and bundle.application_root_id = kept.application_root_id
+  and bundle.application_release_revision = kept.application_release_revision
+  and bundle.bundle_format_version = kept.bundle_format_version
+  and bundle.parts @> '[{"section": "tool_bundle"}]'::jsonb;
+alter table vortex_definition.installation_runtime_bundle_parts
+  add constraint installation_runtime_bundle_parts_section_check
+  check (section = any (array['pages', 'navigation', 'flows', 'theme', 'component_registry', 'access_plan']));
+alter table vortex_definition.installation_runtime_bundles
+  add constraint installation_runtime_bundles_parts_check
+  check (pg_catalog.jsonb_typeof(parts) = 'array' and pg_catalog.jsonb_array_length(parts) >= 6);
+
+create or replace function vortex_definition.assert_prepared_installation_runtime_bundle(
+  p_application_root_id uuid,
+  p_application_release_revision bigint,
+  p_expected_module_bindings jsonb,
+  p_pin_fingerprint text
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  expected_sections constant text[] := array[
+    'pages', 'navigation', 'flows', 'theme', 'component_registry', 'access_plan'
+  ];
+  checked_context jsonb;
+  selected_organization_id uuid;
+  prepared_source jsonb;
+  source_manifest jsonb;
+  application_content jsonb;
+  expected_access_plan jsonb;
+  access_plan_text text;
+  access_plan_value jsonb;
+  stored_bundle vortex_definition.installation_runtime_bundles%rowtype;
+  part_item record;
+  metadata_item jsonb;
+  metadata_count integer;
+  stored_part_count integer;
+  section_value text;
+  ordinal_value bigint;
+  byte_size_value bigint;
+  total_size_value bigint := 0;
+begin
+  if p_application_root_id is null
+    or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_application_release_revision is null
+    or p_application_release_revision not between 1 and 9007199254740991
+    or p_pin_fingerprint is null
+    or p_pin_fingerprint !~ '^sha256:[a-f0-9]{64}$'
+    or pg_catalog.jsonb_typeof(p_expected_module_bindings) is distinct from 'array'
+    or pg_catalog.jsonb_array_length(p_expected_module_bindings) < 1 then
+    raise exception using errcode = '22023',
+      message = 'Prepared runtime bundle assertion is invalid';
+  end if;
+  checked_context := vortex_access.validated_human_request_context();
+  selected_organization_id := (checked_context ->> 'organizationId')::uuid;
+  if selected_organization_id is null then
+    raise exception using errcode = '42501',
+      message = 'Prepared runtime bundle authority is unavailable';
+  end if;
+  prepared_source := vortex_definition.read_prepared_installation_runtime_source(
+    p_application_root_id,
+    p_application_release_revision,
+    p_expected_module_bindings
+  );
+  if prepared_source is null
+    or (prepared_source ->> 'organizationId')::uuid is distinct from selected_organization_id
+    or prepared_source ->> 'pinFingerprint' is distinct from p_pin_fingerprint then
+    raise exception using errcode = '40001',
+      message = 'Prepared runtime bundle source changed';
+  end if;
+  source_manifest := pg_catalog.jsonb_build_object(
+    'bundleFormatVersion', 3,
+    'application', pg_catalog.jsonb_build_object(
+      'rootId', prepared_source #> '{application,rootId}',
+      'definitionKey', prepared_source #> '{application,key}',
+      'releaseRevision', prepared_source #> '{application,releaseRevision}',
+      'releaseVersion', prepared_source #> '{application,releaseVersion}',
+      'validationContractVersion', prepared_source #> '{application,validationContractVersion}',
+      'contentFingerprint', prepared_source #> '{application,contentFingerprint}',
+      'resolutionFingerprint', prepared_source #> '{application,resolutionFingerprint}'
+    ),
+    'modules', coalesce((
+      select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'rootId', module.value -> 'rootId',
+          'definitionKey', module.value -> 'key',
+          'releaseRevision', module.value -> 'releaseRevision',
+          'releaseVersion', module.value -> 'releaseVersion',
+          'validationContractVersion', module.value -> 'validationContractVersion',
+          'contentFingerprint', module.value -> 'contentFingerprint',
+          'resolutionFingerprint', module.value -> 'resolutionFingerprint'
+        ) order by (module.value ->> 'rootId') collate "C")
+      from pg_catalog.jsonb_array_elements(prepared_source -> 'modules') as module(value)
+    ), '[]'::jsonb),
+    'pinFingerprint', prepared_source -> 'pinFingerprint',
+    'preparedRecordAccessPlan', pg_catalog.jsonb_build_object(
+      'planKey', prepared_source #> '{preparedRecordAccessPlan,planKey}',
+      'mappingFingerprint', prepared_source #> '{preparedRecordAccessPlan,mappingFingerprint}'
+    )
+  );
+  select stored.* into strict stored_bundle
+  from vortex_definition.installation_runtime_bundles as stored
+  where stored.organization_id = selected_organization_id
+    and stored.application_root_id = p_application_root_id
+    and stored.application_release_revision = p_application_release_revision
+    and stored.bundle_format_version = 3;
+  if stored_bundle.pin_fingerprint is distinct from p_pin_fingerprint
+    or stored_bundle.source_manifest is distinct from source_manifest then
+    raise exception using errcode = '23505',
+      message = 'Prepared runtime bundle identity differs';
+  end if;
+
+  if pg_catalog.jsonb_typeof(stored_bundle.parts) is distinct from 'array'
+    or pg_catalog.jsonb_array_length(stored_bundle.parts) < pg_catalog.cardinality(expected_sections)
+    or exists (
+      select 1
+      from pg_catalog.unnest(expected_sections) as required(section)
+      where not exists (
+        select 1 from pg_catalog.jsonb_array_elements(stored_bundle.parts) as item(value)
+        where item.value ->> 'section' = required.section
+      )
+    ) then
+    raise exception using errcode = '55000',
+      message = 'Prepared runtime bundle parts are incomplete';
+  end if;
+  select pg_catalog.count(*)::integer into metadata_count
+  from pg_catalog.jsonb_array_elements(stored_bundle.parts) as item(value);
+  select pg_catalog.count(*)::integer into stored_part_count
+  from vortex_definition.installation_runtime_bundle_parts as part
+  where part.organization_id = selected_organization_id
+    and part.application_root_id = p_application_root_id
+    and part.application_release_revision = p_application_release_revision
+    and part.bundle_format_version = 3;
+  if metadata_count is distinct from stored_part_count then
+    raise exception using errcode = '55000',
+      message = 'Prepared runtime bundle part count differs';
+  end if;
+  for metadata_item in
+    select item.value from pg_catalog.jsonb_array_elements(stored_bundle.parts) as item(value)
+  loop
+    if pg_catalog.jsonb_typeof(metadata_item) is distinct from 'object'
+      or not metadata_item ?& array['section','ordinal','byteSize','sha256']
+      or metadata_item - array['section','ordinal','byteSize','sha256'] <> '{}'::jsonb
+      or pg_catalog.jsonb_typeof(metadata_item -> 'section') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(metadata_item -> 'ordinal') is distinct from 'number'
+      or pg_catalog.jsonb_typeof(metadata_item -> 'byteSize') is distinct from 'number'
+      or pg_catalog.jsonb_typeof(metadata_item -> 'sha256') is distinct from 'string'
+      or not (metadata_item ->> 'section' = any (expected_sections))
+      or (metadata_item ->> 'ordinal') !~ '^(0|[1-9][0-9]*)$'
+      or pg_catalog.length(metadata_item ->> 'ordinal') > 10
+      or (metadata_item ->> 'byteSize') !~ '^[1-9][0-9]*$'
+      or pg_catalog.length(metadata_item ->> 'byteSize') > 7
+      or (metadata_item ->> 'sha256') !~ '^sha256:[a-f0-9]{64}$' then
+      raise exception using errcode = '55000',
+        message = 'Prepared runtime bundle part metadata is invalid';
+    end if;
+    section_value := metadata_item ->> 'section';
+    ordinal_value := (metadata_item ->> 'ordinal')::bigint;
+    byte_size_value := (metadata_item ->> 'byteSize')::bigint;
+    if ordinal_value > 2147483647 or byte_size_value > 1048575 then
+      raise exception using errcode = '55000',
+        message = 'Prepared runtime bundle part metadata exceeds its limit';
+    end if;
+    total_size_value := total_size_value + byte_size_value;
+    if total_size_value > 9007199254740991 then
+      raise exception using errcode = '55000',
+        message = 'Prepared runtime bundle total size exceeds its limit';
+    end if;
+    select part.* into strict part_item
+    from vortex_definition.installation_runtime_bundle_parts as part
+    where part.organization_id = selected_organization_id
+      and part.application_root_id = p_application_root_id
+      and part.application_release_revision = p_application_release_revision
+      and part.bundle_format_version = 3
+      and part.section = section_value
+      and part.ordinal = ordinal_value::integer;
+    if pg_catalog.octet_length(part_item.content_bytes) is distinct from byte_size_value
+      or ('sha256:' || pg_catalog.encode(
+        extensions.digest(part_item.content_bytes, 'sha256'), 'hex'
+      )) is distinct from metadata_item ->> 'sha256' then
+      raise exception using errcode = '55000',
+        message = 'Prepared runtime bundle bytes do not match their manifest';
+    end if;
+  end loop;
+  if total_size_value is distinct from stored_bundle.total_size_bytes
+    or exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(stored_bundle.parts) as item(value)
+      group by item.value ->> 'section', (item.value ->> 'ordinal')::integer
+      having pg_catalog.count(*) > 1
+    )
+    or exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(stored_bundle.parts) as item(value)
+      group by item.value ->> 'section'
+      having pg_catalog.min((item.value ->> 'ordinal')::integer) <> 0
+        or pg_catalog.max((item.value ->> 'ordinal')::integer) <>
+          pg_catalog.count(*) - 1
+    )
+    or exists (
+      select 1
+      from pg_catalog.unnest(expected_sections) as required(section)
+      where not exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(stored_bundle.parts) as item(value)
+        where item.value ->> 'section' = required.section
+      )
+    ) then
+    raise exception using errcode = '55000',
+      message = 'Prepared runtime bundle metadata is incomplete';
+  end if;
+
+  application_content := prepared_source #> '{application,compilationOutput,canonical,content}';
+  select pg_catalog.jsonb_build_object(
+    'preparedRecordAccessPlan', prepared_source -> 'preparedRecordAccessPlan',
+    'declaredPermissions', pg_catalog.jsonb_build_object(
+      'application', application_content -> 'permissions',
+      'modules', coalesce((
+        select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+            'rootId', module.value -> 'rootId',
+            'permissions', module.value #> '{compilationOutput,canonical,content,permissions}'
+          ) order by (module.value ->> 'rootId') collate "C")
+        from pg_catalog.jsonb_array_elements(prepared_source -> 'modules') as module(value)
+      ), '[]'::jsonb)
+    )
+  ) into expected_access_plan;
+  select pg_catalog.string_agg(pg_catalog.convert_from(part.content_bytes, 'UTF8'), ''
+    order by part.ordinal)
+  into access_plan_text
+  from vortex_definition.installation_runtime_bundle_parts as part
+  where part.organization_id = selected_organization_id
+    and part.application_root_id = p_application_root_id
+    and part.application_release_revision = p_application_release_revision
+    and part.bundle_format_version = 3
+    and part.section = 'access_plan';
+  begin
+    access_plan_value := access_plan_text::jsonb;
+  exception when others then
+    raise exception using errcode = '55000',
+      message = 'Prepared runtime bundle access plan is invalid';
+  end;
+  if access_plan_value is distinct from expected_access_plan then
+    raise exception using errcode = '23505',
+      message = 'Prepared runtime bundle Record plan differs from current source';
+  end if;
+  return pg_catalog.jsonb_build_object(
+    'outcome', 'verified',
+    'organizationId', selected_organization_id,
+    'applicationRootId', p_application_root_id,
+    'applicationReleaseRevision', p_application_release_revision,
+    'bundleFormatVersion', 3,
+    'pinFingerprint', stored_bundle.pin_fingerprint,
+    'sourceManifest', stored_bundle.source_manifest
+  );
+exception
+  when no_data_found then
+    raise exception using errcode = 'P0002',
+      message = 'Prepared runtime bundle is unavailable';
+  when too_many_rows then
+    raise exception using errcode = '55000',
+      message = 'Prepared runtime bundle evidence is ambiguous';
+end
+$function$;
+
+create or replace function vortex_definition.write_installation_runtime_bundle(
+  p_application_root_id uuid,
+  p_application_release_revision bigint,
+  p_bundle_format_version integer,
+  p_pin_fingerprint text,
+  p_parts jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  expected_sections constant text[] := array[
+    'pages', 'navigation', 'flows', 'theme', 'component_registry', 'access_plan'
+  ];
+  permission_decision record;
+  delegation_decision record;
+  checked_context jsonb;
+  selected_organization_id uuid;
+  part_item jsonb;
+  section_value text;
+  ordinal_value bigint;
+  byte_size_value bigint;
+  content_text text;
+  content_bytes bytea;
+  sha256_value text;
+  total_size_value bigint := 0;
+  parts_manifest jsonb;
+  inserted_rows bigint;
+  stored_bundle vortex_definition.installation_runtime_bundles%rowtype;
+  expected_module_bindings jsonb;
+  prepared_source jsonb;
+  source_manifest jsonb;
+  section_payloads jsonb := '{}'::jsonb;
+  section_text text;
+  application_content jsonb;
+  expected_modules jsonb;
+  expected_access_plan jsonb;
+begin
+  if p_application_root_id is null
+    or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_application_release_revision is null
+    or p_application_release_revision not between 1 and 9007199254740991
+    or p_bundle_format_version is distinct from 3
+    or p_pin_fingerprint is null or p_pin_fingerprint !~ '^sha256:[a-f0-9]{64}$'
+    or p_parts is null or pg_catalog.jsonb_typeof(p_parts) is distinct from 'array' then
+    raise exception using errcode = '22023',
+      message = 'Installation runtime bundle command is invalid';
+  end if;
+  if pg_catalog.jsonb_array_length(p_parts) < pg_catalog.cardinality(expected_sections) then
+    raise exception using errcode = '22023',
+      message = 'Installation runtime bundle command is invalid';
+  end if;
+
+  select evaluated.* into strict permission_decision
+  from vortex_access.evaluate_organization_permission_eligibility(
+    pg_catalog.jsonb_build_object(
+      'operationKey', 'platform.organization.applications.install',
+      'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
+      'target', pg_catalog.jsonb_build_object('kind', 'organization'),
+      'requiredPermission', pg_catalog.jsonb_build_object(
+        'ownerKind', 'platform',
+        'ownerId', vortex_access.platform_permission_owner_id(),
+        'permissionId', vortex_access.platform_permission_id('platform.organization.applications.manage')
+      ),
+      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'authority', pg_catalog.jsonb_build_object('kind', 'permission')
+    )
+  ) as evaluated;
+  if permission_decision.outcome is distinct from 'eligible' then
+    raise exception using errcode = '42501',
+      message = 'Module installation authority is unavailable';
+  end if;
+
+  select evaluated.* into strict delegation_decision
+  from vortex_access.evaluate_organization_permission_eligibility(
+    pg_catalog.jsonb_build_object(
+      'operationKey', 'platform.organization.applications.install_scope',
+      'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
+      'target', pg_catalog.jsonb_build_object('kind', 'organization'),
+      'requiredPermission', pg_catalog.jsonb_build_object(
+        'ownerKind', 'platform',
+        'ownerId', vortex_access.platform_permission_owner_id(),
+        'permissionId', vortex_access.platform_permission_id('platform.organization.applications.manage')
+      ),
+      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'authority', pg_catalog.jsonb_build_object(
+        'kind', 'delegated_management',
+        'before', pg_catalog.jsonb_build_object('kind', 'organization_catalogue'),
+        'after', pg_catalog.jsonb_build_object('kind', 'organization_catalogue')
+      )
+    )
+  ) as evaluated;
+  if delegation_decision.outcome is distinct from 'eligible'
+    or delegation_decision.organization_id <> permission_decision.organization_id
+    or delegation_decision.organization_account_id <> permission_decision.organization_account_id
+    or delegation_decision.access_version <> permission_decision.access_version
+    or delegation_decision.correlation_id <> permission_decision.correlation_id then
+    raise exception using errcode = '42501',
+      message = 'Module installation delegation is unavailable';
+  end if;
+
+  checked_context := vortex_access.validated_human_request_context();
+  if (checked_context ->> 'organizationId')::uuid <> permission_decision.organization_id
+    or (checked_context ->> 'organizationAccountId')::uuid <>
+      permission_decision.organization_account_id
+    or (checked_context ->> 'accessVersion')::bigint <> permission_decision.access_version
+    or (checked_context ->> 'correlationId')::uuid <> permission_decision.correlation_id then
+    raise exception using errcode = '40001',
+      message = 'Module installation context changed';
+  end if;
+  selected_organization_id := permission_decision.organization_id;
+
+  if not exists (
+    select 1
+    from vortex_definition.roots as root
+    join vortex_definition.releases as release
+      on release.root_id = root.root_id
+      and release.release_revision = p_application_release_revision
+    where root.root_id = p_application_root_id
+      and root.organization_id = selected_organization_id
+      and root.kind = 'application'
+      and release.validation_contract_version = any (
+        vortex_definition.accepted_contract_version('application')
+      )
+      and release.compilation_output #>> '{kind}' = 'application'
+      and release.compilation_output #>> '{canonical,envelope,rootId}' =
+        p_application_root_id::text
+      and release.compilation_output #>> '{validationContractVersion}' = any (
+        vortex_definition.accepted_contract_version('application')
+      )
+  ) then
+    raise exception using errcode = 'P0002',
+      message = 'Installation Application release is unavailable';
+  end if;
+
+  select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'moduleRootId', binding.module_root_id,
+      'moduleReleaseRevision', binding.module_release_revision,
+      'bindingRevision', binding.binding_revision,
+      'state', binding.state
+    ) order by binding.module_root_id), '[]'::jsonb)
+  into expected_module_bindings
+  from vortex_definition.installation_bindings as binding
+  where binding.organization_id = selected_organization_id
+    and binding.application_root_id = p_application_root_id
+    and binding.state = 'provisioned';
+  prepared_source := vortex_definition.read_prepared_installation_runtime_source(
+    p_application_root_id,
+    p_application_release_revision,
+    expected_module_bindings
+  );
+  if prepared_source is null
+    or (prepared_source ->> 'organizationId')::uuid is distinct from selected_organization_id
+    or (prepared_source ->> 'applicationRootId')::uuid is distinct from p_application_root_id
+    or (prepared_source ->> 'applicationReleaseRevision')::bigint is distinct from p_application_release_revision
+    or prepared_source ->> 'pinFingerprint' is distinct from p_pin_fingerprint then
+    raise exception using errcode = '40001',
+      message = 'Installation runtime bundle source changed';
+  end if;
+  source_manifest := pg_catalog.jsonb_build_object(
+    'bundleFormatVersion', 3,
+    'application', pg_catalog.jsonb_build_object(
+      'rootId', prepared_source #> '{application,rootId}',
+      'definitionKey', prepared_source #> '{application,key}',
+      'releaseRevision', prepared_source #> '{application,releaseRevision}',
+      'releaseVersion', prepared_source #> '{application,releaseVersion}',
+      'validationContractVersion', prepared_source #> '{application,validationContractVersion}',
+      'contentFingerprint', prepared_source #> '{application,contentFingerprint}',
+      'resolutionFingerprint', prepared_source #> '{application,resolutionFingerprint}'
+    ),
+    'modules', coalesce((
+      select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'rootId', module.value -> 'rootId',
+          'definitionKey', module.value -> 'key',
+          'releaseRevision', module.value -> 'releaseRevision',
+          'releaseVersion', module.value -> 'releaseVersion',
+          'validationContractVersion', module.value -> 'validationContractVersion',
+          'contentFingerprint', module.value -> 'contentFingerprint',
+          'resolutionFingerprint', module.value -> 'resolutionFingerprint'
+        ) order by (module.value ->> 'rootId') collate "C")
+      from pg_catalog.jsonb_array_elements(prepared_source -> 'modules') as module(value)
+    ), '[]'::jsonb),
+    'pinFingerprint', prepared_source -> 'pinFingerprint',
+    'preparedRecordAccessPlan', pg_catalog.jsonb_build_object(
+      'planKey', prepared_source #> '{preparedRecordAccessPlan,planKey}',
+      'mappingFingerprint', prepared_source #> '{preparedRecordAccessPlan,mappingFingerprint}'
+    )
+  );
+  for section_value in
+    select required.section
+    from pg_catalog.unnest(expected_sections) as required(section)
+  loop
+    select pg_catalog.string_agg(item.value ->> 'content', '' order by
+      (item.value ->> 'ordinal')::integer)
+    into section_text
+    from pg_catalog.jsonb_array_elements(p_parts) as item(value)
+    where item.value ->> 'section' = section_value;
+    if section_text is null then
+      raise exception using errcode = '22023',
+        message = 'Installation runtime bundle section is unavailable';
+    end if;
+    begin
+      section_payloads := section_payloads || pg_catalog.jsonb_build_object(
+        section_value, section_text::jsonb
+      );
+    exception when others then
+      raise exception using errcode = '22023',
+        message = 'Installation runtime bundle section is invalid';
+    end;
+  end loop;
+  application_content := prepared_source #> '{application,compilationOutput,canonical,content}';
+  if application_content is null then
+    raise exception using errcode = '55000',
+      message = 'Installation runtime bundle Application content is unavailable';
+  end if;
+  select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'identity', pg_catalog.jsonb_build_object(
+        'kind', module.value -> 'kind',
+        'organizationId', module.value -> 'organizationId',
+        'rootId', module.value -> 'rootId',
+        'definitionKey', module.value -> 'key',
+        'releaseRevision', module.value -> 'releaseRevision',
+        'releaseVersion', module.value -> 'releaseVersion',
+        'validationContractVersion', module.value -> 'validationContractVersion',
+        'contentFingerprint', module.value -> 'contentFingerprint',
+        'resolutionFingerprint', module.value -> 'resolutionFingerprint',
+        'dependencyManifest', module.value -> 'dependencyManifest'
+      ),
+      'content', module.value #> '{compilationOutput,canonical,content}'
+    ) order by (module.value ->> 'rootId') collate "C"), '[]'::jsonb)
+  into expected_modules
+  from pg_catalog.jsonb_array_elements(prepared_source -> 'modules') as module(value);
+  select pg_catalog.jsonb_build_object(
+    'preparedRecordAccessPlan', prepared_source -> 'preparedRecordAccessPlan',
+    'declaredPermissions', pg_catalog.jsonb_build_object(
+      'application', application_content -> 'permissions',
+      'modules', coalesce((
+        select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+            'rootId', module.value -> 'rootId',
+            'permissions', module.value #> '{compilationOutput,canonical,content,permissions}'
+          ) order by (module.value ->> 'rootId') collate "C")
+        from pg_catalog.jsonb_array_elements(prepared_source -> 'modules') as module(value)
+      ), '[]'::jsonb)
+    )
+  ) into expected_access_plan;
+  if section_payloads -> 'navigation' is distinct from application_content -> 'navigation'
+    or section_payloads -> 'flows' is distinct from pg_catalog.jsonb_build_object(
+      'flows', application_content -> 'flows',
+      'flowBindings', application_content -> 'flowBindings'
+    )
+    or section_payloads -> 'theme' is distinct from application_content -> 'theme'
+    or section_payloads -> 'component_registry' is distinct from application_content -> 'platformBlockDependencies'
+    or section_payloads -> 'access_plan' is distinct from expected_access_plan
+    or section_payloads #> '{pages,application,identity}' is distinct from (
+      pg_catalog.jsonb_build_object(
+        'kind', prepared_source #> '{application,kind}',
+        'organizationId', prepared_source #> '{application,organizationId}',
+        'rootId', prepared_source #> '{application,rootId}',
+        'definitionKey', prepared_source #> '{application,key}',
+        'releaseRevision', prepared_source #> '{application,releaseRevision}',
+        'releaseVersion', prepared_source #> '{application,releaseVersion}',
+        'validationContractVersion', prepared_source #> '{application,validationContractVersion}',
+        'contentFingerprint', prepared_source #> '{application,contentFingerprint}',
+        'resolutionFingerprint', prepared_source #> '{application,resolutionFingerprint}',
+        'dependencyManifest', prepared_source #> '{application,dependencyManifest}',
+        'platformCompatibilityVersion',
+          prepared_source #> '{application,compilationOutput,platformCompatibilityVersion}'
+      )
+    )
+    or section_payloads #> '{pages,application,content}' is distinct from
+      application_content - array[
+        'navigation', 'flows', 'flowBindings', 'theme',
+        'platformBlockDependencies', 'shells', 'pages'
+      ]::text[]
+    or section_payloads #> '{pages,application,shells}' is distinct from application_content -> 'shells'
+    or section_payloads #> '{pages,application,pages}' is distinct from application_content -> 'pages'
+    or section_payloads #> '{pages,modules}' is distinct from expected_modules
+    or pg_catalog.jsonb_typeof(section_payloads #> '{pages,resolvedCompositions}') is distinct from 'array'
+    or pg_catalog.jsonb_array_length(section_payloads #> '{pages,resolvedCompositions}') <>
+      pg_catalog.jsonb_array_length(application_content -> 'pages') then
+    raise exception using errcode = '23514',
+      message = 'Installation runtime bundle sections do not match current immutable source';
+  end if;
+  for part_item in
+    select item.value from pg_catalog.jsonb_array_elements(p_parts) as item(value)
+  loop
+    if pg_catalog.jsonb_typeof(part_item) is distinct from 'object' then
+      raise exception using errcode = '22023',
+        message = 'Installation runtime bundle part is invalid';
+    end if;
+    if not (part_item ?& array['section', 'ordinal', 'byteSize', 'sha256', 'content'])
+      or part_item - array['section', 'ordinal', 'byteSize', 'sha256', 'content'] <> '{}'::jsonb
+      or pg_catalog.jsonb_typeof(part_item -> 'section') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(part_item -> 'ordinal') is distinct from 'number'
+      or pg_catalog.jsonb_typeof(part_item -> 'byteSize') is distinct from 'number'
+      or pg_catalog.jsonb_typeof(part_item -> 'sha256') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(part_item -> 'content') is distinct from 'string' then
+      raise exception using errcode = '22023',
+        message = 'Installation runtime bundle part is invalid';
+    end if;
+
+    section_value := part_item ->> 'section';
+    if not (section_value = any (expected_sections))
+      or (part_item ->> 'ordinal') !~ '^(0|[1-9][0-9]*)$'
+      or pg_catalog.length(part_item ->> 'ordinal') > 10
+      or (part_item ->> 'byteSize') !~ '^[1-9][0-9]*$'
+      or pg_catalog.length(part_item ->> 'byteSize') > 7 then
+      raise exception using errcode = '22023',
+        message = 'Installation runtime bundle part is invalid';
+    end if;
+    ordinal_value := (part_item ->> 'ordinal')::bigint;
+    byte_size_value := (part_item ->> 'byteSize')::bigint;
+    content_text := part_item ->> 'content';
+    if ordinal_value > 2147483647 or byte_size_value > 1048575 then
+      raise exception using errcode = '22023',
+        message = 'Installation runtime bundle part exceeds its limit';
+    end if;
+
+    content_bytes := pg_catalog.convert_to(content_text, 'UTF8');
+    if pg_catalog.octet_length(content_bytes) <> byte_size_value then
+      raise exception using errcode = '22023',
+        message = 'Installation runtime bundle part size is invalid';
+    end if;
+    sha256_value := 'sha256:' || pg_catalog.encode(
+      extensions.digest(content_bytes, 'sha256'), 'hex'
+    );
+    if (part_item ->> 'sha256') !~ '^sha256:[a-f0-9]{64}$'
+      or sha256_value <> (part_item ->> 'sha256') then
+      raise exception using errcode = '22023',
+        message = 'Installation runtime bundle part fingerprint is invalid';
+    end if;
+    total_size_value := total_size_value + byte_size_value;
+    if total_size_value > 9007199254740991 then
+      raise exception using errcode = '22023',
+        message = 'Installation runtime bundle is too large';
+    end if;
+  end loop;
+
+  if exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(p_parts) as item(value)
+      group by item.value ->> 'section', (item.value ->> 'ordinal')::integer
+      having pg_catalog.count(*) > 1
+    )
+    or exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(p_parts) as item(value)
+      group by item.value ->> 'section'
+      having pg_catalog.min((item.value ->> 'ordinal')::integer) <> 0
+        or pg_catalog.max((item.value ->> 'ordinal')::integer) <>
+          pg_catalog.count(*) - 1
+    )
+    or exists (
+      select 1
+      from pg_catalog.unnest(expected_sections) as required(section)
+      where not exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(p_parts) as item(value)
+        where item.value ->> 'section' = required.section
+      )
+    ) then
+    raise exception using errcode = '22023',
+      message = 'Installation runtime bundle sections are incomplete';
+  end if;
+
+  select pg_catalog.jsonb_agg(
+    pg_catalog.jsonb_build_object(
+      'section', item.value ->> 'section',
+      'ordinal', (item.value ->> 'ordinal')::integer,
+      'byteSize', (item.value ->> 'byteSize')::bigint,
+      'sha256', item.value ->> 'sha256'
+    ) order by pg_catalog.array_position(
+      expected_sections, item.value ->> 'section'
+    ), (item.value ->> 'ordinal')::integer
+  )
+  into parts_manifest
+  from pg_catalog.jsonb_array_elements(p_parts) as item(value);
+
+  insert into vortex_definition.installation_runtime_bundles (
+    organization_id, application_root_id, application_release_revision,
+    bundle_format_version, pin_fingerprint, source_manifest, parts, total_size_bytes
+  ) values (
+    selected_organization_id, p_application_root_id, p_application_release_revision,
+    p_bundle_format_version, p_pin_fingerprint, source_manifest, parts_manifest, total_size_value
+  ) on conflict (
+    organization_id, application_root_id, application_release_revision, bundle_format_version
+  ) do nothing;
+  get diagnostics inserted_rows = row_count;
+
+  if inserted_rows = 0 then
+    select stored.* into stored_bundle
+    from vortex_definition.installation_runtime_bundles as stored
+    where stored.organization_id = selected_organization_id
+      and stored.application_root_id = p_application_root_id
+      and stored.application_release_revision = p_application_release_revision
+      and stored.bundle_format_version = p_bundle_format_version;
+    if not found then
+      raise exception using errcode = '40001',
+        message = 'Installation runtime bundle changed concurrently';
+    end if;
+    if stored_bundle.pin_fingerprint <> p_pin_fingerprint
+      or stored_bundle.source_manifest is distinct from source_manifest
+      or stored_bundle.parts is distinct from parts_manifest
+      or stored_bundle.total_size_bytes is distinct from total_size_value
+      or (select pg_catalog.count(*) from vortex_definition.installation_runtime_bundle_parts as part
+        where part.organization_id = selected_organization_id
+          and part.application_root_id = p_application_root_id
+          and part.application_release_revision = p_application_release_revision
+          and part.bundle_format_version = p_bundle_format_version)
+        <> pg_catalog.jsonb_array_length(p_parts)
+      or exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(p_parts) as item(value)
+        left join vortex_definition.installation_runtime_bundle_parts as part
+          on part.organization_id = selected_organization_id
+          and part.application_root_id = p_application_root_id
+          and part.application_release_revision = p_application_release_revision
+          and part.bundle_format_version = p_bundle_format_version
+          and part.section = item.value ->> 'section'
+          and part.ordinal = (item.value ->> 'ordinal')::integer
+        where part.content_bytes is distinct from pg_catalog.convert_to(item.value ->> 'content', 'UTF8')
+      ) then
+      raise exception using errcode = '23505',
+        message = 'Installation runtime bundle pin fingerprint differs';
+    end if;
+  else
+    for part_item in
+      select item.value from pg_catalog.jsonb_array_elements(p_parts) as item(value)
+    loop
+      insert into vortex_definition.installation_runtime_bundle_parts (
+        organization_id, application_root_id, application_release_revision,
+        bundle_format_version, section, ordinal, content_bytes
+      ) values (
+        selected_organization_id, p_application_root_id, p_application_release_revision,
+        p_bundle_format_version, part_item ->> 'section',
+        (part_item ->> 'ordinal')::integer,
+        pg_catalog.convert_to(part_item ->> 'content', 'UTF8')
+      );
+    end loop;
+
+    select stored.* into strict stored_bundle
+    from vortex_definition.installation_runtime_bundles as stored
+    where stored.organization_id = selected_organization_id
+      and stored.application_root_id = p_application_root_id
+      and stored.application_release_revision = p_application_release_revision
+      and stored.bundle_format_version = p_bundle_format_version;
+  end if;
+
+  return pg_catalog.jsonb_build_object(
+    'organizationId', stored_bundle.organization_id,
+    'applicationRootId', stored_bundle.application_root_id,
+    'applicationReleaseRevision', stored_bundle.application_release_revision,
+    'bundleFormatVersion', stored_bundle.bundle_format_version,
+    'pinFingerprint', stored_bundle.pin_fingerprint,
+    'sourceManifest', stored_bundle.source_manifest,
+    'parts', stored_bundle.parts,
+    'totalSizeBytes', stored_bundle.total_size_bytes,
+    'builtAt', stored_bundle.built_at
+  );
+exception
+  when no_data_found then
+    raise exception using errcode = 'P0002',
+      message = 'Installation runtime bundle evidence is unavailable';
+  when too_many_rows then
+    raise exception using errcode = '55000',
+      message = 'Installation runtime bundle evidence is ambiguous';
+end
+$function$;
+
+create or replace function vortex_definition.read_installation_runtime_bundle_parts(
+  p_application_root_id uuid,
+  p_application_release_revision bigint,
+  p_bundle_format_version integer,
+  p_sections jsonb
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $function$
+declare
+  allowed_sections constant text[] := array[
+    'pages', 'navigation', 'flows', 'theme', 'component_registry', 'access_plan'
+  ];
+  checked_context jsonb;
+  selected_organization_id uuid;
+  requested_sections text[];
+  parts_value jsonb;
+begin
+  if p_application_root_id is null
+    or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_application_release_revision is null
+    or p_application_release_revision not between 1 and 9007199254740991
+    or p_bundle_format_version is null or p_bundle_format_version < 1
+    or p_sections is null or pg_catalog.jsonb_typeof(p_sections) is distinct from 'array' then
+    raise exception using errcode = '22023',
+      message = 'Installation runtime bundle read command is invalid';
+  end if;
+  if pg_catalog.jsonb_array_length(p_sections) not between 1 and
+    pg_catalog.cardinality(allowed_sections) then
+    raise exception using errcode = '22023',
+      message = 'Installation runtime bundle read command is invalid';
+  end if;
+  if exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(p_sections) as requested(value)
+      where pg_catalog.jsonb_typeof(requested.value) is distinct from 'string'
+        or not ((requested.value #>> '{}') = any (allowed_sections))
+    )
+    or exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(p_sections) as requested(value)
+      group by requested.value
+      having pg_catalog.count(*) > 1
+    ) then
+    raise exception using errcode = '22023',
+      message = 'Installation runtime bundle read command is invalid';
+  end if;
+  select pg_catalog.array_agg(requested.value #>> '{}' order by requested.ordinality)
+  into requested_sections
+  from pg_catalog.jsonb_array_elements(p_sections) with ordinality as requested(value, ordinality);
+
+  checked_context := vortex_access.validated_human_request_context();
+  selected_organization_id := (checked_context ->> 'organizationId')::uuid;
+  if selected_organization_id is null then
+    raise exception using errcode = '42501',
+      message = 'Installation runtime bundle organisation is unavailable';
+  end if;
+
+  if not exists (
+    select 1 from vortex_definition.installation_runtime_bundles as stored
+    where stored.organization_id = selected_organization_id
+      and stored.application_root_id = p_application_root_id
+      and stored.application_release_revision = p_application_release_revision
+      and stored.bundle_format_version = p_bundle_format_version
+  ) then
+    raise exception using errcode = 'P0002',
+      message = 'Installation runtime bundle is unavailable';
+  end if;
+
+  select coalesce(pg_catalog.jsonb_agg(
+    pg_catalog.jsonb_build_object(
+      'section', part.section,
+      'ordinal', part.ordinal,
+      'byteSize', pg_catalog.octet_length(part.content_bytes),
+      'sha256', 'sha256:' || pg_catalog.encode(
+        extensions.digest(part.content_bytes, 'sha256'), 'hex'
+      ),
+      'content', pg_catalog.convert_from(part.content_bytes, 'UTF8')
+    ) order by pg_catalog.array_position(requested_sections, part.section), part.ordinal
+  ), '[]'::jsonb)
+  into parts_value
+  from vortex_definition.installation_runtime_bundle_parts as part
+  where part.organization_id = selected_organization_id
+    and part.application_root_id = p_application_root_id
+    and part.application_release_revision = p_application_release_revision
+    and part.bundle_format_version = p_bundle_format_version
+    and part.section = any (requested_sections);
+
+  return parts_value;
+end
+$function$;
+
+-- Activity says who acted on a person's behalf: an agent (the agent channel its request carried)
+-- or the back end (a subscriber or back-end run); the person stays the actor.
+create or replace function vortex_access.list_organization_activity_entries_projection(
+  p_record_ids uuid[],
+  p_sort_key text,
+  p_direction text,
+  p_after jsonb,
+  p_limit integer,
+  p_predicate jsonb
+)
+returns table (
+  organization_id uuid,
+  record_id uuid,
+  revision bigint,
+  attribute_values jsonb
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  checked_context jsonb;
+  visible_organization_id uuid;
+  actor_identity_id uuid;
+  actor_account_id uuid;
+  decision_outcome text;
+  decision_organization_id uuid;
+  decision_account_id uuid;
+  audit_projection boolean;
+  person_record_type_id uuid;
+  installation_plan jsonb;
+  installation_record_types jsonb;
+  after_occurred_at timestamptz;
+  after_record_id uuid;
+  keyset_sql text := '';
+  base_sql text;
+  source_sql text;
+  order_sql text;
+  scan_sql text;
+  predicate_plan jsonb;
+begin
+  -- The action is the one filterable key (the record title); there is no searchable key.
+  predicate_plan := vortex_record.compile_projection_predicate_internal(
+    p_predicate,
+    $declared${
+      "action": {"sql": "entry.action", "database": "text", "filter": true}
+    }$declared$::jsonb,
+    10
+  );
+  if p_sort_key <> 'occurred_at' or p_direction not in ('ascending', 'descending')
+    or p_sort_key is null or p_direction is null
+    or (p_limit is not null and p_limit < 1) then
+    raise exception using errcode = '22023', message = 'Activity projection bounds are invalid';
+  end if;
+  if p_after is not null then
+    if pg_catalog.jsonb_typeof(p_after) <> 'object'
+      or pg_catalog.jsonb_typeof(p_after -> 'sortKey') is distinct from 'array'
+      or pg_catalog.jsonb_array_length(p_after -> 'sortKey') <> 1
+      or pg_catalog.jsonb_typeof(p_after -> 'sortKey' -> 0) <> 'string'
+      or pg_catalog.jsonb_typeof(p_after -> 'recordId') is distinct from 'string' then
+      raise exception using errcode = '22023', message = 'Activity projection cursor is invalid';
+    end if;
+    begin
+      after_occurred_at := (p_after -> 'sortKey' ->> 0)::timestamptz;
+      after_record_id := (p_after ->> 'recordId')::uuid;
+    exception when invalid_text_representation or datetime_field_overflow then
+      raise exception using errcode = '22023', message = 'Activity projection cursor is invalid';
+    end;
+    keyset_sql := case when p_direction = 'descending'
+      then ' and (entry.occurred_at, entry.activity_id) < ($6, $7)'
+      else ' and (entry.occurred_at, entry.activity_id) > ($6, $7)' end;
+  end if;
+  begin
+    checked_context := vortex_access.validated_human_request_context();
+    visible_organization_id := (checked_context ->> 'organizationId')::uuid;
+    actor_identity_id := (checked_context ->> 'identityId')::uuid;
+    actor_account_id := (checked_context ->> 'organizationAccountId')::uuid;
+    perform 1 from vortex_access.resolve_human_organization_scope(
+      actor_identity_id, visible_organization_id
+    );
+  exception
+    when insufficient_privilege or no_data_found then
+      return;
+  end;
+
+  select evaluated.outcome, evaluated.organization_id, evaluated.organization_account_id
+  into decision_outcome, decision_organization_id, decision_account_id
+  from vortex_access.evaluate_organization_permission_eligibility(
+    pg_catalog.jsonb_build_object(
+      'operationKey', 'platform.organization.permissions.read',
+      'action', pg_catalog.jsonb_build_object('actionKind', 'read'),
+      'target', pg_catalog.jsonb_build_object('kind', 'organization'),
+      'requiredPermission', vortex_access.required_platform_permission(
+        'platform.organization.permissions.read'
+      ),
+      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'authority', pg_catalog.jsonb_build_object('kind', 'permission')
+    )
+  ) as evaluated;
+  audit_projection := coalesce(
+    decision_outcome = 'eligible'
+      and decision_organization_id = visible_organization_id
+      and decision_account_id = actor_account_id,
+    false
+  );
+
+  -- Use this request's validated live/preview installation, including its pins.
+  installation_plan := vortex_record.resolve_installation_access_plan_internal(
+    vortex_definition.read_current_active_installation()
+  );
+  select pg_catalog.jsonb_agg(installed.value) into installation_record_types
+  from pg_catalog.jsonb_each(installation_plan -> 'recordTypes') as installed(key, value);
+  person_record_type_id := vortex_access.resolve_installed_account_record_type_internal(
+    installation_record_types
+  );
+
+  order_sql := pg_catalog.format(
+    ' order by entry.occurred_at %s, entry.activity_id %s limit $8',
+    case when p_direction = 'descending' then 'desc' else 'asc' end,
+    case when p_direction = 'descending' then 'desc' else 'asc' end
+  );
+  base_sql := $scan$select entry.*
+    from vortex_record.organization_activity_entries as entry
+    where entry.organization_id = $1
+      and entry.occurred_at >= pg_catalog.statement_timestamp() - interval '90 days'
+      and ($2 is null or entry.activity_id = any($2))$scan$
+    || coalesce(' and ' || (predicate_plan ->> 'predicate'), '');
+  if audit_projection then
+    source_sql := base_sql || keyset_sql || order_sql;
+  else
+    source_sql := 'select visible.* from (('
+      || base_sql
+      || ' and entry.actor_kind = ''organization_account'' and entry.actor_id = $4'
+      || keyset_sql || order_sql
+      || ') union all ('
+      || base_sql
+      || ' and entry.actor_kind = ''identity'' and entry.actor_id = $5'
+      || keyset_sql || order_sql
+      || ')) as visible'
+      || pg_catalog.format(' order by visible.occurred_at %s, visible.activity_id %s limit $8',
+        case when p_direction = 'descending' then 'desc' else 'asc' end,
+        case when p_direction = 'descending' then 'desc' else 'asc' end);
+  end if;
+  scan_sql := $scan$select
+    entry.organization_id,
+    entry.activity_id,
+    1::bigint,
+    pg_catalog.jsonb_build_object(
+      'organization_id', entry.organization_id::text,
+      'revision', 1,
+      'occurred_at', entry.occurred_at,
+      'actor_kind', case entry.actor_kind
+        when 'organization_account' then case
+          when entry.source = 'system' then 'Back end on behalf of person'
+          when entry.source = 'webmcp' then 'Agent on behalf of person'
+          else 'Person' end
+        when 'identity' then 'Platform operator'
+        when 'system' then 'System'
+        when 'public_session' then 'Public visitor'
+        else 'Other' end,
+      'actor', case when entry.actor_kind = 'organization_account'
+        then pg_catalog.jsonb_build_object('recordTypeId', $9, 'recordId', entry.actor_id::text)
+        else null end,
+      'action', entry.action,
+      'subject_count', pg_catalog.cardinality(entry.subject_ids),
+      'changed_field_count', case when $3
+        then pg_catalog.cardinality(entry.changed_field_ids) else null end
+    )
+  from ($scan$ || source_sql || $scan$) as entry$scan$
+    || pg_catalog.format(' order by entry.occurred_at %s, entry.activity_id %s',
+      case when p_direction = 'descending' then 'desc' else 'asc' end,
+      case when p_direction = 'descending' then 'desc' else 'asc' end);
+  return query execute scan_sql using visible_organization_id, p_record_ids,
+    audit_projection, actor_account_id, actor_identity_id,
+    after_occurred_at, after_record_id, p_limit, person_record_type_id,
+    predicate_plan -> 'parameters';
+end
+$function$;
+
+reset role;

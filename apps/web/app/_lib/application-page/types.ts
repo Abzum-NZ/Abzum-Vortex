@@ -12,9 +12,7 @@ import type {
   PageDefinition,
   RecordsTablePageRequest,
 } from "@vortex/platform/schema";
-import type { PageWebMcpTool } from "./webmcp-projection";
 import type { PlacementFlowBinding } from "@vortex/ui";
-export type { PageWebMcpTool } from "./webmcp-projection";
 export type { PlacementFlowBinding } from "@vortex/ui";
 
 export type PageDataState = Readonly<Record<string, unknown>>;
@@ -117,8 +115,6 @@ export type ApplicationPageModel = PlacementReadModel &
   Readonly<{
     /** Client page changes replace the mounted frame's navigation; documents use its own copy. */
     navigation?: ProjectedNavigation;
-    /** Permission-filtered tools that map to one usable control on this page. */
-    webMcpTools: readonly PageWebMcpTool[];
   }>;
 
 export type PageLoadOptions = Readonly<{

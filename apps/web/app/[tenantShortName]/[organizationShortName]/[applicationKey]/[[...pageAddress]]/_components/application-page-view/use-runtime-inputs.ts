@@ -10,7 +10,7 @@ import {
   equalFormValue,
   type ControlSemanticEvent,
   type DisplaySemanticEvent,
-  type ServerDrivenResult,
+  type FlowDispatchResult,
   type FlowIntentHost,
   type FlowRuntimeState,
 } from "@vortex/ui";
@@ -199,7 +199,7 @@ export function useRuntimeInputs({
   submittedFormsRef: RefObject<Map<string, SubmittedForm>>;
   formCancelledRef: RefObject<boolean>;
   applyDispatch: (
-    dispatch: Promise<ServerDrivenResult | undefined>,
+    dispatch: Promise<FlowDispatchResult | undefined>,
     formPlacementId?: string,
     afterAccepted?: () => Promise<PageMessageDraft | undefined>,
     sourceBindingId?: string,
@@ -719,8 +719,7 @@ export function useRuntimeInputs({
         };
       }
       // A form container emits its one submission for a gesture; it runs the bound flow once
-      // through the runtime, which resumes every pause with the server-issued continuation. The
-      // handler returns that run, so the form shows busy from the press until the run settles.
+      // through the page runner. The handler returns that run, so the form shows busy from the press until the run settles.
       const submitBinding = bindings.find((binding) => binding.event === "form_submit");
       if (
         submitBinding !== undefined ||

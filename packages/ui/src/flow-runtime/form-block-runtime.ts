@@ -1,5 +1,5 @@
 import type { FlowRuntime, PlacementFlowBinding } from "./flow-runtime";
-import type { ServerDrivenResult } from "./server-driven-run";
+import type { FlowDispatchResult } from "./flow-runtime";
 
 /**
  * The form block's wiring to the page's flow runtime. A form container emits one
@@ -29,24 +29,24 @@ export type FormBlockRuntime = Readonly<{
     prepare: (signal: AbortSignal) => PreparedForm | undefined | Promise<PreparedForm | undefined>,
     gestureId: string,
     sourceTablePlacementId?: string,
-  ) => Promise<ServerDrivenResult | undefined>;
+  ) => Promise<FlowDispatchResult | undefined>;
   /** A guided form's step change or cancel: the bound flow with the draft and step it names. */
   guided: (
     binding: PlacementFlowBinding,
     /** Read once, after the form's pending changes have settled. */
     inputs: () => Readonly<Record<string, unknown>>,
     gestureId: string,
-  ) => Promise<ServerDrivenResult | undefined>;
+  ) => Promise<FlowDispatchResult | undefined>;
   /** The form's mount event, when the placement binds it. */
   ready: (
     binding: PlacementFlowBinding,
     gestureId: string,
-  ) => Promise<ServerDrivenResult | undefined>;
+  ) => Promise<FlowDispatchResult | undefined>;
   /** The form's reset event, when the placement binds it. */
   reset: (
     binding: PlacementFlowBinding,
     gestureId: string,
-  ) => Promise<ServerDrivenResult | undefined>;
+  ) => Promise<FlowDispatchResult | undefined>;
 }>;
 
 export function createFormBlockRuntime(runtime: FlowRuntime): FormBlockRuntime {
@@ -57,7 +57,7 @@ export function createFormBlockRuntime(runtime: FlowRuntime): FormBlockRuntime {
       | ((signal: AbortSignal) => Promise<Readonly<Record<string, unknown>> | undefined>),
     gestureId: string,
     sourceTablePlacementId?: string,
-  ): Promise<ServerDrivenResult | undefined> =>
+  ): Promise<FlowDispatchResult | undefined> =>
     runtime.dispatch(binding, callerInputs, gestureId, undefined, sourceTablePlacementId);
 
   return Object.freeze({

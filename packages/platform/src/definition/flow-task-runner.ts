@@ -38,7 +38,7 @@ import {
   beginFlowEffect,
   completeFlowEffect,
   type FlowEffectPrincipal,
-} from "./flow-continuation-store";
+} from "./flow-effect-ledger";
 import { reportUnexpectedFailure } from "./definition-error";
 import { runGuidedDraftTask } from "./flow-guided-draft-task";
 import {

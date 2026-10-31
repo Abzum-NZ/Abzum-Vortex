@@ -12,7 +12,6 @@ import {
   DATE_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
-  FORM_CONTAINER_BLOCK_RELEASE,
   placementSettings,
   fieldControl,
   planChoiceOptionGates,
@@ -20,14 +19,11 @@ import {
   applyChoiceOptionGates,
 } from "@vortex/platform/server";
 import {
-  type ApplicationContent,
   type IdentitySession,
   type OrganizationSelectionCandidate,
   isRecord,
   sameId,
   walkPageComposition,
-  walkPlacementData,
-  type VisitedPlacement,
 } from "@vortex/platform/schema";
 import { loadInstalledContext, requestDependencies } from "./installed-context";
 import { platformPermissionSource } from "../platform-permission-source";
@@ -131,27 +127,6 @@ export type ProjectedOptionsField = Readonly<{
 export type ProjectedOptionsForm = Readonly<{
   fields: ReadonlyMap<string, ProjectedOptionsField>;
 }>;
-
-/** A form id is usable only when one authored Form placement has that identity in the release. */
-export const applicationHasAuthoredForm = (
-  application: ApplicationContent,
-  formId: string,
-): boolean => {
-  let matches = 0;
-  const countForm = (placement: VisitedPlacement): undefined => {
-    const block = placement.vortex.block;
-    if (
-      sameId(placement.placementId, formId) &&
-      isRecord(block) &&
-      typeof block.blockId === "string" &&
-      sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
-    )
-      matches += 1;
-  };
-  for (const page of application.pages) walkPageComposition(page.composition, countForm);
-  for (const shell of application.shells) walkPlacementData(shell.layout, countForm);
-  return matches === 1;
-};
 
 /**
  * The option-sourced fields (link inputs) of the one usable Form on the viewer's projected page,

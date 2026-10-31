@@ -73,9 +73,6 @@ export type {
   FlowOrchestratorResponse,
   FlowRecordType,
   FlowRelease,
-  FlowRunExpectation,
   FlowUnavailableNotice,
 } from "./flow-orchestrator-types";
 export type { FlowSubject } from "../rules/index";
-
-export { createFormContinuationService } from "./form-continuation";

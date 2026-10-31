@@ -21,21 +21,14 @@ import {
 import type { FlowValue } from "../workflows/flow-values";
 import { typedValueMatchesType } from "../rules/condition-types";
 import type {
-  FlowInterfaceIntent,
   FlowLibrary,
   FlowProtectedTaskCall,
   FlowRunState,
   FlowTaskOutcome,
 } from "../rules/flow-interpreter";
-import type {
-  FlowRelease,
-  FlowSelectedRecordReadProjection,
-  SafeIntent,
-} from "./flow-orchestrator-types";
+import type { FlowRelease, FlowSelectedRecordReadProjection } from "./flow-orchestrator-types";
 
 const maximumPayloadCharacters = 65_536;
-
-export const sha256 = (value: string): string => createHash("sha256").update(value).digest("hex");
 
 /**
  * The command identity of one protected task's record change: stable for the run, task path and
@@ -97,14 +90,6 @@ export const runFlowTargets = (flow: FlowDefinition): string[] => {
   visit(flow.finally);
   return targets;
 };
-
-export const safeIntent = (intent: FlowInterfaceIntent): SafeIntent => ({
-  kind: intent.kind,
-  taskId: intent.taskId,
-  properties: Object.fromEntries(
-    Object.entries(intent.properties).map(([name, value]) => [name, value.value]),
-  ),
-});
 
 /**
  * A declared sensitive output (for example a raw invitation secret) is returned once in the live

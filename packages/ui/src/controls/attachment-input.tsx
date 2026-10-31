@@ -9,7 +9,7 @@ import {
 import { Field, FieldLabel } from "../components/field";
 import { Input } from "../components/input";
 import { Button } from "../components/button";
-import { flowSetFieldChange } from "../flow-runtime/flow-cycle";
+import { setFieldChange } from "../flow-runtime/flow-cycle";
 import {
   readControlSettings,
   resolveControlContext,
@@ -59,31 +59,36 @@ export function AttachmentInput(props: ControlRenderProps<AttachmentInputPayload
           (required && !disabled && !readOnly && files.length === 0
             ? `${label} is required.`
             : undefined)),
-    (value, cycle) => {
-      if (
-        disabled ||
-        readOnly ||
-        busyRef.current ||
-        feedback?.hidden === true ||
-        !Array.isArray(value)
-      )
-        return undefined;
-      if (
-        value.some((id) => typeof id !== "string" || !files.some((file) => file.fileId === id)) ||
-        new Set(value).size !== value.length
-      )
-        return undefined;
-      const kept = files.filter((file) => value.includes(file.fileId));
-      const references = kept.map((file) => file.fileId);
-      return {
-        value: references,
-        apply: () => setSerialized(JSON.stringify(kept)),
-        emit: () =>
-          context.events?.field_changed?.({
-            ...flowSetFieldChange(cycle, fieldKey, references),
-            draftDisplay: { files: kept },
-          }),
-      };
+    {
+      label,
+      required,
+      refusal:
+        feedback?.hidden === true
+          ? "hidden"
+          : disabled || busyRef.current
+            ? "disabled"
+            : readOnly
+              ? "read_only"
+              : undefined,
+      set: (value, cause) => {
+        if (
+          !Array.isArray(value) ||
+          value.some((id) => typeof id !== "string" || !files.some((file) => file.fileId === id)) ||
+          new Set(value).size !== value.length
+        )
+          return "invalid_value";
+        const kept = files.filter((file) => value.includes(file.fileId));
+        const references = kept.map((file) => file.fileId);
+        return {
+          value: references,
+          apply: () => setSerialized(JSON.stringify(kept)),
+          emit: () =>
+            context.events?.field_changed?.({
+              ...setFieldChange(cause, fieldKey, references),
+              draftDisplay: { files: kept },
+            }),
+        };
+      },
     },
   );
   const formError = useFormFieldError(fieldKey);
