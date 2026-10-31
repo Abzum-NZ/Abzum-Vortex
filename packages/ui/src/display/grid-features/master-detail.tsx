@@ -186,7 +186,11 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
 
   if (state.kind === "loading")
     return (
-      <div role="status" aria-label="Reading related records" className="flex flex-col gap-2 py-1">
+      <div
+        role="status"
+        aria-label="Reading related records"
+        className="flex flex-col gap-[var(--vortex-space-sm)] py-1"
+      >
         {Array.from({ length: Math.min(pageSize, 5) }, (_, index) => (
           <Skeleton key={index} className="h-5 w-full" />
         ))}
@@ -200,7 +204,10 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
     );
   if (state.kind === "error")
     return (
-      <div role="alert" className="flex flex-wrap items-center gap-2 py-1 text-sm">
+      <div
+        role="alert"
+        className="flex flex-wrap items-center gap-[var(--vortex-space-sm)] py-1 text-sm"
+      >
         <span className="text-muted-foreground">The related records could not be read.</span>
         <Button variant="outline" size="sm" onClick={() => void open()}>
           Try again
@@ -209,7 +216,7 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
     );
   if (state.kind === "empty")
     return (
-      <Empty role="status" className="p-2 md:p-2">
+      <Empty role="status" className="p-[var(--vortex-space-sm)] md:p-[var(--vortex-space-sm)]">
         <EmptyHeader>
           <EmptyTitle className="text-sm font-normal text-muted-foreground">
             No related records
@@ -239,8 +246,8 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
   );
   if (context.presentation === "cards")
     return (
-      <div className="flex min-w-0 flex-col items-start gap-1 text-sm">
-        <ul className="m-0 flex w-full min-w-0 list-none flex-col divide-y divide-border p-0">
+      <div className="flex min-w-0 flex-col items-start gap-[var(--vortex-space-xs)] text-sm">
+        <ul className="m-0 flex w-full min-w-0 list-none flex-col divide-y divide-border p-[0]">
           {page.rows.map((related) => {
             const [titleColumn, ...detailColumns] = page.columns;
             const titleValue = titleColumn === undefined ? undefined : cellOf(related, titleColumn);
@@ -289,7 +296,7 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
       </div>
     );
   return (
-    <div className="flex flex-col items-start gap-1">
+    <div className="flex flex-col items-start gap-[var(--vortex-space-xs)]">
       <Table className="text-sm" containerClassName="border-0 bg-transparent">
         <TableHeader>
           <TableRow className="hover:bg-transparent">

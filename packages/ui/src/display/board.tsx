@@ -199,7 +199,7 @@ function BoardColumn({
   const dropRefused = from !== undefined && from.key !== bucket.key && !dropAllowed;
   return (
     <div
-      className={`flex min-h-64 min-w-64 flex-1 basis-64 flex-col gap-3 transition-opacity max-md:min-w-0 max-md:basis-full ${
+      className={`flex min-h-64 min-w-64 flex-1 basis-64 flex-col gap-[var(--vortex-space-md)] transition-opacity max-md:min-w-0 max-md:basis-full ${
         active ? "" : "max-md:hidden"
       } ${dropRefused ? "opacity-50" : dropAllowed ? "ring-2 ring-ring" : ""}`}
       data-vortex-board-column="true"
@@ -239,8 +239,8 @@ function BoardColumn({
             },
           })}
     >
-      <header className="flex flex-col gap-1">
-        <h3 className="m-0 flex items-center gap-2 font-medium">
+      <header className="flex flex-col gap-[var(--vortex-space-xs)]">
+        <h3 className="m-0 flex items-center gap-[var(--vortex-space-sm)] font-medium">
           {bucket.stage === undefined ? null : (
             <span
               aria-hidden="true"
@@ -285,7 +285,7 @@ function BoardColumn({
           </p>
         ) : null}
       </header>
-      <div className="flex min-h-32 flex-1 flex-col gap-3">
+      <div className="flex min-h-32 flex-1 flex-col gap-[var(--vortex-space-md)]">
         {page === null ? (
           pending ? (
             <p className="text-sm text-muted-foreground" role="status">
@@ -307,7 +307,7 @@ function BoardColumn({
             {emptyMessage}
           </p>
         ) : rows.length > 0 ? (
-          <ul className="flex list-none flex-col gap-2 p-0">
+          <ul className="flex list-none flex-col gap-[var(--vortex-space-sm)] p-[0]">
             {rows.map((row) => {
               const fieldById = new Map(
                 row.fields.map((field) => [field.key.toLowerCase(), field] as const),
@@ -872,7 +872,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
           ref={cardsRef}
           data-vortex-display="board"
           data-vortex-placement-id={placementId}
-          className="flex min-w-0 flex-col gap-3"
+          className="flex min-w-0 flex-col gap-[var(--vortex-space-md)]"
           aria-label={accessibleName}
         >
           <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
@@ -892,7 +892,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
             </Suspense>
           )}
           <div
-            className="flex gap-2 overflow-x-auto md:hidden"
+            className="flex gap-[var(--vortex-space-sm)] overflow-x-auto md:hidden"
             role="group"
             aria-label={`${accessibleName} column`}
           >
@@ -960,7 +960,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
               aria-label={`${accessibleName} columns`}
               tabIndex={0}
             >
-              <div className="flex min-w-max items-stretch gap-3 pb-2 max-md:min-w-0">
+              <div className="flex min-w-max items-stretch gap-[var(--vortex-space-md)] pb-2 max-md:min-w-0">
                 {buckets.map((bucket) => (
                   <BoardColumn
                     key={bucket.key}

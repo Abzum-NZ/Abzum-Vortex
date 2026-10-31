@@ -103,7 +103,11 @@ function ExportToolbarItems({ context }: GridFeaturePointProps): ReactElement | 
   if (context.events?.export_requested === undefined) return null;
   if (run?.status === "running")
     return (
-      <div role="status" aria-live="polite" className="flex items-center gap-2 text-sm">
+      <div
+        role="status"
+        aria-live="polite"
+        className="flex items-center gap-[var(--vortex-space-sm)] text-sm"
+      >
         <Spinner aria-hidden="true" />
         <span>
           Exporting{run.expected === undefined ? "" : ` ${recordsPhrase(run.expected)}`}…{" "}

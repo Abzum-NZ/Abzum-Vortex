@@ -79,12 +79,15 @@ export function TableLoadingState({
 
   if (presentation === "cards")
     return (
-      <div {...state} className="flex flex-col gap-2">
+      <div {...state} className="flex flex-col gap-[var(--vortex-space-sm)]">
         {Array.from({ length: drawnRows }, (_, card) => (
           <Card key={card} size="sm" className={CARD_SPACING[density]}>
             <Skeleton className="h-[0.875em] w-2/3" />
             {columns.slice(1).map((column) => (
-              <div key={column.field} className="flex items-center justify-between gap-4">
+              <div
+                key={column.field}
+                className="flex items-center justify-between gap-[var(--vortex-space-md)]"
+              >
                 <Skeleton className="h-[0.75em] w-1/4" />
                 <Skeleton className="h-[0.75em] w-1/3" />
               </div>
@@ -109,7 +112,7 @@ export function TableLoadingState({
       {widths.map((width, index) => (
         <div
           key={index}
-          className="flex items-center px-2"
+          className="flex items-center px-[var(--vortex-space-sm)]"
           style={{ flex: `${width} 0 ${width}px` }}
         >
           <Skeleton
@@ -123,7 +126,7 @@ export function TableLoadingState({
     <Card
       {...state}
       className={cn(
-        "relative max-w-full gap-0 overflow-hidden py-0",
+        "relative max-w-full gap-[0] overflow-hidden py-0",
         contract.viewport === "bounded" && BOUNDED_VIEWPORT_CLASS,
       )}
     >

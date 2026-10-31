@@ -149,7 +149,7 @@ export function RangeStatusBar({
       aria-atomic="true"
       aria-busy={summary.status === "loading"}
       aria-label="Selection totals"
-      className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground"
+      className="flex flex-wrap items-center gap-[var(--vortex-space-xs)] text-xs text-muted-foreground"
     >
       {summary.status === "loading" ? <span>Totalling…</span> : null}
       {summary.status === "refused" ? <span>Totals are not available right now.</span> : null}
@@ -160,7 +160,12 @@ export function RangeStatusBar({
         <>
           <span className="sr-only">{readout(summary.fields, labelOf)}</span>
           {summary.fields.map((field) => (
-            <Badge key={field.fieldId} variant="outline" className="gap-1 font-normal" aria-hidden>
+            <Badge
+              key={field.fieldId}
+              variant="outline"
+              className="gap-[var(--vortex-space-xs)] font-normal"
+              aria-hidden
+            >
               <span className="font-medium text-foreground">{labelOf(field.fieldId)}</span>
               {field.state === "withheld" ? (
                 <span>Not available</span>

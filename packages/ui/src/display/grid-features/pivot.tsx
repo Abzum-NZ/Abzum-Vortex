@@ -168,7 +168,11 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
   if (!open || settings === undefined) return null;
   if (state.kind === "loading")
     return (
-      <div role="status" aria-label="Reading the pivot" className="flex flex-col gap-2 py-1">
+      <div
+        role="status"
+        aria-label="Reading the pivot"
+        className="flex flex-col gap-[var(--vortex-space-sm)] py-1"
+      >
         {Array.from({ length: 6 }, (_, index) => (
           <Skeleton key={index} className="h-6 w-full" />
         ))}
@@ -182,7 +186,10 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
     );
   if (state.kind === "error")
     return (
-      <div role="alert" className="flex flex-wrap items-center gap-2 py-1 text-sm">
+      <div
+        role="alert"
+        className="flex flex-wrap items-center gap-[var(--vortex-space-sm)] py-1 text-sm"
+      >
         <span className="text-muted-foreground">The pivot could not be read.</span>
         <Button variant="outline" size="sm" onClick={() => setAttempt((count) => count + 1)}>
           Try again
@@ -227,7 +234,7 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
     );
   return (
     <div
-      className={cn("flex flex-col gap-2", refreshing && "opacity-60")}
+      className={cn("flex flex-col gap-[var(--vortex-space-sm)]", refreshing && "opacity-60")}
       aria-busy={refreshing}
       data-vortex-pivot=""
     >
@@ -307,11 +314,11 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
           </TableFooter>
         ) : null}
       </Table>
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-[var(--vortex-space-sm)]">
         <p className="m-0 text-xs text-muted-foreground tabular-nums" role="status">
           {`${page.measureLabel} · ${shown} · ${page.totalRecords} ${page.totalRecords === 1 ? "record" : "records"}`}
         </p>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-[var(--vortex-space-xs)]">
           <Button
             variant="outline"
             size="sm"

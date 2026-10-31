@@ -114,8 +114,11 @@ export function PersonalFormattingDialog({
             the view with see the rules on the fields their role can read.
           </DialogDescription>
         </DialogHeader>
-        <section aria-labelledby={`${ownId}-rules`} className="flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-2">
+        <section
+          aria-labelledby={`${ownId}-rules`}
+          className="flex flex-col gap-[var(--vortex-space-sm)]"
+        >
+          <div className="flex items-center justify-between gap-[var(--vortex-space-sm)]">
             <h3 id={`${ownId}-rules`} className="text-sm font-medium">
               Rules
             </h3>
@@ -135,7 +138,10 @@ export function PersonalFormattingDialog({
           {rules.length === 0 ? (
             <p className="text-sm text-muted-foreground">No rules yet.</p>
           ) : (
-            <ol aria-label="Formatting rules" className="flex flex-col gap-1">
+            <ol
+              aria-label="Formatting rules"
+              className="flex flex-col gap-[var(--vortex-space-xs)]"
+            >
               {rules.map((rule, index) => {
                 const issue = issueOf(rule);
                 const switchId = `${ownId}-rule-${index}`;
@@ -143,7 +149,7 @@ export function PersonalFormattingDialog({
                   <li
                     key={rule.id}
                     className={cn(
-                      "flex items-start gap-2 p-2",
+                      "flex items-start gap-[var(--vortex-space-sm)] p-[var(--vortex-space-sm)]",
                       activeId === rule.id && "bg-accent text-accent-foreground",
                       !rule.enabled && "opacity-60",
                     )}
@@ -224,7 +230,7 @@ export function PersonalFormattingDialog({
           <section
             key={active.id}
             aria-label="Rule details"
-            className="flex flex-col gap-3 border-t pt-3"
+            className="flex flex-col gap-[var(--vortex-space-md)] border-t pt-3"
           >
             <fieldset disabled={busy} className="min-w-0">
               <StudioConditionControls

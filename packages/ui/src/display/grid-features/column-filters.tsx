@@ -160,7 +160,7 @@ function TextEditor({
     return () => clearTimeout(timeout);
   }, [text]);
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-[var(--vortex-space-sm)]">
       <Label htmlFor={id}>Contains</Label>
       {/* A plain text box: a search box empties itself on Escape, and closing the popover with
           Escape would then commit an empty filter. "Clear filter" clears it. */}
@@ -208,10 +208,10 @@ function ChoiceEditor({
     onCommit(next.length === 0 ? undefined : { kind: "choice", values: next });
   };
   return (
-    <fieldset className="flex max-h-64 flex-col gap-2 overflow-y-auto">
+    <fieldset className="flex max-h-64 flex-col gap-[var(--vortex-space-sm)] overflow-y-auto">
       <legend className="sr-only">{field.label} is any of</legend>
       {(field.options ?? []).map((option, index) => (
-        <div key={option.value} className="flex items-center gap-2">
+        <div key={option.value} className="flex items-center gap-[var(--vortex-space-sm)]">
           <Checkbox
             id={`${baseId}-${index}`}
             checked={chosen.includes(option.value)}
@@ -282,7 +282,7 @@ function RangeEditor({
     onCommit({ kind: "number", ...range });
   };
   const bound = (label: string, value: string, set: (next: string) => void, suffix: string) => (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-[var(--vortex-space-sm)]">
       <Label htmlFor={`${id}-${suffix}`}>{label}</Label>
       <InputGroup>
         {field.kind === "money" && currencyText !== "" ? (
@@ -309,9 +309,9 @@ function RangeEditor({
     </div>
   );
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-[var(--vortex-space-md)]">
       {field.kind === "money" && field.currency === undefined ? (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-[var(--vortex-space-sm)]">
           <Label htmlFor={`${id}-currency`}>Currency</Label>
           <Input
             id={`${id}-currency`}
@@ -322,7 +322,7 @@ function RangeEditor({
           />
         </div>
       ) : null}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-[var(--vortex-space-sm)]">
         {bound("At least", from, setFrom, "from")}
         {bound("At most", to, setTo, "to")}
       </div>
@@ -388,7 +388,7 @@ function DateEditor({
   const fromDay = dayOf(from);
   const toDay = dayOf(to);
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-[var(--vortex-space-md)]">
       <Calendar
         mode="range"
         selected={fromDay === undefined ? undefined : { from: fromDay, to: toDay }}
@@ -398,8 +398,8 @@ function DateEditor({
           setTo(range?.to === undefined ? "" : calendarDay(range.to));
         }}
       />
-      <div className="grid grid-cols-2 gap-2">
-        <div className="flex flex-col gap-1.5">
+      <div className="grid grid-cols-2 gap-[var(--vortex-space-sm)]">
+        <div className="flex flex-col gap-[var(--vortex-space-sm)]">
           <Label htmlFor={`${id}-from`}>From</Label>
           <Input
             id={`${id}-from`}
@@ -410,7 +410,7 @@ function DateEditor({
             aria-invalid={problem !== undefined}
           />
         </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-[var(--vortex-space-sm)]">
           <Label htmlFor={`${id}-to`}>Until</Label>
           <Input
             id={`${id}-to`}
@@ -467,12 +467,15 @@ function LinkEditor({
     onCommit(next.length === 0 ? undefined : { kind: "link", recordIds: next });
   };
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-[var(--vortex-space-md)]">
       {chosen.length === 0 ? null : (
-        <ul className="flex flex-wrap gap-1" aria-label={`Chosen ${field.label} records`}>
+        <ul
+          className="flex flex-wrap gap-[var(--vortex-space-xs)]"
+          aria-label={`Chosen ${field.label} records`}
+        >
           {chosen.map((recordId) => (
             <li key={recordId}>
-              <Badge variant="secondary" className="gap-1 pe-0.5">
+              <Badge variant="secondary" className="gap-[var(--vortex-space-xs)] pe-0.5">
                 {narrowing?.recordTitles?.[recordId] ?? "Restricted record"}
                 <Button
                   variant="ghost"
@@ -521,7 +524,7 @@ function YesNoEditor({
 }>): ReactElement {
   const id = useId();
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-[var(--vortex-space-sm)]">
       <Label htmlFor={id}>{field.label}</Label>
       <NativeSelect
         id={id}
@@ -673,7 +676,7 @@ export function FiltersToolbar({
     fields[0]!;
   return (
     <div
-      className="flex flex-wrap items-center gap-2"
+      className="flex flex-wrap items-center gap-[var(--vortex-space-sm)]"
       role="group"
       aria-label={`Filters for ${context.accessibleName}`}
     >
@@ -683,7 +686,7 @@ export function FiltersToolbar({
           Filter
         </PopoverTrigger>
         <PopoverContent className="w-72" align="start">
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-[var(--vortex-space-sm)]">
             <Label htmlFor={selectId}>Field</Label>
             <NativeSelect
               id={selectId}
@@ -706,7 +709,11 @@ export function FiltersToolbar({
         </PopoverContent>
       </Popover>
       {active.map(({ field, filter }) => (
-        <Badge key={field.fieldId} variant="secondary" className="gap-1 pe-0.5">
+        <Badge
+          key={field.fieldId}
+          variant="secondary"
+          className="gap-[var(--vortex-space-xs)] pe-0.5"
+        >
           <span className="font-medium">{field.label}:</span>
           <FilterSummary field={field} filter={filter} narrowing={context.narrowing} />
           <Button

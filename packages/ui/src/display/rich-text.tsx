@@ -31,7 +31,10 @@ const renderInline = (inline: DisplayRichTextInline, key: number): ReactNode => 
           return <em key={key}>{children}</em>;
         case "code":
           return (
-            <code key={key} className="bg-muted px-1 py-0.5 font-mono text-sm">
+            <code
+              key={key}
+              className="bg-muted px-[var(--vortex-space-xs)] py-0.5 font-mono text-sm"
+            >
               {children}
             </code>
           );

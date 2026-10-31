@@ -33,7 +33,7 @@ function SearchControl({
   if (onSearch === undefined) return null;
   return (
     <form
-      className="flex w-full min-w-0 items-end gap-1.5 sm:w-auto"
+      className="flex w-full min-w-0 items-end gap-[var(--vortex-space-sm)] sm:w-auto"
       role="search"
       onSubmit={(event) => {
         event.preventDefault();

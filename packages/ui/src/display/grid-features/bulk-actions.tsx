@@ -153,7 +153,7 @@ function BulkActionsMenu({
                   else run(action);
                 }}
               >
-                <span className="flex max-w-72 flex-col gap-1 whitespace-normal">
+                <span className="flex max-w-72 flex-col gap-[var(--vortex-space-xs)] whitespace-normal">
                   <span className="group-data-disabled/dropdown-menu-item:opacity-50">
                     {action.label}
                   </span>
@@ -234,7 +234,10 @@ function RunSummary({
         : ""}
       {summary.limited ? " More records matched than the action's limit." : ""}
       {summary.warnings.map(({ message, count }) => (
-        <span key={message} className="mt-1 flex items-start gap-1.5 text-muted-foreground">
+        <span
+          key={message}
+          className="mt-1 flex items-start gap-[var(--vortex-space-sm)] text-muted-foreground"
+        >
           <Icon name="triangle-alert" className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <span className="min-w-0 break-words">
             Warning on {recordsPhrase(count)}: {message}
@@ -285,7 +288,7 @@ function SelectionBand({
         ? null
         : Math.round((run.processed / run.total) * 100);
     body = (
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+      <div className="flex min-w-0 flex-1 flex-col gap-[var(--vortex-space-sm)]">
         <span>
           {run.label}:{" "}
           {run.total === undefined
@@ -321,7 +324,7 @@ function SelectionBand({
           <Button
             variant="link"
             size="sm"
-            className="h-auto px-0"
+            className="h-auto px-[0]"
             onClick={() => void onScope({ event: "selection_scope_changed", scope: "matching" })}
           >
             Select all matching records
@@ -335,7 +338,7 @@ function SelectionBand({
     <div
       role="status"
       aria-live="polite"
-      className="flex min-w-0 flex-1 items-center gap-2 text-sm text-foreground"
+      className="flex min-w-0 flex-1 items-center gap-[var(--vortex-space-sm)] text-sm text-foreground"
     >
       {scope?.kind === "counting" ? <Spinner aria-hidden="true" /> : null}
       {body}

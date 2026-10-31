@@ -23,7 +23,7 @@ export function TotalValues({
   totals,
 }: Readonly<{ totals: readonly RecordsTableTotal[] }>): ReactElement {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 py-1 text-xs tabular-nums">
+    <div className="flex min-w-0 flex-col gap-[var(--vortex-space-xs)] py-1 text-xs tabular-nums">
       {totals.map((total) => (
         <span key={`${total.fieldId}:${total.operation}`} className="break-words">
           <span className="text-muted-foreground">
@@ -58,7 +58,7 @@ export function TableTotals({
       role="group"
       aria-label={label}
       data-vortex-table-totals=""
-      className="border-t border-border px-2 py-1"
+      className="border-t border-border px-[var(--vortex-space-sm)] py-1"
     >
       <p className="m-0 text-xs text-muted-foreground">{label}</p>
       <dl className="m-0 flex flex-wrap gap-x-6 gap-y-1">

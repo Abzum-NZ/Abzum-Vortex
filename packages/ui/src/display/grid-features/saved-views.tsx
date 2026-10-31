@@ -150,7 +150,7 @@ function NameDialog({
     <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
       <DialogContent>
         <form
-          className="flex flex-col gap-4"
+          className="flex flex-col gap-[var(--vortex-space-md)]"
           onSubmit={(event) => {
             event.preventDefault();
             if (trimmed === "" || busy) return;
@@ -166,7 +166,7 @@ function NameDialog({
             <DialogTitle>{title}</DialogTitle>
             <DialogDescription>{description}</DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-[var(--vortex-space-sm)]">
             <Label htmlFor={inputId}>View name</Label>
             <Input
               id={inputId}
@@ -244,8 +244,8 @@ function ShareDialog({
             own access, so anything their role cannot see is left out.
           </DialogDescription>
         </DialogHeader>
-        <div className="flex max-h-80 flex-col gap-3 overflow-y-auto">
-          <Label className="gap-2">
+        <div className="flex max-h-80 flex-col gap-[var(--vortex-space-md)] overflow-y-auto">
+          <Label className="gap-[var(--vortex-space-sm)]">
             <Checkbox
               checked={organization}
               onCheckedChange={(checked) => setOrganization(checked === true)}
@@ -262,13 +262,13 @@ function ShareDialog({
             </Alert>
           ) : (
             <>
-              <fieldset className="flex flex-col gap-2">
+              <fieldset className="flex flex-col gap-[var(--vortex-space-sm)]">
                 <legend className="mb-1 text-sm font-medium">Roles</legend>
                 {targets.roles.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No roles to share with.</p>
                 ) : (
                   targets.roles.map((role) => (
-                    <Label key={role.id} className="gap-2 font-normal">
+                    <Label key={role.id} className="gap-[var(--vortex-space-sm)] font-normal">
                       <Checkbox
                         checked={roleIds.has(role.id)}
                         onCheckedChange={(checked) =>
@@ -280,13 +280,13 @@ function ShareDialog({
                   ))
                 )}
               </fieldset>
-              <fieldset className="flex flex-col gap-2">
+              <fieldset className="flex flex-col gap-[var(--vortex-space-sm)]">
                 <legend className="mb-1 text-sm font-medium">Groups</legend>
                 {targets.groups.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No groups to share with.</p>
                 ) : (
                   targets.groups.map((group) => (
-                    <Label key={group.id} className="gap-2 font-normal">
+                    <Label key={group.id} className="gap-[var(--vortex-space-sm)] font-normal">
                       <Checkbox
                         checked={groupIds.has(group.id)}
                         onCheckedChange={(checked) =>
@@ -406,8 +406,10 @@ function ViewSwitcher({
 
   const listOf = (title: string, items: readonly GridViewItem[]): ReactElement | null =>
     items.length === 0 ? null : (
-      <div role="group" aria-label={title} className="flex flex-col gap-0.5">
-        <p className="px-2 pt-1 text-xs font-medium text-muted-foreground">{title}</p>
+      <div role="group" aria-label={title} className="flex flex-col gap-[var(--vortex-space-xs)]">
+        <p className="px-[var(--vortex-space-sm)] pt-1 text-xs font-medium text-muted-foreground">
+          {title}
+        </p>
         {items.map((view) => {
           const active = selected !== null && sameKey(view.viewId, selected.viewId);
           return (
@@ -417,11 +419,11 @@ function ViewSwitcher({
               size="sm"
               role="option"
               aria-selected={active}
-              className="justify-between gap-2"
+              className="justify-between gap-[var(--vortex-space-sm)]"
               onClick={() => choose(view.viewId)}
             >
               <span className="truncate">{view.name}</span>
-              <span className="flex items-center gap-1.5">
+              <span className="flex items-center gap-[var(--vortex-space-sm)]">
                 {viewScopeBadge(view)}
                 {active ? <Icon name="check" aria-hidden="true" /> : null}
               </span>
@@ -432,22 +434,22 @@ function ViewSwitcher({
     );
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-[var(--vortex-space-sm)]">
       <Popover open={open} onOpenChange={changeOpen}>
         <PopoverTrigger render={<Button variant="outline" size="sm" />}>
           <Icon name="eye" aria-hidden="true" />
           <span className="max-w-40 truncate">{label}</span>
           {unsaved ? (
             <>
-              <Badge aria-hidden="true" className="size-2 min-w-0 p-0" />
+              <Badge aria-hidden="true" className="size-2 min-w-0 p-[0]" />
               <span className="sr-only">Unsaved changes</span>
             </>
           ) : null}
         </PopoverTrigger>
         <PopoverContent className="w-80" align="start">
           <PopoverTitle>Views</PopoverTitle>
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-[var(--vortex-space-sm)]">
+            <div className="flex flex-col gap-[var(--vortex-space-sm)]">
               <Label htmlFor={searchId} className="sr-only">
                 Search views
               </Label>
@@ -465,7 +467,7 @@ function ViewSwitcher({
               role="listbox"
               aria-label="Views"
               aria-busy={listing === "loading"}
-              className="flex max-h-64 flex-col gap-1 overflow-y-auto"
+              className="flex max-h-64 flex-col gap-[var(--vortex-space-xs)] overflow-y-auto"
             >
               <Button
                 variant={selected === null ? "secondary" : "ghost"}
@@ -481,11 +483,14 @@ function ViewSwitcher({
               {listOf("Personal views", personal)}
               {listOf("Team views", team)}
               {listing === "loading" ? (
-                <p role="status" className="px-2 py-1 text-sm text-muted-foreground">
+                <p
+                  role="status"
+                  className="px-[var(--vortex-space-sm)] py-1 text-sm text-muted-foreground"
+                >
                   Loading views…
                 </p>
               ) : listing === "unavailable" ? (
-                <div className="px-2 py-1">
+                <div className="px-[var(--vortex-space-sm)] py-1">
                   <Alert variant="destructive">
                     <AlertDescription>Views could not be loaded.</AlertDescription>
                   </Alert>
@@ -494,7 +499,10 @@ function ViewSwitcher({
                   </Button>
                 </div>
               ) : shown.length === 0 && needle !== "" ? (
-                <p role="status" className="px-2 py-1 text-sm text-muted-foreground">
+                <p
+                  role="status"
+                  className="px-[var(--vortex-space-sm)] py-1 text-sm text-muted-foreground"
+                >
                   No matching views
                 </p>
               ) : null}
@@ -505,7 +513,7 @@ function ViewSwitcher({
               </p>
             ) : null}
             <Separator />
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-[var(--vortex-space-sm)]">
               {selected !== null && canChange ? (
                 <Button
                   size="sm"
@@ -536,7 +544,7 @@ function ViewSwitcher({
                 {selected === null ? "Save view" : "Save as…"}
               </Button>
               {views.formattingFields === undefined ? null : (
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-[var(--vortex-space-xs)]">
                   <Button
                     size="sm"
                     variant="outline"

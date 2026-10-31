@@ -110,7 +110,7 @@ export function RecordsCards({
       ref={listRef}
       aria-label={accessibleName}
       className={cn(
-        "m-0 flex list-none flex-col gap-2 p-0",
+        "m-0 flex list-none flex-col gap-[var(--vortex-space-sm)] p-[0]",
         fill
           ? "min-h-0 flex-1 overflow-auto"
           : bounded && cn("overflow-auto", BOUNDED_VIEWPORT_CLASS),
@@ -186,7 +186,7 @@ export function RecordsCards({
               size="sm"
               className={cn(CARD_SPACING[density], selected && "ring-2 ring-primary")}
             >
-              <div className="flex min-w-0 items-center gap-2 [&_button]:min-h-6 [&_button]:min-w-6 [@media(pointer:coarse)]:[&_button]:min-h-11 [@media(pointer:coarse)]:[&_button]:min-w-11">
+              <div className="flex min-w-0 items-center gap-[var(--vortex-space-sm)] [&_button]:min-h-6 [&_button]:min-w-6 [@media(pointer:coarse)]:[&_button]:min-h-11 [@media(pointer:coarse)]:[&_button]:min-w-11">
                 {selectable ? renderers.select(row, selected) : null}
                 <h3
                   id={headingId}
@@ -249,7 +249,7 @@ export function RecordsCards({
                 role="region"
                 aria-label={`${expansion.noun.charAt(0).toUpperCase()}${expansion.noun.slice(1)} of ${name}`}
                 data-vortex-related-panel=""
-                className="mt-1 bg-muted/40 px-3 py-2"
+                className="mt-1 bg-muted/40 px-[var(--vortex-space-md)] py-2"
               >
                 {expansion.panel(row)}
               </div>

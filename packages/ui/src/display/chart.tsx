@@ -59,7 +59,7 @@ export function ChartDisplay(props: DisplayRenderProps<ChartPayload>): ReactElem
         <section
           data-vortex-display="chart"
           data-vortex-placement-id={placementId}
-          className="flex flex-col gap-2"
+          className="flex flex-col gap-[var(--vortex-space-sm)]"
           aria-label={accessibleName}
         >
           <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
@@ -80,7 +80,7 @@ export function ChartDisplay(props: DisplayRenderProps<ChartPayload>): ReactElem
                 <TableRow key={point.key} data-vortex-chart-key={point.key}>
                   <TableCell className="whitespace-nowrap">{point.label}</TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-[var(--vortex-space-md)]">
                       <Progress
                         aria-hidden="true"
                         className="min-w-0 flex-1"

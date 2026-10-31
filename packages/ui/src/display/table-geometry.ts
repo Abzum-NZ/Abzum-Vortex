@@ -18,8 +18,8 @@ export const GRID_ROW_HEIGHT: Readonly<Record<RecordsTableDensity, number>> = Ob
 
 /** Card spacing follows the same authored or personal density as the table. */
 export const CARD_SPACING: Readonly<Record<RecordsTableDensity, string>> = Object.freeze({
-  comfortable: "gap-2 p-3",
-  compact: "gap-1 p-2",
+  comfortable: "gap-[var(--vortex-space-sm)] p-[var(--vortex-space-md)]",
+  compact: "gap-[var(--vortex-space-xs)] p-[var(--vortex-space-sm)]",
 });
 
 export { recordsTableColumnWidth as columnWidth } from "@vortex/platform/schema";

@@ -451,7 +451,9 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
       ),
       selectAll: () => null,
       rowEditor,
-      actions: (row) => <span className="flex items-center gap-1">{rowCommands(row)}</span>,
+      actions: (row) => (
+        <span className="flex items-center gap-[var(--vortex-space-xs)]">{rowCommands(row)}</span>
+      ),
     };
   }, [
     behaviours,
@@ -733,7 +735,7 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
       );
     if (state.status === "error" || state.status === "refused" || state.status === "awaiting_input")
       return (
-        <div className="flex flex-col items-start gap-2">
+        <div className="flex flex-col items-start gap-[var(--vortex-space-sm)]">
           <DisplayStateContainer
             accessibleName={accessibleName}
             availability={availability}
@@ -825,7 +827,7 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
           </Suspense>
         );
     return values.groups?.status === "too_many" ? (
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-[var(--vortex-space-sm)]">
         <Alert>
           <AlertDescription>
             There are too many matching records or values to count in groups. Narrow the table with
@@ -923,7 +925,7 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
             values.hasPreviousPage === true ||
             (values.page !== undefined && values.page > 1)
           ) ? null : (
-            <div className="mt-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
+            <div className="mt-2 flex shrink-0 flex-wrap items-center justify-between gap-[var(--vortex-space-sm)]">
               <p className="m-0 text-xs text-muted-foreground tabular-nums">
                 {/* A keyset table marks every later page as page 2 (it never counts rows), so only
                     page one and a numbered list name their page; the end of a keyset list is the

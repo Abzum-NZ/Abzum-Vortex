@@ -181,9 +181,9 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
       {values === undefined ? null : (
         <section data-vortex-display="calendar" data-vortex-placement-id={placementId}>
           <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-[var(--vortex-space-md)]">
             <div
-              className="flex flex-wrap items-center gap-2"
+              className="flex flex-wrap items-center gap-[var(--vortex-space-sm)]"
               role="group"
               aria-label="Calendar period"
             >
@@ -233,7 +233,11 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                   : `${dayLabel(values.windowStart, locale)} – ${dayLabel(addDays(values.windowEnd, -1), locale)}`}
               </h3>
             </div>
-            <div className="flex gap-1" role="group" aria-label="Calendar view">
+            <div
+              className="flex gap-[var(--vortex-space-xs)]"
+              role="group"
+              aria-label="Calendar view"
+            >
               {calendarViews.map((view) => (
                 <Button
                   key={view}
@@ -302,8 +306,8 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
             <div
               className={
                 values.view === "week"
-                  ? "grid grid-cols-1 gap-2 sm:grid-cols-7"
-                  : "grid grid-cols-7 gap-1"
+                  ? "grid grid-cols-1 gap-[var(--vortex-space-sm)] sm:grid-cols-7"
+                  : "grid grid-cols-7 gap-[var(--vortex-space-xs)]"
               }
               data-vortex-calendar-view={values.view}
               role="group"
@@ -313,7 +317,7 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                 ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((weekday) => (
                     <div
                       key={weekday}
-                      className="px-1 py-2 text-center text-sm font-medium text-muted-foreground"
+                      className="px-[var(--vortex-space-xs)] py-2 text-center text-sm font-medium text-muted-foreground"
                     >
                       {weekday}
                     </div>
@@ -341,7 +345,7 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <ul className="flex flex-col gap-1">
+                      <ul className="flex flex-col gap-[var(--vortex-space-xs)]">
                         {items.map((item) => (
                           <li key={item.recordId}>
                             <CalendarItemButton
@@ -393,7 +397,7 @@ const CalendarItemButton = ({
     </>
   );
   return events?.row_action === undefined || rowActionEventId === undefined ? (
-    <span className="block px-1 py-1 text-xs">{content}</span>
+    <span className="block px-[var(--vortex-space-xs)] py-1 text-xs">{content}</span>
   ) : (
     <Button
       type="button"

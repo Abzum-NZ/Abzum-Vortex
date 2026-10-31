@@ -141,7 +141,7 @@ export default function Find({ context, surface }: GridFeatureInteractionProps):
           <div
             role="search"
             aria-label={`Find on page in ${context.accessibleName}`}
-            className="flex flex-wrap items-center gap-1"
+            className="flex flex-wrap items-center gap-[var(--vortex-space-xs)]"
           >
             <Input
               ref={input}

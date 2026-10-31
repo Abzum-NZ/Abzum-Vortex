@@ -94,7 +94,7 @@ export function DisplayStateContainer<Values>({
         data-vortex-display-state="loading"
         aria-label={`Loading ${accessibleName}`}
       >
-        <CardContent className="flex flex-col gap-2">
+        <CardContent className="flex flex-col gap-[var(--vortex-space-sm)]">
           <Skeleton className="h-4 w-2/5" />
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-4/5" />

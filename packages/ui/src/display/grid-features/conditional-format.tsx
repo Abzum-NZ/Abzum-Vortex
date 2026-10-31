@@ -158,8 +158,8 @@ function ConditionalFormatCell({
     <span
       data-vortex-format={styled === undefined ? undefined : styled.own ? "cell" : "row"}
       className={cn(
-        "relative flex min-w-0 flex-1 items-center gap-1.5 self-stretch",
-        "[[data-grid-cell]_&]:-mx-2 [[data-grid-cell]_&]:px-2",
+        "relative flex min-w-0 flex-1 items-center gap-[var(--vortex-space-sm)] self-stretch",
+        "[[data-grid-cell]_&]:-mx-2 [[data-grid-cell]_&]:px-[var(--vortex-space-sm)]",
         tint,
       )}
     >
@@ -261,7 +261,7 @@ export function BoardCardFormat({
     <div
       data-vortex-format="row"
       className={cn(
-        "flex flex-col gap-1",
+        "flex flex-col gap-[var(--vortex-space-xs)]",
         style.tint && cardTintClasses[style.token],
         style.text && cardTitleTextClasses[style.token],
         style.bold && "[&_[data-slot=card-title]]:font-bold",
@@ -269,7 +269,7 @@ export function BoardCardFormat({
       )}
     >
       {style.icon === undefined && style.badgeLabel === undefined ? null : (
-        <span className="flex min-w-0 items-center gap-1.5 text-xs">
+        <span className="flex min-w-0 items-center gap-[var(--vortex-space-sm)] text-xs">
           {style.icon === undefined ? null : (
             <span
               className={cn("inline-flex shrink-0", style.text && iconTextClasses[style.token])}

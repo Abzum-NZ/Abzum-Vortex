@@ -73,12 +73,12 @@ export function SummaryValuesDisplay(props: DisplayRenderProps<SummaryPayload>):
         <section
           data-vortex-display="summary_values"
           data-vortex-placement-id={placementId}
-          className="flex flex-col gap-2"
+          className="flex flex-col gap-[var(--vortex-space-sm)]"
           aria-label={accessibleName}
         >
           <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
           <div
-            className="grid gap-3"
+            className="grid gap-[var(--vortex-space-md)]"
             style={{
               gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${minimumWidth.value}px), 1fr))`,
             }}
