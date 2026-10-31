@@ -4,7 +4,7 @@ import { jsonValueSchema, type JsonValue } from "../catalogue/common";
 import type { DefinitionValidationLocation } from "../catalogue/validation-errors";
 import {
   flowReadFieldsProjectionSchema,
-  flowReadFieldsScalarTypeSchema,
+  flowReadFieldsScalarTypeForField,
   flowSchema,
   type FlowDefinition,
   type FlowReadFieldsScalarType,
@@ -66,26 +66,6 @@ export type ResolvedFlowFieldMetadata = Readonly<{
   type: string;
   valueType?: string;
 }>;
-
-/** Maps canonical Module field discriminators to the scalar types a Flow may expose. */
-export const flowReadFieldsScalarTypeForField = (
-  fieldType: string,
-): FlowReadFieldsScalarType | undefined => {
-  const direct = flowReadFieldsScalarTypeSchema.safeParse(fieldType);
-  // A formatted-text value is a structured document, while the Flow scalar evaluator accepts a
-  // string: it cannot be projected as-is. Money is projected as its amount (see the reader).
-  if (direct.success && fieldType !== "formatted_text") return direct.data;
-  switch (fieldType) {
-    case "long_text":
-    case "reference_number":
-    case "email_address":
-    case "phone_number":
-    case "web_address":
-      return "text";
-    default:
-      return undefined;
-  }
-};
 
 /**
  * How aliases become permanent identities. Each method throws the compiler's refusal when the

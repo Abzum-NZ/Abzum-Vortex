@@ -1,8 +1,9 @@
 import type { JsonValue } from "../catalogue/common";
 import { isRecord } from "../catalogue/runtime-primitives";
+import type { FlowRuntimeValue } from "./flow-formula";
 
 /** One entry of a built list: the value a picker stores, the label it shows, and an optional note. */
-export type FlowBuiltListEntry = Readonly<{
+type FlowBuiltListEntry = Readonly<{
   value: JsonValue;
   label: string;
   description?: string;
@@ -18,12 +19,13 @@ const pathOf = (item: unknown, path: string): unknown =>
  * read from the keys (or dotted paths) the step names. Undefined when the items are not a list or
  * an entry does not hold a value and a label of its own.
  */
-export const buildFlowList = (
-  items: unknown,
-  valueKey: unknown,
-  labelKey: unknown,
-  descriptionKey: unknown,
-): readonly FlowBuiltListEntry[] | undefined => {
+export const builtListTaskValue = (
+  properties: Readonly<Record<string, FlowRuntimeValue>>,
+): FlowRuntimeValue | undefined => {
+  const items = properties.items?.value;
+  const valueKey = properties.value?.value;
+  const labelKey = properties.label?.value;
+  const descriptionKey = properties.description?.value;
   if (
     !Array.isArray(items) ||
     typeof valueKey !== "string" ||
@@ -43,5 +45,5 @@ export const buildFlowList = (
       ...(typeof description === "string" ? { description } : {}),
     });
   }
-  return list;
+  return { type: "json", value: list };
 };

@@ -13,7 +13,7 @@ import {
 import type { ApplicationContent } from "./application-contracts";
 import type { ModuleDefinitionConsumerReadResult } from "./definition-consumer-read";
 import type { ExactDefinitionDependency } from "./definition-store-contracts";
-import { flowReadFieldsScalarTypeForField } from "./flow-compilation";
+import { flowReadFieldsScalarTypeForField } from "../workflows/flow-contracts";
 import type { FlowRelease } from "./flow-orchestrator-types";
 
 type SelectedRecordReadField = Readonly<{

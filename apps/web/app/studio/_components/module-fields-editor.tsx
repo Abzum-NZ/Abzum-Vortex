@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import { useMemo, useState, type FormEvent } from "react";
 import { Icon } from "@vortex/ui";
 import {

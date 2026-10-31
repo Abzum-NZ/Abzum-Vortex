@@ -1,4 +1,4 @@
-﻿import { flowPathGuardMatches } from "./flow-path-guard";
+import { flowPathGuardMatches } from "./flow-path-guard";
 export { flowPathGuardMatches } from "./flow-path-guard";
 import { flowSegmentValues } from "./flow-segment-values";
 import type { FlowPlan, FlowServerSegment } from "../workflows/flow-plan";
@@ -26,7 +26,7 @@ import {
 } from "./flow-interpreter-state";
 import { serverRuns } from "./flow-server-step-runners";
 import { formattedTaskValue } from "./flow-data-tasks";
-import { buildFlowList } from "./flow-build-list";
+import { builtListTaskValue } from "./flow-build-list";
 import { evaluateRecordChangeValues } from "./flow-record-change-values";
 import { findTask, validReadFieldsResume } from "./flow-read-fields-resume";
 export { flowRunStateVersion } from "./flow-interpreter-state";
@@ -316,7 +316,7 @@ const evaluateProperties = (
     ]),
   );
 
-// â”€â”€â”€ Activations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Activations ──────────────────────────────────────────────────────────────────────────────
 
 const buildInputs = (
   flow: FlowProgram,
@@ -672,14 +672,9 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
       return { kind: "continue" };
     }
     if (registered.type === "data.build_list") {
-      const list = buildFlowList(
-        properties.items?.value,
-        properties.value?.value,
-        properties.label?.value,
-        properties.description?.value,
-      );
+      const list = builtListTaskValue(properties);
       if (list === undefined) return failed("value_unresolved", "failed", taskId);
-      replaceTop(machine, storeTaskOutputs(next, taskId, { list: typed("json", [...list]) }));
+      replaceTop(machine, storeTaskOutputs(next, taskId, { list }));
       return { kind: "continue" };
     }
     if (registered.type === "data.set_variable") {

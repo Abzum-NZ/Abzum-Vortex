@@ -8,6 +8,7 @@ import {
   type FlowLiteral,
   type FlowTaskPropertyType,
   type FlowValue,
+  flowReadFieldsScalarTypeForField,
   type ImmutablePlatformBlockCatalogue,
   type SourceFlow,
   type SourceFlowTask,
@@ -812,10 +813,14 @@ export const projectStudioFlowStepForm = (
                 : task.type === "interface.set_value" && key === "value"
                   ? choices.pageValues.map((entry) => ({ value: entry.name, label: entry.label }))
                   : control === "read_fields" && recordType !== undefined
-                    ? (recordFieldList ?? []).map((entry) => ({
-                        value: `${recordType}.${entry.key}`,
-                        label: entry.label,
-                      }))
+                    ? (recordFieldList ?? [])
+                        .filter(
+                          (entry) => flowReadFieldsScalarTypeForField(entry.type) !== undefined,
+                        )
+                        .map((entry) => ({
+                          value: `${recordType}.${entry.key}`,
+                          label: entry.label,
+                        }))
                     : control === "field"
                       ? studioFlowFieldOptions(source, flow, moduleKey, task.properties)
                       : undefined;

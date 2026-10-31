@@ -2,9 +2,9 @@ import {
   type FlowDefinition,
   type FlowTask,
   flowReadFieldsProjectionSchema,
+  flowReadFieldsScalarTypeForField,
   flowTaskChildLists,
 } from "../../workflows/flow-contracts";
-import { flowReadFieldsScalarTypeForField } from "../flow-compilation";
 import type { JsonObject } from "./context";
 import { object, array } from "./helpers";
 import { typedValueMatchesType } from "./field-types";
