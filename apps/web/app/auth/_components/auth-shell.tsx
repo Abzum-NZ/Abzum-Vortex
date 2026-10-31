@@ -46,7 +46,6 @@ export function AuthShell({
               <Link
                 className="text-xs font-bold tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
                 href="/"
-                prefetch={false}
                 aria-label={`${organizationChooserShell.name} home`}
               >
                 {organizationChooserShell.name}
