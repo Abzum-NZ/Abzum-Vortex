@@ -21,7 +21,6 @@ export const initializeLifecycleLimits = async (
       allowUnlimitedRetentionDays: true,
       allowUnlimitedRecordCount: true,
       allowedActions: ["delete"],
-      allowedArchiveDestinations: [],
     },
     initialPolicy,
   );

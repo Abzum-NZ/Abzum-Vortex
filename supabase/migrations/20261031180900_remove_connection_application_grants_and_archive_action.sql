@@ -398,9 +398,6 @@ begin
       'allowUnlimitedRetentionDays', limits_row.allow_unlimited_retention_days,
       'allowUnlimitedRecordCount', limits_row.allow_unlimited_record_count,
       'allowedActions', pg_catalog.to_jsonb(limits_row.allowed_actions)
-    ),
-    'readinessEvidence', pg_catalog.jsonb_build_object(
-      'organizationId', p_organization_id
     )
   );
 end

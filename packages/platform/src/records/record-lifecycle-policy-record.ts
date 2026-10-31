@@ -79,13 +79,6 @@ export const createOrganizationLifecycleLimitsStore = (
           stored.data.allowedActions.length !== canonicalLimits.allowedActions.length ||
           stored.data.allowedActions.some(
             (action, index) => action !== canonicalLimits.allowedActions[index],
-          ) ||
-          // archive leftover: removed by FIX-DB-SECURITY
-          stored.data.allowedArchiveDestinations.length !==
-            canonicalLimits.allowedArchiveDestinations.length ||
-          stored.data.allowedArchiveDestinations.some(
-            (destination, index) =>
-              destination !== canonicalLimits.allowedArchiveDestinations[index],
           )
         )
           throw new Error("RECORD_LIFECYCLE_POLICY_STORAGE_UNAVAILABLE");
