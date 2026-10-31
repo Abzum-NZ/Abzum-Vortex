@@ -7,8 +7,8 @@ engine and protected operations.
 
 This is the approved product contract for the current build scope. Every chapter and appendix states
 current behaviour. [Record ownership and lifecycle](appendices/record-ownership-and-lifecycle.md)
-defines the ownership and deadline-refresh choices, account offboarding and transfers, and
-organisation-bounded record-type policies. The owner selected one Frontend Rule Designer with
+defines the ownership and deadline-refresh choices and organisation-bounded
+record-type policies. The owner selected one Frontend Rule Designer with
 configurable component data flows, flow-level `runAs` authority and reusable custom forms.
 Collect-first atomic submission is optional, while configured sequential commits remain explicit.
 

@@ -94,13 +94,10 @@ flowchart LR
 
 ## Identity and organisation-account lifecycle
 
-The approved [offboarding and ownership-transfer rules](appendices/record-ownership-and-lifecycle.md#archive-a-person)
-use the existing inactive organisation-account state for an archived person.
-Archiving stops access without requiring immediate transfer; deleting the account
-requires complete ownership transfer first. Transfers may also be initiated for
-an active account, selected by application, through protected Record operations.
-Neither operation affects the person's other organisation accounts or rewrites
-creator/audit attribution.
+Archiving an organisation account uses the existing inactive state and stops access; it
+is not deletion of the global identity. The person's other organisation accounts
+are unaffected, and creator/audit attribution is never rewritten. Records owned
+by an archived account remain owned by it under the ordinary lifecycle policy.
 
 1. A person proves control of a supported sign-in method.
 2. The platform loads active organisation accounts and tenant-administrator

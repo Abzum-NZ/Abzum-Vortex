@@ -206,7 +206,7 @@ sequenceDiagram
     participant DB as Record transaction
     participant Outbox as Event outbox
     participant Dispatch as Dispatcher
-    participant Consumer as Workflow trigger
+    participant Consumer as Flow trigger
     DB->>Outbox: Write event with record sequence
     Note over DB,Outbox: Record, activity and outbox commit together or all roll back
     Dispatch->>Outbox: Claim next unblocked sequence

@@ -1,4 +1,4 @@
-# Record ownership, offboarding and lifecycle policies
+# Record ownership and lifecycle policies
 
 [Records](../06-records-and-lifecycle.md) · [People](../02-people-organisations-and-sign-in.md) · [Retention](../14-activity-privacy-and-retention.md)
 

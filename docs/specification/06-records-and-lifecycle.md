@@ -20,9 +20,8 @@ Every record stores or exposes through one joined system record:
 Exact columns are defined in the [data contracts](appendices/data-contracts.md#record-storage-contract).
 
 Initial account ownership is the creator; initial Group ownership requires a
-selected current membership Group. Protected ownership transfer, account
-offboarding, per-record-type lifecycle limits and automatic deadline calculations
-follow [record ownership and lifecycle policies](appendices/record-ownership-and-lifecycle.md).
+selected current membership Group. Per-record-type lifecycle limits and automatic deadline calculations follow
+[record ownership and lifecycle policies](appendices/record-ownership-and-lifecycle.md).
 These are required engine behaviours, not ordinary editable system fields.
 
 The record's physical table follows its storage contract, not the name of the organisation, application, module, or record type. Consequently, two organisations can each own an application named CRM without colliding, and CRM and Service Desk can use one organisation-owned Company record without copying it. The complete allocation rule is in [runtime storage](17-runtime-storage-and-caching.md#record-table-allocation).
@@ -133,7 +132,7 @@ mutations as follows: `record.save` is `create_subject` or `set_fields`,
 is an ordered list of several mutations.
 
 The trusted caller supplies the invoking published definition - the Save flow,
-the named-action flow and its binding, or the lifecycle or ownership boundary -
+the named-action flow and its binding, or the lifecycle boundary -
 through the transaction context, never through the command. The mutation list
 and announced Event keys are statements of intent, not authority. The engine
 decides every touched record against current access and field permissions, and
@@ -155,14 +154,10 @@ The ordered mutation list is closed:
 | `copy_relationships` | Copy the subject's named relationships to another record of the same type |
 | `delete_subject` | Soft-delete the subject through the protected lifecycle primitive |
 | `restore_subject` | Restore the subject through the protected lifecycle primitive |
-| `transfer_ownership` | Transfer the subject to one Organisation account or Group |
 
-A null `set_fields` value clears a field. `create_subject`, `delete_subject`,
-`restore_subject` and `transfer_ownership` each occur at most once. A deleting
-command may only copy relationships and announce Events, because a subject
-write or creation could move the revision the delete names. Restore and ownership transfer each run alone. A
+A null `set_fields` value clears a field. `create_subject`, `delete_subject` and `restore_subject` each occur at most once. A deleting command may only copy relationships and announce Events, because a subject write or creation could move the revision the delete names. Restore runs alone. A
 relationship copy targets another record of the subject's type and names each
-relationship once. Offboarding issues one command per owned record. Announced
+relationship once. Announced
 Event keys travel in their own ordered list and are written, with the
 mutations, into the event outbox inside the one transaction.
 
@@ -179,7 +174,7 @@ correction names the mutation whose value needs correcting.
 
 ### The one writer
 
-`vortex_record.apply_record_changes` is the only record writer. Every record task ends in it: the default Save, named actions, deletes and restores, settings records and offboarding transfers. It writes through the private primitives `create_record_internal`, `change_record`, `change_record_relationship_internal`, `write_relationship_value_internal` and `soft_delete_record_recursive_internal`, and uses one receipt table `vortex_record.command_receipts(command_id, organization_id, tenant_id, actor_id, command_kind, result, created_at)`, keyed by the client-generated command id and replayed only for the organisation, tenant, actor and kind that stored it, and one activity appender `append_record_activity_internal`.
+`vortex_record.apply_record_changes` is the only record writer. Every record task ends in it: the default Save, named actions, deletes and restores, and settings records. It writes through the private primitives `create_record_internal`, `change_record`, `change_record_relationship_internal`, `write_relationship_value_internal` and `soft_delete_record_recursive_internal`, and uses one receipt table `vortex_record.command_receipts(command_id, organization_id, tenant_id, actor_id, command_kind, result, created_at)`, keyed by the client-generated command id and replayed only for the organisation, tenant, actor and kind that stored it, and one activity appender `append_record_activity_internal`.
 
 Two maintenance writers do different jobs and are not record changes: `apply_derived_field_backfill` stores the totals and stored calculations for existing records when a definition adds a derived field, under the record's revision check, moving the revision and recording no Activity or Event; the preview copy and reconcile operations store and reconcile Studio preview data. Deadline-passed values are evaluated at read time, so no writer stores or refreshes deadline due metadata.
 
