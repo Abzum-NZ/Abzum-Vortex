@@ -99,12 +99,14 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
           <Link
             className="font-medium text-foreground underline underline-offset-4 hover:text-primary transition-colors"
             href="/auth/register"
+            prefetch={false}
           >
             Create account
           </Link>
           <Link
             className="font-medium text-foreground underline underline-offset-4 hover:text-primary transition-colors"
             href="/auth/recover"
+            prefetch={false}
           >
             Forgot password?
           </Link>
