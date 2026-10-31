@@ -401,11 +401,17 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     }
   };
 
-  /** Whether a release read failed because the release predates the current definition contract. */
-  const supersededRelease = (error: unknown): boolean => {
+  /**
+   * Whether a release read failed with this code: the release predates the current definition
+   * contract (RELEASE_CONTRACT_SUPERSEDED), or a platform definition it pins was superseded
+   * (DEFINITION_DEPENDENCY_SUPERSEDED).
+   */
+  const releaseReadFailedWith = (
+    error: unknown,
+    code: "RELEASE_CONTRACT_SUPERSEDED" | "DEFINITION_DEPENDENCY_SUPERSEDED",
+  ): boolean => {
     for (let cause: unknown = error; cause instanceof Error; cause = cause.cause)
-      if (cause instanceof DefinitionError && cause.code === "RELEASE_CONTRACT_SUPERSEDED")
-        return true;
+      if (cause instanceof DefinitionError && cause.code === code) return true;
     return false;
   };
 
@@ -425,7 +431,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
         await readReleaseSet(session, target, "replace_or_remove"),
       );
     } catch (error) {
-      if (supersededRelease(error)) return "superseded";
+      if (releaseReadFailedWith(error, "RELEASE_CONTRACT_SUPERSEDED")) return "superseded";
       throw error;
     }
   };
@@ -850,9 +856,16 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
               applicationRootId: request.applicationRootId,
               applicationReleaseRevision: request.expectedActiveReleaseRevision,
             }).catch((error: unknown) => {
-              // A prior release of an earlier contract has no registered authority to preserve.
-              if (!supersededRelease(error))
-                logRefusal("installation", "prior release read", "prior_release_unreadable", error);
+              // A prior release of an earlier contract, or on superseded platform definitions, has
+              // no registered authority to preserve: this upgrade replaces it.
+              if (releaseReadFailedWith(error, "RELEASE_CONTRACT_SUPERSEDED")) return null;
+              if (releaseReadFailedWith(error, "DEFINITION_DEPENDENCY_SUPERSEDED")) {
+                console.info(
+                  `[installation] prior release ${request.expectedActiveReleaseRevision} uses superseded platform definitions: replaced by release ${request.applicationReleaseRevision}`,
+                );
+                return null;
+              }
+              logRefusal("installation", "prior release read", "prior_release_unreadable", error);
               return null;
             });
 
