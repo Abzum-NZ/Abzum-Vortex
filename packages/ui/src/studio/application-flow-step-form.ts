@@ -611,11 +611,11 @@ const expectedEntries = (
 ): readonly StudioFlowNamedEntry[] | undefined => {
   const properties = task.properties;
   if (task.type === "interface.navigate" && key === "parameters") {
-    // A page of another application may show a record; its record type is known only there, so
-    // the record is named by its identity: a fixed one, or one a step or input gives.
+    // A page of another application may show a record; its record type is known only there. The
+    // record comes from the flow (a fixed record id would not hold in another installation).
     if (properties.application !== undefined)
       return [
-        { name: "record_id", label: "Record to open (its id)", type: "text", required: false },
+        { name: "record_id", label: "Record to open", type: "record_reference", required: false },
       ];
     const page = choices.pages.find((candidate) => candidate.key === literalText(properties.page));
     return page?.recordType === null || page === undefined
