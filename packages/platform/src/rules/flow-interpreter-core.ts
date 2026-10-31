@@ -3,7 +3,7 @@ export { flowPathGuardMatches } from "./flow-path-guard";
 import { flowSegmentValues } from "./flow-segment-values";
 import type { FlowPlan, FlowServerSegment } from "../workflows/flow-plan";
 import type { parseFlowSegmentSeed } from "./flow-segment-seed";
-import { pageStepIntents, pageValueAcceptsWrite, pageWritesIntent } from "./flow-page-steps";
+import { pageStepIntents, pageValueWrite, pageWritesIntent } from "./flow-page-steps";
 export { pageStepIntents } from "./flow-page-steps";
 import {
   at,
@@ -737,8 +737,11 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
   if (definition.effect === "interface") {
     if (registered.type === "interface.set_value" && properties.value !== undefined) {
       const name = properties.value.value;
-      const value = properties.to;
-      if (typeof name !== "string" || !pageValueAcceptsWrite(state.pageValues?.[name], value))
+      const value =
+        typeof name === "string"
+          ? pageValueWrite(state.pageValues?.[name], properties.to)
+          : undefined;
+      if (typeof name !== "string" || value === undefined)
         return failed("value_unresolved", "failed", taskId);
       machine.state.pageValues = { ...state.pageValues, [name]: value };
       machine.state.pageWrites = { ...state.pageWrites, [name]: value };

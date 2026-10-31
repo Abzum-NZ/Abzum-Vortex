@@ -381,6 +381,38 @@ const setFieldsSeed = (
   return field === undefined ? undefined : { kind: "map", entries: { [field.key]: text("") } };
 };
 
+/** Read selected record fields starts with the title field of the run's record type. */
+const readFieldsSeed = (
+  flow: SourceFlow,
+  source: Readonly<ApplicationSourceDocument>,
+): FlowValue | undefined => {
+  const recordType = flowRecordType(flow);
+  const moduleKey =
+    source.body.modules.find((module) => module.flows.some((candidate) => candidate.id === flow.id))
+      ?.key ?? null;
+  const found =
+    recordType === undefined ? undefined : studioDraftRecordType(source, recordType, moduleKey);
+  const field =
+    found?.record.fields.find((candidate) => candidate.key === found.record.title_field) ??
+    found?.record.fields[0];
+  return recordType === undefined || field === undefined
+    ? undefined
+    : {
+        kind: "literal",
+        literal: {
+          type: "json",
+          value: [{ alias: field.key, field: `${recordType}.${field.key}` }],
+        },
+      };
+};
+
+/** Build list starts empty, reading `value` and `label` from each item, which the builder points at a list. */
+const buildListSeeds: Readonly<Record<string, FlowValue>> = {
+  items: { kind: "literal", literal: { type: "json", value: [] } },
+  value: text("value"),
+  label: text("label"),
+};
+
 /** A number a default formatter can show. */
 const zeroSeed: FlowValue = { kind: "literal", literal: { type: "whole_number", value: 0 } };
 
@@ -471,7 +503,7 @@ const seededTask = (
       kind: "literal",
       literal:
         declared?.type === "money"
-          ? { type: "money", value: { amount: "0", currency: String(declared.currency) } }
+          ? { type: "money", value: "0" }
           : declared?.type === "decimal_number"
             ? { type: "decimal_number", value: "0" }
             : declared?.type === "yes_no"
@@ -512,7 +544,11 @@ const seededTask = (
                       zeroSeed
                     : definition.type === "record.set_fields" && key === "values"
                       ? setFieldsSeed(flow, source)
-                      : seedValue(declaration.type, flow, source, declaration.default);
+                      : definition.type === "record.read_fields" && key === "fields"
+                        ? readFieldsSeed(flow, source)
+                        : definition.type === "data.build_list"
+                          ? buildListSeeds[key]
+                          : seedValue(declaration.type, flow, source, declaration.default);
     if (seed === undefined) return undefined;
     properties[key] = seed;
   }
