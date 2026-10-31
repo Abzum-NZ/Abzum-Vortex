@@ -5,6 +5,7 @@ import {
   loadPermittedApplicationsAtAddress,
 } from "../../../_lib/organization-context";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
+import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { continueStudioSession } from "../../_lib/studio-session";
 import { StudioUnavailable } from "../../_components/studio-unavailable";
 import {
@@ -111,6 +112,35 @@ const loadWorkspacePlace = async (
   const installed =
     applications.kind === "available" &&
     applications.applications.some((candidate) => candidate.key === applicationKey);
+  // The other applications the builder may open, with the pages they may open there, for a
+  // Navigate step that opens one of them.
+  const navigationTargets =
+    applications.kind !== "available"
+      ? []
+      : (
+          await Promise.all(
+            applications.applications
+              .filter((candidate) => candidate.key !== applicationKey)
+              .map(async (candidate) => {
+                const addressed = await resolveApplicationAddress(
+                  resolved.session,
+                  entry.tenantShortName,
+                  entry.organizationShortName,
+                  candidate.key,
+                );
+                return addressed.kind === "application_page"
+                  ? [
+                      {
+                        key: candidate.key,
+                        label: candidate.name,
+                        homePageKey: candidate.homePageKey,
+                        pageKeys: addressed.application.pageKeys,
+                      },
+                    ]
+                  : [];
+              }),
+          )
+        ).flat();
   return {
     kind: "available",
     place: {
@@ -118,6 +148,7 @@ const loadWorkspacePlace = async (
       applicationHref: pathOf(applicationKey),
       appStoreHref: pathOf(settings.value),
       installed,
+      navigationTargets,
     },
   };
 };

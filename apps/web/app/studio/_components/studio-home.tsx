@@ -6,6 +6,7 @@ import { FormattedTime } from "@vortex/ui/display/date-format-context";
 import { Icon } from "@vortex/ui/icons";
 import { resolveIdentitySessionWithEmail } from "../../auth/_lib/session-server";
 import { StudioAccount } from "./studio-account";
+import { RestoredPageReread } from "../../_components/restored-page-reread";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@vortex/ui/components/card";
@@ -70,6 +71,7 @@ export async function StudioHome({
   if (email === undefined) throw new Error("Active identity session resolved without an email");
   return (
     <main className="mx-auto min-h-dvh max-w-7xl space-y-8 px-8 py-8">
+      <RestoredPageReread />
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-2">
           <h1 className="text-3xl font-semibold tracking-tight">Applications</h1>

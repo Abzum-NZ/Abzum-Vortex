@@ -64,6 +64,14 @@ const calculationFormula = (
 
 // ─── What the draft offers a step ────────────────────────────────────────────────────────────
 
+/** An installed application a Navigate step can open, with the keys of its pages. */
+export type StudioNavigationApplication = Readonly<{
+  key: string;
+  label: string;
+  homePageKey: string;
+  pageKeys: readonly string[];
+}>;
+
 export type StudioFlowNamedEntry = Readonly<{
   name: string;
   label: string;
@@ -98,6 +106,11 @@ export type StudioFlowDraftChoices = Readonly<{
   messagePlacements: readonly Readonly<{ alias: string; label: string; kind: "inline" | "slot" }>[];
   /** The page values every page the flow is bound on declares, for a step that sets one. */
   pageValues: readonly Readonly<{ name: string; label: string; type: string }>[];
+  /**
+   * The other applications of the organisation the builder may open, with their pages, for a
+   * Navigate step that opens a page (and record) there.
+   */
+  applications: readonly StudioNavigationApplication[];
 }>;
 
 /**
@@ -140,6 +153,7 @@ export const projectStudioFlowDraftChoices = (
     source: ApplicationSourceDocument;
     catalogue: ImmutablePlatformBlockCatalogue;
     flow?: SourceFlow;
+    applications?: readonly StudioNavigationApplication[];
   }>,
 ): StudioFlowDraftChoices => {
   const source = draft.source;
@@ -262,6 +276,7 @@ export const projectStudioFlowDraftChoices = (
   const boundPages = source.body.pages.filter((page) => invokingPages.includes(page.id));
   return {
     messagePlacements: messagePlacements.filter((entry) => onInvokingPages(entry.alias)),
+    applications: draft.applications ?? [],
     pageValues: Object.entries(boundPages[0]?.values ?? {})
       .filter(([name, declaration]) =>
         boundPages.every((page) => page.values?.[name]?.type === declaration.type),
@@ -318,6 +333,7 @@ export type StudioFlowPropertyControl =
   | "key"
   | "record_type"
   | "page"
+  | "application"
   | "form"
   | "query"
   | "flow"
@@ -456,6 +472,8 @@ const controlFor = (type: FlowTaskPropertyType): StudioFlowPropertyControl | und
       return "record_type";
     case "page_id":
       return "page";
+    case "application_key":
+      return "application";
     case "form_id":
       return "form";
     case "query_id":
@@ -593,6 +611,11 @@ const expectedEntries = (
 ): readonly StudioFlowNamedEntry[] | undefined => {
   const properties = task.properties;
   if (task.type === "interface.navigate" && key === "parameters") {
+    // A page of another application may show a record; its record type is known only there.
+    if (properties.application !== undefined)
+      return [
+        { name: "record_id", label: "Record to open", type: "record_reference", required: false },
+      ];
     const page = choices.pages.find((candidate) => candidate.key === literalText(properties.page));
     return page?.recordType === null || page === undefined
       ? undefined
@@ -617,6 +640,9 @@ const help: Readonly<Record<string, string>> = {
   "record.save action_inputs":
     "Saving an option that a named action owns runs that action; give the inputs it asks for.",
   "interface.navigate parameters": "A record page opens the record you name here.",
+  "interface.navigate application":
+    "Leave it unset to open a page of this application, or choose another application of the organisation.",
+  "interface.navigate page": "The page to open; with another application, one of its pages.",
 };
 
 /** The selected-record read a step stores: its field references, or the stored value when unreadable. */
@@ -644,6 +670,7 @@ const propertyDraft = (type: FlowTaskPropertyType, value: FlowValue): StudioFlow
     case "key":
     case "record_type":
     case "page":
+    case "application":
     case "form":
     case "query":
     case "flow":
@@ -810,20 +837,31 @@ export const projectStudioFlowStepForm = (
                     value: entry.alias,
                     label: `${entry.label} (${entry.kind === "slot" ? "Notice slot" : "inline"})`,
                   }))
-                : task.type === "interface.set_value" && key === "value"
-                  ? choices.pageValues.map((entry) => ({ value: entry.name, label: entry.label }))
-                  : control === "read_fields" && recordType !== undefined
-                    ? (recordFieldList ?? [])
-                        .filter(
-                          (entry) => flowReadFieldsScalarTypeForField(entry.type) !== undefined,
-                        )
-                        .map((entry) => ({
-                          value: `${recordType}.${entry.key}`,
+                : task.type === "interface.navigate" && key === "application"
+                  ? choices.applications.map((entry) => ({ value: entry.key, label: entry.label }))
+                  : task.type === "interface.navigate" &&
+                      key === "page" &&
+                      task.properties.application !== undefined
+                    ? (choices.applications
+                        .find((entry) => entry.key === literalText(task.properties.application))
+                        ?.pageKeys.map((page) => ({ value: page, label: studioWords(page) })) ?? [])
+                    : task.type === "interface.set_value" && key === "value"
+                      ? choices.pageValues.map((entry) => ({
+                          value: entry.name,
                           label: entry.label,
                         }))
-                    : control === "field"
-                      ? studioFlowFieldOptions(source, flow, moduleKey, task.properties)
-                      : undefined;
+                      : control === "read_fields" && recordType !== undefined
+                        ? (recordFieldList ?? [])
+                            .filter(
+                              (entry) => flowReadFieldsScalarTypeForField(entry.type) !== undefined,
+                            )
+                            .map((entry) => ({
+                              value: `${recordType}.${entry.key}`,
+                              label: entry.label,
+                            }))
+                        : control === "field"
+                          ? studioFlowFieldOptions(source, flow, moduleKey, task.properties)
+                          : undefined;
       const valueType =
         control === "value" && declaration.type === "record_change_list"
           ? "json"

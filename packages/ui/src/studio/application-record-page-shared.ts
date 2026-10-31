@@ -525,6 +525,8 @@ const opensAny = (source: Source, page: Page, targets: readonly string[]): boole
           flow.tasks.some(
             (task) =>
               task.type === "interface.navigate" &&
+              // A Navigate to another application opens none of this application's pages.
+              (task.properties as { application?: unknown }).application === undefined &&
               targets.includes(
                 String(
                   (task.properties as { page?: { literal?: { value?: unknown } } }).page?.literal
@@ -609,6 +611,8 @@ export const controlOpens = (
           flow.tasks.some(
             (task) =>
               task.type === "interface.navigate" &&
+              // A Navigate to another application opens none of this application's pages.
+              (task.properties as { application?: unknown }).application === undefined &&
               targets.includes(
                 String(
                   (task.properties as { page?: { literal?: { value?: unknown } } }).page?.literal

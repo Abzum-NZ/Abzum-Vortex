@@ -3,8 +3,8 @@
 import { readCompiledItemSettings } from "@vortex/platform/schema";
 import type { ReactElement } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useNavigator, useRestoredPage, type Navigator } from "@vortex/ui/routing";
+import { useSearchParams } from "next/navigation";
+import { useNavigator, type Navigator } from "@vortex/ui/routing";
 import type {
   ApplicationShell,
   PageDefinition,
@@ -22,6 +22,7 @@ import {
   type PagePuckRendererProps,
 } from "@vortex/ui";
 import type { permittedApplicationsToListValues } from "@vortex/ui";
+import { RestoredPageReread } from "../../../_components/restored-page-reread";
 import { signOut } from "../../../auth/actions";
 import { searchLauncherAction } from "../[applicationKey]/frame-actions";
 
@@ -59,44 +60,44 @@ function OrganizationShellPage({
   Readonly<{
     runtimeInputs: (navigator: Navigator) => Readonly<Record<string, unknown>>;
   }>): ReactElement {
-  const router = useRouter();
   const navigator = useNavigator();
-  // The launcher is read for this person at this moment; Back or Forward restoring it reads it again.
-  useRestoredPage(() => router.refresh());
   const registry = useMemo(
     () => createPlatformComponentRegistryForReleases(platformBlockReleases),
     [platformBlockReleases],
   );
   const rendered = useMemo(() => renderedPageOf(page, [shell]), [page, shell]);
   return (
-    <ApplicationAccountActionsProvider
-      actions={{
-        account,
-        organizationName,
-        organizationShortName,
-        signOut,
-      }}
-    >
-      <PagePuckRenderer
-        readSettings={readCompiledItemSettings}
-        composition={rendered.page}
-        {...(rendered.shell === undefined ? {} : { shell: rendered.shell })}
-        registry={registry}
-        fieldInputControlReleases={fieldInputControlReleases}
-        platformThemeTokens={platformThemeTokens}
-        pageId={page.pageId}
-        applicationSurface
-        applicationShellRuntime={{
-          applicationName: shell.name,
-          applicationHref: launcherHref,
+    <>
+      <RestoredPageReread />
+      <ApplicationAccountActionsProvider
+        actions={{
+          account,
           organizationName,
           organizationShortName,
-          pageName: page.name,
+          signOut,
         }}
-        runtimeInputs={runtimeInputs(navigator)}
-        {...(applicationSearch === undefined ? {} : { applicationSearch })}
-      />
-    </ApplicationAccountActionsProvider>
+      >
+        <PagePuckRenderer
+          readSettings={readCompiledItemSettings}
+          composition={rendered.page}
+          {...(rendered.shell === undefined ? {} : { shell: rendered.shell })}
+          registry={registry}
+          fieldInputControlReleases={fieldInputControlReleases}
+          platformThemeTokens={platformThemeTokens}
+          pageId={page.pageId}
+          applicationSurface
+          applicationShellRuntime={{
+            applicationName: shell.name,
+            applicationHref: launcherHref,
+            organizationName,
+            organizationShortName,
+            pageName: page.name,
+          }}
+          runtimeInputs={runtimeInputs(navigator)}
+          {...(applicationSearch === undefined ? {} : { applicationSearch })}
+        />
+      </ApplicationAccountActionsProvider>
+    </>
   );
 }
 
