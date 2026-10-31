@@ -120,7 +120,7 @@ export type RecordsTableQueryRunner = Readonly<{
  * queries, so `moduleRootId` and `queryId` must name the exact query the placement is bound to;
  * a caller never substitutes another query for one it cannot resolve.
  */
-export type RecordsTableQueryRequest = Readonly<{
+type RecordsTableQueryRequest = Readonly<{
   moduleRootId: ModuleRootId;
   queryId: QueryId;
   settings: Readonly<Record<string, BlockPropertyValueContract>>;
@@ -207,7 +207,7 @@ type RecordsTableRefusalReason =
  * a filter or sort the table cannot apply, which carries its own business refusal reason.
  * `unavailable` is a temporary failure the placement may retry.
  */
-export type RecordsTableQueryResolution =
+type RecordsTableQueryResolution =
   | Readonly<{
       kind: "available";
       /** The visible columns, in declared order, as field identities; rows carry only these values. */

@@ -68,7 +68,7 @@ export type PlacementLogPlace = Readonly<{
   pageKey: string;
 }>;
 
-export type PlacementFailureReason =
+type PlacementFailureReason =
   | "query_not_bound"
   | "query_binding_refused"
   | "query_binding_withheld"

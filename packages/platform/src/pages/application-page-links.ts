@@ -51,5 +51,4 @@ export const applicationPageLinkResultSchema = z.union([
 ]);
 
 export type ApplicationPageLinkSelector = z.infer<typeof applicationPageLinkSelectorSchema>;
-export type ApplicationPageLinkTarget = z.infer<typeof applicationPageLinkTargetSchema>;
 export type ApplicationPageLinkResult = z.infer<typeof applicationPageLinkResultSchema>;

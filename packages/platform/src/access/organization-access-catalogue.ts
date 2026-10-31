@@ -6,10 +6,8 @@ import {
   actorIdSchema,
   applicationRootIdSchema,
   builderKeySchema,
-  delegationAuthorityIdSchema,
   fingerprintSchema,
   groupIdSchema,
-  membershipIdSchema,
   namespacedKeySchema,
   organizationAccountIdSchema,
   organizationIdSchema,
@@ -131,7 +129,7 @@ export const roleRecentAuthenticationRequirementSchema = z.discriminatedUnion("k
     .strict(),
 ]);
 
-export const applicationRoleSourceReferenceSchema = z
+const applicationRoleSourceReferenceSchema = z
   .object({
     applicationRootId: applicationRootIdSchema,
     sourceRoleId: roleIdSchema,
@@ -150,7 +148,7 @@ export const applicationRoleSourceReferenceSchema = z
       });
   });
 
-export const customRoleTemplateProvenanceSchema = z
+const customRoleTemplateProvenanceSchema = z
   .object({
     applicationRootId: applicationRootIdSchema,
     sourceRoleId: roleIdSchema,
@@ -258,7 +256,7 @@ export const groupSchema = z
   .strict()
   .superRefine(addCreationTimeIssue);
 
-export const accessAssigneeSchema = z.discriminatedUnion("kind", [
+const accessAssigneeSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("organization_account"),
@@ -267,167 +265,6 @@ export const accessAssigneeSchema = z.discriminatedUnion("kind", [
     .strict(),
   z.object({ kind: z.literal("group"), groupId: groupIdSchema }).strict(),
 ]);
-
-const effectiveGrantStateSchema = z.enum(["scheduled", "active", "expired", "revoked"]);
-const temporalGrantFields = {
-  startsAt: timestampSchema,
-  expiresAt: timestampSchema.optional(),
-  state: z.enum(["live", "revoked"]),
-  grantedByActorId: actorIdSchema,
-  grantedAt: timestampSchema,
-  grantCorrelationId: correlationIdSchema,
-  changedByActorId: actorIdSchema,
-  changeCorrelationId: correlationIdSchema,
-  revokedByActorId: actorIdSchema.optional(),
-  revokedAt: timestampSchema.optional(),
-  revocationCorrelationId: correlationIdSchema.optional(),
-  changedAt: timestampSchema,
-};
-
-const addTemporalGrantIssues = (
-  value: {
-    startsAt: string;
-    expiresAt?: string | undefined;
-    state: "live" | "revoked";
-    grantedAt: string;
-    revokedByActorId?: string | undefined;
-    revokedAt?: string | undefined;
-    revocationCorrelationId?: string | undefined;
-    changedAt: string;
-  },
-  context: z.RefinementCtx,
-) => {
-  if (value.expiresAt !== undefined && Date.parse(value.expiresAt) <= Date.parse(value.startsAt))
-    context.addIssue({
-      code: "custom",
-      path: ["expiresAt"],
-      message: "Expiry must be later than the effective start",
-    });
-  const hasAnyRevocation =
-    value.revokedByActorId !== undefined ||
-    value.revokedAt !== undefined ||
-    value.revocationCorrelationId !== undefined;
-  const hasCompleteRevocation =
-    value.revokedByActorId !== undefined &&
-    value.revokedAt !== undefined &&
-    value.revocationCorrelationId !== undefined;
-  if (
-    (value.state === "live" && hasAnyRevocation) ||
-    (value.state === "revoked" && !hasCompleteRevocation)
-  )
-    context.addIssue({
-      code: "custom",
-      path: ["revokedAt"],
-      message: "Revocation evidence is present exactly when the grant is revoked",
-    });
-  if (value.revokedAt !== undefined && Date.parse(value.revokedAt) < Date.parse(value.grantedAt))
-    context.addIssue({
-      code: "custom",
-      path: ["revokedAt"],
-      message: "Revocation cannot precede the grant",
-    });
-  if (Date.parse(value.changedAt) < Date.parse(value.grantedAt))
-    context.addIssue({
-      code: "custom",
-      path: ["changedAt"],
-      message: "The last change cannot precede the grant",
-    });
-  if (value.revokedAt !== undefined && Date.parse(value.changedAt) < Date.parse(value.revokedAt))
-    context.addIssue({
-      code: "custom",
-      path: ["changedAt"],
-      message: "The last change cannot precede revocation",
-    });
-};
-
-export const groupMembershipSchema = z
-  .object({
-    membershipId: membershipIdSchema,
-    organizationId: organizationIdSchema,
-    groupId: groupIdSchema,
-    organizationAccountId: organizationAccountIdSchema,
-    revision: revisionSchema,
-    ...temporalGrantFields,
-  })
-  .strict()
-  .superRefine(addTemporalGrantIssues);
-
-export const groupMembershipEffectiveStateSchema = z
-  .object({
-    membership: groupMembershipSchema,
-    effectiveState: effectiveGrantStateSchema,
-  })
-  .strict()
-  .refine(
-    (value) => (value.membership.state === "revoked") === (value.effectiveState === "revoked"),
-    {
-      path: ["effectiveState"],
-      message: "Only a revoked membership has revoked effective state",
-    },
-  );
-
-export const roleAssignmentSchema = z
-  .object({
-    roleAssignmentId: roleAssignmentIdSchema,
-    organizationId: organizationIdSchema,
-    roleId: roleIdSchema,
-    assignee: accessAssigneeSchema,
-    revision: revisionSchema,
-    ...temporalGrantFields,
-  })
-  .strict()
-  .superRefine(addTemporalGrantIssues);
-
-/** Timing-only validity; an active assignment is effective while its window is open. */
-export const roleAssignmentEffectiveStateSchema = z
-  .object({
-    assignment: roleAssignmentSchema,
-    effectiveState: effectiveGrantStateSchema,
-  })
-  .strict()
-  .refine(
-    (value) => (value.assignment.state === "revoked") === (value.effectiveState === "revoked"),
-    {
-      path: ["effectiveState"],
-      message: "Only a revoked assignment has revoked effective state",
-    },
-  );
-
-export const delegationScopeSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("organization_catalogue") }).strict(),
-  z
-    .object({
-      kind: z.literal("bounded"),
-      permissions: rolePermissionSetSchema.min(1),
-    })
-    .strict(),
-]);
-
-export const delegationAuthoritySchema = z
-  .object({
-    delegationAuthorityId: delegationAuthorityIdSchema,
-    organizationId: organizationIdSchema,
-    holder: accessAssigneeSchema,
-    scope: delegationScopeSchema,
-    revision: revisionSchema,
-    ...temporalGrantFields,
-  })
-  .strict()
-  .superRefine(addTemporalGrantIssues);
-
-export const delegationAuthorityEffectiveStateSchema = z
-  .object({
-    delegation: delegationAuthoritySchema,
-    effectiveState: effectiveGrantStateSchema,
-  })
-  .strict()
-  .refine(
-    (value) => (value.delegation.state === "revoked") === (value.effectiveState === "revoked"),
-    {
-      path: ["effectiveState"],
-      message: "Only revoked delegation has revoked effective state",
-    },
-  );
 
 export const affectedRoleAssignmentSchema = z
   .object({
@@ -460,7 +297,7 @@ export const affectedRoleAssignmentManifestSchema = z
       });
   });
 
-export const preparedApplicationRoleTemplateSchema = z
+const preparedApplicationRoleTemplateSchema = z
   .object({
     template: applicationRoleSchema,
     sourcePermissions: z.array(permissionRegistryEntryCandidateSchema).min(1),
@@ -468,7 +305,7 @@ export const preparedApplicationRoleTemplateSchema = z
   })
   .strict();
 
-export const applicationRoleTemplatePreparationBasisSchema = z.discriminatedUnion("kind", [
+const applicationRoleTemplatePreparationBasisSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("registration_candidate") }).strict(),
   z
     .object({
@@ -630,26 +467,9 @@ export const preparedApplicationRoleTemplatesSchema = z
   });
 
 export type RolePermissionEntry = z.infer<typeof rolePermissionEntrySchema>;
-export type RolePrivilegeClassification = z.infer<typeof rolePrivilegeClassificationSchema>;
-export type RoleRecentAuthenticationRequirement = z.infer<
-  typeof roleRecentAuthenticationRequirementSchema
->;
-export type ApplicationRoleSourceReference = z.infer<typeof applicationRoleSourceReferenceSchema>;
-export type CustomRoleTemplateProvenance = z.infer<typeof customRoleTemplateProvenanceSchema>;
 export type Role = z.infer<typeof roleSchema>;
 export type Group = z.infer<typeof groupSchema>;
-export type AccessAssignee = z.infer<typeof accessAssigneeSchema>;
-export type GroupMembership = z.infer<typeof groupMembershipSchema>;
-export type GroupMembershipEffectiveState = z.infer<typeof groupMembershipEffectiveStateSchema>;
-export type RoleAssignment = z.infer<typeof roleAssignmentSchema>;
-export type RoleAssignmentEffectiveState = z.infer<typeof roleAssignmentEffectiveStateSchema>;
-export type DelegationScope = z.infer<typeof delegationScopeSchema>;
-export type DelegationAuthority = z.infer<typeof delegationAuthoritySchema>;
-export type DelegationAuthorityEffectiveState = z.infer<
-  typeof delegationAuthorityEffectiveStateSchema
->;
 export type AffectedRoleAssignment = z.infer<typeof affectedRoleAssignmentSchema>;
-export type AffectedRoleAssignmentManifest = z.infer<typeof affectedRoleAssignmentManifestSchema>;
 export type PreparedApplicationRoleTemplate = z.infer<typeof preparedApplicationRoleTemplateSchema>;
 export type ApplicationRoleTemplatePreparationBasis = z.infer<
   typeof applicationRoleTemplatePreparationBasisSchema

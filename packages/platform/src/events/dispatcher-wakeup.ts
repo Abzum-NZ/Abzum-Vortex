@@ -17,9 +17,9 @@ import { exactRecord } from "./event-record-shapes";
  * The scheduled recovery source is a caller-supplied label only: it never
  * selects consumers and never changes authority.
  */
-export const eventDispatcherWakeupSources = ["scheduled_recovery"] as const;
+const eventDispatcherWakeupSources = ["scheduled_recovery"] as const;
 
-export type EventDispatcherWakeupSource = (typeof eventDispatcherWakeupSources)[number];
+type EventDispatcherWakeupSource = (typeof eventDispatcherWakeupSources)[number];
 
 export const eventDispatcherWakeupLimits = Object.freeze({
   /** Stop starting dispatches after ten seconds; let the current batch commit. */
@@ -44,7 +44,7 @@ export const eventDispatcherBacklogStatuses = [
   "unavailable",
 ] as const;
 
-export type EventDispatcherBacklogStatus = (typeof eventDispatcherBacklogStatuses)[number];
+type EventDispatcherBacklogStatus = (typeof eventDispatcherBacklogStatuses)[number];
 
 /**
  * Content-free delivery backlog: the age, since append, of the oldest claimed
@@ -53,20 +53,20 @@ export type EventDispatcherBacklogStatus = (typeof eventDispatcherBacklogStatuse
  * consumer identity or payload, and "unavailable" reports a status that could
  * not be read rather than inventing one.
  */
-export type EventDispatcherBacklog = Readonly<{
+type EventDispatcherBacklog = Readonly<{
   status: EventDispatcherBacklogStatus;
   oldestPendingAgeSeconds: number | null;
   terminalFailureCount: number | null;
 }>;
 
-export type EventDispatcherWakeupRequest = Readonly<{
+type EventDispatcherWakeupRequest = Readonly<{
   /** The request's `Authorization` header value. */
   authorization: string | null | undefined;
   /** Optional parsed JSON body; it may carry only the `source` label. */
   body?: unknown;
 }>;
 
-export type EventDispatcherWakeupResponse =
+type EventDispatcherWakeupResponse =
   | Readonly<{
       outcome: "refused";
       reason: EventDispatcherRefusalReason;
@@ -84,16 +84,16 @@ export type EventDispatcherWakeupResponse =
       backlog: EventDispatcherBacklog;
     }>;
 
-export interface EventDispatcherWakeup {
+interface EventDispatcherWakeup {
   handle(request: EventDispatcherWakeupRequest): Promise<EventDispatcherWakeupResponse>;
 }
 
 /** Reads one bounded, content-free backlog snapshot. */
-export interface EventDispatcherBacklogReader {
+interface EventDispatcherBacklogReader {
   read(): Promise<EventDispatcherBacklog>;
 }
 
-export type EventDispatcherWakeupDependencies = EventDispatcherRouteDependencies &
+type EventDispatcherWakeupDependencies = EventDispatcherRouteDependencies &
   Readonly<{ backlog?: EventDispatcherBacklogReader }>;
 
 type BacklogRow = DatabaseRow & { readonly result: unknown };
@@ -137,7 +137,7 @@ const deriveBacklogStatus = (
     : "pending";
 };
 
-export const eventDispatcherUnavailableBacklog: EventDispatcherBacklog = Object.freeze({
+const eventDispatcherUnavailableBacklog: EventDispatcherBacklog = Object.freeze({
   status: "unavailable",
   oldestPendingAgeSeconds: null,
   terminalFailureCount: null,
@@ -170,7 +170,7 @@ const parseBacklog = (candidate: unknown): EventDispatcherBacklog => {
  * becomes "unavailable" instead of an exception or a fabricated status, so no
  * payload, consumer identity or internal error text can leak.
  */
-export const createEventDispatchBacklogReader = (
+const createEventDispatchBacklogReader = (
   run: EventDispatcherTransactionRunner,
 ): EventDispatcherBacklogReader =>
   Object.freeze({

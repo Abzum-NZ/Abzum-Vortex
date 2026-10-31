@@ -36,7 +36,7 @@ import { asRecord } from "../catalogue/runtime-primitives";
  * Only a bound is needed for a placement identity; the resolved composition
  * owns the exact spelling.
  */
-export const privateInvalidationSubscriberLimits = Object.freeze({
+const privateInvalidationSubscriberLimits = Object.freeze({
   maximumPlacementIdLength: 200,
 });
 
@@ -45,10 +45,10 @@ export const privateInvalidationSubscriberErrorCodes = [
   "INVALID_INVALIDATION_WATCH",
 ] as const;
 
-export type PrivateInvalidationSubscriberErrorCode =
+type PrivateInvalidationSubscriberErrorCode =
   (typeof privateInvalidationSubscriberErrorCodes)[number];
 
-export class PrivateInvalidationSubscriberError extends Error {
+class PrivateInvalidationSubscriberError extends Error {
   readonly code: PrivateInvalidationSubscriberErrorCode;
 
   constructor(code: PrivateInvalidationSubscriberErrorCode) {
@@ -66,7 +66,7 @@ export class PrivateInvalidationSubscriberError extends Error {
  * `recordId` is deliberately broad (for example an access change) and affects
  * every declaration of that type.
  */
-export type PrivateInvalidationPlacementWatch = Readonly<{
+type PrivateInvalidationPlacementWatch = Readonly<{
   placementId: string;
   recordTypeId: RecordTypeId;
   recordId?: RecordId;
@@ -82,7 +82,7 @@ export interface PrivateInvalidationSubscriptionSource {
   subscribe(onMessage: (message: unknown) => void): () => void;
 }
 
-export type PrivateInvalidationSubscriberDependencies = Readonly<{
+type PrivateInvalidationSubscriberDependencies = Readonly<{
   /** Organisation and application of the private topic this subscriber holds. */
   scope: PrivateInvalidationTopicScope;
   /** Transport to subscribe for messages; its channel is already scoped. */

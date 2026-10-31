@@ -114,7 +114,7 @@ const validateThemeTokenReferences = (tokens: CanonicalTheme["tokens"]): void =>
   }
 };
 
-export type ApplicationThemeMaterialisation =
+type ApplicationThemeMaterialisation =
   | Readonly<{ valid: true; theme: CanonicalTheme; options: ThemeResolutionOptions }>
   | Readonly<{
       valid: false;

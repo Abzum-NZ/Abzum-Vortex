@@ -15,10 +15,10 @@ export const organizationRoleChangeEvidenceErrorCodes = [
   "ORGANIZATION_ROLE_CHANGE_EVIDENCE_INVALID",
 ] as const;
 
-export type OrganizationRoleChangeEvidenceErrorCode =
+type OrganizationRoleChangeEvidenceErrorCode =
   (typeof organizationRoleChangeEvidenceErrorCodes)[number];
 
-export class OrganizationRoleChangeEvidenceError extends Error {
+class OrganizationRoleChangeEvidenceError extends Error {
   readonly code: OrganizationRoleChangeEvidenceErrorCode;
 
   constructor(code: OrganizationRoleChangeEvidenceErrorCode, options?: ErrorOptions) {

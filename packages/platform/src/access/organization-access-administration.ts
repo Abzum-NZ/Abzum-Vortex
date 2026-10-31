@@ -22,7 +22,7 @@ import {
 import { preparedOrganizationRoleChangeSchema } from "./organization-role-changes";
 import { permissionFieldPolicySchema, permissionRecordScopeSchema } from "./permissions";
 
-export const organizationAdministrationGroupSchema = z
+const organizationAdministrationGroupSchema = z
   .object({
     groupId: groupIdSchema,
     key: builderKeySchema,
@@ -81,14 +81,14 @@ export const changeOrganizationAdministrationGroupResultSchema = z
   })
   .strict();
 
-export const organizationAdministrationMembershipTemporalStateSchema = z.enum([
+const organizationAdministrationMembershipTemporalStateSchema = z.enum([
   "active",
   "scheduled",
   "expired",
   "revoked",
 ]);
 
-export const organizationAdministrationMembershipSchema = z
+const organizationAdministrationMembershipSchema = z
   .object({
     membershipId: membershipIdSchema,
     groupId: groupIdSchema,
@@ -163,7 +163,7 @@ export const organizationAdministrationPermissionSchema = z
   })
   .strict();
 
-export const organizationAdministrationRoleSourceSchema = z.discriminatedUnion("kind", [
+const organizationAdministrationRoleSourceSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("custom") }).strict(),
   z
     .object({
@@ -208,12 +208,12 @@ const addOrganizationAdministrationRoleIssues = (
     });
 };
 
-export const organizationAdministrationRoleSummarySchema = z
+const organizationAdministrationRoleSummarySchema = z
   .object(organizationAdministrationRoleFields)
   .strict()
   .superRefine(addOrganizationAdministrationRoleIssues);
 
-export const organizationAdministrationRoleDetailSchema = z
+const organizationAdministrationRoleDetailSchema = z
   .object({
     ...organizationAdministrationRoleFields,
     description: descriptionSchema,
@@ -289,7 +289,7 @@ export const changeOrganizationAdministrationRoleAuthorityCommandSchema = z
  * explicit acceptance is a visible, required choice, so a broadening template is accepted on
  * purpose rather than by submitting a form.
  */
-export const organizationAdministrationRoleChangePreparationOperationSchema = z.enum([
+const organizationAdministrationRoleChangePreparationOperationSchema = z.enum([
   "create_custom",
   "accept_new_application_role",
 ]);
@@ -354,14 +354,14 @@ export const changeOrganizationAdministrationRoleResultSchema = z
   })
   .strict();
 
-export const organizationAdministrationAssignmentTemporalStateSchema = z.enum([
+const organizationAdministrationAssignmentTemporalStateSchema = z.enum([
   "active",
   "scheduled",
   "expired",
   "revoked",
 ]);
 
-export const organizationAdministrationAssignmentSubjectSchema = z.discriminatedUnion("kind", [
+const organizationAdministrationAssignmentSubjectSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("organization_account"),
@@ -381,7 +381,7 @@ export const organizationAdministrationAssignmentSubjectSchema = z.discriminated
     .strict(),
 ]);
 
-export const organizationAdministrationAssignedRoleSchema = z
+const organizationAdministrationAssignedRoleSchema = z
   .object({
     roleId: roleIdSchema,
     key: builderKeySchema,
@@ -421,7 +421,7 @@ const addOrganizationAdministrationTemporalFactIssues = (
     });
 };
 
-export const organizationAdministrationRoleAssignmentSchema = z
+const organizationAdministrationRoleAssignmentSchema = z
   .object({
     roleAssignmentId: roleAssignmentIdSchema,
     role: organizationAdministrationAssignedRoleSchema,
@@ -486,7 +486,7 @@ export const assignOrganizationAdministrationRoleAssignmentCommandSchema = z
       });
   });
 
-export const organizationAdministrationDelegationScopeSchema = z.discriminatedUnion("kind", [
+const organizationAdministrationDelegationScopeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("organization_catalogue") }).strict(),
   z
     .object({
@@ -508,7 +508,7 @@ export const organizationAdministrationDelegationScopeSchema = z.discriminatedUn
     }),
 ]);
 
-export const organizationAdministrationDelegationAuthoritySchema = z
+const organizationAdministrationDelegationAuthoritySchema = z
   .object({
     delegationAuthorityId: delegationAuthorityIdSchema,
     holder: organizationAdministrationAssignmentSubjectSchema,

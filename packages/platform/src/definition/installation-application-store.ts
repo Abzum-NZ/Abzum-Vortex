@@ -63,7 +63,7 @@ import {
  * showed (`expected`); the install and the upgrade refuse as a conflict when that state moved, so
  * a person only ever confirms what is still true.
  */
-export type ApplicationStoreEnvironment = FirstInstallFlowEnvironment & UpgradeRoleEnvironment;
+type ApplicationStoreEnvironment = FirstInstallFlowEnvironment & UpgradeRoleEnvironment;
 
 export type { StoreReceiptCompletion };
 

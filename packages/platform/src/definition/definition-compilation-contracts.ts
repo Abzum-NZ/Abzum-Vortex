@@ -36,7 +36,7 @@ export {
   type DefinitionProvenanceEntry,
 } from "./definition-provenance";
 
-export const sourceIdentityKindSchema = z.enum([
+const sourceIdentityKindSchema = z.enum([
   "root",
   "storage_contract",
   "record_type",
@@ -84,7 +84,7 @@ export const sourceIdentityReservationSchema = sourceIdentityAssignmentSchema.om
   identifier: true,
 });
 export type SourceIdentityReservation = z.infer<typeof sourceIdentityReservationSchema>;
-export const resolvedDefinitionSchema = z.discriminatedUnion("kind", [
+const resolvedDefinitionSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("module"),
@@ -120,7 +120,7 @@ export const definitionResolutionSnapshotSchema = z
     identities: z.array(sourceIdentityAssignmentSchema),
   })
   .strict();
-export const definitionDraftMetadataSchema = z
+const definitionDraftMetadataSchema = z
   .object({
     organizationId: organizationIdSchema,
     draftRevision: revisionSchema,
@@ -247,7 +247,7 @@ export const definitionCompilationOutputSchema = z.union([
 
 const publishedModuleHistoryEntrySchema = moduleVersionImpactHistoryEntrySchema;
 
-export const publishedDefinitionHistorySchema = z.discriminatedUnion("kind", [
+const publishedDefinitionHistorySchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("module"),

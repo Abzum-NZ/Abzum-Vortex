@@ -24,9 +24,9 @@ export const organizationAccountErrorCodes = [
   "ORGANIZATION_ACCOUNT_OPERATION_FAILED",
 ] as const;
 
-export type OrganizationAccountErrorCode = (typeof organizationAccountErrorCodes)[number];
+type OrganizationAccountErrorCode = (typeof organizationAccountErrorCodes)[number];
 
-export class OrganizationAccountError extends Error {
+class OrganizationAccountError extends Error {
   readonly code: OrganizationAccountErrorCode;
 
   constructor(code: OrganizationAccountErrorCode, options?: ErrorOptions) {
@@ -38,14 +38,6 @@ export class OrganizationAccountError extends Error {
 
 interface OrganizationAccountStoreDependencies {
   readonly runtimeTransaction?: RuntimeTransactionRunner;
-}
-
-/** A non-mutating eligibility lookup for protected-session resolution. */
-export interface IdentityProjectionReader {
-  readIdentityProjection(
-    verifiedIdentity: VerifiedIdentity,
-    transaction?: RequestDatabaseTransaction,
-  ): Promise<IdentityProjection | undefined>;
 }
 
 type IdentityProjectionRow = DatabaseRow & {
@@ -96,7 +88,7 @@ const requireZeroOrOne = <Row extends DatabaseRow>(rows: readonly Row[]): Row | 
   return rows[0];
 };
 
-export const createOrganizationAccountStore = (
+const createOrganizationAccountStore = (
   dependencies: OrganizationAccountStoreDependencies = {},
 ) => {
   const runtimeTransaction = dependencies.runtimeTransaction ?? withRuntimeTransaction;

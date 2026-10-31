@@ -18,9 +18,9 @@ export const eventConsumerProgressErrorCodes = [
   "EVENT_CONSUMER_PROGRESS_STORAGE_UNAVAILABLE",
 ] as const;
 
-export type EventConsumerProgressErrorCode = (typeof eventConsumerProgressErrorCodes)[number];
+type EventConsumerProgressErrorCode = (typeof eventConsumerProgressErrorCodes)[number];
 
-export class EventConsumerProgressError extends Error {
+class EventConsumerProgressError extends Error {
   readonly code: EventConsumerProgressErrorCode;
 
   constructor(code: EventConsumerProgressErrorCode) {
@@ -30,20 +30,20 @@ export class EventConsumerProgressError extends Error {
   }
 }
 
-export type EventConsumerClaimInput = Readonly<{
+type EventConsumerClaimInput = Readonly<{
   consumerKey: string;
   batchSize: number;
   leaseSeconds: number;
 }>;
 
-export type EventConsumerLeaseRenewalInput = Readonly<{
+type EventConsumerLeaseRenewalInput = Readonly<{
   consumerKey: string;
   ackCursor: string;
   occurrenceId: string;
   leaseSeconds: number;
 }>;
 
-export type EventConsumerAcknowledgementInput = Readonly<{
+type EventConsumerAcknowledgementInput = Readonly<{
   consumerKey: string;
   ackCursor: string;
   occurrenceId: string;
@@ -60,11 +60,11 @@ export type EventConsumerClaimResult = Readonly<{
   occurrences: readonly ClaimedEventOccurrence[];
 }>;
 
-export type EventConsumerLeaseRenewalResult =
+type EventConsumerLeaseRenewalResult =
   | Readonly<{ outcome: "renewed"; leaseExpiresAt: string }>
   | Readonly<{ outcome: "claim_unavailable" }>;
 
-export type EventConsumerAcknowledgementResult = Readonly<{
+type EventConsumerAcknowledgementResult = Readonly<{
   outcome: "acknowledged" | "already_acknowledged" | "claim_unavailable";
 }>;
 

@@ -144,7 +144,7 @@ export const displayColumnsSchema = z
  * page of rows with each row's scalar cells keyed by exactly those columns, and the field's total
  * row count, never fewer than the rows shown.
  */
-export const displayTableFieldSchema = z
+const displayTableFieldSchema = z
   .object({
     kind: z.literal("field_table"),
     columns: displayColumnsSchema.refine(

@@ -378,7 +378,7 @@ const occurrences = (index: UseIndex, text: string): readonly Occurrence[] =>
   index.strings.get(text) ?? [];
 
 /** A stable key for a target. */
-export const applicationUseTargetKey = (target: ApplicationUseTarget): string => {
+const applicationUseTargetKey = (target: ApplicationUseTarget): string => {
   switch (target.kind) {
     case "standard_action":
       return `standard_action:${target.moduleKey}:${target.recordKey}.${target.action}`;

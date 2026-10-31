@@ -16,7 +16,7 @@ export type FlowMessageSeverity = (typeof flowMessageSeverities)[number];
 /** The shortest and longest auto-dismiss a message may carry, in milliseconds. */
 export const flowMessageDismissBounds = Object.freeze({ minimumMs: 2_000, maximumMs: 30_000 });
 
-export type FlowStepSettingIssue = Readonly<{
+type FlowStepSettingIssue = Readonly<{
   path: (string | number)[];
   message: string;
 }>;

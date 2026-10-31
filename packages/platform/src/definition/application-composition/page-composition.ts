@@ -18,10 +18,7 @@ import { positiveFiniteSchema } from "./shared";
 import type { BlockPropertyValueContract } from "./block-property-values";
 import { typedSettingValue } from "./block-property-schema";
 import { compiledItemSettingsBy } from "./component-setting-reading";
-import {
-  platformBlockDependenciesSchema,
-  platformBlockReferenceSchema,
-} from "./platform-block-release";
+import { platformBlockReferenceSchema } from "./platform-block-release";
 import type { releaseSettingDeclarations } from "./placement-slots";
 import {
   compiledItemReservedProps,
@@ -30,7 +27,6 @@ import {
   compiledPageZones,
   compiledRootZone,
 } from "./compiled-item-tree";
-import { applicationThemeSchema } from "./theme";
 
 const widthSchema = z.discriminatedUnion("kind", [
   z.object({ kind: sourceProvenanceUnchanged(z.literal("content")) }).strict(),
@@ -74,7 +70,7 @@ const heightSchema = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 
-export const placementLayoutSchema = z
+const placementLayoutSchema = z
   .object({
     visible: sourceProvenanceUnchanged(z.boolean()),
     width: sourceProvenanceUnchanged(widthSchema),
@@ -90,7 +86,7 @@ export const sourcePlacementLayoutSchema = z
   })
   .strict();
 
-export const responsivePlacementSchema = z
+const responsivePlacementSchema = z
   .object({
     desktop: sourceProvenanceUnchanged(placementLayoutSchema),
     tablet: sourceProvenanceUnchanged(placementLayoutSchema),
@@ -108,9 +104,7 @@ export const sourceResponsivePlacementSchema = z
   .strict();
 
 /** The canonical form of one authored placement layout: only a grid width changes its keys. */
-export const canonicalPlacementLayout = (
-  value: Record<string, unknown>,
-): Record<string, unknown> => {
+const canonicalPlacementLayout = (value: Record<string, unknown>): Record<string, unknown> => {
   const width = value.width as Record<string, unknown>;
   return {
     visible: value.visible,
@@ -134,33 +128,6 @@ export const canonicalResponsivePlacement = (
     tablet: canonicalPlacementLayout(tablet),
     phone: canonicalPlacementLayout(phone),
   };
-};
-
-/** The canonical form of one authored theme token value: only multi-word keys change case. */
-export const canonicalThemeTokenValue = (value: Record<string, unknown>): unknown => {
-  switch (value.kind) {
-    case "typography":
-      return {
-        kind: value.kind,
-        family: value.family,
-        sizeRem: value.size_rem,
-        lineHeight: value.line_height,
-        weight: value.weight,
-      };
-    case "border":
-      return {
-        kind: value.kind,
-        widthRem: value.width_rem,
-        style: value.style,
-        colorToken: value.color_token,
-      };
-    case "focus":
-      return { kind: value.kind, colorToken: value.color_token, widthRem: value.width_rem };
-    case "asset":
-      return { kind: value.kind, assetId: value.asset_id };
-    default:
-      return value;
-  }
 };
 
 /**
@@ -188,7 +155,7 @@ export type CompiledItemVortex = {
   slotOrders: Record<string, BreakpointOrder>;
 };
 
-export type CompiledItemProps = {
+type CompiledItemProps = {
   id: string;
   vortex: CompiledItemVortex;
   /** One setting (its plain value) or one child slot (an array of items). */
@@ -296,7 +263,7 @@ const compiledItemVortexSchema = z
   })
   .strict();
 
-export const compiledItemSchema: z.ZodType<CompiledItem> = z.lazy(() =>
+const compiledItemSchema: z.ZodType<CompiledItem> = z.lazy(() =>
   z
     .object({
       type: namespacedKeySchema,
@@ -430,7 +397,7 @@ export const pageCompositionSchema: z.ZodType<PageComposition> = z
   }) as unknown as z.ZodType<PageComposition>;
 
 /** One page frame with an exact, separately ordered content tree for every guided step. */
-export type GuidedFormPageComposition = { stepContent: Record<string, PageComposition> };
+type GuidedFormPageComposition = { stepContent: Record<string, PageComposition> };
 
 export const guidedFormPageCompositionSchema: z.ZodType<GuidedFormPageComposition> = z
   .object({ stepContent: z.record(containedComponentIdSchema, pageCompositionSchema) })
@@ -451,7 +418,7 @@ export const guidedFormPageCompositionSchema: z.ZodType<GuidedFormPageCompositio
 
 export type AnyPageComposition = PageComposition | GuidedFormPageComposition;
 
-export const shellContentSlotSchema = z
+const shellContentSlotSchema = z
   .object({
     slotId: sourceProvenanceUnchanged(containedComponentIdSchema),
     key: sourceProvenanceUnchanged(builderKeySchema),
@@ -592,25 +559,3 @@ export const applicationShellSchema = z
 export type ApplicationShell = z.infer<typeof applicationShellSchema>;
 export type ApplicationPuckRootShell = z.infer<typeof applicationPuckRootShellSchema>;
 export type ResponsivePlacement = z.infer<typeof responsivePlacementSchema>;
-
-/** The compiled composition one renderer input carries: dependencies, shells, pages and theme. */
-export const materialisedApplicationCompositionSchema = z
-  .object({
-    platformBlockDependencies: platformBlockDependenciesSchema,
-    shells: z.array(applicationShellSchema),
-    pages: z.array(
-      z
-        .object({
-          pageId: z.string().min(1),
-          composition: z.union([pageCompositionSchema, guidedFormPageCompositionSchema]),
-          steps: z
-            .array(
-              z.object({ id: z.string().min(1), name: z.string(), summary: z.boolean() }).strict(),
-            )
-            .optional(),
-        })
-        .strict(),
-    ),
-    theme: applicationThemeSchema,
-  })
-  .strict();

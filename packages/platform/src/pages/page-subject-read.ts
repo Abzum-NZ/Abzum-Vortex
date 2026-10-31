@@ -191,5 +191,3 @@ export const createPageSubjectReader = (dependencies: HumanOrganizationRequestDe
     },
   });
 };
-
-export type PageSubjectReader = ReturnType<typeof createPageSubjectReader>;

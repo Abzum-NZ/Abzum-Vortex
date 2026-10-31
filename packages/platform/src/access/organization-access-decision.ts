@@ -2,13 +2,10 @@ import { z } from "zod";
 import { correlationIdSchema } from "../catalogue/common";
 import {
   applicationRootIdSchema,
-  containedComponentIdSchema,
   moduleRootIdSchema,
   namespacedKeySchema,
   organizationAccountIdSchema,
   organizationIdSchema,
-  permissionIdSchema,
-  recordIdSchema,
   recordTypeIdSchema,
   revisionSchema,
   storageContractIdSchema,
@@ -75,7 +72,7 @@ export const organizationAccessActionSchema = z
       });
   });
 
-export const organizationAccessTargetSchema = z.discriminatedUnion("kind", [
+const organizationAccessTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("organization") }).strict(),
   z
     .object({
@@ -141,13 +138,13 @@ const boundedManagementScopeSchema = z
   });
 
 /** A current management request names its meaning; retained role revisions carry accepted meaning. */
-export const organizationAccessManagementScopeSchema = z.discriminatedUnion("kind", [
+const organizationAccessManagementScopeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("none") }).strict(),
   z.object({ kind: z.literal("organization_catalogue") }).strict(),
   boundedManagementScopeSchema,
 ]);
 
-export const organizationAccessAuthorityRequirementSchema = z
+const organizationAccessAuthorityRequirementSchema = z
   .discriminatedUnion("kind", [
     z.object({ kind: z.literal("permission") }).strict(),
     z
@@ -288,7 +285,7 @@ export const organizationRecordAccessDeclarationSchema = z
   });
 
 /** Transaction-bound evidence shared by private eligibility and final decisions. */
-export const organizationAccessDecisionEvidenceSchema = z
+const organizationAccessDecisionEvidenceSchema = z
   .object({
     operationKey: namespacedKeySchema,
     target: organizationAccessTargetSchema,
@@ -300,7 +297,7 @@ export const organizationAccessDecisionEvidenceSchema = z
   })
   .strict();
 
-export const organizationAccessRefusalReasonSchema = z.enum([
+const organizationAccessRefusalReasonSchema = z.enum([
   "permission_unavailable",
   "permission_not_effective",
   "authentication_unsatisfied",
@@ -374,79 +371,6 @@ export const organizationRecordPermissionEligibilitySchema = z.discriminatedUnio
   }),
 ]);
 
-const organizationRecordDecisionEvidenceSchema = organizationRecordAccessEvidenceSchema.safeExtend({
-  recordId: recordIdSchema,
-});
-
-const organizationRecordMatchedRouteSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("all_records") }).strict(),
-  z.object({ kind: z.literal("ownership") }).strict(),
-  z
-    .object({
-      kind: z.literal("relationship"),
-      relationshipId: containedComponentIdSchema,
-      sourcePermissionId: permissionIdSchema,
-      sourceRecordId: recordIdSchema,
-    })
-    .strict(),
-]);
-
-const organizationRecordMatchedContributionSchema = organizationRecordEligiblePermissionSchema
-  .safeExtend({
-    route: organizationRecordMatchedRouteSchema,
-    validUntil: timestampSchema,
-  })
-  .superRefine((value, context) => {
-    const matchedRoute = value.recordScope.routes.some((route) => {
-      if (route.kind !== value.route.kind) return false;
-      return (
-        route.kind !== "relationship" ||
-        (value.route.kind === "relationship" &&
-          representsSameUuid(route.relationshipId, value.route.relationshipId) &&
-          representsSameUuid(route.sourcePermissionId, value.route.sourcePermissionId))
-      );
-    });
-    if (!matchedRoute)
-      context.addIssue({
-        code: "custom",
-        path: ["route"],
-        message: "A matched route must belong to that permission record scope",
-      });
-  });
-
-const organizationRecordAccessAllowedSchema = organizationRecordDecisionEvidenceSchema
-  .safeExtend({
-    outcome: z.literal("allowed"),
-    action: organizationAccessActionSchema,
-    validUntil: timestampSchema,
-    matchedContributions: z.array(organizationRecordMatchedContributionSchema).min(1),
-  })
-  .superRefine((value, context) => {
-    const checkedAt = Date.parse(value.checkedAt);
-    const deadlines = value.matchedContributions.map((contribution) =>
-      Date.parse(contribution.validUntil),
-    );
-    if (
-      deadlines.some((deadline) => deadline <= checkedAt) ||
-      Date.parse(value.validUntil) !== Math.min(...deadlines)
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["validUntil"],
-        message: "Record access must use the earliest complete contribution deadline",
-      });
-  });
-
-/** Private complete permission-and-row evidence consumed by fixed storage adapters. */
-export const organizationRecordAccessDecisionSchema = z.discriminatedUnion("outcome", [
-  organizationRecordAccessAllowedSchema,
-  organizationRecordDecisionEvidenceSchema.safeExtend({
-    outcome: z.literal("refused"),
-    action: organizationAccessActionSchema,
-    reasonCode: z.union([organizationAccessRefusalReasonSchema, z.literal("record_scope_refused")]),
-  }),
-]);
-
 const boundedDecisionEvidenceSchema = organizationAccessDecisionEvidenceSchema
   .safeExtend({ validUntil: timestampSchema })
   .superRefine((value, context) => {
@@ -476,7 +400,7 @@ export const organizationAccessDecisionSchema = z.discriminatedUnion("outcome", 
 ]);
 
 /** Safe refusal exposed outside the decision boundary; internal authority evidence is absent. */
-export const safeOrganizationAccessRefusalSchema = z
+const safeOrganizationAccessRefusalSchema = z
   .object({
     outcome: z.literal("refused"),
     reasonCode: z.enum([
@@ -489,33 +413,15 @@ export const safeOrganizationAccessRefusalSchema = z
     correlationId: correlationIdSchema,
   })
   .strict();
-
-export type OrganizationAccessExactPermission = z.infer<
-  typeof organizationAccessExactPermissionSchema
->;
-export type OrganizationAccessAction = z.infer<typeof organizationAccessActionSchema>;
-export type OrganizationAccessTarget = z.infer<typeof organizationAccessTargetSchema>;
-export type OrganizationAccessManagementScope = z.infer<
-  typeof organizationAccessManagementScopeSchema
->;
-export type OrganizationAccessAuthorityRequirement = z.infer<
-  typeof organizationAccessAuthorityRequirementSchema
->;
 export type OrganizationAccessDeclaration = z.infer<typeof organizationAccessDeclarationSchema>;
 export type OrganizationRecordAccessDeclaration = z.infer<
   typeof organizationRecordAccessDeclarationSchema
->;
-export type OrganizationAccessDecisionEvidence = z.infer<
-  typeof organizationAccessDecisionEvidenceSchema
 >;
 export type OrganizationPermissionEligibility = z.infer<
   typeof organizationPermissionEligibilitySchema
 >;
 export type OrganizationRecordPermissionEligibility = z.infer<
   typeof organizationRecordPermissionEligibilitySchema
->;
-export type OrganizationRecordAccessDecision = z.infer<
-  typeof organizationRecordAccessDecisionSchema
 >;
 export type OrganizationAccessDecision = z.infer<typeof organizationAccessDecisionSchema>;
 export type SafeOrganizationAccessRefusal = z.infer<typeof safeOrganizationAccessRefusalSchema>;

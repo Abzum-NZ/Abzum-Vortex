@@ -14,7 +14,7 @@ const optionValueSchema = z.string().min(1).max(120);
  * A choice field's own option list. When it is narrowed by a parent choice field of the same
  * record type, `optionParents` lists, for every option, the parent options it belongs to.
  */
-export const fixedOptionsSourceSchema = z
+const fixedOptionsSourceSchema = z
   .object({
     kind: z.literal("fixed"),
     parentFieldId: fieldIdSchema.optional(),
@@ -36,7 +36,7 @@ export const fixedOptionsSourceSchema = z
  * whose `filterFieldId` link points at the record chosen in this record type's `parentFieldId`
  * link, or a declared query over its declared inputs.
  */
-export const queryOptionsSourceSchema = z
+const queryOptionsSourceSchema = z
   .object({
     kind: z.literal("query"),
     queryId: queryIdSchema.optional(),
@@ -66,7 +66,7 @@ export const queryOptionsSourceSchema = z
       });
   });
 /** Options worked out by an options flow over declared inputs: value, label and description. */
-export const flowOptionsSourceSchema = z
+const flowOptionsSourceSchema = z
   .object({ kind: z.literal("flow"), flowId: flowIdSchema, inputs: optionsSourceInputsSchema })
   .strict();
 /**
@@ -83,8 +83,8 @@ export const linkOptionsSourceSchema = z.discriminatedUnion("kind", [
   queryOptionsSourceSchema,
   flowOptionsSourceSchema,
 ]);
-export type ChoiceOptionsSource = z.infer<typeof choiceOptionsSourceSchema>;
-export type LinkOptionsSource = z.infer<typeof linkOptionsSourceSchema>;
+type ChoiceOptionsSource = z.infer<typeof choiceOptionsSourceSchema>;
+type LinkOptionsSource = z.infer<typeof linkOptionsSourceSchema>;
 
 /**
  * The field of the same record type that narrows a field's options, and for a link the target's

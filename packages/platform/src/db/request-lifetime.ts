@@ -14,9 +14,9 @@ export interface RequestDatabaseLookupOwner {
   readonly lookupDeliverySettled: boolean;
 }
 
-export type RequestDatabaseStopReason = "abort" | "deadline" | "completed";
+type RequestDatabaseStopReason = "abort" | "deadline" | "completed";
 
-export interface DatabaseResourcesSettled {
+interface DatabaseResourcesSettled {
   readonly status: "database_resources_settled";
   readonly stoppedBy: RequestDatabaseStopReason;
   readonly settledAt: number;
@@ -25,7 +25,7 @@ export interface DatabaseResourcesSettled {
 }
 
 /** Execution control only. This object supplies no identity, context, role or permission. */
-export interface RequestDatabaseLifetime {
+interface RequestDatabaseLifetime {
   readonly signal: AbortSignal;
   /** Absolute final deadline, including database cleanup. */
   readonly deadline: number;
@@ -33,7 +33,7 @@ export interface RequestDatabaseLifetime {
   checkpoint(): void;
 }
 
-export interface RequestDatabaseLifetimeOptions {
+interface RequestDatabaseLifetimeOptions {
   readonly signal: AbortSignal;
   readonly deadline: number;
   readonly createOwnedLookup?: () => RequestDatabaseLookupOwner;

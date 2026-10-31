@@ -22,7 +22,7 @@ import { linkDependencyCandidates, type LinkDependencyField } from "./module-lin
 export type ModuleFieldType = (typeof fieldTypeKeys)[number];
 type Declaration = BlockPropertySchemaContract;
 type Typed = SourceBlockPropertyValueContract;
-export type ModuleFieldTypedSettings = Readonly<Record<string, Typed>>;
+type ModuleFieldTypedSettings = Readonly<Record<string, Typed>>;
 
 /** A field type as a person reads it, for the type picker. */
 export const moduleFieldTypeLabels: Readonly<Record<ModuleFieldType, string>> = {
@@ -50,7 +50,7 @@ export const moduleFieldTypeLabels: Readonly<Record<ModuleFieldType, string>> = 
 };
 
 /** What a field's settings can refer to in its module. */
-export type ModuleFieldSettingsContext = Readonly<{
+type ModuleFieldSettingsContext = Readonly<{
   /** The other fields of the field's own record type, by local key. */
   fields: readonly Readonly<{ key: string; label: string; type: string }>[];
   /** The module's permissions, which may control who can choose a choice option. */
@@ -593,7 +593,7 @@ const storedColumn = (flat: Record<string, unknown>): Record<string, unknown> =>
   return { key: flat.key, required: flat.required === true, type, settings };
 };
 /** Where a field's current settings could not be read as typed settings, as located failures. */
-export type ModuleFieldSettingsReading = Readonly<{
+type ModuleFieldSettingsReading = Readonly<{
   values: ModuleFieldTypedSettings;
   failures: readonly ComponentSettingFailure[];
 }>;

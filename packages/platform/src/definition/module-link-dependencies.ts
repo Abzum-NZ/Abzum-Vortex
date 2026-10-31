@@ -20,7 +20,7 @@ export type LinkDependencyField = Readonly<{
   options?: readonly Readonly<{ value: string; parentValues?: readonly string[] }>[];
 }>;
 
-export type LinkDependencyProblem = Readonly<{
+type LinkDependencyProblem = Readonly<{
   reason:
     | "not_dependable"
     | "parent_missing"
@@ -32,7 +32,7 @@ export type LinkDependencyProblem = Readonly<{
   message: string;
 }>;
 
-export type LinkDependencyCandidates =
+type LinkDependencyCandidates =
   | Readonly<{
       kind: "available";
       parents: readonly LinkDependencyField[];

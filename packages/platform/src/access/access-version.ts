@@ -29,9 +29,9 @@ export const accessVersionErrorCodes = [
   "ACCESS_VERSION_OPERATION_FAILED",
 ] as const;
 
-export type AccessVersionErrorCode = (typeof accessVersionErrorCodes)[number];
+type AccessVersionErrorCode = (typeof accessVersionErrorCodes)[number];
 
-export class AccessVersionError extends Error {
+class AccessVersionError extends Error {
   readonly code: AccessVersionErrorCode;
 
   constructor(code: AccessVersionErrorCode, options?: ErrorOptions) {
@@ -142,7 +142,7 @@ const mapStorageFailure = (error: unknown): AccessVersionError => {
 
 const normalizeEmail = (email: string): string => email.trim().toLowerCase();
 
-export const createAccessVersionStore = (dependencies: AccessVersionStoreDependencies = {}) => {
+const createAccessVersionStore = (dependencies: AccessVersionStoreDependencies = {}) => {
   const runtimeTransaction = dependencies.runtimeTransaction ?? withRuntimeTransaction;
 
   return Object.freeze({

@@ -2,13 +2,8 @@ import { z } from "zod";
 import {
   applicationSourceDocumentSchema,
   sourceApplicationBodySchema,
-  sourcePageDefinitionSchema,
 } from "./application-source-contracts";
-import type {
-  ApplicationSourceDocument,
-  SourceApplicationBody,
-  SourcePageDefinition,
-} from "./application-source-contracts";
+import type { ApplicationSourceDocument } from "./application-source-contracts";
 import { connectionTypeSourceDocumentSchema } from "../connections/connection-source-contracts";
 import {
   moduleSourceDocumentSchema,
@@ -32,7 +27,6 @@ export {
   moduleSourceDocumentSchema,
   sourceApplicationModuleSchema,
   sourceApplicationBodySchema,
-  sourcePageDefinitionSchema,
   sourceConditionSchema,
   sourceQualifiedConditionSchema,
   sourceProvenanceRegistry,
@@ -63,6 +57,4 @@ export type {
   ModuleSourceDocument,
   SourceApplicationModule,
   SourceProvenanceAnnotation,
-  SourceApplicationBody,
-  SourcePageDefinition,
 };

@@ -102,7 +102,6 @@ export type {
   FlowTaskOutcome,
   FlowFailureCode,
   FlowFailure,
-  FlowRuleFeedback,
   FlowRuntimeValues,
   FlowSubject,
   FlowInterfaceIntent,

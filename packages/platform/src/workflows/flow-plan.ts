@@ -52,11 +52,11 @@ export type FlowPathCondition =
     }>;
 
 /** A typed value a segment reads from before it or hands on after it. */
-export type FlowPlanValueTypes = Readonly<Record<string, string>>;
+type FlowPlanValueTypes = Readonly<Record<string, string>>;
 
-export type FlowPlanSection = "tasks" | "errors" | "finally";
+type FlowPlanSection = "tasks" | "errors" | "finally";
 
-export type FlowPageSegment = Readonly<{
+type FlowPageSegment = Readonly<{
   kind: "page";
   id: string;
   section: FlowPlanSection;
@@ -108,7 +108,7 @@ export type FlowServerSegment = Readonly<{
 export type FlowPlanSegment = FlowPageSegment | FlowServerSegment;
 
 /** What the page holds for one server segment: no step properties, operation inputs or secrets. */
-export type FlowSegmentStub = Readonly<{
+type FlowSegmentStub = Readonly<{
   kind: "server";
   id: string;
   section: FlowPlanSection;
@@ -696,7 +696,7 @@ const isIsolatedWorkflow = (
   operationOf(flow, step)?.workflow === "multi_transaction";
 
 /** Compiles one validated flow into its plan. Throws `FlowPlanError` naming the step it refuses. */
-export const compileFlowPlan = (
+const compileFlowPlan = (
   flow: FlowDefinition,
   bindings: readonly FlowBindingInputs[] = [],
   formTypes: FlowFormTypes = {},
@@ -1284,10 +1284,6 @@ export const flowEntrySegmentsMatch = (
     expected.every((segment) => identities.get(segment.id) === segment.fingerprint)
   );
 };
-
-/** Identifies the whole plan when a continuation reaches no server segment. */
-export const flowPlanFingerprint = (plan: FlowPlan): `sha256:${string}` =>
-  fingerprintCanonicalValue({ definition: plan.definition, segments: plan.segments });
 
 /** Derive the literal form placements reachable from a row-action flow. */
 export const rowActionFormTargets = (

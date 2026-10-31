@@ -2,7 +2,7 @@ import { z } from "zod";
 import { currentIso4217Alpha3CodeSetV2026_01_01 } from "../catalogue/currencies";
 import { organizationIdSchema, revisionSchema } from "../catalogue/identifiers";
 
-export const organizationRuntimeSettingsDateFormats = ["short", "medium", "long", "full"] as const;
+const organizationRuntimeSettingsDateFormats = ["short", "medium", "long", "full"] as const;
 const [shortDateFormat, mediumDateFormat, longDateFormat, fullDateFormat] =
   organizationRuntimeSettingsDateFormats;
 export const organizationRuntimeSettingsDateFormatOptions = [
@@ -12,12 +12,7 @@ export const organizationRuntimeSettingsDateFormatOptions = [
   { value: fullDateFormat, label: "Full" },
 ] as const;
 
-export const organizationRuntimeSettingsNumberFormats = [
-  "auto",
-  "always",
-  "min2",
-  "never",
-] as const;
+const organizationRuntimeSettingsNumberFormats = ["auto", "always", "min2", "never"] as const;
 const [
   automaticNumberFormat,
   alwaysDecimalNumberFormat,

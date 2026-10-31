@@ -1,7 +1,6 @@
 import { z } from "zod";
-import { correlationIdSchema, descriptionSchema, labelSchema } from "../catalogue/common";
+import { descriptionSchema, labelSchema } from "../catalogue/common";
 import {
-  actorIdSchema,
   applicationRootIdSchema,
   builderKeySchema,
   fingerprintSchema,
@@ -14,7 +13,6 @@ import {
   affectedRoleAssignmentSchema,
   rolePermissionEntrySchema,
   rolePrivilegeClassificationSchema,
-  roleSchema,
 } from "./organization-access-catalogue";
 
 const normalizedUuid = (value: string): string => value.toLowerCase();
@@ -286,70 +284,8 @@ export const organizationRoleChangePreparationSchema = z
       });
   });
 
-export const organizationRoleChangeCommandSchema = z
-  .object({
-    evidence: preparedOrganizationRoleChangeSchema,
-    changedBy: actorIdSchema,
-    correlationId: correlationIdSchema,
-  })
-  .strict();
-
-export const organizationRoleChangeResultSchema = z
-  .object({
-    outcome: z.literal("changed"),
-    operation: z.enum([
-      "create_custom",
-      "create_custom_from_template",
-      "accept_new_application_role",
-      "revise_metadata_policy",
-      "revise_custom_permissions",
-      "accept_application_role_revision",
-      "retire_role",
-    ]),
-    role: roleSchema,
-    accessVersion: revisionSchema,
-    correlationId: correlationIdSchema,
-  })
-  .strict()
-  .superRefine((value, context) => {
-    if (value.role.changeCorrelationId !== value.correlationId)
-      context.addIssue({
-        code: "custom",
-        path: ["correlationId"],
-        message: "The result must be bound to the stored role change",
-      });
-
-    const createOperation =
-      value.operation.startsWith("create_") || value.operation === "accept_new_application_role";
-    if (
-      (createOperation && value.role.liveRevision !== 1) ||
-      (!createOperation && value.role.liveRevision <= 1)
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["role", "liveRevision"],
-        message: "The stored role revision must match the change intent",
-      });
-    if (
-      ((value.operation === "create_custom" ||
-        value.operation === "create_custom_from_template" ||
-        value.operation === "revise_custom_permissions") &&
-        (value.role.kind !== "custom" || value.role.lifecycle !== "active")) ||
-      ((value.operation === "accept_new_application_role" ||
-        value.operation === "accept_application_role_revision") &&
-        (value.role.kind !== "application" || value.role.lifecycle !== "active")) ||
-      (value.operation === "retire_role" && value.role.lifecycle !== "retired")
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["role"],
-        message: "The stored role kind and lifecycle must match the change intent",
-      });
-  });
-
 export type OrganizationRoleChangeCandidate = z.infer<typeof organizationRoleChangeCandidateSchema>;
 export type OrganizationRoleChangePreparation = z.infer<
   typeof organizationRoleChangePreparationSchema
 >;
 export type PreparedOrganizationRoleChange = z.infer<typeof preparedOrganizationRoleChangeSchema>;
-export type OrganizationRoleChangeCommand = z.infer<typeof organizationRoleChangeCommandSchema>;

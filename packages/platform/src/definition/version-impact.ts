@@ -19,7 +19,6 @@ import {
 import { moduleContentSchema, moduleDraftSchema } from "./module-contracts";
 
 export const versionImpactSchema = z.enum(["patch", "minor", "major"]);
-export const moduleVersionImpactPolicyVersion = "4.0.0" as const;
 export { stableDefinitionReleaseVersionSchema };
 
 export const versionImpactReasonCodes = [
@@ -40,7 +39,7 @@ export const versionImpactReasonCodes = [
   "dependency_requirement_changed",
   "existing_behavior_changed",
 ] as const;
-export const versionImpactReasonCodeSchema = z.enum(versionImpactReasonCodes);
+const versionImpactReasonCodeSchema = z.enum(versionImpactReasonCodes);
 
 export const versionImpactComponentKinds = [
   "module",
@@ -78,7 +77,7 @@ export const versionImpactComponentKinds = [
   "flow_edge",
   "flow_binding",
 ] as const;
-export const versionImpactComponentKindSchema = z.enum(versionImpactComponentKinds);
+const versionImpactComponentKindSchema = z.enum(versionImpactComponentKinds);
 
 export const versionImpactProperties = [
   "definition",
@@ -101,9 +100,9 @@ export const versionImpactProperties = [
   "icon",
   "presentation",
 ] as const;
-export const versionImpactPropertySchema = z.enum(versionImpactProperties);
+const versionImpactPropertySchema = z.enum(versionImpactProperties);
 
-export const versionImpactLocationSchema = z
+const versionImpactLocationSchema = z
   .object({
     componentKind: versionImpactComponentKindSchema,
     componentId: platformIdSchema.optional(),
@@ -166,7 +165,7 @@ const nextStableVersion = (
       : `${major + 1n}.0.0`;
 };
 
-export const definitionVersionSubjectSchema = z.discriminatedUnion("definitionKind", [
+const definitionVersionSubjectSchema = z.discriminatedUnion("definitionKind", [
   z.object({ definitionKind: z.literal("module"), rootId: moduleRootIdSchema }).strict(),
   z.object({ definitionKind: z.literal("application"), rootId: applicationRootIdSchema }).strict(),
 ]);
@@ -227,7 +226,7 @@ const resultCommon = {
   subject: definitionVersionSubjectSchema,
 };
 
-export const noDefinitionChangeResultSchema = z
+const noDefinitionChangeResultSchema = z
   .object({
     ...resultCommon,
     outcome: z.literal("no_change"),
@@ -236,7 +235,7 @@ export const noDefinitionChangeResultSchema = z
   })
   .strict();
 
-export const initialDefinitionReleaseResultSchema = z
+const initialDefinitionReleaseResultSchema = z
   .object({
     ...resultCommon,
     outcome: z.literal("initial_release"),
@@ -245,7 +244,7 @@ export const initialDefinitionReleaseResultSchema = z
   })
   .strict();
 
-export const requiredDefinitionReleaseResultSchema = z
+const requiredDefinitionReleaseResultSchema = z
   .object({
     ...resultCommon,
     outcome: z.literal("release_required"),

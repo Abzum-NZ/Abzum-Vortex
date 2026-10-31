@@ -26,7 +26,7 @@ type AllowedOrganizationAccessDecision = Extract<
   Readonly<{ outcome: "allowed" }>
 >;
 
-export type OrganizationAccessOperationResult<Result> =
+type OrganizationAccessOperationResult<Result> =
   Readonly<{ outcome: "completed"; value: Result }> | SafeOrganizationAccessRefusal;
 
 type EligibilityRow = DatabaseRow & {

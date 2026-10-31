@@ -32,17 +32,17 @@ import type { QueryBindingContext } from "./query-binding-resolver";
  * Why a Records table cannot be used on the addressed page: the placement gate's reasons, or the
  * placement is on the page but is not a Records table with a readable contract.
  */
-export type ProjectedTablePlacementRefusal =
+type ProjectedTablePlacementRefusal =
   ProjectedPlacementRefusal | "placement_not_a_table" | "table_contract_invalid";
 
 /** The readers a table read's query bindings take from the request. */
-export type ProjectedTableBindingReaders = Readonly<{
+type ProjectedTableBindingReaders = Readonly<{
   readSubject: (recordTypeId: string, recordId: string) => Promise<PageSubjectReadResult>;
   readTimeZone: () => Promise<string | undefined>;
   readViewerGroups: () => Promise<readonly string[] | undefined>;
 }>;
 
-export type ProjectedTablePlacement =
+type ProjectedTablePlacement =
   | Readonly<{
       kind: "resolved";
       placement: PlacementReadEntry;

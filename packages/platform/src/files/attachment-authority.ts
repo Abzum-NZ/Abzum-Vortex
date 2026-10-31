@@ -4,7 +4,7 @@ import type { SessionContext } from "../access/identity-access";
 import type { FieldId, OrganizationId } from "../catalogue/identifiers";
 import type { VerifiedFileActor } from "./file-contracts";
 
-export type ResolveVerifiedFileActorResult =
+type ResolveVerifiedFileActorResult =
   | Readonly<{ authorized: true; actor: VerifiedFileActor }>
   | Readonly<{ authorized: false; reason: string }>;
 
@@ -60,14 +60,14 @@ export const resolveVerifiedFileActor = (
   }
 };
 
-export type VerifyAttachmentFieldAuthorityInput = Readonly<{
+type VerifyAttachmentFieldAuthorityInput = Readonly<{
   fieldId: FieldId;
   readableFieldIds: readonly FieldId[];
   changeableFieldIds: readonly FieldId[];
   operation: "read" | "write" | "delete";
 }>;
 
-export type AttachmentFieldAuthorityResult =
+type AttachmentFieldAuthorityResult =
   Readonly<{ authorized: true }> | Readonly<{ authorized: false; reason: string }>;
 
 /**

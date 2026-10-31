@@ -15,12 +15,10 @@ const nonNilUuidSchema = z
   });
 
 /** An exact field index is either a uniqueness requirement or advisory performance. */
-export const indexPurposeSchema = z.enum(["uniqueness", "performance"]);
-export type IndexPurpose = z.infer<typeof indexPurposeSchema>;
+const indexPurposeSchema = z.enum(["uniqueness", "performance"]);
 
 /** The live physical state of one exact field index. */
-export const indexObservedStateSchema = z.enum(["missing", "present", "invalid"]);
-export type IndexObservedState = z.infer<typeof indexObservedStateSchema>;
+const indexObservedStateSchema = z.enum(["missing", "present", "invalid"]);
 
 /**
  * Readiness of one exact field index of one exact storage contract and field.
@@ -28,7 +26,7 @@ export type IndexObservedState = z.infer<typeof indexObservedStateSchema>;
  * definition the provisioner emits, so readiness answers the desired definition
  * rather than any index of the same name.
  */
-export const indexReadinessEntrySchema = z
+const indexReadinessEntrySchema = z
   .object({
     indexContractId: nonNilUuidSchema,
     storageContractId: storageContractIdSchema,
@@ -51,7 +49,6 @@ export const indexReadinessEntrySchema = z
         message: "An index can only be ready while its observed state is present",
       });
   });
-export type IndexReadinessEntry = z.infer<typeof indexReadinessEntrySchema>;
 
 /**
  * The complete live index-readiness snapshot for one activating Application
@@ -80,4 +77,3 @@ export const indexReadinessSchema = z
         message: "uniquenessReady must reflect every uniqueness entry's readiness",
       });
   });
-export type IndexReadiness = z.infer<typeof indexReadinessSchema>;

@@ -31,7 +31,7 @@ export const previewInstallationRepositoryErrorCodes = [
   "PREVIEW_INSTALLATION_FAILED",
 ] as const;
 
-export type PreviewInstallationRepositoryErrorCode =
+type PreviewInstallationRepositoryErrorCode =
   (typeof previewInstallationRepositoryErrorCodes)[number];
 
 type PreviewRow = DatabaseRow & { readonly preview_installation: unknown };

@@ -132,7 +132,6 @@ export const protectedQueryBoardColumnSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("option"), value: z.string().min(1).max(120) }).strict(),
   z.object({ kind: z.literal("unassigned") }).strict(),
 ]);
-export type ProtectedQueryBoardColumn = z.infer<typeof protectedQueryBoardColumnSchema>;
 
 /** A closed member selector over the choice field of a grouped installed Query. */
 export const protectedQueryBoardSelectorSchema = z
@@ -191,7 +190,7 @@ const groupTypedValue = <K extends string, T extends z.ZodType>(fieldType: K, va
     .strict();
 
 /** One exact readable representation for an installed generic summary group key. */
-export const protectedQueryGroupValueSchema = z.discriminatedUnion("fieldType", [
+const protectedQueryGroupValueSchema = z.discriminatedUnion("fieldType", [
   groupTypedValue("text", groupStringValueSchema),
   groupTypedValue("whole_number", safeWholeNumberGroupValueSchema),
   groupTypedValue("decimal_number", sourceExactDecimalTextSchema),
@@ -205,10 +204,9 @@ export const protectedQueryGroupValueSchema = z.discriminatedUnion("fieldType", 
   groupTypedValue("web_address", groupStringValueSchema),
   groupTypedValue("link", z.union([recordLinkValueSchema, groupNotAvailableValueSchema])),
 ]);
-export type ProtectedQueryGroupValue = z.infer<typeof protectedQueryGroupValueSchema>;
 
 /** Exact installed group identity; values keep the same representation used by summary JSONB. */
-export const protectedQueryGroupSelectorSchema = z
+const protectedQueryGroupSelectorSchema = z
   .object({
     values: z.array(protectedQueryGroupValueSchema).min(1).max(10),
   })
@@ -222,10 +220,9 @@ export const protectedQueryGroupSelectorSchema = z
         message: "Each installed group field is named once",
       });
   });
-export type ProtectedQueryGroupSelector = z.infer<typeof protectedQueryGroupSelectorSchema>;
 
 /** A calendar bucket for a date dimension: an explicit unit and a named time zone. */
-export const protectedQueryDateBucketSchema = z
+const protectedQueryDateBucketSchema = z
   .object({
     unit: z.enum(["day", "week", "month", "quarter", "year"]),
     timeZone: z
@@ -248,7 +245,6 @@ export const protectedQueryDateBucketSchema = z
       ),
   })
   .strict();
-export type ProtectedQueryDateBucket = z.infer<typeof protectedQueryDateBucketSchema>;
 
 const protectedQueryTotalsSchema = z
   .array(
@@ -271,7 +267,7 @@ const protectedQueryTotalsSchema = z
   );
 
 /** One authored grid dimension. Date fields require an explicit calendar unit and time zone. */
-export const protectedQueryGroupingSchema = z
+const protectedQueryGroupingSchema = z
   .object({
     fieldId: fieldIdSchema,
     limit: z.number().int().min(1).max(200),
@@ -284,7 +280,7 @@ export const protectedQueryGroupingSchema = z
  * One authored pivot: a row and a column dimension crossed with one measure. Rows are paged
  * (`rowLimit`, at most 200) with the summary's keyset; the engine caps the column dimension.
  */
-export const protectedQueryPivotSchema = z
+const protectedQueryPivotSchema = z
   .object({
     rowFieldId: fieldIdSchema,
     rowDateBucket: protectedQueryDateBucketSchema.optional(),
@@ -302,7 +298,6 @@ export const protectedQueryPivotSchema = z
     rowLimit: z.number().int().min(1).max(200),
   })
   .strict();
-export type ProtectedQueryPivot = z.infer<typeof protectedQueryPivotSchema>;
 
 /** One uncached, ordered, bidirectional page of currently readable members of a group. */
 export const protectedQueryGroupedMembersCommandSchema = protectedQueryCommandSchema
@@ -321,9 +316,8 @@ export type ProtectedQueryGroupedMembersCommand = z.infer<
  * The record action kinds one list row can expose per row. Read is implied by the
  * row's own presence; create is not a per-existing-record action and is never listed.
  */
-export const protectedQueryRowActionKinds = ["update", "delete", "restore"] as const;
-export const protectedQueryRowActionKindSchema = z.enum(protectedQueryRowActionKinds);
-export type ProtectedQueryRowActionKind = z.infer<typeof protectedQueryRowActionKindSchema>;
+const protectedQueryRowActionKinds = ["update", "delete", "restore"] as const;
+const protectedQueryRowActionKindSchema = z.enum(protectedQueryRowActionKinds);
 
 /** One row revision is a JavaScript-safe positive integer, exactly as a concurrency number is. */
 
@@ -353,7 +347,6 @@ export const protectedQueryRowCapabilitiesSchema = z
         message: "Each changeable field is reported once",
       });
   });
-export type ProtectedQueryRowCapabilities = z.infer<typeof protectedQueryRowCapabilitiesSchema>;
 
 const protectedQueryRowFields = {
   recordId: recordIdSchema,
@@ -420,13 +413,12 @@ export const protectedQueryRefusalReasonCodes = [
 export type ProtectedQueryRefusalReasonCode = (typeof protectedQueryRefusalReasonCodes)[number];
 
 /** Every refusal is this one neutral shape; it is decided before any row is exposed. */
-export const protectedQueryRefusalSchema = z
+const protectedQueryRefusalSchema = z
   .object({
     outcome: z.literal("refused"),
     reasonCode: z.enum(protectedQueryRefusalReasonCodes),
   })
   .strict();
-export type ProtectedQueryRefusal = z.infer<typeof protectedQueryRefusalSchema>;
 
 /**
  * The reader's current field bound, decided by the same read as the page and carried even by an
@@ -462,7 +454,7 @@ export const protectedQueryPageSchema = z
   .strict();
 export type ProtectedQueryPage = z.infer<typeof protectedQueryPageSchema>;
 
-export const protectedQueryGroupedMembersCompletedSchema = z
+const protectedQueryGroupedMembersCompletedSchema = z
   .object({
     outcome: z.literal("completed"),
     moduleRootId: moduleRootIdSchema,
@@ -512,9 +504,6 @@ export const protectedQueryGroupedMembersCompletedSchema = z
         message: "Each record is returned once per group page",
       });
   });
-export type ProtectedQueryGroupedMembersCompleted = z.infer<
-  typeof protectedQueryGroupedMembersCompletedSchema
->;
 
 export const protectedQueryGroupedMembersResultSchema = z.discriminatedUnion("outcome", [
   protectedQueryGroupedMembersCompletedSchema,
@@ -547,9 +536,8 @@ export type ProtectedQueryTreeLevelCommand = z.infer<typeof protectedQueryTreeLe
 export const protectedQueryTreeRowSchema = protectedQueryPageRowSchema
   .extend({ hasChildren: z.boolean().nullable() })
   .strict();
-export type ProtectedQueryTreeRow = z.infer<typeof protectedQueryTreeRowSchema>;
 
-export const protectedQueryTreeLevelCompletedSchema = z
+const protectedQueryTreeLevelCompletedSchema = z
   .object({
     outcome: z.literal("completed"),
     moduleRootId: moduleRootIdSchema,
@@ -649,7 +637,7 @@ export const protectedQuerySummaryAggregateResultSchema = z.discriminatedUnion("
     .strict(),
 ]);
 
-export const protectedQuerySummaryGroupSchema = z
+const protectedQuerySummaryGroupSchema = z
   .object({
     groupKey: z.string(),
     groupValues: z.record(fieldIdSchema, jsonValueSchema),
@@ -662,7 +650,7 @@ export const protectedQuerySummaryGroupSchema = z
 const pivotAxisValueSchema = z.union([z.string(), z.null(), recordLinkValueSchema]);
 const pivotMeasureSchema = z.record(builderKeySchema, protectedQuerySummaryAggregateResultSchema);
 
-export const protectedQueryPivotResultSchema = z
+const protectedQueryPivotResultSchema = z
   .object({
     rowFieldId: fieldIdSchema,
     columnFieldId: fieldIdSchema,
@@ -706,7 +694,7 @@ export const protectedQueryPivotResultSchema = z
   .strict();
 export type ProtectedQueryPivotResult = z.infer<typeof protectedQueryPivotResultSchema>;
 
-export const protectedQuerySummaryCompletedSchema = z
+const protectedQuerySummaryCompletedSchema = z
   .object({
     outcome: z.literal("completed"),
     moduleRootId: moduleRootIdSchema,
@@ -733,7 +721,6 @@ export type ProtectedQuerySummaryCompleted = z.infer<typeof protectedQuerySummar
 export type ProtectedQuerySummaryAggregateResult = z.infer<
   typeof protectedQuerySummaryAggregateResultSchema
 >;
-export type ProtectedQuerySummaryGroup = z.infer<typeof protectedQuerySummaryGroupSchema>;
 export type ProtectedQuerySummaryResult = z.infer<typeof protectedQuerySummaryResultSchema>;
 
 /** One installed choice column in an exact protected board summary. */
@@ -783,7 +770,7 @@ export type ProtectedQueryBoardSummaryCommand = z.infer<
   typeof protectedQueryBoardSummaryCommandSchema
 >;
 
-export const protectedQueryBoardSummaryCompletedSchema = z
+const protectedQueryBoardSummaryCompletedSchema = z
   .object({
     outcome: z.literal("completed"),
     moduleRootId: moduleRootIdSchema,
@@ -842,15 +829,6 @@ export const protectedQueryBoardSummaryResultSchema = z.discriminatedUnion("outc
   protectedQueryBoardSummaryCompletedSchema,
   protectedQueryRefusalSchema,
 ]);
-export type ProtectedQueryBoardSummaryColumn = z.infer<
-  typeof protectedQueryBoardSummaryColumnSchema
->;
-export type ProtectedQueryBoardSummaryUnassigned = z.infer<
-  typeof protectedQueryBoardSummaryUnassignedSchema
->;
-export type ProtectedQueryBoardSummaryCompleted = z.infer<
-  typeof protectedQueryBoardSummaryCompletedSchema
->;
 export type ProtectedQueryBoardSummaryResult = z.infer<
   typeof protectedQueryBoardSummaryResultSchema
 >;

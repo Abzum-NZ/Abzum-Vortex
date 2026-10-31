@@ -178,7 +178,7 @@ const unsafeSettingTextPatterns: readonly RegExp[] = Object.freeze([
 ]);
 
 /** True when authored text carries markup, script, styling or a data-access statement. */
-export const isUnsafeComponentSettingText = (text: string): boolean =>
+const isUnsafeComponentSettingText = (text: string): boolean =>
   unsafeSettingTextPatterns.some((pattern) => pattern.test(text));
 
 type RichTextSettingDocument = z.infer<typeof richTextDocumentSchema>;
@@ -207,7 +207,7 @@ const richTextSettingViolations = (
 };
 
 /** Setting-value or setting-key violation families the shared component-setting validator emits. */
-export type ComponentSettingFailureFamily = Extract<
+type ComponentSettingFailureFamily = Extract<
   DefinitionRuleFailureFamily,
   | "required_value"
   | "invalid_value"
@@ -641,7 +641,7 @@ const defaultMatchesProperty = (schema: BlockPropertySchemaContract): boolean =>
   return validateComponentSettingValue(value, schema).length === 0 && complete(value, schema);
 };
 
-export type BlockPropertyVisibilityIssue = Readonly<{
+type BlockPropertyVisibilityIssue = Readonly<{
   path: [number, ...(string | number)[]];
   message: string;
 }>;

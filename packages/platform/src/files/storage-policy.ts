@@ -31,7 +31,7 @@ export const validateStorageKey = (storageKey: string, organizationId: Organizat
   privateFileObjectPathSchema.safeParse(storageKey).success &&
   storageKey.startsWith(`${organizationId}/`);
 
-export type CreateSignedStorageOperationClaimsInput = Readonly<{
+type CreateSignedStorageOperationClaimsInput = Readonly<{
   destinationProject: string;
   issuer: string;
   organizationId: OrganizationId;
@@ -87,16 +87,3 @@ export const createSignedStorageOperationClaims = (
     exp: issuedAtEpochSeconds + ttlSeconds,
   });
 };
-
-export type VerifySignedStorageOperationClaimsExpected = Readonly<{
-  destinationProject: string;
-  issuer: string;
-  organizationId: OrganizationId;
-  objectPath: string;
-  operation: FileStorageOperation;
-  nowEpochSeconds?: number;
-}>;
-
-export type VerifyStorageClaimsResult =
-  | Readonly<{ valid: true; claims: FileStorageOperationClaims }>
-  | Readonly<{ valid: false; reason: string }>;

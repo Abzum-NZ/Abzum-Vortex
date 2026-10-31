@@ -34,7 +34,7 @@ export type InlinePipelineChange = Readonly<{
   removedOptions: readonly string[];
 }>;
 
-export type InlinePipelineResult =
+type InlinePipelineResult =
   | Readonly<{ kind: "changed"; source: ApplicationSourceDocument; pipelineKey: string }>
   | Readonly<{ kind: "invalid"; issues: readonly string[] }>
   | Readonly<{

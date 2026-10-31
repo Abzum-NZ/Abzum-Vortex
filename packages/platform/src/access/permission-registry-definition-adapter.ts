@@ -33,7 +33,7 @@ export const permissionRegistryPreparationErrorCodes = [
   "PERMISSION_REGISTRY_PERMISSION_OWNERSHIP_AMBIGUOUS",
 ] as const;
 
-export type PermissionRegistryPreparationErrorCode =
+type PermissionRegistryPreparationErrorCode =
   (typeof permissionRegistryPreparationErrorCodes)[number];
 
 export class PermissionRegistryPreparationError extends Error {
@@ -55,7 +55,7 @@ export interface PermissionRegistryDefinitionSetReader {
   ): Promise<SystemApplicationBoundReleaseSetResult>;
 }
 
-export type PrepareApplicationPermissionRegistrationCommand = Readonly<{
+type PrepareApplicationPermissionRegistrationCommand = Readonly<{
   applicationRootId: ApplicationRootId;
   releaseRevision: number;
 }>;

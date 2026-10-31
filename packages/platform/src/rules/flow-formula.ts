@@ -409,7 +409,7 @@ const isEmpty = (candidate: FlowRuntimeValue): boolean =>
     !Array.isArray(candidate.value) &&
     Object.keys(candidate.value).length === 0);
 
-export const flowJsonValuesEqual = (left: JsonValue, right: JsonValue): boolean => {
+const flowJsonValuesEqual = (left: JsonValue, right: JsonValue): boolean => {
   if (left === right) return true;
   if (left === null || right === null || typeof left !== "object" || typeof right !== "object")
     return false;

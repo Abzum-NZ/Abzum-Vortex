@@ -2,7 +2,6 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import type { SessionContext } from "../access/identity-access";
 import { correlationIdSchema, type CorrelationId } from "../catalogue/common";
 import {
   applicationRootIdSchema,
@@ -35,7 +34,7 @@ import {
 } from "./file-contracts";
 import { isExecutableContent, normalizeFileExtension, normalizeMediaType } from "./content-safety";
 import { sanitizeFileDisplayName } from "./file-metadata";
-import { resolveVerifiedFileActor, verifyAttachmentFieldAuthority } from "./attachment-authority";
+import { verifyAttachmentFieldAuthority } from "./attachment-authority";
 import type {
   ResolveCurrentStorageAuthority,
   StorageCredentialBridge,
@@ -92,7 +91,7 @@ export type FileReadPurpose = "download" | "preview";
  * request context of the organisation the viewer is acting in. For a shared
  * record that is the recipient organisation, never the source organisation.
  */
-export type FileReadViewer = Readonly<{
+type FileReadViewer = Readonly<{
   organizationId: OrganizationId;
   actor: VerifiedFileActor;
   applicationRootId?: ApplicationRootId;
@@ -105,7 +104,7 @@ export type FileReadViewer = Readonly<{
  * A grant that does not name the attachment field exposes neither metadata nor
  * content, and the bytes remain owned by the source organisation.
  */
-export type SharedRecordFileGrant = Readonly<{
+type SharedRecordFileGrant = Readonly<{
   grantId: PlatformId;
   sourceOrganizationId: OrganizationId;
   sourceRecordTypeId: RecordTypeId;
@@ -127,7 +126,7 @@ export type SharedRecordFileGrant = Readonly<{
  * preview request, supplies a fresh one; `validUntil` bounds how long the
  * decision may be relied on.
  */
-export type CurrentReadAuthority = Readonly<{
+type CurrentReadAuthority = Readonly<{
   viewer: FileReadViewer;
   recordTypeId: RecordTypeId;
   recordId: RecordId;
@@ -137,35 +136,16 @@ export type CurrentReadAuthority = Readonly<{
   validUntil: string;
 }>;
 
-export type FileReadRequest = Readonly<{
+type FileReadRequest = Readonly<{
   fileId: FileId;
   purpose: FileReadPurpose;
   rangeHeader?: string;
   ifRangeHeader?: string;
 }>;
 
-/**
- * Derives the file viewer from a trusted, already-resolved session context. A
- * public, anonymous or federated caller has no local private-file viewer: a
- * federated read is served by the source File service's own gateway.
- */
-export const fileReadViewerFromSessionContext = (
-  context: SessionContext,
-): FileReadViewer | null => {
-  const actor = resolveVerifiedFileActor(context, context.organizationId);
-  if (!actor.authorized) return null;
-  return Object.freeze({
-    organizationId: context.organizationId,
-    actor: actor.actor,
-    ...(context.applicationRootId === undefined
-      ? {}
-      : { applicationRootId: context.applicationRootId }),
-  });
-};
+type ParsedByteRange = Readonly<{ start: number; end: number }>;
 
-export type ParsedByteRange = Readonly<{ start: number; end: number }>;
-
-export type RangeParseResult =
+type RangeParseResult =
   | Readonly<{ kind: "none" }>
   | Readonly<{ kind: "satisfiable"; range: ParsedByteRange }>
   | Readonly<{ kind: "unsatisfiable" }>;
@@ -177,7 +157,7 @@ const MAXIMUM_RANGE_HEADER_LENGTH = 200;
  * non-byte Range header is ignored and the complete representation is served; a
  * well-formed byte range that selects nothing is unsatisfiable.
  */
-export const parseRangeHeader = (
+const parseRangeHeader = (
   rangeHeader: string | undefined,
   totalBytes: number,
 ): RangeParseResult => {
@@ -263,10 +243,7 @@ const ACTIVE_BROWSER_EXTENSIONS: ReadonlySet<string> = new Set([
  * its own type: markup, scripts, SVG, PDF and executables. Such content is only
  * ever downloaded as an opaque attachment.
  */
-export const isExecutableOrActiveBrowserContent = (
-  mediaType: string,
-  extension: string,
-): boolean => {
+const isExecutableOrActiveBrowserContent = (mediaType: string, extension: string): boolean => {
   const normalized = normalizeMediaType(mediaType);
   const normalizedExtension = normalizeFileExtension(extension);
   return (
@@ -328,7 +305,7 @@ const encodeRfc5987 = (value: string): string =>
  * printable ASCII without quotes or backslashes; the exact sanitised name
  * travels in the RFC 5987 extended parameter.
  */
-export const buildContentDisposition = (
+const buildContentDisposition = (
   disposition: "attachment" | "inline",
   displayName: string,
   extension: string,
@@ -363,7 +340,7 @@ export const privateFileResponseHeaders = (): Record<string, string> => ({
   "X-Download-Options": "noopen",
 });
 
-export type ClaimedDownloadGrant = Readonly<{
+type ClaimedDownloadGrant = Readonly<{
   grant: DownloadGrant;
   fileRecord: FileRecord;
   correlationId: CorrelationId;
@@ -377,7 +354,7 @@ type SqlRow = Readonly<Record<string, unknown>>;
  * it. Every function below reads the request context that transaction
  * established, so it runs only inside the viewer's own protected request.
  */
-export type FileReadSqlTransaction = Readonly<{
+type FileReadSqlTransaction = Readonly<{
   query<Row extends SqlRow = SqlRow>(
     strings: TemplateStringsArray,
     ...values: readonly SqlValue[]
@@ -423,7 +400,7 @@ const claimedDownloadGrantSchema = z
   })
   .strict();
 
-export type FileApplicationLocation =
+type FileApplicationLocation =
   | Readonly<{ outcome: "located"; applicationRootId: ApplicationRootId }>
   | Readonly<{ outcome: "refused" }>;
 
@@ -445,7 +422,7 @@ export const locateFileApplication = async (
   );
 };
 
-export type FileReadDecision =
+type FileReadDecision =
   | Readonly<{
       outcome: "allowed";
       organizationId: OrganizationId;
@@ -488,7 +465,7 @@ export const readFileForDownload = async (
 };
 
 /** Persists one unclaimed, short-lived read grant for this request. */
-export const recordFileDownloadGrant = async (
+const recordFileDownloadGrant = async (
   transaction: FileReadSqlTransaction,
   {
     grant,
@@ -620,12 +597,12 @@ export const composeStorageAuthorityResolvers = (
 };
 
 /** One server-side Storage read, authorised by a bridge credential that never leaves the server. */
-export type UpstreamStorageReadOptions = Readonly<{
+type UpstreamStorageReadOptions = Readonly<{
   credential: StorageOperationCredential;
   range?: ParsedByteRange;
 }>;
 
-export type UpstreamStorageReadResult = Readonly<{
+type UpstreamStorageReadResult = Readonly<{
   statusCode: 200 | 206;
   contentLength?: number;
   contentRange?: string;
@@ -633,7 +610,7 @@ export type UpstreamStorageReadResult = Readonly<{
 }>;
 
 /** Server-side reader port that streams bytes from private Storage. */
-export type UpstreamStorageReader = (
+type UpstreamStorageReader = (
   options: UpstreamStorageReadOptions,
 ) => Promise<UpstreamStorageReadResult>;
 
@@ -714,7 +691,7 @@ const boundedByteStream = (
  * execute macros, scripts or active document content, and return one passive
  * rendition. The source is opened on demand through a server-held read.
  */
-export type FilePreviewRenderer = (
+type FilePreviewRenderer = (
   input: Readonly<{
     fileRecord: FileRecord;
     source: ReadableStream<Uint8Array>;
@@ -728,7 +705,7 @@ export type FilePreviewRenderer = (
   }>
 >;
 
-export type FileReadStreamResponse = Readonly<{
+type FileReadStreamResponse = Readonly<{
   outcome: "success";
   fileId: FileId;
   statusCode: 200 | 206;
@@ -736,7 +713,7 @@ export type FileReadStreamResponse = Readonly<{
   stream: ReadableStream<Uint8Array>;
 }>;
 
-export type FileReadRefusal = Readonly<{
+type FileReadRefusal = Readonly<{
   outcome: "refused";
   reason: FileReadRefusalReason;
   message: string;
@@ -746,7 +723,7 @@ export type FileReadRefusal = Readonly<{
 
 export type FileReadResult = FileReadStreamResponse | FileReadRefusal;
 
-export type FileReadCoordinatorDependencies = Readonly<{
+type FileReadCoordinatorDependencies = Readonly<{
   transaction: FileReadSqlTransaction;
   bridge: Pick<StorageCredentialBridge, "mintStorageOperationCredential">;
   upstreamStorageReader: UpstreamStorageReader;
@@ -760,7 +737,7 @@ export type FileReadCoordinatorDependencies = Readonly<{
   clock?: () => Date;
 }>;
 
-export type FileReadCoordinator = Readonly<{
+type FileReadCoordinator = Readonly<{
   readFile(authority: CurrentReadAuthority, request: FileReadRequest): Promise<FileReadResult>;
 }>;
 

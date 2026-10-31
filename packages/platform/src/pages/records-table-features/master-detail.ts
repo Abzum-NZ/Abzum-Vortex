@@ -36,10 +36,10 @@ import type { RecordsTableQueryRunner } from "../records-table-query";
 import { logRecordsTableRequestRefusal, recordsTableRequestRefusal } from "./index";
 
 /** One related record of an expanded row: its own record page, when the viewer may open it. */
-export type RowDetailRow = z.input<typeof rowDetailRowSchema>;
+type RowDetailRow = z.input<typeof rowDetailRowSchema>;
 
 /** One expanded row's read: the installed placement, the row the browser named and the services. */
-export type RowDetailRequest = Readonly<{
+type RowDetailRequest = Readonly<{
   context: InstalledRuntimeContext;
   session: IdentitySession;
   selection: OrganizationSelectionCandidate;

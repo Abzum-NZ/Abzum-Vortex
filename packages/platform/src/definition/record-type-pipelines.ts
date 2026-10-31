@@ -53,7 +53,7 @@ type PipelineShape = Readonly<{
   transitions: readonly Readonly<{ from: string; to: string }>[];
 }>;
 
-export type PipelineShapeProblem = Readonly<{ path: (string | number)[]; message: string }>;
+type PipelineShapeProblem = Readonly<{ path: (string | number)[]; message: string }>;
 
 /**
  * Why a pipeline does not fit the options of its stage field: every option is one stage, and every

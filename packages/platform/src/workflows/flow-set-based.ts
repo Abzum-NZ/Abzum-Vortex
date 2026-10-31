@@ -1,5 +1,5 @@
 /** Record steps a For each may run as one set-based change. */
-export const setBasedSteps: ReadonlySet<string> = new Set([
+const setBasedSteps: ReadonlySet<string> = new Set([
   "record.create",
   "record.set_fields",
   "record.link",

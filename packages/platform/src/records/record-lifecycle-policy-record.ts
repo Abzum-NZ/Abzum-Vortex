@@ -20,7 +20,7 @@ const requireOneRow = <Row extends DatabaseRow>(rows: readonly Row[]): Row => {
 
 type LimitsRow = DatabaseRow & { limits: unknown };
 
-export interface RecordLifecycleLimitsStoreDependencies {
+interface RecordLifecycleLimitsStoreDependencies {
   readonly runtimeTransaction?: RuntimeTransactionRunner;
 }
 
@@ -94,19 +94,3 @@ export const createOrganizationLifecycleLimitsStore = (
     },
   });
 };
-
-/**
- * The pure recovery-eligibility decision. It is re-exported here so the
- * Record lifecycle-policy runtime is the single callable surface for it; the
- * decision itself observes and changes nothing, and owns no restore, totals,
- * due-metadata, Activity, Event or receipt behaviour.
- */
-export {
-  decideRecordRecoveryEligibility,
-  maximumRecoveryWindowDays,
-  recordRecoveryEligibilityInputSchema,
-  type RecordRecoveryEligibilityDecision,
-  type RecordRecoveryEligibilityInput,
-  type RecordRecoveryEligibilityReason,
-  type RecordRecoveryPolicy,
-} from "../schema";

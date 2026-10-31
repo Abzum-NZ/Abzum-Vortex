@@ -221,14 +221,14 @@ const requirePreparedPlanMatchesReleaseSet = (
   if (canonicalJson(plan.permissions) !== canonicalJson(expectedPermissions)) invalid();
 };
 
-export type PreparedInstallationRuntimeSourceCommand = Readonly<{
+type PreparedInstallationRuntimeSourceCommand = Readonly<{
   organizationId: string;
   applicationRootId: string;
   applicationReleaseRevision: number;
   moduleBindings: readonly z.infer<typeof preparedBindingSchema>[];
 }>;
 
-export const createDatabasePreparedInstallationRuntimeSourceService = (
+const createDatabasePreparedInstallationRuntimeSourceService = (
   catalogueDefinition: ImmutableDefinitionPublicationCatalogueDefinition,
   transaction: RequestDatabaseTransaction,
   verifiedReleaseSets: readonly SystemApplicationBoundReleaseSetResult[],

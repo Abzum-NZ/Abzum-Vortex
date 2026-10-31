@@ -44,7 +44,7 @@ type Runner = <Result>(
  * (`vortex_identity.tenant_request_actor_id()`), never from `session`. A transaction with no bound
  * human or federated context, such as the default runtime transaction, is refused.
  */
-export type TenantGovernanceServiceDependencies = Readonly<{ runtimeTransaction?: Runner }>;
+type TenantGovernanceServiceDependencies = Readonly<{ runtimeTransaction?: Runner }>;
 
 type OrganizationMutationRow = DatabaseRow & {
   outcome: unknown;
@@ -276,10 +276,3 @@ export const createTenantGovernanceService = (
 
   return Object.freeze(logRefusedOperations("TENANT_GOVERNANCE", operations));
 };
-
-const defaultService = createTenantGovernanceService();
-export const createTenantOrganization = defaultService.createOrganization;
-export const renameTenantOrganization = defaultService.renameOrganization;
-export const reparentTenantOrganization = defaultService.reparentOrganization;
-export const suspendTenantOrganization = defaultService.suspendOrganization;
-export const reactivateTenantOrganization = defaultService.reactivateOrganization;

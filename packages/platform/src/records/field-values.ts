@@ -40,7 +40,7 @@ export const storedRecordCandidateValues = (
   return candidate;
 };
 
-export type RecordFieldValuePreparationIssueCode =
+type RecordFieldValuePreparationIssueCode =
   | "invalid_input"
   | "invalid_existing_value"
   | "unknown_field"
@@ -53,7 +53,7 @@ export type RecordFieldValuePreparationIssueCode =
   | "unresolved_record_target"
   | "stage_move_refused";
 
-export type RecordFieldValuePreparationIssue = Readonly<{
+type RecordFieldValuePreparationIssue = Readonly<{
   code: RecordFieldValuePreparationIssueCode;
   fieldId?: string;
   path: ValuePath;
@@ -82,7 +82,7 @@ export type RecordFieldValuePendingCheck =
       fileId: FileId;
     }>;
 
-export type PrepareRecordFieldValuesInput = Readonly<{
+type PrepareRecordFieldValuesInput = Readonly<{
   operation: "create" | "update";
   recordType: RecordTypeDefinition;
   submittedValues: ValueMap;
@@ -121,11 +121,11 @@ export type InitialRecordFieldCandidate = Readonly<{
   submittedClearFieldIds: readonly string[];
 }>;
 
-export type PrepareInitialRecordFieldCandidateResult =
+type PrepareInitialRecordFieldCandidateResult =
   | Readonly<{ success: true; candidate: InitialRecordFieldCandidate }>
   | Readonly<{ success: false; issues: readonly RecordFieldValuePreparationIssue[] }>;
 
-export type FinalizeRecordFieldCandidateInput = Readonly<{
+type FinalizeRecordFieldCandidateInput = Readonly<{
   recordType: RecordTypeDefinition;
   initialCandidate: InitialRecordFieldCandidate;
   candidateValues: ValueMap;
@@ -148,7 +148,7 @@ type PreparationContext = {
 type ValueOrigin = RecordFieldValueOrigin | "candidate";
 type FieldPolicyMode = "structural" | "final";
 
-export type PersistedRecordFieldValueInput = Readonly<{
+type PersistedRecordFieldValueInput = Readonly<{
   field: ModuleField;
   value: unknown;
 }>;

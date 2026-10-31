@@ -30,9 +30,9 @@ export const eventDeliveryRecoveryErrorCodes = [
   "EVENT_DELIVERY_RECOVERY_STORAGE_UNAVAILABLE",
 ] as const;
 
-export type EventDeliveryRecoveryErrorCode = (typeof eventDeliveryRecoveryErrorCodes)[number];
+type EventDeliveryRecoveryErrorCode = (typeof eventDeliveryRecoveryErrorCodes)[number];
 
-export class EventDeliveryRecoveryError extends Error {
+class EventDeliveryRecoveryError extends Error {
   readonly code: EventDeliveryRecoveryErrorCode;
 
   constructor(code: EventDeliveryRecoveryErrorCode) {
@@ -52,7 +52,7 @@ export class EventDeliveryRecoveryError extends Error {
  * how long the reclaim lease is held before the same claim becomes eligible
  * for ordinary claim reclaim again.
  */
-export type EventDeliveryFailureReportInput = Readonly<{
+type EventDeliveryFailureReportInput = Readonly<{
   consumerKey: string;
   occurrenceId: string;
   claimCursor: string;
@@ -61,7 +61,7 @@ export type EventDeliveryFailureReportInput = Readonly<{
   retryBackoffSeconds: number;
 }>;
 
-export type EventDeliveryFailureReportResult =
+type EventDeliveryFailureReportResult =
   | Readonly<{ outcome: "claim_unavailable" }>
   | Readonly<{ outcome: "mismatched" }>
   | Readonly<{ outcome: "already_acknowledged" }>

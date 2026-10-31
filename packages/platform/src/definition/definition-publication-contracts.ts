@@ -43,7 +43,7 @@ type ConnectionOutput = Extract<DefinitionCompilationOutput, { kind: "connection
 export type PublishableCompilationOutput = ApplicationCompilationOutput | ModuleCompilationOutput;
 export type DefinitionResolution = DefinitionResolutionSnapshot;
 
-export type DefinitionPublicationFailureCode =
+type DefinitionPublicationFailureCode =
   | "INVALID_DEFINITION_PUBLICATION_COMMAND"
   | "DEFINITION_DRAFT_STALE_OR_MISSING"
   | "DEFINITION_IDENTITY_RETIRED"

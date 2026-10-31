@@ -26,7 +26,7 @@ export type OperandInfo = Readonly<{
   acceptsLiteral?: (value: JsonValue) => boolean;
   dialect?: ValueDialect;
 }>;
-export type ValueDialect = "source" | "canonical" | "flow";
+type ValueDialect = "source" | "canonical" | "flow";
 
 /** Unknown declarations are refused, including on unary conditions. */
 export function conditionValueType(type: unknown): ConditionValueType | undefined {

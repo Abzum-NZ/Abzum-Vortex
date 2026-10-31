@@ -9,11 +9,10 @@ import {
   moduleRootIdSchema,
   namespacedKeySchema,
   organizationIdSchema,
-  queryIdSchema,
   revisionSchema,
   semanticVersionSchema,
 } from "../catalogue/identifiers";
-import { moduleQueryDefinitionSchema, moduleContentSchema } from "./module-contracts";
+import { moduleContentSchema } from "./module-contracts";
 import { applicationPlatformCompatibilityVersionSchema } from "./platform-compatibility";
 import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 
@@ -152,27 +151,6 @@ export const systemApplicationBoundReleaseSetResultSchema = z
       });
   });
 
-/**
- * One published Module query with the exact release identity it was read from. This is the only
- * shape a Query executor receives; it carries the declared contract, never a database target.
- */
-export const publishedModuleQueryDescriptorSchema = z
-  .object({
-    moduleRootId: moduleRootIdSchema,
-    moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
-    query: moduleQueryDefinitionSchema,
-  })
-  .strict();
-
-/** An Application selects a published Module query by module root, exact release and query identity. */
-export const applicationModuleQueryBindingSchema = z
-  .object({
-    moduleRootId: moduleRootIdSchema,
-    moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
-    queryId: queryIdSchema,
-  })
-  .strict();
-
 export type DefinitionConsumerReadResult = z.infer<typeof definitionConsumerReadResultSchema>;
 export type ApplicationBoundReleaseSetCommand = z.infer<
   typeof applicationBoundReleaseSetCommandSchema
@@ -189,4 +167,3 @@ export type SystemApplicationBoundReleaseSetResult = z.infer<
 export type ModuleDefinitionConsumerReadResult = z.infer<
   typeof moduleDefinitionConsumerReadResultSchema
 >;
-export type ApplicationModuleQueryBinding = z.infer<typeof applicationModuleQueryBindingSchema>;

@@ -86,7 +86,7 @@ export type FlowValidationIssue = Readonly<{
   taskId?: string;
 }>;
 
-export type FlowSetValidationIssue = FlowValidationIssue & Readonly<{ flowId: string }>;
+type FlowSetValidationIssue = FlowValidationIssue & Readonly<{ flowId: string }>;
 
 export type FlowReferenceEnvironment = Readonly<{
   page: string;

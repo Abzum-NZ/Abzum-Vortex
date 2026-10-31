@@ -45,14 +45,14 @@ export type ModuleFieldPublication = Readonly<{
 }>;
 
 /** What a field change is checked against besides the draft: what is published, and the people directory. */
-export type InlineModuleFieldContext = Readonly<{
+type InlineModuleFieldContext = Readonly<{
   publication: ModuleFieldPublication;
   /** The people directory's owner, which a first Person link adds to the Modules the application uses. */
   peopleDirectory: PeopleDirectoryOwner | null;
 }>;
 
 /** One field added to, or changed in, a record type of an owned inline Module, as a person set it. */
-export type InlineModuleFieldChange = Readonly<{
+type InlineModuleFieldChange = Readonly<{
   moduleKey: string;
   recordAlias: string;
   /** Absent to add a new field. */
@@ -76,7 +76,7 @@ export type InlineModuleFieldChange = Readonly<{
   cardinality: LinkCardinality | undefined;
 }>;
 
-export type InlineModuleFieldChangeResult =
+type InlineModuleFieldChangeResult =
   | Readonly<{
       kind: "changed";
       source: ApplicationSourceDocument;

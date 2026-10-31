@@ -14,7 +14,7 @@ import { recordIdSchema, revisionSchema } from "../catalogue/identifiers";
  *   command runs, under the person's current access, in bounded batches.
  */
 export const recordsSelectionMaximumIds = 200;
-export const recordsSelectionMaximumExclusions = 200;
+const recordsSelectionMaximumExclusions = 200;
 
 /** The sealed descriptor of every record a table read matches. */
 export const recordsSelectionTokenSchema = z
@@ -41,7 +41,6 @@ export const recordsSelectionSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
 ]);
-export type RecordsSelection = z.infer<typeof recordsSelectionSchema>;
 /** A selection as the browser builds it, before the server parses its identities. */
 export type RecordsSelectionInput = z.input<typeof recordsSelectionSchema>;
 
@@ -120,7 +119,7 @@ export type RecordsTableBulkRefusalReason = (typeof recordsTableBulkRefusalReaso
 const countSchema = z.number().int().nonnegative();
 
 /** Maximum distinct authored warning messages carried by one bulk summary. */
-export const recordsTableBulkWarningMaximum = 100;
+const recordsTableBulkWarningMaximum = 100;
 
 /** What a finished bulk run reports: the records it covered, changed, refused and did not reach. */
 export const recordsTableBulkRunSummarySchema = z

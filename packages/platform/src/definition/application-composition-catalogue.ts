@@ -349,7 +349,7 @@ export const LINK_TILES_BLOCK_RELEASE: PlatformBlockRelease = release(
 );
 
 /** All immutable display block releases, including calendar and query-bound board releases. */
-export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
+const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
   NOTICE_BLOCK_RELEASE,
   ATTACHMENT_LIST_BLOCK_RELEASE,
   QUERY_NOTICE_BLOCK_RELEASE,
@@ -384,19 +384,19 @@ export const CONTROL_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.fr
 ]);
 
 /** All immutable launcher and tile block releases. */
-export const LAUNCHER_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
+const LAUNCHER_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
   LINK_TILES_BLOCK_RELEASE,
 ]);
 
 /** All immutable general layout block releases. */
-export const LAYOUT_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
+const LAYOUT_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
   CONTAINER_BLOCK_RELEASE,
   HEADING_BLOCK_RELEASE,
 ]);
 
 /** Immutable application navigation and search releases, placed in a shell's layout. */
-export const NAVIGATION_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
+const NAVIGATION_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
   APPLICATION_NAVIGATION_BLOCK_RELEASE,
   APPLICATION_ACCOUNT_ACTIONS_BLOCK_RELEASE,
   APPLICATION_SEARCH_BLOCK_RELEASE,

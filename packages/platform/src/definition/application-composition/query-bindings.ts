@@ -14,7 +14,7 @@ import {
  * for each request and reaches the Query engine as an input it validates again; a binding can only
  * choose a value the viewer's own access already allows to be read, never widen it.
  */
-export const queryBindingSourceKinds = [
+const queryBindingSourceKinds = [
   "fixed",
   "page_parameter",
   "record_field",
@@ -182,20 +182,3 @@ export const defaultAwaitingMessage = (
   blockTitle === undefined || blockTitle.trim() === ""
     ? `Choose ${inputLabel} to see this.`
     : `Choose ${inputLabel} to see ${blockTitle.trim()}.`;
-
-/** The input every binding of a block names, so a page knows which parameters a block depends on. */
-export const queryBindingParameterNames = (
-  bindings: QueryBindings,
-  publishedBy: (placement: string) => string | undefined,
-): readonly string[] => [
-  ...new Set(
-    bindings.flatMap((binding) => {
-      if (binding.source.kind === "page_parameter") return [binding.source.name];
-      if (binding.source.kind === "control") {
-        const name = publishedBy(binding.source.placement);
-        return name === undefined ? [] : [name];
-      }
-      return [];
-    }),
-  ),
-];

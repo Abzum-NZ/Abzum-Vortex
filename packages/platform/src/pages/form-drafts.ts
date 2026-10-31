@@ -32,26 +32,6 @@ import {
   workflowNodeIdSchema,
 } from "../catalogue/identifiers";
 
-/**
- * Page-owned private revisioned form drafts.
- *
- * A draft is one person's unfinished input for one exact form of one exact
- * installed application release. It is deliberately not a business record: it
- * creates no Record, Activity or event, and it is removed thirty days after its
- * last revision. The store is private to the person, so a draft can only be read
- * back by the organisation account that wrote it, while the browser and an
- * authorised MCP client share the one revision-checked contract.
- *
- * Values and validation state are stored as bounded JSON keyed by permanent
- * field identity or by the form's declared input key. Both are written and read
- * only through the server-owned projection of the fields and choices the page
- * layer currently permits, so an unpermitted or write-only field is never stored
- * and a stale field or choice never reaches a caller.
- */
-
-/** An untouched draft is removed thirty days after its last revision. */
-export const privateFormDraftRetentionDays = 30 as const;
-
 /** Bounds that keep one draft a bounded personal scratch document. */
 export const privateFormDraftLimits = Object.freeze({
   fields: 500,
@@ -60,7 +40,7 @@ export const privateFormDraftLimits = Object.freeze({
 });
 
 /** A permanent field identity, or a record-free form input key. Field identities are lower case. */
-export const privateFormDraftInputKeySchema = z
+const privateFormDraftInputKeySchema = z
   .string()
   .refine(
     (key) => fieldIdSchema.safeParse(key).success || builderKeySchema.safeParse(key).success,
@@ -73,7 +53,7 @@ const normalizedKey = (key: string): string => key.toLowerCase();
  * One field's safe validation state. Only a closed state and a bounded machine
  * reason code are stored, never a rendered message or raw server value.
  */
-export const privateFormDraftFieldValidationSchema = z
+const privateFormDraftFieldValidationSchema = z
   .object({
     state: z.enum(["valid", "invalid", "incomplete"]),
     reasonCode: z
@@ -102,7 +82,7 @@ const privateFormDraftValuesSchema = z
       context.addIssue({ code: "custom", message: "A draft value set is too large" });
   });
 
-export const privateFormDraftValidationSchema = z
+const privateFormDraftValidationSchema = z
   .record(privateFormDraftInputKeySchema, privateFormDraftFieldValidationSchema)
   .superRefine((value, context) => {
     if (Object.keys(value).length > privateFormDraftLimits.fields)
@@ -120,11 +100,11 @@ const privateFormDraftScopeShape = {
   subjectRecordId: recordIdSchema.optional(),
 };
 
-export const privateFormDraftScopeSchema = z.object(privateFormDraftScopeShape).strict();
+const privateFormDraftScopeSchema = z.object(privateFormDraftScopeShape).strict();
 
 export type PrivateFormDraftScope = z.infer<typeof privateFormDraftScopeSchema>;
 
-export const privateFormDraftSchema = z
+const privateFormDraftSchema = z
   .object({
     draftId: platformIdSchema,
     organizationId: organizationIdSchema,
@@ -152,7 +132,7 @@ export type PrivateFormDraft = z.infer<typeof privateFormDraftSchema>;
  * part of a caller's command. A write-only (secret) field is not listed, so its
  * value is neither stored in the draft nor returned.
  */
-export const privateFormDraftProjectionSchema = z
+const privateFormDraftProjectionSchema = z
   .object({
     permittedFieldIds: z.array(privateFormDraftInputKeySchema).max(privateFormDraftLimits.fields),
     fieldChoices: z
@@ -164,18 +144,18 @@ export const privateFormDraftProjectionSchema = z
   })
   .strict();
 
-export type PrivateFormDraftProjection = z.infer<typeof privateFormDraftProjectionSchema>;
+type PrivateFormDraftProjection = z.infer<typeof privateFormDraftProjectionSchema>;
 
-export const createPrivateFormDraftCommandSchema = privateFormDraftScopeSchema
+const createPrivateFormDraftCommandSchema = privateFormDraftScopeSchema
   .extend({
     values: privateFormDraftValuesSchema,
     validation: privateFormDraftValidationSchema,
   })
   .strict();
 
-export const readPrivateFormDraftCommandSchema = privateFormDraftScopeSchema;
+const readPrivateFormDraftCommandSchema = privateFormDraftScopeSchema;
 
-export const updatePrivateFormDraftCommandSchema = privateFormDraftScopeSchema
+const updatePrivateFormDraftCommandSchema = privateFormDraftScopeSchema
   .extend({
     draftId: platformIdSchema,
     expectedRevision: revisionSchema,
@@ -184,32 +164,32 @@ export const updatePrivateFormDraftCommandSchema = privateFormDraftScopeSchema
   })
   .strict();
 
-export const abandonPrivateFormDraftCommandSchema = z
+const abandonPrivateFormDraftCommandSchema = z
   .object({ draftId: platformIdSchema, expectedRevision: revisionSchema })
   .strict();
 
-export type CreatePrivateFormDraftCommand = z.infer<typeof createPrivateFormDraftCommandSchema>;
-export type ReadPrivateFormDraftCommand = z.infer<typeof readPrivateFormDraftCommandSchema>;
-export type UpdatePrivateFormDraftCommand = z.infer<typeof updatePrivateFormDraftCommandSchema>;
-export type AbandonPrivateFormDraftCommand = z.infer<typeof abandonPrivateFormDraftCommandSchema>;
+type CreatePrivateFormDraftCommand = z.infer<typeof createPrivateFormDraftCommandSchema>;
+type ReadPrivateFormDraftCommand = z.infer<typeof readPrivateFormDraftCommandSchema>;
+type UpdatePrivateFormDraftCommand = z.infer<typeof updatePrivateFormDraftCommandSchema>;
+type AbandonPrivateFormDraftCommand = z.infer<typeof abandonPrivateFormDraftCommandSchema>;
 
-export type PrivateFormDraftCreateResult =
+type PrivateFormDraftCreateResult =
   | Readonly<{ outcome: "created"; draft: PrivateFormDraft }>
   | Readonly<{ outcome: "exists" }>
   | Readonly<{ outcome: "unavailable" }>;
 
-export type PrivateFormDraftReadResult =
+type PrivateFormDraftReadResult =
   | Readonly<{ outcome: "available"; draft: PrivateFormDraft }>
   | Readonly<{ outcome: "stale_installation" }>
   | Readonly<{ outcome: "unavailable" }>;
 
-export type PrivateFormDraftUpdateResult =
+type PrivateFormDraftUpdateResult =
   | Readonly<{ outcome: "updated"; draft: PrivateFormDraft }>
   | Readonly<{ outcome: "stale_revision" }>
   | Readonly<{ outcome: "stale_installation" }>
   | Readonly<{ outcome: "unavailable" }>;
 
-export type PrivateFormDraftAbandonResult =
+type PrivateFormDraftAbandonResult =
   | Readonly<{ outcome: "abandoned"; draft: PrivateFormDraft }>
   | Readonly<{ outcome: "stale_revision" }>
   | Readonly<{ outcome: "unavailable" }>;
@@ -221,9 +201,9 @@ export const privateFormDraftErrorCodes = [
   "PRIVATE_FORM_DRAFT_OPERATION_FAILED",
 ] as const;
 
-export type PrivateFormDraftErrorCode = (typeof privateFormDraftErrorCodes)[number];
+type PrivateFormDraftErrorCode = (typeof privateFormDraftErrorCodes)[number];
 
-export class PrivateFormDraftError extends Error {
+class PrivateFormDraftError extends Error {
   readonly code: PrivateFormDraftErrorCode;
 
   constructor(code: PrivateFormDraftErrorCode, options?: ErrorOptions) {
@@ -259,7 +239,7 @@ const projectField = (
  * field whose value the projection left unchanged, so a stale "valid" state
  * never describes a value the caller no longer sees. Keys come back normalised.
  */
-export const restrictPrivateFormDraftInput = (
+const restrictPrivateFormDraftInput = (
   input: Readonly<{
     values: Readonly<Record<string, JsonValue>>;
     validation: Readonly<Record<string, PrivateFormDraftFieldValidation>>;
@@ -302,7 +282,7 @@ export const restrictPrivateFormDraftInput = (
  * Projects one stored draft to the exact currently permitted fields, choices
  * and validation state. This is the only shape a caller ever receives.
  */
-export const projectPrivateFormDraft = (
+const projectPrivateFormDraft = (
   draft: PrivateFormDraft,
   projection: PrivateFormDraftProjection,
 ): PrivateFormDraft => {
@@ -514,7 +494,7 @@ const abandonPrivateFormDraft = async (
  * declaration that governs filling it and the projection of fields and choices
  * the person may store and read back now.
  */
-export type PrivateFormDraftAuthority = Readonly<{
+type PrivateFormDraftAuthority = Readonly<{
   access: OrganizationAccessDeclaration;
   projection: PrivateFormDraftProjection;
 }>;

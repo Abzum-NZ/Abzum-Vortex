@@ -10,20 +10,20 @@ import {
 } from "../db/request-transaction";
 import { DefinitionError } from "./definition-error";
 
-export const runtimeBundleCleanupLimits = Object.freeze({
+const runtimeBundleCleanupLimits = Object.freeze({
   batchSize: 100,
   minimumCredentialLength: 32,
   maximumCredentialLength: 1024,
 });
 
-export type RuntimeBundleCleanupAuthentication =
+type RuntimeBundleCleanupAuthentication =
   | Readonly<{ outcome: "authenticated" }>
   | Readonly<{
       outcome: "refused";
       reason: "cleanup_not_configured" | "credential_missing" | "credential_rejected";
     }>;
 
-export type RuntimeBundleCleanupBatchResult = Readonly<{
+type RuntimeBundleCleanupBatchResult = Readonly<{
   bundlesRemoved: number;
   bundlePartsRemoved: number;
   accessPlansRemoved: number;

@@ -36,7 +36,7 @@ export type TypedConditionParameterDeclaration = Readonly<{
     | "organization_account_reference";
 }>;
 
-export type TypedConditionEvaluationInput = Readonly<{
+type TypedConditionEvaluationInput = Readonly<{
   condition: ConditionNode;
   sourceRecordFields: readonly ModuleField[];
   declaredFieldIds: readonly string[];

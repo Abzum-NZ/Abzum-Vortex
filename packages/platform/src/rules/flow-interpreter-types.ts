@@ -43,7 +43,7 @@ export type FlowFailure = Readonly<{
 }>;
 
 /** What a save rule task reported while a save transaction flow ran, in flow order. */
-export type FlowRuleFeedback = Readonly<{
+type FlowRuleFeedback = Readonly<{
   kind: "warn" | "require";
   taskId: string;
   message: string;

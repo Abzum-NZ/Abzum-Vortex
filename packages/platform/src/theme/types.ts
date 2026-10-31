@@ -6,33 +6,17 @@ import type {
   DefinitionRuleFailure,
   DefinitionRuleFailureFamily,
 } from "../catalogue/validation-errors";
-import type {
-  PlatformThemeRelease as ContractPlatformThemeRelease,
-  ThemeColorRole,
-} from "../definition/application-composition/theme";
+import type { PlatformThemeRelease as ContractPlatformThemeRelease } from "../definition/application-composition/theme";
 import type { ApplicationContent } from "../definition/application-contracts";
-
-export type { ThemeColorRole };
 
 export type ApplicationTheme = ApplicationContent["theme"];
 export type ExactPlatformThemeDependency = ApplicationTheme["base"];
 export type ThemeTokenValue = ApplicationTheme["tokens"][string];
-export type ThemeTokenKind = ThemeTokenValue["kind"];
 export type PlatformThemeRelease = ContractPlatformThemeRelease;
 
-export type ColorPairToken = Extract<ThemeTokenValue, { kind: "color_pair" }>;
-export type TypographyToken = Extract<ThemeTokenValue, { kind: "typography" }>;
-export type SpacingToken = Extract<ThemeTokenValue, { kind: "spacing" }>;
-export type CornersToken = Extract<ThemeTokenValue, { kind: "corners" }>;
-export type BorderToken = Extract<ThemeTokenValue, { kind: "border" }>;
-export type ElevationToken = Extract<ThemeTokenValue, { kind: "elevation" }>;
-export type FocusToken = Extract<ThemeTokenValue, { kind: "focus" }>;
-export type AssetToken = Extract<ThemeTokenValue, { kind: "asset" }>;
-export type DensityToken = Extract<ThemeTokenValue, { kind: "density" }>;
+type ContrastPairUsage = "normal_text" | "large_text" | "non_text";
 
-export type ContrastPairUsage = "normal_text" | "large_text" | "non_text";
-
-export type ContrastPairDeclaration = Readonly<{
+type ContrastPairDeclaration = Readonly<{
   foregroundTokenKey: string;
   backgroundTokenKey: string;
   usage?: ContrastPairUsage | undefined;

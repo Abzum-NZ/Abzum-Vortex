@@ -165,7 +165,7 @@ const dateTimeActionInputSchema = z
       .optional(),
   })
   .strict();
-export const applicationActionInputDefinitionSchema = z
+const applicationActionInputDefinitionSchema = z
   .discriminatedUnion("type", [
     textActionInputSchema,
     formattedTextActionInputSchema,
@@ -212,7 +212,7 @@ export const applicationActionInputDefinitionSchema = z
         message: "Maximum cannot be below minimum",
       });
   });
-export const applicationActionDefinitionSchema = z
+const applicationActionDefinitionSchema = z
   .object({
     actionId: actionIdSchema,
     key: namespacedKeySchema,
@@ -260,7 +260,7 @@ export const applicationActionDefinitionSchema = z
       });
   });
 
-export const moduleBindingSchema = z
+const moduleBindingSchema = z
   .object({
     moduleRootId: moduleRootIdSchema,
     version: versionRequirementSchema,
@@ -269,14 +269,14 @@ export const moduleBindingSchema = z
   })
   .strict();
 
-export const aggregateSchema = z
+const aggregateSchema = z
   .object({
     operation: z.enum(["count", "sum", "minimum", "maximum", "average", "distinct_count"]),
     fieldId: fieldIdSchema.optional(),
     alias: builderKeySchema,
   })
   .strict();
-export const queryDefinitionSchema = z
+const queryDefinitionSchema = z
   .object({
     queryId: queryIdSchema,
     key: builderKeySchema,
@@ -315,7 +315,7 @@ type NavigationItemValue =
       address: string;
       permissionKey: string;
     };
-export const navigationItemSchema: z.ZodType<NavigationItemValue> = z.lazy(() =>
+const navigationItemSchema: z.ZodType<NavigationItemValue> = z.lazy(() =>
   z.discriminatedUnion("type", [
     z
       .object({
@@ -368,7 +368,7 @@ export const calendarMappingSchema = z.discriminatedUnion("kind", [
 ]);
 
 /** The closed selector carried by a single board-column continuation request. */
-export const boardColumnSelectorSchema = z.discriminatedUnion("kind", [
+const boardColumnSelectorSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("option"), value: z.string().min(1).max(120) }).strict(),
   z.object({ kind: z.literal("unassigned") }).strict(),
 ]);
@@ -503,7 +503,7 @@ export function isPresentationOnlyApplicationExperience(
  * other flows read it; it lives only in the page, is never trusted by the server and resets when
  * the page reloads.
  */
-export const pageValueDeclarationSchema = z
+const pageValueDeclarationSchema = z
   .object({
     type: z.enum(["decimal_number", "money", "text", "yes_no", "json"]),
     label: labelSchema,
@@ -683,7 +683,7 @@ export const maximumApplicationRoles = maximumFlowConfirmationDetailLines;
  * An application's roles. Exactly one is its default member role: a first install offers that
  * role to the installer, and the installer's explicit acceptance makes it theirs.
  */
-export const applicationRolesSchema = z
+const applicationRolesSchema = z
   .array(applicationRoleSchema)
   .min(1)
   .max(maximumApplicationRoles)
@@ -691,7 +691,7 @@ export const applicationRolesSchema = z
     message: "Exactly one role must be the application's default member role",
   });
 
-export const applicationConnectionBindingSchema = z
+const applicationConnectionBindingSchema = z
   .object({
     bindingId: containedComponentIdSchema,
     key: builderKeySchema,
@@ -701,7 +701,7 @@ export const applicationConnectionBindingSchema = z
     requiredOperationKeys: z.array(builderKeySchema).min(1),
   })
   .strict();
-export const publicAddressSchema = z
+const publicAddressSchema = z
   .object({
     addressId: containedComponentIdSchema,
     pageId: pageIdSchema,
@@ -1048,4 +1048,3 @@ export type ApplicationContent = z.infer<typeof applicationContentSchema>;
 export type ApplicationDraft = z.infer<typeof applicationDraftSchema>;
 export type PublishedApplicationDefinition = z.infer<typeof publishedApplicationDefinitionSchema>;
 export type ApplicationRole = z.infer<typeof applicationRoleSchema>;
-export type ApplicationConnectionBinding = z.infer<typeof applicationConnectionBindingSchema>;

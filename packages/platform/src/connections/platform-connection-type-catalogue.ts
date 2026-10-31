@@ -11,7 +11,7 @@ import {
   type SemanticVersion,
 } from "../catalogue/identifiers";
 
-export type PlatformConnectionTypeCatalogueRelease = Readonly<{
+type PlatformConnectionTypeCatalogueRelease = Readonly<{
   source: ConnectionTypeSourceDocument;
   rootId: ConnectionTypeId;
   releaseVersion: SemanticVersion;

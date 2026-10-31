@@ -176,7 +176,7 @@ export type InvocationDependencies = Readonly<{
   ) => Promise<GuidedInvocationPage | undefined>;
 }>;
 
-export type FlowInvocationAddress = Readonly<{
+type FlowInvocationAddress = Readonly<{
   read: Extract<PermittedApplicationsRead, { kind: "available" }>;
   application: PermittedApplication;
   /**

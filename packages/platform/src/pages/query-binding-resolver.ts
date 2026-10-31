@@ -67,7 +67,7 @@ export type QueryBindingContext = Readonly<{
   now: Date;
 }>;
 
-export type QueryBindingResolution =
+type QueryBindingResolution =
   | Readonly<{ kind: "resolved"; inputValues: Readonly<Record<string, JsonValue>> }>
   /** A required input has no value yet: the block shows its message and reads nothing. */
   | Readonly<{ kind: "awaiting"; input: string; message: string }>

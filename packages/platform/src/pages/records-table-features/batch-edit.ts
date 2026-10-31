@@ -57,7 +57,7 @@ export type RecordsTableBatchEditDependencies = HumanOrganizationRequestDependen
   }>;
 
 /** The rows a batch flow saves, or why the batch stops before any is written. */
-export type RecordsTableBatchEditPreparation =
+type RecordsTableBatchEditPreparation =
   | Readonly<{
       kind: "ready";
       rows: readonly Readonly<{

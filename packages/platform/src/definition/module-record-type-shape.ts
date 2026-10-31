@@ -202,7 +202,7 @@ const parsedResult = (
 };
 
 /** A new record type and, for an Application that owns no Module yet, its first Module. */
-export type InlineRecordTypeCreation = Readonly<{
+type InlineRecordTypeCreation = Readonly<{
   /** The owned Module to add it to; absent to create the Application's first owned Module. */
   moduleKey?: string;
   /** The key and name of the first owned Module, when one is created. */

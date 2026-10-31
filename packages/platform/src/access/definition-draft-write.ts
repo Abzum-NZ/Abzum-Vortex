@@ -46,7 +46,7 @@ import type { createHumanOrganizationRequestService } from "./human-organization
 import { DefinitionError, classifyDatabaseError } from "../definition/definition-error";
 
 /** Why a draft write was refused, in terms the person can act on. */
-export type HumanApplicationDraftRefusalReason =
+type HumanApplicationDraftRefusalReason =
   | "permission_missing"
   | "source_invalid"
   | "context_changed"
@@ -54,7 +54,7 @@ export type HumanApplicationDraftRefusalReason =
   | "identity_retired";
 
 /** Why a draft write conflicted, in terms the person can act on. */
-export type HumanApplicationDraftConflictReason =
+type HumanApplicationDraftConflictReason =
   "draft_changed" | "key_exists" | "alias_conflict" | "draft_missing";
 
 export type HumanApplicationDraftWriteResult =
@@ -63,7 +63,7 @@ export type HumanApplicationDraftWriteResult =
   | Readonly<{ kind: "refused"; reason?: HumanApplicationDraftRefusalReason; sentence?: string }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
-export type HumanApplicationDraftWriterDependencies = Readonly<{
+type HumanApplicationDraftWriterDependencies = Readonly<{
   requests: ReturnType<typeof createHumanOrganizationRequestService>;
   /** The shipped platform permission catalogue the draft write is judged against. */
   permissions: PlatformPermissionSource;

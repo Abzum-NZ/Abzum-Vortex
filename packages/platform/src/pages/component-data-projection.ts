@@ -58,7 +58,7 @@ import {
 } from "./records-table-features";
 
 /** One closed display value of a record detail field, as the display payload schema accepts it. */
-export type ProjectedCellValue = z.infer<typeof displayDetailCellSchema>;
+type ProjectedCellValue = z.infer<typeof displayDetailCellSchema>;
 
 /** One labelled display value of a record detail section or related-list row. */
 type LabeledValue = Readonly<{ key: string; label: string; value: ProjectedCellValue }>;
@@ -135,7 +135,7 @@ export const recordLinkPlainText = (
  * revision and a row action can be hidden for a row the viewer cannot act on. Neither is ever
  * inferred: a row the engine returned without them withholds the whole projection.
  */
-export type ProjectedTableRow = Readonly<{
+type ProjectedTableRow = Readonly<{
   recordId: string;
   revision: number;
   capabilities: NonNullable<ProtectedQueryRow["capabilities"]>;
@@ -181,7 +181,7 @@ export type ProjectedTableValues = z.input<typeof tableReadValuesSchema>;
 /** The viewer's search and filters a table page was read with; both empty when it was not narrowed. */
 export type RecordsTableNarrowing = z.input<typeof displayTableNarrowingSchema>;
 
-export type ProjectedRecordDetailValues = z.infer<typeof recordDetailPayloadSchema>;
+type ProjectedRecordDetailValues = z.infer<typeof recordDetailPayloadSchema>;
 
 /**
  * The display payload for one placement. Only `ready` carries values; a refusal never does, so a
@@ -198,7 +198,7 @@ export type ProjectedComponentData<Values> =
  * `readableFieldIds`, when supplied, narrows the readable fields further; it can never widen the
  * fields the Query engine returned.
  */
-export type ComponentDataProjectionInput = Readonly<{
+type ComponentDataProjectionInput = Readonly<{
   settings: Readonly<Record<string, BlockPropertyValueContract>>;
   fieldLabels?: Readonly<Record<string, string>>;
   /** Every declared option in definition order for choice fields, used only to label stored values. */

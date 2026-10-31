@@ -304,7 +304,7 @@ const multiLinkSettingsSchema = z
  * therefore always read-time; a stored field may never use the current time. A calculation that
  * uses a read-time calculation is itself read-time, and publication refuses one declared `stored`.
  */
-export const moduleCalculationEvaluationSchema = z.enum(["read_time", "stored"]);
+const moduleCalculationEvaluationSchema = z.enum(["read_time", "stored"]);
 
 const calculationSettingsSchema = z
   .object({
@@ -873,14 +873,14 @@ export const savedSharingConditionSchema = z
           });
   });
 
-export const moduleQuerySortSchema = z
+const moduleQuerySortSchema = z
   .object({
     fieldId: fieldIdSchema,
     direction: z.enum(["ascending", "descending"]),
   })
   .strict();
 
-export const moduleQueryAggregateSchema = z
+const moduleQueryAggregateSchema = z
   .object({
     operation: z.enum(["count", "sum", "minimum", "maximum", "average", "distinct_count"]),
     fieldId: fieldIdSchema.optional(),
@@ -918,7 +918,7 @@ export const moduleQueryDefinitionSchema = z
  * existing permanent identity, which is also the contribution's stable identity. The
  * target module is the exact resolved dependency entry, never a fresh reference.
  */
-export const moduleContributionSchema = z
+const moduleContributionSchema = z
   .object({
     contributionId: containedComponentIdSchema,
     targetModule: moduleDependencySchema,
@@ -961,7 +961,7 @@ export const moduleContributionSchema = z
  * the organisation field, the revision field and the declared filterable and sortable fields to
  * their permanent field identities.
  */
-export const moduleSystemProjectionSchema = z
+const moduleSystemProjectionSchema = z
   .object({
     protectedView: protectedReadModelKeySchema,
     organizationFieldId: fieldIdSchema,
@@ -1216,7 +1216,7 @@ export const recordTypeDefinitionSchema = z
  * record type action may target, so the subject row's identity and revision always have somewhere
  * to go. A Module- or application-owned operation is never a system record write path.
  */
-export const isSystemRecordProtectedOperation = (
+const isSystemRecordProtectedOperation = (
   reference: z.infer<typeof protectedOperationReferenceSchema>,
 ): boolean => {
   const owner = reference.owner;
@@ -1431,8 +1431,6 @@ export const moduleDraftSchema = z
 
 export type ModuleField = z.infer<typeof moduleFieldSchema>;
 export type ActionInputDefinition = z.infer<typeof actionInputDefinitionSchema>;
-export type ModuleQueryDefinition = z.infer<typeof moduleQueryDefinitionSchema>;
 export type RecordTypeDefinition = z.infer<typeof recordTypeDefinitionSchema>;
 export type ModuleContribution = z.infer<typeof moduleContributionSchema>;
 export type ModuleContent = z.infer<typeof moduleContentSchema>;
-export type ModuleDraft = z.infer<typeof moduleDraftSchema>;

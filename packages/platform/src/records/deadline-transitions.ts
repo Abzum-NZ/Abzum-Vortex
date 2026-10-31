@@ -1,4 +1,4 @@
-import { type ModuleField } from "../definition/module-contracts";
+import type { ModuleField } from "../definition/module-contracts";
 
 const fieldResultType = (field: ModuleField): string =>
   field.type === "calculation" || field.type === "total" ? field.settings.resultType : field.type;

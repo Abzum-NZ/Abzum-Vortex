@@ -63,7 +63,7 @@ import type {
   ResolvableConnectionTypeRelease,
 } from "../definition-publication-contracts";
 
-export type PlatformConnectionTypeReleaseDefinition = Readonly<{
+type PlatformConnectionTypeReleaseDefinition = Readonly<{
   source: ConnectionTypeSourceDocument;
   rootId: ConnectionTypeId;
   releaseVersion: SemanticVersion;
@@ -78,17 +78,17 @@ export type ImmutableDefinitionPublicationCatalogueDefinition = Readonly<{
   platformServiceOperationReleases?: readonly PlatformServiceOperationRelease[];
 }>;
 
-export type PlatformBlockReleaseDefinition = Omit<
+type PlatformBlockReleaseDefinition = Omit<
   PlatformBlockRelease,
   "contentFingerprint" | "customComponent"
 >;
 
-export type PlatformThemeReleaseDefinition = Omit<PlatformThemeRelease, "contentFingerprint">;
+type PlatformThemeReleaseDefinition = Omit<PlatformThemeRelease, "contentFingerprint">;
 
-export type CustomComponentReleaseDefinition = PlatformBlockReleaseDefinition &
+type CustomComponentReleaseDefinition = PlatformBlockReleaseDefinition &
   Readonly<{ customComponent: CustomComponentRelease }>;
 
-export type ApplicationCompositionCatalogueDefinition = Readonly<{
+type ApplicationCompositionCatalogueDefinition = Readonly<{
   compositionPolicy: ApplicationCompositionPolicy;
   platformBlockReleases: readonly PlatformBlockReleaseDefinition[];
   platformThemeReleases: readonly PlatformThemeReleaseDefinition[];
@@ -100,7 +100,7 @@ export type ApplicationCompositionCatalogueDefinition = Readonly<{
   customComponentReleases?: readonly CustomComponentReleaseDefinition[] | undefined;
 }>;
 
-export type ApplicationCompositionCatalogueSelection = Readonly<{
+type ApplicationCompositionCatalogueSelection = Readonly<{
   platformBlocks: readonly Readonly<{
     blockId: BlockId;
     releaseVersion: SemanticVersion;
@@ -117,7 +117,7 @@ export type ApplicationCompositionCatalogueSelection = Readonly<{
   customComponentPlacement?: CustomComponentPlacementContext;
 }>;
 
-export interface ApplicationCompositionCatalogue {
+interface ApplicationCompositionCatalogue {
   readPlatformBlockRelease(
     blockId: BlockId,
     releaseVersion: string,

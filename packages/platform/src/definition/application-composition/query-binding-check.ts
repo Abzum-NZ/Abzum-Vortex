@@ -33,7 +33,7 @@ export type QueryBindingField = Readonly<{
 }>;
 
 /** One parameter the page declares: its subject, or the one a control publishes. */
-export type QueryBindingPageParameter = Readonly<{
+type QueryBindingPageParameter = Readonly<{
   name: string;
   /** The parameter in business words: "This Company", or the publishing control's label. */
   label: string;
@@ -43,7 +43,7 @@ export type QueryBindingPageParameter = Readonly<{
 }>;
 
 /** One control on the page, by the placement a binding names, with its label. */
-export type QueryBindingControl = Readonly<{
+type QueryBindingControl = Readonly<{
   placement: string;
   label: string;
   /** The page parameter it publishes; absent when it publishes none. */

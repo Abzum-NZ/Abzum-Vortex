@@ -40,7 +40,6 @@ export {
   recordsTableFieldFilterable,
   recordsTableFilterKindOf,
   recordsTableFilterKinds,
-  type RecordsTableFilterKind,
 } from "./column-filters";
 import { recordsTableRowActionsFeature } from "./row-actions";
 import { recordsTableRowEditFeature, type RecordsTableRowEditSettings } from "./row-edit";
@@ -108,7 +107,6 @@ export {
 } from "./grouping";
 export { boardProblem, recordsTableBoardFactsOf } from "./board";
 export { boardFilterProblem } from "./column-filters";
-export { boardFormattingProblem } from "./conditional-formatting";
 export {
   conditionalColumnFormatFieldTypes,
   conditionalColumnFormatIssue,

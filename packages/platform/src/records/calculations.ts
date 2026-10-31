@@ -15,18 +15,18 @@ import { persistedRecordFieldValueMatches } from "./field-values";
 import { isRecord } from "../catalogue/runtime-primitives";
 
 type CalculationField = Extract<ModuleField, { type: "calculation" }>;
-export type RecordCalculationClock = Readonly<{
+type RecordCalculationClock = Readonly<{
   instant: string;
   organizationLocalDate: string;
 }>;
 
-export type EvaluateRecordCalculationsInput = Readonly<{
+type EvaluateRecordCalculationsInput = Readonly<{
   recordType: RecordTypeDefinition;
   authoritativeFieldValues: Readonly<Record<string, unknown>>;
   clock: RecordCalculationClock;
 }>;
 
-export type RecordCalculationIssueCode =
+type RecordCalculationIssueCode =
   | "invalid_input"
   | "execution_ineligible"
   | "invalid_dependency_value"
@@ -39,13 +39,13 @@ export type RecordCalculationIssueCode =
   | "required_result_missing"
   | "invalid_result";
 
-export type RecordCalculationIssue = Readonly<{
+type RecordCalculationIssue = Readonly<{
   code: RecordCalculationIssueCode;
   fieldId?: string;
   path: readonly (string | number)[];
 }>;
 
-export type EvaluateRecordCalculationsResult =
+type EvaluateRecordCalculationsResult =
   | Readonly<{
       success: true;
       setValues: Readonly<Record<string, JsonValue>>;

@@ -2,18 +2,13 @@ export { installedNamedActions } from "./installed-named-actions";
 export { createFlowBindingEndpoint, type InstalledFlowBindings } from "./flow-binding-endpoint";
 export type { FlowGuidedDraftPort } from "./flow-orchestrator-types";
 export { createBackgroundFlowExecutor } from "./flow-background-run";
-export { runFlowTest, type FlowTestRunDependencies, type FlowTestRunResult } from "./flow-test-run";
+export { runFlowTest, type FlowTestRunResult } from "./flow-test-run";
 export type { FlowTraceStep, FlowTraceNotRun } from "./flow-test-trace";
-export {
-  invokeInstalledFlow,
-  type FlowInvocationAddress,
-  type FlowInvocationRequest,
-} from "./flow-invocation";
+export { invokeInstalledFlow, type FlowInvocationRequest } from "./flow-invocation";
 export {
   InstallationProblem,
   firstInstallConferredPermissions,
   installationOperation,
-  installationPermissionDeclaration,
   installationProblem,
   installationTargetFacts,
   readBuilderOperationDeadlines,
@@ -26,7 +21,6 @@ export {
   type InstallationHumanContext,
   type InstallationMemberRoleRefusal,
   type InstallationProblemShape,
-  type InstallationUnavailableReason,
 } from "./installation-authority";
 export { FirstInstallUnavailable } from "./installation-first-install";
 export {
@@ -38,26 +32,19 @@ export {
   createFirstInstallCoordinator,
   type FirstInstallCoordinatorEnvironment,
 } from "./installation-first-install-coordinator";
-export {
-  activateFirstInstall,
-  type FirstInstallMemberRoleChoice,
-} from "./installation-first-install-roles";
+export { activateFirstInstall } from "./installation-first-install-roles";
 export { acceptedApplicationRoleKey, releaseRoleTemplates } from "./installation-role-templates";
 export { classifyInstallationFailure } from "./installation-failure";
 export {
   createApplicationStoreService,
-  type ApplicationStoreEnvironment,
   type ApplicationStoreService,
 } from "./installation-application-store";
 export {
   activateUpgradeRelease,
-  readUpgradeActiveObservation,
   readUpgradeAuthorizedState,
   sameUpgradeSelectedSnapshot,
   sameUpgradeSnapshotState,
-  type UpgradeAuthorizedState,
   type UpgradeEnvironment,
-  type UpgradeReleaseIdentity,
   type UpgradeSelector,
   type UpgradeSnapshot,
   type UpgradeState,
@@ -71,11 +58,7 @@ export type { OfflineSourceFailure } from "./offline-source-validation";
 export { applicationModuleSources } from "./application-module-lowering";
 export { validateApplicationsOffline } from "./offline-application-validation";
 export { createFlowQueryReader } from "./flow-query-reader";
-export {
-  runFieldOptionsFlow,
-  type FieldOptionsFlowOption,
-  type FieldOptionsFlowResult,
-} from "./field-options-flow";
+export { runFieldOptionsFlow } from "./field-options-flow";
 export { createOptionMembershipCheck } from "./option-membership-check";
 
 export * from "./canonical-json-definition";
@@ -100,15 +83,12 @@ export * from "./definition-store";
 export {
   readApplicationDefinitionDraft,
   requireApplicationDefinitionDraftConsistency,
-  readModuleDefinitionDraft,
   type StoredApplicationDefinitionDraft,
-  type StoredModuleDefinitionDraft,
 } from "./definition-draft-read";
 export * from "./source-identities";
 export * from "./source-identity-reservations";
 export * from "./saved-condition-revisions";
 export {
-  type DefinitionPublicationFailureCode,
   type DefinitionPublicationCandidate,
   type ResolvableModuleRelease,
   type ModuleReleasePageCursor,
@@ -122,7 +102,6 @@ export {
 } from "./definition-publication-contracts";
 export {
   type ApplicationDraftCompilation,
-  type ApplicationDraftConditionContext,
   createDatabaseDefinitionPublicationService,
 } from "./definition-publication";
 export * from "./publication/publish";
@@ -149,7 +128,6 @@ export {
   readAddressedApplicationForFlowInRequest,
   readPermittedApplicationsAtAddress,
   resolvePermittedApplicationAddress,
-  type AddressedApplicationRead,
   type AddressedApplicationBundleRead,
   type ApplicationExperience,
 } from "./application-address";
@@ -178,7 +156,6 @@ export {
   createViewerSafeRecordLinkService,
   readVisiblePersonLabels,
   recordLinkLabelKey,
-  type RecordLinkLabel,
   type RecordLinkLabelsResult,
   type RecordLinkReference,
 } from "./viewer-safe-record-link";
@@ -198,7 +175,6 @@ export {
   PREVIEW_SEED_RECORD_BOUND,
   runtimeContextSelection,
   runtimePreviewOf,
-  type RuntimePreview,
 } from "./runtime-preview";
 export {
   previewApplicationKey,

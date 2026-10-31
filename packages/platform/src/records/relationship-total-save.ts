@@ -75,7 +75,7 @@ export type RecordCalculationChange =
       storedValues: Readonly<Record<string, unknown>>;
     }>;
 
-export type CalculateRelationshipTotalSaveResult =
+type CalculateRelationshipTotalSaveResult =
   | Readonly<{
       success: true;
       records: ReadonlyMap<

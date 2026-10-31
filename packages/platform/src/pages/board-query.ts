@@ -357,7 +357,7 @@ type BoardCardRow = Readonly<{
 type BoardPagePayload = NonNullable<BoardPlacementValues["unassigned"]["page"]>;
 
 /** The board's ready values, typed by the schema the browser parses them with. */
-export type BoardPlacementValues = z.input<typeof boardPayloadSchema>;
+type BoardPlacementValues = z.input<typeof boardPayloadSchema>;
 
 export type BoardPlacementFailureCause =
   | "board_context_refused"
@@ -378,7 +378,7 @@ export type BoardPlacementFailureCause =
  * temporary, structural or malformed-request failure (a scope mismatch or a malformed continuation
  * is never a permission refusal), `refused` a settled permission refusal.
  */
-export type BoardPlacementProjection =
+type BoardPlacementProjection =
   | Readonly<{ outcome: "ready"; values: BoardPlacementValues }>
   | Readonly<{
       outcome: "refused" | "unavailable";

@@ -30,7 +30,7 @@ import { supportedRecordSystemFieldKeySchema } from "./record-system-values";
  * rather than truncated into a partial total.
  */
 export const arrangementRowLimit = 1_000;
-export const boardChoiceOptionLimit = 12;
+const boardChoiceOptionLimit = 12;
 
 const uniqueIds = (ids: readonly string[]): boolean =>
   new Set(ids.map((id) => id.toLowerCase())).size === ids.length;
@@ -82,7 +82,6 @@ const arrangementDatasetSchema = z
     rows: z.array(protectedQueryRowSchema).max(arrangementRowLimit),
   })
   .strict();
-export type ArrangementDataset = z.infer<typeof arrangementDatasetSchema>;
 
 const aggregateDescriptorSchema = z
   .object({
@@ -122,7 +121,6 @@ const aggregateValueSchema = z.union([
   z.boolean(),
   z.null(),
 ]);
-export type AggregateValue = z.infer<typeof aggregateValueSchema>;
 
 const aggregateResultSchema = z.discriminatedUnion("outcome", [
   z
@@ -193,7 +191,6 @@ const arrangementDescriptorSchema = z.discriminatedUnion("type", [
   boardArrangementDescriptorSchema,
   calendarArrangementDescriptorSchema,
 ]);
-export type ArrangementDescriptor = z.infer<typeof arrangementDescriptorSchema>;
 export type TableArrangementDescriptor = z.infer<typeof tableArrangementDescriptorSchema>;
 export type BoardArrangementDescriptor = z.infer<typeof boardArrangementDescriptorSchema>;
 export type CalendarArrangementDescriptor = z.infer<typeof calendarArrangementDescriptorSchema>;
@@ -203,10 +200,9 @@ export const arrangementCommandSchema = z
     descriptor: arrangementDescriptorSchema,
   })
   .strict();
-export type ArrangementCommand = z.input<typeof arrangementCommandSchema>;
 
 /** The first page of each named column, or the next page of one column. */
-export const protectedBoardArrangementPageRequestSchema = z.discriminatedUnion("kind", [
+const protectedBoardArrangementPageRequestSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("read"),
@@ -224,9 +220,6 @@ export const protectedBoardArrangementPageRequestSchema = z.discriminatedUnion("
     })
     .strict(),
 ]);
-export type ProtectedBoardArrangementPageRequest = z.infer<
-  typeof protectedBoardArrangementPageRequestSchema
->;
 
 /** One uncached page of protected board members with record identity intact. */
 export const protectedBoardArrangementPageSchema = z
@@ -304,7 +297,6 @@ const tableGroupSchema = z
     aggregates: aggregateResultsSchema,
   })
   .strict();
-export type TableGroup = z.infer<typeof tableGroupSchema>;
 
 const tableArrangementResultSchema = z
   .object({
@@ -374,7 +366,7 @@ const calendarArrangementResultSchema = z
   .strict();
 export type CalendarArrangementResult = z.infer<typeof calendarArrangementResultSchema>;
 
-export const arrangementRefusalReasonCodes = [
+const arrangementRefusalReasonCodes = [
   /** The command does not match the arrangement contract. */
   "request_invalid",
   /** A named field is not in the plan, or does not permit that use. */

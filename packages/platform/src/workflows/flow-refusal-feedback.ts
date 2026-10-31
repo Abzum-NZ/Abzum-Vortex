@@ -114,7 +114,7 @@ const flowRefusalPresentationSchema = authoredRefusalGuidanceSchema.extend({
 });
 
 /** The closed reasons a submitted form field needs correcting. */
-export const flowFieldCorrectionCodeSchema = z.enum([
+const flowFieldCorrectionCodeSchema = z.enum([
   "invalid_value",
   "required_value",
   "field_refused",

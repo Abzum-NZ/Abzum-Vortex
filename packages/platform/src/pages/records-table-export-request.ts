@@ -47,7 +47,7 @@ export type RecordsTableExportRequest = z.infer<typeof recordsTableExportRequest
  * Why the server refused an export before sending a file, in the closed words the person's
  * message is chosen from. The cause behind a refusal stays in the server log.
  */
-export const recordsTableExportRefusalReasons = [
+const recordsTableExportRefusalReasons = [
   /** The request could not be read or did not match the request contract. */
   "request_invalid",
   /** Export is not on, not permitted now, or the request does not fit this table. */
@@ -59,7 +59,6 @@ export const recordsTableExportRefusalReasons = [
   /** The selection changed since it was made (a new release, or an expired read). */
   "changed",
 ] as const;
-export type RecordsTableExportRefusalReason = (typeof recordsTableExportRefusalReasons)[number];
 
 export const recordsTableExportRefusalSchema = z.discriminatedUnion("kind", [
   z

@@ -46,8 +46,8 @@ export const flowRegisteredTaskTypeKeys = [
   "interface.set_panel",
   "interface.set_filter",
 ] as const;
-export type FlowRegisteredTaskTypeKey = (typeof flowRegisteredTaskTypeKeys)[number];
-export type FlowControlTaskTypeKey = (typeof flowControlTaskTypeKeys)[number];
+type FlowRegisteredTaskTypeKey = (typeof flowRegisteredTaskTypeKeys)[number];
+type FlowControlTaskTypeKey = (typeof flowControlTaskTypeKeys)[number];
 export type FlowTaskTypeKey = FlowControlTaskTypeKey | FlowRegisteredTaskTypeKey;
 
 const page = { page: true, server: false, backend: false } as const;
@@ -56,7 +56,7 @@ const serverAndBackend = { page: false, server: true, backend: true } as const;
 const everywhere = { page: true, server: true, backend: true } as const;
 
 /** Where each step runs today; each later batch flips a flag when it lands the implementation. */
-export const flowTaskRuns = Object.freeze({
+const flowTaskRuns = Object.freeze({
   if: everywhere,
   switch: everywhere,
   for_each: everywhere,
@@ -102,7 +102,7 @@ type StepsRunning<Where extends keyof FlowStepRuns> = {
   [Type in FlowTaskTypeKey]: (typeof flowTaskRuns)[Type][Where] extends true ? Type : never;
 }[FlowTaskTypeKey];
 /** The steps with a page implementation, including control tasks handled by the interpreter. */
-export type PageStepType = StepsRunning<"page">;
+type PageStepType = StepsRunning<"page">;
 /** Registered page steps are dispatched through the page intent implementation map. */
 export type PageIntentStepType = Exclude<Extract<PageStepType, FlowRegisteredTaskTypeKey>, "data.calculate" | "data.set_variable" | "data.build_list">;
 /** The steps with a server implementation; the server's implementation map covers exactly these. */

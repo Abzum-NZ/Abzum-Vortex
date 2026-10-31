@@ -31,39 +31,28 @@ export { type FixedAuthenticatedPageCapability } from "./authenticated-page-capa
 export {
   projectPageCapability,
   type PageCapabilityState,
-  type PlacementCapabilityState,
   type ProjectedPageCapability,
 } from "./page-capability-projection";
 export {
   requireProjectedPlacement,
-  type ProjectedPlacementGate,
   type ProjectedPlacementRefusal,
 } from "./projected-placement-gate";
 export {
   applyChoiceOptionGates,
   decideChoiceOptionGates,
   fieldControl,
-  fieldForPlacement,
   formFieldOf,
   planChoiceOptionGates,
   projectEditField,
   type ChoiceOptionPlan,
   type DateTimeZones,
-  type HeldChoiceOptions,
 } from "./field-placement";
 export {
   isTablePlacement,
   pageSubjectType,
   resolveProjectedTablePlacement,
-  type ProjectedTableBindingReaders,
-  type ProjectedTablePlacement,
-  type ProjectedTablePlacementRefusal,
 } from "./projected-table-placement";
-export {
-  createStoredPageCapabilityService,
-  type StoredPageCapabilityDependencies,
-  type StoredPageCapabilitySelection,
-} from "./stored-page-capability";
+export { createStoredPageCapabilityService } from "./stored-page-capability";
 export { recordLinkLabelKey } from "../definition";
 export {
   projectRecordDetailData,
@@ -71,25 +60,19 @@ export {
   collectRecordLinks,
   collectRecordLinkValues,
   recordLinkPlainText,
-  type ComponentDataProjectionInput,
-  type ProjectedCellValue,
   type ProjectedComponentData,
-  type ProjectedRecordDetailValues,
   type ProjectedRecordLinks,
   type RecordLinkResolver,
   type RecordLinkTitler,
   type TableFieldColumn,
   type ProjectedTableGroup,
   type ProjectedTableGroups,
-  type ProjectedTableRow,
   type ProjectedTableValues,
 } from "./component-data-projection";
 export type { LinkFieldType, ProjectedRecordLink } from "./cell-projection";
 export {
   buildRecordsTableQueryCommand,
   createRecordsTableQueryResolver,
-  type RecordsTableQueryRequest,
-  type RecordsTableQueryResolution,
   type RecordsTableQueryRunner,
 } from "./records-table-query";
 export {
@@ -113,119 +96,50 @@ export {
   type RecordsTableBulkDependencies,
 } from "./records-table-features/bulk-run";
 export { createRecordsTableRunService } from "./records-table-features/run-chain";
-export {
-  createRecordsRangeSummaryService,
-  type RecordsRangeSummaryDependencies,
-} from "./records-table-features/range-summary";
-export {
-  createRecordsTableExportService,
-  type RecordsTableExportDependencies,
-} from "./records-table-features/export";
+export { createRecordsRangeSummaryService } from "./records-table-features/range-summary";
+export { createRecordsTableExportService } from "./records-table-features/export";
 export { decideRecordTypeCreatableFieldIds } from "./records-table-features/record-type-access";
-export {
-  readNamedActionEligibility,
-  type NamedActionEligibilityTarget,
-  type NamedActionRecordEligibility,
-} from "./records-table-features/named-action-eligibility";
+export { readNamedActionEligibility } from "./records-table-features/named-action-eligibility";
 export {
   createRecordsSelectionSealer,
   type RecordsSelectionSealer,
 } from "./records-selection-seal";
-export {
-  readRecordsTableRowDetail,
-  type RowDetailRequest,
-  type RowDetailRow,
-} from "./records-table-features/master-detail";
+export { readRecordsTableRowDetail } from "./records-table-features/master-detail";
 export type { RowDetailResult } from "./display-payload-table";
-export {
-  readRecordsTablePivot,
-  type PivotRequest,
-  type RecordsTablePivotQueryRunner,
-} from "./records-table-features/pivot";
-export type { PivotCell, PivotDrill, PivotResult, PivotRow } from "./display-payload-pivot";
+export { readRecordsTablePivot } from "./records-table-features/pivot";
+export type { PivotCell, PivotResult, PivotRow } from "./display-payload-pivot";
 export { readPageSubjectInTransaction } from "./page-subject-read";
 export {
   createPageSubjectReader,
   pageSubjectFieldIds,
-  type PageSubjectReader,
   type PageSubjectReadResult,
 } from "./page-subject-read";
 export {
   projectReadOnlyAttachmentList,
-  type ReadOnlyAttachmentDecision,
   type ReadOnlyAttachmentFileEvidence,
-  type ReadOnlyAttachmentFileMetadata,
-  type ReadOnlyAttachmentListProjection,
-  type ReadOnlyAttachmentOwner,
 } from "./search-attachment-capabilities";
 export {
-  abandonPrivateFormDraftCommandSchema,
-  createPrivateFormDraftCommandSchema,
-  PrivateFormDraftError,
-  privateFormDraftErrorCodes,
-  privateFormDraftFieldValidationSchema,
-  privateFormDraftInputKeySchema,
   privateFormDraftLimits,
-  privateFormDraftProjectionSchema,
-  privateFormDraftRetentionDays,
-  privateFormDraftSchema,
-  privateFormDraftScopeSchema,
-  privateFormDraftValidationSchema,
-  projectPrivateFormDraft,
-  readPrivateFormDraftCommandSchema,
-  restrictPrivateFormDraftInput,
-  updatePrivateFormDraftCommandSchema,
-  type AbandonPrivateFormDraftCommand,
-  type CreatePrivateFormDraftCommand,
   type PrivateFormDraft,
-  type PrivateFormDraftAbandonResult,
-  type PrivateFormDraftCreateResult,
-  type PrivateFormDraftErrorCode,
   type PrivateFormDraftFieldValidation,
-  type PrivateFormDraftProjection,
-  type PrivateFormDraftReadResult,
   type PrivateFormDraftScope,
-  type PrivateFormDraftUpdateResult,
-  type ReadPrivateFormDraftCommand,
-  type UpdatePrivateFormDraftCommand,
   createPrivateFormDraftService,
-  type PrivateFormDraftAuthority,
   type LoadPrivateFormDraftAuthority,
   type PrivateFormDraftServiceDependencies,
 } from "./form-drafts";
 export { adaptPrivateFormSubmit } from "./form-request";
 export {
-  buildQueryNoticeQueryBinding,
   createQueryNoticeQueryResolver,
-  type ProjectedQueryNotice,
-  type ProjectedQueryNoticePage,
-  type QueryNoticeQueryBinding,
-  type QueryNoticeResolution,
   type QueryNoticeSeverity,
 } from "./notice-query-projection";
-export {
-  buildLinkTilesQueryBinding,
-  createLinkTilesQueryResolver,
-  type LinkTilesQueryBinding,
-  type LinkTilesQueryResolution,
-} from "./link-tiles-query";
+export { buildLinkTilesQueryBinding, createLinkTilesQueryResolver } from "./link-tiles-query";
 export {
   projectCalendarPlacement,
   readCalendarPlacementContract,
   type CalendarPlacementContract,
-  type CalendarPlacementFailureCause,
-  type CalendarPlacementProjection,
-  type CalendarPlacementProjectionInput,
-  type CalendarPlacementValues,
-  type CalendarQueryRunner,
 } from "./calendar-query";
 export type { CalendarView } from "./calendar-date";
-export {
-  projectBoardPlacement,
-  type BoardPlacementFailureCause,
-  type BoardPlacementProjection,
-  type BoardPlacementValues,
-} from "./board-query";
+export { projectBoardPlacement, type BoardPlacementFailureCause } from "./board-query";
 export {
   computeGuidedFormStepId,
   createGuidedFormDraftService,
@@ -238,14 +152,11 @@ export {
   guidedFormDraftScope,
   guidedFormInitialValues,
   guidedFormInputData,
-  loadGuidedFormAuthorityForSession,
   openGuidedFormDraft,
-  resolveGuidedFormAuthority,
   validateGuidedFormStep,
   visibleGuidedFormValidation,
   visibleGuidedFormValues,
   type GuidedFormDependencies,
-  type GuidedFormStepField,
   type GuidedFormStepFields,
 } from "./guided-form-steps";
 export {
@@ -261,17 +172,12 @@ export {
   writeGridView,
   type GridViewConflict,
   type GridViewOperationOutcome,
-  type GridViewResetOutcome,
-  type GridViewWriteOutcome,
-  type StoredGridView,
   type StoredGridViews,
-  type StoredNamedGridView,
 } from "./grid-views";
 export {
   resolveQueryBindings,
   type QueryBindingContext,
   type QueryBindingRecordRead,
-  type QueryBindingResolution,
 } from "./query-binding-resolver";
 export {
   isStreamableQueryPlacement,
@@ -288,10 +194,7 @@ export {
   type LauncherQueryRow,
   type PageDataState,
   type PageSubjectType,
-  type PlacementFailureReason,
-  type PlacementGridLayouts,
   type PlacementLogPlace,
   type PlacementReadEntry,
   type PlacementReadInput,
-  type PlacementReadServices,
 } from "./placement-read/index";

@@ -47,7 +47,7 @@ import {
 } from "./installation-role-templates";
 
 /** Whether the installer asked to take the application's default member role themselves. */
-export type FirstInstallMemberRoleChoice =
+type FirstInstallMemberRoleChoice =
   Readonly<{ kind: "accept"; sourceRoleId: string }> | Readonly<{ kind: "decline" }>;
 
 /** Proves assignment management in its own installer transaction. */

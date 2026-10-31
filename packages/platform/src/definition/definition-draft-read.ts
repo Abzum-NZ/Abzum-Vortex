@@ -8,7 +8,6 @@ import {
   actorIdSchema,
   applicationRootIdSchema,
   fingerprintSchema,
-  moduleRootIdSchema,
   namespacedKeySchema,
   organizationAccountIdSchema,
   organizationIdSchema,
@@ -20,7 +19,6 @@ import {
 } from "../catalogue/identifiers";
 import {
   storedDefinitionDraftSchema,
-  storedModuleDefinitionDraftSchema,
   type StoredDefinitionDraft,
 } from "./definition-store-contracts";
 import { definitionKindSchema } from "./definitions";
@@ -42,16 +40,6 @@ export type StoredApplicationDefinitionDraft = Extract<
   StoredDefinitionDraft,
   { kind: "application" }
 >;
-
-const moduleDraftReadCommandSchema = z
-  .object({
-    rootId: moduleRootIdSchema,
-    expectedDraftRevision: revisionSchema.optional(),
-  })
-  .strict();
-
-type ModuleDefinitionDraftReadCommand = z.infer<typeof moduleDraftReadCommandSchema>;
-export type StoredModuleDefinitionDraft = z.infer<typeof storedModuleDefinitionDraftSchema>;
 
 // The protected context also contains trusted transport and identity evidence.
 // Parse only the fields needed to bind this read to the resolved request scope.
@@ -266,87 +254,4 @@ export const requireApplicationDefinitionDraftConsistency = async (
     current.publishedRevision !== (draft.publishedRevision ?? null)
   )
     throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
-};
-
-/**
- * Reads one current authored Module draft on the caller's resolved human
- * organization-only transaction. This revision is evidence for a later save;
- * the read neither changes the draft nor authorizes or locks that later write.
- */
-export const readModuleDefinitionDraft = async (
-  transaction: RequestDatabaseTransaction,
-  serverResolvedScope: SelectedOrganizationScope,
-  commandCandidate: ModuleDefinitionDraftReadCommand,
-): Promise<StoredModuleDefinitionDraft> => {
-  const command = moduleDraftReadCommandSchema.safeParse(commandCandidate);
-  if (!command.success) throw new DefinitionError("INVALID_DEFINITION_COMMAND");
-  const scope = selectedOrganizationScopeSchema.safeParse(serverResolvedScope);
-  if (!scope.success || Object.hasOwn(scope.data, "applicationRootId"))
-    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
-
-  let rows: readonly DraftReadRow[];
-  try {
-    rows = await transaction.query<DraftReadRow>`
-      select
-        vortex_access.validated_human_request_context() as request_context,
-        vortex_definition.read_publication_state(${command.data.rootId}) as publication_state
-    `;
-  } catch (error) {
-    if (isDefinitionContextFailure(error)) throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
-    if (
-      error instanceof Error &&
-      "code" in error &&
-      error.code === "23503" &&
-      error.message === "A Definition root requires its current draft"
-    )
-      throw new DefinitionError("DEFINITION_ROOT_MISSING");
-    throw new DefinitionError("DEFINITION_STORAGE_FAILED");
-  }
-
-  if (rows.length !== 1) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
-  const row = draftReadRowSchema.safeParse(rows[0]);
-  if (!row.success) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
-  const context = humanReadContextSchema.safeParse(row.data.request_context);
-  if (
-    !context.success ||
-    Object.hasOwn(context.data, "applicationRootId") ||
-    !hasMatchingLiveContext(row.data.request_context, scope.data)
-  )
-    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
-  if (row.data.publication_state === null) throw new DefinitionError("DEFINITION_ROOT_MISSING");
-
-  const state = publicationStateSchema.safeParse(row.data.publication_state);
-  if (!state.success) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
-  const root = state.data.root;
-  if (!sameUuid(root.organizationId, scope.data.organizationId))
-    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
-  if (root.kind !== "module") throw new DefinitionError("DEFINITION_ROOT_MISSING");
-  // The kind-specific schema accepts only the current Module source contract.
-  const parsedDraft = storedModuleDefinitionDraftSchema.safeParse(
-    normalizeStoredDraft(state.data.draft),
-  );
-  if (!parsedDraft.success) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
-  const draft = parsedDraft.data;
-  if (
-    !sameUuid(root.rootId, command.data.rootId) ||
-    !sameUuid(draft.rootId, root.rootId) ||
-    !sameUuid(draft.organizationId, root.organizationId) ||
-    draft.key !== root.key ||
-    draft.source.kind !== root.kind ||
-    draft.source.key !== draft.key ||
-    (draft.publishedRevision ?? null) !== root.currentReleaseRevision ||
-    draft.createdAt !== root.createdAt ||
-    !sameUuid(draft.createdBy, root.createdBy) ||
-    Date.parse(draft.updatedAt) < Date.parse(draft.createdAt) ||
-    fingerprintCanonicalValue(draft.source) !== draft.sourceFingerprint
-  )
-    throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
-  if (
-    command.data.expectedDraftRevision !== undefined &&
-    command.data.expectedDraftRevision !== draft.draftRevision
-  )
-    throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
-  if (!hasMatchingLiveContext(row.data.request_context, scope.data))
-    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
-  return draft;
 };

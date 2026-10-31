@@ -56,7 +56,7 @@ import { object, array } from "./validation/helpers";
 import { moduleDependencies } from "./module-dependencies";
 import { runtimeSupportRule, runtimeSupportRuleCodes } from "./validation/runtime-support";
 
-export const definitionSemanticRules: readonly DefinitionSemanticRule[] = Object.freeze([
+const definitionSemanticRules: readonly DefinitionSemanticRule[] = Object.freeze([
   {
     ruleId: "vortex.definition.source_shape",
     emittedCodes: ["vortex.definition.source_shape"],

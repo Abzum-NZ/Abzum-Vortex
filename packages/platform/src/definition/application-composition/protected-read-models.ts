@@ -3,7 +3,7 @@ import { z } from "zod";
 /**
  * Closed, platform-declared protected read models that a module's protected view may name.
  */
-export const protectedReadModelKeys = [
+const protectedReadModelKeys = [
   "people",
   "organization_accounts",
   "roles",

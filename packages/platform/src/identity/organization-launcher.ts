@@ -24,7 +24,7 @@ type LauncherRow = DatabaseRow & {
   account_display_name: unknown;
 };
 
-export type OrganizationLauncherServiceDependencies = Readonly<{
+type OrganizationLauncherServiceDependencies = Readonly<{
   runtimeTransaction?: RuntimeTransactionRunner;
 }>;
 
