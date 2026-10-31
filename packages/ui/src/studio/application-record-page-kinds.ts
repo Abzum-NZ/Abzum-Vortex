@@ -105,6 +105,7 @@ export const columnTypes: ReadonlySet<string> = new Set([
   "web_address",
   "phone_number",
   "choice",
+  "link",
   "whole_number",
   "decimal_number",
   "money",

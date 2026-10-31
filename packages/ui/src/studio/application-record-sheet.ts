@@ -6,7 +6,8 @@ import {
 } from "@vortex/platform/schema";
 import { blockItem, blockRelease, uniqueKey, refuse } from "./application-structure-common";
 import { applyStudioFlowCreate } from "./application-flow-create";
-import { placed, studioRecordDetailItem } from "./application-record-pages";
+import { studioRecordDetailItem } from "./application-record-page-detail";
+import { placed } from "./application-record-page-shared";
 import { sourceNames } from "./composition-references";
 import { studioQueryChoices } from "./contextual-palette";
 import { syncStoredBlockDependencies } from "./stored-composition";
