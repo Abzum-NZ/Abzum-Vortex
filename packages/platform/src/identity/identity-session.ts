@@ -31,7 +31,7 @@ const verificationFailure = (error: unknown): IdentitySessionResolution => {
   const code: IdentityVerificationRefusalCode = error.refusalCode;
   if (code === "vortex.identity.authority_unavailable")
     return closed({ kind: "temporarily_unavailable" });
-  if (code === "vortex.identity.expired_access_token")
+  if (code === "vortex.identity.expired_access_token" || code === "vortex.identity.session_ended")
     return closed({ kind: "expired_or_revoked" });
   return closed({ kind: "invalid_session_state" });
 };
@@ -89,6 +89,7 @@ export const createIdentitySessionService = (verifier: IdentityVerifier) => {
 
   const verify = async (
     accessToken: string,
+    transaction?: RequestDatabaseTransaction,
   ): Promise<
     | Readonly<{ ok: true; identity: VerifiedIdentity }>
     | Readonly<{ ok: false; result: IdentitySessionResolution }>
@@ -96,7 +97,7 @@ export const createIdentitySessionService = (verifier: IdentityVerifier) => {
     if (accessToken.trim().length === 0) return { ok: false, result: closed({ kind: "missing" }) };
     try {
       verifier.checkpoint?.();
-      const identity = await verifier.verifyAccessToken(accessToken);
+      const identity = await verifier.verifyAccessToken(accessToken, transaction);
       verifier.checkpoint?.();
       return { ok: true, identity };
     } catch (error) {
@@ -108,7 +109,7 @@ export const createIdentitySessionService = (verifier: IdentityVerifier) => {
     accessToken: string,
     transaction?: RequestDatabaseTransaction,
   ): Promise<Readonly<{ resolution: IdentitySessionResolution; identity?: VerifiedIdentity }>> => {
-    const verified = await verify(accessToken);
+    const verified = await verify(accessToken, transaction);
     if (!verified.ok) return { resolution: verified.result };
     try {
       verifier.checkpoint?.();
