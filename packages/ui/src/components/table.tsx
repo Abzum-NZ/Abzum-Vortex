@@ -12,10 +12,7 @@ function Table({
   ...props
 }: React.ComponentProps<"table"> & { containerClassName?: string }) {
   return (
-    <div
-      data-slot="table-container"
-      className={cn("cn-table-container", containerClassName)}
-    >
+    <div data-slot="table-container" className={cn("cn-table-container", containerClassName)}>
       <table
         data-slot="table"
         className={cn("cn-table border-collapse border-spacing-0", className)}
@@ -26,9 +23,7 @@ function Table({
 }
 
 function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
-  return (
-    <thead data-slot="table-header" className={cn("cn-table-header", className)} {...props} />
-  );
+  return <thead data-slot="table-header" className={cn("cn-table-header", className)} {...props} />;
 }
 
 function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
