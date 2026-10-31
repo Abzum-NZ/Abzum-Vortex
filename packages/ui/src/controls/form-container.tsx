@@ -14,12 +14,13 @@ import {
   type ReactElement,
   type RefObject,
 } from "react";
-import type { FlowFieldCorrection, FormFlowFeedback } from "@vortex/platform/schema";
+import type { FlowFieldCorrection } from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import { FlowSurfaceContext } from "../flow-runtime/flow-surface-context";
 import { FlowRuntimeStateContext } from "../flow-runtime/flow-runtime-state-context";
 import { InlineMessage, inlineMessageId } from "../flow-runtime/inline-message";
 import { resolveControlContext, type ControlRenderProps } from "./control-context";
+import { Button } from "../components/button";
 import {
   applicableDraftFeedback,
   fieldDraftFeedback,
@@ -74,7 +75,6 @@ const useHydrated = (): boolean =>
   );
 
 /** A safe, final result returned by the form's bound flow. */
-export type { FormFlowFeedback };
 
 const fieldCorrectionText: Readonly<Record<FlowFieldCorrection["code"], string>> = {
   required_value: "This field is required.",
@@ -163,6 +163,7 @@ function FormErrorSummary({
  */
 export function FormContainer(props: FormContainerProps): ReactElement {
   const context = resolveControlContext<FormPayload>(props, [
+    "form_cancel",
     "form_ready",
     "form_submit",
     "form_reset",
@@ -478,9 +479,11 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       >
         <FormErrorSummary form={formRef} errors={validationErrors} />
         {ownerGroups === undefined ? null : ownerGroups.length === 0 ? (
-          <p role="alert" className="text-sm text-muted-foreground">
-            You need current membership in an active Group before you can create this record.
-          </p>
+          <Alert>
+            <AlertDescription>
+              You need current membership in an active Group before you can create this record.
+            </AlertDescription>
+          </Alert>
         ) : (
           <Field>
             {ownerGroups.length === 1 ? (
@@ -540,6 +543,23 @@ export function FormContainer(props: FormContainerProps): ReactElement {
             {props.slots.content ?? null}
           </fieldset>
         </FormScopeContext.Provider>
+        {context.events?.form_cancel === undefined ? null : (
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={pending}
+              onClick={() =>
+                void context.events?.form_cancel?.({
+                  event: "form_cancel",
+                  gestureId: crypto.randomUUID(),
+                })
+              }
+            >
+              Cancel
+            </Button>
+          </div>
+        )}
         <FormDraftFeedbackRegion id={feedbackId} summary={summary} />
         <InlineMessage placementId={props.placementId} />
       </form>

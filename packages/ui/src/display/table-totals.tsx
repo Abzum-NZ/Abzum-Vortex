@@ -74,3 +74,46 @@ export function TableTotals({
     </div>
   );
 }
+
+/**
+ * The list's summary row: how many records the list holds and the money totals the server read for
+ * its columns. A count of a page of rows is never presented as a total count, so the label names
+ * only the rows shown; the arithmetic and formatting stay on the server.
+ */
+export function TableSummary({
+  recordCount,
+  totals,
+  columns,
+  label,
+}: Readonly<{
+  recordCount: number;
+  totals: readonly RecordsTableTotal[];
+  columns: readonly Readonly<{ key: string; label: string }>[];
+  label: string;
+}>): ReactElement | null {
+  const sums = columns.flatMap((column) =>
+    totals.flatMap((total) =>
+      total.fieldId.toLowerCase() === column.key.toLowerCase() &&
+      total.operation === "sum" &&
+      total.state === "value"
+        ? [{ key: `${total.fieldId}:${total.operation}`, text: total.text! }]
+        : [],
+    ),
+  );
+  if (recordCount === 0 && sums.length === 0) return null;
+  return (
+    <p
+      data-vortex-table-summary=""
+      className="m-0 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-muted-foreground tabular-nums"
+    >
+      <span className="font-medium text-foreground">
+        {recordCount === 1
+          ? `1 ${label.replace(/ies$/i, "y").replace(/s$/i, "")}`
+          : `${recordCount} ${label.toLowerCase()}`}
+      </span>
+      {sums.map((sum) => (
+        <span key={sum.key}>{sum.text}</span>
+      ))}
+    </p>
+  );
+}

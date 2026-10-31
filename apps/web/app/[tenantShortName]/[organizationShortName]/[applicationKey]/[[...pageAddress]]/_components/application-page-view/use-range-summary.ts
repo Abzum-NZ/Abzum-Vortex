@@ -6,6 +6,7 @@ import {
 } from "@vortex/platform/schema";
 import type { DisplaySemanticEvent, DisplayTablePayload } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
+import { postJson } from "../../../../../../_lib/post-json";
 import type { PageAddress } from "./page-address";
 import { recordsTableAddress } from "./records-table-address";
 
@@ -31,13 +32,9 @@ export function useRangeSummary({
           placementId,
           new URLSearchParams(address.search()),
         );
-        const response = await fetch("/api/records-table/range-summary", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          credentials: "same-origin",
-          cache: "no-store",
-          signal: event.signal,
-          body: JSON.stringify({
+        const response = await postJson(
+          "/api/records-table/range-summary",
+          {
             ...recordsTableAddress(model),
             placementId,
             token: table.selectionToken,
@@ -53,10 +50,11 @@ export function useRangeSummary({
                 }),
             recordIds: event.recordIds,
             fieldIds: event.fieldIds,
-          }),
-        });
+          },
+          { signal: event.signal },
+        );
         // The answer is parsed, never trusted: an unreadable one is logged and shown as refused.
-        const answer = recordsRangeSummaryResultSchema.safeParse(await response.json());
+        const answer = recordsRangeSummaryResultSchema.safeParse(response.body);
         if (answer.success) return answer.data;
         console.error(
           `[page] range summary answer unreadable: status=${response.status}`,

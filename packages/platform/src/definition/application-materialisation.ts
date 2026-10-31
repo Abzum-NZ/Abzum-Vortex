@@ -433,6 +433,9 @@ const deriveFieldInputContract = (field: FieldInputSourceField): DerivedFieldInp
               properties: {
                 key: { kind: "text", value: choice.key },
                 label: { kind: "text", value: choice.label },
+                ...(choice.tone === undefined
+                  ? {}
+                  : { tone: { kind: "choice", value: choice.tone } }),
                 ...(choice.parentValues === undefined
                   ? {}
                   : {

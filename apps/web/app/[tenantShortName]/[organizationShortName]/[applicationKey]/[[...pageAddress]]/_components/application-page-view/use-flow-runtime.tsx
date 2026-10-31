@@ -48,7 +48,6 @@ export function useFlowRuntime({
   submittedFormsRef,
   router,
   resolvePageHref,
-  basePath,
   unsavedWork,
   model,
   platformComponentRegistry,
@@ -181,18 +180,13 @@ export function useFlowRuntime({
     () => ({
       unsavedWork,
       recheckInternalTarget: async (target) => {
-        if (
-          target.kind === "page" &&
-          model.pages.some((page) => sameId(page.pageId, target.pageId))
-        )
-          return true;
+        if (model.pages.some((page) => sameId(page.pageId, target.pageId))) return true;
         // The projected page list is a rendering hint; the destination still authorises its read.
         // A page it does not offer must not resolve to the application's home address.
         showPageMessage(unavailableNotice);
         return false;
       },
       navigateInternal: (target) => {
-        if (target.kind !== "page") return;
         const parameters = new URLSearchParams();
         for (const [name, value] of Object.entries(target.parameters ?? {}))
           if (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
@@ -204,11 +198,8 @@ export function useFlowRuntime({
         if (startPageChange === undefined) router.push(address);
         else startPageChange(() => router.push(address));
       },
-      resolveInternalAddress: (target) =>
-        target.kind === "page" ? resolvePageHref(target.pageId) : basePath,
     }),
     [
-      basePath,
       model.pages,
       resolvePageHref,
       router,

@@ -3,11 +3,7 @@
 import type { ReactElement } from "react";
 import { Alert, AlertDescription, AlertTitle } from "../components/alert";
 import { equalFormValue, useFormScope } from "./form-context";
-import type {
-  FormDraftFeedback,
-  FormDraftFeedbackFieldState,
-  FormDraftFeedbackSupply,
-} from "@vortex/platform/schema";
+import type { FormDraftFeedback, FormDraftFeedbackSupply } from "@vortex/platform/schema";
 import type { TypedFieldValue } from "./projected-data";
 
 /**
@@ -24,12 +20,12 @@ import type { TypedFieldValue } from "./projected-data";
  */
 
 /** One located requirement, warning or refusal message. */
-export type FormDraftFeedbackMessage = Readonly<{
+type FormDraftFeedbackMessage = Readonly<{
   severity: "error" | "warning";
   text: string;
 }>;
 
-export type { FormDraftFeedback, FormDraftFeedbackFieldState, FormDraftFeedbackSupply };
+export type { FormDraftFeedback, FormDraftFeedbackSupply };
 
 /**
  * Located feedback applicable to one field, or nothing when none applies. A

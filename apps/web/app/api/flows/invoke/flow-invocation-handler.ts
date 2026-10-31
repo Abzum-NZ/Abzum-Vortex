@@ -30,11 +30,9 @@ import { getQueryContinuationKey } from "../../../_lib/query-continuation-key";
 import { resolveFormOptionValues } from "../../../_lib/application-page/form-option-values";
 import { appTelemetry } from "../../../_lib/server-composition";
 import { platformPermissionSource } from "../../../_lib/platform-permission-source";
-import { readBoundedRequestText } from "../../_lib/bounded-request-body";
-import {
-  getIdentityAuthorityConfiguration,
-  getIdentityJourneyConfiguration,
-} from "../../../auth/_lib/authority-configuration";
+import { pageAddressSchema } from "../../../_lib/page-address-schema";
+import { isOwnSiteJsonRequest, readJsonBody } from "../../_lib/own-site-request";
+import { getIdentityAuthorityConfiguration } from "../../../auth/_lib/authority-configuration";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { privateJsonResponse as privateResponse } from "../../../_lib/private-response";
 import { mapWebError } from "../../../_lib/web-error-mapper";
@@ -59,12 +57,8 @@ import {
 } from "../../../_lib/placement-refresh";
 
 const maximumRequestBodyLength = 131_072;
-const requestSchema = z
-  .object({
-    tenantShortName: z.string().min(1).max(200),
-    organizationShortName: z.string().min(1).max(200),
-    applicationKey: z.string().min(1).max(200),
-    pageKey: z.string().min(1).max(200),
+const requestSchema = pageAddressSchema
+  .extend({
     pageRecordId: recordIdSchema.optional(),
     pageInputs: z
       .object({
@@ -121,15 +115,7 @@ const navigatesAfterSuccess = (
 };
 
 /** Cookie-backed starts must originate from this site's JSON client. */
-const fromOwnSite = (request: NextRequest): boolean => {
-  const origin = request.headers.get("origin");
-  const contentType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
-  return (
-    origin !== null &&
-    origin === new URL(getIdentityJourneyConfiguration().siteUrl).origin &&
-    contentType === "application/json"
-  );
-};
+const fromOwnSite = isOwnSiteJsonRequest;
 
 /** The route fixes the invocation channel; request data cannot select its Activity attribution. */
 export const createFlowInvocationHandler =
@@ -139,26 +125,19 @@ export const createFlowInvocationHandler =
     try {
       if (!fromOwnSite(request)) return privateResponse({ kind: "refused" }, 403);
       // Read before holding a database transaction: a slow upload must not pin a pooled connection.
-      const read = await readBoundedRequestText(request, maximumRequestBodyLength);
+      const read = await readJsonBody(request, maximumRequestBodyLength, requestSchema);
       if (read.kind === "too_large") return privateResponse({ kind: "refused" }, 413);
       if (read.kind === "unreadable") return refusedResponse();
-      let parsedBody: z.ZodSafeParseResult<z.infer<typeof requestSchema>>;
-      try {
-        parsedBody = requestSchema.safeParse(JSON.parse(read.text));
-      } catch (error) {
-        logRefusal(route, "request body", "body_not_json", error);
-        return refusedResponse();
-      }
-      if (!parsedBody.success) {
+      if (read.kind === "invalid") {
         logRefusal(route, "request body", "body_schema_invalid", {
-          issues: parsedBody.error.issues.map((issue) => ({
+          issues: read.error.issues.map((issue) => ({
             code: issue.code,
             path: issue.path,
           })),
         });
         return refusedResponse();
       }
-      const body = parsedBody.data;
+      const body = read.value;
       if (
         body.refresh !== undefined &&
         (body.refresh.address.tenantShortName !== body.tenantShortName ||

@@ -12,6 +12,7 @@ import {
   flowRefusalFeedbackCodeSchema,
   flowRuleRefusalSchema,
 } from "../workflows/flow-refusal-feedback";
+import { pipelineStageToneSchema } from "../definition/record-type-pipelines";
 import { isIsoCalendarDate } from "./display-payload-calendar";
 import { displayTextSchema, refineUniqueKeys } from "./display-payload-parts";
 
@@ -69,7 +70,12 @@ export type TypedFieldValue = z.output<typeof typedFieldValueSchema>;
 
 /** One choice option available in a choice input. */
 const choiceOptionSchema = z
-  .object({ key: choiceValueSchema, label: displayTextSchema })
+  .object({
+    key: choiceValueSchema,
+    label: displayTextSchema,
+    /** The colour role the definition gave this option; absent when it declares none. */
+    tone: pipelineStageToneSchema.exactOptional(),
+  })
   .strict()
   .readonly();
 export type ChoiceOption = z.output<typeof choiceOptionSchema>;

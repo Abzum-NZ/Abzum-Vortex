@@ -72,6 +72,31 @@ export function NumberInput(props: NumberInputProps): ReactElement {
   const minimum = settings.number("min_value");
   const maximum = settings.number("max_value");
   const step = settings.number("step_value");
+  // A money field's derived input carries its fixed currency and digit grouping, in the same "en"
+  // format the detail shows.
+  const currency = settings.text("currency");
+  const groupDigits = settings.boolean("group_digits");
+  const numberFormat =
+    currency === undefined
+      ? undefined
+      : new Intl.NumberFormat("en", { style: "currency", currency });
+  const currencyPrefix = numberFormat
+    ?.formatToParts(0)
+    .find((part) => part.type === "currency")?.value;
+  const groupSeparator =
+    new Intl.NumberFormat("en").formatToParts(1000).find((part) => part.type === "group")?.value ??
+    ",";
+  /** The typed text with its integer part grouped, while the exact typed value stays in `raw`. */
+  const groupedText = (text: string): string => {
+    if (!groupDigits) return text;
+    const negative = text.trimStart().startsWith("-");
+    const unsigned = text.replace("-", "").trimStart();
+    if (unsigned === "") return text;
+    const [whole, fraction] = unsigned.split(".");
+    if (whole === undefined || !/^\d*$/.test(whole)) return text;
+    const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, groupSeparator);
+    return `${negative ? "-" : ""}${grouped}${fraction === undefined ? "" : `.${fraction}`}`;
+  };
   if (minimum !== undefined && maximum !== undefined && maximum < minimum)
     throw new DefinitionRenderError(
       "INVALID_COMPOSITION",
@@ -158,7 +183,9 @@ export function NumberInput(props: NumberInputProps): ReactElement {
 
   const onChange = (event: ChangeEvent<HTMLInputElement>): void => {
     if (disabled || readOnly) return;
-    const next = event.target.value;
+    const next = groupDigits
+      ? event.target.value.split(groupSeparator).join("")
+      : event.target.value;
     setRaw(next);
     const value = toTyped(next);
     publish(value);
@@ -186,23 +213,35 @@ export function NumberInput(props: NumberInputProps): ReactElement {
       <FieldLabel htmlFor={ids.control}>
         <FieldLabelText label={label} required={required} />
       </FieldLabel>
-      <Input
-        id={ids.control}
-        type="text"
-        inputMode={integer ? "numeric" : "decimal"}
-        name={fieldKey}
-        value={raw}
-        onChange={onChange}
-        disabled={disabled}
-        readOnly={readOnly}
-        required={required}
-        {...(placeholder === undefined ? {} : { placeholder })}
-        {...(minimum === undefined ? {} : { min: minimum })}
-        {...(maximum === undefined ? {} : { max: maximum })}
-        step={step ?? (integer ? 1 : "any")}
-        aria-invalid={error !== undefined}
-        {...describedBy(ids, help, error, note, draftFeedback)}
-      />
+      <div className="relative">
+        {currencyPrefix === undefined ? null : (
+          <span
+            aria-hidden="true"
+            data-vortex-currency-prefix=""
+            className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-sm font-medium text-muted-foreground"
+          >
+            {currencyPrefix}
+          </span>
+        )}
+        <Input
+          id={ids.control}
+          type="text"
+          inputMode={integer ? "numeric" : "decimal"}
+          name={fieldKey}
+          value={groupedText(raw)}
+          onChange={onChange}
+          disabled={disabled}
+          readOnly={readOnly}
+          required={required}
+          className={currencyPrefix === undefined ? undefined : "ps-14"}
+          {...(placeholder === undefined ? {} : { placeholder })}
+          {...(minimum === undefined ? {} : { min: minimum })}
+          {...(maximum === undefined ? {} : { max: maximum })}
+          step={step ?? (integer ? 1 : "any")}
+          aria-invalid={error !== undefined}
+          {...describedBy(ids, help, error, note, draftFeedback)}
+        />
+      </div>
       <FieldMessages
         ids={ids}
         help={help}

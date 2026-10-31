@@ -9,10 +9,10 @@ import {
 import { z } from "zod";
 import { resolveApplicationAddress } from "../../_lib/application-address";
 import { loadFieldOptionsPage } from "../../_lib/application-page/link-input";
-import { readBoundedRequestText } from "../_lib/bounded-request-body";
-import { getIdentityJourneyConfiguration } from "../../auth/_lib/authority-configuration";
+import { pageAddressSchema } from "../../_lib/page-address-schema";
 import { resolveIdentitySession } from "../../auth/_lib/session-server";
 import { privateJsonResponse as privateResponse } from "../../_lib/private-response";
+import { isOwnSiteJsonRequest, readJsonBody } from "../_lib/own-site-request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,12 +23,8 @@ const maximumRequestBodyLength = 131_072;
  * One page of the records a link field, or a Records table's link picker (a column filter or a
  * cell editor), on the person's current page may point at.
  */
-const requestSchema = z
-  .object({
-    tenantShortName: z.string().min(1).max(200),
-    organizationShortName: z.string().min(1).max(200),
-    applicationKey: z.string().min(1).max(200),
-    pageKey: z.string().min(1).max(200),
+const requestSchema = pageAddressSchema
+  .extend({
     placementId: containedComponentIdSchema,
     /** For a Records table's link picker: the field whose target records are offered. */
     fieldId: recordIdSchema.optional(),
@@ -60,19 +56,9 @@ const refusedResponse = (code: string, cause?: unknown): NextResponse => {
   return privateResponse({ kind: "refused", code }, 404);
 };
 
-const fromOwnSite = (request: NextRequest): boolean => {
-  const origin = request.headers.get("origin");
-  const contentType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
-  return (
-    origin !== null &&
-    origin === new URL(getIdentityJourneyConfiguration().siteUrl).origin &&
-    contentType === "application/json"
-  );
-};
-
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    if (!fromOwnSite(request)) {
+    if (!isOwnSiteJsonRequest(request)) {
       logRefusal("field-options", "options page", "request_not_from_own_site");
       return privateResponse({ kind: "refused", code: "request_not_from_own_site" }, 403);
     }
@@ -81,20 +67,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return privateResponse({ kind: "temporarily_unavailable" }, 503);
     if (identity.kind !== "active") return refusedResponse("identity_not_active");
 
-    const read = await readBoundedRequestText(request, maximumRequestBodyLength);
+    const read = await readJsonBody(request, maximumRequestBodyLength, requestSchema);
     if (read.kind === "too_large") {
       logRefusal("field-options", "options page", "body_too_large");
       return privateResponse({ kind: "refused", code: "body_too_large" }, 413);
     }
-    if (read.kind !== "read") return refusedResponse("body_unreadable");
-    let parsed: z.ZodSafeParseResult<z.infer<typeof requestSchema>>;
-    try {
-      parsed = requestSchema.safeParse(JSON.parse(read.text));
-    } catch (error) {
-      return refusedResponse("body_not_json", error);
-    }
-    if (!parsed.success) return refusedResponse("body_invalid", parsed.error);
-    const body = parsed.data;
+    if (read.kind === "unreadable") return refusedResponse("body_not_json");
+    if (read.kind === "invalid") return refusedResponse("body_invalid", read.error);
+    const body = read.value;
 
     const address = await resolveApplicationAddress(
       identity.session,

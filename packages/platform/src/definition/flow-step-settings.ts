@@ -9,15 +9,10 @@ import type { FlowValue } from "../workflows/flow-values";
  */
 
 /** Where a message shows. `dialog` blocks until read; the others are part of the page. */
-/** @knipignore */
 export const flowMessageTargets = ["dialog", "toast", "banner", "inline", "slot"] as const;
-/** @knipignore */
 export type FlowMessageTarget = (typeof flowMessageTargets)[number];
-/** @knipignore */
 export const flowMessageSeverities = ["info", "success", "warning", "error"] as const;
-/** @knipignore */
 export type FlowMessageSeverity = (typeof flowMessageSeverities)[number];
-/** @knipignore */
 export const flowMessageDismissBounds = Object.freeze({ minimumMs: 2_000, maximumMs: 30_000 });
 
 type FlowStepSettingIssue = Readonly<{

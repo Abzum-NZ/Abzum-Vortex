@@ -19,6 +19,25 @@ import {
   useFieldIds,
 } from "./field-parts";
 import { useFormField, useFormFieldError, useFormFieldPublisher } from "./form-context";
+import { postJson } from "../lib/post-json";
+
+/**
+ * The application address the browser is showing, from its own path segments. The server validates
+ * it again and resolves the viewer's access from it, so a stale or crafted address is refused there.
+ */
+const pageAddressFromLocation = ():
+  | Readonly<{ tenantShortName: string; organizationShortName: string; applicationKey: string }>
+  | undefined => {
+  const [tenantShortName, organizationShortName, applicationKey] = window.location.pathname
+    .split("/")
+    .filter((segment) => segment !== "")
+    .map((segment) => decodeURIComponent(segment));
+  return tenantShortName === undefined ||
+    organizationShortName === undefined ||
+    applicationKey === undefined
+    ? undefined
+    : { tenantShortName, organizationShortName, applicationKey };
+};
 
 /** The form sees only the one-use reference returned by the write-only endpoint. */
 export function ConnectionSecretInput(props: ControlRenderProps<never>): ReactElement {
@@ -72,18 +91,20 @@ export function ConnectionSecretInput(props: ControlRenderProps<never>): ReactEl
       immediate: true,
     });
     try {
-      const response = await fetch("/api/connection-secrets", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ secret: value }),
+      const address = pageAddressFromLocation();
+      if (address === undefined) {
+        setFailure("The secret could not be stored. Refresh the page and try again.");
+        return;
+      }
+      const response = await postJson<{ reference?: unknown }>("/api/connection-secrets", {
+        ...address,
+        secret: value,
       });
-      const result: unknown = await response.json();
+      const result = response.body;
       if (
         !response.ok ||
         typeof result !== "object" ||
         result === null ||
-        !("reference" in result) ||
         typeof result.reference !== "string" ||
         !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(result.reference)
       )

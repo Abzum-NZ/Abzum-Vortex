@@ -2,7 +2,6 @@ import {
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
   queryNoticePayloadSchema,
   componentSettingShapeFailures,
-  type QueryNoticeItem,
   type QueryNoticePayload,
 } from "@vortex/platform/schema";
 import type { ReactElement } from "react";
@@ -13,7 +12,7 @@ import type { DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
 import { readDisplayData } from "./projected-data";
 
-export type { QueryNoticeItem, QueryNoticePayload };
+export type { QueryNoticePayload };
 const QUERY_NOTICE_RELEASE = PLATFORM_BLOCK_RELEASE_IDENTITIES.QUERY_NOTICE_BLOCK_RELEASE;
 
 function refuse(location: DefinitionRenderErrorLocation): never {
@@ -34,7 +33,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** The ready values a query notice block accepts: no arbitrary row values, content or extra keys. */
-export const parseQueryNoticePayload = (
+const parseQueryNoticePayload = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
 ): QueryNoticePayload => {

@@ -19,24 +19,13 @@ import { toast } from "../../components/sonner";
 import { Spinner } from "../../components/spinner";
 import { Icon } from "../../icons/icon";
 import type { DisplayTableExportRun, DisplayTableExportScope } from "../projected-data";
+import { formatBytes, formatCount, recordsPhrase } from "../date-format";
 import type {
   GridFeatureContext,
   GridFeatureModule,
   GridFeaturePointProps,
   GridFeatureScopeProps,
 } from "./registry";
-
-const numberFormat = new Intl.NumberFormat();
-const records = (count: number): string =>
-  count === 1 ? "1 record" : `${numberFormat.format(count)} records`;
-
-/** The bytes received so far, in the words of a file size. */
-const size = (bytes: number): string =>
-  bytes < 1024
-    ? `${bytes} B`
-    : bytes < 1024 * 1024
-      ? `${numberFormat.format(Math.round(bytes / 1024))} KB`
-      : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
 /** What a selection means to an export, from the page's own selection state. */
 const selectionOf = (
@@ -117,8 +106,8 @@ function ExportToolbarItems({ context }: GridFeaturePointProps): ReactElement | 
       <div role="status" aria-live="polite" className="flex items-center gap-2 text-sm">
         <Spinner aria-hidden="true" />
         <span>
-          Exporting{run.expected === undefined ? "" : ` ${records(run.expected)}`}…{" "}
-          {size(run.bytes)} received
+          Exporting{run.expected === undefined ? "" : ` ${recordsPhrase(run.expected)}`}…{" "}
+          {formatBytes(run.bytes)} received
         </span>
         {onCancel === undefined ? null : (
           <Button
@@ -148,14 +137,14 @@ function ExportToolbarItems({ context }: GridFeaturePointProps): ReactElement | 
           <ExportScopeItem
             context={context}
             scope="selected"
-            label={`Export selected (${numberFormat.format(selected)})`}
+            label={`Export selected (${formatCount(selected)})`}
           />
         ) : null}
         {matching !== undefined && matching > 0 ? (
           <ExportScopeItem
             context={context}
             scope="matching"
-            label={`Export all ${numberFormat.format(matching)} matching`}
+            label={`Export all ${formatCount(matching)} matching`}
           />
         ) : null}
       </DropdownMenuSubContent>
@@ -174,8 +163,8 @@ function ExportSelectionBanner({ context }: GridFeaturePointProps): ReactElement
   const allMatching = matching !== undefined && matching > 0;
   if (!allMatching && selected === 0) return null;
   const label = allMatching
-    ? `Export all ${numberFormat.format(matching)} matching`
-    : `Export selected (${numberFormat.format(selected)})`;
+    ? `Export all ${formatCount(matching)} matching`
+    : `Export selected (${formatCount(selected)})`;
   const formats = context.features.export?.formats ?? [];
   if (formats.length === 1)
     return (

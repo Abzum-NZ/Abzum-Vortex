@@ -183,7 +183,7 @@ export function validateAccessibleName(
  * Validates that a breakpoint order names exactly the items of its slot: one complete
  * permutation, with no missing, extra or duplicate identities. Desktop is the slot's array order.
  */
-export function validateSlotOrder(
+function validateSlotOrder(
   items: readonly CompiledItem[],
   order: Readonly<Partial<BreakpointOrder>> | undefined,
   breakpoint: Exclude<Breakpoint, "desktop">,
@@ -252,7 +252,7 @@ type PlacementTreeOptions = Readonly<{
  * 1. An item's slots must only be keys declared in metadata.slots.
  * 2. Child items within each slot must have a paletteGroup permitted by allowedChildCategories.
  */
-export function validatePlacementSlots(
+function validatePlacementSlots(
   item: CompiledItem,
   metadata: PlatformBlockRelease,
   registry: PlatformComponentRegistry,

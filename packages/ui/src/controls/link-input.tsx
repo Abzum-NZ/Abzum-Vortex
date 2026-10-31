@@ -38,11 +38,13 @@ import {
   type RecordChoiceOption,
   type TypedRecordReference,
 } from "./projected-data";
+import {
+  RECORD_CHOICE_SEARCH_LIMIT,
+  useRecordChoicePager,
+  type RecordChoicePagerPage,
+} from "./use-record-choice-pager";
 
 export type LinkInputProps = ControlRenderProps<LinkInputPayload>;
-
-/** How long typing rests before the records are searched, so a word costs one read, not one per key. */
-const SEARCH_DELAY_MS = 250;
 
 /** The picked record: its identity and the title the person picked it by. */
 type Picked = Readonly<{ reference: TypedRecordReference; title: string; typeLabel?: string }>;
@@ -104,6 +106,8 @@ export function LinkInput(props: LinkInputProps): ReactElement {
     picked !== null && allowedRecordTypeIds.includes(picked.reference.recordTypeId.toLowerCase())
       ? picked
       : null;
+  // The page of records read now, for a flow's Set value that names a record by identity.
+  const choiceItemsRef = useRef<readonly RecordChoiceOption[]>([]);
   const validationError = useRequiredFormField(
     fieldKey,
     props.placementId,
@@ -131,7 +135,7 @@ export function LinkInput(props: LinkInputProps): ReactElement {
           typeof value === "object" && value !== null && !Array.isArray(value)
             ? (value as Record<string, unknown>)
             : undefined;
-        const available = choices.filter((choice) =>
+        const available = choiceItemsRef.current.filter((choice) =>
           typeof value === "string"
             ? choice.recordId === value
             : choice.recordId === candidate?.recordId &&
@@ -158,7 +162,7 @@ export function LinkInput(props: LinkInputProps): ReactElement {
         };
       },
       options: async (search) =>
-        (await load.current(search ?? "")).map((choice) => ({
+        ((await readChoices(search ?? ""))?.items ?? []).map((choice) => ({
           value: choice.recordId,
           label: choice.title,
         })),
@@ -168,11 +172,6 @@ export function LinkInput(props: LinkInputProps): ReactElement {
 
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [choices, setChoices] = useState<readonly RecordChoiceOption[]>([]);
-  const [next, setNext] = useState<string | undefined>(undefined);
-  const [loading, setLoading] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const generation = useRef(0);
   const requestRecords = useRef(context.events?.options_requested);
   requestRecords.current = context.events?.options_requested;
   const parent = useRef(parentRecordId);
@@ -180,62 +179,40 @@ export function LinkInput(props: LinkInputProps): ReactElement {
   const location = useRef(context.location);
   location.current = context.location;
 
-  /**
-   * Reads one page and answers with its records; a newer request or a closed picker discards the
-   * answer of an older one, which then answers with none.
-   */
-  const load = useRef<
-    (search: string, continuationToken?: string) => Promise<readonly RecordChoiceOption[]>
-  >(async () => []);
-  load.current = (search, continuationToken) => {
+  /** Reads one page of records for the picker; undefined when the page has no records handler. */
+  const readChoices = async (
+    search: string,
+    continuationToken?: string,
+  ): Promise<RecordChoicePagerPage<RecordChoiceOption> | undefined> => {
     const handler = requestRecords.current;
-    if (handler === undefined) return Promise.resolve([]);
-    const request = ++generation.current;
-    setLoading(true);
-    setFailed(false);
-    const bounded = search.trim().slice(0, 100);
-    return Promise.resolve(
-      handler({
-        event: "options_requested",
-        ...(bounded === "" ? {} : { search: bounded }),
-        ...(continuationToken === undefined ? {} : { continuationToken }),
-        ...(parent.current === undefined ? {} : { parentRecordId: parent.current }),
-      }),
-    )
-      .then((answer) => {
-        if (generation.current !== request) return [];
-        const page = readRecordChoicePage(answer, location.current);
-        setChoices((current) =>
-          continuationToken === undefined ? page.choices : [...current, ...page.choices],
-        );
-        setNext(page.nextContinuationToken);
-        return page.choices;
-      })
-      .catch((cause: unknown) => {
-        if (generation.current === request) {
-          console.error("[link-input] records unavailable", cause);
-          setFailed(true);
-        }
-        return [];
-      })
-      .finally(() => {
-        if (generation.current === request) setLoading(false);
-      });
-  };
-
-  // Opening reads the first page; typing reads again once the person pauses. Closing abandons any
-  // answer still on its way.
-  useEffect(() => {
-    if (!open) {
-      generation.current += 1;
-      return;
+    if (handler === undefined) return { items: [] };
+    const bounded = search.trim().slice(0, RECORD_CHOICE_SEARCH_LIMIT);
+    try {
+      const answer = await Promise.resolve(
+        handler({
+          event: "options_requested",
+          ...(bounded === "" ? {} : { search: bounded }),
+          ...(continuationToken === undefined ? {} : { continuationToken }),
+          ...(parent.current === undefined ? {} : { parentRecordId: parent.current }),
+        }),
+      );
+      const page = readRecordChoicePage(answer, location.current);
+      return {
+        items: page.choices,
+        ...(page.nextContinuationToken === undefined ? {} : { next: page.nextContinuationToken }),
+      };
+    } catch (cause) {
+      console.error("[link-input] records unavailable", cause);
+      return undefined;
     }
-    const timeout = setTimeout(
-      () => void load.current(searchTerm),
-      searchTerm.trim() === "" ? 0 : SEARCH_DELAY_MS,
-    );
-    return () => clearTimeout(timeout);
-  }, [open, searchTerm]);
+  };
+  const pager = useRecordChoicePager<RecordChoiceOption>({
+    open,
+    search: searchTerm,
+    read: readChoices,
+    disabled: disabled || readOnly || waiting,
+  });
+  choiceItemsRef.current = pager.items;
 
   const pickedOption: RecordChoiceOption | null =
     permitted === null
@@ -246,9 +223,10 @@ export function LinkInput(props: LinkInputProps): ReactElement {
           typeLabel: permitted.typeLabel ?? "",
         };
   const items =
-    pickedOption === null || choices.some((choice) => choiceKey(choice) === choiceKey(pickedOption))
-      ? choices
-      : [pickedOption, ...choices];
+    pickedOption === null ||
+    pager.items.some((choice) => choiceKey(choice) === choiceKey(pickedOption))
+      ? pager.items
+      : [pickedOption, ...pager.items];
 
   // A changed parent leaves this field holding a record the server would refuse: it clears with it,
   // in the same draft, and the records offered are read again for the new parent.
@@ -258,8 +236,7 @@ export function LinkInput(props: LinkInputProps): ReactElement {
     previousParent.current = parentRecordId;
     // A parent that was not registered yet (a form starting with its stored values) is no change.
     if (before === undefined || before === parentRecordId) return;
-    setChoices([]);
-    setNext(undefined);
+    pager.reset();
     if (picked !== null) {
       setPicked(null);
       publish(null);
@@ -330,9 +307,7 @@ export function LinkInput(props: LinkInputProps): ReactElement {
           setOpen(next);
           setSearchTerm("");
           if (!next) {
-            setChoices([]);
-            setNext(undefined);
-            setLoading(false);
+            pager.reset();
           }
         }}
         onInputValueChange={setSearchTerm}
@@ -383,25 +358,25 @@ export function LinkInput(props: LinkInputProps): ReactElement {
             )}
           </ComboboxList>
           <ComboboxEmpty role="status">
-            {loading
+            {pager.loading
               ? "Searching…"
-              : failed
+              : pager.failed
                 ? "Records could not be loaded. Try again."
                 : searchTerm.trim() === ""
                   ? `No ${labelInSentence(label)} to choose from yet`
                   : `No ${labelInSentence(label)} matches your search`}
           </ComboboxEmpty>
-          {next !== undefined ? (
+          {pager.next !== undefined ? (
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              disabled={loading}
+              disabled={pager.loading}
               onMouseDown={(event) => event.preventDefault()}
-              onClick={() => load.current(searchTerm, next)}
+              onClick={() => pager.loadMore()}
               className="w-full justify-start text-muted-foreground"
             >
-              {loading ? "Loading…" : "Show more"}
+              {pager.loading ? "Loading…" : "Show more"}
             </Button>
           ) : null}
         </ComboboxContent>

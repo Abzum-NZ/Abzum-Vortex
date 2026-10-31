@@ -83,7 +83,7 @@ const parseBindings = (
 };
 
 /** Builds the fail-closed parser for one custom component release's own contract. */
-export const createCustomComponentPayloadParser = (
+const createCustomComponentPayloadParser = (
   custom: CustomComponentRelease,
 ): PlatformComponentPayloadParser =>
   createPayloadParser({
@@ -96,7 +96,7 @@ export const createCustomComponentPayloadParser = (
  * ownership, declared events, data contract, text alternative and bundle manifest, so the parser is
  * derived from it rather than registered statically.
  */
-export const createCustomComponentRegistration = (
+const createCustomComponentRegistration = (
   release: PlatformBlockRelease,
 ): PlatformComponentRegistration => {
   const custom = release.customComponent;

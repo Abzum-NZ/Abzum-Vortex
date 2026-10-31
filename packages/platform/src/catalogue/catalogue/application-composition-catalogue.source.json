@@ -2396,6 +2396,23 @@
                 "minLength": 1,
                 "maxLength": 120
               }
+            },
+            {
+              "kind": "choice",
+              "key": "tone",
+              "label": "Colour",
+              "help": "The colour role shown with this option",
+              "required": false,
+              "options": [
+                { "key": "neutral", "label": "Neutral" },
+                { "key": "primary", "label": "Primary" },
+                { "key": "destructive", "label": "Destructive" },
+                { "key": "chart_1", "label": "Chart 1" },
+                { "key": "chart_2", "label": "Chart 2" },
+                { "key": "chart_3", "label": "Chart 3" },
+                { "key": "chart_4", "label": "Chart 4" },
+                { "key": "chart_5", "label": "Chart 5" }
+              ]
             }
           ]
         }

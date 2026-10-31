@@ -1,444 +1,114 @@
-export const uiPackage = "@vortex/ui" as const;
+// The public surface of @vortex/ui: only the names applications and other packages import.
+// Everything else is internal to this package and imported by its own files directly.
 
-// Shared notice component
+// Per-block payload and event contracts the page runtime reads.
+export type {
+  BoardPayload,
+  ChoiceOption,
+  DisplayRow,
+  DisplayTableBulkRun,
+  DisplayTableExportRun,
+  DisplayTableExportScope,
+  DisplayTablePayload,
+  DisplayTableSelectionScope,
+  FormFlowFeedback,
+  LauncherRowsPayload,
+  RecordChoicePage,
+  VortexIconName,
+} from "@vortex/platform/schema";
+export type {
+  DisplayBatchEditAnswer,
+  DisplayInlineEditResult,
+  DisplaySemanticEvent,
+} from "./display/display-events";
+export type { ControlSemanticEvent } from "./controls/projected-data";
+
+// Display components and values.
+export { BrandLoader } from "./display/brand-loader";
+export { FormattedTime } from "./display/date-format-context";
+export { getAccessibleName } from "./display/display-state-container";
+
+// Display, control and page behaviour used by the running application.
+export { continueFlowEventCycle } from "./flow-runtime/flow-cycle";
+export type { FlowEventCycle } from "./flow-runtime/flow-cycle";
+export { useFlowIntentHost } from "./flow-runtime/flow-intent-host";
 export {
-  Notice,
-  type NoticeContent,
-  type NoticeContentPart,
-  type NoticeProps,
-  type NoticeSeverity,
-} from "./components/notice";
+  createFlowRuntime,
+  createFlowRuntimeState,
+  scopeFlowRuntimeForms,
+} from "./flow-runtime/flow-runtime";
+export type {
+  FlowDispatchResult,
+  FlowRuntimeState,
+  PlacementFlowBinding,
+} from "./flow-runtime/flow-runtime";
+export { createFormBlockRuntime } from "./flow-runtime/form-block-runtime";
+export type { FormBlockRuntime } from "./flow-runtime/form-block-runtime";
+export type {
+  FlowFormAnswer,
+  FlowFormIntent,
+  FlowIntentHost,
+  FlowMessageIntent,
+} from "./flow-runtime/intents";
+export { createFlowInvokeClient } from "./flow-runtime/lazy-flow-client";
+export type { PageMessageDraft } from "./flow-runtime/messages";
+export type { FlowInvokeClient, ServerFlowResponse } from "./flow-runtime/server-flow-client";
+export { pageAgentTools, runPageAgentTool } from "./agent/page-tools";
+export type { PageAgentTool } from "./agent/page-tools";
 
-// Platform Component Registry
+// Form controls.
+export { equalFormValue } from "./controls/form-context";
 export {
-  assertRuntimeInputKeysArePlacements,
-  createPayloadParser,
-  EMPTY_RUNTIME_INPUTS,
-  noRuntimeInputs,
-  type PlatformBlockRenderProps,
-  type PlatformBlockRuntimeInputs,
-  type PlatformComponentPayloadParser,
-  type PlatformComponentRegistration,
-  type RegisteredPlatformComponent,
-  type PlatformComponentRenderer,
-  type PlatformComponentRegistry,
-  type FieldInputControlReleaseMap,
-  type RuntimeInputReader,
-  type RuntimeInputsByPlacement,
-} from "./registry";
-
-// Definition & Render Errors
+  RECORD_CHOICE_SEARCH_DELAY_MS,
+  RECORD_CHOICE_SEARCH_LIMIT,
+  useRecordChoicePager,
+  type RecordChoicePager,
+  type RecordChoicePagerPage,
+} from "./controls/use-record-choice-pager";
 export {
-  DefinitionRenderError,
-  placementSettings,
-  validateAccessibleName,
-  validatePlacementSlots,
-  validatePlacementTree,
-  validateSlotOrder,
-  type Breakpoint,
-  type DefinitionRenderErrorCode,
-  type DefinitionRenderErrorLocation,
-} from "./definition-error";
-
-// Layout-only Styles
-export {
-  computePlacementClassName,
-  computePlacementStyle,
-  computeSlotOrderCss,
-  LAYOUT_CLASS_NAMES,
-  LAYOUT_ONLY_STYLES_CSS,
-} from "./layout-styles";
-
-// The one Puck component config: every definition block, for <Render>, <Puck> and the page runtime
-export {
-  createVortexPuckConfig,
-  getVortexPuckConfig,
-  type VortexPlacementMeta,
-  type VortexPuckComponentProps,
-  type VortexPuckMetadata,
-} from "./puck-config";
-
-// Page composition resolution and the single Puck page renderer
-export {
-  materialisedPageOf,
-  renderedPageOf,
-  selectRenderedLayout,
-  type MaterialisedApplicationComposition,
-  type RenderedPage,
-} from "./page-composition";
-export { PagePuckRenderer, type PagePuckRendererProps } from "./page-puck-renderer";
-
-// Per-Block Display Payload & Event Contracts
-export {
-  DISPLAY_EVENT_NAMES,
-  readDisplayData,
-  parseDisplayEventHandlers,
-  type DisplayDetailCell,
-  type DisplayColumn,
-  type DisplayDataState,
-  type DisplayEventHandler,
-  type DisplayInlineEditResult,
-  type DisplayEventHandlers,
-  type DisplayDetailField,
-  type DisplayRefusalReason,
-  type DisplayRichTextBlock,
-  type DisplayRichTextDocument,
-  type DisplayRichTextInline,
-  type DisplayRow,
-  type DisplayBatchEditAnswer,
-  type DisplaySemanticEvent,
-  type DisplaySemanticEventName,
-  type BoardBucketPayload,
-  type BoardColumnPayload,
-  type BoardData,
-  type BoardPage,
-  type BoardPayload,
-  type ChartPayload,
-  type LauncherRowsData,
-  type LauncherRowsPayload,
-  type RecordDetailData,
-  type RecordDetailPayload,
-  type RichTextData,
-  type RichTextPayload,
-  type SummaryData,
-  type SummaryPayload,
-  type DisplayTableBulkRun,
-  type DisplayTableExportRun,
-  type DisplayTableExportScope,
-  type TableData,
-  type DisplayTablePayload,
-  type DisplayTableSelectionScope,
-  type TextData,
-  type TextPayload,
-} from "./display";
-
-// Display Components & Views
-export {
-  BrandLoader,
-  type LoaderMark,
-  DisplayCellView,
-  DisplayStateContainer,
-  NoticeBlock,
-  QueryNoticeDisplay,
-  parseQueryNoticePayload,
-  type QueryNoticeItem,
-  type QueryNoticePayload,
-  PlainTextDisplay,
-  RecordDetailDisplay,
-  RichTextDisplay,
-  RichTextDocumentView,
-  SummaryValuesDisplay,
-  TableDisplay,
-  cellValueToText,
-  formatIsoDate,
-  FormattedTime,
-  getAccessibleName,
-  richTextToPlainText,
-  type DisplayRenderProps,
-  type DisplayStateContainerProps,
-} from "./display";
-
-// Display Registrations & Registry
-export { DISPLAY_COMPONENT_REGISTRATIONS } from "./display";
-
-// Per-Block Control Payload & Event Contracts
-export {
-  CONTROL_EVENT_NAMES,
-  equalFormValue,
-  readControlData,
-  parseControlEventHandlers,
-  readRecordChoicePage,
-  parseTypedFieldValue,
-  type BooleanInputData,
-  type BooleanInputPayload,
-  type ButtonData,
-  type ButtonPayload,
-  type ChoiceInputData,
-  type ChoiceInputPayload,
-  type ChoiceOption,
-  type ControlDataState,
-  type ControlEventHandler,
-  type ControlEventHandlers,
-  type ControlRenderProps,
-  type ControlSemanticEvent,
-  type ControlSemanticEventName,
-  type DateInputData,
-  type DateInputPayload,
-  type DialogData,
-  type DialogPayload,
-  type DrawerData,
-  type DrawerPayload,
-  type FieldInputData,
-  type FieldInputPayload,
-  type FormContainerData,
-  type FormPayload,
-  type LinkInputData,
-  type LinkInputPayload,
-  type RecordChoiceOption,
-  type RecordChoicePage,
-  type NumberInputData,
-  type NumberInputPayload,
-  type RichTextInputData,
-  type RichTextInputPayload,
-  type TabsData,
-  type TabsPayload,
-  type TextInputData,
-  type TextInputPayload,
-  type TypedFieldValue,
-  type TypedRecordReference,
-  type TypedRichTextDocument,
-  type ValidationData,
-  type ValidationPayload,
-} from "./controls";
-
-// Form & Action Control Components
-export {
-  BooleanInput,
-  Button,
-  ChoiceInput,
-  DateInput,
-  Dialog,
-  Drawer,
-  FieldInput,
-  FormContainer,
-  LinkInput,
-  NumberInput,
-  RichTextInput,
-  Tabs,
-  TextInput,
   UnsavedWorkProvider,
-  ValidationMessage,
   useUnsavedWorkGuard,
   useUnsavedWorkRegistry,
-  type BooleanInputProps,
-  type ButtonProps,
-  type ChoiceInputProps,
-  type DateInputProps,
-  type DialogProps,
-  type DrawerProps,
-  type FieldInputProps,
-  type FormContainerProps,
-  type FormFlowFeedback,
-  type LinkInputProps,
-  type NumberInputProps,
-  type RichTextInputProps,
-  type TabsProps,
-  type TextInputProps,
-  type ValidationMessageProps,
-} from "./controls";
+} from "./controls/unsaved-work";
 
-// Form Draft Feedback
+// Launcher, navigation and page composition.
 export {
-  FieldDraftFeedback,
-  FormDraftFeedbackRegion,
-  useFieldFeedback,
-  type FormDraftFeedback,
-  type FormDraftFeedbackFieldState,
-  type FormDraftFeedbackMessage,
-  type FormDraftFeedbackSummary,
-  type FormDraftFeedbackSupply,
-  type FormFieldDraftFeedback,
-} from "./controls";
-
-// Control Registrations & Registry
-export { CONTROL_COMPONENT_REGISTRATIONS } from "./controls";
-
-// Launcher List Payload & Binding Contracts
-export {
-  applicationLauncherQueryRowsToListValues,
   parsePermittedApplicationsLauncherProjection,
   permittedApplicationsToListValues,
-  readLauncherSettings,
-  resolveLauncherListContext,
-  type ApplicationLauncherQueryRow,
-  type LauncherListContext,
-  type LauncherRenderProps,
-  type LauncherSettings,
-  type PermittedApplicationMetadata,
-  type PermittedApplicationsLauncherProjection,
-} from "./launcher";
-
-// Launcher, Link-Tile & View-Filter Components
-export { ApplicationLauncher, LinkTiles } from "./launcher";
-
-// Launcher Registrations & Registry
-export { LAUNCHER_COMPONENT_REGISTRATIONS } from "./launcher";
-
-// General Layout Components
-export { Container, Heading, type ContainerProps, type HeadingProps } from "./layout";
-
-// General Layout Registrations & Registry
-export { LAYOUT_COMPONENT_REGISTRATIONS } from "./layout";
-
-// Application Navigation
-export {
-  ApplicationNavigation,
-  ApplicationNavigationBlock,
-  PageNavigationBusyContext,
-  type ApplicationNavigationProps,
-  type ProjectedNavigation,
-  type ProjectedNavigationItem,
-} from "./navigation";
-
-// Application Navigation Registrations & Registry
+} from "./launcher/bindings";
+export type { LinkNavigationEnvironment, UnsavedWorkGuard } from "./launcher/link-navigation";
 export {
   ApplicationAccountActionsBlock,
   ApplicationAccountActionsProvider,
-  type ApplicationAccount,
-  type ApplicationAccountActions,
-  type ApplicationShellRuntime,
-  type ApplicationSwitcherData,
-  type ApplicationSwitcherSource,
-  type ApplicationWebMcpRuntime,
-  ContentTransition,
+} from "./navigation/account-actions";
+export type { ApplicationAccount, ApplicationAccountActions } from "./navigation/account-actions";
+export { WebMcpStatus } from "./navigation/application-shell";
+export type {
+  ApplicationShellRuntime,
+  ApplicationSwitcherData,
+  ApplicationWebMcpRuntime,
+} from "./navigation/application-shell";
+export { ContentTransition, usePagePresence } from "./navigation/content-transition";
+export { PageNavigationBusyContext } from "./navigation/navigation";
+export {
   isClientPageChange,
   observeSettled,
   pageHoldFor,
   primaryStreamedPlacement,
   settledValue,
-  type PageHoldOutcome,
-  usePagePresence,
-  NAVIGATION_COMPONENT_REGISTRATIONS,
-  WebMcpStatus,
-} from "./navigation";
+} from "./navigation/page-hold";
+export { renderedPageOf } from "./page-composition";
+export type { RenderedPage } from "./page-composition";
+export { PagePuckRenderer } from "./page-puck-renderer";
+export type { PagePuckRendererProps } from "./page-puck-renderer";
 
-// Full Platform Component Registry (Display + Controls + Launcher + Layout + Navigation)
-export {
-  ALL_PLATFORM_COMPONENT_REGISTRATIONS,
-  createPlatformComponentRegistryForReleases,
-} from "./combined-registry";
+// Registry, definition errors and theme.
+export { createPlatformComponentRegistryForReleases } from "./combined-registry";
+export { placementSettings } from "./definition-error";
+export type { FieldInputControlReleaseMap } from "./registry";
+export { createThemeRootProps } from "./theme/theme-variables";
+export type { PlatformThemeTokens } from "./theme/theme-variables";
+export { VORTEX_STYLES, createVortexStyleRootProps } from "./theme/vortex-style";
 
-// Theme variables and shared component styles
-export {
-  APPEARANCE_COOKIE,
-  createAppearanceRootProps,
-  createThemeRootProps,
-  parseThemeMode,
-  createVortexStyleRootProps,
-  DEFAULT_VORTEX_MENU_ACCENT,
-  DEFAULT_VORTEX_MENU_COLOR,
-  DEFAULT_VORTEX_STYLE,
-  resolveVortexMenuAccent,
-  resolveVortexMenuColor,
-  resolveVortexStyle,
-  resolveVortexStyleSelection,
-  VORTEX_MENU_ACCENTS,
-  VORTEX_MENU_COLORS,
-  VORTEX_STYLES,
-  VortexStyleRoot,
-  type AppearanceRootProps,
-  type ThemeMode,
-  type ThemeRootProps,
-  type PlatformThemeTokens,
-  type VortexMenuAccent,
-  type VortexMenuColor,
-  type VortexStyle,
-  type VortexStyleRootProps,
-  type VortexStyleSelection,
-} from "./theme";
-
-// Semantic icons drawn by the selected shadcn/create icon library
-export {
-  Icon,
-  IconLibraryProvider,
-  loadIconAdapter,
-  VORTEX_ICON_LIBRARIES,
-  VORTEX_ICON_NAMES,
-  type VortexIconAdapter,
-  type VortexIconName,
-  type VortexIconProps,
-} from "./icons";
-
-// Browser Flow Runtime
-export {
-  FLOW_INTENT_KINDS,
-  continueFlowEventCycle,
-  createFlowInvokeClient,
-  createFlowRuntime,
-  createFlowRuntimeState,
-  scopeFlowRuntimeForms,
-  createFormBlockRuntime,
-  setFieldChange,
-  isFlowIntent,
-  parseServerFlowResponse,
-  performPresentationIntent,
-  readConfirmIntent,
-  readFormIntent,
-  readMessageIntent,
-  startFlowEventCycle,
-  useFlowIntentHost,
-  type FlowApplicationAddress,
-  type FlowBindingReference,
-  type PlacementFlowBinding,
-  type FlowConfirmAnswer,
-  type FlowConfirmIntent,
-  type FlowCycleRefusal,
-  type FlowEventCycle,
-  type FormBlockRuntime,
-  type FormFieldAnswers,
-  type FlowFormAnswer,
-  type FlowFormIntent,
-  type FlowSubjectContext,
-  type FlowIntent,
-  type FlowIntentHost,
-  type FlowIntentHostOptions,
-  type FlowIntentKind,
-  type FlowInvokeClient,
-  type FlowInvokeClientOptions,
-  type FlowMessageIntent,
-  type PageMessage,
-  type PageMessageDraft,
-  type FlowRuntime,
-  type FlowRuntimeOptions,
-  type FlowRuntimeState,
-  type FlowDispatchResult,
-  type ServerFlowResponse,
-} from "./flow-runtime";
-
-// Agents act through the page model: tools generated from the rendered page, run as the person's gestures
-export {
-  pageAgentTools,
-  runPageAgentTool,
-  type AgentPage,
-  type PageAgentTool,
-  type PageAgentToolKinds,
-} from "./agent/page-tools";
-export {
-  createHeadlessPageDriver,
-  type PageDriver,
-  type PageDriverRecord,
-} from "./agent/page-driver";
-
-// Link Navigation and the Navigate task
-export {
-  activateLinkTarget,
-  externalLinkActivation,
-  linkTargetForNavigateIntent,
-  navigateIntentForPage,
-  performNavigateTask,
-  type LinkNavigationEnvironment,
-  type LinkOpenBehavior,
-  type LinkTarget,
-  type NavigateTaskIntent,
-  type UnsavedWorkGuard,
-} from "./launcher";
-
-// Sandboxed custom component host
-export {
-  COMPONENT_BOOTSTRAP_QUERY_PARAMETERS,
-  COMPONENT_BOOTSTRAP_SERVING_PATH,
-  CustomComponentHost,
-  componentBundleContentAddressFromIntegrity,
-  createCustomComponentPayloadParser,
-  createCustomComponentRegistration,
-  createCustomComponentRegistrations,
-  customComponentBootstrapUrl,
-  validateCustomComponentEventPayload,
-  type CustomComponentBootstrapTarget,
-  type CustomComponentEvent,
-  type CustomComponentEventBinding,
-  type CustomComponentEventBindings,
-  type CustomComponentEventDeclaration,
-  type CustomComponentEventPayload,
-  type CustomComponentHostProps,
-} from "./custom-component";
+// Icon rendering.
+export { Icon, IconLibraryProvider } from "./icons/icon";

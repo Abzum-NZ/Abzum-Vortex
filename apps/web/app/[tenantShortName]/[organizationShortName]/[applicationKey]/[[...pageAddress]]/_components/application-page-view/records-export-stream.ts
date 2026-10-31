@@ -10,9 +10,9 @@ import type {
   DisplayTablePayload,
 } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
+import { formatCount } from "@vortex/ui/display/date-format";
+import { postJson } from "../../../../../../_lib/post-json";
 import { recordsTableAddress } from "./records-table-address";
-
-const numberFormat = new Intl.NumberFormat();
 
 /** The sentence a person reads when the server refused to start an export. */
 const refusalMessage = (refusal: RecordsTableExportRefusal): string => {
@@ -22,8 +22,8 @@ const refusalMessage = (refusal: RecordsTableExportRefusal): string => {
       return "This export request could not be read. Reload the page and try again.";
     case "too_many":
       return `Too many records to export${
-        refusal.count === undefined ? "" : `: ${numberFormat.format(refusal.count)} are selected`
-      }. At most ${numberFormat.format(refusal.limit ?? 0)} can be exported at once; narrow the view and try again.`;
+        refusal.count === undefined ? "" : `: ${formatCount(refusal.count)} are selected`
+      }. At most ${formatCount(refusal.limit ?? 0)} can be exported at once; narrow the view and try again.`;
     case "changed":
       return "The table changed since you made this selection, or nothing is left to export. Select the records again.";
     case "not_available":
@@ -70,13 +70,9 @@ export async function streamRecordsExport({
   record: (placementId: string, run: DisplayTableExportRun | undefined) => void;
 }>): Promise<void> {
   const viewId = table.layout.views?.selected?.viewId;
-  const response = await fetch("/api/records-table/export", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    credentials: "same-origin",
-    cache: "no-store",
-    signal: controller.signal,
-    body: JSON.stringify({
+  const posted = await postJson(
+    "/api/records-table/export",
+    {
       ...recordsTableAddress(model),
       placementId,
       format,
@@ -84,8 +80,10 @@ export async function streamRecordsExport({
       ...(token === undefined ? {} : { token }),
       // The saved view the grid showed is a candidate; the server decides the columns.
       ...(viewId === undefined ? {} : { viewId }),
-    }),
-  });
+    },
+    { signal: controller.signal, read: "stream" },
+  );
+  const response = posted.response;
   if (!response.ok || response.body === null) {
     const refusal = recordsTableExportRefusalSchema.safeParse(
       await response.json().catch(() => undefined),

@@ -1,8 +1,4 @@
-import {
-  SHADCN_ICON_LIBRARIES,
-  isShadcnIconLibrary,
-  type ShadcnIconLibrary,
-} from "@vortex/platform/schema";
+import { isShadcnIconLibrary, type ShadcnIconLibrary } from "@vortex/platform/schema";
 import type { PRESET_ICON_LIBRARIES } from "shadcn/preset";
 
 import type { VortexIconAdapter } from "./icon-names";
@@ -50,6 +46,3 @@ export function loadIconAdapter(library: string): Promise<VortexIconAdapter> {
   }
   return adapter;
 }
-
-/** Every catalogue icon library, in the pinned preset's order. */
-export const VORTEX_ICON_LIBRARIES: readonly ShadcnIconLibrary[] = SHADCN_ICON_LIBRARIES;

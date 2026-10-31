@@ -6,6 +6,7 @@ import { loadApplicationSearch } from "../../../_lib/application-search";
 import { loadPermittedApplicationsAtAddress } from "../../../_lib/organization-context";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { readApplicationReleaseAdoption } from "../../../_lib/application-release-adoption";
+import { loadStudioCreateAccess } from "../../../_lib/studio-application-draft";
 import {
   matchesLiteralSearchText,
   runtimePreviewOf,
@@ -115,6 +116,9 @@ export async function readApplicationSwitcherAction(
       console.error(
         `[application-shell] permitted applications unavailable: cause=${read.cause ?? "cause_not_provided"}`,
       );
+    // Studio is an ordinary switcher row when the one access check says this person may build here.
+    const studio =
+      read.kind === "available" ? await loadStudioCreateAccess(read.organizationId) : undefined;
     return {
       state:
         read.kind === "available"
@@ -124,12 +128,24 @@ export async function readApplicationSwitcherAction(
             : "unavailable",
       applications:
         read.kind === "available"
-          ? read.applications.map((candidate) => ({
-              key: candidate.key,
-              name: candidate.name,
-              icon: candidate.icon,
-              href: `/${encodeURIComponent(tenantShortName)}/${encodeURIComponent(organizationShortName)}/${encodeURIComponent(candidate.key)}/${encodeURIComponent(candidate.homePageKey)}`,
-            }))
+          ? [
+              ...read.applications.map((candidate) => ({
+                key: candidate.key,
+                name: candidate.name,
+                icon: candidate.icon,
+                href: `/${encodeURIComponent(tenantShortName)}/${encodeURIComponent(organizationShortName)}/${encodeURIComponent(candidate.key)}/${encodeURIComponent(candidate.homePageKey)}`,
+              })),
+              ...(studio?.kind === "available" && studio.organizationId === read.organizationId
+                ? [
+                    {
+                      key: "studio",
+                      name: "Studio",
+                      icon: "blocks",
+                      href: `/studio/${encodeURIComponent(studio.organizationId)}`,
+                    },
+                  ]
+                : []),
+            ]
           : [],
     };
   } catch (error) {

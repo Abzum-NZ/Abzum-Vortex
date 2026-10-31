@@ -1,5 +1,10 @@
 import {
   maximumFlowConfirmationDetailLines,
+  flowMessageDismissBounds,
+  flowMessageSeverities,
+  flowMessageTargets,
+  type FlowMessageSeverity,
+  type FlowMessageTarget,
   type FormAnswer,
   type JsonValue,
 } from "@vortex/platform/schema";
@@ -26,21 +31,6 @@ export type FlowIntent = Readonly<{
   taskId: string;
   properties: Readonly<Record<string, JsonValue>>;
 }>;
-
-export type FlowIntentKind = FlowIntent["kind"];
-
-export const FLOW_INTENT_KINDS: readonly FlowIntentKind[] = Object.freeze([
-  "show_message",
-  "clear_message",
-  "show_form",
-  "confirm",
-  "navigate",
-  "refresh",
-  "set_panel",
-  "set_filter",
-  "set_value",
-  "validate_form",
-]);
 
 /**
  * The person's answer to a form intent, using the same shape sent to the server. Cancel is an
@@ -111,18 +101,6 @@ const text = (candidate: JsonValue | undefined): string | undefined =>
 const record = (candidate: JsonValue | undefined): Readonly<Record<string, JsonValue>> =>
   typeof candidate === "object" && candidate !== null && !Array.isArray(candidate) ? candidate : {};
 
-export const isFlowIntent = (candidate: unknown): candidate is FlowIntent => {
-  if (typeof candidate !== "object" || candidate === null) return false;
-  const intent = candidate as Record<string, unknown>;
-  return (
-    FLOW_INTENT_KINDS.includes(intent.kind as FlowIntentKind) &&
-    typeof intent.taskId === "string" &&
-    typeof intent.properties === "object" &&
-    intent.properties !== null &&
-    !Array.isArray(intent.properties)
-  );
-};
-
 /** Undefined when a platform-produced intent does not match the message contract. */
 export const readMessageIntent = (intent: FlowIntent): FlowMessageIntent | undefined => {
   const message = text(intent.properties.message);
@@ -136,8 +114,10 @@ export const readMessageIntent = (intent: FlowIntent): FlowMessageIntent | undef
   const dismissAfterMs = intent.properties.dismiss_after_ms;
   if (
     message === undefined ||
-    !["toast", "banner", "dialog", "inline", "slot"].includes(target ?? "") ||
-    !["info", "success", "warning", "error"].includes(severity ?? "") ||
+    target === undefined ||
+    !(flowMessageTargets as readonly string[]).includes(target) ||
+    severity === undefined ||
+    !(flowMessageSeverities as readonly string[]).includes(severity) ||
     ((target === "inline" || target === "slot") && component === undefined) ||
     (actionLabel === undefined) !== (actionFlow === undefined) ||
     (actionInputs !== undefined &&
@@ -145,17 +125,17 @@ export const readMessageIntent = (intent: FlowIntent): FlowMessageIntent | undef
     (dismissAfterMs !== undefined &&
       (typeof dismissAfterMs !== "number" ||
         !Number.isInteger(dismissAfterMs) ||
-        dismissAfterMs < 2_000 ||
-        dismissAfterMs > 30_000 ||
+        dismissAfterMs < flowMessageDismissBounds.minimumMs ||
+        dismissAfterMs > flowMessageDismissBounds.maximumMs ||
         (target !== "toast" && target !== "banner") ||
         (severity !== "info" && severity !== "success")))
   )
     return undefined;
   return {
     taskId: intent.taskId,
-    target: target as PageMessageTarget,
+    target: target as FlowMessageTarget,
     text: message,
-    severity: severity as NoticeSeverity,
+    severity: severity as FlowMessageSeverity,
     ...(title === undefined ? {} : { title }),
     ...(component === undefined ? {} : { component }),
     ...(actionLabel === undefined ? {} : { actionLabel }),

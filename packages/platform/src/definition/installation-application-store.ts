@@ -138,6 +138,38 @@ type ApplicationStoreRoleSummary = Readonly<{
   lines: string[];
 }>;
 
+/** A standard record permission's operation and the record types it covers. */
+const standardOperationOf = (
+  label: string,
+): Readonly<{ operation: string; records: string }> | undefined => {
+  const match = standardPermission.exec(label);
+  return match === null
+    ? undefined
+    : { operation: (match[1] ?? "").replaceAll("_", " "), records: match[2] ?? "" };
+};
+
+/** The words a person uses for a set of standard operations, in the order they are listed. */
+const operationWords = (operations: ReadonlySet<string>): string =>
+  listWords(
+    standardOperationWords
+      .filter(([operation]) => operations.has(operation))
+      .map(([, word]) => word),
+  );
+
+/**
+ * One line per record type for a role's standard operations: what it gains and, when accepting the
+ * version also takes an operation away, what it loses.
+ */
+const operationsLine = (
+  gained: ReadonlySet<string> | undefined,
+  lost: ReadonlySet<string> | undefined,
+  records: string,
+): string => {
+  if (gained === undefined) return `Can no longer ${operationWords(lost ?? new Set())} ${records}.`;
+  if (lost === undefined) return `Can ${operationWords(gained)} ${records}.`;
+  return `Can ${operationWords(gained)} ${records}, and can no longer ${operationWords(lost)} ${records}.`;
+};
+
 /**
  * One role's summary: its standard record permissions grouped by record type ("can view, create,
  * edit, delete, restore and export assets") as one line each, then its other permissions as
@@ -152,23 +184,19 @@ const roleSummaryLine = (
   const operationsByRecords = new Map<string, Set<string>>();
   const others: string[] = [];
   for (const { description } of role.permissions) {
-    const match = standardPermission.exec(description);
-    if (match === null) {
+    const standard = standardOperationOf(description);
+    if (standard === undefined) {
       others.push(description);
       continue;
     }
-    const records = match[2] ?? "";
     operationsByRecords.set(
-      records,
-      (operationsByRecords.get(records) ?? new Set()).add((match[1] ?? "").replaceAll("_", " ")),
+      standard.records,
+      (operationsByRecords.get(standard.records) ?? new Set()).add(standard.operation),
     );
   }
-  const standard = [...operationsByRecords].map(([records, operations]) => {
-    const words = standardOperationWords
-      .filter(([operation]) => operations.has(operation))
-      .map(([, word]) => word);
-    return `Can ${listWords(words)} ${records}.`;
-  });
+  const standard = [...operationsByRecords].map(([records, operations]) =>
+    operationsLine(operations, undefined, records),
+  );
   return { text: role.name, lines: [...standard, ...others] };
 };
 
@@ -298,13 +326,42 @@ const expectedOf = (snapshot: unknown): JsonValue =>
   JSON.parse(canonicalJson(snapshot)) as JsonValue;
 
 /**
- * One line per role change, in plain words: who holds the role and what accepting changes. A role
- * the version adds is held by nobody until it is assigned.
+ * One role change as the upgrade confirmation lists it: the role's line, then what accepting the
+ * version changes, one line per record type and one line for each other change. A role the version
+ * adds is held by nobody until it is assigned; a new role's whole permission set is its change.
  */
-const roleChangeLine = (change: ApplicationRoleChange): string =>
-  change.roleId === undefined
-    ? `${change.name}, a new role nobody holds yet, lets people: ${change.changes.join(", ")}`
-    : `${change.name}, held by ${change.holders} ${change.holders === 1 ? "person or Group" : "people or Groups"}: ${change.changes.join("; ")}`;
+const roleChangeSummary = (change: ApplicationRoleChange): ApplicationStoreRoleSummary => {
+  const added = new Map<string, Set<string>>();
+  const removed = new Map<string, Set<string>>();
+  const others: string[] = [];
+  const collect = (target: Map<string, Set<string>>, label: string): boolean => {
+    const standard = standardOperationOf(label);
+    if (standard === undefined) return false;
+    target.set(
+      standard.records,
+      (target.get(standard.records) ?? new Set()).add(standard.operation),
+    );
+    return true;
+  };
+  for (const line of change.changes) {
+    if (line.startsWith("+ ")) {
+      if (collect(added, line.slice(2))) continue;
+    } else if (line.startsWith("− ")) {
+      if (collect(removed, line.slice(2))) continue;
+    } else if (collect(added, line)) continue;
+    others.push(line);
+  }
+  const lines = [...new Set([...added.keys(), ...removed.keys()])].map((records) =>
+    operationsLine(added.get(records), removed.get(records), records),
+  );
+  return {
+    text:
+      change.roleId === undefined
+        ? `${change.name}, a new role nobody holds yet`
+        : `${change.name}, held by ${change.holders} ${change.holders === 1 ? "person or Group" : "people or Groups"}`,
+    lines: [...lines, ...others],
+  };
+};
 
 /**
  * A first install: every role the version offers (installing makes each an organisation role that
@@ -381,7 +438,7 @@ const review = async (
         release_version: authorized.snapshot.selected.releaseVersion,
         installed_version: authorized.snapshot.active.releaseVersion,
         release_note: latest.releaseNote,
-        role_changes: changes.map(roleChangeLine),
+        role_changes: changes.map(roleChangeSummary),
         role_change_count: changes.length,
         role_template_ids: changes.map((change) => change.sourceRoleId),
         expected: expectedOf({

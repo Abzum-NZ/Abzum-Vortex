@@ -11,12 +11,14 @@ import {
   type ReactElement,
 } from "react";
 import { recordsTableContractOrLog, type RecordsTableContract } from "@vortex/platform/schema";
+import Link from "next/link";
 import { Alert, AlertDescription } from "../components/alert";
 import { Button } from "../components/button";
 import { Empty, EmptyContent, EmptyHeader, EmptyTitle } from "../components/empty";
 import { cn } from "../lib/utils";
 import { useAgentGrid } from "./agent-grid";
 import { cellValueToText, DisplayCellView } from "./cell";
+import { addLabelOf } from "./add-label";
 import {
   DisplayHeader,
   PaginationControl,
@@ -48,7 +50,7 @@ import { useRowLines, useRowWrites } from "./sub-rows";
 import { useGroupedTable } from "./table-groups-state";
 import type { CardRenderers } from "./table-cards";
 import { columnWidth, useTablePresentation } from "./table-geometry";
-import { TableTotals } from "./table-totals";
+import { TableSummary, TableTotals } from "./table-totals";
 import { RecordsGrid, type GridRenderers } from "./table-grid";
 import { useGridLayout, type GridColumn } from "./table-layout";
 import { TableLoadingState, useLoadingReveal } from "./table-loading";
@@ -191,6 +193,16 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
   // A grouped table shows its groups, and under the open group the rows its page holds.
   const grouped = useGroupedTable(values, events);
   const rows = grouped === undefined ? (values?.rows ?? []) : grouped.rows;
+  /** The authored one-line purpose and the inline create action of this list. */
+  const purpose = values?.purpose;
+  const createHref =
+    values?.create === undefined || props.resolvePageHref === undefined
+      ? undefined
+      : props.resolvePageHref(values.create.pageKey);
+  const create =
+    createHref === undefined || values?.create === undefined
+      ? undefined
+      : { href: createHref, label: addLabelOf(createHref) };
   // The grid features this viewer may use on this read, as the server projected them. While the
   // next page is being read the last projection stays, so the search box and filters keep focus.
   // An open group's page carries its own projection, which follows the rows it shows.
@@ -712,7 +724,13 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
     if (pivotOpen) return <>{gridFeatures.viewBody()}</>;
     if (state.status === "loading") return loading;
     if (state.status === "empty")
-      return <RecordsEmptyState accessibleName={accessibleName} message={emptyMessage} />;
+      return (
+        <RecordsEmptyState
+          accessibleName={accessibleName}
+          message={emptyMessage}
+          {...(create === undefined ? {} : { create })}
+        />
+      );
     if (state.status === "error" || state.status === "refused" || state.status === "awaiting_input")
       return (
         <div className="flex flex-col items-start gap-2">
@@ -776,10 +794,16 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
                     : emptyMessage}
             </EmptyTitle>
           </EmptyHeader>
-          {!narrowed(narrowing) ? null : (
+          {narrowed(narrowing) ? (
             <EmptyContent>
               <Button variant="outline" size="sm" onClick={clearNarrowing}>
                 Clear search and filters
+              </Button>
+            </EmptyContent>
+          ) : create === undefined ? null : (
+            <EmptyContent>
+              <Button nativeButton={false} render={<Link href={create.href} prefetch={false} />}>
+                {create.label}
               </Button>
             </EmptyContent>
           )}
@@ -829,6 +853,24 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
           {...(revealed ? { "data-vortex-display-revealed": "" } : {})}
         >
           <DisplayHeader title={title} accessibleName={accessibleName} events={undefined} />
+          {purpose === undefined ? null : (
+            <p
+              data-vortex-table-purpose=""
+              className="m-0 mb-3 max-w-prose text-sm text-muted-foreground"
+            >
+              {purpose}
+            </p>
+          )}
+          {ready && values !== undefined && !pivotOpen ? (
+            <div className="mb-3">
+              <TableSummary
+                recordCount={rows.length}
+                totals={values.totals ?? []}
+                columns={layout.shown}
+                label={accessibleName}
+              />
+            </div>
+          ) : null}
           {state.status === "refused" ||
           state.status === "error" ||
           state.status === "awaiting_input"

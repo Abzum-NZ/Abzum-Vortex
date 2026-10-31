@@ -1,11 +1,9 @@
 export {
-  DISPLAY_EVENT_NAMES,
   type DisplayBatchEditAnswer,
   type DisplayEventHandler,
   type DisplayEventHandlers,
   type DisplayInlineEditResult,
   type DisplaySemanticEvent,
-  type DisplaySemanticEventName,
 } from "./display-events";
 import {
   DISPLAY_EVENT_NAMES,
@@ -14,25 +12,13 @@ import {
   type DisplaySemanticEventName,
 } from "./display-events";
 import { displayRefusalReasons } from "@vortex/platform/schema";
-import type {
-  RichTextPayload,
-  TextPayload,
-  SummaryPayload,
-  RecordDetailPayload,
-  LauncherRowsPayload,
-  DisplayDataState,
-  BlockPropertyValueContract,
-  DisplayTablePayload,
-  BoardPayload,
-} from "@vortex/platform/schema";
+import type { DisplayDataState, BlockPropertyValueContract } from "@vortex/platform/schema";
 import type { DefinitionRenderErrorLocation } from "../definition-error";
 import { fail, requireRecord } from "./payload-parse";
 
 export {
   isInternalAddress,
   type BoardBucketPayload,
-  type BoardColumnPayload,
-  type BoardPage,
   type BoardPayload,
   type CalendarPayload,
   type CalendarView,
@@ -43,7 +29,6 @@ export {
   type DisplayRefusalReason,
   type DisplayRow,
   type DisplayScalarCell,
-  type DisplaySummaryMetric,
   type DisplayTableBulkRun,
   type DisplayTableExportRun,
   type DisplayTableExportScope,
@@ -55,7 +40,6 @@ export {
   type DisplayTableSelectionScope,
   type LauncherRowsPayload,
   type RecordDetailPayload,
-  type RecordsTableBulkRunSummary,
   type RichTextPayload,
   type SummaryPayload,
   type TextPayload,
@@ -78,14 +62,6 @@ export type DisplayRichTextInline = Extract<
   DisplayRichTextBlock,
   { kind: "paragraph" }
 >["children"][number];
-
-export type TextData = DisplayDataState<TextPayload>;
-export type RichTextData = DisplayDataState<RichTextPayload>;
-export type LauncherRowsData = DisplayDataState<LauncherRowsPayload>;
-export type TableData = DisplayDataState<DisplayTablePayload>;
-export type RecordDetailData = DisplayDataState<RecordDetailPayload>;
-export type SummaryData = DisplayDataState<SummaryPayload>;
-export type BoardData = DisplayDataState<BoardPayload>;
 
 // The data-free states carry no values, so one frozen instance serves every block's state type.
 const LOADING_STATE: DisplayDataState<never> = Object.freeze({ status: "loading" });

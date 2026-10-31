@@ -10,6 +10,7 @@ import {
   isRecord,
 } from "@vortex/platform/schema";
 import type { PlacementFlowBinding } from "./flow-runtime";
+import { postJson } from "../lib/post-json";
 
 /** The address the signed-in person is using; the server resolves everything else from it. */
 export type FlowApplicationAddress = Readonly<{
@@ -219,15 +220,11 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
     if (signal?.aborted) return unavailable;
     try {
       const refresh = bindingId === undefined ? undefined : options.prepareRefresh?.(bindingId);
-      const response = await (options.fetchImplementation ?? fetch)(endpoint, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "same-origin",
-        cache: "no-store",
-        ...(signal === undefined ? {} : { signal }),
-        // Exactly the endpoint's strict request shape: the addressed page and the invocation. The
-        // endpoint checks it against the invocation contract and refuses anything else.
-        body: JSON.stringify({
+      const response = await postJson(
+        endpoint,
+        {
+          // Exactly the endpoint's strict request shape: the addressed page and the invocation. The
+          // endpoint checks it against the invocation contract and refuses anything else.
           tenantShortName: options.address.tenantShortName,
           organizationShortName: options.address.organizationShortName,
           applicationKey: options.address.applicationKey,
@@ -238,11 +235,17 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
           pageInputs: options.pageInputs?.() ?? { parameters: {}, controls: {} },
           ...(refresh === undefined ? {} : { refresh: refresh.request }),
           invocation,
-        }),
-      });
+        },
+        {
+          ...(signal === undefined ? {} : { signal }),
+          ...(options.fetchImplementation === undefined
+            ? {}
+            : { fetchImplementation: options.fetchImplementation }),
+        },
+      );
       if (response.status === 401 || response.status === 403 || response.status === 413)
         return refused;
-      const body: unknown = await response.json();
+      const body: unknown = response.body;
       if (signal?.aborted) return unavailable;
       const parsed = parseServerFlowResponse(body);
       if (isRecord(body) && body.refresh !== undefined) {

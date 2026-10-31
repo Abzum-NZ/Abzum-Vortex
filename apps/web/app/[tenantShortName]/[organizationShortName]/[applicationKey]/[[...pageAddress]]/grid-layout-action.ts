@@ -41,15 +41,9 @@ import { resolveApplicationAddress } from "../../../../_lib/application-address"
 import { humanOrganizationRequestDependencies } from "../../../../_lib/server-composition";
 import { platformPermissionSource } from "../../../../_lib/platform-permission-source";
 import { collectPlacements } from "../../../../_lib/application-page/placement-helpers";
+import { pageAddressSchema } from "../../../../_lib/page-address-schema";
 
-const gridLayoutAddressSchema = z
-  .object({
-    tenantShortName: z.string().min(1).max(80),
-    organizationShortName: z.string().min(1).max(80),
-    applicationKey: z.string().min(1).max(80),
-    pageKey: z.string().min(1).max(80),
-  })
-  .strict();
+const gridLayoutAddressSchema = pageAddressSchema;
 
 const viewIdSchema = z.uuid();
 
