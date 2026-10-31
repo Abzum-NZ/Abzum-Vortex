@@ -449,7 +449,7 @@ drop function pg_temp.contract_43_canonical_json(jsonb);
 
 reset role;
 
-
+set role vortex_record_adapter;
 
 create or replace function vortex_record.module_query_board_member_internal(
   p_bound jsonb,
@@ -549,6 +549,10 @@ revoke all on function vortex_record.module_query_board_member_internal(jsonb,js
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_record.module_query_board_member_internal(jsonb,jsonb) is
   'Adapter-only board membership of a bound Module query page read: requires the query''s sole grouping key to be the selected, filterable choice field the board names with 1 to 12 closed options, every requested option column to be one of them, and returns the closed choice membership value with the stored choice column only when the reader is guaranteed to see the choice field on every scanned row.';
+
+reset role;
+
+set role vortex_owner;
 
 -- One protected summary plan: field policy, filter pushdown, aggregate expressions and candidate scan.
 create or replace function vortex_record.module_summary_plan_internal(
@@ -1534,3 +1538,5 @@ alter function vortex_record.module_summary_plan_internal(uuid,uuid,bigint,jsonb
 revoke all on function vortex_record.module_summary_plan_internal(uuid,uuid,bigint,jsonb,jsonb,uuid[],text,uuid[],jsonb,jsonb,uuid,boolean,uuid,uuid,uuid,jsonb,integer,text,uuid,jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.module_summary_plan_internal(uuid,uuid,bigint,jsonb,jsonb,uuid[],text,uuid[],jsonb,jsonb,uuid,boolean,uuid,uuid,uuid,jsonb,integer,text,uuid,jsonb) to vortex_record_adapter;
+
+reset role;
