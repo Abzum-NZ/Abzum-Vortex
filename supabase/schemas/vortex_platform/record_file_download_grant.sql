@@ -76,8 +76,6 @@ begin
   return pg_catalog.jsonb_build_object('outcome', 'recorded');
 end
 $function$;
-alter function vortex_platform.record_file_download_grant(uuid,uuid,uuid,uuid,uuid,jsonb,text,uuid,timestamp with time zone) owner to vortex_owner;
-
 
 revoke execute on function vortex_platform.record_file_download_grant(
   uuid, uuid, uuid, uuid, uuid, jsonb, text, uuid, timestamptz

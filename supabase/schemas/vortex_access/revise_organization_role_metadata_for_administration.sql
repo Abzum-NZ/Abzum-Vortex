@@ -214,9 +214,8 @@ begin
 
   insert into vortex_access.organization_role_revisions (
     organization_id, role_id, revision, role_kind, application_root_id,
-    lifecycle, privilege_classification, assignment_policy,
+    lifecycle, privilege_classification,
     policy_continuity_revision, authority_continuity_revision,
-    activation_policy_id, activation_policy_revision,
     role_key, label, description,
     source_definition_key, source_release_revision, source_release_version,
     source_validation_contract_version, accepted_registration_revision,
@@ -226,9 +225,8 @@ begin
     context_organization_id, p_role_id, role_fact.live_revision + 1,
     revision_fact.role_kind, revision_fact.application_root_id,
     revision_fact.lifecycle, revision_fact.privilege_classification,
-    revision_fact.assignment_policy, revision_fact.policy_continuity_revision,
+    revision_fact.policy_continuity_revision,
     revision_fact.authority_continuity_revision,
-    revision_fact.activation_policy_id, revision_fact.activation_policy_revision,
     revision_fact.role_key,
     p_label, p_description, revision_fact.source_definition_key,
     revision_fact.source_release_revision, revision_fact.source_release_version,

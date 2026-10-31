@@ -21,8 +21,6 @@ $function$;
 
 revoke all on function vortex_platform.topic_application_root_id(text)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_platform.topic_application_root_id(text)
-  to vortex_request, vortex_runtime;
 grant execute on function vortex_platform.topic_application_root_id(text) to postgres;
 
 comment on function vortex_platform.topic_application_root_id(text) is

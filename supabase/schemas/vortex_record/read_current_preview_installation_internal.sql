@@ -28,8 +28,6 @@ begin
   return preview_value;
 end
 $function$;
-alter function vortex_record.read_current_preview_installation_internal() owner to vortex_record_adapter;
-
 
 alter function vortex_record.read_current_preview_installation_internal()
   owner to vortex_record_adapter;

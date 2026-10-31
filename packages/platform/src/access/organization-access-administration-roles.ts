@@ -140,19 +140,7 @@ export const createAccessAdministrationRoleOperations = ({
       const rows = await transaction.query<RoleChangeRow>`
         select outcome, organization_id, role_summary, access_version
         from vortex_access.change_organization_role_authority_for_administration(
-          ${JSON.stringify(
-            changes.map((change) => ({
-              ...change,
-              evidence: {
-                ...change.evidence,
-                candidate: {
-                  ...change.evidence.candidate,
-                  // assignment_policy: removed by FIX-DB-SECURITY
-                  assignmentPolicy: { kind: "standing" },
-                },
-              },
-            })),
-          )}::text::jsonb
+          ${JSON.stringify(changes)}::text::jsonb
         )
       `;
       if (rows.length !== changes.length)

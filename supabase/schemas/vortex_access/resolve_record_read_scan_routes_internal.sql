@@ -6,7 +6,6 @@ returns table (
   restricted boolean,
   owner_account_id uuid,
   owner_group_ids uuid[],
-  shared_record_ids uuid[],
   alternatives jsonb
 )
 language plpgsql
@@ -15,12 +14,8 @@ security definer
 set search_path = ''
 as $function$
 declare
-  -- The most directly shared record identifiers one query carries. A caller
-  -- with more is not narrowed by this route at all.
-  shared_limit constant integer := 10000;
   ctx jsonb;
   checked_at timestamptz;
-  binding jsonb;
   routes jsonb;
   eligibility jsonb;
   candidate jsonb;
@@ -29,14 +24,11 @@ declare
   account_id uuid;
   member_group_ids uuid[];
   wants_owner boolean := false;
-  wants_share boolean := false;
   -- Every route of every eligible alternative has an exact stored predicate, so
   -- a condition-free scan examines only rows the exact decision admits. When
   -- any route does not, that route's term is left true in the scan plan and no
   -- field is taken as readable for every scanned row.
   pushable boolean := true;
-  shared_overflow boolean := false;
-  shared uuid[] := array[]::uuid[];
   alternatives jsonb := '[]'::jsonb;
 begin
   if p_declaration is null
@@ -54,7 +46,6 @@ begin
   -- ones that decision would union for any single record.
   ctx := vortex_access.validated_human_request_context();
   checked_at := pg_catalog.clock_timestamp();
-  binding := p_declaration -> 'recordBinding';
   account_id := (ctx ->> 'organizationAccountId')::uuid;
 
   eligibility := vortex_access.evaluate_organization_record_permission_eligibility_internal(
@@ -65,7 +56,7 @@ begin
   -- empty alternative list narrows the scan to nothing; the exact decision
   -- would refuse every row anyway.
   if eligibility ->> 'outcome' <> 'eligible' then
-    return query select true, null::uuid, array[]::uuid[], array[]::uuid[], '[]'::jsonb;
+    return query select true, null::uuid, array[]::uuid[], '[]'::jsonb;
     return;
   end if;
 
@@ -79,7 +70,7 @@ begin
   loop
     routes := candidate -> 'recordScope' -> 'routes';
     if pg_catalog.jsonb_typeof(routes) is distinct from 'array' then
-      return query select false, null::uuid, array[]::uuid[], array[]::uuid[], null::jsonb;
+      return query select false, null::uuid, array[]::uuid[], null::jsonb;
       return;
     end if;
     alternatives := alternatives || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
@@ -102,8 +93,6 @@ begin
           -- record: neither is a fixed stored predicate.
           pushable := false;
         end if;
-      elsif route_kind = 'direct_share' then
-        wants_share := true;
       else
         -- all_records admits every record; a relationship route is a
         -- relationship chase. Neither is a fixed stored predicate, so the scan
@@ -114,7 +103,7 @@ begin
   end loop;
 
   -- The groups the caller belongs to now: an active group and a live,
-  -- started, unexpired membership, as the ownership and share tests require.
+  -- started, unexpired membership, as the ownership test requires.
   select coalesce(pg_catalog.array_agg(distinct membership.group_id), array[]::uuid[])
   into member_group_ids
   from vortex_access.organization_group_memberships as membership
@@ -128,60 +117,15 @@ begin
     and membership.starts_at <= checked_at
     and (membership.expires_at is null or membership.expires_at > checked_at);
 
-  if wants_share then
-    -- The same current-share conditions as the exact-record contribution
-    -- reader, over every record of this type instead of one. A caller with more
-    -- shares than one query carries gets a null array: that route is not
-    -- narrowed, rather than truncated.
-    select coalesce(pg_catalog.array_agg(listed.record_id), array[]::uuid[])
-    into shared
-    from (
-      select distinct share.record_id
-      from vortex_access.organization_direct_record_shares as share
-      where share.organization_id = (ctx ->> 'organizationId')::uuid
-        and share.storage_scope = binding ->> 'storageScope'
-        and share.application_scope_id = coalesce(case
-          when binding ->> 'storageScope' = 'application_contained'
-            then (p_declaration -> 'target' ->> 'applicationRootId')::uuid
-          else null::uuid
-        end, '00000000-0000-0000-0000-000000000000'::uuid)
-        and share.module_root_id = (binding ->> 'moduleRootId')::uuid
-        and share.record_type_id = (binding ->> 'recordTypeId')::uuid
-        and share.storage_contract_id = (binding ->> 'storageContractId')::uuid
-        and share.state = 'active'
-        and share.starts_at <= checked_at
-        and (share.expires_at is null or share.expires_at > checked_at)
-        and (
-          (share.recipient_kind = 'organization_account'
-            and share.organization_account_id = account_id)
-          or (share.recipient_kind = 'group'
-            and share.group_id = any (member_group_ids))
-        )
-      limit shared_limit + 1
-    ) as listed;
-    if pg_catalog.cardinality(shared) > shared_limit then
-      shared_overflow := true;
-    end if;
-  end if;
-
-  if shared_overflow then
-    -- That route is not narrowed, so no scanned row is guaranteed admitted.
-    pushable := false;
-  end if;
-
   return query select
     pushable,
     case when wants_owner and p_ownership_mode = 'organization_account'
       then account_id else null::uuid end,
     case when wants_owner and p_ownership_mode = 'group'
       then member_group_ids else array[]::uuid[] end,
-    case when wants_share and not shared_overflow
-      then shared else null::uuid[] end,
     alternatives;
 end
 $function$;
-alter function vortex_access.resolve_record_read_scan_routes_internal(jsonb,text) owner to vortex_owner;
-
 
 revoke all on function vortex_access.resolve_record_read_scan_routes_internal(jsonb, text)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
@@ -189,7 +133,7 @@ grant execute on function vortex_access.resolve_record_read_scan_routes_internal
   to vortex_record_adapter;
 
 comment on function vortex_access.resolve_record_read_scan_routes_internal(jsonb, text) is
-  'Private read-scan narrowing for the fixed record adapter: from the caller''s own current eligible read alternatives it returns the owner account, owner groups and directly shared record identifiers, the eligible alternatives reduced to their route lists and saved-condition envelopes, and whether every route has an exact stored predicate; it only narrows candidates and never replaces the exact-record decision.';
+  'Private read-scan narrowing for the fixed record adapter: from the caller''s own current eligible read alternatives it returns the owner account and owner groups, the eligible alternatives reduced to their route lists and saved-condition envelopes, and whether every route has an exact stored predicate; it only narrows candidates and never replaces the exact-record decision.';
 
 alter function vortex_access.resolve_record_read_scan_routes_internal(jsonb, text)
   owner to vortex_owner;

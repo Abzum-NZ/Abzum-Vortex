@@ -37,7 +37,6 @@ declare
   exact_record_ids uuid[];
   access_owner_account_id uuid := nullif(p_plan #>> '{storagePlan,access,ownerAccountId}', '')::uuid;
   access_owner_group_ids uuid[];
-  access_shared_record_ids uuid[];
   segment_predicates text[];
   segment_sql text;
   scan_sql text;
@@ -138,8 +137,6 @@ begin
   end if;
   select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[]) into access_owner_group_ids
   from pg_catalog.jsonb_array_elements_text(p_plan #> '{storagePlan,access,ownerGroupIds}') as item(value);
-  select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[]) into access_shared_record_ids
-  from pg_catalog.jsonb_array_elements_text(p_plan #> '{storagePlan,access,sharedRecordIds}') as item(value);
   select pg_catalog.array_agg(item.value) into segment_predicates
   from pg_catalog.jsonb_array_elements_text(p_plan -> 'segmentPredicates') as item(value);
   select coalesce(pg_catalog.array_agg(item.value), array[]::text[]) into choice_option_values
@@ -208,7 +205,7 @@ begin
      from %s
      where stored.organisation_id = $1
        and stored.lifecycle_state = ''active''
-       and ($12::uuid[] is null or stored.record_id = any ($12))
+       and ($11::uuid[] is null or stored.record_id = any ($11))
        and %s
        and (%s)
         and (case when (%s) then true else false end)
@@ -236,7 +233,7 @@ begin
   open scan_cursor scroll for execute scan_sql
     using context_organization_id, context_application_root_id, after_sort_key,
       after_record_id, scan_limit + 1, access_owner_account_id,
-      access_owner_group_ids, access_shared_record_ids,
+      access_owner_group_ids,
       p_plan -> 'filterParameters', coalesce(p_plan #> '{storagePlan,access,parameters}', '[]'::jsonb),
       projection_batch, exact_record_ids,
       p_member ->> 'columnValue', choice_option_values, group_selector_values, tree_parent_id,

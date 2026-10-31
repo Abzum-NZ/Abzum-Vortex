@@ -23,7 +23,7 @@ $function$;
 revoke execute on function vortex_platform.current_context()
   from public, anon, authenticated, service_role, vortex_runtime;
 grant execute on function vortex_platform.current_context()
-  to vortex_request, vortex_record_adapter, vortex_owner, vortex_record_inventory;
+  to vortex_request, vortex_record_adapter, vortex_owner;
 
 comment on function vortex_platform.current_context() is
   'Returns the validated request context established in this transaction or fails closed when it is absent, expired or stale.';

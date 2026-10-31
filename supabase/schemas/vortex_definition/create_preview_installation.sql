@@ -71,7 +71,8 @@ begin
     delete from vortex_definition.preview_installations as preview
     where preview.preview_installation_id = previous_preview.preview_installation_id;
   end loop;
-  perform vortex_definition.expire_preview_installations(100);
+  -- Other expired previews are refused by every preview reader and purged by the scheduled
+  -- vortex_definition.expire_abandoned_preview_installations run.
 
   -- The builder's live records reach the preview only through the installed Application.
   seedable_value := exists (

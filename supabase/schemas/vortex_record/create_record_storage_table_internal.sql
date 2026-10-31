@@ -89,6 +89,21 @@ begin
     )', table_token, organization_reference, p_module_root_id, p_record_type_id,
     p_storage_contract_id, scope_index_columns, owner_references, scope_check, owner_check
   );
+  -- The owner route of a restricted read is a stored predicate on the one owner column this
+  -- ownership mode fills; the partial index serves that predicate and the owner's foreign key.
+  if p_ownership_mode = 'organization_account' then
+    execute pg_catalog.format(
+      'create index %I on record_data.%I (organisation_id, owner_organisation_account_id)
+         where owner_organisation_account_id is not null',
+      'ix_' || table_token || '_owner', table_token
+    );
+  elsif p_ownership_mode = 'group' then
+    execute pg_catalog.format(
+      'create index %I on record_data.%I (organisation_id, owner_group_id)
+         where owner_group_id is not null',
+      'ix_' || table_token || '_owner', table_token
+    );
+  end if;
   execute pg_catalog.format('alter table record_data.%I enable row level security', table_token);
   execute pg_catalog.format('alter table record_data.%I force row level security', table_token);
   execute pg_catalog.format(
@@ -137,4 +152,4 @@ revoke all on function vortex_record.create_record_storage_table_internal(uuid, 
 grant execute on function vortex_record.create_record_storage_table_internal(uuid, uuid, uuid, text, text, boolean)
   to vortex_owner;
 comment on function vortex_record.create_record_storage_table_internal(uuid, uuid, uuid, text, text, boolean) is
-  'Creates one generated Record storage table with its fixed scope checks and request-adapter policies; installed storage references the platform organisation, account and Group rows, preview storage references no platform table.';
+  'Creates one generated Record storage table with its fixed scope checks, the owner index of its ownership mode and request-adapter policies; installed storage references the platform organisation, account and Group rows, preview storage references no platform table.';

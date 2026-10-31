@@ -10,7 +10,7 @@ $function$;
 revoke execute on function vortex_platform.organization_id()
   from public, anon, authenticated, service_role, vortex_runtime;
 grant execute on function vortex_platform.organization_id()
-  to vortex_request, vortex_record_adapter, vortex_owner, vortex_record_inventory;
+  to vortex_request, vortex_record_adapter, vortex_owner;
 
 comment on function vortex_platform.organization_id() is
   'Returns the organisation identifier from the validated request context.';

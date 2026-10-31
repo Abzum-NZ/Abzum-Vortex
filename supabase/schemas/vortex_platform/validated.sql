@@ -46,7 +46,7 @@ begin
       end if;
       if not candidate ?& array['identityId', 'organizationAccountId']
         or authentication_strength is null
-        or authentication_strength not in ('single_factor', 'multi_factor', 'recent_multi_factor') then
+        or authentication_strength not in ('single_factor', 'multi_factor') then
         raise exception using errcode = '22023', message = 'Vortex human context has an invalid actor';
       end if;
     when 'federated' then
@@ -62,7 +62,7 @@ begin
       end if;
       if not candidate ?& array['identityId', 'organizationAccountId']
         or authentication_strength is null
-        or authentication_strength not in ('single_factor', 'multi_factor', 'recent_multi_factor') then
+        or authentication_strength not in ('single_factor', 'multi_factor') then
         raise exception using errcode = '22023', message = 'Vortex federated context has an invalid actor';
       end if;
     when 'system' then
@@ -185,7 +185,7 @@ begin
     end if;
 
     if candidate ? 'multiFactorAuthenticatedAt' then
-      if authentication_strength not in ('multi_factor', 'recent_multi_factor') then
+      if authentication_strength <> 'multi_factor' then
         raise exception using errcode = '22023', message = 'Vortex human multi-factor evidence conflicts with authentication strength';
       end if;
       if pg_catalog.jsonb_typeof(candidate -> 'multiFactorAuthenticatedAt') <> 'string'
@@ -267,9 +267,7 @@ end
 $function$;
 
 revoke execute on function vortex_platform.validated(jsonb)
-  from public, anon, authenticated, service_role;
-grant execute on function vortex_platform.validated(jsonb)
-  to vortex_runtime, vortex_request;
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_platform.validated(jsonb) is
   'Validates one trusted request context, including its optional trusted channel, or fails closed.';

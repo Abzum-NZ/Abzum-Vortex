@@ -1,5 +1,7 @@
--- Synthetic development and test data will be added by the issue that owns
--- each schema. Production delivery never applies this file.
+-- Local-only database settings applied after every local reset: the runtime login's local password
+-- and the event dispatcher's system actor grant. It holds no demo or development data; `pnpm
+-- setup:local` (apps/web/scripts/development-setup) creates that. Production delivery never applies
+-- this file.
 
 -- The application connects as the same restricted runtime login in Local as it does when hosted.
 -- This credential is intentionally fixed and Local-only; it is never valid outside the disposable

@@ -29,6 +29,6 @@ $function$;
 alter function vortex_record.complete_flow_segment_receipt(uuid, jsonb) owner to vortex_record_adapter;
 revoke all on function vortex_record.complete_flow_segment_receipt(uuid, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.complete_flow_segment_receipt(uuid, jsonb) to vortex_request, vortex_owner, postgres;
+grant execute on function vortex_record.complete_flow_segment_receipt(uuid, jsonb) to vortex_owner, postgres;
 comment on function vortex_record.complete_flow_segment_receipt(uuid, jsonb) is
   'Completes the current human request scope''s pending flow segment receipt.';

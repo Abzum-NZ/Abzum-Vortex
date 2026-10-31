@@ -277,8 +277,6 @@ exception
       message = 'Installed definition evidence is ambiguous';
 end
 $function$;
-alter function vortex_record.resolve_record_action_context_internal(uuid,text) owner to vortex_record_adapter;
-
 
 alter function vortex_record.resolve_record_action_context_internal(uuid, text)
   owner to vortex_record_adapter;

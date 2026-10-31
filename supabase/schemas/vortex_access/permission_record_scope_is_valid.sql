@@ -48,11 +48,6 @@ begin
         return false;
       end if;
       route_identity := '1:';
-    elsif route_kind = 'direct_share' then
-      if route_value - array['kind']::text[] <> '{}'::jsonb then
-        return false;
-      end if;
-      route_identity := '2:';
     elsif route_kind = 'relationship' then
       if route_value - array['kind', 'relationshipId', 'sourcePermissionId']::text[]
           <> '{}'::jsonb

@@ -36,7 +36,6 @@ begin
         and revision.lifecycle in ('active', 'acceptance_required')
       where assignment.organization_id = p_organization_id
         and assignment.state = 'live'
-        and assignment.assignment_kind = 'standing'
         and assignment.starts_at <= pg_catalog.statement_timestamp()
         and (assignment.expires_at is null or assignment.expires_at > pg_catalog.statement_timestamp())
         and (assigned_role.application_root_id is null

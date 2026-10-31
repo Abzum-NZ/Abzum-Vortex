@@ -16,22 +16,6 @@ as $function$
     'lifecycle', revision.lifecycle,
     'liveRevision', revision.revision,
     'privilegeClassification', revision.privilege_classification,
-    'assignmentPolicy', case revision.assignment_policy
-      when 'standing' then pg_catalog.jsonb_build_object('kind', 'standing')
-      else pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
-        'kind', 'activation_required',
-        'maximumActivationDurationSeconds',
-          policy.maximum_activation_duration_seconds,
-        'reasonRequired', policy.reason_required,
-        'recentAuthentication', case policy.authentication_requirement
-          when 'none' then pg_catalog.jsonb_build_object('kind', 'none')
-          else pg_catalog.jsonb_build_object(
-            'kind', policy.authentication_requirement,
-            'maximumAgeSeconds', policy.authentication_maximum_age_seconds
-          )
-        end
-      ))
-    end,
     'source', case role.role_kind
       when 'custom' then pg_catalog.jsonb_build_object('kind', 'custom')
       else pg_catalog.jsonb_build_object(
@@ -53,11 +37,6 @@ as $function$
     on revision.organization_id = role.organization_id
     and revision.role_id = role.role_id
     and revision.revision = role.live_revision
-  left join vortex_access.organization_role_activation_policy_revisions as policy
-    on policy.organization_id = revision.organization_id
-    and policy.role_id = revision.role_id
-    and policy.activation_policy_id = revision.activation_policy_id
-    and policy.revision = revision.activation_policy_revision
   where role.organization_id = p_organization_id
     and role.role_id = p_role_id
 $function$;

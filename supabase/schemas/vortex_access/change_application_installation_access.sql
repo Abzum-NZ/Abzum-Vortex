@@ -119,7 +119,7 @@ begin
         perform vortex_access.coordinate_organization_role_assignment_change(
           'revoke', authority.organization_id,
           assignment_to_revoke.role_assignment_id, assignment_to_revoke.revision,
-          null, null, null, null, null, null, null, null,
+          null, null, null, null, null, null, null,
           authority.organization_account_id, authority.correlation_id
         );
       end loop;

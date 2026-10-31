@@ -19,7 +19,6 @@ declare
   access_parameters jsonb;
   access_owner_account_id uuid;
   access_owner_group_ids uuid[];
-  access_shared_record_ids uuid[];
   bound_field_ids text[];
   filter_condition jsonb;
   filter_types jsonb;
@@ -45,10 +44,6 @@ begin
     else pg_catalog.array_agg(item.value::uuid order by item.position) end into access_owner_group_ids
   from pg_catalog.jsonb_array_elements_text(nullif(p_plan -> 'access_owner_group_ids', 'null'::jsonb))
     with ordinality as item(value, position);
-  select case when p_plan -> 'access_shared_record_ids' = '[]'::jsonb then array[]::uuid[]
-    else pg_catalog.array_agg(item.value::uuid order by item.position) end into access_shared_record_ids
-  from pg_catalog.jsonb_array_elements_text(nullif(p_plan -> 'access_shared_record_ids', 'null'::jsonb))
-    with ordinality as item(value, position);
   select case when p_plan -> 'bound_field_ids' = '[]'::jsonb then array[]::text[]
     else pg_catalog.array_agg(item.value::text order by item.position) end into bound_field_ids
   from pg_catalog.jsonb_array_elements_text(nullif(p_plan -> 'bound_field_ids', 'null'::jsonb))
@@ -70,7 +65,7 @@ begin
     execute summary_sql into result_value
       using context_organization_id, context_application_root_id, null::text[], null::uuid,
         summary_candidate_limit + 1, access_owner_account_id, access_owner_group_ids,
-        access_shared_record_ids, filter_parameters, access_parameters, null::jsonb,
+        filter_parameters, access_parameters, null::jsonb,
         filter_condition, filter_types, parameter_types, parameter_values,
         filter_ids, summary_field_ids, search_field_ids, user_search;
   exception

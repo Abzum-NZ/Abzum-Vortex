@@ -23,8 +23,6 @@ as $function$
         )
     )
 $function$;
-alter function vortex_platform.application_is_installed(uuid,uuid) owner to vortex_owner;
-
 
 revoke all on function vortex_platform.application_is_installed(uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;

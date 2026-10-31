@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION vortex_access.coordinate_assignment_change_without_stewardship_internal(p_operation text, p_organization_id uuid, p_role_assignment_id uuid, p_expected_assignment_revision bigint, p_role_id uuid, p_expected_role_revision bigint, p_assignee_kind text, p_organization_account_id uuid, p_group_id uuid, p_assignment_kind text, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_changed_by uuid, p_correlation_id uuid) RETURNS TABLE(outcome text, operation text, organization_id uuid, role_assignment_id uuid, role_id uuid, assignee_kind text, organization_account_id uuid, group_id uuid, assignment_kind text, revision bigint, starts_at timestamp with time zone, expires_at timestamp with time zone, state text, granted_by_actor_id uuid, granted_at timestamp with time zone, grant_correlation_id uuid, changed_by_actor_id uuid, changed_at timestamp with time zone, change_correlation_id uuid, revoked_by_actor_id uuid, revoked_at timestamp with time zone, revocation_correlation_id uuid, access_version bigint, correlation_id uuid)
+CREATE OR REPLACE FUNCTION vortex_access.coordinate_assignment_change_without_stewardship_internal(p_operation text, p_organization_id uuid, p_role_assignment_id uuid, p_expected_assignment_revision bigint, p_role_id uuid, p_expected_role_revision bigint, p_assignee_kind text, p_organization_account_id uuid, p_group_id uuid, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_changed_by uuid, p_correlation_id uuid) RETURNS TABLE(outcome text, operation text, organization_id uuid, role_assignment_id uuid, role_id uuid, assignee_kind text, organization_account_id uuid, group_id uuid, revision bigint, starts_at timestamp with time zone, expires_at timestamp with time zone, state text, granted_by_actor_id uuid, granted_at timestamp with time zone, grant_correlation_id uuid, changed_by_actor_id uuid, changed_at timestamp with time zone, change_correlation_id uuid, revoked_by_actor_id uuid, revoked_at timestamp with time zone, revocation_correlation_id uuid, access_version bigint, correlation_id uuid)
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
@@ -30,8 +30,6 @@ begin
       or p_expected_role_revision not between 1 and 9007199254740991
       or p_assignee_kind is null
       or p_assignee_kind not in ('organization_account', 'group')
-      or p_assignment_kind is null
-      or p_assignment_kind not in ('standing', 'eligible')
       or p_starts_at is null
       or p_starts_at in ('-infinity'::timestamptz, 'infinity'::timestamptz)
       or p_expires_at in ('-infinity'::timestamptz, 'infinity'::timestamptz)
@@ -63,7 +61,6 @@ begin
     or p_assignee_kind is not null
     or p_organization_account_id is not null
     or p_group_id is not null
-    or p_assignment_kind is not null
     or p_starts_at is not null
     or p_expires_at is not null then
     raise exception using errcode = '22023',
@@ -86,8 +83,7 @@ begin
   end if;
 
   if p_operation = 'grant' then
-    select role.live_revision, role_revision.lifecycle,
-      role_revision.assignment_policy
+    select role.live_revision, role_revision.lifecycle
     into role_fact
     from vortex_access.organization_roles as role
     join vortex_access.organization_role_revisions as role_revision
@@ -100,14 +96,7 @@ begin
 
     if not found
       or role_fact.live_revision <> p_expected_role_revision
-      or role_fact.lifecycle <> 'active'
-      or not (
-        (p_assignment_kind = 'standing' and role_fact.assignment_policy = 'standing')
-        or (
-          p_assignment_kind = 'eligible'
-          and role_fact.assignment_policy = 'activation_required'
-        )
-      ) then
+      or role_fact.lifecycle <> 'active' then
       raise exception using errcode = '40001',
         message = 'Organization role-assignment grant evidence is stale or unavailable';
     end if;
@@ -140,13 +129,13 @@ begin
 
     insert into vortex_access.organization_role_assignments (
       organization_id, role_assignment_id, role_id, assignee_kind,
-      organization_account_id, group_id, assignment_kind, revision, starts_at,
+      organization_account_id, group_id, revision, starts_at,
       expires_at, state, granted_by, granted_at, grant_correlation_id,
       changed_by, changed_at, change_correlation_id, revoked_by, revoked_at,
       revocation_correlation_id
     ) values (
       p_organization_id, p_role_assignment_id, p_role_id, p_assignee_kind,
-      p_organization_account_id, p_group_id, p_assignment_kind, 1, p_starts_at,
+      p_organization_account_id, p_group_id, 1, p_starts_at,
       p_expires_at, 'live', p_changed_by, operation_at, p_correlation_id,
       p_changed_by, operation_at, p_correlation_id, null, null, null
     );
@@ -203,7 +192,7 @@ begin
   select 'changed'::text, p_operation, assignment.organization_id,
     assignment.role_assignment_id, assignment.role_id, assignment.assignee_kind,
     assignment.organization_account_id, assignment.group_id,
-    assignment.assignment_kind, assignment.revision, assignment.starts_at,
+    assignment.revision, assignment.starts_at,
     assignment.expires_at, assignment.state, assignment.granted_by,
     assignment.granted_at, assignment.grant_correlation_id,
     assignment.changed_by, assignment.changed_at,
@@ -216,10 +205,10 @@ begin
 end
 $$;
 
-alter function vortex_access.coordinate_assignment_change_without_stewardship_internal(p_operation text, p_organization_id uuid, p_role_assignment_id uuid, p_expected_assignment_revision bigint, p_role_id uuid, p_expected_role_revision bigint, p_assignee_kind text, p_organization_account_id uuid, p_group_id uuid, p_assignment_kind text, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_changed_by uuid, p_correlation_id uuid) owner to vortex_owner;
+alter function vortex_access.coordinate_assignment_change_without_stewardship_internal(p_operation text, p_organization_id uuid, p_role_assignment_id uuid, p_expected_assignment_revision bigint, p_role_id uuid, p_expected_role_revision bigint, p_assignee_kind text, p_organization_account_id uuid, p_group_id uuid, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_changed_by uuid, p_correlation_id uuid) owner to vortex_owner;
 
-COMMENT ON FUNCTION vortex_access.coordinate_assignment_change_without_stewardship_internal(p_operation text, p_organization_id uuid, p_role_assignment_id uuid, p_expected_assignment_revision bigint, p_role_id uuid, p_expected_role_revision bigint, p_assignee_kind text, p_organization_account_id uuid, p_group_id uuid, p_assignment_kind text, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_changed_by uuid, p_correlation_id uuid) IS 'Private atomic role-assignment fact and Access change used by the stewardship-preserving public composition.';
+COMMENT ON FUNCTION vortex_access.coordinate_assignment_change_without_stewardship_internal(p_operation text, p_organization_id uuid, p_role_assignment_id uuid, p_expected_assignment_revision bigint, p_role_id uuid, p_expected_role_revision bigint, p_assignee_kind text, p_organization_account_id uuid, p_group_id uuid, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_changed_by uuid, p_correlation_id uuid) IS 'Private atomic role-assignment fact and Access change used by the stewardship-preserving public composition.';
 
-REVOKE ALL ON FUNCTION vortex_access.coordinate_assignment_change_without_stewardship_internal(p_operation text, p_organization_id uuid, p_role_assignment_id uuid, p_expected_assignment_revision bigint, p_role_id uuid, p_expected_role_revision bigint, p_assignee_kind text, p_organization_account_id uuid, p_group_id uuid, p_assignment_kind text, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_changed_by uuid, p_correlation_id uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION vortex_access.coordinate_assignment_change_without_stewardship_internal(p_operation text, p_organization_id uuid, p_role_assignment_id uuid, p_expected_assignment_revision bigint, p_role_id uuid, p_expected_role_revision bigint, p_assignee_kind text, p_organization_account_id uuid, p_group_id uuid, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_changed_by uuid, p_correlation_id uuid) FROM PUBLIC;
 
-grant execute on function vortex_access.coordinate_assignment_change_without_stewardship_internal(p_operation text, p_organization_id uuid, p_role_assignment_id uuid, p_expected_assignment_revision bigint, p_role_id uuid, p_expected_role_revision bigint, p_assignee_kind text, p_organization_account_id uuid, p_group_id uuid, p_assignment_kind text, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_changed_by uuid, p_correlation_id uuid) to postgres;
+grant execute on function vortex_access.coordinate_assignment_change_without_stewardship_internal(p_operation text, p_organization_id uuid, p_role_assignment_id uuid, p_expected_assignment_revision bigint, p_role_id uuid, p_expected_role_revision bigint, p_assignee_kind text, p_organization_account_id uuid, p_group_id uuid, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_changed_by uuid, p_correlation_id uuid) to postgres;

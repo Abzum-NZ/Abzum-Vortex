@@ -29,9 +29,7 @@ export const groupIdSchema = stableId<"GroupId">();
 export const membershipIdSchema = stableId<"MembershipId">();
 export const permissionIdSchema = stableId<"PermissionId">();
 export const roleIdSchema = stableId<"RoleId">();
-export const roleActivationPolicyIdSchema = stableId<"RoleActivationPolicyId">();
 export const roleAssignmentIdSchema = stableId<"RoleAssignmentId">();
-export const roleActivationIdSchema = stableId<"RoleActivationId">();
 export const delegationAuthorityIdSchema = stableId<"DelegationAuthorityId">();
 export const actionIdSchema = stableId<"ActionId">();
 /** Permanent identity of a flow: every behaviour (action, rule, back-end flow) is one. */

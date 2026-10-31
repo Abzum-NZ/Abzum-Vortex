@@ -204,8 +204,6 @@ begin
   );
 end
 $function$;
-alter function vortex_definition.remove_abandoned_runtime_bundles(integer) owner to vortex_owner;
-
 
 alter function vortex_definition.remove_abandoned_runtime_bundles(integer)
   owner to vortex_owner;

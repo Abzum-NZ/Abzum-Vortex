@@ -12,7 +12,6 @@ declare
   contribution jsonb;
   contribution_permission jsonb;
   contribution_source jsonb;
-  contribution_route jsonb;
   catalogue_entry vortex_access.permission_catalogue_entries%rowtype;
   policy_readable text[];
   policy_changeable text[];
@@ -31,7 +30,6 @@ begin
   loop
     contribution_permission := contribution -> 'permission';
     contribution_source := contribution -> 'source';
-    contribution_route := contribution -> 'route';
 
     -- The catalogue entry of the registration revision this contribution's
     -- decision names: the meaning the caller's role accepted, which may be
@@ -80,36 +78,18 @@ begin
       continue;
     end if;
 
-    -- A direct_share route can only narrow the permission's own policy, so
-    -- readable/changeable fields are kept only when the route also names
-    -- them; every other route kind contributes the policy as declared.
+    -- Every route contributes the permission's field policy as declared.
     select pg_catalog.array_agg(pg_catalog.lower(field.value))
     into policy_readable
     from pg_catalog.jsonb_array_elements_text(
       catalogue_entry.field_policy -> 'readableFieldIds'
-    ) as field(value)
-    where contribution_route ->> 'kind' is distinct from 'direct_share'
-      or exists (
-        select 1
-        from pg_catalog.jsonb_array_elements_text(
-          contribution_route -> 'readableFieldIds'
-        ) as shared(value)
-        where pg_catalog.lower(shared.value) = pg_catalog.lower(field.value)
-      );
+    ) as field(value);
 
     select pg_catalog.array_agg(pg_catalog.lower(field.value))
     into policy_changeable
     from pg_catalog.jsonb_array_elements_text(
       catalogue_entry.field_policy -> 'changeableFieldIds'
-    ) as field(value)
-    where contribution_route ->> 'kind' is distinct from 'direct_share'
-      or exists (
-        select 1
-        from pg_catalog.jsonb_array_elements_text(
-          contribution_route -> 'changeableFieldIds'
-        ) as shared(value)
-        where pg_catalog.lower(shared.value) = pg_catalog.lower(field.value)
-      );
+    ) as field(value);
 
     readable_ids := readable_ids || coalesce(policy_readable, array[]::text[]);
     changeable_ids := changeable_ids || coalesce(policy_changeable, array[]::text[]);
@@ -137,9 +117,8 @@ begin
   );
   -- Changeable never exceeds readable, because every contribution's own
   -- changeable set already sits inside its own readable set: the policy
-  -- validator enforces that for a permission, and the direct-share table
-  -- enforces it for a share. Unioning subsets preserves it, so this only
-  -- canonicalises.
+  -- validator enforces that for a permission. Unioning subsets preserves it,
+  -- so this only canonicalises.
   changeable_ids := array(
     select distinct field.value
     from pg_catalog.unnest(changeable_ids) as field(value)
@@ -152,8 +131,6 @@ begin
   );
 end
 $function$;
-alter function vortex_access.resolve_record_field_bounds_internal(jsonb) owner to vortex_owner;
-
 
 revoke execute on function vortex_access.resolve_record_field_bounds_internal(jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
