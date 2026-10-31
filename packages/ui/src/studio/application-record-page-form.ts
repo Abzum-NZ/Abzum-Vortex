@@ -4,7 +4,6 @@ import {
   defaultSaveFlowSource,
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
   sourcePageItems,
-  sourcePageZones,
   type DefaultFlowAfter,
   type SourceFlow,
 } from "@vortex/platform/schema";
@@ -29,8 +28,6 @@ import {
   ensureListEdit,
   field,
   ensureListCreate,
-  opensAny,
-  recordTables,
   release,
   resolveRecordType,
   type Field,

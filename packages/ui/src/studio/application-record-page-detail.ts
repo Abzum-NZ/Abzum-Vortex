@@ -13,12 +13,8 @@ import {
   field,
   keyColumns,
   linkTablesToDetail,
-  openFlow,
-  placeButton,
-  recordTables,
   release,
   resolveRecordType,
-  tableColumns,
   type Query,
   type Resolved,
 } from "./application-record-page-shared";
@@ -34,7 +30,6 @@ import {
   refuse,
   StructureRefusal,
   uniqueKey,
-  type Page,
   type Source,
   type StudioStructureContext,
 } from "./application-structure-common";
