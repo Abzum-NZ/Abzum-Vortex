@@ -96,26 +96,6 @@ export function validateFocusVisibility(
         });
       }
     }
-
-    // Validate border tokens reference valid color_pairs
-    if (token.kind === "border") {
-      const colorToken = tokens[token.colorToken];
-      if (colorToken === undefined) {
-        addFailure({
-          code: "BROKEN_TOKEN_REFERENCE",
-          family: "broken_reference",
-          message: `Border token "${key}" references missing color token "${token.colorToken}"`,
-          tokenKey: key,
-        });
-      } else if (colorToken.kind !== "color_pair") {
-        addFailure({
-          code: "INVALID_TOKEN_KIND",
-          family: "broken_reference",
-          message: `Border token "${key}" references non-color token "${token.colorToken}" of kind "${colorToken.kind}"`,
-          tokenKey: key,
-        });
-      }
-    }
   }
 
   if (!foundFocusToken) {

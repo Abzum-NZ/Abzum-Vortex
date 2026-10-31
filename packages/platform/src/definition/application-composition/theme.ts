@@ -14,11 +14,8 @@ const themeTokenKindSchema = z.enum([
   "typography",
   "spacing",
   "corners",
-  "border",
-  "elevation",
   "focus",
   "asset",
-  "density",
 ]);
 
 const colorComponentPattern = "(?:\\d+(?:\\.\\d+)?|\\.\\d+)";
@@ -74,20 +71,6 @@ export const themeTokenValueSchema = z.discriminatedUnion("kind", [
     .strict(),
   z
     .object({
-      kind: sourceProvenanceUnchanged(z.literal("border")),
-      widthRem: sourceProvenanceUnchanged(nonNegativeFiniteSchema),
-      style: sourceProvenanceUnchanged(z.enum(["solid", "dashed"])),
-      colorToken: sourceProvenanceUnchanged(builderKeySchema),
-    })
-    .strict(),
-  z
-    .object({
-      kind: sourceProvenanceUnchanged(z.literal("elevation")),
-      level: sourceProvenanceUnchanged(z.number().int().nonnegative()),
-    })
-    .strict(),
-  z
-    .object({
       kind: sourceProvenanceUnchanged(z.literal("focus")),
       colorToken: sourceProvenanceUnchanged(builderKeySchema),
       widthRem: sourceProvenanceUnchanged(positiveFiniteSchema),
@@ -97,12 +80,6 @@ export const themeTokenValueSchema = z.discriminatedUnion("kind", [
     .object({
       kind: sourceProvenanceUnchanged(z.literal("asset")),
       assetId: sourceProvenanceUnchanged(platformIdSchema),
-    })
-    .strict(),
-  z
-    .object({
-      kind: sourceProvenanceUnchanged(z.literal("density")),
-      value: sourceProvenanceUnchanged(z.enum(["compact", "comfortable"])),
     })
     .strict(),
 ]);

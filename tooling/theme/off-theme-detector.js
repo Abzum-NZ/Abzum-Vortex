@@ -31,7 +31,6 @@
     "--vortex-space-xs",
     "--vortex-space-sm",
     "--vortex-space-md",
-    "--vortex-space-lg",
     "--card-spacing",
   ];
   const SKIPPED_TAGS = new Set([
