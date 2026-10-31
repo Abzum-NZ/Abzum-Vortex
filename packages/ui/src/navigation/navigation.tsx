@@ -79,6 +79,8 @@ type NavigationListProps = Readonly<{
   pendingPageId: string | undefined;
   /** A page item started an in-place page change (the navigator in force carries it out). */
   onNavigate: (pageId: string) => void;
+  /** That change did not start after all (the person chose to stay with unsaved work). */
+  onCancelled: () => void;
   /** The one selected-item indicator's layout identity and its slide timing. */
   indicator: Readonly<{ layoutId: string; timing: MotionTiming | undefined }>;
 }>;
@@ -109,6 +111,7 @@ function NavigationList({
   currentPageId,
   pendingPageId,
   onNavigate,
+  onCancelled,
   indicator,
 }: NavigationListProps): ReactElement {
   const sub = depth > 1;
@@ -148,6 +151,7 @@ function NavigationList({
                 currentPageId={currentPageId}
                 pendingPageId={pendingPageId}
                 onNavigate={onNavigate}
+                onCancelled={onCancelled}
                 indicator={indicator}
               />
             </Item>
@@ -204,6 +208,7 @@ function NavigationList({
                 {...(current ? { "aria-current": "page" as const } : {})}
                 {...(pending ? { "data-vortex-navigation-pending": "" } : {})}
                 onNavigate={() => onNavigate(item.pageId)}
+                onCancelled={onCancelled}
               />,
               <>
                 <Icon name={item.icon} aria-hidden="true" />
@@ -339,6 +344,7 @@ function ApplicationNavigation({
                 currentPageId={currentPageId}
                 pendingPageId={pendingPageId}
                 onNavigate={activatePage}
+                onCancelled={() => setPending(undefined)}
                 indicator={indicator}
               />
             </SidebarGroupContent>

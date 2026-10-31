@@ -67,7 +67,7 @@ export function ApplicationSearchControl({
     }
     const query = new URLSearchParams();
     for (const [name, value] of form) if (typeof value === "string") query.append(name, value);
-    navigator.navigate(`${pathname}?${query.toString()}`);
+    navigator.navigate(`${pathname}?${query.toString()}`, { withinPage: true });
   };
 
   const placeholder = textSetting(settings, "placeholder");

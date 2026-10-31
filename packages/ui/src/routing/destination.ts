@@ -6,6 +6,7 @@
  */
 export type Destination =
   | Readonly<{ kind: "internal"; path: string }>
+  | Readonly<{ kind: "server_route"; path: string }>
   | Readonly<{ kind: "fragment"; address: string }>
   | Readonly<{ kind: "external"; address: string; web: boolean }>;
 
@@ -17,6 +18,22 @@ const hasControlCharacter = (value: string): boolean =>
   });
 const INTERNAL_BASE = "https://vortex.invalid";
 
+/**
+ * Internal addresses answered by a server route, not a page: the browser follows them as a document
+ * request and they are never prefetched (ending a session must not happen because a link was
+ * pointed at).
+ */
+const SERVER_ROUTES: readonly string[] = [
+  "/api",
+  "/auth/session",
+  "/auth/session-ended",
+  "/health",
+];
+const isServerRoute = (path: string): boolean =>
+  SERVER_ROUTES.some(
+    (route) => path === route || path.startsWith(`${route}/`) || path.startsWith(`${route}?`),
+  );
+
 /** The destination an address names, or undefined when it is neither internal nor a safe external one. */
 export function destinationOf(address: string): Destination | undefined {
   if (address.length === 0 || hasControlCharacter(address) || address.includes("\\"))
@@ -26,16 +43,19 @@ export function destinationOf(address: string): Destination | undefined {
   if (address.startsWith("/") && !address.startsWith("//")) {
     try {
       const url = new URL(address, INTERNAL_BASE);
-      return url.origin === INTERNAL_BASE ? { kind: "internal", path: address } : undefined;
+      if (url.origin !== INTERNAL_BASE) return undefined;
+      return isServerRoute(address)
+        ? { kind: "server_route", path: address }
+        : { kind: "internal", path: address };
     } catch {
       return undefined;
     }
   }
   if (/^(mailto|tel):/i.test(address)) return { kind: "external", address, web: false };
-  if (!/^https?:\/\//i.test(address)) return undefined;
+  if (!/^https?:/i.test(address)) return undefined;
   try {
     const url = new URL(address);
-    if (url.username !== "" || url.password !== "") return undefined;
+    if (url.username !== "" || url.password !== "" || url.hostname === "") return undefined;
     return { kind: "external", address, web: true };
   } catch {
     return undefined;

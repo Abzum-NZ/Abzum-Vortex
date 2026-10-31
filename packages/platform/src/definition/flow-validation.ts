@@ -3,7 +3,11 @@ import { valueTypesCompatible, workflowValueTypeSchema } from "../catalogue/cata
 import { isIsoCurrencyCode } from "../catalogue/currencies";
 import { checkFlowFormula } from "../rules/flow-formula-check";
 import { formatterCatalogue, unitCatalogue } from "../pages/value-format";
-import { recordTypeIdSchema } from "../catalogue/identifiers";
+import {
+  builderKeySchema,
+  namespacedKeySchema,
+  recordTypeIdSchema,
+} from "../catalogue/identifiers";
 import { isSetBasedForEach } from "../workflows/flow-set-based";
 import type {
   DefinitionRuleFailureFamily,
@@ -1062,6 +1066,23 @@ export function validateFlow(
           "vortex.definition.workflow_node_values",
           "invalid_value",
           `${name} must be written as a readable name, never computed`,
+        );
+      else if (
+        // Another application and its page are named by their keys there, checked when the step
+        // runs against the person's access; here only their form is checked.
+        (declared.type === "application_key" &&
+          !namespacedKeySchema.safeParse((value as { literal: { value: unknown } }).literal.value)
+            .success) ||
+        (declared.type === "page_id" &&
+          task.properties.application !== undefined &&
+          !builderKeySchema.safeParse((value as { literal: { value: unknown } }).literal.value)
+            .success)
+      )
+        add(
+          path,
+          "vortex.definition.workflow_node_values",
+          "invalid_value",
+          `${name} must be an application or page key, as in its web address`,
         );
       else if (declared.type === "flow_id") {
         const target = findFlow(String((value as { literal: { value: unknown } }).literal.value));

@@ -39,10 +39,6 @@ const SHARED_COMPONENT_STYLES_CSS = `
   --vortex-motion-row-settle: 180ms; /* each first-appearing row's fade and 3px rise */
   --vortex-motion-row-settle-easing: cubic-bezier(0.16, 1, 0.3, 1);
   --vortex-motion-row-stagger: 13ms; /* the step between rows; the twentieth row and later share one */
-  --vortex-motion-loader-fade: 200ms; /* the loader's fade in */
-  /* The platform loader's size and one draw-hold-erase cycle. */
-  --vortex-loader-size: 100px;
-  --vortex-loader-cycle: 5s;
   color: var(--foreground);
   background-color: var(--background);
   font-family: var(--vortex-font-family);

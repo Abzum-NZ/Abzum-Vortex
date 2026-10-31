@@ -138,7 +138,9 @@ export function useApplyDispatch({
           // revision), so the placements this run reads are re-read as they now are.
           else
             void refreshPlacements(
-              sourceBindingId === undefined ? [] : refreshTargetsForBinding(sourceBindingId),
+              sourceBindingId === undefined
+                ? Object.keys(model.data)
+                : refreshTargetsForBinding(sourceBindingId),
               undefined,
               { content: true },
             );
@@ -382,7 +384,9 @@ export function useApplyDispatch({
       }
     },
     [
+      model.data,
       model.guidedForm,
+      model.invocation.installationRevision,
       model.page,
       model.pageId,
       navigationKey,

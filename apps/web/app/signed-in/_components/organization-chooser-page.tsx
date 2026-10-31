@@ -3,6 +3,8 @@
 import { readCompiledItemSettings } from "@vortex/platform/schema";
 import type { ReactElement } from "react";
 import { useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { useRestoredPage } from "@vortex/ui/routing";
 import type {
   ApplicationShell,
   PageDefinition,
@@ -47,6 +49,9 @@ export function OrganizationChooserPage({
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
 }>): ReactElement {
+  const router = useRouter();
+  // The chooser is read for this person at this moment; Back or Forward restoring it reads it again.
+  useRestoredPage(() => router.refresh());
   const registry = useMemo(
     () => createPlatformComponentRegistryForReleases(platformBlockReleases),
     [platformBlockReleases],

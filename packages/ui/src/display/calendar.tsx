@@ -134,7 +134,10 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
     const parameters = new URLSearchParams(searchParams.toString());
     change(parameters);
     const query = parameters.toString();
-    navigator.navigate(query === "" ? pathname : `${pathname}?${query}`, { replace: true });
+    navigator.navigate(query === "" ? pathname : `${pathname}?${query}`, {
+      replace: true,
+      withinPage: true,
+    });
   };
 
   if (state.status === "loading") return <RecordsLoadingState accessibleName={accessibleName} />;

@@ -23,7 +23,7 @@ import {
   walkPageComposition,
   readCompiledItemSettings,
 } from "@vortex/platform/schema";
-import { NavigationLink } from "@vortex/ui/routing";
+import { NavigationLink, useRestoredPage } from "@vortex/ui/routing";
 import { Button } from "@vortex/ui/components/button";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { FirstRecordTypeEmptyState } from "../../../../../../_components/first-record-type-empty-state";
@@ -55,6 +55,7 @@ import { useRowDetail } from "./use-row-detail";
 import { usePivot } from "./use-pivot";
 import { useGroupMembers } from "./use-group-members";
 import { WebMcpAdapter } from "../../../../../../_components/webmcp-adapter";
+import { registerShownPageRefresh } from "../../../_components/shown-page";
 import {
   useApplicationFrame,
   useFramePageState,
@@ -603,12 +604,15 @@ export function ApplicationPageViewContent({
     [adoptReleaseAction, application.applicationKey, application.pageKey, showPageMessage],
   );
   useFramePageState("adoptRelease", adoptRelease);
-  // A change an earlier page finished after it had gone re-reads this page's data placements.
-  const refreshPage = useCallback(
+  // A change an earlier page finished after it had gone, and Back or Forward restoring this page,
+  // re-read this page's data placements (a placement read answers `reload` when the installed
+  // release changed).
+  const refreshShown = useCallback(
     () => void refreshPlacements(Object.keys(model.data), undefined, { content: true }),
     [model.data, refreshPlacements],
   );
-  useFramePageState("refreshPage", refreshPage);
+  useEffect(() => registerShownPageRefresh(refreshShown), [refreshShown]);
+  useRestoredPage(refreshShown);
 
   return (
     <>

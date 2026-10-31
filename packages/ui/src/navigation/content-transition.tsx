@@ -71,10 +71,9 @@ const pageMountId = (transitionKey: string, generation: number): string =>
 
 /**
  * The application frame's page outlet. Exactly one page is current. While the next page is fetched
- * (`busy`) the current page stays in place, dimmed, with a thin progress line along the top of the
- * outlet once the wait is noticeable; a wait that reaches the loader delay shows the platform loader
- * over it instead of the line. The next page is held until it is ready (see `pageHoldFor`); then the
- * current page fades out quickly over the next one (out of the layout, so the next page never waits
+ * (`busy`) the current page stays in place, dimmed, and the clicked link shows it is pending; no
+ * placeholder is drawn. The next page arrives complete (no streamed reads); then the current page
+ * fades out quickly over the next one (out of the layout, so the next page never waits
  * for it) while the next page rises into place, and focus moves to the new page's heading. A further
  * change while a page is still leaving removes that page at once and lets the page just replaced
  * leave instead, so rapid changes never stack pages. With reduced motion the change is immediate and

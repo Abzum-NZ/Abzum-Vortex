@@ -25,6 +25,8 @@ export type NavigationLinkProps = Omit<
     replace?: boolean;
     /** Called when an in-place page change starts from this link (not for modified or external clicks). */
     onNavigate?: () => void;
+    /** Called when that change did not start after all (the person chose to stay). */
+    onCancelled?: () => void;
   }>;
 
 /**
@@ -39,11 +41,14 @@ export function NavigationLink({
   href,
   replace,
   onNavigate,
+  onCancelled,
   ...anchor
 }: NavigationLinkProps): ReactElement {
   const navigator = useNavigator();
   const router = useRouter();
   const prefetched = useRef(false);
+  const dwell = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(dwell.current), []);
   // The change this link started (the address it started from), until the address has changed
   // once the host's page change is over, or the change was cancelled. Only this link shows it.
   const pathname = usePathname();
@@ -59,8 +64,14 @@ export function NavigationLink({
     return () => window.clearTimeout(timer);
   }, [pending]);
   const destination = destinationOf(href);
-  if (destination === undefined) throw new Error(`Refused navigation address: ${href}`);
+  if (destination === undefined) {
+    // An address no link may follow is shown as its label alone, and the cause is logged.
+    console.error(`[navigation] refused address: ${JSON.stringify(href.slice(0, 200))}`);
+    return <span className={anchor.className}>{anchor.children}</span>;
+  }
   if (destination.kind === "fragment") return <a {...anchor} href={destination.address} />;
+  // A server route (signing out, an API answer) is a document request the browser makes itself.
+  if (destination.kind === "server_route") return <a {...anchor} href={destination.path} />;
   if (destination.kind === "external")
     return <a {...anchor} href={destination.address} rel={anchor.rel ?? "noopener noreferrer"} />;
   const path = destination.path;
@@ -76,9 +87,16 @@ export function NavigationLink({
       prefetch={false}
       {...(replace === undefined ? {} : { replace })}
       {...(pending === undefined ? {} : { "aria-busy": true, "data-vortex-link-pending": "" })}
+      // A pointer that rests on the link for a moment shows intent; one sweeping across a list
+      // of links prefetches nothing.
       onPointerEnter={(event) => {
         anchor.onPointerEnter?.(event);
-        intend();
+        window.clearTimeout(dwell.current);
+        dwell.current = window.setTimeout(intend, 80);
+      }}
+      onPointerLeave={(event) => {
+        anchor.onPointerLeave?.(event);
+        window.clearTimeout(dwell.current);
       }}
       onFocus={(event) => {
         anchor.onFocus?.(event);
@@ -90,12 +108,17 @@ export function NavigationLink({
       }}
       onNavigate={(event) => {
         onNavigate?.();
-        setPending(window.location.pathname + window.location.search);
+        const here = window.location.pathname + window.location.search;
+        // A link to the address shown now changes nothing worth showing as pending.
+        if (path !== here) setPending(here);
         // The navigator in force carries out the change (unsaved-work question, page-change state).
         event.preventDefault();
         navigator.navigate(path, {
           ...(replace === undefined ? {} : { replace }),
-          onCancelled: () => setPending(undefined),
+          onCancelled: () => {
+            setPending(undefined);
+            onCancelled?.();
+          },
         });
       }}
     />

@@ -53,8 +53,6 @@ export type ApplicationFramePageState = Readonly<{
   navigation?: ProjectedNavigation;
   /** The page runtime's inputs for the frame's own placements (shell blocks with data or events). */
   runtimeInputs?: PagePuckRendererProps["runtimeInputs"];
-  /** Re-reads the data placements the page shows, for a change made on an earlier page. */
-  refreshPage?: () => void;
 }>;
 
 /** The identity of one registration; only its owner can clear what it set. */
@@ -73,11 +71,6 @@ export type ApplicationFrameStateValue = Readonly<{
   ) => void;
   /** Clears one part of the page state, only while `owner` is still the one that set it. */
   clearPageState: (key: keyof ApplicationFramePageState, owner: FramePageStateOwner) => void;
-  /**
-   * Re-reads the data of the page shown now. A change an earlier page started and finished after
-   * that page had gone (an Undo carried to the next page) refreshes only what the shown page reads.
-   */
-  refreshShownPage: () => void;
   /** The application search the header shows, also offered to a search block in the content. */
   applicationSearch: PagePuckRendererProps["applicationSearch"];
   applicationSearchPageSubject: string | undefined;

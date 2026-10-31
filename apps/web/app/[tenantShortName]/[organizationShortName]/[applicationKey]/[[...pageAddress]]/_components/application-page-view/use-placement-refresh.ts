@@ -379,14 +379,16 @@ export function usePlacementRefresh({
         apply: (candidate: unknown) => {
           const result = flowRefreshResultSchema.parse(candidate);
           if (placementRequestsRef.current.key !== scope.key) return;
-          // Another installed release: the page itself is out of date and is read again in full.
-          if (result.kind === "reload") {
+          // Another installed release, or the page itself is no longer available to the person (the
+          // record it shows was deleted, or the write removed their access): the page is read again
+          // in full, so it shows its own not-found or refused state.
+          if (result.kind === "reload" || result.kind === "unavailable") {
             router.refresh();
             return;
           }
-          // The write committed but its rows could not be read with the reply: they are read again
-          // on their own, so the page never keeps showing what the write changed.
-          if (result.kind !== "available") {
+          // The write committed but its rows could not be read with the reply right now: they are
+          // read again on their own, so the page never keeps showing what the write changed.
+          if (result.kind === "temporarily_unavailable") {
             void refreshPlacements(
               [...requests.values()].map((entry) => entry.componentId),
               undefined,

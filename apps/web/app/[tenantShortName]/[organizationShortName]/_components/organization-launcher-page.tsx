@@ -4,6 +4,7 @@ import { readCompiledItemSettings } from "@vortex/platform/schema";
 import type { ReactElement } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useNavigator, useRestoredPage, type Navigator } from "@vortex/ui/routing";
 import type {
   ApplicationShell,
   PageDefinition,
@@ -56,9 +57,12 @@ function OrganizationShellPage({
   runtimeInputs,
 }: OrganizationShellPageProps &
   Readonly<{
-    runtimeInputs: (router: ReturnType<typeof useRouter>) => Readonly<Record<string, unknown>>;
+    runtimeInputs: (navigator: Navigator) => Readonly<Record<string, unknown>>;
   }>): ReactElement {
   const router = useRouter();
+  const navigator = useNavigator();
+  // The launcher is read for this person at this moment; Back or Forward restoring it reads it again.
+  useRestoredPage(() => router.refresh());
   const registry = useMemo(
     () => createPlatformComponentRegistryForReleases(platformBlockReleases),
     [platformBlockReleases],
@@ -89,7 +93,7 @@ function OrganizationShellPage({
           organizationShortName,
           pageName: page.name,
         }}
-        runtimeInputs={runtimeInputs(router)}
+        runtimeInputs={runtimeInputs(navigator)}
         {...(applicationSearch === undefined ? {} : { applicationSearch })}
       />
     </ApplicationAccountActionsProvider>
@@ -226,8 +230,8 @@ export function OrganizationAddressStatePage({
     <div className="contents" data-vortex-address-state={addressState}>
       <OrganizationShellPage
         {...shellPage}
-        runtimeInputs={(router) => ({
-          [actionPlacementId]: { events: { action: () => router.push(actionHref) } },
+        runtimeInputs={(navigator) => ({
+          [actionPlacementId]: { events: { action: () => navigator.navigate(actionHref) } },
         })}
       />
     </div>

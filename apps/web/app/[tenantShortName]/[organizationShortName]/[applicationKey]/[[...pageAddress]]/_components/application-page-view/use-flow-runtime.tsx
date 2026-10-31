@@ -35,6 +35,7 @@ import { DialogFooter } from "@vortex/ui/components/dialog";
 import { noteCommittedWrite, useNavigator } from "@vortex/ui/routing";
 import { resolveApplicationPagePathAction } from "../../../frame-actions";
 import { useApplicationFrame } from "../../../_components/application-frame-state";
+import { refreshShownPage } from "../../../_components/shown-page";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import type { SubmittedForm, PageMessageDraft } from "./types";
 import type { ControlDrafts } from "../../../_components/application-frame-state";
@@ -213,7 +214,7 @@ export function useFlowRuntime({
         noteCommittedWrite();
         runtimeState.messages.carryToasts();
         // The navigator in force asks before discarding unsaved work and, inside the frame, runs
-        // the change in its page transition (dimmed page, progress line).
+        // the change in its page transition (the current page stays, dimmed, until the next is ready).
         navigator.navigate(path);
       },
     }),
@@ -496,7 +497,7 @@ export function useFlowRuntime({
     // An action carried to the next page (Undo after a delete that opened the list) finishes after
     // this page has gone: the page now showing re-reads the data it shows.
     void dispatched.then(() => {
-      if (!mountedRef.current) applicationFrame?.refreshShownPage();
+      if (!mountedRef.current) refreshShownPage();
     });
   };
   useEffect(() => {
