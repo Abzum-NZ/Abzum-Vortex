@@ -7,6 +7,7 @@ import {
   recordsTableExportFormats,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
+import { formatCount } from "../../display/date-format";
 import { Input } from "../../components/input";
 import { Label } from "../../components/label";
 import { Checkbox } from "../../components/checkbox";
@@ -96,7 +97,7 @@ export function StudioExportEditor({
         }}
       />
       <p className="text-xs text-muted-foreground">
-        Up to {RECORDS_TABLE_EXPORT_MAXIMUM_ROWS.toLocaleString("en-US")} records.
+        Up to {formatCount(RECORDS_TABLE_EXPORT_MAXIMUM_ROWS)} records.
       </p>
     </div>
   );

@@ -12,6 +12,7 @@ import {
   type JsonValue,
   type SourceFlow,
 } from "@vortex/platform/schema";
+import { postJson } from "../../_lib/post-json";
 import type { StudioFlowTestRunReply } from "../../_lib/studio-flow-test-run";
 import { readStudioDataRecords } from "../_lib/studio-reads";
 
@@ -188,22 +189,16 @@ export function StudioFlowTestRun({
     setProblem(undefined);
     setReply(undefined);
     try {
-      const response = await fetch("/api/studio/flow-test-run", {
-        method: "POST",
-        credentials: "same-origin",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          organizationId,
-          rootId,
-          draftRevision,
-          flowKey: flow.key,
-          moduleKey,
-          inputs: supplied,
-        }),
+      const response = await postJson<StudioFlowTestRunReply>("/api/studio/flow-test-run", {
+        organizationId,
+        rootId,
+        draftRevision,
+        flowKey: flow.key,
+        moduleKey,
+        inputs: supplied,
       });
       if (!response.ok) throw new Error(`STUDIO_FLOW_TEST_RUN_HTTP_${response.status}`);
-      setReply((await response.json()) as StudioFlowTestRunReply);
+      setReply(response.body);
     } catch (error) {
       console.error("[studio] flow test run failed", describeFailure(error));
       setProblem("The test run could not be completed. Try again.");
