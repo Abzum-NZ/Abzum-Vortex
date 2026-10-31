@@ -8,6 +8,8 @@ Vortex may need to allow or refuse a platform capability and measure resource co
 
 An **entitlement** answers whether a tenant may use a named platform capability and, where relevant, how much may be used. A **metering event** records an accepted quantity attributed to a tenant and optionally to the organisation that caused it. Neither concept carries money or commercial status.
 
+<a id="metering-events"></a>
+
 ## Decided, not built
 
 The entitlement decision, the metering event and entitlement ceilings are decided, not built. The decided design is:
