@@ -8,7 +8,7 @@ import { Separator } from "../components/separator";
 import { cn } from "../lib/utils";
 import { cellValueToText, DisplayCellView } from "./cell";
 import { addLabelOf } from "./add-label";
-import { DisplayHeader, RowActionControl } from "./controls";
+import { DisplayHeader, DisplayRefreshButton, RowActionControl } from "./controls";
 import { resolveDisplayContext, rowActionEventIdOf, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
 import { optionToneFillClass } from "./option-tone";
@@ -125,11 +125,21 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
               <CardHeader className="gap-4 *:mb-0">
                 <div className="flex min-w-0 items-start justify-between gap-3">
                   <div className="min-w-0 flex-1 *:mb-0">
-                    <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
+                    <DisplayHeader
+                      title={title}
+                      accessibleName={accessibleName}
+                      events={undefined}
+                    />
                   </div>
-                  {actions === undefined ? null : (
-                    <div className="flex shrink-0 flex-row flex-nowrap items-center justify-end gap-2 [&>div]:flex-row [&>div]:flex-nowrap [&>div]:items-center [&>div]:gap-2">
+                  {actions === undefined && events?.refresh === undefined ? null : (
+                    <div data-vortex-record-actions="" className="shrink-0">
                       {actions}
+                      {events?.refresh === undefined ? null : (
+                        <DisplayRefreshButton
+                          accessibleName={accessibleName}
+                          refresh={events.refresh}
+                        />
+                      )}
                     </div>
                   )}
                 </div>

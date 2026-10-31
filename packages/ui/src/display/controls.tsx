@@ -19,6 +19,26 @@ import { usePendingGesture } from "../controls/pending-gesture";
 import { Icon } from "../icons/icon";
 import type { DisplayEventHandlers, DisplayRow, DisplaySemanticEvent } from "./projected-data";
 
+/** The refresh control bound to the declared `refresh` event. */
+export function DisplayRefreshButton({
+  accessibleName,
+  refresh,
+}: Readonly<{
+  accessibleName: string;
+  refresh: NonNullable<DisplayEventHandlers["refresh"]>;
+}>): ReactElement {
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      aria-label={`Refresh ${accessibleName}`}
+      onClick={() => refresh({ event: "refresh" })}
+    >
+      Refresh
+    </Button>
+  );
+}
+
 /** Optional authored title with a refresh control bound to the declared `refresh` event. */
 export function DisplayHeader({
   title,
@@ -39,14 +59,7 @@ export function DisplayHeader({
         </h2>
       )}
       {refresh === undefined ? null : (
-        <Button
-          variant="outline"
-          size="sm"
-          aria-label={`Refresh ${accessibleName}`}
-          onClick={() => refresh({ event: "refresh" })}
-        >
-          Refresh
-        </Button>
+        <DisplayRefreshButton accessibleName={accessibleName} refresh={refresh} />
       )}
     </div>
   );
