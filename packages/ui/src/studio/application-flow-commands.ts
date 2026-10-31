@@ -39,6 +39,7 @@ import {
   type StudioFlowSelection,
   type StudioFlowTaskListOutline,
 } from "./application-flow-model";
+import { addStudioBackgroundFlow } from "./application-flow-background";
 import {
   projectStudioFlowDraftChoices,
   applyStudioFlowStepDraft,
@@ -136,6 +137,9 @@ const flowRecordType = (flow: SourceFlow): string | undefined => {
  * It is not a valid block name, so no form can be named like it.
  */
 export const studioNewFormChoice = "+new_form";
+
+/** The pick that asks for a new back-end flow for a Run on back end step instead of an existing one. */
+export const studioNewBackendFlowChoice = "+new_backend_flow";
 
 /** One builder decision a step needs before it is inserted: what the setting points at. */
 export type StudioFlowStepBuilderChoice = Readonly<{
@@ -359,8 +363,10 @@ const setFieldsSeed = (
       (candidate.type === "text" || candidate.type === "long_text") &&
       changeable.has(candidate.key),
   );
-  // A flow that names its record keeps the field's current value until the builder changes it;
-  // otherwise an optional field starts empty.
+  // A flow that names its record keeps the field's current value until the builder changes it; a
+  // save transaction has no triggering record to read, and otherwise an optional field starts empty.
+  if (flow.execution === "transaction" && fields[0] !== undefined)
+    return { kind: "map", entries: { [fields[0].key]: text("") } };
   if (flow.recordInput !== undefined && fields[0] !== undefined)
     return {
       kind: "map",
@@ -403,6 +409,23 @@ const stepBuilderChoices = (
       studioWords(property),
       `Choose ${studioWords(property).toLowerCase()} before adding the step`,
     ];
+    if (definition.type === "backend.run" && property === "flow")
+      // Only a back-end flow can run on the back end; one is made for the step when none exists.
+      return [
+        {
+          property,
+          label,
+          unset,
+          options: [
+            ...(options ?? []).filter((option) =>
+              [...source.body.flows, ...source.body.modules.flatMap((module) => module.flows)].some(
+                (entry) => entry.id === option.value && entry.execution === "background",
+              ),
+            ),
+            { value: studioNewBackendFlowChoice, label: "Create a back-end flow for this step" },
+          ],
+        },
+      ];
     return options === undefined ? [] : [{ property, label, unset, options }];
   });
   // Set value changes a page value: which one is the builder's choice, from the values the flow's
@@ -471,28 +494,31 @@ const seededTask = (
       continue;
     }
     const seed =
-      definition.type === "rule.refuse" && key === "reason"
-        ? refusalReasonSeed
-        : definition.type === "interface.show_message" && key === "target"
-          ? // The page shows messages in a dialog today.
-            text("dialog")
-          : definition.type === "interface.show_message" && key === "severity"
-            ? text("info")
-            : definition.type === "data.calculate" && key === "result_type"
-              ? text("decimal_number")
-              : definition.type === "record.link" && key === "target"
-                ? targetSeed(flow)
-                : definition.type === "data.format" && key === "input"
-                  ? // A number its default formatter can show; the builder points it at a value.
-                    zeroSeed
-                  : definition.type === "record.set_fields" && key === "values"
-                    ? setFieldsSeed(flow, source)
-                    : seedValue(declaration.type, flow, source, declaration.default);
+      definition.type === "backend.run" && key === "mode"
+        ? text("await")
+        : definition.type === "rule.refuse" && key === "reason"
+          ? refusalReasonSeed
+          : definition.type === "interface.show_message" && key === "target"
+            ? // The page shows messages in a dialog today.
+              text("dialog")
+            : definition.type === "interface.show_message" && key === "severity"
+              ? text("info")
+              : definition.type === "data.calculate" && key === "result_type"
+                ? text("decimal_number")
+                : definition.type === "record.link" && key === "target"
+                  ? targetSeed(flow)
+                  : definition.type === "data.format" && key === "input"
+                    ? // A number its default formatter can show; the builder points it at a value.
+                      zeroSeed
+                    : definition.type === "record.set_fields" && key === "values"
+                      ? setFieldsSeed(flow, source)
+                      : seedValue(declaration.type, flow, source, declaration.default);
     if (seed === undefined) return undefined;
     properties[key] = seed;
   }
-  // Set fields changes the record the flow runs for.
-  if (definition.type === "record.set_fields") {
+  // Set fields changes the record the flow runs for; in a transaction it changes the saved record
+  // and may not name it.
+  if (definition.type === "record.set_fields" && flow.execution !== "transaction") {
     const record = seedValue("record_reference", flow, source);
     const recordType = seedValue("record_type_id", flow, source);
     if (record === undefined || recordType === undefined) return undefined;
@@ -997,6 +1023,37 @@ export const applyStudioFlowCommand = (
         if ("refused" in inner) return inner;
         source = inner.source;
         settings = { ...settings, firstStep: { ...settings.firstStep, settings: inner.settings } };
+      }
+      if (taskType === "backend.run" && settings.choices?.flow === studioNewBackendFlowChoice) {
+        const recordType = flowRecordType(original.flow);
+        if (recordType === undefined)
+          return {
+            refused: {
+              kind: "invalid",
+              reason: "This flow runs for no record, so a back-end flow cannot be made for it.",
+            } as const,
+          };
+        const moduleKey =
+          candidate.body.modules.find((entry) =>
+            entry.flows.some((flow) => flow.id === original.flow.id),
+          )?.key ?? null;
+        const made = addStudioBackgroundFlow(
+          candidate.body,
+          {
+            kind: "background",
+            moduleKey,
+            recordTypeKey: recordType,
+            name: `${studioFlowLabel(original.flow)} back-end flow`,
+            event: null,
+          },
+          `${studioFlowLabel(original.flow)} back-end flow`,
+        );
+        if (typeof made === "string")
+          return { refused: { kind: "invalid", reason: made } as const };
+        return {
+          source: candidate as Readonly<ApplicationSourceDocument>,
+          settings: { ...settings, choices: { ...settings.choices, flow: made.flow.id } },
+        };
       }
       if (taskType !== "interface.show_form" || settings.choices?.form !== studioNewFormChoice)
         return { source, settings };

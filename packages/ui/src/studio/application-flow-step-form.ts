@@ -1,6 +1,7 @@
 import {
   builderKeySchema,
   flowFormulaSchema,
+  flowSavedRecordTargetProperties,
   sourcePageShell,
   type ApplicationSourceDocument,
   type FlowFormula,
@@ -751,8 +752,15 @@ export const projectStudioFlowStepForm = (
       reason: `${where}, ${studioWords(unknown)}: the step catalogue does not declare this setting, so the step cannot be edited. Remove the step or replace it.`,
     };
   const recordType = stepRecordType(flow, task.properties);
-  const fields = Object.entries(definition.properties).map(
-    ([key, declaration]): StudioFlowPropertyField => {
+  // In a save transaction a step changes only the saved record, so it has no target to name.
+  const namesNoTarget =
+    definition.transactionScope === "saved_record" && flow.execution === "transaction";
+  const fields = Object.entries(definition.properties)
+    .filter(
+      ([key]) =>
+        !(namesNoTarget && (flowSavedRecordTargetProperties as readonly string[]).includes(key)),
+    )
+    .map(([key, declaration]): StudioFlowPropertyField => {
       const control =
         task.type === "event.announce" && key === "event" ? "field" : controlFor(declaration.type)!;
       const entries =
@@ -801,8 +809,7 @@ export const projectStudioFlowStepForm = (
         ...(options === undefined ? {} : { options }),
         ...(hint === undefined ? {} : { help: hint }),
       };
-    },
-  );
+    });
   const properties = Object.fromEntries(
     Object.entries(definition.properties).map(([key, declaration]) => [
       key,

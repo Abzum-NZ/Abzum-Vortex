@@ -1064,7 +1064,8 @@ export function ModuleFieldsEditor({
               required: declaration.required,
             })),
           }))}
-          disabled={disabled || shapeLocked}
+          // Which values are offered is behaviour, not stored shape, so it changes after publication.
+          disabled={disabled}
           onChange={(next) => commit({}, undefined, next)}
         />
       )}
