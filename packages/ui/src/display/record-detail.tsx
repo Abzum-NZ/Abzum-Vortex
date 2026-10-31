@@ -11,7 +11,7 @@ import { addLabelOf } from "./add-label";
 import { DisplayHeader, RowActionControl } from "./controls";
 import { resolveDisplayContext, rowActionEventIdOf, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
-import { optionToneBadgeClass, optionToneFillClass } from "./option-tone";
+import { optionToneFillClass } from "./option-tone";
 import type { DisplayDetailField, RecordDetailPayload } from "./projected-data";
 
 type RecordDetailSection = RecordDetailPayload["sections"][number];
@@ -170,17 +170,24 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
                     key={step.value}
                     aria-current={step.current ? "step" : undefined}
                     data-vortex-stage-current={step.current ? "true" : undefined}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs",
-                      step.current ? "font-semibold" : "font-normal",
-                      optionToneBadgeClass(step.tone),
-                    )}
+                    className="flex min-w-0 flex-1 items-center gap-2"
                   >
                     <span
                       aria-hidden="true"
-                      className={cn("size-2 rounded-full", optionToneFillClass[step.tone])}
+                      className={cn(
+                        "h-1.5 min-w-6 flex-1",
+                        optionToneFillClass[step.tone],
+                        step.current ? "" : "opacity-50",
+                      )}
                     />
-                    {step.label}
+                    <span
+                      className={cn(
+                        "truncate text-xs",
+                        step.current ? "font-semibold" : "text-muted-foreground",
+                      )}
+                    >
+                      {step.label}
+                    </span>
                   </span>
                 ))}
               </div>

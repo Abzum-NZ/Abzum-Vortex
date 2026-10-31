@@ -39,8 +39,8 @@ export const optionToneFillClass: Readonly<Record<PipelineStageTone, string>> = 
   chart_5: "bg-chart-5",
 });
 
-/** One small dot in an option's colour, or nothing for the neutral role. */
-export function OptionToneDot({
+/** One small mark in an option's colour, or nothing for the neutral role. */
+export function OptionToneMark({
   tone,
   className,
 }: Readonly<{ tone: PipelineStageTone | undefined; className?: string }>) {
@@ -49,11 +49,7 @@ export function OptionToneDot({
     <span
       aria-hidden="true"
       data-vortex-option-tone={tone}
-      className={cn(
-        "inline-block size-2 shrink-0 rounded-full",
-        optionToneFillClass[tone],
-        className,
-      )}
+      className={cn("inline-block h-3.5 w-1 shrink-0", optionToneFillClass[tone], className)}
     />
   );
 }
