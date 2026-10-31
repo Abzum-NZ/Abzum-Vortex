@@ -48,6 +48,8 @@ declare
   any_change boolean := false;
   is_projection boolean;
   protected_view_key text;
+  removed_option_values text[];
+  removed_option_in_use boolean;
 begin
   if not vortex_platform.is_non_nil_uuid(p_module_root_id::text)
     or p_module_release_revision not between 1 and 9007199254740991 then
@@ -359,6 +361,54 @@ begin
       where mapping.storage_contract_id = storage_id and mapping.field_id = field_id_value
       for update;
       if found then
+        -- A newer release may drop a choice option that no stored row holds: the stored
+        -- definition stops offering it before the compatibility check, in this transaction,
+        -- with the table locked against concurrent writes. An option a row holds is refused.
+        if stored_catalogue.storage_contract_id is not null
+          and p_module_release_revision > stored_catalogue.last_compatible_release_revision
+          and field_value ->> 'type' in ('choice', 'several_choices')
+          and stored_field.field_definition ->> 'type' = field_value ->> 'type'
+          and pg_catalog.jsonb_typeof(stored_field.field_definition #> '{settings,options}') = 'array'
+          and pg_catalog.jsonb_typeof(field_value #> '{settings,options}') = 'array' then
+          select coalesce(pg_catalog.array_agg(before.value ->> 'value' order by before.ordinality),
+              array[]::text[])
+          into removed_option_values
+          from pg_catalog.jsonb_array_elements(
+            stored_field.field_definition #> '{settings,options}'
+          ) with ordinality as before(value, ordinality)
+          where not exists (
+            select 1
+            from pg_catalog.jsonb_array_elements(field_value #> '{settings,options}') as after(value)
+            where after.value -> 'value' = before.value -> 'value'
+          );
+          if pg_catalog.cardinality(removed_option_values) > 0 then
+            if not is_projection then
+              execute pg_catalog.format('lock table record_data.%I in share mode', table_token);
+              execute pg_catalog.format(
+                case when stored_field.database_value_type = 'json'
+                  then 'select exists (select 1 from record_data.%I where %I ?| $1)'
+                  else 'select exists (select 1 from record_data.%I where %I = any ($1))'
+                end,
+                table_token, column_token
+              ) into removed_option_in_use using removed_option_values;
+              if removed_option_in_use then
+                raise exception using errcode = '55000', message = 'Existing record field storage is incompatible';
+              end if;
+            end if;
+            stored_field.field_definition := pg_catalog.jsonb_set(
+              stored_field.field_definition, '{settings,options}', (
+                select coalesce(pg_catalog.jsonb_agg(before.value order by before.ordinality), '[]'::jsonb)
+                from pg_catalog.jsonb_array_elements(
+                  stored_field.field_definition #> '{settings,options}'
+                ) with ordinality as before(value, ordinality)
+                where (before.value ->> 'value') <> all (removed_option_values)
+              )
+            );
+            update vortex_record.field_storage_mappings as mapping
+            set field_definition = stored_field.field_definition
+            where mapping.storage_contract_id = storage_id and mapping.field_id = field_id_value;
+          end if;
+        end if;
         if stored_field.physical_column_token <> column_token
           or stored_field.database_value_type <> database_type
           or stored_field.state <> 'active'
@@ -667,4 +717,4 @@ revoke all on function vortex_record.provision_exact_module_storage(uuid, bigint
 grant execute on function vortex_record.provision_exact_module_storage(uuid, bigint)
   to vortex_owner;
 comment on function vortex_record.provision_exact_module_storage(uuid, bigint) is
-  'Private exact-release Module storage provisioner: creates or evolves generated record_data storage, or registers definition and field mappings for a system projection read only through its bounded protected reader, for one published Module release; removes a system projection record type or field the newest release drops when nothing stored refers to it.';
+  'Private exact-release Module storage provisioner: creates or evolves generated record_data storage, or registers definition and field mappings for a system projection read only through its bounded protected reader, for one published Module release; removes a system projection record type or field, or a choice option, that the newest release drops when nothing stored holds or refers to it.';
