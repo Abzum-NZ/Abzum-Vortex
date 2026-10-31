@@ -76,6 +76,7 @@ export {
   type StudioRecordPageCommand,
   type StudioRecordPageKind,
 } from "./application-record-page-kinds";
+export * from "./application-record-page-checks";
 export * from "./application-item-labels";
 export { tokenName } from "./studio-words";
 export * from "./studio-reference-picker";

@@ -40,7 +40,14 @@ import {
   type StudioStructureResult,
 } from "./application-structure-common";
 import { addRecordPage } from "./application-record-pages";
-import type { StudioRecordPageCommand } from "./application-record-page-kinds";
+import { takenIds, type StudioRecordPageCommand } from "./application-record-page-kinds";
+import {
+  ensureDetailEdit,
+  ensureListEdit,
+  resolveRecordType,
+} from "./application-record-page-shared";
+import { ensureFormCancel } from "./application-record-page-form";
+import type { Plan } from "./application-record-plan";
 import { movePage, type StudioPageLayoutCommand } from "./application-page-layout";
 import { editLayoutOutlet, type StudioLayoutOutletCommand } from "./application-layout-outlets";
 import { applyStudioMenuCommand } from "./application-menu-commands";
@@ -74,6 +81,10 @@ export type StudioStructureCommand =
   | Readonly<{ kind: "remove_page"; pageAlias: string }>
   | Readonly<{ kind: "remove_shell"; shellAlias: string }>
   | Readonly<{ kind: "set_home_page"; pageAlias: string }>
+  /** A form page's Cancel: the form_cancel flow and its binding, for an app made before it. */
+  | Readonly<{ kind: "ensure_form_cancel"; pageAlias: string }>
+  /** Edit in the detail header and each list's row menu, for an app whose edit page predates them. */
+  | Readonly<{ kind: "ensure_record_page_actions"; recordType: string }>
   | StudioPageLayoutCommand
   | StudioLayoutOutletCommand;
 
@@ -495,6 +506,37 @@ export const applyStudioStructureCommand = (
           select: { kind: "page", pageAlias: page.id },
           details: [],
           message: `${quoted(page.name)} is now the home page.`,
+        };
+      }
+      case "ensure_form_cancel": {
+        const page = candidate.body.pages.find((entry) => entry.id === command.pageAlias);
+        if (page === undefined) return refuse("That form page is no longer in the draft.");
+        const plan: Plan = { source: candidate, details: [], taken: takenIds(candidate) };
+        if (!ensureFormCancel(context, plan, page))
+          return refuse(`${quoted(page.name)} already offers Cancel.`);
+        return {
+          kind: "applied",
+          source: judged(plan.source),
+          select: { kind: "page", pageAlias: page.id },
+          details: plan.details,
+          message: plan.details[0] ?? `${quoted(page.name)} now offers Cancel.`,
+        };
+      }
+      case "ensure_record_page_actions": {
+        const resolved = resolveRecordType(candidate, command.recordType);
+        const plan: Plan = { source: candidate, details: [], taken: takenIds(candidate) };
+        ensureDetailEdit(context, plan, resolved);
+        ensureListEdit(context, plan, resolved);
+        if (plan.details.length === 0)
+          return refuse(
+            `The pages of ${quoted(resolved.record.plural_name)} already offer Edit wherever an edit page exists.`,
+          );
+        return {
+          kind: "applied",
+          source: judged(plan.source),
+          select: null,
+          details: plan.details,
+          message: plan.details[0]!,
         };
       }
       case "rename": {
