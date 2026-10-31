@@ -636,7 +636,7 @@ choices, precision and row policies on the final candidate after all applicable
 rules. Intermediate typed values may be corrected by a later task; neither
 publication nor a completed pure flow bypasses final field validation.
 
-Target Interactive Show form bindings declare exact form/flow/task identity, typed defaults and response output maps. One private revision-checked draft collects answers and proposed operation inputs. A journey may collect first and run one bounded owning operation, or may place forms between several explicitly configured operations. Each operation revalidates its own mandatory path and commits atomically; a later refusal does not undo an earlier commit. Input-only forms need no owning operation and their response alone is not a business commit. Browser variables and task-path claims are not authority. [Form drafts #68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68) and [bindings #250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) own these planned contracts and runtime, including explicit record-free input forms and protected flow-start input maps; the [page contract](page-builder-contracts.md) remains the sole form representation. They are not implemented by the existing Definition draft store.
+Interactive Show form bindings declare exact form/flow/step identity, typed defaults and response output maps. One private revision-checked draft collects answers and proposed operation inputs. A journey may collect first and run one bounded owning operation, or may place forms between several explicitly configured operations. Each operation revalidates its own mandatory path and commits atomically; a later refusal does not undo an earlier commit. Input-only forms need no owning operation and their response alone is not a business commit. Browser variables and step-path claims are not authority. The [page contract](page-builder-contracts.md) remains the sole form representation.
 
 A condition has an operator and typed field, value, or parameter operands. Either side of a binary comparison may use any of those operands, so field-to-field comparison is explicit rather than encoded as a value. Boolean groups use `all`, `any`, or `not`. Every authored and canonical condition is limited to ten nesting levels and one hundred total operands. Publication also enforces the relevant relationship-hop limit and refuses wrong unary/binary arity, an operator/type mismatch, or an unknown operand source.
 
@@ -741,7 +741,7 @@ The upload reservation and grant APIs have been removed until file fields and th
 
 A connection instance has organisation, connection-type revision, encrypted-secret reference, authorised applications, state, grant scopes, token expiry, last health result, and administrator activity link.
 
-The unwired connection-administration write API has been removed. Administration writes will be built with the integrations feature; the existing connection readiness and archive-selection readers remain in use. The unused search index-build lease API has also been removed and will be designed with search.
+The connection-administration write API has been removed. The connection readiness and archive-selection readers remain in use. The unused search index-build lease API has also been removed.
 
 An incoming message has organisation, connection, message type, provider message identifier or fingerprint, verified time, safe payload reference, duplicate state, flow trigger result, and retention due time.
 

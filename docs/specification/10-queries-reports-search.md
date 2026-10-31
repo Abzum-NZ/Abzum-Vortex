@@ -335,53 +335,7 @@ Current person supplies a record reference to the signed-in viewer's directory p
 
 ### Grid grouping execution
 
-Grid grouping is state of the Data grid, executed by `run_module_query_group_summary` and the protected
-`groupedMembers` reader. Query-authored grouping and totals supply defaults; they are not a second
-grid engine. Data grid is the only record-table block. Its List preset renders the same bounded
-record page as cards at every screen size; Table can use those same cards on phones. Presets write
-ordinary grid settings and never select a second query or renderer. The former standalone list
-and grouped-data blocks have been removed; grouped preset authoring follows the grid grouping feature.
-
-The protected readers accept `grouping: { fieldId, limit, dateBucket? }` to replace those defaults
-with one query-selected, filterable dimension. A choice field has at most 50 options; a lifecycle
-stage uses its canonical choice field identity, never its label. A date or date-time field requires
-`dateBucket: { unit, timeZone }`, with a day, week (Monday start), month, quarter or year unit and an
-explicit recognised time zone. Date-only values retain calendar dates. Date-time values bucket the
-stored instant in that zone and return the bucket's start as canonical UTC, independent of session
-time zone or display format. Both readers refuse this override unless the field is guaranteed
-readable under the current read plan.
-
-The authored `limit` is 1–200 groups. A summary returns only that page of groups, ordered by its
-canonical JSON group key. `nextGroupKey` is the last visible key when more groups exist and null
-otherwise; the next request supplies it as `groupAfter`. Each page rechecks current access and
-recomputes counts over the complete filtered set. `totalRowCount` and aggregate totals do not shrink
-to the visible group page. The summary retains the 100,000-candidate ceiling and returns a neutral
-`dataset_limit_exceeded` refusal above it. Counts describe the currently readable result,
-independently of a later member page.
-
-Summary and member requests carry the same resolved query inputs, narrowing filter and search.
-Search matches only the current readable scalar or choice-array values of fields the record type
-marks searchable. A component's searchable-field set may narrow that set; an empty set searches all
-searchable fields. Summary search uses per-record access decisions, retaining the candidate ceiling
-before it reads records. It does not derive counts from a loaded member page.
-
-Generic member pages take the ordinary ordered sort contract and forward/backward keysets. They
-carry at most 200 records, with only the requested field projection. Choice grouping narrows the
-candidate scan by its stored key; date grouping uses typed half-open calendar ranges. Instant
-grouping widens the index range around the bucket boundaries and applies exact authored-zone
-bucket equality before the candidate page limit, so repeated local midnight retains both
-occurrences (including 23/25-hour DST days). These predicates apply only after guaranteed
-readability is established, then membership is rechecked by the same canonical bucket operation
-on the current readable record. A noncanonical bucket start is refused. JSON null denotes the unassigned group; a missing or
-withheld value never establishes generic group membership. Continuations bind the actor, scope,
-release, query, resolved inputs, exact selector, grouping dimension/bucket/zone/cap, sort, filters, search, projection,
-page size and direction. Member reads remain uncached.
-
-These reader capabilities are the execution foundation of #3027 and the date/group-cap part of
-#3032. Link dimensions still require permitted batched titles and neutral unreadable-target groups;
-they are refused as grid overrides until that support lands. The grid feature gate, Studio
-controls, single URL codec, group headers and active-group interactions are supplied by that
-feature's UI/runtime integration, rather than inferred by the query readers.
+Grouping is grid state executed by the protected grid summary `run_module_query_group_summary`, then one member page through `run_module_query_group_members`; the [Group by](#group-by) feature owns the authored settings, capability check and interaction. The summary groups the table's own narrowing, returns one page of groups ordered by canonical JSON key with counts over the complete filtered set, and refuses above 100,000 candidates with `dataset_limit_exceeded`. Member reads carry at most 200 records with the requested projection, use the ordinary ordered sort and bidirectional keysets, and bind their continuation to actor, scope, release, query, inputs, selector, grouping dimension, bucket and zone, cap, sort, filters, search, projection, page size and direction. A missing or withheld grouping value never joins a group; member reads remain uncached.
 
 ### Row editing
 

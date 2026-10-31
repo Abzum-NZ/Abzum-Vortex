@@ -74,7 +74,7 @@ The complete classification, identity, ordering, history-integrity, and stale-co
 
 ## Publication history and draft restoration
 
-A trusted server caller can browse the immutable publication history of one Module or Application, inspect one exact history entry, and restore the authored source preserved in that release into the definition's one editable draft. History and restore use the same validated request context as other Phase 2 Definition operations. They expose no browser, public API or MCP route in this phase.
+A trusted server caller can browse the immutable publication history of one Module or Application, inspect one exact history entry, and restore the authored source preserved in that release into the definition's one editable draft. History and restore use the same validated request context as other Definition operations. They expose no browser or public API route.
 
 ```mermaid
 flowchart LR

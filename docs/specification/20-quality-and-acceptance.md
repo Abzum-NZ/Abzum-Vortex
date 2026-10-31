@@ -27,7 +27,7 @@ Review behaviour against the owning specification:
 
 ## Review scope
 
-The issue's What will be built section names the owning code, inputs, outputs, dependencies and excluded work. Acceptance criteria describe observable implementation behaviour and structures a reviewer can inspect. They do not add a second implementation of the same feature or an unnecessary framework.
+Review scope names the owning code, inputs, outputs, dependencies and excluded work. Acceptance criteria describe observable implementation behaviour and structures a reviewer can inspect. They do not add a second implementation of the same feature or an unnecessary framework.
 
 Use the simplest design that meets the current specification. Correct an unsuitable contract or schema at its source. Published product revisions remain useful functionality; retaining an obsolete platform serialization is not required for this new application.
 

@@ -312,7 +312,7 @@ Cross-module links follow the same relationship rules as intra-module links: one
 
 Removing a record type from a new release is an incompatible change, but does not by itself prevent publishing an inert breaking release. Existing external consumers keep their exact older dependency pins. Publication refuses a dangling link inside the candidate release's own resolved dependency set; an explicit upgrade refuses adoption where that consumer's required target would be missing. See [publication and adoption](03-composition-and-publication.md).
 
-A relationship still joins records owned by the same organisation. Viewing a source organisation's record through a cross-organisation grant does not permit creating a stored relationship from a recipient-owned record to that source record. A separately designed federation-reference field would be required for that future behaviour.
+A relationship joins records owned by the same organisation. There is no cross-organisation stored relationship.
 
 ## Extension points
 
@@ -354,4 +354,3 @@ Changing stored meaning is never an arbitrary in-place retype. Only a proven wid
 - A record links to a person or a group with an ordinary link to the People or Group system record type; no special person-link field type exists.
 - An organisation adds a Department field to the People system record type; it appears in that organisation's People lists, filters, rules and access conditions and never changes the protected account fact or its protected-operation write path.
 - A breaking release may omit a record type while existing external consumers remain pinned. A dangling link in the candidate's own dependency set or in an explicitly proposed consumer upgrade is refused with the affected reference; publication never silently retargets consumers.
-- A cross-organisation grant does not bypass the same-organisation rule for stored relationships.

@@ -103,7 +103,7 @@ flowchart LR
 - `vortex_runtime` is the application login and may only execute the API functions.
 - `vortex_request` is the role every request transaction runs as; the API functions, record writes included, are granted to it, never the owner-only `*_internal` helpers. Request code never switches back to `vortex_runtime`, with one explicit exception: tenant governance and the connection executor run each authorised operation under `vortex_runtime` inside a savepoint that admits exactly one call and restores `vortex_request` before it settles (`identity/tenant-governance-request-bound.ts`).
 - `vortex_record_adapter` is the role the record-data RLS policies are written for.
-- `vortex_record_inventory` is the second restricted role: the account-deletion inventory reads record data through organisation-scoped policies.
+- `vortex_record_inventory` is the second restricted role: the retention inventory reads record data through organisation-scoped policies.
 
 The local signup privacy integration uses `vortex_identity.before_user_created`, owned by
 `vortex_owner` and executable only by `supabase_auth_admin`. It validates the acknowledgement and
