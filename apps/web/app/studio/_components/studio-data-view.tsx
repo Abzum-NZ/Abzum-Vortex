@@ -1,7 +1,11 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { StudioInspectorGroup, type StudioDataSelection } from "@vortex/ui/studio";
+import {
+  StudioInspectorGroup,
+  StudioOptionControl,
+  type StudioDataSelection,
+} from "@vortex/ui/studio";
 import {
   deleteInlineRecordType,
   renameInlineModule,
@@ -22,7 +26,6 @@ import {
 } from "@vortex/ui/components/dropdown-menu";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { StudioPanelShell } from "./studio-frame";
 import { StudioField } from "./studio-field";
@@ -297,30 +300,27 @@ function RecordTypeInspector({
           hint="Names records in pickers and headings, and is always filterable. Changing a published title requires a major version."
         >
           {(control) => (
-            <NativeSelect
+            <StudioOptionControl
               {...control}
-              className="w-full"
               value={record.title_field}
               disabled={disabled}
-              onChange={(event) => {
+              options={record.fields.filter(recordTitleFieldEligible).map((field) => ({
+                value: field.key,
+                label: `${field.label} (${fieldTypeLabel(field.type)})`,
+              }))}
+              onChange={(value) => {
                 const problem = studioEditProblem(
                   edit((current) =>
                     setInlineRecordTitleField(current, {
                       moduleKey,
                       recordKey,
-                      fieldKey: event.target.value,
+                      fieldKey: value,
                     }),
                   ),
                 );
                 setIssues(problem === undefined ? [] : [problem]);
               }}
-            >
-              {record.fields.filter(recordTitleFieldEligible).map((field) => (
-                <NativeSelectOption key={field.key} value={field.key}>
-                  {field.label} ({fieldTypeLabel(field.type)})
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+            />
           )}
         </StudioField>
       </StudioInspectorGroup>
