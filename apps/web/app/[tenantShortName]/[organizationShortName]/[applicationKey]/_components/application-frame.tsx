@@ -268,28 +268,35 @@ export function ApplicationFrame({
 
   const unsavedWork = pageState.unsavedWork;
   const adoptRelease = pageState.adoptRelease;
+  // Sign-out waits for an in-flight adoption read to settle, so its server action response cannot
+  // refresh or navigate the page after the sign-out request has gone out.
+  const adoptionRead = useRef<Promise<unknown>>(Promise.resolve());
   const readReleaseAdoption = useCallback<
     NonNullable<ApplicationAccountActions["readReleaseAdoption"]>
   >(async () => {
-    const result = await readReleaseAdoptionAction(
-      application.tenantShortName,
-      application.organizationShortName,
-      application.key,
-    );
-    if (result.state !== "available") return result;
-    const offer = result.offer;
-    return {
-      state: "available",
-      ...(offer === undefined || adoptRelease === undefined
-        ? {}
-        : {
-            offer: {
-              version: offer.version,
-              adopt: () =>
-                adoptRelease(offer.offeredReleaseRevision, offer.installedReleaseRevision),
-            },
-          }),
-    };
+    const pending = (async () => {
+      const result = await readReleaseAdoptionAction(
+        application.tenantShortName,
+        application.organizationShortName,
+        application.key,
+      );
+      if (result.state !== "available") return result;
+      const offer = result.offer;
+      return {
+        state: "available",
+        ...(offer === undefined || adoptRelease === undefined
+          ? {}
+          : {
+              offer: {
+                version: offer.version,
+                adopt: () =>
+                  adoptRelease(offer.offeredReleaseRevision, offer.installedReleaseRevision),
+              },
+            }),
+      };
+    })();
+    adoptionRead.current = pending;
+    return pending;
   }, [
     adoptRelease,
     application.tenantShortName,
@@ -316,7 +323,10 @@ export function ApplicationFrame({
       if (await leaveIfConfirmed()) router.push(href);
     },
     signOut: async () => {
-      if (await leaveIfConfirmed()) await signOut();
+      if (!(await leaveIfConfirmed())) return;
+      // A read still in flight settles before the one sign-out request is sent.
+      await adoptionRead.current.catch(() => undefined);
+      await signOut();
     },
   };
 
