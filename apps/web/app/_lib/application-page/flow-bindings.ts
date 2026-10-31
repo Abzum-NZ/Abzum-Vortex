@@ -301,6 +301,28 @@ export const projectFlowBindingTargets = (input: {
 };
 
 /** The flow bindings one placement holds, projected for the browser by placement identity. */
+/** The task types an agent may start only with the person's confirmation. */
+const agentConfirmedTaskTypes = new Set(["record.delete", "record.changes", "backend.run"]);
+
+/**
+ * Whether a flow reaches a delete, a set of record changes or a back-end run before its own steps
+ * ask the person to confirm. Only a confirmation that always runs first counts: one in a branch
+ * may be skipped.
+ */
+const changesBeforeConfirming = (tasks: readonly FlowTask[]): boolean => {
+  const changes = (list: readonly FlowTask[]): boolean =>
+    list.some(
+      (task) =>
+        agentConfirmedTaskTypes.has(task.type) ||
+        flowTaskChildLists(task).some((child) => changes(child.tasks)),
+    );
+  for (const task of tasks) {
+    if (task.type === "interface.confirm") return false;
+    if (changes([task])) return true;
+  }
+  return false;
+};
+
 export const projectPlacementBindings = (
   input: Readonly<{
     application: InstalledRuntimeContext["releaseSet"]["application"];
@@ -389,6 +411,12 @@ export const projectPlacementBindings = (
         });
       const flow = plans.flows.get(String(binding.flow.flowId));
       if (flow === undefined) throw new Error("FLOW_BINDING_DEFINITION_UNAVAILABLE");
+      // An agent may delete, change records in bulk or start a back-end run only after the person
+      // confirms it; a flow whose own steps confirm first needs no second question.
+      const agentConfirmation =
+        binding.event === "bulk_action" ||
+        binding.event === "batch_edit" ||
+        changesBeforeConfirming(flow.tasks);
       const label = placement.settings.label;
       const recordType = context.releaseSet.modules
         .flatMap((module) => module.content.recordTypes)
@@ -425,6 +453,7 @@ export const projectPlacementBindings = (
         ...(messageAction === undefined ? {} : { messageAction }),
         browser: { plan, inputs: pageInputs },
         savesFormValues: flow !== undefined && savesValues(flow.tasks),
+        ...(agentConfirmation ? { agentConfirmation: true } : {}),
         bindingId: binding.bindingId,
         controlId: binding.controlId,
         controlName,

@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactElement,
   type ReactNode,
 } from "react";
@@ -19,13 +20,15 @@ import {
   type RenderedPage,
   type PlatformThemeTokens,
   type ApplicationWebMcpRuntime,
+  pageAgentTools,
+  runPageAgentTool,
+  type PageAgentTool,
   isClientPageChange,
   pageHoldFor,
   primaryStreamedPlacement,
   createFlowRuntimeState,
 } from "@vortex/ui";
 import {
-  describeFailure,
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
   type ProjectedApplicationFrame,
   type PageDefinition,
@@ -69,6 +72,23 @@ import {
   useFramePageState,
   emptyControlDrafts,
 } from "../../../_components/application-frame-state";
+
+const noAgentTools: readonly PageAgentTool[] = [];
+/** The page's tools, rebuilt only when what they offer changed, so the adapter keeps its registration. */
+const agentToolCache = new WeakMap<
+  object,
+  Readonly<{ key: string; tools: readonly PageAgentTool[] }>
+>();
+const agentToolsOf = (
+  state: ReturnType<typeof createFlowRuntimeState>,
+): readonly PageAgentTool[] => {
+  const tools = pageAgentTools(state);
+  const key = JSON.stringify(tools);
+  const held = agentToolCache.get(state);
+  if (held?.key === key) return held.tools;
+  agentToolCache.set(state, { key, tools });
+  return tools;
+};
 
 /** Every placement id of the page's own content, nested placements and guided step content included. */
 const placementIdsOf = (content: Readonly<Record<string, unknown>>): ReadonlySet<string> => {
@@ -283,48 +303,47 @@ export function ApplicationPageViewContent({
   const applyMessageActionRef = useRef<
     (dispatch: Promise<FlowDispatchResult>, bindingId: string) => void
   >(() => undefined);
-  const { formBlock, flowRuntime, webMcpRuntime, intentHostElement, messageBanner } =
-    useFlowRuntime({
-      application,
-      runtimeState,
-      subject,
-      formCancelledRef,
-      unsavedWorkRegistry,
-      submittedFormsRef,
-      router,
-      resolvePageHref,
-      basePath,
-      unsavedWork,
-      model,
-      platformComponentRegistry,
-      runtimeInputsRef,
-      controlDraftsRef,
-      fieldInputControlReleases,
-      showPageMessage,
-      currentData,
-      dialogFormRef,
-      platformThemeTokens,
-      prepareRefresh: (bindingId) => {
-        let targets = refreshTargetsForBinding(bindingId);
-        if (targets.length === 0) {
-          // Identity and Access writes have no record target. Only reread displayed data:
-          // the page payload also holds inputs for dialogs that are not part of this projection.
-          const displayed = new Set(
-            Array.from(
-              compositionRootRef.current?.querySelectorAll<HTMLElement>(
-                "[data-vortex-placement-id]",
-              ) ?? [],
-            )
-              .filter((element) => element.getClientRects().length > 0)
-              .map((element) => element.dataset.vortexPlacementId?.toLowerCase()),
-          );
-          targets = Object.keys(currentData).filter((id) => displayed.has(id.toLowerCase()));
-        }
-        return prepareFlowRefresh(targets);
-      },
-      setPanelRef,
-      applyMessageActionRef,
-    });
+  const { formBlock, flowRuntime, host, intentHostElement, messageBanner } = useFlowRuntime({
+    application,
+    runtimeState,
+    subject,
+    formCancelledRef,
+    unsavedWorkRegistry,
+    submittedFormsRef,
+    router,
+    resolvePageHref,
+    basePath,
+    unsavedWork,
+    model,
+    platformComponentRegistry,
+    runtimeInputsRef,
+    controlDraftsRef,
+    fieldInputControlReleases,
+    showPageMessage,
+    currentData,
+    dialogFormRef,
+    platformThemeTokens,
+    prepareRefresh: (bindingId) => {
+      let targets = refreshTargetsForBinding(bindingId);
+      if (targets.length === 0) {
+        // Identity and Access writes have no record target. Only reread displayed data:
+        // the page payload also holds inputs for dialogs that are not part of this projection.
+        const displayed = new Set(
+          Array.from(
+            compositionRootRef.current?.querySelectorAll<HTMLElement>(
+              "[data-vortex-placement-id]",
+            ) ?? [],
+          )
+            .filter((element) => element.getClientRects().length > 0)
+            .map((element) => element.dataset.vortexPlacementId?.toLowerCase()),
+        );
+        targets = Object.keys(currentData).filter((id) => displayed.has(id.toLowerCase()));
+      }
+      return prepareFlowRefresh(targets);
+    },
+    setPanelRef,
+    applyMessageActionRef,
+  });
 
   /** A page-level address change (a guided form step) renders the page again on the server. */
   const setQuery = useCallback(
@@ -352,6 +371,30 @@ export function ApplicationPageViewContent({
   applyMessageActionRef.current = (dispatch, bindingId) => {
     void applyDispatch(dispatch, undefined, undefined, bindingId);
   };
+
+  // The agent's tools are the page model as it is rendered now: they change as controls mount,
+  // leave or change what they offer, and each call runs as the person's own gesture.
+  const agentTools = useSyncExternalStore(
+    useCallback(
+      (listener: () => void) => runtimeState.subscribe("agent", listener),
+      [runtimeState],
+    ),
+    useCallback(() => agentToolsOf(runtimeState), [runtimeState]),
+    () => noAgentTools,
+  );
+  const invokeAgentTool = useCallback(
+    async (tool: PageAgentTool, input: unknown, signal?: AbortSignal): Promise<unknown> => {
+      if (signal?.aborted) return { outcome: "cancelled" };
+      if (!isRecord(input)) return { outcome: "refused", reason: "invalid_value" };
+      return runPageAgentTool(
+        { state: runtimeState, confirm: host.confirm },
+        tool.name,
+        input,
+        signal,
+      );
+    },
+    [host, runtimeState],
+  );
 
   const webMcpContextKey = JSON.stringify([
     model.accessVersion,
@@ -612,6 +655,12 @@ export function ApplicationPageViewContent({
         className="contents"
         {...(pageHold === "held" ? { "data-vortex-page-held": "" } : {})}
       >
+        <WebMcpAdapter
+          contextKey={webMcpContextKey}
+          tools={agentTools}
+          onInvoke={invokeAgentTool}
+          onStatusChange={reportWebMcpShellState}
+        />
         <PagePuckRenderer
           readSettings={readCompiledItemSettings}
           contentRegion

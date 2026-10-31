@@ -246,8 +246,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
       if (signal?.aborted) return unavailable;
       const parsed = parseServerFlowResponse(body);
       if (isRecord(body) && body.refresh !== undefined) {
-        if (refresh === undefined || parsed.kind !== "result")
-          return invalidServerResponse();
+        if (refresh === undefined || parsed.kind !== "result") return invalidServerResponse();
         refresh.apply(body.refresh);
       }
       return parsed;

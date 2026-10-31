@@ -3,7 +3,7 @@
 import { useEffect, useState, type ChangeEvent, type ReactElement } from "react";
 import { Field, FieldLabel } from "../components/field";
 import { Input } from "../components/input";
-import { flowSetFieldChange } from "../flow-runtime/flow-cycle";
+import { setFieldChange } from "../flow-runtime/flow-cycle";
 import type { DateTimeInputPayload } from "./projected-data";
 import {
   readControlSettings,
@@ -74,19 +74,30 @@ export function DateTimeInput(props: DateTimeInputProps): ReactElement {
     props.placementId,
     typedValue,
     { label, missing: required && !disabled && !readOnly && typedValue === null },
-    (value, cycle) => {
-      if (disabled || readOnly || draftFeedback?.hidden === true) return undefined;
-      if (value !== null && typeof value !== "string") return undefined;
-      const next = toLocalInputValue(value, timeZone);
-      if (value !== null && next === "") return undefined;
-      return {
-        value,
-        apply: () => {
-          setRaw(next);
-          setTypedValue(value);
-        },
-        emit: () => context.events?.field_changed?.(flowSetFieldChange(cycle, fieldKey, value)),
-      };
+    {
+      label,
+      required,
+      refusal:
+        draftFeedback?.hidden === true
+          ? "hidden"
+          : disabled
+            ? "disabled"
+            : readOnly
+              ? "read_only"
+              : undefined,
+      set: (value, cause) => {
+        if (value !== null && typeof value !== "string") return "invalid_value";
+        const next = toLocalInputValue(value, timeZone);
+        if (value !== null && next === "") return "invalid_value";
+        return {
+          value,
+          apply: () => {
+            setRaw(next);
+            setTypedValue(value);
+          },
+          emit: () => context.events?.field_changed?.(setFieldChange(cause, fieldKey, value)),
+        };
+      },
     },
   );
   const invalidLocalTime =

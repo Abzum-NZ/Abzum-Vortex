@@ -99,7 +99,7 @@ export function useFlowRuntime({
    */
   const prepareRefreshRef = useRef(prepareRefresh);
   prepareRefreshRef.current = prepareRefresh;
-  const { flowClient, webMcpClient, beginSubmission } = useMemo(() => {
+  const { flowClient, agentClient, beginSubmission } = useMemo(() => {
     const options = {
       address: {
         tenantShortName: application.tenantShortName,
@@ -161,7 +161,8 @@ export function useFlowRuntime({
     return {
       beginSubmission,
       flowClient: createFlowInvokeClient(options, wrap),
-      webMcpClient: createFlowInvokeClient(
+      // The agent endpoint marks an agent's runs; the person stays the actor.
+      agentClient: createFlowInvokeClient(
         { ...options, endpoint: "/api/flows/invoke/webmcp" },
         wrap,
       ),
@@ -391,6 +392,7 @@ export function useFlowRuntime({
         flowName: string;
         controlName: string;
         formId?: string;
+        agentConfirmation?: boolean;
       }
     >(
       Object.values(model.bindings).flatMap((items) =>
@@ -409,6 +411,7 @@ export function useFlowRuntime({
                 flowName: binding.flowName,
                 controlName: binding.controlName,
                 ...(binding.formId === undefined ? {} : { formId: binding.formId }),
+                ...(binding.agentConfirmation === true ? { agentConfirmation: true } : {}),
               },
             ] as const,
         ),
@@ -436,6 +439,7 @@ export function useFlowRuntime({
     () =>
       createFlowRuntime({
         client: flowClient,
+        agentClient,
         host,
         state: runtimeState,
         bindingSettings,
@@ -446,6 +450,7 @@ export function useFlowRuntime({
       }),
     [
       application.flowTimeZone,
+      agentClient,
       beginSubmission,
       bindingSettings,
       browserBindings,
@@ -494,27 +499,6 @@ export function useFlowRuntime({
       if (!mountedRef.current) router.refresh();
     });
   };
-  const webMcpRuntime = useMemo(
-    () =>
-      createFlowRuntime({
-        client: webMcpClient,
-        host,
-        state: runtimeState,
-        bindingSettings,
-        begin: beginSubmission,
-        browserBinding: browserBindings,
-        ...(application.flowTimeZone === undefined ? {} : { timeZone: application.flowTimeZone }),
-      }),
-    [
-      application.flowTimeZone,
-      beginSubmission,
-      bindingSettings,
-      browserBindings,
-      webMcpClient,
-      host,
-      runtimeState,
-    ],
-  );
   useEffect(() => {
     if (
       !Object.values(model.bindings).some((items) =>
@@ -536,5 +520,5 @@ export function useFlowRuntime({
   }, [currentData, flowRuntime, model.bindings]);
   const formBlock = useMemo(() => createFormBlockRuntime(flowRuntime), [flowRuntime]);
 
-  return { formBlock, flowRuntime, webMcpRuntime, intentHostElement, messageBanner };
+  return { formBlock, flowRuntime, host, intentHostElement, messageBanner };
 }

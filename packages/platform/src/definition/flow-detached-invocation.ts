@@ -13,10 +13,7 @@ type OrchestratorFactory = (
 
 /** Wires a detached page segment through the existing admitted execution path. */
 export const createDetachedSegmentInvoker =
-  (
-    continuationKey: QueryContinuationKey,
-    orchestratorFor: OrchestratorFactory,
-  ): InvokeSegment =>
+  (continuationKey: QueryContinuationKey, orchestratorFor: OrchestratorFactory): InvokeSegment =>
   async (session, selection, binding, inputs, request, release, runId, installation) => {
     if (selection.applicationRootId === undefined) return { kind: "refused", committedNow: false };
     const plan = installation.plans.get(String(binding.flow.flowId));

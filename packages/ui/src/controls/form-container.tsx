@@ -289,6 +289,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
 
   const scope: FormScope = useMemo(
     () => ({
+      formId,
       pending,
       inactive: context.inactive,
       register: registry.register,
@@ -299,8 +300,11 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       valueOf: registry.valueOf,
       publish: registry.publish,
       subscribe,
+      submit: () => formRef.current?.requestSubmit(),
+      reset: () => formRef.current?.reset(),
     }),
     [
+      formId,
       pending,
       context.inactive,
       registry,
@@ -322,9 +326,27 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     focusFirstInvalidRef.current = true;
     return false;
   }, [registry]);
+  // The form's value API: what a flow's Set value and an agent's set_field write through, and the
+  // fields, options and submit an agent reads and uses.
+  const title = context.accessibleName;
+  const fieldErrorRef = useRef(fieldErrorFor);
+  fieldErrorRef.current = fieldErrorFor;
   useEffect(
-    () => flowRuntimeState?.registerForm(formId, registry.valueOf, registry.write, validateNow),
-    [flowRuntimeState, formId, registry, validateNow],
+    () =>
+      flowRuntimeState?.registerForm(formId, {
+        label: title,
+        read: registry.valueOf,
+        write: registry.write,
+        validate: validateNow,
+        describe: () =>
+          registry.describe().map((field) => {
+            const error = fieldErrorRef.current(field.key);
+            return error === undefined ? field : { ...field, error };
+          }),
+        options: registry.options,
+        submit: () => formRef.current?.requestSubmit(),
+      }),
+    [flowRuntimeState, formId, registry, title, validateNow],
   );
   useEffect(() => {
     eventsRef.current = events;
@@ -419,7 +441,6 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     events?.form_reset?.({ event: "form_reset", gestureId: crypto.randomUUID() });
   };
 
-  const title = context.accessibleName;
   const ownerGroups = props.data?.status === "ready" ? props.data.values.ownerGroups : undefined;
   const selectedOwnerGroupId =
     ownerGroups?.length === 1

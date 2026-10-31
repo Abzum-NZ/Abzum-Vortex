@@ -358,7 +358,7 @@ export {
   createFlowRuntimeState,
   scopeFlowRuntimeForms,
   createFormBlockRuntime,
-  flowSetFieldChange,
+  setFieldChange,
   isFlowIntent,
   parseServerFlowResponse,
   performPresentationIntent,
@@ -394,6 +394,19 @@ export {
   type FlowDispatchResult,
   type ServerFlowResponse,
 } from "./flow-runtime";
+
+// Agents act through the page model: tools generated from the rendered page, run as the person's gestures
+export {
+  pageAgentTools,
+  runPageAgentTool,
+  type AgentPage,
+  type PageAgentTool,
+} from "./agent/page-tools";
+export {
+  createHeadlessPageDriver,
+  type PageDriver,
+  type PageDriverRecord,
+} from "./agent/page-driver";
 
 // Link Navigation and the Navigate task
 export {

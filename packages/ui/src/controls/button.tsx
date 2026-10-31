@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, type ReactElement } from "react";
+import { useContext, useEffect, useId, useRef, type ReactElement } from "react";
 import { Button as SharedButton } from "../components/button";
 import { Spinner } from "../components/spinner";
 import { DefinitionRenderError } from "../definition-error";
@@ -13,6 +13,7 @@ import {
 import { useFormScope } from "./form-context";
 import { usePendingGesture } from "./pending-gesture";
 import { usePlacementReactions } from "../flow-runtime/placement-reactions";
+import { FlowRuntimeStateContext } from "../flow-runtime/flow-runtime-state-context";
 
 export type ButtonProps = ControlRenderProps<ButtonPayload>;
 
@@ -69,6 +70,42 @@ export function Button(props: ButtonProps): ReactElement {
     settings.boolean("disabled") ||
     (mode !== "action" && form?.inactive === true);
   const note = context.unavailable ? "Unavailable" : context.disabledReason;
+  const click = (): void => {
+    if (mode !== "action" || disabled) return;
+    gesture.track(
+      context.events?.action?.({
+        event: "action",
+        intent: "activate",
+        ...(form === undefined ? {} : { readValues: form.values }),
+      }),
+    );
+  };
+  // An agent uses the button as the person does: its click, or its form's one submit or reset path.
+  const agentState = useRef({ click, disabled, hidden: reactions.visible === false, form, mode });
+  agentState.current = { click, disabled, hidden: reactions.visible === false, form, mode };
+  const runtimeState = useContext(FlowRuntimeStateContext);
+  useEffect(
+    () =>
+      runtimeState?.agent.register({
+        kind: "button",
+        id: props.placementId,
+        label,
+        formId: mode === "action" ? undefined : form?.formId,
+        refusal: () =>
+          agentState.current.hidden
+            ? "hidden"
+            : agentState.current.disabled
+              ? "disabled"
+              : undefined,
+        activate: () => {
+          const current = agentState.current;
+          if (current.mode === "submit") current.form?.submit();
+          else if (current.mode === "reset") current.form?.reset();
+          else current.click();
+        },
+      }),
+    [form?.formId, label, mode, props.placementId, runtimeState],
+  );
 
   return (
     <>
@@ -82,16 +119,7 @@ export function Button(props: ButtonProps): ReactElement {
         disabled={disabled}
         aria-busy={pending}
         {...(note === undefined ? {} : { "aria-describedby": noteId })}
-        onClick={() => {
-          if (mode !== "action" || disabled) return;
-          gesture.track(
-            context.events?.action?.({
-              event: "action",
-              intent: "activate",
-              ...(form === undefined ? {} : { readValues: form.values }),
-            }),
-          );
-        }}
+        onClick={click}
       >
         {pending ? <Spinner data-icon="inline-start" aria-hidden="true" /> : null}
         {label}

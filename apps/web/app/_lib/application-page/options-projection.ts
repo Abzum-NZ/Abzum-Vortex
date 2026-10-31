@@ -12,7 +12,6 @@ import {
   DATE_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
-  FORM_CONTAINER_BLOCK_RELEASE,
   placementSettings,
   fieldControl,
   planChoiceOptionGates,
@@ -20,14 +19,11 @@ import {
   applyChoiceOptionGates,
 } from "@vortex/platform/server";
 import {
-  type ApplicationContent,
   type IdentitySession,
   type OrganizationSelectionCandidate,
   isRecord,
   sameId,
   walkPageComposition,
-  walkPlacementData,
-  type VisitedPlacement,
 } from "@vortex/platform/schema";
 import { loadInstalledContext, requestDependencies } from "./installed-context";
 import { platformPermissionSource } from "../platform-permission-source";

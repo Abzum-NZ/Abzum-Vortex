@@ -1,5 +1,6 @@
 "use client";
 
+import { useAgentGrid } from "./agent-grid";
 import {
   lazy,
   Suspense,
@@ -373,6 +374,17 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
             onRowClick({ event: "row_clicked", eventId: rowClickEventId, recordId }),
     [onRowClick, rowClickEventId],
   );
+  // The grid as the page's agent sees and uses it: the same rows and the same row, cell, selection
+  // and bulk events the person's gestures emit.
+  useAgentGrid(placementId, accessibleName ?? title ?? placementId, {
+    rows,
+    columns,
+    features,
+    events,
+    selectable,
+    selectedRecordIds,
+    activateRow,
+  });
   const showActions = features?.rowEdit !== undefined || features?.rowActions !== undefined;
   // Rows expand to a panel a projected feature draws (their related records); the panel reads only
   // while its row is open.

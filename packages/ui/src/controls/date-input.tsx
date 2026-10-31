@@ -8,7 +8,7 @@ import { Field, FieldLabel } from "../components/field";
 import { Input } from "../components/input";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/popover";
 import { FormattedDate } from "../display/date-format-context";
-import { flowSetFieldChange } from "../flow-runtime/flow-cycle";
+import { setFieldChange } from "../flow-runtime/flow-cycle";
 import {
   readControlSettings,
   resolveControlContext,
@@ -69,15 +69,26 @@ export function DateInput(props: DateInputProps): ReactElement {
     props.placementId,
     typed,
     { label, missing: required && !disabled && !readOnly && typed === null },
-    (value, cycle) => {
-      if (disabled || readOnly || draftFeedback?.hidden === true) return undefined;
-      if (value !== null && (typeof value !== "string" || !isIsoCalendarDate(value)))
-        return undefined;
-      return {
-        value,
-        apply: () => setRaw(value ?? ""),
-        emit: () => context.events?.field_changed?.(flowSetFieldChange(cycle, fieldKey, value)),
-      };
+    {
+      label,
+      required,
+      refusal:
+        draftFeedback?.hidden === true
+          ? "hidden"
+          : disabled
+            ? "disabled"
+            : readOnly
+              ? "read_only"
+              : undefined,
+      set: (value, cause) => {
+        if (value !== null && (typeof value !== "string" || !isIsoCalendarDate(value)))
+          return "invalid_value";
+        return {
+          value,
+          apply: () => setRaw(value ?? ""),
+          emit: () => context.events?.field_changed?.(setFieldChange(cause, fieldKey, value)),
+        };
+      },
     },
   );
   const error = projectedError ?? validationError;

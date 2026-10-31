@@ -2,7 +2,7 @@ export { useFlowIntentHost, type FlowIntentHostOptions } from "./flow-intent-hos
 export type { PageMessage, PageMessageDraft } from "./messages";
 export {
   continueFlowEventCycle,
-  flowSetFieldChange,
+  setFieldChange,
   startFlowEventCycle,
   type FlowCycleRefusal,
   type FlowEventCycle,

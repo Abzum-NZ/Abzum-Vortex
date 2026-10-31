@@ -10,7 +10,7 @@ import {
 import { Field, FieldLabel } from "../components/field";
 import { Input } from "../components/input";
 import { DefinitionRenderError } from "../definition-error";
-import { flowSetFieldChange } from "../flow-runtime/flow-cycle";
+import { setFieldChange } from "../flow-runtime/flow-cycle";
 import type { NumberInputPayload } from "./projected-data";
 import {
   readControlSettings,
@@ -129,17 +129,29 @@ export function NumberInput(props: NumberInputProps): ReactElement {
     }
     return undefined;
   };
-  useFormField(fieldKey, props.placementId, typed, validate, (value, cycle) => {
-    if (disabled || readOnly || draftFeedback?.hidden === true) return undefined;
-    if (value !== null && typeof value !== "string" && typeof value !== "number") return undefined;
-    const next = value === null ? "" : String(value);
-    const nextTyped = toTyped(next);
-    if (value !== null && (nextTyped === null || nextTyped !== value)) return undefined;
-    return {
-      value: nextTyped,
-      apply: () => setRaw(next),
-      emit: () => context.events?.field_changed?.(flowSetFieldChange(cycle, fieldKey, nextTyped)),
-    };
+  useFormField(fieldKey, props.placementId, typed, validate, {
+    label,
+    required,
+    refusal:
+      draftFeedback?.hidden === true
+        ? "hidden"
+        : disabled
+          ? "disabled"
+          : readOnly
+            ? "read_only"
+            : undefined,
+    set: (value, cause) => {
+      if (value !== null && typeof value !== "string" && typeof value !== "number")
+        return "invalid_value";
+      const next = value === null ? "" : String(value);
+      const nextTyped = toTyped(next);
+      if (value !== null && (nextTyped === null || nextTyped !== value)) return "invalid_value";
+      return {
+        value: nextTyped,
+        apply: () => setRaw(next),
+        emit: () => context.events?.field_changed?.(setFieldChange(cause, fieldKey, nextTyped)),
+      };
+    },
   });
   const validationError = useFormFieldError(fieldKey);
   const error = projectedError ?? validationError ?? (raw.trim() === "" ? undefined : validate());

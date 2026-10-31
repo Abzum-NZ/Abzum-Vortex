@@ -6,24 +6,17 @@ import {
   applicationSourceContractVersion,
   applicationValidationContractVersion,
 } from "./application-contract-versions";
-import {
-  applicationActionInputDefinitionSchema,
-  publishedApplicationDefinitionSchema,
-} from "./application-contracts";
-import { flowValueDeclarationSchema } from "./application-flow-bindings";
+import { publishedApplicationDefinitionSchema } from "./application-contracts";
 import { connectionTypeSourceDocumentSchema } from "../connections/connection-source-contracts";
 import { connectionTypeSchema } from "../connections/integration-contracts";
 import {
-  actionInputDefinitionSchema,
   moduleContractVersionPairSchema,
   moduleDraftSchema,
   moduleValidationContractVersion,
 } from "./module-contracts";
 import { moduleSourceDocumentSchema } from "./definition-source";
-import { descriptionSchema } from "../catalogue/common";
 import { definitionProvenanceEntrySchema } from "./definition-provenance";
 import {
-  actionIdSchema,
   actorIdSchema,
   applicationRootIdSchema,
   builderKeySchema,
@@ -33,12 +26,8 @@ import {
   moduleRootIdSchema,
   namespacedKeySchema,
   organizationIdSchema,
-  pageIdSchema,
   platformIdSchema,
-  queryIdSchema,
-  recordTypeIdSchema,
   revisionSchema,
-  flowIdSchema,
   semanticVersionSchema,
   timestampSchema,
   stableDefinitionReleaseVersionSchema,

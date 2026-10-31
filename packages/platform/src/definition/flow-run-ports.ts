@@ -45,7 +45,10 @@ export type FlowRunPortsHost = Readonly<{
 }>;
 
 /** The admission of the run's page start and server segments. */
-export type FlowRunAdmission = Pick<FlowOrchestratorDependencies, "admitSegment" | "admitPageStart">;
+export type FlowRunAdmission = Pick<
+  FlowOrchestratorDependencies,
+  "admitSegment" | "admitPageStart"
+>;
 
 /**
  * The ports one flow run needs, bound to the given request when there is one: protected

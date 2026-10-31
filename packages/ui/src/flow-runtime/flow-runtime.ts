@@ -13,8 +13,11 @@ import type {
   FlowSubjectContext,
   ServerFlowResponse,
 } from "./server-flow-client";
-import { startFlowEventCycle, type FlowEventCycle } from "./flow-cycle";
+import { startFlowEventCycle, type FieldWriteCause, type FlowEventCycle } from "./flow-cycle";
 import type { TypedFieldValue } from "../controls/projected-data";
+import type { FieldOption, FieldWriteResult, FormFieldDescription } from "../controls/form-context";
+import type { AgentControl } from "../agent/page-agent-controls";
+import type { AgentGesture } from "../agent/page-driver";
 import { createExclusiveScopes } from "./exclusive";
 import { createFormSettler } from "./settle";
 
@@ -63,6 +66,11 @@ const canonicalInputs = (inputs: Readonly<Record<string, unknown>>) =>
 
 export type FlowRuntimeOptions = Readonly<{
   client: FlowInvokeClient;
+  /**
+   * The same endpoint marked as an agent's: a run an agent started sends its server segments here,
+   * so the gate records the agent channel while the person stays the actor.
+   */
+  agentClient?: FlowInvokeClient;
   /** Every binding's compiled page plan: each gesture runs through it, page and server segments alike. */
   browserBinding: (
     bindingId: string,
@@ -87,6 +95,8 @@ export type FlowRuntimeOptions = Readonly<{
         flowName: string;
         controlName: string;
         formId?: string;
+        /** The flow changes records in a way an agent may start only with the person's confirmation. */
+        agentConfirmation?: boolean;
       }>
     | undefined;
   /** Keep submission evidence for the entire gesture, including every server segment. */
@@ -107,14 +117,10 @@ export function createFlowRuntimeState(
   const cycles = new Map<string, Readonly<{ cycle: FlowEventCycle }>>();
   const listeners = new Map<string, Set<() => void>>();
   const retries = new Map<string, string>();
-  const forms = new Map<
-    string,
-    Readonly<{
-      read: (fieldKey: string) => TypedFieldValue | undefined;
-      write: (fieldKey: string, value: unknown, cycle: FlowEventCycle) => boolean;
-      validate: () => boolean;
-    }>
-  >();
+  const forms = new Map<string, RegisteredForm & Readonly<{ formId: string }>>();
+  const agentControls = new Map<string, AgentControl>();
+  /** An agent's gesture on a control, taken by the dispatch the gesture starts. */
+  const agentClaims = new Map<string, AgentGesture>();
   /** A form is registered under its placement and, in a dialog, the dialog's own scope, so two copies never collide. */
   const formKey = (formId: string, scope: string) => `${scope}|${formId.toLowerCase()}`;
   /** The form of a scope, else the page's own form of that placement. */
@@ -163,24 +169,20 @@ export function createFlowRuntimeState(
     formChanged: (formId: string, fieldKey: string) =>
       notify(`form:${formId.toLowerCase()}:${fieldKey}`),
     isRunning: (controlId: string) => (running.get(controlId) ?? 0) > 0,
-    registerForm: (
-      formId: string,
-      read: (fieldKey: string) => TypedFieldValue | undefined,
-      write: (fieldKey: string, value: unknown, cycle: FlowEventCycle) => boolean,
-      validate: () => boolean,
-      scope = "",
-    ) => {
+    registerForm: (formId: string, registered: RegisteredForm, scope = "") => {
       const key = formKey(formId, scope);
       if (forms.has(key)) throw new Error(`Form '${formId}' is registered more than once`);
-      const form = { read, write, validate };
+      const form = { ...registered, formId };
       forms.set(key, form);
       for (const fieldKey of Object.keys(formTypes[formId] ?? {}))
         notify(`form:${formId.toLowerCase()}:${fieldKey}`);
+      notify("agent");
       return () => {
         if (forms.get(key) === form) {
           forms.delete(key);
           for (const fieldKey of Object.keys(formTypes[formId] ?? {}))
             notify(`form:${formId.toLowerCase()}:${fieldKey}`);
+          notify("agent");
         }
       };
     },
@@ -190,10 +192,46 @@ export function createFlowRuntimeState(
       formId: string,
       fieldKey: string,
       value: unknown,
-      cycle: FlowEventCycle,
+      cause: FieldWriteCause,
       scope = "",
-    ) => formIn(formId, scope)?.write(fieldKey, value, cycle) ?? false,
+    ): FieldWriteResult =>
+      formIn(formId, scope)?.write(fieldKey, value, cause) ?? {
+        kind: "refused",
+        reason: "not_on_page",
+      },
     validateForm: (formId: string, scope = "") => formIn(formId, scope)?.validate() ?? false,
+    /**
+     * The page as an agent sees it: the page's own forms and the controls mounted now (a dialog's
+     * form belongs to the person answering it), and the claim an agent's gesture leaves on the
+     * control it uses, so the dispatch that gesture starts is marked as the agent's.
+     */
+    agent: Object.freeze({
+      forms: () => [...forms].filter(([key]) => key.startsWith("|")).map(([, form]) => form),
+      controls: () => [...agentControls.values()],
+      register: (control: AgentControl) => {
+        const key = control.id.toLowerCase();
+        agentControls.set(key, control);
+        notify("agent");
+        return () => {
+          if (agentControls.get(key) !== control) return;
+          agentControls.delete(key);
+          notify("agent");
+        };
+      },
+      claim: (controlId: string, gesture: AgentGesture) => {
+        const key = controlId.toLowerCase();
+        agentClaims.set(key, gesture);
+        return () => {
+          if (agentClaims.get(key) === gesture) agentClaims.delete(key);
+        };
+      },
+      take: (controlId: string) => {
+        const key = controlId.toLowerCase();
+        const gesture = agentClaims.get(key);
+        agentClaims.delete(key);
+        return gesture;
+      },
+    }),
     cycleFor: (gestureId: string) => cycles.get(gestureId)?.cycle,
     trackCycle: (gestureId: string, cycle: FlowEventCycle) => {
       const held = { cycle };
@@ -403,6 +441,21 @@ export function createFlowRuntimeState(
 
 export type FlowRuntimeState = ReturnType<typeof createFlowRuntimeState>;
 
+/** A mounted form's value API: the one place a flow's Set value and an agent's set_field write. */
+export type RegisteredForm = Readonly<{
+  label: string | undefined;
+  read: (fieldKey: string) => TypedFieldValue | undefined;
+  write: (fieldKey: string, value: unknown, cause: FieldWriteCause) => FieldWriteResult;
+  validate: () => boolean;
+  describe: () => readonly FormFieldDescription[];
+  options: (
+    fieldKey: string,
+    search: string | undefined,
+  ) => Promise<readonly FieldOption[]> | undefined;
+  /** Submits the form the way its Submit button does: validation first, then its one event. */
+  submit: () => void;
+}>;
+
 /**
  * The runtime state as a dialog's form sees it: its form registers, reads, writes and validates in
  * the dialog's own scope (the form's placement and the dialog's run), and everything else is the
@@ -413,11 +466,10 @@ export const scopeFlowRuntimeForms = (
   scope: string,
 ): FlowRuntimeState => ({
   ...state,
-  registerForm: (formId, read, write, validate) =>
-    state.registerForm(formId, read, write, validate, scope),
+  registerForm: (formId, registered) => state.registerForm(formId, registered, scope),
   readFormValue: (formId, fieldKey) => state.readFormValue(formId, fieldKey, scope),
-  writeFormValue: (formId, fieldKey, value, cycle) =>
-    state.writeFormValue(formId, fieldKey, value, cycle, scope),
+  writeFormValue: (formId, fieldKey, value, cause) =>
+    state.writeFormValue(formId, fieldKey, value, cause, scope),
   validateForm: (formId) => state.validateForm(formId, scope),
 });
 
@@ -438,6 +490,8 @@ export type PlacementFlowBinding = Readonly<{
   entrySegments: readonly Readonly<{ segmentId: string; fingerprint: string }>[];
   callerInputs: readonly string[];
   savesFormValues: boolean;
+  /** The flow deletes, changes records in bulk or runs on the back end before any confirmation. */
+  agentConfirmation?: boolean;
   recordTypeId?: string;
   selectedReadInputs?: readonly Readonly<{ callerInputName: string; recordTypeId: string }>[];
 }>;
@@ -492,6 +546,8 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
       console.error(`[flow] binding ${binding.bindingId} has no projected settings`);
       return { kind: "refused" };
     }
+    // An agent's gesture claimed this control, or this run continues one an agent started.
+    const agent = cycle?.agent ?? options.state.agent.take(settings.controlId);
     let retry:
       { key: string; runId: string; inputs: Readonly<Record<string, unknown>> } | undefined;
     let end: (() => void) | undefined;
@@ -509,9 +565,10 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
           end = options.begin?.(binding.bindingId, retry.runId);
         }
         const attempt = retry;
+        const started = cycle ?? startFlowEventCycle(binding.flowId, settings.controlId);
         const releaseCycle = options.state.trackCycle(
           attempt.runId,
-          cycle ?? startFlowEventCycle(binding.flowId, settings.controlId),
+          agent === undefined ? started : { ...started, agent },
         );
         try {
           if (resume !== undefined) return await resume();
@@ -525,6 +582,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
             subject,
             sourceTablePlacementId,
             settings,
+            agent?.driver,
           );
         } finally {
           releaseCycle();
@@ -543,7 +601,9 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
       };
     };
     try {
-      return keepRetry(await execute(signal));
+      const result = keepRetry(await execute(signal));
+      agent?.settled(result);
+      return result;
     } catch (error) {
       end?.();
       throw error;

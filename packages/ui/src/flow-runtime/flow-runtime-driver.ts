@@ -1,6 +1,7 @@
 import { safeFlowResultDescriptors } from "@vortex/platform/schema";
 import type { FlowRuntimeOptions, FlowBindingReference } from "./flow-runtime";
 import type { FlowSubjectContext } from "./server-flow-client";
+import type { PageDriver } from "../agent/page-driver";
 import type { FlowDispatchResult } from "./flow-runtime";
 
 /** The page host of one binding's run: while a call waits on the person, the binding's timeout clock stands still. */
@@ -24,6 +25,26 @@ const hostWaitingOnPerson = (
   };
 };
 
+/**
+ * The page host of an agent's run: Navigate and Show message reach the page and the agent's driver,
+ * and every confirmation is the driver's, which on a screen asks the person.
+ */
+const hostForAgent = (
+  host: FlowRuntimeOptions["host"],
+  driver: PageDriver,
+): FlowRuntimeOptions["host"] => ({
+  ...host,
+  navigate: async (intent) => {
+    await driver.navigate(intent);
+    return host.navigate(intent);
+  },
+  showMessage: async (message, signal) => {
+    await driver.showMessage(message, signal);
+    await host.showMessage(message, signal);
+  },
+  confirm: (confirmation, signal) => driver.confirm(confirmation, signal),
+});
+
 /** Runs one scheduled binding after the page has loaded the flow driver. */
 export async function runFlowBinding(
   options: FlowRuntimeOptions,
@@ -34,10 +55,35 @@ export async function runFlowBinding(
   subject: FlowSubjectContext | undefined,
   sourceTablePlacementId: string | undefined,
   settings: NonNullable<ReturnType<FlowRuntimeOptions["bindingSettings"]>>,
+  agent: PageDriver | undefined,
 ): Promise<FlowDispatchResult> {
-  const pageHost = hostWaitingOnPerson(options.host, () =>
-    options.state.holdTimeouts(binding.bindingId),
+  const client = agent === undefined ? options.client : options.agentClient;
+  if (client === undefined) {
+    console.error("[flow] an agent's run needs the agent endpoint, which this page does not have");
+    return { kind: "refused" };
+  }
+  const pageHost = hostWaitingOnPerson(
+    agent === undefined ? options.host : hostForAgent(options.host, agent),
+    () => options.state.holdTimeouts(binding.bindingId),
   );
+  // An agent never deletes, changes records in bulk or starts a back-end run before the person
+  // confirms it on the page; a flow that asks first itself needs no second question.
+  if (agent !== undefined && settings.agentConfirmation === true) {
+    const answer = await pageHost.confirm(
+      {
+        title: "Allow the agent?",
+        message: `An agent working for you wants to run ${settings.flowName} (${settings.controlName}).`,
+        details: [],
+        choice: undefined,
+        confirmLabel: "Allow",
+        destructive: true,
+      },
+      runSignal,
+    );
+    if (runSignal.aborted) return { kind: "abandoned" };
+    if (!answer.confirmed)
+      return { kind: "refused", reason: "You did not allow the agent's action." };
+  }
   const browser = options.browserBinding(binding.bindingId);
   if (browser === undefined || options.timeZone === undefined) {
     console.error(`[flow] binding ${binding.bindingId} has no page plan or time zone`);
@@ -68,7 +114,10 @@ export async function runFlowBinding(
       validateForm: options.state.validateForm,
       setFormValue: (form, field, value) => {
         const cycle = options.state.cycleFor(clickId);
-        return cycle !== undefined && options.state.writeFormValue(form, field, value, cycle);
+        return (
+          cycle !== undefined &&
+          options.state.writeFormValue(form, field, value, cycle).kind === "set"
+        );
       },
     },
     readFormValue: options.state.readFormValue,
@@ -76,7 +125,7 @@ export async function runFlowBinding(
     condition: settings.condition,
     signal: runSignal,
     server: {
-      client: options.client,
+      client,
       binding,
       ...((subject ?? options.subject) === undefined
         ? {}

@@ -15,7 +15,8 @@ export type PlacementReactions = Readonly<{
   required?: boolean | undefined;
   readOnly?: boolean | undefined;
   enabled?: boolean | undefined;
-  canWrite?: (() => boolean) | undefined;
+  /** Why a value cannot be written now (this placement or one around it), checked at the write. */
+  refusal?: (() => "hidden" | "read_only" | "disabled" | undefined) | undefined;
 }>;
 
 export const PlacementReactionsContext = createContext<PlacementReactions>({});
@@ -135,14 +136,16 @@ export function useLivePlacementReactions(
       state === undefined || nodes[3] === undefined
         ? conditions.reactions?.enabled
         : (mask & 8) !== 0,
-    canWrite: () => {
+    refusal: () => {
+      const inherited = parent.refusal?.();
+      if (inherited !== undefined) return inherited;
       const current = snapshot();
-      return (
-        (parent.canWrite?.() ?? true) &&
-        (nodes[0] === undefined || (current & 1) !== 0) &&
-        (nodes[2] === undefined ? conditions.reactions?.readOnly !== true : (current & 4) === 0) &&
-        (nodes[3] === undefined ? conditions.reactions?.enabled !== false : (current & 8) !== 0)
-      );
+      if (nodes[0] !== undefined && (current & 1) === 0) return "hidden";
+      if (nodes[2] === undefined ? conditions.reactions?.readOnly === true : (current & 4) !== 0)
+        return "read_only";
+      if (nodes[3] === undefined ? conditions.reactions?.enabled === false : (current & 8) === 0)
+        return "disabled";
+      return undefined;
     },
   };
 }

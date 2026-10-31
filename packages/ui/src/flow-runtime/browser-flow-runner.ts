@@ -210,8 +210,7 @@ export async function runBrowserFlow(
         result.kind === "unknown"
       )
         return { kind: "terminal", value: terminal(result) };
-      if (result.kind !== "result")
-        throw new Error("FLOW_PAGE_SEGMENT_RESPONSE_INVALID");
+      if (result.kind !== "result") throw new Error("FLOW_PAGE_SEGMENT_RESPONSE_INVALID");
       carriedValues = result.carriedValues;
       if (result.descriptor.commit === "confirmed" || result.descriptor.commit === "partial")
         committed = true;

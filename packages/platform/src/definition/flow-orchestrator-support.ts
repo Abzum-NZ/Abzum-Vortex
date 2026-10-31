@@ -19,16 +19,12 @@ import {
 import type { FlowValue } from "../workflows/flow-values";
 import { typedValueMatchesType } from "../rules/condition-types";
 import type {
-  FlowInterfaceIntent,
   FlowLibrary,
   FlowProtectedTaskCall,
   FlowRunState,
   FlowTaskOutcome,
 } from "../rules/flow-interpreter";
-import type {
-  FlowRelease,
-  FlowSelectedRecordReadProjection,
-} from "./flow-orchestrator-types";
+import type { FlowRelease, FlowSelectedRecordReadProjection } from "./flow-orchestrator-types";
 
 const maximumPayloadCharacters = 65_536;
 
