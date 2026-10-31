@@ -72,7 +72,12 @@ export function useApplyDispatch({
       /** The control reports its outcome; what must not vanish with it also stays on the page. */
       reportOnControl?: ControlReport,
     ): Promise<DispatchOutcome> => {
-      let outcome: DispatchOutcome = { notice: undefined, confirmed: false, changed: false };
+      let outcome: DispatchOutcome = {
+        notice: undefined,
+        confirmed: false,
+        completed: false,
+        changed: false,
+      };
       const isCurrentNavigation = (): boolean => placementRequestsRef.current.key === navigationKey;
       showPageMessage(undefined);
       if (formPlacementId !== undefined) runtimeState.messages.clear("inline", formPlacementId);
@@ -128,6 +133,14 @@ export function useApplyDispatch({
         if (server.kind === "reload") {
           router.refresh();
           return outcome;
+        }
+        if (server.kind === "cells_refused") {
+          showResult({
+            target: "banner",
+            severity: "error",
+            text: "Nothing was saved. Fix the cells listed and try again.",
+          });
+          return { ...outcome, cellProblems: server.problems };
         }
         if (server.kind === "finished") {
           // A later run of the same binding that went through settles the earlier unknown outcome.
@@ -273,7 +286,12 @@ export function useApplyDispatch({
           outcome = {
             ...outcome,
             confirmed,
+            completed:
+              ["completed", "committed"].includes(server.descriptor.outcome) &&
+              server.failure === undefined,
             changed: changedUnderPerson,
+            ...(server.outputs.applied === undefined ? {} : { applied: server.outputs.applied }),
+            ...(typeof server.outputs.run === "string" ? { run: server.outputs.run } : {}),
             ...(diagnostic?.corrections === undefined
               ? {}
               : { corrections: diagnostic.corrections }),

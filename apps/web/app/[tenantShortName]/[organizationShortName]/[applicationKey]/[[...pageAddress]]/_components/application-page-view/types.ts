@@ -1,6 +1,11 @@
 import type { ControlSemanticEvent, FormBlockRuntime, PageMessageDraft } from "@vortex/ui";
 export type { PageMessageDraft } from "@vortex/ui";
-import type { FlowFieldCorrection, RecordsSelectionInput } from "@vortex/platform/schema";
+import type {
+  FlowFieldCorrection,
+  JsonValue,
+  RecordsSelectionInput,
+  RecordsTableBatchEditProblem,
+} from "@vortex/platform/schema";
 import type { ApplicationPageModel, PageDataState } from "../../../../../../_lib/application-page";
 
 export type EditFormBaseline = ApplicationPageModel["editFormBaselines"][string];
@@ -54,8 +59,16 @@ export type ControlReport = "transient" | "in_place";
 export type DispatchOutcome = Readonly<{
   notice: PageMessageDraft | undefined;
   confirmed: boolean;
+  /** The run ended well, whether or not it committed a change of its own (it may only have started background work). */
+  completed: boolean;
   changed: boolean;
   corrections?: readonly FlowFieldCorrection[];
+  /** A pasted, filled or undone batch that stopped before any cell was written: each cell that stopped it. */
+  cellProblems?: readonly RecordsTableBatchEditProblem[];
+  /** What a batch flow reports it applied: each record's new revision and the values it replaced. */
+  applied?: JsonValue;
+  /** The run reference a flow that started background work reports. */
+  run?: string;
 }>;
 
 export type SubmittedForm = Readonly<{

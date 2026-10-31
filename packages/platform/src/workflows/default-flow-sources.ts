@@ -33,6 +33,23 @@ const inputReference = (name: string) =>
   ({ kind: "reference", reference: { source: "input", name } }) as const;
 const outputReference = (task: string, key: string) =>
   ({ kind: "reference", reference: { source: "task_output", task, key } }) as const;
+const variableReference = (name: string) =>
+  ({ kind: "reference", reference: { source: "variable", name } }) as const;
+
+/** The reference a run output holds while no run was started (the nil identity: read as none). */
+const noRunReference = "00000000-0000-0000-0000-000000000000";
+const runReferenceVariable = {
+  type: "workflow_run_reference",
+  default: noRunReference,
+} as const;
+
+const setVariableTask = (id: string, name: string, value: ReturnType<typeof outputReference>): Task =>
+  ({
+    id,
+    type: "data.set_variable",
+    version: taskVersion,
+    properties: { variable: textLiteral(name), value },
+  }) as unknown as Task;
 
 const showMessage = (
   id: string,
@@ -103,7 +120,7 @@ const recordReferenceInput = (recordType: string) => ({
 const interactiveSource = (
   identity: DefaultFlowIdentity,
   parts: Pick<SourceFlow, "inputs" | "tasks" | "outputs"> &
-    Readonly<{ errors?: SourceFlow["errors"] }>,
+    Readonly<{ errors?: SourceFlow["errors"]; variables?: SourceFlow["variables"] }>,
 ): SourceFlow => ({
   id: identity.id,
   key: identity.key,
@@ -112,7 +129,7 @@ const interactiveSource = (
   execution: "interactive",
   runAs: { kind: "initiator" },
   inputs: parts.inputs,
-  variables: {},
+  variables: parts.variables ?? {},
   triggers: [],
   tasks: parts.tasks,
   outputs: parts.outputs,
@@ -537,6 +554,278 @@ export const defaultChangeFlowSource = (input: DefaultChangeFlowInput): SourceFl
     },
     errors: [refreshTask("refresh_after_failure")],
   });
+
+export type DefaultBatchEditFlowInput = DefaultFlowIdentity & Readonly<{ recordType: string }>;
+
+const loopItemField = (name: string) =>
+  ({ kind: "reference", reference: { source: "loop_item", path: [name] } }) as const;
+
+/**
+ * The default for pasted, filled and undone cells (and an undo's inverse): one set-based For each
+ * that sets the fields of every row at the revision the person saw, so the whole batch is one
+ * change in one transaction. A stale row or a refused cell refuses all of it. The batch's
+ * `applied` output carries each record's new revision and the values it replaced, which Undo sends
+ * back. The invoking grid supplies `rows` (record, expected revision and values per row) after the
+ * server has decided every cell.
+ */
+export const defaultBatchEditFlowSource = (input: DefaultBatchEditFlowInput): SourceFlow =>
+  interactiveSource(input, {
+    inputs: {
+      rows: { type: "json", required: true },
+      operation: { type: "text", required: true },
+    },
+    tasks: [
+      {
+        id: "apply",
+        type: "for_each",
+        items: inputReference("rows"),
+        maximumItems: 200,
+        tasks: [
+          {
+            id: "set",
+            type: "record.set_fields",
+            version: taskVersion,
+            properties: {
+              record_type: textLiteral(input.recordType),
+              record: loopItemField("record"),
+              values: loopItemField("values"),
+              expected_revision: loopItemField("expected_revision"),
+            },
+          },
+        ],
+      } as unknown as Task,
+    ],
+    outputs: { applied: { type: "json", value: outputReference("apply", "applied") } },
+    errors: [refreshTask("refresh_after_failure")],
+  });
+
+export type DefaultBulkActionFlowInput = DefaultFlowIdentity &
+  Readonly<{
+    /** The named action's namespaced operation key. */
+    operation: string;
+    /** The table's query (its alias in the owning definition) and the key of the matching flow. */
+    query: string;
+    matchingFlow: string;
+    /** The key of the flow that applies a chosen selection too large for the request. */
+    idsFlow: string;
+    /** What the person is told when "every matching record" has started in the background. */
+    started: string;
+    /** The toast that tells the person the action was done on the selected records. */
+    done: string;
+  }>;
+
+/**
+ * The default for a bulk action of a table: the selected records (at most 200, each with the
+ * revision the person saw) take the named action as ONE command in one transaction, all or none;
+ * "every matching record" starts the matching flow on the back end instead. The grid supplies
+ * `subjects`, `selection` (the sealed token of the matching read, empty for chosen rows) and
+ * `excluded` (the records unticked since).
+ */
+export const defaultBulkActionFlowSource = (input: DefaultBulkActionFlowInput): SourceFlow =>
+  interactiveSource(input, {
+    inputs: {
+      subjects: { type: "json", required: true },
+      queued: { type: "json", required: true },
+      selection: { type: "text", required: true },
+      excluded: { type: "json", required: true },
+    },
+    variables: { run: runReferenceVariable },
+    tasks: [
+      {
+        id: "route",
+        type: "if",
+        condition: {
+          op: "is_not_empty",
+          arg: { op: "reference", reference: { source: "input", name: "selection" } },
+        },
+        then: [
+          {
+            id: "start_matching",
+            type: "backend.run",
+            version: taskVersion,
+            properties: {
+              flow: textLiteral(input.matchingFlow),
+              mode: textLiteral("start"),
+              inputs: {
+                kind: "map",
+                entries: {
+                  selection: inputReference("selection"),
+                  excluded: inputReference("excluded"),
+                  continuation: textLiteral(""),
+                },
+              },
+            },
+          } as unknown as Task,
+          setVariableTask("keep_matching_run", "run", outputReference("start_matching", "run")),
+          showMessage("started", input.started, { severity: "info" }),
+        ],
+        else: [
+          {
+            id: "route_chosen",
+            type: "if",
+            condition: {
+              op: "is_not_empty",
+              arg: { op: "reference", reference: { source: "input", name: "queued" } },
+            },
+            then: [
+              {
+                id: "start_chosen",
+                type: "backend.run",
+                version: taskVersion,
+                properties: {
+                  flow: textLiteral(input.idsFlow),
+                  mode: textLiteral("start"),
+                  inputs: { kind: "map", entries: { subjects: inputReference("queued") } },
+                },
+              } as unknown as Task,
+              setVariableTask("keep_chosen_run", "run", outputReference("start_chosen", "run")),
+              showMessage("started_chosen", input.started, { severity: "info" }),
+            ],
+            else: [
+              {
+                id: "apply",
+                type: "operation.call",
+                version: taskVersion,
+                properties: {
+                  operation: textLiteral(input.operation),
+                  inputs: { kind: "map", entries: {} },
+                  subjects: inputReference("subjects"),
+                },
+              } as unknown as Task,
+              showMessage("done", input.done),
+              refreshTask("refresh"),
+            ],
+              } as unknown as Task,
+        ],
+      } as unknown as Task,
+    ],
+    outputs: { run: { type: "workflow_run_reference", value: variableReference("run") } },
+  });
+
+/**
+ * The flow that applies a bulk action to chosen rows too many for one request (more than the
+ * request maximum, at most 200): one command in one transaction on the back end, as the person who
+ * started it.
+ */
+export const defaultBulkIdsFlowSource = (input: DefaultBulkActionFlowInput): SourceFlow => ({
+  id: input.idsFlow,
+  key: input.idsFlow,
+  description: input.description ?? "Applies a bulk action to the chosen records on the back end.",
+  labels: {},
+  execution: "background",
+  runAs: { kind: "initiator" },
+  inputs: { subjects: { type: "json", required: true } },
+  variables: {},
+  triggers: [],
+  tasks: [
+    {
+      id: "apply",
+      type: "operation.call",
+      version: taskVersion,
+      properties: {
+        operation: textLiteral(input.operation),
+        inputs: { kind: "map", entries: {} },
+        subjects: inputReference("subjects"),
+      },
+    } as unknown as Task,
+  ],
+  outputs: {},
+  errors: [],
+  finally: [],
+});
+
+/**
+ * The matching flow of a bulk action, run on the back end as the person who started it: it reads
+ * one page of the table's own matching rows (the token carries its filters and search), applies
+ * the named action to that page as one command in one transaction, and starts itself again with
+ * the next continuation until none is left. The only input that changes between runs is the
+ * continuation, and every page is a run in history. Each run's `next` output names the run it
+ * started after itself (the nil identity when it was the last), which is how the grid follows the
+ * chain.
+ */
+export const defaultBulkMatchingFlowSource = (input: DefaultBulkActionFlowInput): SourceFlow => ({
+  id: input.matchingFlow,
+  key: input.matchingFlow,
+  description: input.description ?? "Applies a bulk action to every matching record, a page at a time.",
+  labels: {},
+  execution: "background",
+  runAs: { kind: "initiator" },
+  inputs: {
+    selection: { type: "text", required: true },
+    excluded: { type: "json", required: true },
+    continuation: { type: "text", required: true },
+  },
+  variables: { next: runReferenceVariable },
+  triggers: [],
+  tasks: [
+    {
+      id: "page",
+      type: "record.query",
+      version: taskVersion,
+      properties: {
+        query: textLiteral(input.query),
+        selection: inputReference("selection"),
+        excluded: inputReference("excluded"),
+        continuation: inputReference("continuation"),
+        page_size: { kind: "literal", literal: { type: "whole_number", value: 200 } },
+      },
+    } as unknown as Task,
+    {
+      id: "apply_page",
+      type: "if",
+      condition: {
+        op: "is_not_empty",
+        arg: { op: "reference", reference: { source: "task_output", task: "page", key: "records" } },
+      },
+      then: [
+        {
+          id: "apply",
+          type: "operation.call",
+          version: taskVersion,
+          properties: {
+            operation: textLiteral(input.operation),
+            inputs: { kind: "map", entries: {} },
+              subjects: outputReference("page", "records"),
+          },
+        } as unknown as Task,
+      ],
+    } as unknown as Task,
+    {
+      id: "more",
+      type: "if",
+      condition: {
+        op: "is_not_empty",
+        arg: {
+          op: "reference",
+          reference: { source: "task_output", task: "page", key: "continuation" },
+        },
+      },
+      then: [
+        {
+          id: "next_page",
+          type: "backend.run",
+          version: taskVersion,
+          properties: {
+            flow: textLiteral(input.matchingFlow),
+            mode: textLiteral("start"),
+            inputs: {
+              kind: "map",
+              entries: {
+                selection: inputReference("selection"),
+                excluded: inputReference("excluded"),
+                continuation: outputReference("page", "continuation"),
+              },
+            },
+          },
+        } as unknown as Task,
+        setVariableTask("keep_next_run", "next", outputReference("next_page", "run")),
+      ],
+    } as unknown as Task,
+  ],
+  outputs: { next: { type: "workflow_run_reference", value: variableReference("next") } },
+  errors: [],
+  finally: [],
+});
 
 export type DefaultQueryFlowInput = DefaultFlowIdentity &
   Readonly<{

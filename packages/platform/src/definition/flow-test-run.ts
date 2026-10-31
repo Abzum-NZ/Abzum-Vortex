@@ -165,6 +165,7 @@ export const runFlowTest = async (
     const backgroundDependencies: BackgroundRunDependencies = {
       requests: requestDependencies,
       applicationStore: dependencies.applicationStore,
+      continuationKey: dependencies.continuationKey,
       backend: () => inline,
     };
     /** A back-end child runs here, in the same request, as the builder; no run is recorded. */
@@ -386,6 +387,7 @@ export const runFlowTest = async (
           {
             requests: requestDependencies,
             applicationStore: dependencies.applicationStore,
+            continuationKey: dependencies.continuationKey,
             backend: () => backend,
           },
           { ...requestDependencies, boundRequest: bound },

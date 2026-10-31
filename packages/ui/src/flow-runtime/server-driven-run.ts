@@ -27,6 +27,8 @@ export type ServerDrivenResult =
   | Readonly<{ kind: "reload"; installationRevision: number }>
   /** Unknown, expired, foreign, tampered or not permitted: the one neutral refusal. */
   | Readonly<{ kind: "refused"; reason?: string }>
+  /** A pasted, filled or undone batch stopped before any cell was written: every cell that stopped it. */
+  | Extract<ServerFlowResponse, { kind: "cells_refused" }>
   | Readonly<{ kind: "unavailable" }>
   | Readonly<{ kind: "unknown"; controlId?: string; retry?: () => Promise<ServerDrivenResult> }>
   /**
@@ -78,6 +80,7 @@ export async function driveServerFlow(
           return refuseInvalidServerFlowState("unexpected_run_start");
         case "reload":
         case "refused":
+        case "cells_refused":
         case "unavailable":
         case "unknown":
           return response;

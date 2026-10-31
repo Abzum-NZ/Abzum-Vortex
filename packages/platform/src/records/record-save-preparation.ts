@@ -6,7 +6,6 @@ import type {
 } from "../access/human-organization-request";
 import { readCurrentOrganizationRuntimeSettingsAfterAuthorization } from "../access/organization-runtime-settings-administration";
 import { organizationRuntimeSettingsSchema } from "../access/organization-runtime-settings-schema";
-import type { JsonValue } from "../catalogue/common";
 import { applicationRootIdSchema, fieldIdSchema } from "../catalogue/identifiers";
 import { databaseRevision, describeFailure, sameId } from "../catalogue/runtime-primitives";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
@@ -513,39 +512,6 @@ export const readOrganizationRuntimeSettings = async (transaction: RequestDataba
  * The save result plus any before-save rule warnings of a saved attempt. The
  * closed result contract has no warning field, so they travel beside it.
  */
-/** The most records one batch save changes in its one transaction. */
-export const recordBatchSaveMaximum = 200;
-
-/** One record of a batch gesture: its displayed revision and submitted changes. */
-export type RecordBatchSaveSubject = Readonly<{
-  recordId: string;
-  expectedConcurrencyNumber: number;
-  submittedValues: Readonly<Record<string, JsonValue>>;
-}>;
-
-/** Why one record (or one of its fields) stopped a batch save. The server log keeps the cause. */
-export type RecordBatchSaveProblem = Readonly<{
-  recordId: string;
-  fieldId?: string;
-  reason: "changed" | "refused" | RecordSaveFieldCorrection["code"];
-  /** A rule's authored message, the only free text that may leave with a problem. */
-  message?: string;
-}>;
-
-export type RecordBatchSaveResult =
-  | Readonly<{
-      kind: "saved";
-      rows: readonly Readonly<{
-        recordId: string;
-        concurrencyNumber: number;
-        /** What the submitted fields held before, for the readable fields; empty on a replay. */
-        previous: Readonly<Record<string, unknown>>;
-      }>[];
-    }>
-  /** Nothing was written; every problem found is listed. */
-  | Readonly<{ kind: "refused"; problems: readonly RecordBatchSaveProblem[] }>
-  | Readonly<{ kind: "unavailable" | "temporarily_unavailable" }>;
-
 export type RecordSaveServiceResult = HumanOrganizationRequestResult<SaveRecordResult> &
   Readonly<{ warnings?: readonly BeforeSaveRuleWarning[] }>;
 

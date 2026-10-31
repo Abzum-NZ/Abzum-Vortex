@@ -62,6 +62,18 @@ import type { draftControls } from "./control-drafts";
 import type { ControlDrafts } from "../../../_components/application-frame-state";
 import type { useFieldFlowEvents } from "./use-field-flow-events";
 
+/** The grid events whose built-in table change stays and whose bound flow runs after it. */
+const gridStateFlowEvents = [
+  "refresh",
+  "filter_changed",
+  "search_changed",
+  "sort_changed",
+  "columns_changed",
+  "row_expanded",
+  "page_changed",
+  "selection_changed",
+] as const;
+
 export function useRuntimeInputs({
   currentData,
   model,
@@ -226,6 +238,7 @@ export function useRuntimeInputs({
   });
   // Bulk actions: every matching record of a table, and the runs over a selection.
   const bulk = useBulkSelection({
+    runBinding,
     model,
     navigationKey,
     currentData,
@@ -238,7 +251,7 @@ export function useRuntimeInputs({
   // The spreadsheet status bar's totals of a selected range, read from the server per settled range.
   const rangeSummary = useRangeSummary({ model, address });
   // Paste, Fill and Undo: one validated batch per gesture, and the session's stack of batches.
-  const batchEdit = useBatchUndo({ model, navigationKey, address });
+  const batchEdit = useBatchUndo({ navigationKey, address, runBinding });
   const titles = useRef<{ scope: string; values: PublishedRecordTitles }>({
     scope: navigationKey,
     values: new Map(),
@@ -409,7 +422,10 @@ export function useRuntimeInputs({
           supportsEvent("bulk_action") &&
           supportsEvent("selection_changed")
         )
-          Object.assign(events, bulk.eventsFor(placementId, tableData, selection[placementId]));
+          Object.assign(
+            events,
+            bulk.eventsFor(placementId, tableData, selection[placementId], bindings),
+          );
         // A table's Export streams a file from the server over the same selection, never a flow.
         if (tableData?.features?.export !== undefined)
           Object.assign(events, exported.eventsFor(placementId, tableData, selection[placementId]));
@@ -420,7 +436,7 @@ export function useRuntimeInputs({
           tableData?.features?.spreadsheet?.fill === true ||
           tableData?.features?.spreadsheet?.undo === true
         )
-          Object.assign(events, batchEdit.eventsFor(placementId));
+          Object.assign(events, batchEdit.eventsFor(placementId, bindings));
         if (supportsEvent("selection_changed"))
           events.selection_changed = (event: DisplaySemanticEvent) => {
             if (event.event !== "selection_changed") return;
@@ -564,6 +580,17 @@ export function useRuntimeInputs({
             tableData?.features?.tree !== undefined)
         )
           events.row_expanded = rowDetailHandlers(placementId);
+        // A flow the builder bound to one of these grid events runs after the built-in change.
+        for (const kind of gridStateFlowEvents) {
+          const binding = bindingOfEvent(bindings, kind);
+          const builtIn = events[kind] as ((event: DisplaySemanticEvent) => unknown) | undefined;
+          if (binding === undefined || builtIn === undefined || !supportsEvent(kind)) continue;
+          events[kind] = (event: DisplaySemanticEvent) => {
+            const result = builtIn(event);
+            void runBinding(placementId, binding, suppliedValues(event));
+            return result as void;
+          };
+        }
       }
       // A field's picker asks for its options; the page reads them under the person's access.
       if (model.optionPlacementIds.includes(placementId))

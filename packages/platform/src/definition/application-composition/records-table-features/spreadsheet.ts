@@ -6,6 +6,7 @@ import {
   projectedEditableFields,
   requiredBoolean,
   requiredChoice,
+  optionalText,
   requiredFieldList,
   requiredItems,
   type RecordsTableFeatureDefinition,
@@ -46,6 +47,8 @@ export type RecordsTableSpreadsheetSettings = Readonly<{
   paste: boolean;
   fill: boolean;
   undo: boolean;
+  /** The flow binding that saves a pasted, filled or undone batch; paste, fill and undo need it. */
+  eventId?: string;
   statusBarFields: readonly string[];
   statusBarOperations: readonly RecordsTableStatusBarOperation[];
 }>;
@@ -122,6 +125,15 @@ const featureSettings = {
         kind: "boolean",
         value: false,
       },
+    },
+    {
+      kind: "text",
+      key: "event_id",
+      label: "Event identity",
+      help: "The action that saves a pasted, filled or undone batch; it is set when the workflow for a batch is added",
+      required: false,
+      minLength: 1,
+      maxLength: 60,
     },
     {
       kind: "list",
@@ -245,6 +257,7 @@ export const recordsTableSpreadsheetFeature: RecordsTableFeatureDefinition<
   settings: featureSettings,
   refusals: [featureRefusal],
   onBoard: "unsupported",
+  events: { batch_edit: {} },
   label: "Spreadsheet controls",
   description: "Select a range, find values and total a range within the loaded page",
   read: (group) =>
@@ -257,6 +270,9 @@ export const recordsTableSpreadsheetFeature: RecordsTableFeatureDefinition<
           paste: requiredBoolean(group["paste"], "paste"),
           fill: requiredBoolean(group["fill"], "fill"),
           undo: requiredBoolean(group["undo"], "undo"),
+          ...(optionalText(group["event_id"], "event_id") === undefined
+            ? {}
+            : { eventId: optionalText(group["event_id"], "event_id")! }),
           statusBarFields: requiredFieldList(group["status_bar_fields"], "status_bar_fields"),
           statusBarOperations: requiredItems(
             group["status_bar_operations"],
@@ -278,8 +294,8 @@ export const recordsTableSpreadsheetFeature: RecordsTableFeatureDefinition<
     );
     const batchEditable =
       state.rangeSelect && projectedEditableFields(features.inlineEdit, context).length > 0;
-    const pasteUsable = batchEditable && state.paste;
-    const fillUsable = batchEditable && state.fill;
+    const pasteUsable = batchEditable && state.paste && state.eventId !== undefined;
+    const fillUsable = batchEditable && state.fill && state.eventId !== undefined;
     const undoUsable = (pasteUsable || fillUsable) && state.undo;
     return {
       rangeSelect: state.rangeSelect,
@@ -287,6 +303,7 @@ export const recordsTableSpreadsheetFeature: RecordsTableFeatureDefinition<
       ...(pasteUsable ? { paste: true as const } : {}),
       ...(fillUsable ? { fill: true as const } : {}),
       ...(undoUsable ? { undo: true as const } : {}),
+      ...(pasteUsable || fillUsable ? { eventId: state.eventId } : {}),
       ...(state.rangeSelect && statusBarFields.length > 0 && state.statusBarOperations.length > 0
         ? { statusBar: { fields: statusBarFields, operations: state.statusBarOperations } }
         : {}),
@@ -318,6 +335,11 @@ export const recordsTableSpreadsheetFeature: RecordsTableFeatureDefinition<
       return featureNotPossible(featureRefusal, "Undo needs Paste or Fill");
     if ((state.paste || state.fill) && !state.rangeSelect)
       return featureNotPossible(featureRefusal, "Paste and fill need Range selection turned on.");
+    if ((state.paste || state.fill) && state.eventId === undefined)
+      return featureNotPossible(
+        featureRefusal,
+        "Add the flow that saves a pasted or filled batch.",
+      );
     const { statusBarFields: fields, statusBarOperations: operations } = state;
     if (fields.length === 0 && operations.length === 0) return featureAvailable;
     if (!state.rangeSelect)

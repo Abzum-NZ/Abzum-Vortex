@@ -28,6 +28,7 @@ import {
 
 export {
   recordsTableBulkActionRecordLimit,
+  recordsTableBulkRequestMaximum,
   type RecordsTableBulkActionContract,
 } from "./bulk-actions";
 import {
