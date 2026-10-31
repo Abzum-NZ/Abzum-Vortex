@@ -1,4 +1,4 @@
-import type { JsonValue } from "@vortex/platform/schema";
+import { isRecord, type JsonValue } from "@vortex/platform/schema";
 import type { FlowDispatchResult, FlowRuntimeState } from "../flow-runtime/flow-runtime";
 import type { FlowConfirmAnswer, FlowConfirmIntent } from "../flow-runtime/intents";
 import type { FieldOption } from "../controls/form-context";
@@ -29,6 +29,7 @@ type PageAgentToolName =
   | "list_options"
   | "click"
   | "open_row"
+  | "row_action"
   | "edit_cell"
   | "select_rows"
   | "bulk_action";
@@ -129,6 +130,19 @@ export function pageAgentTools(kinds: PageAgentToolKinds): readonly PageAgentToo
             record: text("The row's record id from read_page."),
           },
           ["grid", "record"],
+        ),
+      },
+      {
+        name: "row_action",
+        description:
+          "Runs one of a row's actions (for example Delete), as its row command does; read_page lists each row's actions. A delete waits for the person to confirm it on the page.",
+        inputSchema: schema(
+          {
+            grid: text("The grid, by its id from read_page."),
+            record: text("The row's record id."),
+            action: text("The row action, by its key from read_page."),
+          },
+          ["grid", "record", "action"],
         ),
       },
       {
@@ -282,6 +296,7 @@ const readPage = (state: FlowRuntimeState): ToolAnswer => ({
     label: grid.label,
     columns: grid.columns(),
     rows: grid.rows(),
+    rowActions: grid.rowActions(),
     bulkActions: grid.bulkActions(),
     opensRows: grid.open !== undefined,
   })),
@@ -367,6 +382,23 @@ export async function runPageAgentTool(
       if (record === undefined || !grid.rows().some((row) => sameId(row.record, record)))
         return refused("not_on_page");
       return gesture(page, [grid.id], () => open(record), signal);
+    }
+    case "row_action": {
+      const action = stringOf(input, "action");
+      if (record === undefined || action === undefined) return refused("not_on_page");
+      let answer: unknown;
+      const outcome = await gesture(
+        page,
+        [grid.id],
+        () => {
+          answer = grid.act(record, action);
+          return answer;
+        },
+        signal,
+      );
+      return isRecord(answer) && typeof answer.refused === "string"
+        ? refused(answer.refused)
+        : outcome;
     }
     case "edit_cell": {
       const field = stringOf(input, "field");

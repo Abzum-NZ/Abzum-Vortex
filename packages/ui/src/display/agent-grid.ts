@@ -30,6 +30,16 @@ const editable = (state: GridState, row: DisplayRow, field: string): boolean =>
   row.capabilities.actions.includes("update") &&
   row.capabilities.changeableFieldIds.some((fieldId) => same(fieldId, field));
 
+/** The row actions the server decided this viewer may run on the row as it is drawn. */
+const eligibleActions = (state: GridState, row: DisplayRow): readonly string[] => {
+  const projection = state.features?.rowActions;
+  if (projection === undefined || row.revision === undefined) return [];
+  const decided = projection.availability.find(
+    (item) => item.recordId === row.recordId && item.revision === row.revision,
+  );
+  return (decided?.actions ?? []).filter((item) => item.eligible).map((item) => item.action);
+};
+
 const editResult = (answer: unknown): AgentGridEditResult => {
   if (typeof answer === "object" && answer !== null && "kind" in answer) {
     if (answer.kind === "saved") return { kind: "saved" };
@@ -60,6 +70,7 @@ export function useAgentGrid(placementId: string, label: string, state: GridStat
             record: row.recordId,
             cells: row.cells as Readonly<Record<string, JsonValue>>,
             selected: current.current.selectedRecordIds.includes(row.recordId),
+            actions: eligibleActions(current.current, row),
           })),
         columns: () =>
           current.current.columns.map((column) => ({
@@ -77,6 +88,24 @@ export function useAgentGrid(placementId: string, label: string, state: GridStat
               }))
             : [],
         open: opensRows ? (record) => current.current.activateRow?.(record) : undefined,
+        rowActions: () =>
+          current.current.events?.row_action === undefined
+            ? []
+            : (current.current.features?.rowActions?.actions ?? []).map((action) => ({
+                action: action.eventId,
+                label: action.label,
+              })),
+        act: (record, action) => {
+          const grid = current.current;
+          const row = grid.rows.find((candidate) => same(candidate.recordId, record));
+          const handler = grid.events?.row_action;
+          if (row?.revision === undefined || handler === undefined)
+            return { refused: "not_on_page" };
+          if (!eligibleActions(grid, row).includes(action)) return { refused: "not_permitted" };
+          return Promise.resolve(
+            handler({ event: "row_action", eventId: action, recordId: row.recordId, revision: row.revision }),
+          );
+        },
         edit: async (record, field, value) => {
           const grid = current.current;
           const row = grid.rows.find((candidate) => same(candidate.recordId, record));

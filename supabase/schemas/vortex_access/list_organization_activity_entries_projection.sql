@@ -149,8 +149,11 @@ begin
       'revision', 1,
       'occurred_at', entry.occurred_at,
       'actor_kind', case entry.actor_kind
-        when 'organization_account' then case when entry.agent_channel = 'webmcp'
-          then 'Agent on behalf of person' else 'Person' end
+        when 'organization_account' then case
+          when entry.source = 'system' then 'Back end on behalf of person'
+          when entry.agent_channel = 'webmcp' or entry.source = 'webmcp'
+            then 'Agent on behalf of person'
+          else 'Person' end
         when 'identity' then 'Platform operator'
         when 'system' then 'System'
         when 'public_session' then 'Public visitor'

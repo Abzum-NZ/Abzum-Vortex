@@ -23,6 +23,8 @@ type AgentGridRow = Readonly<{
   record: string;
   cells: Readonly<Record<string, JsonValue>>;
   selected: boolean;
+  /** The row actions the person may run on this row now, by action key. */
+  actions: readonly string[];
 }>;
 
 export type AgentGridEditResult =
@@ -38,6 +40,10 @@ export type AgentGrid = Readonly<{
   columns: () => readonly Readonly<{ field: string; label: string; editable: boolean }>[];
   /** The bulk actions offered over the selection now. */
   bulkActions: () => readonly Readonly<{ action: string; label: string }>[];
+  /** The actions the grid offers on its rows (each row says which it may run now). */
+  rowActions: () => readonly Readonly<{ action: string; label: string }>[];
+  /** Runs one row action the way its row command does; a refusal names why. */
+  act: (record: string, action: string) => Readonly<{ refused: string }> | Promise<unknown>;
   /** Opens a row the way a click on it does; undefined when the grid opens no rows. */
   open: ((record: string) => unknown) | undefined;
   /** Commits one cell the way the person's in-place edit does. */
