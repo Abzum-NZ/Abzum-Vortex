@@ -255,6 +255,7 @@ export function useStudioReleasesTab({
   const requestPublication = async (
     mode: "prepare" | "publish",
     suppliedNote?: string,
+    adopted = false,
   ): Promise<StudioPublicationOutcome> => {
     if (draft.isHeld("publication") || latest.current.blockedReason() !== undefined)
       return { kind: "not_started", reason: "busy" };
@@ -315,6 +316,28 @@ export function useStudioReleasesTab({
           result.kind === "available"
             ? prepareDefinitionPublicationResultSchema.safeParse(result.preparation)
             : null;
+        // An unchanged draft whose release the platform has superseded is saved once more by the
+        // platform, in the same request; the same source on a later revision is adopted as the
+        // saved draft, and the check runs again on it.
+        if (
+          !adopted &&
+          parsed?.success &&
+          parsed.data.confirmation.rootId === snapshot.rootId &&
+          parsed.data.confirmation.expectedDraftRevision > snapshot.draftRevision &&
+          parsed.data.confirmation.sourceFingerprint === snapshot.sourceFingerprint
+        ) {
+          // This request is finished: release it so the check on the adopted draft can start.
+          request.current = null;
+          latest.current.hold("publication", false);
+          const reloaded = await latest.current.reload();
+          if (!reloaded) {
+            setProblem("The saved draft could not be reloaded. Close this window and try again.");
+            return { kind: "unverified" };
+          }
+          // Let the reloaded draft render before the check reads the workspace again.
+          await new Promise((resolve) => setTimeout(resolve));
+          return requestPublication("prepare", suppliedNote, true);
+        }
         if (
           parsed?.success &&
           parsed.data.confirmation.rootId === snapshot.rootId &&
