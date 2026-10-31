@@ -232,7 +232,7 @@ export function useApplyDispatch({
               text:
                 recovery === undefined
                   ? (presentation?.message ?? reason.text)
-                  : `${presentation?.message ?? reason.text} ${reason.text}`,
+                  : `${presentation?.message ?? reason.text} ${resultNotice.text}`,
             };
           }
           // Signing in again, or verifying, comes back to this page and record, where the person can retry.

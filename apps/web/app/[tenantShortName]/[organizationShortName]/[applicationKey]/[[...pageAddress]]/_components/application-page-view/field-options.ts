@@ -72,10 +72,6 @@ export const requestFieldOptions = async (
     reload();
     throw new Error("FIELD_OPTIONS_RELEASE_CHANGED");
   }
-  if (isRecord(body) && body.kind === "reload") {
-    reload();
-    throw new Error("FIELD_OPTIONS_RELEASE_CHANGED");
-  }
   if (!response.ok || !isRecord(body) || body.kind !== "completed")
     throw new Error(`FIELD_OPTIONS_UNAVAILABLE: ${response.status}`);
   const next =
