@@ -233,7 +233,7 @@ const projectRowDetail = async (request: RowDetailRequest): Promise<RowDetailRes
     projected.push({
       recordId: String(related.recordId),
       ...(link?.kind === "record_link" && link.href !== undefined ? { href: link.href } : {}),
-      fields: detail.values.fields,
+      fields: detail.values.sections.flatMap((section) => section.fields),
     });
   }
   const columns = fieldIds.map((fieldId) => ({

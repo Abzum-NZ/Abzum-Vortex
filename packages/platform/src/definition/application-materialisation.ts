@@ -393,8 +393,17 @@ const deriveFieldInputContract = (field: FieldInputSourceField): DerivedFieldInp
     case "whole_number":
       return { control: "number", settings: { integer: { kind: "boolean", value: true } } };
     case "decimal_number":
+      return { control: "number", settings: { group_digits: { kind: "boolean", value: true } } };
     case "money":
-      return { control: "number", settings: {} };
+      return {
+        control: "number",
+        settings: {
+          group_digits: { kind: "boolean", value: true },
+          ...(field.currency === undefined
+            ? {}
+            : { currency: { kind: "text", value: field.currency } }),
+        },
+      };
     case "yes_no":
       return { control: "boolean", settings: {} };
     case "date":

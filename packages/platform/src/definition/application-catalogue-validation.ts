@@ -453,8 +453,12 @@ export function validateApplicationSourceCatalogue(
       }
     } else if (detail !== undefined) {
       checkFields(
-        "detail_fields",
-        detail.fields.map((entry) => entry.field),
+        "sections",
+        [
+          ...detail.sections.flatMap((section) => section.fields.map((entry) => entry.field)),
+          ...detail.headerFields,
+          ...(detail.stageField === undefined ? [] : [detail.stageField]),
+        ],
         () => true,
         "invalid_value",
       );

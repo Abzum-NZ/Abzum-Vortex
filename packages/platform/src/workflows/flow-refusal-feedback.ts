@@ -68,18 +68,39 @@ export const flowRefusalFeedbackSentences: Readonly<Record<FlowRefusalFeedbackCo
 };
 
 /**
- * Definition-authored guidance for one refusal and a page to open within the current organization.
- * Without a message the refusal keeps its platform sentence.
+ * Definition-authored guidance for one refusal and, when the flow offers one, a page to open within
+ * the current organization. A message alone replaces the refusal's sentence and keeps the
+ * platform's own action; a link always names its label and destination together. Without a message
+ * the refusal keeps its platform sentence.
  */
 const authoredRefusalGuidanceSchema = z
   .object({
     message: z.string().min(1).max(300).optional(),
-    link_label: z.string().min(1).max(100),
+    link_label: z.string().min(1).max(100).optional(),
     destination: z
       .object({ application_key: namespacedKeySchema, page_key: builderKeySchema })
-      .strict(),
+      .strict()
+      .optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if ((value.link_label === undefined) !== (value.destination === undefined))
+      context.addIssue({
+        code: "custom",
+        path: [value.link_label === undefined ? "link_label" : "destination"],
+        message: "Authored refusal guidance names both a link label and its destination",
+      });
+    if (
+      value.message === undefined &&
+      value.link_label === undefined &&
+      value.destination === undefined
+    )
+      context.addIssue({
+        code: "custom",
+        path: [],
+        message: "Authored refusal guidance names a message, a link, or both",
+      });
+  });
 
 /** A protected operation call's `refusal_feedback`: the authored guidance for each refusal code. */
 export const flowRefusalGuidanceByCodeSchema = z.partialRecord(

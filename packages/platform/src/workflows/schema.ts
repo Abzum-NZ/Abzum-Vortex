@@ -3,6 +3,7 @@ export * from "./flow-limits";
 export * from "./flow-set-based";
 export * from "./flow-effects";
 export * from "./flow-confirmation-limits";
+export * from "./flow-confirm-details";
 export * from "./flow-values";
 export * from "./flow-warning-notice";
 export * from "./form-answer";

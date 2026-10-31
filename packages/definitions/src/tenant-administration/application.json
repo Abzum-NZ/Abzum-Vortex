@@ -1042,26 +1042,32 @@
                     "heading_source": "field",
                     "heading_field": "vortex.system_directory:organization.display_name",
                     "title": "Organisation details",
-                    "detail_fields": [
+                    "sections": [
                       {
-                        "field": "vortex.system_directory:organization.display_name",
-                        "label": "Organisation"
-                      },
-                      {
-                        "field": "vortex.system_directory:organization.short_name",
-                        "label": "Short name"
-                      },
-                      {
-                        "field": "vortex.system_directory:organization.state",
-                        "label": "State"
-                      },
-                      {
-                        "field": "vortex.system_directory:organization.state_changed_at",
-                        "label": "State changed"
-                      },
-                      {
-                        "field": "vortex.system_directory:organization.created_at",
-                        "label": "Created"
+                        "key": "details",
+                        "title": "Details",
+                        "fields": [
+                          {
+                            "field": "vortex.system_directory:organization.display_name",
+                            "label": "Organisation"
+                          },
+                          {
+                            "field": "vortex.system_directory:organization.short_name",
+                            "label": "Short name"
+                          },
+                          {
+                            "field": "vortex.system_directory:organization.state",
+                            "label": "State"
+                          },
+                          {
+                            "field": "vortex.system_directory:organization.state_changed_at",
+                            "label": "State changed"
+                          },
+                          {
+                            "field": "vortex.system_directory:organization.created_at",
+                            "label": "Created"
+                          }
+                        ]
                       }
                     ],
                     "vortex": {
@@ -1249,26 +1255,32 @@
                     "id": "tenant_administrator_detail",
                     "heading_source": "title",
                     "title": "Tenant administrator details",
-                    "detail_fields": [
+                    "sections": [
                       {
-                        "field": "vortex.system_directory:tenant_administrator.identity_id",
-                        "label": "Identity"
-                      },
-                      {
-                        "field": "vortex.system_directory:tenant_administrator.capability_keys",
-                        "label": "Capabilities"
-                      },
-                      {
-                        "field": "vortex.system_directory:tenant_administrator.starts_at",
-                        "label": "Starts"
-                      },
-                      {
-                        "field": "vortex.system_directory:tenant_administrator.expires_at",
-                        "label": "Expires"
-                      },
-                      {
-                        "field": "vortex.system_directory:tenant_administrator.state",
-                        "label": "State"
+                        "key": "details",
+                        "title": "Details",
+                        "fields": [
+                          {
+                            "field": "vortex.system_directory:tenant_administrator.identity_id",
+                            "label": "Identity"
+                          },
+                          {
+                            "field": "vortex.system_directory:tenant_administrator.capability_keys",
+                            "label": "Capabilities"
+                          },
+                          {
+                            "field": "vortex.system_directory:tenant_administrator.starts_at",
+                            "label": "Starts"
+                          },
+                          {
+                            "field": "vortex.system_directory:tenant_administrator.expires_at",
+                            "label": "Expires"
+                          },
+                          {
+                            "field": "vortex.system_directory:tenant_administrator.state",
+                            "label": "State"
+                          }
+                        ]
                       }
                     ],
                     "vortex": {

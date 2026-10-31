@@ -270,6 +270,13 @@ export type DisplayTableExportRun = z.output<typeof displayTableExportRunSchema>
 /** The parts of a table payload the server reads; the page runtime adds the ones below. */
 const tableReadShape = {
   kind: z.literal("table"),
+  /** The authored one-line purpose shown above the rows; absent when the block declares none. */
+  purpose: displayTextSchema.exactOptional(),
+  /**
+   * Present when the block offers adding a record from the list: the create form page the person
+   * opens. The page runtime builds the address from its own route and page key.
+   */
+  create: z.object({ pageKey: displayFieldKeySchema }).strict().readonly().exactOptional(),
   /** Declared sort fields readable on every record under this read's field policy. */
   sortableFields: z.array(displayFieldKeySchema).readonly(),
   columns: z.array(displayColumnSchema).readonly(),

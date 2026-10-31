@@ -63,6 +63,8 @@ export type FieldInputSourceField = Readonly<{
   textFormat?: string | undefined;
   displayTimeZone?: "person" | "organization" | "utc" | undefined;
   maximumSelections?: number | undefined;
+  /** A fixed money field's currency, so the money input shows it as a prefix. */
+  currency?: string | undefined;
   choices: readonly Readonly<{ key: string; label: string; parentValues?: readonly string[] }>[];
   /** The field of the same record type whose chosen value narrows this field's choices. */
   dependsOn?: Readonly<{ fieldKey: string; label: string }> | undefined;
@@ -153,6 +155,9 @@ export const fieldInputSourceField = (
       : {}),
     ...(type === "several_choices" && typeof settings.maximumSelections === "number"
       ? { maximumSelections: settings.maximumSelections }
+      : {}),
+    ...(type === "money" && typeof settings.currency === "string"
+      ? { currency: settings.currency }
       : {}),
     ...(type === "attachment"
       ? {

@@ -562,8 +562,9 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       "Asks the person to confirm before the flow continues, optionally listing what it covers and offering one opt-in.",
     runLocations: ["browser"],
     effect: "interface",
-    // `details` is a list of short lines shown under the message; `choice` labels one opt-in the
-    // person may tick with a yes, answered as `choice` (always no when no choice is offered).
+    // `details` is a list of short lines shown under the message, each one line of text with an
+    // optional one level of nested lines (`{text, lines}`); `choice` labels one opt-in the person
+    // may tick with a yes, answered as `choice` (always no when no choice is offered).
     properties: {
       title: optional("message_text"),
       message: required("message_text"),

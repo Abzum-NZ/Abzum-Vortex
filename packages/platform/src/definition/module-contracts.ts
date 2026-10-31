@@ -1,4 +1,3 @@
-import { definitionContractVersion } from "./application-contract-versions";
 import {
   flowFormulaSchema,
   flowFormulaUsesNow,

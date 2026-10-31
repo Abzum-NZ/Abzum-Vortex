@@ -1,5 +1,5 @@
 import "server-only";
-import { definitionContractVersion } from "./application-contract-versions";
+import type { definitionContractVersion } from "./application-contract-versions";
 
 import type {
   BlockId,

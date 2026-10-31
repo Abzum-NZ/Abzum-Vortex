@@ -194,6 +194,47 @@ begin
 end
 $function$;
 
+-- Every stored Record detail placement that declared a flat `detail_fields` list now declares one
+-- section card holding the same fields in the same order.
+create function pg_temp.contract_43_detail_sections(p_value jsonb)
+returns jsonb
+language plpgsql
+immutable
+set search_path = ''
+as $function$
+declare
+  result jsonb;
+  member record;
+  converted jsonb;
+begin
+  case pg_catalog.jsonb_typeof(p_value)
+    when 'object' then
+      result := '{}'::jsonb;
+      for member in select item.key, item.value from pg_catalog.jsonb_each(p_value) as item(key, value) loop
+        if member.key = 'detail_fields'
+          and pg_catalog.jsonb_typeof(member.value) = 'array'
+          and not (p_value ? 'sections') then
+          result := result || pg_catalog.jsonb_build_object('sections', pg_catalog.jsonb_build_array(
+            pg_catalog.jsonb_build_object(
+              'key', 'details', 'title', 'Details',
+              'fields', pg_temp.contract_43_detail_sections(member.value))));
+        else
+          result := result || pg_catalog.jsonb_build_object(
+            member.key, pg_temp.contract_43_detail_sections(member.value));
+        end if;
+      end loop;
+      return result;
+    when 'array' then
+      return coalesce((
+        select pg_catalog.jsonb_agg(pg_temp.contract_43_detail_sections(item.value) order by item.ordinality)
+        from pg_catalog.jsonb_array_elements(p_value) with ordinality as item(value, ordinality)
+      ), '[]'::jsonb);
+    else
+      return p_value;
+  end case;
+end
+$function$;
+
 do $convert$
 declare
   draft record;
@@ -219,10 +260,11 @@ begin
     else
       body := pg_temp.contract_43_module(body);
     end if;
-    converted := pg_temp.contract_43_groups(
-      pg_catalog.jsonb_set(
-        pg_catalog.jsonb_set(draft.draft_source, '{body}', body),
-        '{source_contract_version}', '"4.3.0"'::jsonb));
+    converted := pg_temp.contract_43_detail_sections(
+      pg_temp.contract_43_groups(
+        pg_catalog.jsonb_set(
+          pg_catalog.jsonb_set(draft.draft_source, '{body}', body),
+          '{source_contract_version}', '"4.3.0"'::jsonb)));
     update vortex_definition.drafts d set
       draft_source = converted,
       source_contract_version = '4.3.0',
@@ -239,6 +281,7 @@ $convert$;
 
 drop function pg_temp.contract_43_module(jsonb);
 drop function pg_temp.contract_43_groups(jsonb);
+drop function pg_temp.contract_43_detail_sections(jsonb);
 drop function pg_temp.contract_43_fingerprint(jsonb);
 drop function pg_temp.contract_43_canonical_json(jsonb);
 

@@ -34,7 +34,6 @@ import type { FlowSegmentReceipt, SegmentExecution, StartFlowResult } from "../w
 import type { FlowWarningNotice } from "../workflows/flow-warning-notice";
 import type { RecordSaveServiceResult } from "../records/save-record";
 import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
-import type { QueryContinuationKey } from "../queries/continuation-token";
 import type { NamedActionFlowRunner } from "./flow-action-run";
 import type { NamedActionBatchResult } from "../records/action-record-port";
 import type { ExecuteNamedActionCommand } from "../records/named-actions";

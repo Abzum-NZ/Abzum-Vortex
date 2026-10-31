@@ -2343,34 +2343,40 @@
                     "heading_source": "field",
                     "heading_field": "vortex.system_directory:connection_instance.destination_key",
                     "title": "Connection details",
-                    "detail_fields": [
+                    "sections": [
                       {
-                        "field": "vortex.system_directory:connection_instance.destination_key",
-                        "label": "Destination"
-                      },
-                      {
-                        "field": "vortex.system_directory:connection_instance.connection_type_id",
-                        "label": "Connection type"
-                      },
-                      {
-                        "field": "vortex.system_directory:connection_instance.connection_type_version",
-                        "label": "Type version"
-                      },
-                      {
-                        "field": "vortex.system_directory:connection_instance.state",
-                        "label": "State"
-                      },
-                      {
-                        "field": "vortex.system_directory:connection_instance.last_health_outcome",
-                        "label": "Health"
-                      },
-                      {
-                        "field": "vortex.system_directory:connection_instance.secret_set",
-                        "label": "Secret set"
-                      },
-                      {
-                        "field": "vortex.system_directory:connection_instance.token_expires_at",
-                        "label": "Token expires"
+                        "key": "details",
+                        "title": "Details",
+                        "fields": [
+                          {
+                            "field": "vortex.system_directory:connection_instance.destination_key",
+                            "label": "Destination"
+                          },
+                          {
+                            "field": "vortex.system_directory:connection_instance.connection_type_id",
+                            "label": "Connection type"
+                          },
+                          {
+                            "field": "vortex.system_directory:connection_instance.connection_type_version",
+                            "label": "Type version"
+                          },
+                          {
+                            "field": "vortex.system_directory:connection_instance.state",
+                            "label": "State"
+                          },
+                          {
+                            "field": "vortex.system_directory:connection_instance.last_health_outcome",
+                            "label": "Health"
+                          },
+                          {
+                            "field": "vortex.system_directory:connection_instance.secret_set",
+                            "label": "Secret set"
+                          },
+                          {
+                            "field": "vortex.system_directory:connection_instance.token_expires_at",
+                            "label": "Token expires"
+                          }
+                        ]
                       }
                     ],
                     "vortex": {

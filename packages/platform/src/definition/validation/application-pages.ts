@@ -1134,7 +1134,9 @@ export function applicationPageRules(scope: ApplicationScope): void {
         (detail !== undefined &&
           !mapped(
             [
-              ...detail.fields.map((entry) => entry.field),
+              ...detail.sections.flatMap((section) => section.fields.map((entry) => entry.field)),
+              ...detail.headerFields,
+              ...(detail.stageField === undefined ? [] : [detail.stageField]),
               ...(detail.headingField === undefined ? [] : [detail.headingField]),
             ],
             selected,

@@ -122,6 +122,24 @@ export const optionalChoice = <Choice extends string>(
   allowed: readonly Choice[],
   path: string,
 ): Choice | undefined => (value === undefined ? undefined : requiredChoice(value, allowed, path));
+/** A page reference as its page key, whether the setting is authored or compiled. */
+export const optionalPage = (
+  value: ComponentSettingValue | undefined,
+  path: string,
+): string | undefined => {
+  if (value === undefined) return undefined;
+  if (value.kind !== "page_reference") return unreadable(path);
+  return "page" in value ? value.page : value.pageId;
+};
+/** A query reference as its key or identity, whether the setting is authored or compiled. */
+export const optionalQuery = (
+  value: ComponentSettingValue | undefined,
+  path: string,
+): string | undefined => {
+  if (value === undefined) return undefined;
+  if (value.kind !== "query_reference") return unreadable(path);
+  return "query" in value ? value.query : value.queryId;
+};
 
 /** Reads the `enabled` switch of one feature group; a group that does not declare it is unreadable. */
 export const featureEnabled = (group: SettingsRecord): boolean =>

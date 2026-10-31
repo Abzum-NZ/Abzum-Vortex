@@ -334,10 +334,16 @@ const pages = [
         heading_field: `${incidentRecordType}.incident_number`,
         title: "Incident",
         row_action_event_id: "row_action_operations_incident_detail_body",
-        detail_fields: incidentColumns.map(([field, label]) => ({
-          field: `${incidentRecordType}.${field}`,
-          label,
-        })),
+        sections: [
+          {
+            key: "details",
+            title: "Details",
+            fields: incidentColumns.map(([field, label]) => ({
+              field: `${incidentRecordType}.${field}`,
+              label,
+            })),
+          },
+        ],
       }),
       // Attach runs on the open incident as its subject; operators without the attach
       // permission never see the form, and the action refuses a resolved or closed incident and

@@ -29,7 +29,7 @@ import {
   type PublishedDefinitionHistory,
   type DefinitionResolutionSnapshot,
 } from "../definition-compilation-contracts";
-import { type ApplicationSourceDocument, type ModuleSourceDocument } from "../definition-source";
+import type { ApplicationSourceDocument, ModuleSourceDocument } from "../definition-source";
 import {
   storedDefinitionSourceSchema,
   exactDefinitionDependencySchema,

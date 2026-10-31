@@ -1,4 +1,4 @@
-import { definitionContractVersion } from "../definition/application-contract-versions";
+import type { definitionContractVersion } from "../definition/application-contract-versions";
 import type { JsonValue } from "../catalogue/common";
 import { organizationAccountIdSchema, timestampSchema } from "../catalogue/identifiers";
 import type {

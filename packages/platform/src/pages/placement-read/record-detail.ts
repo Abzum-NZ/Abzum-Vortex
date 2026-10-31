@@ -105,7 +105,7 @@ export const readSelectedDetail = async (
   const requestedFieldIds = [
     ...new Set(
       [
-        ...contract.fields.map((field) => field.field),
+        ...contract.sections.flatMap((section) => section.fields).map((field) => field.field),
         ...(contract.headingField === undefined ? [] : [contract.headingField]),
       ].map((field) => field.toLowerCase()),
     ),
@@ -191,7 +191,7 @@ export const readQueryDetail = async (
   }
   const fieldIds = [
     ...new Set([
-      ...detailContract.fields.map((field) => field.field),
+      ...detailContract.sections.flatMap((section) => section.fields).map((field) => field.field),
       ...(detailContract.headingField === undefined ? [] : [detailContract.headingField]),
     ]),
   ];

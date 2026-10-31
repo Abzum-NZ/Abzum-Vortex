@@ -1137,22 +1137,28 @@
                     "heading_source": "field",
                     "heading_field": "vortex.system_directory:person.display_name",
                     "title": "Person detail",
-                    "detail_fields": [
+                    "sections": [
                       {
-                        "field": "vortex.system_directory:person.display_name",
-                        "label": "Display name"
-                      },
-                      {
-                        "field": "vortex.system_directory:person.state",
-                        "label": "State"
-                      },
-                      {
-                        "field": "vortex.system_directory:person.language",
-                        "label": "Language"
-                      },
-                      {
-                        "field": "vortex.system_directory:person.time_zone",
-                        "label": "Time zone"
+                        "key": "details",
+                        "title": "Details",
+                        "fields": [
+                          {
+                            "field": "vortex.system_directory:person.display_name",
+                            "label": "Display name"
+                          },
+                          {
+                            "field": "vortex.system_directory:person.state",
+                            "label": "State"
+                          },
+                          {
+                            "field": "vortex.system_directory:person.language",
+                            "label": "Language"
+                          },
+                          {
+                            "field": "vortex.system_directory:person.time_zone",
+                            "label": "Time zone"
+                          }
+                        ]
                       }
                     ],
                     "vortex": {
@@ -3024,62 +3030,68 @@
                     "id": "iam_access_request_detail_body",
                     "heading_source": "field",
                     "heading_field": "vortex.iam.core:access_request.title",
-                    "detail_fields": [
+                    "sections": [
                       {
-                        "field": "vortex.iam.core:access_request.request_number",
-                        "label": "Request number"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.title",
-                        "label": "Title"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.request_type",
-                        "label": "Request type"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.state",
-                        "label": "State"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.beneficiary",
-                        "label": "Beneficiary"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.target_role_key",
-                        "label": "Target role"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.target_group_key",
-                        "label": "Target group"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.target_group",
-                        "label": "Target group record"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.application_context",
-                        "label": "Application context"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.reason",
-                        "label": "Reason"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.starts_on",
-                        "label": "Starts on"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.expires_on",
-                        "label": "Expires on"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.submitted_at",
-                        "label": "Submitted at"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.decided_at",
-                        "label": "Decided at"
+                        "key": "details",
+                        "title": "Details",
+                        "fields": [
+                          {
+                            "field": "vortex.iam.core:access_request.request_number",
+                            "label": "Request number"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.title",
+                            "label": "Title"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.request_type",
+                            "label": "Request type"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.state",
+                            "label": "State"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.beneficiary",
+                            "label": "Beneficiary"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.target_role_key",
+                            "label": "Target role"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.target_group_key",
+                            "label": "Target group"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.target_group",
+                            "label": "Target group record"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.application_context",
+                            "label": "Application context"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.reason",
+                            "label": "Reason"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.starts_on",
+                            "label": "Starts on"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.expires_on",
+                            "label": "Expires on"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.submitted_at",
+                            "label": "Submitted at"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.decided_at",
+                            "label": "Decided at"
+                          }
+                        ]
                       }
                     ],
                     "title": "Access request",

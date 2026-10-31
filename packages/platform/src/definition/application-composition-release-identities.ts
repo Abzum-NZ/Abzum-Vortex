@@ -53,14 +53,14 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     key: "platform.display.table",
     rendererKey: "platform.renderer.table",
     releaseVersion: "2.0.0",
-    contentFingerprint: "sha256:b2371d8be88dbb59c87a400152c9b430794ba137de13d62132192e334aecb1ed",
+    contentFingerprint: "sha256:0bf887918d673338d4868cfea42b5ff2dd01a66794cbdc9a9fc3f4f1c6916704",
   },
   RECORD_DETAIL_BLOCK_RELEASE: {
     blockId: "e2569df0-2f10-4b20-b41d-177b66cd136c",
     key: "platform.display.record_detail",
     rendererKey: "platform.renderer.record_detail",
     releaseVersion: "1.2.0",
-    contentFingerprint: "sha256:53971d0fa01a2f35f47c43198111704eb393699b29ce7a662e093746112bc638",
+    contentFingerprint: "sha256:5ae17299f723a50e16cd3b1665e578cc0a6f35e1c1b9349a2cfff89121818c07",
   },
   ATTACHMENT_INPUT_BLOCK_RELEASE: {
     blockId: "9cd96c38-95a1-4bd4-bfaa-0e20c4acb1b9",
@@ -88,7 +88,7 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     key: "platform.form.number_input",
     rendererKey: "platform.renderer.number_input",
     releaseVersion: "1.0.0",
-    contentFingerprint: "sha256:0c84c58ed3746022ab5791629eb438ea0ef2704b1de6ba5152d9506d325726c7",
+    contentFingerprint: "sha256:dc38ad6a15ca599ebc6745bef916f4bafab29e50cedd0b8fff1525c71da70117",
   },
   BOOLEAN_INPUT_BLOCK_RELEASE: {
     blockId: "e9418c36-3234-4806-a05a-0f259482238d",

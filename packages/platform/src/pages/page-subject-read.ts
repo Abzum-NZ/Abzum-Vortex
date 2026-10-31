@@ -35,7 +35,10 @@ export const pageSubjectFieldIds = (
     const settings = candidate as Parameters<typeof readRecordDetailContract>[0];
     if (vortex.queryId === undefined) {
       const detail = readRecordDetailContract(settings);
-      for (const field of detail?.fields ?? []) fields.add(field.field.toLowerCase());
+      for (const field of detail?.sections.flatMap((section) => section.fields) ?? [])
+        fields.add(field.field.toLowerCase());
+      for (const field of detail?.headerFields ?? []) fields.add(field.toLowerCase());
+      if (detail?.stageField !== undefined) fields.add(detail.stageField.toLowerCase());
       if (detail?.headingField !== undefined) fields.add(detail.headingField.toLowerCase());
       const field = candidate.field;
       if (isRecord(field) && field.kind === "field_reference" && typeof field.fieldId === "string")
