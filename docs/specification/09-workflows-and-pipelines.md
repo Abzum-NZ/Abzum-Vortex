@@ -6,32 +6,32 @@ This chapter specifies the product's workflow engine and process pipelines.
 
 ## Purpose and authority
 
-A **back-end flow** is a flow that runs apart from the request that started it: a child started by a **Run on back end** (`backend.run`) step, or an after-save subscriber started by a committed record `Event` ([Amendment A](../build-plan/architecture-decisions-2026-09-25.md#amendment-a-29-october-2026--studio-flows-one-compiled-plan-page-steps-in-the-page-a-back-end-adapter)). There is no separate workflow language, engine or catalogue: every flow uses the one [flow language](appendices/frontend-rule-designer.md#one-flow-language), the one task registry, the one compiler and the one validator. A **process pipeline** describes the business stages through which a record moves; its transitions and entry and exit effects are tasks inside flows.
+A **back-end flow** is a flow that runs apart from the request that started it: a child started by a **Run on back end** (`backend.run`) step, or an after-save subscriber started by a committed record `Event` ([Amendment A](../build-plan/architecture-decisions.md)). There is no separate workflow language, engine or catalogue: every flow uses the one [flow language](appendices/frontend-rule-designer.md#one-flow-language), the one task registry, the one compiler and the one validator. A **process pipeline** describes the business stages through which a record moves; its transitions and entry and exit effects are tasks inside flows.
 
-A back-end flow runs through a **back-end adapter**. Contract 4 has one adapter, `simulated`: it runs the flow's compiled plan with the same interpreter on the Vortex server, as the initiator, in its own transaction after the calling segment commits. `await` mode returns the child's outputs to the caller; `start` mode returns a run reference and runs after the reply. A Kestra adapter (and later n8n) plugs in behind the same interface with no change to flows or to Studio; its requirements are kept in [The Kestra adapter](#the-kestra-adapter-back-end-epic) below. None of the back-end chain runs today: publication refuses `backend.run` and `Event` subscribers by name until the simulated adapter ships.
+A back-end flow runs through a **back-end adapter**. One adapter exists, `simulated`: it runs the flow's compiled plan with the same interpreter on the Vortex server, as the initiator, in its own transaction after the calling segment commits. `await` mode returns the child's outputs to the caller; `start` mode returns a run reference and runs after the reply.
 
 Vortex remains authoritative for identities, tenant and organisation context, permissions, definitions, records, files, connections, and every application side effect. A back-end adapter receives no organisation database credential and cannot grant access or write organisation tables directly.
 
 ## Triggers
 
-A flow's `triggers[]` holds only its automatic starts. Contract 4 has exactly two:
+A flow's `triggers[]` holds only its automatic starts. The contract has exactly two:
 
 | Trigger | Starts | Execution kind |
 | --- | --- | --- |
 | `BeforeSave` | Inside the save transaction of a named record type, before commit, for every writer, in the order of the record type's ordered rule list | `transaction` |
-| `Event` | After a committed record change: one of the seven standard [events](08-forms-actions-rules-and-events.md#events) or a declared business event. An after-save subscriber runs once on the back-end adapter and may declare "run after" another subscriber | `background` |
+| `Event` | After a committed record change: one of the eight standard [events](08-forms-actions-rules-and-events.md#events) or a declared business event. An after-save subscriber runs once on the back-end adapter and may declare "run after" another subscriber | `background` |
 
-Schedules and verified incoming messages return with the back-end epic.
 
-Every other start is a **binding**, not a trigger: a component placement, navigation item, form commit, interface operation, agent tool or parent flow holds the exact flow id plus a typed input map. Pages never hold flow logic of their own.
+
+Every other start is a **binding**, not a trigger: a component placement, navigation item, form commit, interface operation, page-model tool or parent flow holds the exact flow id plus a typed input map. Pages never hold flow logic of their own.
 
 ### The record a flow runs for
 
-A flow reads the record it runs for in one way: `{{ trigger.record.<field> }}`. A `BeforeSave` flow's record is the record being saved (with `{{ trigger.previous.<field> }}` for its values before the change), an `Event` flow's is the record the event is about, and a named action's is its subject. An `interactive` flow bound to a record (a button on a record page, a board's card move) names the input that carries that record in its `recordInput`: a required `record_reference` input of exactly one record type. When the flow starts, and again whenever it resumes after a form or confirmation, the platform reads that record afresh under the initiator's current access, with field-level read policy applied: a field the initiator may not read reads as empty, and a record the initiator may not read refuses the start. The values are typed by their fields and never stored with a paused run. Only the started flow reads its record; a flow it runs through Run flow reads none. There is no separate step that loads the current record. Studio's condition and value controls offer the record's fields with their types and, for a choice, its options.
+A flow reads the record it runs for in one way: `{{ trigger.record.<field> }}`. A `BeforeSave` flow's record is the record being saved (with `{{ trigger.previous.<field> }}` for its values before the change), an `Event` flow's is the record the event is about, and a named action's is its subject. An `interactive` flow bound to a record (a button on a record page, a board's card move) names the input that carries that record in its `recordInput`: a required `record_reference` input of exactly one record type. When the flow starts, and again for each server segment that reads it, the platform reads that record afresh under the initiator's current access, with field-level read policy applied: a field the initiator may not read reads as empty, and a record the initiator may not read refuses the start. The values are typed by their fields. Only the started flow reads its record; a flow it runs through Run flow reads none. There is no separate step that loads the current record. Studio's condition and value controls offer the record's fields with their types and, for a choice, its options.
 
 A **frontend flow** is a flow a person or agent starts through a binding (`interactive`, or `transaction` for a named action); a **back-end flow** runs through the back-end adapter (`background`). There is one start path ([#979](https://github.com/Abzum-NZ/Abzum-Vortex/issues/979)):
 
-1. Every button, menu command, record gesture, agent tool call and interface operation starts a frontend flow through its binding. A form, interface operation or agent tool binds a flow entry point — a generated one-task flow by default — and never binds a lower-level operation directly. An interface read operation or a query tool names a declared query, which the Query engine runs directly under the caller's access; a data flow is used only when a builder adds transform or write steps.
+1. Every button, menu command, record gesture, page-model tool call and interface operation starts a frontend flow through its binding. A form, interface operation or agent tool binds a flow entry point — a generated one-task flow by default — and never binds a lower-level operation directly. An interface read operation or a query tool names a declared query, which the Query engine runs directly under the caller's access; a data flow is used only when a builder adds transform or write steps.
 2. A frontend flow starts a back-end flow only through a **Run on back end** (`backend.run`) step with declared typed inputs. The step ends a server segment; the child runs after that segment commits. A `transaction` flow runs inside a record save and cannot contain `backend.run`, and the target flow holds no page steps.
 3. Back-end flows are otherwise started only by a committed record `Event`, and may call one another only with typed inputs and outputs through a **Run flow** or **Run on back end** step.
 
@@ -39,13 +39,13 @@ A flow a person or agent starts is an **action**; a lower-level protected change
 
 Each trigger declares its typed inputs, a nullable entry condition and its duplicate-protection rule. Publication matches every declared input to its exact owning contract and refuses missing, extra or invented inputs. An `Event` trigger names both the event and its record type; publication proves that the event exists, belongs to that record type, and carries every declared record-field input the flow reads. A condition may reference only fields on the actual event or binding subject record.
 
-The [Frontend Rule Designer](appendices/frontend-rule-designer.md) authors triggers, bindings and tasks in the same designer for every execution kind. A Show form step may collect private draft answers between server segments; [#68](https://github.com/Abzum-NZ/Abzum-Vortex/issues/68) and [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250) own that private draft and binding runtime. No database transaction stays open while awaiting a person. Each server segment of an interactive flow is one request and one transaction, so earlier committed segments remain committed when a later one fails.
+The [Frontend Rule Designer](appendices/frontend-rule-designer.md) authors triggers, bindings and tasks in the same designer for every execution kind. A Show form step may collect private draft answers between server segments; the draft is private to the person, form, subject, application and organisation. No database transaction stays open while awaiting a person. Each server segment of an interactive flow is one request and one transaction, so earlier committed segments remain committed when a later one fails.
 
-Flow inputs map explicitly to declared trigger inputs through the versioned binding extension in [#250](https://github.com/Abzum-NZ/Abzum-Vortex/issues/250), completed by [#76](https://github.com/Abzum-NZ/Abzum-Vortex/issues/76), [#77](https://github.com/Abzum-NZ/Abzum-Vortex/issues/77) and [#78](https://github.com/Abzum-NZ/Abzum-Vortex/issues/78). This is a validated snapshot, never a shared mutable environment or a wholesale browser-variable payload. No unrelated interface or child-flow payload is silently widened.
+Flow inputs map explicitly to declared trigger inputs through the versioned binding extension. This is a validated snapshot, never a shared mutable environment or a wholesale browser-variable payload. No unrelated interface or child-flow payload is silently widened.
 
 ### Interactive and save hand-off
 
-Publication and the runtime compile each flow once per release into a plan of page segments, server segments and back-end steps; the plan is cached with the installation's runtime bundle and never stored. In the page and in WebMCP, page steps run in the browser and each server segment is one gated request: Vortex reloads the current active installation and the exact published binding, checks the caller's current permission, subject revision and the segment's path guard, validates only the declared typed inputs, and runs the segment's server steps in one transaction. Values a segment returns and the page sends to a later segment are caller inputs, re-validated by type and access. The browser plan holds only page steps and segment stubs (id, input and output types, labels), never operation inputs, server-step properties or secrets. An external API or MCP client is driven by the server, which returns page steps as intents with a continuation. Today the server drives every channel; the page driver arrives with the page runner.
+Publication and the runtime compile each flow once per release into a plan of page segments, server segments and back-end steps; the plan is cached with the installation's runtime bundle and never stored. In the page and in WebMCP, page steps run in the browser and each server segment is one gated request: Vortex reloads the current active installation and the exact published binding, checks the caller's current permission, subject revision and the segment's path guard, validates only the declared typed inputs, and runs the segment's server steps in one transaction. Values a segment returns and the page sends to a later segment are caller inputs, re-validated by type and access. The browser plan holds only page steps and segment stubs (id, input and output types, labels), never operation inputs, server-step properties or secrets.
 
 ```mermaid
 sequenceDiagram
@@ -68,11 +68,11 @@ The idempotency key of a server segment is (gesture or form-instance id, segment
 
 ## Task types in the shared registry
 
-Every flow uses the same task types. There is no second frontend, background or workflow catalogue: every task type is registered once in the one task registry ([`flow-task-registry.ts`](../../packages/platform/src/workflows/flow-task-registry.ts), [#983](https://github.com/Abzum-NZ/Abzum-Vortex/issues/983)) with its version, its typed properties, outputs and outcomes, its default policy, its effect class (**pure**, **read**, **change** or **interface**) and its `runs` flags: where an implementation exists (**page**, **server**, **backend**). The page and server implementation maps are typed from the flags, so a flag without an implementation, or the reverse, fails the type check. Studio's palette offers a step only where it runs, and publication refuses a step placed where it has no implementation, naming the step. A step whose runtime is a later batch is refused at publication by name until it lands.
+Every flow uses the same task types. There is no second frontend, background or workflow catalogue: every task type is registered once in the one task registry ([`flow-task-registry.ts`](../../packages/platform/src/workflows/flow-task-registry.ts), [#983](https://github.com/Abzum-NZ/Abzum-Vortex/issues/983)) with its version, its typed properties, outputs and outcomes, its default policy, its effect class (**pure**, **read**, **change** or **interface**) and its `runs` flags: where an implementation exists (**page**, **server**, **backend**). The page and server implementation maps are typed from the flags, so a flag without an implementation, or the reverse, fails the type check. Studio's palette offers a step only where it runs, and publication refuses a step placed where it has no implementation, naming the step. 
 
 Control tasks give the ordered task list its structure: **If**, **Switch**, **For each**, **Sequential**, **Run flow** and **Stop** run wherever their children run. A **For each** over record steps inside a server segment compiles to one set-based change.
 
-The registered task types of contract 4:
+The registered task types:
 
 | Task group | Registered task types | Runs | Effect class |
 | --- | --- | --- | --- |
@@ -85,9 +85,9 @@ The registered task types of contract 4:
 | Events | Announce event | Server and save transaction (the record being saved only) | Change |
 | Protected operation | Call protected operation, whose operation descriptor declares its own effect | Server | Change, as declared by the called operation |
 
-Run background flow, Call connection, Acknowledge message, Export to file, Attach file, Move file and the durable-only Parallel, Wait until and Wait for a person are not in contract 4; each returns with its runner in a later epic.
+Run background flow, Call connection, Acknowledge message, Export to file, Attach file, Move file, Parallel, Wait until and Wait for a person are not registered task types: the registry holds no task that runs nowhere.
 
-Every record task calls one protected operation, **apply record changes**: `record.save`, `record.create`, `record.setFields`, `record.link`, `record.delete`, `record.restore` and `record.changes`. One call is one transaction that enforces the access decision for each touched record, field permissions, pipeline transitions and gates, action-only fields, revision checks, `BeforeSave` flows, and read-time and stored computed values. A flow cannot split or bypass this operation: record changes that must succeed or fail together are one `record.changes` task.
+Every record task calls one protected operation, **apply record changes**: `record.save`, `record.create`, `record.set_fields`, `record.link`, `record.delete`, `record.restore` and `record.changes`. One call is one transaction that enforces the access decision for each touched record, field permissions, pipeline transitions and gates, action-only fields, revision checks, `BeforeSave` flows, and read-time and stored computed values. A flow cannot split or bypass this operation: record changes that must succeed or fail together are one `record.changes` task.
 
 Values passed between tasks are explicit. A value is a literal, a declared trigger value, a named output of a named earlier task, the current record, the current actor, or the current time. A task-output reference may add a path of at most five named fields, for example `{{ outputs.form.values.label }}`. Publication requires the selected output to be declared as JSON and every selected name to appear in its declared member shape; an unshaped JSON output cannot be read by field path. The selected member takes the type of its declaration. The runtime reads only own object properties, refuses a missing member, a wrong-type member or a non-object intermediate value, and never indexes arrays or follows inherited properties. Publication resolves readable task and field keys to permanent identifiers, rejects values outside the trigger contract, rejects missing or incompatible outputs, and rejects a reference to a task that cannot precede the consumer. A plain JSON object is a literal and is never interpreted as a hidden task reference.
 
@@ -101,7 +101,7 @@ The unary `record_id` formula takes a declared JSON value containing exactly the
 
 A **Run flow** task invokes another flow, which keeps its own declared execution kind, with a typed input map and typed outputs; a **Run on back end** step runs a flow through the back-end adapter with a typed input map. The parent's task is the binding: it names the exact child flow, and publication checks its input map against the child's declared inputs, refuses cycles between flows and enforces the Run flow depth limit. A child never inherits undeclared context, and no payload is widened by convention.
 
-Authored definitions may omit repetitive execution policy. The versioned source contract then supplies the documented conservative defaults before publication: a five-minute timeout, three exponential retry attempts from one to thirty seconds, the task type as its activity key, and no payload in activity. Tasks that create or change records, relationships or back-end runs default to required duplicate protection; read, wait, branch, format and stop tasks default to not applicable. Canonical published tasks always contain the resolved policy explicitly, and publication refuses a policy that is unsafe for the task type.
+Authored definitions may omit repetitive execution policy. The versioned source contract then supplies the documented conservative defaults before publication: a timeout within the one-to-ten-second server limit, a duplicate-protection requirement and a redaction choice. Tasks that create or change records, relationships or back-end runs default to required duplicate protection; read, branch, format and stop tasks default to not applicable. Canonical published tasks always contain the resolved policy explicitly, and publication refuses a policy that is unsafe for the task type.
 
 The registry excludes arbitrary SQL, JavaScript, shell commands, database credentials, unrestricted expressions, arbitrary network addresses, unrestricted file-system operations, and vendor-specific direct table manipulation. New task types require a platform release, security review, contracts, tests, and documentation; builders cannot upload executable code.
 
@@ -115,7 +115,6 @@ The registry excludes arbitrary SQL, JavaScript, shell commands, database creden
 - Cancelling stops future work but does not pretend that completed external effects were undone.
 - Compensation is a separate, explicit path.
 - Access is checked when the flow starts and again immediately before every protected read or side effect. Removing access therefore affects the next protected task request.
-- A recipient flow cannot select, persist, export, or send live records shared from another organisation. A grant-approved action executes synchronously at the source.
 
 ## Process pipelines
 
@@ -144,87 +143,9 @@ The record's current stage is Vortex business data. Stage movement is a named [a
 - A run started under one application version remains explainable after a newer version is published.
 - A move between two pipeline stages that is not a declared transition is refused, and a move into a gated stage runs its owning action with that action's permission, even if a flow tries to save the stage directly.
 
-## The Kestra adapter (back-end epic)
+## Published operation references
 
-Nothing in this section runs today; the dead durable chain was deleted ([#3752](https://github.com/Abzum-NZ/Abzum-Vortex/issues/3752)). These are the requirements a Kestra adapter must meet when the back-end epic adds it behind the back-end adapter interface on contract 4, together with the [compiler rules in Decision 1](../build-plan/architecture-decisions-2026-09-25.md#keeping-customer-text-out-of-kestras-template-engine). Durable-only acceptance: publishing registers no Kestra flow; repeated registration converges; a start accepted before an upgrade stays pinned to its revision; Vortex shows Kestra's current run state and labels it unavailable during an outage.
-
-### Authority
-
-[Kestra](https://kestra.io/docs) is authoritative for whether a durable flow run or task is queued, running, waiting, completed, cancelled, or failed. Vortex asks Kestra for the current state whenever a person views a run. Vortex may keep a clearly labelled last-known snapshot for correlation, search, activity, and outage diagnosis, but never presents that snapshot as current when Kestra is unavailable.
-
-```mermaid
-sequenceDiagram
-    participant V as Vortex
-    participant K as Kestra
-    participant P as Protected platform operation
-    participant U as Person
-    V->>K: Start published durable flow with correlation and security reference
-    K->>P: Signed, versioned step request
-    P->>P: Recheck current access and duplicate key
-    P-->>K: Completed, waiting, retryable, or refused
-    U->>V: View flow run
-    V->>K: Read current execution state
-    K-->>V: Authoritative state and step position
-    V-->>U: Current state plus Vortex activity links
-```
-
-### Ownership and versioning
-
-Durable flows are contained in an [application version](03-composition-and-publication.md#definition-ownership-and-versions). Publishing an application produces the immutable flow definition and deterministic input from which its Kestra flow can be generated. Publication is inert: it neither registers a flow nor changes a live installation. An explicit application install or upgrade registers and activates the exact published application and flow versions used by new runs. A run remains pinned to the application and flow version from which it started unless an authorised, tested migration moves it.
-
-#### Installation registration and activation
-
-One private Workflow Kestra adapter deploys every installed application's durable flows into the shared Kestra instance without redeploying the engine. The adapter accepts only an immutable candidate prepared from the exact published application release and its resolved dependencies. It never accepts browser-supplied YAML, namespaces, flow identifiers, credentials, or claims that registration succeeded.
-
-```mermaid
-sequenceDiagram
-    participant Install as Application install or upgrade
-    participant V as Vortex
-    participant K as Shared Kestra
-    Install->>V: Authorise exact immutable candidate
-    V->>K: Prepare versioned flows inactive
-    K-->>V: Verify every identity and fingerprint
-    V->>V: Activate installation revision
-    V->>K: Enable current schedules and disable superseded schedules
-    Note over V,K: Starts and schedules recheck current activation
-```
-
-The generated namespace and flow identity are scoped by permanent environment, organisation, installation, application, and flow identifiers plus exact revisions. Labels and mutable keys are diagnostic only and never select or authorise a flow. A schedule is registered disabled or otherwise unable to start application work while its candidate is being prepared.
-
-Preparation registers every durable flow version and verifies its exact generated fingerprint before Vortex activates the installation revision. The activation is one Vortex transaction after external preparation; Vortex never claims that its database and Kestra share a transaction. An interactive start request and every scheduled wake-up must therefore verify that the exact installation revision is still current and active before Vortex durably accepts a new start. Once accepted, that intent is pinned to the exact application and flow revision like an in-flight run: a normal upgrade neither retargets nor drops it. Post-commit dispatch rechecks current permission and withdrawal state and verifies that the accepted exact revision remains retained; it does not require that revision to remain the installation's current pointer. A prepared but unactivated flow cannot pass initial acceptance.
-
-Registration is duplicate-safe. Repeating the same installation, flow version, and fingerprint converges on the same prepared flow; the same identity with different content is refused. A failed first registration leaves the installation not ready. A failed upgrade leaves the existing active revision unchanged. Only after every new flow is verified does Vortex switch the active revision, so partial external registration cannot create a partly upgraded live application.
-
-After activation, an idempotent reconciliation enables the current revision's prepared schedules and disables superseded schedules. Failed or interrupted synchronisation remains visible and retryable; it cannot leave an enabled old schedule authorised to start new work, because Vortex still checks the active revision. Vortex distinguishes an active installation from pending schedule synchronisation and does not claim that a schedule is running until its enablement is verified.
-
-Older flow versions and their private mappings remain available for accepted starts and runs already in flight. Explicit rollback activates a previously verified exact application revision through the same checks; it does not mutate history. Uninstalling or withdrawing the installation first blocks new acceptance in Vortex, including scheduled starts. An accepted start that has not begun execution is explicitly refused or cancelled with a retained status rather than discarded; an already running execution follows the published cancellation policy. Execution, mapping, intent, and activity history remain available to explain each outcome. Later external deactivation and retention cleanup are reconciled operations, not the authority for whether a new start may be accepted.
-
-The public Vortex execution reference stores the Vortex run identifier, flow and application versions, tenant and organisation references, trigger, start actor, duplicate-protection key, human-input links, safe activity links, and a non-authoritative last-known state snapshot. The Workflow Kestra adapter privately maps that run to Kestra's execution identifier and namespace; provider-specific fields are not part of the core application contract. Kestra stores the executable state, current step, retries, waits, and final execution outcome.
-
-### Protected operation contract
-
-Each Kestra request carries the execution, task, attempt, tenant, organisation, application and flow versions, named operation, typed input, issue and expiry times, and duplicate-protection key in a signed envelope. Vortex verifies the caller, current account or system authority, access version, definition version, and operation before acting.
-
-Vortex records an application side effect and its duplicate key before acknowledging it. Repeating the same request returns the existing result without applying the side effect again. The response is completed, already completed, waiting, retryable failure, or permanent refusal. Kestra uses that response to advance its authoritative execution state.
-
-The published release retains one canonical operation-reference set in each protected `application_flow_node` entry. The entry keys the source task ID within its exact flow; the durable compiler attaches that set to the corresponding retained callback node. A Query node has exactly one reference: the query's owning Application or Module and its query ID. A Record node's references identify its statically bounded record types by owner and record-type ID: the task's `record_type`, both record types at a `record.link` relationship's ends, or the declared `recordTypeIds` of a record-reference or change-list input. Each set is deduplicated and canonically sorted. A node without a static type bound retains an empty set and is marked not grantable; it may run as the person, but cannot receive a run-as grant. There is no first-type fallback or platform-wide apply-record reference. Existing `operation.call` identity and release pinning remain unchanged.
-
-The durable compiler accepts this map as trusted input from the exact published release and carries each set into the retained node binding. It does not infer an owner from an ID or task label. A run-as grant is pinned to the exact flow, node, actor, and complete current reference set; a changed set after republication invalidates the grant.
-
-### Asking a person
-
-The durable **Wait for a person** task pauses for one published form response with assignee rules, due time and timeout path. Only an authorised responder can submit it. Kestra waits for the protected completion signal and remains authoritative for the overall run state.
-
-An application that needs a task list or approval queue defines ordinary task, request and decision record types and the pages that display them. Those records can trigger or complete the generic human-input step, but they cannot grant permissions or activate cross-organisation sharing. Grant activation uses the protected [grant-consent boundary](04-access-and-permissions.md#protected-grant-consent).
-
-The [IAM application](appendices/iam-application.md) uses this same human-input mechanism for role requests and approval history. Its durable flow may apply an approved role change only through a verified published protected-operation binding and current Access checks. A mutable request status is never authority; changing a proposal invalidates earlier approval, and losing approver authority before application refuses the grant. IAM introduces no special flow task or separate approval engine.
-
-### Failure and display behaviour
-
-- If Kestra is unavailable, Vortex shows “flow status temporarily unavailable,” the last successful refresh time, and any safe local activity. It does not infer completion.
-- A permanent refusal stops that path with a stable reason; it never broadens permissions to finish the run.
-- Operators can correlate one Kestra execution with Vortex activity and side effects without treating the duplicate local snapshot as authority.
-- Reconciliation reports missing executions, mismatched identifiers, and callbacks with no matching published definition; it does not silently rewrite business data.
+The published release retains one canonical operation-reference set in each protected `application_flow_node` entry. The entry keys the source step ID within its exact flow. A Query step has exactly one reference: the query's owning Application or Module and its query ID. A Record step's references identify its statically bounded record types by owner and record-type ID: the step's `record_type`, both record types at a `record.link` relationship's ends, or the declared `recordTypeIds` of a record-reference or change-list input. Each set is deduplicated and canonically sorted. A step without a static type bound retains an empty set. There is no first-type fallback or platform-wide apply-record reference. Existing `operation.call` identity and release pinning remain unchanged.
 
 ## External outcome uncertainty
 

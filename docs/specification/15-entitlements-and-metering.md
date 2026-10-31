@@ -1,6 +1,6 @@
 # 15. Entitlements and metering
 
-[Previous: Activity, privacy and retention](14-activity-privacy-and-retention.md) · [Specification index](README.md) · Next: [Copying, sharing, import and export](16-copying-sharing-import-export.md)
+[Previous: Activity, privacy and retention](14-activity-privacy-and-retention.md) · [Specification index](README.md) · Next: [Copying, import and export](16-copying-import-export.md)
 
 ## Purpose and boundary
 
@@ -28,7 +28,7 @@ The requesting service supplies the tenant, optional organisation attribution, n
 
 The decision contains the policy revision used. A service never infers entitlement from a commercial record, payment-provider message or banner. Security and record access are separate checks: an entitlement can refuse an operation but can never grant data access.
 
-Every protected flow task that consumes a limited capability performs the same current entitlement check and metering composition as a direct call to its owning service. Running as a specified account or system actor, or holding execution delegation, never copies, widens or bypasses the tenant entitlement; sequential tasks meter only their own committed operations.
+Every protected flow task that consumes a limited capability performs the same current entitlement check and metering composition as a direct call to its owning service. A flow step never widens or bypasses the tenant entitlement; sequential steps meter only their own committed operations.
 
 ```mermaid
 sequenceDiagram
@@ -55,35 +55,9 @@ Metering is generic evidence. It may support capacity planning, fair-use control
 
 Corrections are explicit later events or protected reconciliation operations; history is not edited in place. The exact reservation strategy for scarce concurrent resources is delivered with the entitlement service and must preserve the same allow/refuse boundary.
 
-## Administration and presentation
+## Decided, not built
 
-Entitlement limits have two levels of authority (owner decision, 27 September 2026):
-
-- **Ceiling.** The configured system operator defines and publishes entitlement policies and retains the context-free tenant-ceiling bootstrap command. An active named Vortex super administrator may set, re-pin and revoke a tenant ceiling as a verified person after recent primary authentication. The selected active organisation account is only the account-bound request anchor; the target is independently verified as an active tenant and need not have an active organisation.
-- **Allocation.** `platform.tenant.capability_limits.allocate` authorizes setting, lowering and revoking a tenant or organisation allocation. Tenant administrators receive `platform.tenant.capability_limits.read` by default, but allocation requires the separate allocation permission. The `Tenant limits manager` tenant-role preset contains both permissions, and a tenant administrator may also be given the allocation permission without that preset. An allocation above the tenant's current ceiling is refused. A named Vortex super administrator inherits both tenant permissions through the existing tenant-capability decision.
-- **Read.** A tenant administrator with `platform.tenant.capability_limits.read` can view tenant limits. Organisation administrators can see the effective limit for their own organisation through its organisation-scoped request, but cannot assign or change any limit, including their own.
-- **Resolution.** The effective limit for a tenant or organisation is the lowest of the platform ceiling, the tenant allocation and, for an organisation, its own allocation. The decision reports which of these applied and the ceiling itself. An allocation counts only while a ceiling is in force, so an allocation, including one made before the ceiling was lowered, can never raise a limit.
-
-```mermaid
-flowchart TB
-    PO[Platform operator] -->|defines policy, bootstraps ceiling| CEIL[Tenant ceiling]
-    SA[Vortex super administrator] -->|sets, re-pins or revokes| CEIL
-    SA -->|inherits tenant allocation permission| TALLOC[Tenant allocation]
-    SA -->|inherits tenant allocation permission| OALLOC[Organisation allocation]
-    TLM[Tenant limits manager] -->|allocates or lowers, never above the ceiling| TALLOC
-    TLM -->|allocates or lowers, never above the ceiling| OALLOC
-    TA[Tenant administrator] -. reads .-> MIN
-    OA[Organisation administrator] -. reads own organisation limit .-> MIN
-    CEIL --> MIN[Effective limit = lowest applicable]
-    TALLOC --> MIN
-    OALLOC --> MIN
-```
-
-Every policy publication, ceiling change and allocation change is a protected operation with activity evidence: an accepted, duplicate-protected receipt and an append-only change record of the actor, scope, quantity and time. An organisation allocation is also written to that organisation's [activity history](14-activity-privacy-and-retention.md). Entitlement limits never grant data access.
-
-Entitlement policy administration is a protected platform operation with activity evidence. Its user interface is a platform-supplied administration application, with platform-owned protected-operation bindings as for [system applications](07-applications-pages-and-themes.md#system-applications), built from ordinary [application primitives](07-applications-pages-and-themes.md), not a special hardcoded screen.
-
-A reusable banner block may show application-provided notices. Emergency service or security status shown before applications load is derived from the narrow [operational status](19-operations-backup-and-recovery.md) boundary and a safe message catalogue; it is not a persistent announcement business domain.
+Entitlement ceilings are decided, not built. The decided design has two levels of authority: the configured system operator defines and publishes entitlement policies and retains the context-free tenant-ceiling bootstrap, and an active named Vortex super administrator may set, re-pin or revoke a tenant ceiling after recent primary authentication. `platform.tenant.capability_limits.allocate` authorises setting, lowering and revoking a tenant or organisation allocation; `platform.tenant.capability_limits.read` authorises reading it. The effective limit is the lowest of the platform ceiling, the tenant allocation and the organisation allocation, and an allocation can never raise a limit above its ceiling. Policy publication, ceiling changes and allocation changes are protected operations with activity evidence. No entitlement service, ceiling operation or allocation permission is wired into a live consuming operation yet.
 
 ## Explicit exclusions
 
@@ -94,7 +68,3 @@ A reusable banner block may show application-provided notices. Emergency service
 - Tenant, organisation or application announcement records.
 
 These exclusions do not prevent Abzum or a customer from building those capabilities as ordinary Vortex applications.
-
-## Delivery order
-
-The headless [entitlement decision and reservation service #118](https://github.com/Abzum-NZ/Abzum-Vortex/issues/118) is needed before the first limited consuming operation. It can follow Access without waiting for page or workflow engines. Initial operational limits come from explicit versioned deployment policy, never a silent unlimited fallback. Phase 12 completes metering/reconciliation and ordinary administration integration.

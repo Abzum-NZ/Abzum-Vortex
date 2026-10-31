@@ -42,7 +42,7 @@ sequenceDiagram
     Server->>Record: Validate values and relationships
     Record->>Record: Apply immediate rules and calculations
     Record->>Record: Write record and activity
-    Record->>Event: Write event outbox and logged queue message in the same transaction
+    Record->>Event: Write the event outbox in the same transaction
     Note over Record,Event: Commit all writes together or roll back all writes
     Record-->>Person: Return saved record and new concurrency number
 ```
@@ -65,16 +65,15 @@ The save transaction performs these steps in order:
 6. Run eligible immediate [rules](08-forms-actions-rules-and-events.md).
 7. Run the owning reference-number, calculation and total generators in their declared dependency order. Validate the complete final candidate, including required fields and accumulated rule requirements, choices, currency/precision/row settings, live reference and file eligibility, uniqueness and application bindings. Refuse all writes if final validation fails.
 8. Save the record, affected parent totals and revisions, relationship changes, reference number, and matching [activity entries](14-activity-privacy-and-retention.md) in one database transaction. Include both old and new parents when a relationship moves; [#48](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48) owns calculation and total integration. A failed calculation or total refuses the operation without partial changes.
-9. Write [events](08-forms-actions-rules-and-events.md#delivery-guarantees) to the outbox and logged queue in that same transaction. Dispatch and external work begin only after commit.
+9. Write [events](08-forms-actions-rules-and-events.md#delivery-guarantees) to the event outbox in that same transaction. Dispatch and external work begin only after commit.
 10. Return the fields the person may read and the new concurrency number.
 
 Initial typed decoding and final field-policy validation are two internal stages
 of the same Record value handling, not different validators or caller-selectable
 validation modes. Only final changed references, choices and files need the
 corresponding live checks; intermediate values overwritten by later rules are
-not saved. A Require-field node accumulates a check until the final candidate
-exists, including any generated value. Explicit Refuse still stops immediately.
-See the [save integration issue](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47).
+not saved. A rule requirement accumulates a check until the final candidate
+exists, including any generated value. A refusal still stops immediately.
 
 This sequence defines one protected Record operation, not a transaction around an entire [flow](appendices/frontend-rule-designer.md). A configured flow may run several queries and changes in order. Each protected change opens its own short owning-service transaction and either commits or refuses atomically; a later task failure does not roll back an earlier committed operation. Collecting all inputs before one save remains an available authoring pattern when one atomic Record operation is intended, but it is not mandatory for every journey. [#47](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47) delivered the base ordinary-human create/update implementation over active installed definitions with [hosted Testing acceptance](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47#issuecomment-5656036501). Subsequent #48 stages integrated calculations and relationship totals into the same protected operation. Immediate Rules, deadline-driven recalculation, named-action execution and broader relationships retain their existing owners in the [save plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/47).
 
@@ -105,60 +104,12 @@ scope-construction and ACL/RLS requirements, not an invitation to add another
 system-context mechanism.
 
 A stale Access version is refused by the composed relationship-total save
-before it can reach the locked parent route; no Record, Activity, Event, queue
-or receipt effect is created. This does not add System or specified-account
-execution capability or attribution.
-
-This currently describes ordinary-human attribution only. The Record save
-service does not yet invoke a private recalculation as a System or
-specified-account actor, and it must not relabel a human context as system or
-invent system attribution. A distinct trusted execution identity and its
-attribution rules must be designed before any such caller is introduced; they
-are not implicit in the current human save path.
-
-The affected private seams are kept explicit: base preparation and save are
-[`prepare_base_record_save`](../../supabase/migrations/20260913120000_enable_same_record_calculation_saves.sql#L117-L317)
-and [`save_base_record`](../../supabase/migrations/20260913115000_base_protected_record_save.sql#L376-L1008);
-the active installation is resolved by
-[`read_current_active_installation`](../../supabase/migrations/20260911090000_resolve_reachable_module_dependencies.sql#L944-L1066);
-the transaction context is stored and read through
-[`request_contexts`](../../supabase/migrations/20260911063404_request_context_transaction_store.sql#L6-L74)
-and scope accessors that read the context established once by the owner-only
-transaction store, whose initializer refuses replacement:
-[`organization_id`](../../supabase/migrations/20260903115546_database_scope_request_role.sql#L334-L342)
-and [`application_root_id`](../../supabase/migrations/20260903115546_database_scope_request_role.sql#L344-L352);
-and generated record tables enforce their policy at
-[`record_storage_provisioning`](../../supabase/migrations/20260908122641_record_storage_provisioning.sql#L638-L663).
-Relationship-total preparation, closure and application remain in
-[`20260914013000_transactional_relationship_totals.sql`](../../supabase/migrations/20260914013000_transactional_relationship_totals.sql#L11-L818),
-while the private Event append retains the human-context boundary in
-[`20260913060000_first_private_transactional_event_append.sql`](../../supabase/migrations/20260913060000_first_private_transactional_event_append.sql#L232-L262).
-Activity append is the one
-[`append_record_activity_internal`](../../supabase/schemas/vortex_record/append_record_activity_internal.sql);
-the private total catalogue, snapshot, closure and parent application are at
-[`20260914013000_transactional_relationship_totals.sql`](../../supabase/migrations/20260914013000_transactional_relationship_totals.sql#L11-L738);
-and the two organization-runtime-settings readers are
-[`read_current_organization_runtime_settings_internal`](../../supabase/migrations/20260913110000_organization_runtime_settings.sql#L349-L382)
-and [`read_current_organization_runtime_settings_for_application`](../../supabase/migrations/20260913110000_organization_runtime_settings.sql#L384-L445).
-
-The present Event `organizationAccountId` UUID, Record receipts, and generated
-attribution all assume an account identity. A time-based caller therefore needs
-a deliberately defined trusted identity and compatible attribution before it
-can exist. This is a prerequisite for [#48](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48),
-not a reason to invent a System context in an ordinary-human save.
+before it can reach the locked parent route; no Record, Activity, Event or
+receipt effect is created.
 
 ## Record-change command
 
-One command describes every record write, so one engine can own validation,
-ordered mutation, announced Events, one receipt and all-or-nothing commit. The
-command is `recordChangeCommandV2Schema` in the
-[Record contracts](../../packages/platform/src/records/records.ts); its result is
-`recordChangeResultV2Schema` and its single receipt is
-`recordChangeReceiptSchema`. It is the request to the one protected "apply
-record changes" operation of
-[Decision 2](../build-plan/architecture-decisions-2026-09-25.md#decision-2--saving-is-a-flow-around-one-atomic-operation).
-The engine itself is built after Phase 6 (#1060-#1065); until it lands, this
-contract and the retired-writer list below govern new work.
+One command describes every record write, so one engine owns validation, ordered mutation, announced Events, one receipt and all-or-nothing commit. The command is `recordChangeCommandSchema` in the [Record contracts](../../packages/platform/src/records/records.ts); its result is `recordChangeResultSchema` and its receipt is `recordChangeReceiptSchema`. It is the request to the one protected apply-record-changes operation (`vortex_record.apply_record_changes`), the only record writer.
 
 The command carries a contract version, command identifier, subject record-type
 identifier, and - only for an existing record - the subject record identifier
@@ -177,7 +128,7 @@ named action is a `transaction` flow started through its binding; the
 binding's installed action reference and typed inputs start that flow, and the
 flow's record changes compile into one command. Flow record tasks map onto
 mutations as follows: `record.save` is `create_subject` or `set_fields`,
-`record.create` is `create_subject` or `create_related`, `record.setFields` is
+`record.create` is `create_subject` or `create_related`, `record.set_fields` is
 `set_fields`, `record.link` is `change_relationship`, `record.delete` is
 `delete_subject`, `record.restore` is `restore_subject`, and `record.changes`
 is an ordered list of several mutations.
@@ -196,26 +147,25 @@ widen a write by adding a mutation or an Event key.
 
 The ordered mutation list is closed:
 
-| Mutation | Change | Today's equivalent |
-| --- | --- | --- |
-| `create_subject` | Create the subject from submitted values, optionally into one selected membership Group | Ordinary create |
-| `set_fields` | Set or clear submitted fields, including a link field's record-link value | Ordinary update and named-action `set_field` |
-| `change_relationship` | Link or unlink one relationship edge to a named target | The relationship primitive behind link values and relationship copies |
-| `create_related` | Create one dependent record from submitted values | Named-action `create_record` |
-| `copy_relationships` | Copy the subject's named relationships to another record of the same type | Named-action `copy_relationships` |
-| `delete_subject` | Soft-delete the subject through the protected lifecycle primitive | Delete and named-action `soft_delete_subject` |
-| `restore_subject` | Restore the subject through the protected lifecycle primitive | Restore |
-| `transfer_ownership` | Transfer the subject to one Organisation account or Group | Ownership transfer |
+| Mutation | Change |
+| --- | --- |
+| `create_subject` | Create the subject from submitted values, optionally into one selected membership Group |
+| `set_fields` | Set or clear submitted fields, including a link field's record-link value |
+| `change_relationship` | Link or unlink one relationship edge to a named target |
+| `create_related` | Create one dependent record from submitted values |
+| `copy_relationships` | Copy the subject's named relationships to another record of the same type |
+| `delete_subject` | Soft-delete the subject through the protected lifecycle primitive |
+| `restore_subject` | Restore the subject through the protected lifecycle primitive |
+| `transfer_ownership` | Transfer the subject to one Organisation account or Group |
 
 A null `set_fields` value clears a field. `create_subject`, `delete_subject`,
 `restore_subject` and `transfer_ownership` each occur at most once. A deleting
 command may only copy relationships and announce Events, because a subject
-write or creation could move the revision the delete names; this is today's
-named-action rule. Restore and ownership transfer each run alone. A
+write or creation could move the revision the delete names. Restore and ownership transfer each run alone. A
 relationship copy targets another record of the subject's type and names each
 relationship once. Offboarding issues one command per owned record. Announced
 Event keys travel in their own ordered list and are written, with the
-mutations, into the same outbox and logged queue inside the one transaction.
+mutations, into the event outbox inside the one transaction.
 
 ### Result and receipt
 
@@ -228,58 +178,11 @@ command identifier with the same command replays the stored result and receipt
 without writing again. A conflict, refusal or correction returns no receipt; a
 correction names the mutation whose value needs correcting.
 
-### Writer variants to be retired
+### The one writer
 
-Retired by #1063: `save_named_action_set_announce`, `save_named_action_set_fields_internal` and
-`save_named_action_effects_with_relationship_totals`. A named action is a `transaction` flow whose
-record tasks the flow runner collects and applies through `apply_record_changes` (through its
-request-role entry `apply_action_record_changes`, which takes one to 200 subjects of one action in a single call and applies them in record identity order, the first refusal rolling all back), keeping the `named_action` receipt, the action's own field rules, Activity and Events.
+`vortex_record.apply_record_changes` is the only record writer. Every record task ends in it: the default Save, named actions, deletes and restores, settings records and offboarding transfers. It writes through the private primitives `create_record_internal`, `change_record`, `change_record_relationship_internal`, `write_relationship_value_internal` and `soft_delete_record_recursive_internal`, and uses one receipt table `vortex_record.command_receipts(command_id, organization_id, tenant_id, actor_id, command_kind, result, created_at)`, keyed by the client-generated command id and replayed only for the organisation, tenant, actor and kind that stored it, and one activity appender `append_record_activity_internal`.
 
-The one engine retires the overlapping entry points, cloned writers, receipt
-ledgers and helpers below. No new record writer variant or named-action effect
-kind may be added until the engine lands.
-
-Base save:
-
-- `prepare_base_record_save`, `save_base_record`.
-- `prepare_relationship_total_save`, `save_base_record_with_relationship_totals`.
-
-Named-action writers:
-
-- `prepare_named_action_set_announce`, `prepare_named_action_relationship_totals`, `prepare_named_action_command_totals`.
-- `change_record_by_named_action_internal`, `insert_named_action_record_internal`, `write_named_action_relationship_value_internal`. `apply_record_changes` still calls each of them for a named action's own authority, so they are retired with the action-scoped facts loaders, not before.
-- `apply_named_action_create_patch_internal`, `apply_named_action_copy_patch_internal`, `apply_named_action_relationship_copies_internal`, `apply_named_action_delete_patch_internal`.
-
-Lifecycle and ownership entry points:
-
-- Delete enters `apply_record_changes` through `apply_lifecycle_record_changes`
-  twice in one request transaction: null mutations claim the receipt and apply
-  the permission-checked cascade; calculated parent mutations finalise totals,
-  Activity, Events and the receipt. Every non-final outcome rolls back the whole
-  transaction. The writer publishes one notice per deleted application-contained
-  record after finalisation; preparation and replay publish none.
-  `prepare_protected_record_delete` and `soft_delete_record_internal` are removed.
-- `prepare_protected_record_restore`, `finalize_protected_record_restore`.
-- `transfer_record_ownership`, `transfer_record_ownership_for_offboarding_internal`, `transfer_offboarding_owned_record`, `transfer_offboarding_active_owned_record`.
-
-Receipt ledgers and helpers:
-
-- `vortex_record.command_receipts(command_id, organization_id, tenant_id, actor_id, command_kind, result, created_at)`, the one receipt table for record saves and ownership transfers, named actions, deletes and restores (command kinds `record_save`, `named_action`, `record_delete`, `record_restore`), keyed by the client-generated command id (identity and access administration commands, including capability reservations, share the table under their own command kinds) and replaying its stored result only for the organisation, tenant, actor and command kind that stored it (any other combination is an identity conflict), with the helpers `claim_command_receipt_internal`, `complete_command_receipt_internal`, `release_command_receipt_internal`, `lock_command_receipt_internal` and `command_receipt_exists_internal`.
-- `append_record_activity_internal`, the one activity appender for saves, named actions, lifecycle changes and ownership transfers.
-
-The engine keeps and builds on the private primitives `create_record_internal`,
-`change_record`, `change_record_relationship_internal`,
-`write_relationship_value_internal` and `soft_delete_record_recursive_internal`.
-`vortex_record.record_lifecycle_command_effects`, the identity-only journal of
-what a delete or restore traversal changed, is the only trusted source of a
-command's deleted set; it moves under the one receipt rather than being
-dropped. The generated-value writer `apply_relationship_total_parent_internal`,
-which applies derived parent values after a change, is not a command writer.
-Deadline-passed values are evaluated at read time, so no writer stores or
-refreshes deadline due metadata. The
-identity and access administration commands keep their own command kinds in the same
-table (claimed and completed through `claim_scoped_command_receipt_internal` and
-`complete_scoped_command_receipt_internal`) and remain outside this command.
+Two maintenance writers do different jobs and are not record changes: `apply_derived_field_backfill` stores the totals and stored calculations for existing records when a definition adds a derived field, under the record's revision check, moving the revision and recording no Activity or Event; the preview copy and reconcile operations store and reconcile Studio preview data. Deadline-passed values are evaluated at read time, so no writer stores or refreshes deadline due metadata.
 
 ## Concurrent changes
 
@@ -354,7 +257,7 @@ Revoking or expiring a grant removes the recipient's ability to query shared rec
 
 ### Collaborative access
 
-The grant lists each allowed action and readable or changeable field. If it permits a comment, attachment, or field update, that operation follows the same [save sequence](#save-sequence), validation, file checks, activity rules, and source-organisation retention as an owner operation. The recipient cannot create relationships to its own organisation's records, change ownership, delete, restore, administer permissions, or re-share. Export is possible only through the separately approved [shared export](16-copying-sharing-import-export.md#record-export), not as a record mutation.
+The grant lists each allowed action and readable or changeable field. If it permits a comment, attachment, or field update, that operation follows the same [save sequence](#save-sequence), validation, file checks, activity rules, and source-organisation retention as an owner operation. The recipient cannot create relationships to its own organisation's records, change ownership, delete, restore, administer permissions, or re-share. Export is possible only through the separately approved [shared export](16-copying-import-export.md#record-export), not as a record mutation.
 
 For the CRM and Service Desk fixture, CRM receives a limited presentation of a Service Desk case rather than the complete case. The grant may allow CRM collaborators to change only `status` and `priority` and to run the shareable public-comment action. Internal notes, attachments, service-level calculations, ownership, deletion, restoration, and sharing administration remain unavailable. Every permitted change saves against the source Service Desk case and is immediately visible in both applications; no summary copy is created.
 

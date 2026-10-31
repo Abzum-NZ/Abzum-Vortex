@@ -4,7 +4,7 @@
 
 ## One access decision
 
-The current model is [Roles, Groups and privileged role activation](appendices/groups-and-privileged-access.md). Groups collect organisation accounts; roles define permissions. Eligibility for a PIM-protected role grants no use until that account completes its required activation. The same central decision enforces both ordinary and privileged access.
+The current model is [Roles and Groups](appendices/groups-and-privileged-access.md). Groups collect organisation accounts; roles define permissions. Eligibility for a PIM-protected role grants no use until that account completes its required activation. The same central decision enforces both ordinary and privileged access.
 
 Every protected operation asks one question: **May this person perform this action on this thing in this organisation?**
 
@@ -12,7 +12,7 @@ Every protected operation asks one question: **May this person perform this acti
 flowchart LR
     REQ[Request] --> ID[Confirm identity, session and organisation account]
     ID --> PERM[Check organisation and application permissions]
-    PERM --> SCOPE[Check record visibility, ownership and sharing]
+    PERM --> SCOPE[Check record visibility and ownership]
     SCOPE --> FIELD[Check field and action restrictions]
     FIELD --> RESULT{Allowed?}
     RESULT -- Yes --> RUN[Perform operation]
@@ -25,7 +25,7 @@ The decision receives:
 - The requested action.
 - The target definition, record, field, file, workflow, connection, or administration function.
 - The current [application](07-applications-pages-and-themes.md), when the operation occurs inside an application.
-- Record ownership, group, explicit sharing, and lifecycle state when a [record](06-records-and-lifecycle.md) is involved.
+- Record ownership, group and lifecycle state when a [record](06-records-and-lifecycle.md) is involved.
 
 The result is either **allowed** or **refused**, with a stable reason code suitable for [activity history](14-activity-privacy-and-retention.md). An error, missing value, unknown permission, or unavailable access service produces **refused**.
 
@@ -38,7 +38,7 @@ The same decision is enforced through coordinated database and server boundaries
 
 The database decision function and declared permission vocabulary define canonical access meaning. The server library preserves that meaning when mapping non-row operations to their protected targets. A TypeScript helper does not replace the PostgreSQL row boundary; both implement the [functional access requirements](20-quality-and-acceptance.md#functional-quality).
 
-An ordinary protected operation consumes the already validated, transaction-bound [organisation request context](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27); it does not select a different identity or account. A published flow fixes `runAs` for the whole flow. Person-started flows use the initiating person; background flows and flows started by Schedule or IncomingMessage declare an exact specified organisation account or registered System actor only through the [scoped execution-identity authority](https://github.com/Abzum-NZ/Abzum-Vortex/issues/322) for that flow and target. The runtime never mutates the initiating human context: each protected task opens a short Access-resolved transaction for its verified effective actor, and a service-role credential or caller-supplied actor identifier never supplies that authority. The operation's trusted declaration binds its action, target and exact required permission, or its published alternatives for a record operation as described below. Possessing an unrelated valid permission cannot authorise the requested action. Client-supplied operation parameters are validated candidates, not a policy declaration or an allow decision.
+An ordinary protected operation consumes the already validated, transaction-bound [organisation request context](https://github.com/Abzum-NZ/Abzum-Vortex/issues/27); it does not select a different identity or account. A published flow fixes `runAs` for the whole flow: `initiator` runs as the person who started it, and `saver` runs as the person whose save triggered it. The runtime never mutates the initiating human context: each protected step opens a short Access-resolved transaction for its verified effective actor, and a service-role credential or caller-supplied actor identifier never supplies that authority. The operation's trusted declaration binds its action, target and exact required permission, or its published alternatives for a record operation as described below. Possessing an unrelated valid permission cannot authorise the requested action. Client-supplied operation parameters are validated candidates, not a policy declaration or an allow decision.
 
 For an application operation, [Central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34)
 also verifies the selected application's exact active registration in that organisation
@@ -50,15 +50,15 @@ and declared operation before running the protected action. The
 defines this small shared handoff; later page bindings consume it without a second
 access decision or an application-specific shortcut.
 
-The database evaluates stored role, assignment and delegation facts once. The server calls that decision and composes the required target restrictions; it does not independently reimplement role evaluation in TypeScript. Browser, server and [MCP](12-connections-and-interfaces.md#governed-mcp-access) operations reach the same boundary. A credential's application or capability restrictions can only narrow current account authority. High-impact operations also require their declared verified authentication strength and recent-authentication evidence.
+The database evaluates stored role, assignment and delegation facts once. The server calls that decision and composes the required target restrictions; it does not independently reimplement role evaluation in TypeScript. Browser, server and agent operations reach the same boundary. A credential's application or capability restrictions can only narrow current account authority. High-impact operations also require their declared verified authentication strength and recent-authentication evidence.
 
-Execution delegation changes who may run one published node; it neither copies the effective actor's roles nor grants the initiator use of that actor's data. The effective actor must pass the normal permission, tenant, organisation, application, row, field, sharing, file, entitlement and recent-authentication checks for the node. A result returned to a different initiating viewer is projected through that viewer's current read authority, and a later write from a derived value is checked again as its own protected operation.
+A flow step runs with the flow's fixed `runAs` authority. A result returned to a different viewer is projected through that viewer's current read authority, and a later write from a derived value is checked again as its own protected operation.
 
 [Identity evidence #276](https://github.com/Abzum-NZ/Abzum-Vortex/issues/276) supplies the verified authentication method and time through the existing session/context boundary. Token issue time, token refresh and request-context creation time do not prove recent sign-in or recent MFA. If genuine evidence satisfying the operation's declared strength and maximum age is absent, that protected action is refused; an otherwise valid ordinary session remains usable for operations without that requirement. Access never parses provider claims itself. This does not impose MFA on every operation: recent sign-in and specifically required recent MFA remain distinct requirements.
 
-An allow result is evidence for one operation and verified state, not a reusable permission token. Its private evidence binds the current Access version and an expiry/recheck bound no later than the earliest relevant session, context, account, membership, assignment, delegation or sharing transition. An unchanged Access version cannot keep an expired grant alive. The operation rechecks when that bound is reached. Concurrent changes must yield a decision from wholly old or wholly new valid facts, never a mixture of role, registration and assignment revisions.
+An allow result is evidence for one operation and verified state, not a reusable permission token. Its private evidence binds the current Access version and an expiry/recheck bound no later than the earliest relevant session, context, account, membership, assignment or delegation transition. An unchanged Access version cannot keep an expired grant alive. The operation rechecks when that bound is reached. Concurrent changes must yield a decision from wholly old or wholly new valid facts, never a mixture of role, registration and assignment revisions.
 
-Every operation declares which lifecycle, row, field, sharing or public restrictions it needs. Missing or unavailable required policy refuses the final operation; a basic role match is not final authority over a record. [Central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) establishes that closed composition boundary, while [row rules #35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35), [scopes #36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36), [fields #37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) and the later sharing/interface tasks supply their actual policies. It adds no second operation registry, access-state store or activity writer. Internal evidence is not returned as role labels, permission keys or private record values in a user-facing refusal.
+Every operation declares which lifecycle, row, field or public restrictions it needs. Missing or unavailable required policy refuses the final operation; a basic role match is not final authority over a record. [Central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) establishes that closed composition boundary, while [row rules #35](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35), [scopes #36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36), [fields #37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) and the later sharing/interface tasks supply their actual policies. It adds no second operation registry, access-state store or activity writer. Internal evidence is not returned as role labels, permission keys or private record values in a user-facing refusal.
 
 ## Named Vortex super administrators
 
@@ -73,7 +73,7 @@ The central permission and role evaluation recognizes an active named
 super-administrator assignment as a complete authority route for every current
 and future permission and role, including organisation, application, named-action,
 and record-operation decisions. It applies the ordinary lifecycle, target,
-application, record, field, sharing, and public restrictions for each operation.
+application, record, field and public restrictions for each operation.
 The route is evaluated from the live assignment ledger, so revocation removes
 this authority on the next decision without copying grants, changing role
 catalogues, or advancing each organisation's Access version.
@@ -94,10 +94,8 @@ permission system.
 ### Complete authority paths
 
 A permission must be supported by one complete current route: a compatible standing
-direct assignment, a compatible standing Group assignment with current membership,
-or the account's valid activation with its exact required eligible assignment and,
-for a Group-derived activation, exact current membership. Parts of different routes cannot be
-joined to invent access. If several complete routes work, the decision selects one
+direct assignment or a compatible standing Group assignment with current membership.
+Parts of different routes cannot be joined to invent access. If several complete routes work, the decision selects one
 consistently and rechecks no later than that route's earliest expiry. A later fresh
 decision may select another route; an earlier result cannot silently change its basis.
 
@@ -162,8 +160,6 @@ The same protection applies when an otherwise active application removes a permi
 
 Fresh acceptance approves one exact role permission set for an explicitly listed set of existing account or Group assignments. The request binds their identifiers and current revisions; a changed, missing or additional assignment requires a refreshed request. [IAM](appendices/iam-application.md) presents those affected assignments, while [the protected operation](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) rechecks the administrator's current authority before committing. Assignments reference the accepted role rather than storing duplicate permission lists. Revoked assignments are not restored, and a later assignment is a separately authorised grant. Bounded authority to grant permissions requires its own explicit acceptance and never follows a use-role acceptance automatically.
 
-Changing a role between standing and activation-required assignment modes, including returning to a previous mode, requires that same complete non-revoked assignment manifest. The change never converts assignments: only a matching-kind, otherwise valid assignment can be used after explicit review. Eligible assignments still need a fresh activation. Changing only activation duration or other requirements within activation-required mode leaves eligibility in place but invalidates old policy-bound requests and activations. These [policy compatibility rules](appendices/groups-and-privileged-access.md#privileged-classification-and-policy) avoid unnecessary regrants without permitting silent restoration.
-
 ```mermaid
 flowchart LR
     A[Permission accepted for a role] --> B[Permission removed or meaning changed]
@@ -178,9 +174,7 @@ Application updates reduce an accepted application-role permission set when perm
 
 An application role awaiting acceptance of changes (`acceptance_required`) preserves only its continuously valid, previously accepted permissions for existing non-revoked assignments. Pending additions grant nothing. Each stored permission still passes the current availability, continuity and meaning checks in [the central decision](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34). Only an `active` role may receive a new assignment; `unavailable` and `retired` roles grant nothing. Explicit acceptance returns the role to `active` only after checking the exact candidate, complete affected-assignment list and current delegated authority. Adding a permission must not, by itself, remove existing valid permissions while review is pending.
 
-A currently active supplied role can stay active after an update that only removes permissions, provided at least one accepted permission remains and there are no added or restored permissions awaiting acceptance. An empty role cannot stay active. A role already awaiting acceptance never returns to active just because a later application update removes its pending additions. A missing template or withdrawn application makes the role unavailable; bringing it back requires acceptance. Retired roles stay retired. These automatic changes preserve the original acceptance evidence and the role's existing privileged classification and activation policy; they are not new acceptances or activations.
-
-The same retained-access rule applies to already activated privileged roles. A separate [role-authority continuity number](appendices/groups-and-privileged-access.md#retained-permissions-during-role-review) preserves still-valid activation use across metadata changes, narrowing and pending additions. Accepting added or restored authority starts a new period and requires fresh activation, without silently revoking the underlying eligibility assignment. Existing eligibility may activate only the retained accepted remainder during review; pending additions grant nothing. A pending activation request still becomes stale if its exact proposed role revision changes.
+A currently active supplied role can stay active after an update that only removes permissions, provided at least one accepted permission remains and there are no added or restored permissions awaiting acceptance. An empty role cannot stay active. A role already awaiting acceptance never returns to active just because a later application update removes its pending additions. A missing template or withdrawn application makes the role unavailable; bringing it back requires acceptance. Retired roles stay retired. These automatic changes preserve the original acceptance evidence and the role's existing privileged classification; they are not new acceptances.
 
 The [coordinated application-access change](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) applies registration, permission/template availability and supplied-role reductions together. Either all changes become visible, with one Access-version change, or none do. An update that already exactly matches the current registration and derived role state returns unchanged without creating history. A request based on an older registration revision is refused rather than applied again. A matching application fingerprint alone is not enough: the related permission, template and role state must also be consistent. See the [closed change contracts](appendices/data-contracts.md#permission-and-role-contracts).
 
@@ -218,15 +212,14 @@ An organisation account may have several organisation roles and several applicat
 
 Delegated organisation administrators may remove existing assignments after their
 role or permissions are withdrawn. This is removal only: it cannot reactivate or
-recreate a role or permission, assign or replace access, extend an assignment, or
-activate privileged eligibility. Nonempty current accepted permission references
+recreate a role or permission, assign or replace access or extend an assignment. Nonempty current accepted permission references
 retain the normal complete affected-scope check. If the current role is explicitly
 unavailable and has no entries, removal requires both the exact assignment-management
 permission and current organisation-catalogue delegation. A missing role snapshot,
 empty active/retired role or merely bounded delegation cannot use that exception.
 The exact organisation, reviewed assignment revision and final-steward safeguard
 still apply. Removal, one Access-version change and Activity evidence are atomic;
-role, permission and activation history are not restored or rewritten. See the
+role and permission history are not restored or rewritten. See the
 [approved cleanup contract](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40).
 
 ### Managing access is different from using data
@@ -262,7 +255,7 @@ Permissions use permanent names, not display labels. A name identifies the area,
 - `application.example.open`
 - `application.example.action.complete`
 
-Unknown names are refused at publication and at runtime. An application role may use the single entry `*` to mean all non-administrative permissions declared by that exact published application version. It cannot be combined with another permission entry, cannot include permissions from a bound module, and cannot cover tenant or organisation administration, security, entitlements, protected data handling, export, or sharing administration. Module-scoped and trailing wildcards are not supported.
+Unknown names are refused at publication and at runtime. An application role may use the single entry `*` to mean all non-administrative permissions declared by that exact published application version. It cannot be combined with another permission entry, cannot include permissions from a bound module, and cannot cover tenant or organisation administration, security, entitlements, protected data handling or export. Module-scoped and trailing wildcards are not supported.
 
 Publishing an application role resolves `*` against that application's permission catalogue and records the catalogue fingerprint and expanded permission identifiers. A permission added later is not silently granted; the role must be reviewed and published again.
 
@@ -285,13 +278,12 @@ A record scope may include:
 - All records the role can access.
 - Records owned by the person.
 - Records owned by a named group to which the person belongs.
-- Records explicitly shared with the organisation account or any of its groups.
 - Records reachable through an approved relationship from another visible record.
 - A saved, validated condition defined by the application.
 
 The scope is translated into database conditions. Records outside it must not be fetched and then hidden afterward.
 
-Inherited ownership follows the child's explicitly declared parent relationship until it reaches an organisation-account or Group owner. It neither copies the owner onto the child nor requires permission to read the parent. A parent's direct share is not ownership of its child. Newly published ownership paths must resolve to an owner and cannot loop or end at a record type with no owner; existing immutable releases remain readable. [#36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36) owns validation and enforcement of this boundary.
+Inherited ownership follows the child's explicitly declared parent relationship until it reaches an organisation-account or Group owner. It neither copies the owner onto the child nor requires permission to read the parent. Newly published ownership paths must resolve to an owner and cannot loop or end at a record type with no owner; existing immutable releases remain readable. [#36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36) owns validation and enforcement of this boundary.
 
 Relationship-based visibility is different: the declared source permission must currently authorize the source record under that same permission's complete visibility scope before the exact declared link can contribute visibility of the target. If the source scope follows another relationship, apply the same check along the publication-validated, cycle-free path. An unrelated readable record or an edge alone grants nothing. [Complete relationship-route composition](https://github.com/Abzum-NZ/Abzum-Vortex/issues/35) belongs to the central row decision, not another permission system.
 
@@ -315,23 +307,6 @@ Comparing a person field with the current user requires an explicit organisation
 
 Conditions validate calendar dates and require offsets on date-times. Date-times compare integer microseconds with up to six fractional digits, including pre-epoch instants and year zero within the declared offset range; millisecond-only parsing must not truncate them. Text ordering is Unicode code-point order. JSON equality ignores object-key order and preserves array order. Explicitly declared finite-number operands use the same finite-double comparison domain in JavaScript and PostgreSQL; this does not claim arbitrary-precision numeric behavior. Declared decimal and money operands instead use the current exact-value rules: amounts remain exact, money equality includes currency, and ordering across currencies is refused. A permissive database cast cannot expand the accepted input language.
 
-### Direct record sharing inside one organisation
-
-An authorised person may share one record directly with one organisation account or one group in the same organisation. The share has explicit readable and changeable field allowlists, optional expiry, grantor, recipient, reason, state, and activity history. A changeable field must also be readable.
-
-The grantor must hold `record.share`, must be able to read every shared field, and must be able to change every changeable field. A direct share cannot grant delete, restore, export, re-share, ownership, role administration, or any permission the grantor does not hold. Group membership is evaluated on every request. Revocation, expiry, suspension, or group removal takes effect on the next request. Directly shared records appear in ordinary lists and search only where the receiving account also has application access and the page supports that record type.
-
-Every local share names the exact organisation/module/storage-contract/record identity and the source application when storage is application-contained. It cannot replace an inter-application grant or a compatible consuming application binding. Independent current account and Group shares may contribute their individually allowed fields; removing one contribution leaves only fields still authorised through another valid route. This is not permission to combine partial cross-organisation grants. [Field enforcement #37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) applies the resulting bounds before response or mutation; [#36](https://github.com/Abzum-NZ/Abzum-Vortex/issues/36) establishes those bounds and the database row restriction.
-
-The [protected local-share invocation in #37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) follows #35's exact record decision: the grantor must pass the share permission, target visibility and current field ceiling before #36's private share writer runs in the same transaction. Private share storage and neutral predicate tests do not by themselves deliver that authorised invocation.
-
-A read-only share does not require permission to edit the record. The operation
-requires at least one proposed readable field and checks the grantor's current
-read authority. It checks changeable-field authority only when changeable fields
-are proposed; a read-only share does not add an update requirement. The exact
-share permission and target visibility are still mandatory. Revocation checks its current fixed authority and
-share revision without requiring the historical grantor's old field ceiling.
-
 ## Field access
 
 Row restrictions alone do not hide columns. Protected record projection and change
@@ -344,73 +319,15 @@ bounds for record read and change, resolving each field policy through the same
 private resolver. The underlying private field helpers are not
 client-selectable endpoints.
 
-A role's exact record permissions declare the fields that permission allows a person to read and change. Each immutable `fieldPolicy` contains explicit `readableFieldIds` and `changeableFieldIds`; changeable fields must also be readable. An omitted field is refused by that permission, not a global veto on other independently complete permissions. This follows the existing permission-union model: first prove each permission's own current eligibility and complete record scope, narrow any direct-share contribution by that share's field lists, then combine the surviving contributions. A permission or share that fails its own checks contributes nothing. Do not combine eligibility from one permission with the field policy or record scope of another.
+A role's exact record permissions declare the fields that permission allows a person to read and change. Each immutable `fieldPolicy` contains explicit `readableFieldIds` and `changeableFieldIds`; changeable fields must also be readable. An omitted field is refused by that permission, not a global veto on other independently complete permissions. This follows the existing permission-union model: first prove each permission's own current eligibility and complete record scope, then combine the surviving contributions. A permission that fails its own checks contributes nothing. Do not combine eligibility from one permission with the field policy or record scope of another.
 
 Newly published record permissions require an explicit policy; empty lists are valid for an operation that needs no business-field access. Historical immutable declarations without a policy remain readable and supply no field authority, but do not veto another complete contribution. There is no wildcard that silently includes future fields. Authored field references resolve against the permission's exact record type. At the [Definition publication boundary](https://github.com/Abzum-NZ/Abzum-Vortex/issues/396), the database applies the same rule before storing a release: a Module-owned permission can name only fields in that exact Module release, while an Application-owned permission can name only fields in the exact Module revisions that release pins. A newer or unpinned Module release cannot lend a field. Non-record permissions cannot declare a field policy. Refusal stores no release or dependency and cannot move the current-release pointer. Historical releases are neither rewritten nor retroactively rejected. Policy changes participate in the existing immutable permission-meaning, release-version and acceptance rules; they do not introduce another authority store or approval mechanism. [Field access delivery #37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) owns the contract, compiler and runtime enforcement.
 
-Field lists only narrow an already authorised operation: a read permission cannot authorise an update merely because its policy names changeable fields. Before projection or mutation, the engine binds the result to the exact organisation, application, module, record type, storage contract, record and operation using the current request's Access evidence. It omits unreadable values and field-derived labels, choices and validation metadata rather than returning blank or CSS-hidden data. An unauthorised changed field refuses the entire attempted mutation; filtering, sorting, grouping, field aggregates, action inputs and error details cannot bypass the same bounds. Later Record, Query, Interface and MCP consumers reuse this boundary rather than calculating a different policy. [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) owns the field-enforcement work; later interfaces have separate owners.
+Field lists only narrow an already authorised operation: a read permission cannot authorise an update merely because its policy names changeable fields. Before projection or mutation, the engine binds the result to the exact organisation, application, module, record type, storage contract, record and operation using the current request's Access evidence. It omits unreadable values and field-derived labels, choices and validation metadata rather than returning blank or CSS-hidden data. An unauthorised changed field refuses the entire attempted mutation; filtering, sorting, grouping, field aggregates, action inputs and error details cannot bypass the same bounds. Later Record, Query and Interface consumers reuse this boundary rather than calculating a different policy. [#37](https://github.com/Abzum-NZ/Abzum-Vortex/issues/37) owns the field-enforcement work; later interfaces have separate owners.
 
 Pages list their fields once, in their definition, and the runtime applies each person's field policy when it renders them ([#2858](https://github.com/Abzum-NZ/Abzum-Vortex/issues/2858)). Lists and detail pages leave out the fields the person cannot read. An edit form leaves out the fields the person cannot read and shows the fields they read but cannot change as read-only, from the same record read and per-record capabilities the writer decides. A create form leaves out the fields none of the person's current create permissions lets them set. A form is refused only when one of its required fields cannot be filled in by that person, and the refusal names the field; record-level access is unchanged. Rendering only narrows what is shown: every save is still decided by the record writer. A field the role changes in the Studio Access tab is one it may set when creating a record and change when updating one.
 
 Fields marked `sensitive` in [modules, fields and relationships](05-modules-fields-and-relationships.md) require an explicit read grant and are never copied to general search.
-
-## Shared-record access
-
-Sharing is an additional restriction, never a replacement for ordinary access. A recipient must pass both its own organisation/application checks and a source-issued grant. Missing, invalid, expired, or undecided information refuses access.
-
-```mermaid
-flowchart TD
-    REQ[Request in recipient organisation account] --> LOCAL[Check recipient account, application and roles]
-    LOCAL --> ROUTE{Source cluster?}
-    ROUTE -- This cluster --> ADAPTER[Use local shared-record adapter]
-    ROUTE -- Another cluster --> SIGN[Sign a short-lived recipient assertion]
-    SIGN --> REMOTE[Send bounded request to source federation endpoint]
-    ADAPTER --> GRANT[Source Access service checks one complete active grant]
-    REMOTE --> GRANT
-    GRANT --> SOURCE[Check source organisation, record state and sharing policy]
-    SOURCE --> FIELDS[Keep only fields allowed by that same grant]
-    FIELDS --> DB[Source database row restriction permits the operation]
-    DB --> RESULT[Return or save in the source organisation]
-```
-
-### Between applications in one organisation
-
-For `organization_shared` storage, each application must bind the module and grant its own roles the required permissions; a separate sharing grant is unnecessary. For `application_contained` storage, another application also needs an active inter-application grant. The recipient application must bind a compatible version of the module so it can validate and display the records.
-
-An inter-application grant may provide collaborative access when the use case requires it. The grant names the readable fields, the smaller or equal set of changeable fields, and any published shareable actions. The recipient uses ordinary record components, but those components expose only the granted capabilities. The record remains owned and saved by its source application; collaboration does not create a recipient copy or permit ownership, deletion, restoration, permission administration, or re-sharing.
-
-### Between organisations
-
-A source organisation may grant limited access to a recipient organisation. The business checks and screens do not change when the organisations are in different clusters. The shared-record gateway chooses a local adapter inside one cluster or a signed request to the source cluster through the [Vortex Federation API](17-runtime-storage-and-caching.md#vortex-federation-between-clusters).
-
-The request acts through the person's active organisation account in the recipient organisation. It never uses roles from another account held by the same global identity. For a cross-cluster request, the recipient cluster verifies that local account and signs a short-lived assertion of its identity, application, roles, and access version. The source accepts that assertion only from the registered recipient cluster and still makes the authoritative grant and record decision itself.
-
-The access decision confirms all of the following:
-
-1. The global identity, recipient organisation account, recipient organisation, and recipient application are active.
-2. The recipient account can enter the one named recipient application and currently holds at least one of the recipient application roles named by the grant.
-3. One active grant independently covers the source record, requested action, and requested fields.
-4. The record still matches the grant's approved scope. A changing set uses only a version-pinned published saved sharing condition with approved parameter values; a grant never supplies an inline condition.
-5. The source organisation, record lifecycle, retention, and legal-hold rules permit the operation.
-6. For a cross-cluster request, the recipient cluster signature, intended source audience, issue and expiry times, one-use nonce, protocol version, content fingerprint, and approved recipient region are valid.
-
-Two grants cannot be combined to manufacture permission: the scope from one grant cannot be joined to the action or fields of another. If several grants independently permit the same request, the request is allowed and the activity entry records the grant identifiers used.
-
-### Shared actions, fields, and export
-
-Cross-organisation grants use explicit readable-field, changeable-field, and allowed-action lists. They do not use broad levels such as `collaborative` or `full_edit`. A changeable field must also be readable, and an action must be published by the source definition as shareable before a grant may name it. Fields classified as `sensitive` are unavailable in the first release. Omitted fields are not returned as blank or masked values; they are absent.
-
-Export is an independent boolean approval, defaults to refused, and is included in the exact proposal approved by both organisations. When allowed, the source produces only the grant's readable fields from records that still match the grant. Ownership changes, deletion, restoration, permission administration, and re-sharing are never implied by a field or action allowlist.
-
-### Protected grant consent
-
-An editable record or ordinary workflow cannot activate a cross-organisation grant. Every cross-organisation grant requires one authorised source consent and one authorised recipient consent for the same grant and proposal revision. The source side confirms the records, condition and parameters, actions, fields, export choice, recipient region, start, and expiry. The recipient side confirms the named application, roles, responsibility, region, start, and expiry.
-
-Changing any proposal value advances the proposal revision, withdraws the earlier decisions and requires both sides to review the new proposal. The Access service owns the grant and activates it only after verifying both immutable consent decisions. An ordinary editable record has no security effect on a grant.
-
-A consent decision is not later rewritten as revoked. Ending access revokes the grant through a new authorised source action, preserving both original decisions and recording the revocation separately.
-
-For a cross-cluster grant, each cluster stores its own protected consent evidence. The source grant is authoritative. The recipient stores only a routing and user-interface mirror plus the source's signed activation receipt. A missed receipt is repaired through [grant reconciliation](17-runtime-storage-and-caching.md#grant-activation-and-reconciliation), not by a distributed database transaction.
 
 ## Public access
 
@@ -426,7 +343,7 @@ Public create and update field lists are checked against the same `public_displa
 
 ## Access-change speed
 
-Role, organisation-account, group, sharing, and public-policy changes increase an organisation access version. Every cached access answer includes that version. A request with an old version is recalculated.
+Role, organisation-account, group and public-policy changes increase an organisation access version. Every cached access answer includes that version. A request with an old version is recalculated.
 
 The Access service stores exactly one positive, monotonically increasing counter per organisation. The counter begins at `1`, is not an Identity or organisation-account field, and can be read or incremented only through narrow server-side Access operations. An access-affecting change and its increment commit in one transaction; a refused, rolled-back, or duplicate change does not advance it. Concurrent changes use an atomic database increment so neither update is lost. The request-context boundary reads the live value after it has verified the selected active organisation account; it never accepts a browser-supplied version.
 
@@ -450,37 +367,24 @@ Access removal takes effect on the next request. Long-running work rechecks acce
 
 Standalone role creation, revision or retirement uses `role_catalogue_changed`; assigning or revoking a role uses `role_assignment_changed`. A coordinated application registration, update, reactivation or withdrawal uses `application_access_changed` exactly once, including its permission, template and existing-role changes. Refusal or exact replay does not increment. These are change reasons, not separate permission evaluators or activity stores.
 
-The recipient interface must remove previously displayed shared values when that next check is refused. It may retain non-content routing and activity references, but it cannot keep a visible snapshot, stale search result, component cache, or offline copy after the grant ends. A completed, separately approved export is the only exception because a downloaded file cannot be recalled.
-
 ## Administration safeguards
 
 - Organisation-account, invitation, role, Group and runtime-setting administration requires the exact organisation permission through the central Access decision as well as an active organisation context. Membership, application administration and tenant-administrator assignment are not substitutes. [Protected administration](https://github.com/Abzum-NZ/Abzum-Vortex/issues/30) must consume the shared role/permission foundation before exposing those operations; it must not introduce a temporary tenant-capability bypass.
 - A person may assign only permissions within their explicit delegation scope, and may grant management authority only within their own effective management scope. Holding a permission for personal use alone does not grant permission to assign it to others.
 - The last effective permanent tenant steward and the last effective permanent organisation steward cannot be removed, expired or stripped of the required powers by any actor until a replacement is active. The organisation invariant is defined above; tenant stewardship is separately scoped and grants no organisation-data access.
 - High-impact changes require recent sign-in confirmation at the operation's declared authentication strength; specifically MFA-required operations need genuine recent MFA evidence under [the same Identity contract](https://github.com/Abzum-NZ/Abzum-Vortex/issues/276).
-- Tenant-administrator, hierarchy, role, organisation-account, group, direct-share, public-access, connection-secret, export, retention, entitlement and grant-consent changes are written to [activity history](14-activity-privacy-and-retention.md).
+- Tenant-administrator, hierarchy, role, organisation-account, group, public-access, connection-secret, export, retention and entitlement changes are written to [activity history](14-activity-privacy-and-retention.md).
 
 ## Acceptance examples
 
 - A person who can open a list but lacks record visibility never receives the hidden rows from the database.
-- A direct share to any one of an account's groups grants only the named fields, and removing the account from that group removes access on the next request.
 - A tenant administrator without a local organisation account and local role cannot read that organisation's records.
 - Removing a role makes previously cached permission answers unusable.
 - A page hidden in navigation remains protected when its address is entered directly.
 - A public page cannot display a field merely because the field is not classified as personal data.
 - All access entry points use the same declared permissions, organisation scope and protected operation boundaries.
-- A read-only cross-organisation grant does not allow creating, changing, deleting, exporting, commenting on, or attaching files to records.
-- A sensitive field is never included in cross-organisation query results even when the grant does not specify a field mask.
-- Revoking a cross-organisation grant makes previously cached permission answers for that grant unusable.
-- Revoking an inter-application grant removes the shared values from the recipient component on its next access check; navigating back or using a client cache cannot reveal them.
-- A collaborative inter-application grant changes only its named fields and runs only its named shareable actions against the source record.
-- A person with accounts in both organisations cannot use roles from the source account while acting through the recipient account.
-- Directly changing an ordinary record cannot activate a sharing grant.
-- A cross-organisation grant with only one side's consent remains inactive.
-- Adding an action, field, role, application, condition parameter, region, or later expiry invalidates both earlier approvals.
+- A person with accounts in two organisations cannot use roles from one account while acting through the other.
 - Assigning a named role to another active account deliberately adds that account to the approved audience; removing the role removes access on the next request.
-- Moving either organisation to another cluster in an already approved region does not change the grant's business meaning; the gateway changes route after the protected directory and grant routing state are updated and verified. Moving the recipient to a different region suspends the grant until the source approves that destination.
-- A forged, expired, replayed, version-incompatible, or incorrectly addressed cross-cluster request is refused before any source record is queried.
 
 ## Declarative actor-relative scopes
 

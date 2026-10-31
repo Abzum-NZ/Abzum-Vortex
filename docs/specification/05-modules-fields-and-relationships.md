@@ -20,7 +20,6 @@ flowchart TD
     APP --> USE[Pages, roles and workflows use the bound module]
 ```
 
-Examples are provided in the [CRM and Service Desk worked examples](appendices/worked-examples.md).
 
 ## Module requirements
 
@@ -209,7 +208,7 @@ explicit product operations.
 
 ## Calculations and totals
 
-Every calculation is a [formula](appendices/frontend-rule-designer.md#formulas): one typed JSON expression tree over a closed operator catalogue, never text. A value that depends on the current time, such as whether a deadline has passed, is a read-time computed field: it is computed whenever it is read and is never stored, and queries that use it bypass the data-result cache ([17](17-runtime-storage-and-caching.md#cache-model)). Stored calculations and relationship totals never depend on it. [Scheduled time-based calculations](appendices/record-ownership-and-lifecycle.md#scheduled-time-based-calculations) defines read-time evaluation and how overdue escalations run as durable flows with a `Schedule` trigger.
+Every calculation is a [formula](appendices/frontend-rule-designer.md#formulas): one typed JSON expression tree over a closed operator catalogue, never text. A value that depends on the current time, such as whether a deadline has passed, is a read-time computed field: it is computed whenever it is read and is never stored, and queries that use it bypass the data-result cache ([17](17-runtime-storage-and-caching.md#cache-model)). Stored calculations and relationship totals never depend on it. Read-time evaluation and deadline escalation are defined in [record ownership and lifecycle](appendices/record-ownership-and-lifecycle.md#scheduled-time-based-calculations).
 
 The [calculation-engine plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48) defines
 the first executable arithmetic and missing-value meanings. Decimal/money
@@ -230,7 +229,7 @@ operation's declared scope, not a general permission bypass.
 A calculated field is disclosed only when that field and its recursive input
 dependencies are readable to the viewer. Apply the same restriction to query
 filters, sorting, grouping/aggregation, search, event/activity output, interfaces
-and MCP. Computing from authoritative inputs and omitting disallowed output is
+and the page model. Computing from authoritative inputs and omitting disallowed output is
 different from computing from a redacted subset or refusing a permitted save.
 
 - A calculation is deterministic and cannot perform network calls, change records, or read data the current operation is not allowed to read.
@@ -351,7 +350,6 @@ Changing stored meaning is never an arbitrary in-place retype. Only a proven wid
 - A field with an unknown property or unsupported setting cannot be published.
 - A required relationship cannot be configured to become empty on parent deletion.
 - A workflow-backed choice belongs to an application binding, not to the reusable module.
-- Every reference in the [CRM and Service Desk examples](appendices/worked-examples.md) resolves to a published module, application component, or documented platform definition.
 - A link field targeting a record type in another module requires a declared module dependency.
 - A record links to a person or a group with an ordinary link to the People or Group system record type; no special person-link field type exists.
 - An organisation adds a Department field to the People system record type; it appears in that organisation's People lists, filters, rules and access conditions and never changes the protected account fact or its protected-operation write path.

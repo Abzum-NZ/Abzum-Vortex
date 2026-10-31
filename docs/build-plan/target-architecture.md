@@ -82,7 +82,7 @@ flowchart LR
 
 **Theme.** One stylesheet plus per-application CSS variables, with fonts loaded through `next/font`.
 
-**Runtime data.** Queries, form state, actions and flow continuations reach blocks through Puck `metadata`, never through module globals.
+**Runtime data.** Queries, form state, actions and flow state reach blocks through Puck `metadata`, never through module globals.
 
 ## 4. Database
 
@@ -174,10 +174,6 @@ Static checks run in CI on every pull request and locally with `pnpm guard`. The
 
 Every pull request that changes behaviour states which pages were exercised on a local database lane (sign-in, then the affected application pages). Reviewers re-run that walkthrough before merging, and a pull request that changes what users see includes screenshots.
 
-### Review checklist (pull request template)
+### Review checklist
 
-- [ ] Matches this document. No new layer, version copy or process artefact.
-- [ ] Root cause fixed, not a workaround at the symptom.
-- [ ] No business names, no absent-setting behaviour, no hard-coded shell or theme.
-- [ ] Errors keep their cause in the log.
-- [ ] `pnpm guard`, `pnpm typecheck` and the local walkthrough pass.
+The checklist lives in the [pull request template](../../.github/pull_request_template.md); it covers this document, the absence of new layers and process artefacts, loud errors, and the guard and walk gates.

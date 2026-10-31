@@ -47,7 +47,7 @@ Attachment fields are not directly filterable, sortable, or searchable. File nam
 5. The record save attaches the active file by identifier.
 6. Never-activated uploads expire after 24 hours, including clean inspections awaiting Save and rejected content. Scheduled maintenance marks a bounded batch abandoned under the same file-row lock as record activation, removes their private objects through the Storage API, and then removes upload state. Failed deletions retry after their cleanup claim expires. Active attachments and held files are excluded.
 
-A flow file task calls this same File-service boundary for the flow's Access-resolved effective actor. Specified-user or system execution authority never bypasses record, field, file, storage, safety, retention or entitlement checks, and no service-role credential acts as a file grant. File references or metadata returned to a different initiating viewer are projected through that viewer's current authority before display or later use.
+A flow file task calls this same File-service boundary for the flow's Access-resolved effective actor. A system execution authority never bypasses record, field, file, storage, safety, retention or entitlement checks, and no service-role credential acts as a file grant. File references or metadata returned to a different initiating viewer are projected through that viewer's current authority before display or later use.
 
 ## Download and preview
 
@@ -79,12 +79,6 @@ Read, preview, removal and other server operations keep this credential and all 
 
 The signing key stays in the destination environment's server secret store, separate from federation and Identity Authority keys, and rotates with the documented provider overlap/revocation procedure. It is a trusted minting credential, not a sandbox against compromised server code; no `service_role`/secret API key enters ordinary file execution. Local, federated and scoped system operations use this same source-side bridge after their own Access resolution. The #92 implementation must preserve the exact accepted claims, recheck authority on resumable renewal, refuse unintended operations and support key rotation. A simulated policy check or broad key cannot replace these source-level safeguards.
 
-## Attachments on shared records
-
-A record-sharing grant does not automatically grant file access. The grant must name the attachment field as readable, and every list, preview, and download rechecks the source record, grant, field, recipient organisation account, and recipient application. Bytes remain in the source organisation's storage; the recipient receives only a short-lived, request-bound download instruction. Across clusters, the source File service streams authorised bytes through the signed [federation request](17-runtime-storage-and-caching.md#cross-cluster-request) or an authenticated source gateway that verifies the same current recipient authority on every new request. A normal Supabase signed URL is not an account-bound Vortex grant. The recipient cluster does not retain the file or preview.
-
-Uploading an attachment from another organisation requires a separately allowed attachment action. The source File service admits the upload and issues a short-lived source-storage instruction; after safety checks, the source Record service attaches it in the source record save. The new file is owned by the source organisation, follows its limits and retention policy, and records both the acting global identity and recipient organisation account. A recipient cannot browse the source organisation's file store, reuse a download instruction or obtain attachment activation under another account, retain the bytes in recipient-cluster storage, or attach one source organisation's file to its own record.
-
 ## Deletion, retention and legal hold
 
 A file follows the lifecycle of the record attachment that owns it unless it has another active owner. Soft deletion preserves the file through the recovery period. Permanent removal follows [privacy and retention](14-activity-privacy-and-retention.md). A legal hold prevents removal but not access restrictions.
@@ -100,8 +94,5 @@ Uploads enforce per-file, per-field, per-request, and organisation storage limit
 - A copied private download route fails for another account and after revocation, including preview and range requests. Already delivered or intentionally exported bytes cannot be recalled.
 - An abandoned upload is removed without creating record activity.
 - Restoring a record restores only files still inside their recovery period and not rejected by safety policy.
-- Sharing a record without naming its attachment field exposes neither file metadata nor file content.
-- A shared-file download remains source-owned, short lived, and checked against the grant on every request.
-- After cross-cluster grant revocation, downloads, new upload admission/renewal and attachment activation refuse. A previously admitted bearer upload credential may deposit pending bytes until expiry, but grants no attachment authority to another account or cluster.
 - Destination Storage refuses wrong-organisation/object/operation claims, a foreign-project identity token and an ordinary local Auth token without File scope; the valid local, federated and system paths use no broad server key.
 - A pending upload credential cannot list, read, overwrite or remove files; renewal and activation refuse revoked authority. A captured private download route cannot obtain a fresh server credential after revocation.

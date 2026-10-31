@@ -104,7 +104,7 @@ Restore follows these rules:
 - Restore never creates a release, moves the current pointer, changes immutable history or retargets a consumer. A consumer already bound to an exact release remains bound to it.
 - Later publication follows the ordinary publication rules. Content equal to the latest immutable release is refused as `no_change`; changed content receives the next governed version. Historical version, dependencies, publisher and time are not copied into the new release.
 
-For Application definitions, the sole surviving contract pair is `sourceContractVersion: "2.0.0"` and `validationContractVersion: "2.0.0"`. Application restore requires the stored release to satisfy this surviving `2.0.0` contract pair; no Application V1 reader, conversion, or legacy fallback is retained. For Module definitions, the current contract pair is `sourceContractVersion: "3.0.0"` and `validationContractVersion: "3.0.0"`. Each definition kind strictly asserts its supported contract pair during release integrity verification; unsupported versions refuse restore. Vortex does not build a speculative source-migration framework or a second history, activity or cache store for this operation.
+Every definition kind uses the current contract `4.3.0` for both `sourceContractVersion` and `validationContractVersion`, through the one `definitionContractVersion` constant and one contract-pair check. Restore requires the stored release to satisfy this current pair; no earlier reader, conversion or legacy fallback is retained, and an unsupported version refuses restore. Vortex does not build a speculative source-migration framework or a second history, activity or cache store for this operation.
 
 ## Consumer reads of published definitions
 
@@ -118,14 +118,14 @@ flowchart LR
     S --> V[Release-integrity verification]
     V --> P[Safe canonical release projection]
     P --> C
-    X[Stored binding, workflow run or grant] --> E[Recorded exact release revision]
+    X[Stored binding or workflow run] --> E[Recorded exact release revision]
     E --> D
 ```
 
 - `current` is discovery-only: an owning operation may use it when deliberately preparing a new binding. An installed application, saved binding, workflow run, grant, or in-flight request uses its recorded exact revision.
 - A current read selects the root's current pointer and its immutable release together. An exact read selects only the named root and immutable revision; it never follows a dependency's current pointer or resolves a version range again.
 - The request context's organisation, root kind, root, stored key and release evidence must agree before content is returned. Unknown, foreign, wrong-kind, unpublished-current and unknown-revision selections have one indistinguishable release-not-found outcome.
-- The safe result contains only the kind, organisation, key, root, exact release revision and stable release version, validation-contract version, content and resolution fingerprints, complete canonical content, sorted complete exact dependency manifest, and copied correlation identifier. It excludes authored source, drafts, publication preparation, provenance, resolution-snapshot content, comparison evidence, notes, publisher information, times, cache state and persistence details. For Application definitions the service verifies the stored release against the surviving `2.0.0` source and validation contract pair and returns the one current Application consumer-read result at validation-contract version `2.0.0`. No polymorphic format selector, fallback reader or V1 compatibility path is permitted.
+- The safe result contains only the kind, organisation, key, root, exact release revision and stable release version, validation-contract version, content and resolution fingerprints, complete canonical content, sorted complete exact dependency manifest, and copied correlation identifier. It excludes authored source, drafts, publication preparation, provenance, resolution-snapshot content, comparison evidence, notes, publisher information, times, cache state and persistence details. The service verifies the stored release against contract `4.3.0` and returns the one current consumer-read result at validation-contract version `4.3.0`. No polymorphic format selector, fallback reader or earlier-contract compatibility path is permitted.
 - The Definition service verifies the stored canonical envelope, compiled artifact, release row, content fingerprint, resolution fingerprint, own snapshot entry and exact dependency manifest before returning a result. A dependency remains pinned to its stored exact root, revision, version and fingerprints. Each platform-catalogue evidence fingerprint belongs to that exact connection-type or theme release, so adding an unrelated catalogue release cannot invalidate it; a missing exact release is unavailable rather than substituted.
 - Consumer reads are server-only and use the existing request transaction boundary. They implement no cache, browser or HTTP endpoint, token parsing, session creation, access decision, installation, upgrade, publication or consumer-specific rewriting.
 
@@ -166,26 +166,15 @@ Authored JSON first passes the exported strict source contract. Publication then
 
 The private Definition store derives those identity requirements from the same parsed-source catalogue used by the compiler and stores the exact requirements with the current draft. A component's authored `id` is its permanent owner; its readable key or public path is an alias. Identity rows and historical alias rows are append-only, but publication preparation exposes only aliases required by the current draft. Removing a component does not remove its historical rows, and a later reintroduction by the same owner receives the same platform identifier. A former alias can never be assigned to another owner. Nested components additionally retain a stable parent-owner scope based on the parent's authored `id`, while the current key-based scope remains the compiler lookup scope. Renaming a record type, page, workflow, or interface therefore adds new lookup aliases without changing the permanent identifiers of its fields, guided steps, workflow nodes, or interface operations, and an obsolete alias does not become a requirement for later compilation.
 
-Saved sharing-condition revisions are derived from that permanent condition identifier and the complete immutable Module-release history; no mutable counter and no caller-supplied source alias is authoritative. The first appearance is revision `1`. An unchanged resolved contract keeps its revision, while any contract change increments it once. Removing a condition creates no new condition row, but its last revision remains in release history. Reintroducing the same permanent condition after an absence increments the revision even when its contract text is unchanged, so a grant pinned to the removed revision cannot silently begin matching again. The Definition service derives the revision before final compilation, and the compiler then recomputes the condition and Module fingerprints.
+Saved visibility-condition revisions are derived from that permanent condition identifier and the complete immutable Module-release history; no mutable counter and no caller-supplied source alias is authoritative. The first appearance is revision `1`. An unchanged resolved contract keeps its revision, while any contract change increments it once. Removing a condition creates no new condition row, but its last revision remains in release history. Reintroducing the same permanent condition after an absence increments the revision even when its contract text is unchanged, so a permission pinned to the removed revision cannot silently begin matching again. The Definition service derives the revision before final compilation, and the compiler then recomputes the condition and Module fingerprints.
 
 Every source leaf receives an exact source path in the returned provenance. Every canonical leaf maps back to an exact source leaf, an approved fixed default, a resolved value, or system metadata. The compiler maps source paths forward into canonical paths; it does not search backwards by value or choose a similarly named sibling. A source value may differ from its canonical leaf or map to a canonical component only when its exact source-path shape is in the compiler's closed transformation catalogue. Any newly accepted but unmapped source property therefore refuses compilation. When several approved source values produce a derived canonical leaf, provenance records every deepest mapped source leaf in that leaf's owning component and marks the mapping with the semantic-transformation or immutable-resolution rule. Publication verifies both sides of this coverage.
 
-The same rule applies when the one flow contract is delivered: flow and task identities, ordered task paths, module-exposed query bindings, flow-level execution grants and viewer-safe outputs must pass through the source contract, canonical compiler, provenance, version impact, immutable storage, consumer read and restore together. An isolated runtime parser or partial persistence change cannot introduce them.
+The same rule applies when the one flow contract is delivered: flow and task identities, ordered task paths, module-exposed query bindings, flow-level run-as declarations and viewer-safe outputs must pass through the source contract, canonical compiler, provenance, version impact, immutable storage, consumer read and restore together. An isolated runtime parser or partial persistence change cannot introduce them.
 
 The publication caller supplies one strict [publication context contract](../../packages/platform/src/definition/definition-compilation-contracts.ts): existing immutable compiled dependencies and the full prior published history for each module or application being published. Every compiled artifact binds its kind, definition key, permanent root, exact version, canonical-content fingerprint, and resolution-snapshot fingerprint. The artifact's exact version must equal the version assigned by the governed version-impact comparison; unchanged content and a snapshot prepared for another candidate version are refused. Each module dependency records its exact resolved version. An application or module accepts a dependency only when its kind, key, root, exact version, content fingerprint, declared requirement and requesting snapshot's dependency selection agree. The dependency artifact/output retain their own resolution fingerprint, verified against the dependency's own immutable release evidence; that fingerprint need not equal the requesting definition's fingerprint. Publication and readback pin and verify the selected dependency's exact revision and fingerprints in the existing dependency manifest. Matching only a key/root or supplying an internally consistent but differently selected release is insufficient. Do not rewrite a dependency's fingerprint to make two different snapshots appear identical.
 
-Application and Module have distinct current source contracts and independently
-versioned product releases. Application definitions use solely the current
-contract pair (`sourceContractVersion: "2.0.0"`, `validationContractVersion:
-"2.0.0"`), with no retained Application V1 contract, comparison, conversion,
-fallback or dual-format selector. Module definitions independently use their own
-current contract pair (`3.0.0` source, `3.0.0` validation). Their resolution
-envelopes retain the fingerprint meaning declared by each owning contract, even
-when identity and release selections coincide. Compilation, publication,
-storage, restore and consumer reads validate each current contract and its
-actual cross-definition references; equal format-version numbers across
-definition kinds are not a dependency requirement. No obsolete Application or
-Module representation reader or conversion is permitted.
+Application and Module have independently versioned product releases but one current definition contract. Compilation, publication, storage, restore and consumer reads validate contract `4.3.0` and each definition's actual cross-definition references. Their resolution envelopes retain the fingerprint meaning declared by each owning contract, even when identity and release selections coincide. No earlier Application or Module representation reader or conversion is permitted.
 
 Each immutable release stores its complete canonical compilation output and the exact resolution snapshot that produced it. This is required evidence, not a cache: a later component alias, dependency release, or catalogue update must not change how an older release is read or validated. The stored snapshot fingerprint, compilation-output fingerprints, release row and exact dependency manifest must agree before the release can be returned or used as a dependency.
 
@@ -202,7 +191,7 @@ flowchart TD
     E --> F[Application and workflow publication rules]
     F --> G[Version-impact comparison]
     G --> H[Prepared publication handoff]
-    H --> I[Phase 2 atomic store transaction]
+    H --> I[One atomic store transaction]
 ```
 
 Publication is refused unless:
@@ -212,10 +201,10 @@ Publication is refused unless:
 3. Every field, page, filter, rule, action, workflow step, permission, cache tag, and connection setting matches its [data contract](appendices/data-contracts.md).
 4. No circular dependency would prevent loading or publication.
 5. Public pages expose only fields explicitly approved for public display under [access and permissions](04-access-and-permissions.md).
-6. Every workflow path has an end state or a documented long-running wait.
+6. Every workflow path has an end state.
 7. Required translation, accessibility, and phone-layout checks pass under [quality and acceptance](20-quality-and-acceptance.md).
 8. Any change affecting stored [records](06-records-and-lifecycle.md) is classified as breaking. Migration feasibility is checked only when an installation or application binding deliberately adopts that release.
-9. Every dependency selected for this new immutable release satisfies the new release's declared requirement. Existing sharing grants remain pinned and are checked only by an explicit grant migration or revocation operation.
+9. Every dependency selected for this new immutable release satisfies the new release's declared requirement.
 10. A record-scoped page has a primary subject and matching main form commit action. Each related panel, query, row and action resolves against its explicit typed binding context under [page builder contracts](appendices/page-builder-contracts.md#data-context-and-related-records). Public pages additionally restrict every selected, filtered, grouped, aggregated and sorted field, permission, action subject and action effect to the approved public surface.
 
 ## Dependency graph
@@ -235,7 +224,7 @@ flowchart LR
     GRAPH --> MOD2
 ```
 
-The candidate graph validates the release being created. Separate consumer graphs load live applications, prepare installations and upgrades, validate grant migrations, calculate cache invalidation, and explain why an installed or bound consumer cannot move to another release.
+The candidate graph validates the release being created. Separate consumer graphs load live applications, prepare installations and upgrades, calculate cache invalidation, and explain why an installed or bound consumer cannot move to another release.
 
 ## Change compatibility
 
@@ -247,11 +236,7 @@ The candidate graph validates the release being created. Separate consumer graph
 
 ## Definition distribution is not record access
 
-Copying or installing a published definition never grants access to the publisher's records. It creates a draft or installed definition owned by the receiving organisation, as described in [copying, sharing, import and export](16-copying-sharing-import-export.md#definition-packages).
-
-A record-sharing grant is live access state owned by the [Access service](04-access-and-permissions.md#shared-record-access). It is not a definition, does not publish with an application, and does not change the definition dependency graph. A target application can use shared records only when it has a compatible binding to the source module; a grant never substitutes for the record-type definition needed to validate and display those records.
-
-Cross-organisation sharing uses the same product behaviour for same-cluster and cross-cluster recipients. The detailed product behaviour is specified in [record sharing](16-copying-sharing-import-export.md#record-sharing).
+Copying or installing a published definition never grants access to the publisher's records. It creates a draft or installed definition owned by the receiving organisation, as described in [copying, sharing, import and export](16-copying-import-export.md#definition-packages).
 
 The source and recipient application bindings must use a compatible published record contract. Installing a definition package records its source lineage, content fingerprint, and stable source-to-local component mapping. A recipient binding created from that lineage can prove how source record types and fields map to the local display definition. A separately authored module is not treated as compatible merely because its labels or database columns happen to look the same.
 
@@ -263,11 +248,6 @@ The source and recipient application bindings must use a compatible published re
 - Restoring a prior published version creates a reviewable draft and does not erase later history.
 - Installing or copying an application does not grant access to the publisher's records.
 - A module and an application each retain their own release history; changing one never silently republishes the other.
-- A target application without a compatible module binding cannot use a record grant.
-- A cross-organisation grant does not copy records into the target organisation's storage.
-- Revoking a sharing grant immediately removes the target's ability to query shared records.
-- A cross-organisation grant never exposes fields classified as sensitive.
-- Removing or changing a field used by an active grant creates a breaking release without changing that grant. Moving the grant to the new release requires a separately approved grant migration or revocation.
 
 ## Publication-history bounds
 

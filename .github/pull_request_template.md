@@ -20,6 +20,4 @@ Pages exercised on a local database lane you hold (sign-in, then each affected p
 
 ## Guardrail review
 
-The rules, their tiers and review-by dates live in `tooling/guard/config.ts`. Any blocking finding fails CI; file size is a warning.
-
-For an intentional exception, add `// guard-allow: <rule> <reason>` on the offending line or the line directly above it. SQL supports `-- guard-allow: <rule> <reason>`; block comments support `/* guard-allow: <rule> <reason> */`. Use a real rule id and explain the reason in at least 10 characters. Each directive covers one occurrence and is reported by the guard. Exceptions are suitable only when the finding is intentional and a direct fix is not appropriate; the reviewer must agree with the reason.
+Guard rules, tiers and review-by dates live in [`tooling/guard/config.ts`](../tooling/guard/config.ts). Any blocking finding fails CI. For the `guard-allow` syntax and when an exception is appropriate, follow [`AGENTS.md`](../AGENTS.md#guardrails).

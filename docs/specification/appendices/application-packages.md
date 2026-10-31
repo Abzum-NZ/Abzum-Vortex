@@ -1,6 +1,6 @@
 # Application packages, custom components and the installation lifecycle
 
-[Specification index](../README.md) · [Architecture decisions of 25 September 2026](../../build-plan/architecture-decisions-2026-09-25.md) · [Composition and publication](../03-composition-and-publication.md)
+[Specification index](../README.md) · [Architecture decisions of 25 September 2026](../../build-plan/architecture-decisions.md) · [Composition and publication](../03-composition-and-publication.md)
 
 An application package is what people install, upgrade, uninstall and share. This appendix defines:
 - what a package contains;
@@ -36,7 +36,7 @@ The package manifest lists:
 - the external hosts its custom components may load from;
 - its seed reference data.
 
-Signatures are added only when a package crosses clusters ([16](../16-copying-sharing-import-export.md)). Inside one cluster, the release fingerprints are enough.
+Signatures are added only when a package crosses clusters ([16](../16-copying-import-export.md)). Inside one cluster, the release fingerprints are enough.
 
 ## Custom logic
 

@@ -1,32 +1,24 @@
 # 17. Runtime services, storage and caching
 
-[Previous: Copying, sharing, import and export](16-copying-sharing-import-export.md) · [Specification index](README.md) · Next: [Delivery environments, database changes and testing](18-delivery-and-testing.md)
+[Previous: Copying, sharing, import and export](16-copying-import-export.md) · [Specification index](README.md) · Next: [Delivery environments, database changes and testing](18-delivery-and-testing.md)
 
 ## Hosting boundaries
 
 The platform uses three operated services:
 
 - [Vercel](https://vercel.com/docs) runs the [Next.js](https://nextjs.org/docs) web application, server routes, and shared runtime cache.
-- [Supabase](https://supabase.com/docs) provides [PostgreSQL](https://www.postgresql.org/docs/) data storage, identity-authority support, file storage, live updates, and a durable [message queue](https://supabase.com/docs/guides/queues).
-- [Kestra](https://kestra.io/docs) runs operational jobs; a future backend will execute durable application flows.
+- [Supabase](https://supabase.com/docs) provides [PostgreSQL](https://www.postgresql.org/docs/) data storage, identity-authority support, file storage and live updates.
+- [Kestra](https://kestra.io/docs) runs the two operational jobs: the event-dispatch recovery tick and the runtime-bundle cleanup.
 
 [Doppler](https://docs.doppler.com/docs) distributes environment secrets. It is a secret-management control, not an application data store.
 
-Deploy database-facing web functions beside the environment's Supabase database,
-using the [supported Vercel region configuration](https://vercel.com/docs/functions/configuring-functions/region#project-configuration).
-For the current Sydney-hosted environments, the tracked web configuration selects
-`syd1`. Browser edge reception in Sydney does not prove the server function also
-executes there. Measure sign-in and protected-page request durations after delivery;
-do not remove access checks, add authority caches or change database pooling merely
-to compensate for an avoidable cross-region connection. The measured repair is
-tracked in [#347](https://github.com/Abzum-NZ/Abzum-Vortex/issues/347) and its
-[#347 sign-in performance work](https://github.com/Abzum-NZ/Abzum-Vortex/issues/347).
+Deploy database-facing web functions beside the environment's Supabase database, using the [supported Vercel region configuration](https://vercel.com/docs/functions/configuring-functions/region#project-configuration). For the current Sydney-hosted environments, the tracked web configuration selects `syd1`. Browser edge reception in Sydney does not prove the server function also executes there. Measure sign-in and protected-page request durations after delivery; do not remove access checks, add authority caches or change database pooling merely to compensate for an avoidable cross-region connection.
 
 ```mermaid
 flowchart LR
-    PERSON[Browser or approved client] --> IDP[Vortex Identity Authority]
+    PERSON[Browser or agent in the page] --> IDP[Vortex Identity Authority]
     IDP --> VERCEL[Vercel web and server]
-    VERCEL --> SUPA[Supabase data, accounts, files, live updates and queue]
+    VERCEL --> SUPA[Supabase data, accounts, files and live updates]
     VERCEL -->|after-commit dispatch| SUPA
     KESTRA[Kestra operational jobs] -->|recovery and cleanup| VERCEL
     DOPPLER[Doppler secrets] --> VERCEL
@@ -35,61 +27,52 @@ flowchart LR
 
 ## Supabase capability policy
 
-Vortex uses Supabase as an integrated platform, but each capability has one narrow job. This avoids building replacements for managed database features while keeping deployments, secrets, and business scheduling under their already approved owners.
+Vortex uses Supabase as an integrated platform, but each capability has one narrow job.
 
-| Supabase capability                                                                                                                                                                                     | Vortex use                                                                                                                                            | Boundary                                                                                                                                                                                                                                  |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Auth](https://supabase.com/docs/guides/auth), [OAuth 2.1 server](https://supabase.com/docs/guides/auth/oauth-server) and [asymmetric signing keys](https://supabase.com/docs/guides/auth/signing-keys) | Environment-wide identity authority, locally verifiable short-lived identity tokens, and authorization-code-with-PKCE tokens for governed MCP clients | Organisation roles, groups, application access and MCP capability grants remain live Vortex data, not OAuth scope or token claims. Supabase authorizes identity/client; the Vercel MCP route enforces Vortex access.                      |
-| PostgreSQL, [row-level security](https://supabase.com/docs/guides/database/postgres/row-level-security) and [Supavisor](https://supabase.com/docs/guides/database/connecting-to-postgres)               | Authoritative data, transactions, constraints, organisation separation and pooled server connections                                                  | Internal service schemas are not exposed through the Data API. Request roles do not own tables or bypass row rules. Vercel uses transaction mode; migrations and database verification use a separate owner credential over session mode. |
-| [Queues](https://supabase.com/docs/guides/queues)                                                                                                                                                       | Logged, durable event delivery after a committed save                                                                                                 | Queue client functions are server-only and the `pgmq_public` interface is not exposed to browsers.                                                                                                                                        |
-| [Realtime Broadcast](https://supabase.com/docs/guides/realtime/authorization)                                                                                                                           | Private, content-free invalidation for open components                                                                                                | Clients reload through the authorised query path; business values are never broadcast.                                                                                                                                                    |
-| [Storage](https://supabase.com/docs/guides/storage)                                                                                                                                                     | Private objects, resumable uploads and authenticated private download streams                                                                         | Business files are never public; Storage row policies and File-service checks both apply.                                                                                                                                                 |
-| [CLI, database tests and linting](https://supabase.com/docs/guides/local-development/cli/testing-and-linting)                                                                                           | Reproducible local database, migration checks, pgTAP tests and database lint                                                                          | The shared Testing project remains the authoritative platform and separation test. Kestra alone migrates Testing and Production.                                                                                                          |
-| [Managed backups](https://supabase.com/docs/guides/platform/backups) and database advisers                                                                                                              | Provider recovery layer and reviewed security/performance findings                                                                                    | Independent encrypted backups, restore drills and reviewed migrations remain required. Adviser suggestions never change production automatically.                                                                                         |
+| Supabase capability | Vortex use | Boundary |
+| --- | --- | --- |
+| [Auth](https://supabase.com/docs/guides/auth) and [asymmetric signing keys](https://supabase.com/docs/guides/auth/signing-keys) | Environment-wide identity authority and locally verifiable short-lived identity tokens | Organisation roles, groups and application access remain live Vortex data, not token claims. |
+| PostgreSQL, [row-level security](https://supabase.com/docs/guides/database/postgres/row-level-security) and [Supavisor](https://supabase.com/docs/guides/database/connecting-to-postgres) | Authoritative data, transactions, constraints, organisation separation and pooled server connections | Internal service schemas are not exposed through the Data API. Request roles do not own tables or bypass row rules. Vercel uses transaction mode; migrations and database verification use a separate owner credential over session mode. |
+| [Realtime Broadcast](https://supabase.com/docs/guides/realtime/authorization) | Private, content-free invalidation for open components | Clients reload through the authorised query path; business values are never broadcast. |
+| [Storage](https://supabase.com/docs/guides/storage) | Private objects, resumable uploads and authenticated private download streams | Business files are never public; Storage row policies and File-service checks both apply. |
+| [CLI and database linting](https://supabase.com/docs/guides/local-development/cli/testing-and-linting) | Reproducible local database and migration checks | The shared Testing project remains the authoritative platform and separation check. Kestra alone migrates Testing and Production. |
+| [Managed backups](https://supabase.com/docs/guides/platform/backups) and database advisers | Provider recovery layer and reviewed security or performance findings | Independent encrypted backups, restore drills and reviewed migrations remain required. Adviser suggestions never change production automatically. |
 
-Supabase Cron is not a second scheduler: Kestra owns operational recovery jobs; business scheduling is future work. Edge Functions are not a second server boundary: Vercel owns web and interface routes. Supabase Vault is not a second secret authority: Doppler owns secrets. Read replicas are added only after measured read demand, recovery needs, cost, and routing behaviour justify them. Direct browser access to business tables, direct cross-cluster database connections, logical replication for sharing, and service-role-key use are refused.
-
-The Phase 10 MCP interface uses the managed Supabase OAuth 2.1 server under the approved authorization contract. Its adapter implements the required protocol behavior and returns a safe unavailable result when the configured capability cannot serve the request. A missing provider capability cannot silently introduce a second identity or token service; any necessary change to the approved provider boundary belongs to the owning specification decision. Hosted capability checks are not a development completion gate. See the [current roadmap](../build-plan/README.md#phases).
+Supabase Cron is not a second scheduler: Kestra owns operational recovery jobs; business scheduling does not exist. Edge Functions are not a second server boundary: Vercel owns web routes. Supabase Vault is not a second secret authority: Doppler owns secrets. `event_outbox` is the one event delivery path. Read replicas are added only after measured read demand, recovery needs, cost and routing behaviour justify them. Direct browser access to business tables, cross-cluster database connections, logical replication and service-role-key use are refused.
 
 ```mermaid
 flowchart LR
-    AUTH[Supabase Auth and OAuth 2.1] --> WEB[Vercel server]
-    AUTH --> MCP[Vercel MCP route]
-    MCP --> WEB
+    AUTH[Supabase Auth] --> WEB[Vercel server]
     WEB --> DB[PostgreSQL plus row rules]
     WEB --> STORE[Private Storage]
-    DB --> Q[Logged Supabase Queue]
-    Q --> WEB
     DB -->|content-free| LIVE[Private Realtime Broadcast]
     LIVE --> BROWSER[Open component]
     BROWSER -->|authorised reload| WEB
-    K[Kestra schedules and migrations] --> WEB
+    K[Kestra operational schedules] --> WEB
 ```
 
 ## Platform services inside the codebase
 
-The codebase is divided into sixteen named services. These are package and ownership boundaries, not sixteen separately deployed servers.
+The platform source is grouped by domain in `packages/platform/src`: `access`, `catalogue`, `connections`, `db`, `definition`, `events`, `files`, `identity`, `pages`, `queries`, `records`, `rules`, `search`, `theme` and `workflows`. These are package and ownership boundaries, not separately deployed servers.
 
-| Service    | Owns                                                                                                                                                                                         |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Definition | Module and application drafts, validation, immutable published revisions, dependency graph, restore                                                                                          |
-| Identity   | Identity Authority integration, cluster-local identity projections, tenants, tenant-administrator assignments, organisation hierarchy, organisation accounts, invitations, sessions, sign-in |
-| Access     | Permissions, roles, assignments, sharing grants, access versions, allow/refuse decision, protected grant activation                                                                          |
-| Module     | Module installation, dependencies, generated storage changes                                                                                                                                 |
-| Record     | Record validation, storage, calculations, totals, concurrency, data versions                                                                                                                 |
-| Query      | Tables, boards, calendars, summaries and saved views                                                                                                                                         |
-| Rule       | The pure flow interpreter shared by the browser and the server: typed conditions, the one formula tree and the transaction-safe task subset, with no server-service imports                                       |
-| Event      | Transactional event outbox, queue dispatch, retries and failed sequences                                                                                                                     |
-| Workflow   | Future durable backend: execution references, schedules and generic human-input waits                                                       |
-| App        | The server flow orchestrator, which drives any flow containing a protected task, plus application assembly, module bindings, navigation, options and application roles                             |
-| Page       | Block registration, page resolution, form drafts, page states and rendering contract                                                                                                         |
-| Theme      | Application-contained and platform-catalogue theme values, inheritance and legibility validation                                                                                             |
-| Search     | Search-document maintenance, ranking and access recheck                                                                                                                                      |
-| File       | Upload admission, metadata, lifecycle, storage allowance and download grants                                                                                                                 |
-| Connection | Connection types, secret grants, outgoing calls, incoming messages and health                                                                                                                |
-| Interface  | Versioned operation catalogue, public interface boundary, governed MCP adapter and semantic projection, cluster directory and federation transport                                           |
+| Domain | Owns |
+| --- | --- |
+| Definition | Module and application drafts, validation, immutable published revisions, dependency graph, restore |
+| Identity | Identity Authority integration, identity projection, tenants, organisation hierarchy, organisation accounts, invitations, sessions, sign-in |
+| Access | Permissions, roles, assignments, groups, access versions and the allow/refuse decision |
+| Records | Record validation, storage, calculations, totals, concurrency, lifecycle and the one record writer |
+| Queries | Tables, boards, calendars, summaries and saved views |
+| Rules | The flow interpreter shared by the page and the server: typed conditions, the one formula tree and the transaction-safe step subset |
+| Events | Transactional event outbox, dispatch, retries and failed sequences |
+| Workflows | Flow plans, the task registry, segment execution and back-end runs |
+| Pages | Block registration, page resolution, form drafts, page states and the rendering contract |
+| Theme | Application-contained and platform-catalogue theme values, inheritance and legibility validation |
+| Search | Search-document maintenance, ranking and access recheck |
+| Files | Upload admission, metadata, lifecycle, storage allowance and download grants |
+| Connections | Connection types, secret grants, health checks and incoming message verification |
+| Catalogue | Shared catalogue schemas, runtime primitives and definition-validation errors |
 
-Each service owns its tables and public contract. Another service calls that contract rather than reading the owner's tables. Dependency direction and build order are defined in the [revised build plan](../build-plan/README.md).
+Each domain owns its tables and public contract. Another domain calls that contract rather than reading the owner's tables.
 
 The shared [Activity foundation](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252) is a private database composition boundary below these services, not a seventeenth service. It owns the single `vortex_record` activity history store and an owner-only append function. Protected owning operations compose that function inside their transactions; raw runtime/request and Data API roles receive no append or read authority. Later permitted Activity views use this same store through their protected boundary.
 
@@ -119,9 +102,9 @@ The durable identity session remains in Supabase Auth; no Vortex database sessio
 
 - Every organisation-owned row carries its organisation identifier and is indexed with that identifier first where the access path requires it.
 - Database row restrictions protect every organisation-owned table for select, insert, update, and delete.
-- Only application-record tables explicitly marked shareable evaluate active [access grants](04-access-and-permissions.md#shared-record-access). Identity, secrets, connections, activity, grant-consent decisions, access-control rows, entitlement policy, and other protected platform tables never become visible through a record grant.
+- Identity, secrets, connections, activity, access-control rows, entitlement policy and other protected platform tables are never visible through a record permission.
 - Request database roles do not own tables and cannot bypass the row restrictions.
-- The trusted backend owns the runtime database connection; browser, import, flow and MCP callers receive closed protected commands, never SQL or database credentials. Temporarily selecting a restricted request role is not a sandbox against compromised backend code: [PostgreSQL can restore the connection's session role](https://www.postgresql.org/docs/current/sql-set-role.html). The [Record save handoff](../build-plan/module-record-provisioning.md#protected-save) separates untrusted submitted values from server-computed final changes without duplicating the flow engine in SQL. A genuinely restricted session and a runtime session temporarily using the request role have different trust ceilings; source review must keep that distinction explicit.
+- The trusted backend owns the runtime database connection; browser, import and flow callers receive closed protected commands, never SQL or database credentials. Temporarily selecting a restricted request role is not a sandbox against compromised backend code: [PostgreSQL can restore the connection's session role](https://www.postgresql.org/docs/current/sql-set-role.html). The [Record save handoff](../build-plan/module-record-provisioning.md#protected-save) separates untrusted submitted values from server-computed final changes without duplicating the flow engine in SQL. A genuinely restricted session and a runtime session temporarily using the request role have different trust ceilings; source review must keep that distinction explicit.
 - The Supabase project-owner credential is limited to migration and controlled verification work. The separate non-login Record object owner is callable only through the protected [storage provisioner](#record-storage-provisioning); request roles cannot inherit it.
 - Every protected database transaction establishes one complete context containing the caller kind, Identity Authority identifier or system actor where applicable, tenant, organisation account where applicable, organisation, optional application, session, authentication strength, issue and expiry times, access version, and correlation identifier before reading organisation data. The cluster-local identity projection and all selected scope rows must be active. Tenant-administrator context alone never satisfies an organisation record policy.
 - Organisation file paths begin with the organisation identifier and are protected by storage policy and server checks.
@@ -159,7 +142,7 @@ flowchart LR
     Z --> D
 ```
 
-Before Access operations exist, Definition create, save, prepare and publish accept only an explicit validated system context. Organisation, actor and time come from that context or PostgreSQL; callers cannot choose them. Direct table access is denied to request, runtime, browser and Supabase service roles. Every relation has forced row security with no browser policy, while narrowly granted empty-search-path functions perform organisation-scoped reads and writes.
+Definition create, save, prepare and publish accept only an explicit validated system context. Organisation, actor and time come from that context or PostgreSQL; callers cannot choose them. Direct table access is denied to request, runtime, browser and Supabase service roles. Every relation has forced row security with no browser policy, while narrowly granted empty-search-path functions perform organisation-scoped reads and writes.
 
 Preparation reads the draft, complete release history, permanent identities and available exact dependencies without writing. An allowed range selects the highest compatible stable release at that moment. The returned confirmation records that exact selection. Publication locks and rechecks the root and draft, current pointer, source fingerprint, identities, saved-condition revisions, exact dependency evidence, compilation, validation and version impact before appending one release and manifest and advancing only that root's discovery pointer. The release retains the complete canonical compilation output and its exact resolution snapshot, rather than rebuilding an old release from later identity aliases or catalogue state. Publication never re-resolves a range inside the commit and never modifies a consumer.
 
@@ -170,7 +153,7 @@ History reads use the existing release primary-key order to return a bounded new
 Vortex separates the credential that changes the database from the credential that serves an
 application request.
 
-- The Supabase project owner is used only by the reviewed Kestra migration and database-verification
+- The Supabase project owner is used only by the reviewed migration and database-verification
   path. It connects through the IPv4 session pooler on port 5432 because those commands require a
   stable PostgreSQL session. Its address, password, and root certificate live only in the unsynced
   Doppler configs `ops_stg` and `ops_prd` in the separate unsynced `Operations` environment.
@@ -186,7 +169,7 @@ application request.
   transaction-pooler URL. The database credential enters the matching Vercel-synchronised Doppler
   root config only inside that complete URL, alongside the public root certificate and required
   non-database application settings. The role password is never committed, shared
-  with another environment, exposed as a second Vercel variable, or reused by Kestra.
+  with another environment, exposed as a second Vercel variable, or reused by an operational job.
 - `vortex_request` receives only the exact operations required on each relation. It never receives
   `TRUNCATE`, `REFERENCES`, `TRIGGER`, schema creation, policy management, or table ownership.
 - `PUBLIC`, `anon`, `authenticated`, and `service_role` have no use or execution grant on private
@@ -258,7 +241,7 @@ A hosted runtime is not ready merely because its migrations and Vercel build suc
 proof verifies that the exact deployed revision received the matching restricted runtime URL,
 certificate, Supabase URL and publishable key, site URL, environment name and Identity Authority
 identifier; that no project-owner, migration,
-general `DATABASE_*`, or Kestra credential entered the Vercel target; and that one real protected
+general `DATABASE_*`, or service credential entered the Vercel target; and that one real protected
 journey succeeded through `vortex_runtime`. Production provisioning and proof remain separately
 gated from Testing.
 
@@ -272,15 +255,15 @@ and verified TLS; a Local setting can never relax their address checks.
 
 Database functions use `SECURITY INVOKER` unless a documented invariant requires otherwise. A rare
 `SECURITY DEFINER` function belongs in a non-exposed schema, uses fully qualified names and a fixed
-safe `search_path`, grants execution only to its exact caller, and has tests proving it cannot broaden
+safe `search_path`, grants execution only to its exact caller, and cannot broaden
 access.
 
 Every later private service schema uses the copyable [private service-schema
 pattern](../../supabase/README.md#private-service-schema-pattern) and its reusable session-local
-pgTAP assertions. The pattern covers existing-object grants separately from default privileges for
+The pattern covers existing-object grants separately from default privileges for
 future tables, sequences, and functions. It preserves PostgreSQL's database-wide temporary-relation
 default for Supabase-managed roles; temporary relations are session-local and never count as service
-storage, durable authority, or persistent relation ownership.
+storage, persistent relation ownership.
 
 ### Record-table allocation
 
@@ -300,7 +283,7 @@ flowchart LR
 - The table is allocated for a record-type storage lineage, not for each organisation or application. A shared definition requires one compatible physical structure per cluster, not a repository migration for every installation.
 - A table has fixed system columns from the [record storage contract](appendices/data-contracts.md#record-storage-contract) and one typed business column for each field in the active compatible lineage. Optional fields added by a compatible release are nullable for records still governed by an earlier revision.
 - New mappings use schema `record_data`, table `rt_` followed by the full lowercase storage-contract UUID without hyphens, and column `f_` followed by the full lowercase field UUID without hyphens. Tokens are collision-checked and recorded in the catalog. Existing verified mappings remain authoritative; installation does not regenerate them. Human names and builder keys may appear in comments and operational tools but never determine physical identity.
-- An independently created or structurally forked record type receives a new storage-contract identity and table. Reusing the same local published root does not require package-copy evidence. Copying a package while preserving its source storage identity requires the signed package lineage and fingerprint validation described in [copying](16-copying-sharing-import-export.md).
+- An independently created or structurally forked record type receives a new storage-contract identity and table. Reusing the same local published root does not require package-copy evidence. Copying a package while preserving its source storage identity requires the signed package lineage and fingerprint validation described in [copying](16-copying-import-export.md).
 - Organisation-shared rows use `organisation_id` as their data boundary. Application-contained rows additionally require `application_root_id`. Unique constraints and lookup indexes include the complete applicable scope before a business value.
 - A relationship always repeats and enforces `organisation_id`. Two application-contained endpoints must also have the same `application_root_id`. An application-contained record may link to an organisation-shared record in the same organisation. A sharing grant never creates a stored cross-organisation or cross-application relationship.
 - Platform migrations and the protected provisioner resolve tables and fields through the catalog. Runtime requests provide stable definition identifiers and never accept a physical table or column name from a browser, definition author, flow, interface caller, or federation peer.
@@ -431,94 +414,13 @@ current result; a stale revision refuses rather than adding a receipt, fingerpri
 or lifecycle counter. Failure cannot expose a partial active installation and
 does not destroy valid inactive/shared structures. Detach changes only the target
 Application's bindings, so another Application sharing a Module remains active.
-Populated changes use the
-same owning primitives in bounded add/migrate/switch/retire steps, orchestrated
-through Kestra when durable data movement is necessary. Initial creation needs
-no new worker, queue or owner credential in Vercel.
-
-## Vortex federation between clusters
-
-All Vortex clusters use the same published data contracts, but clusters may run different compatible releases during deployment and remain separate security, availability, and data-residency boundaries. Cross-cluster sharing therefore uses a versioned Vortex service contract, not a direct database connection.
-
-```mermaid
-flowchart LR
-    PERSON[Person in recipient organisation] --> RG[Recipient shared-record gateway]
-    RG --> ROUTE{Where is the source?}
-    ROUTE -- Same cluster --> LOCAL[Local adapter]
-    ROUTE -- Another cluster --> SIGN[Signed HTTPS federation request]
-    LOCAL --> ACCESS[Source Access service]
-    SIGN --> FED[Source federation endpoint]
-    FED --> ACCESS
-    ACCESS --> RECORD[Source Record or File service]
-    RECORD --> RLS[Source database row restrictions]
-    RLS --> RESULT[Approved fields or refusal]
-    RESULT --> PERSON
-```
-
-The **shared-record gateway** is one product-facing contract with two adapters:
-
-- The local adapter calls the source Access, Record, Query, and File services inside the current cluster and relies on the source database row restrictions.
-- The remote adapter sends the same bounded request to the source cluster's protected federation endpoint. The source runs the access decision and database query; the recipient does not receive database credentials, raw SQL access, or a broad unfiltered result.
-
-The route is an implementation detail. Grant identifiers, query shapes, actions, field allowlists, result envelopes, errors, activity, and user-visible states are the same. A cross-cluster route may have higher latency or a source-unavailable state, but it does not have different sharing permissions.
-
-### Cluster identity and discovery
-
-Every cluster has a permanent `cluster_id` and a signed manifest registered in the Vortex cluster directory. The protected directory stores operational metadata: approved federation address, environment, service region, status, supported federation protocol versions, supported shared-contract versions, current and next public signing keys, and the organisation identifiers currently routed to that cluster. It stores no organisation profile, account, role, record, file, or shared field value.
-
-Clusters cache a verified directory entry for a bounded time and fail closed when they cannot establish a currently approved route. Private signing keys remain in [Doppler](https://docs.doppler.com/docs), and rotation overlaps old and new public keys for a documented verification window.
-
-The shared [Vortex Identity Authority](02-people-organisations-and-sign-in.md#identity-across-clusters) issues asymmetric identity tokens whose public keys are available for local verification. Each cluster stores a minimal local eligibility projection and authorises its own organisation accounts; a verified identity token alone never proves cluster eligibility, organisation membership, or a recipient role.
-
-### Cross-cluster request
-
-The recipient cluster first verifies the person's current identity, local organisation account, application access, roles, and access version. It then creates a short-lived recipient assertion containing only the identifiers and security context required by the [federation contract](appendices/data-contracts.md#federation-contracts). The source federation endpoint verifies it and establishes source-database request context containing the recipient cluster, organisation, account, application, roles, grant, and correlation identifier. The source's [PostgreSQL row-security policies](https://www.postgresql.org/docs/current/ddl-rowsecurity.html) remain the final database boundary.
-
-The remote request uses HTTPS and an asymmetric [HTTP Message Signature](https://www.rfc-editor.org/rfc/rfc9421.html). The signature covers the request method, target address and path, destination authority, issue and expiry times, one-use nonce, federation version, correlation identifier, and [Content-Digest](https://www.rfc-editor.org/rfc/rfc9530.html). The source verifies the registered recipient-cluster key, intended audience, digest, clock window, nonce, compatible versions, and grant before calling a business service. A nonce cannot be accepted twice inside the replay window. The source signs the response status, correlation identifier, issue time, and content digest so the recipient can verify its origin and body before display.
-
-The first release exposes only bounded protected operations:
-
-- Shared-record query with source-side filters, sorts, field projection, cursor pagination, and page limits.
-- Source-executed shared search and report queries using the same bounded query contract, with no recipient index or materialised report result.
-- Source-owned approved export job and short-lived download instruction, with no recipient-cluster file copy.
-- Named record action with the expected concurrency number and a duplicate-protection key.
-- Grant proposal, acceptance, activation receipt, revocation notice, and authoritative status reconciliation.
-- Source-owned upload admission/completion with current-authority recheck, and authenticated preview/download streams as specified by [Files](11-files-and-attachments.md#download-and-preview). A reusable bearer Storage URL cannot replace that check.
-- Content-free invalidation that tells an open recipient screen to re-run its authorised query.
-
-Raw SQL, cross-cluster joins, unbounded reads, arbitrary source URLs, database credentials, and distributed database transactions are not federation operations.
-
-### Grant activation and reconciliation
-
-The source cluster owns the grant. The recipient cluster owns a non-content mirror used to show pending and active sharing, route requests, and store signed evidence. Cross-cluster activation follows the signed proposal, acceptance, activation-receipt, and status-reconciliation sequence in [record sharing](16-copying-sharing-import-export.md#creating-a-grant).
-
-Every message has a permanent operation identifier, payload fingerprint, sender and receiver cluster, issue and expiry time, and duplicate-protection key. Repeating the same message returns the existing result. A message with the same operation identifier and different fingerprint is refused. There is no attempt to commit both databases atomically.
-
-Source revocation and expiry take effect on the next source request even if the recipient mirror or notification is delayed. Reconciliation updates the mirror and its local access version; it never restores access the source has ended.
-
-### Versions, failures, and efficiency
-
-Every request names the federation protocol version, shared-contract version and fingerprint, relevant published module revision, and validated source-to-recipient definition mapping. A cluster accepts a documented compatible range during rolling deployment and refuses an unsupported version with a safe, stable error. Matching database structures do not allow this check to be skipped because migrations and application deployments may temporarily differ.
-
-Remote queries are efficient by contract: filters, search, sorting, field selection, grouping, totals, counts, and cursor pagination run at the source; records and aggregates are returned in bounded batches; transport connections may be reused; and timeouts and failure isolation prevent one unavailable cluster consuming the recipient's request capacity. Application search fans out only across a bounded set of active grant mirrors, isolates each unavailable source, and groups merged remote results as shared rather than pretending that incomparable source ranks form one local index.
-
-Recipient-side gateway consumption is measured for the recipient organisation. Source queries, searches, reports, actions, temporary export or file storage, and any network delivery are measured for the source organisation. Linked metering entries share one correlation identifier, the same category is not counted twice, and the allocation does not change between local and remote routes. The source rate-limits by recipient cluster, organisation, grant, and operation.
-
-The recipient may cache signed cluster metadata, public keys, definition fingerprints, grant mirrors, saved non-content report definitions, and content-free invalidations. It does not persist business-record responses, files, search documents, report results, flow payloads, or cross-request shared-data cache entries.
-
-A timeout, unreachable source, invalid signature, replay, version mismatch, disabled route, entitlement or rate-limit refusal, unapproved recipient region, or uncertain grant status fails closed. The screen shows that the source organisation is temporarily unavailable when retry is safe; it never displays a stored stale record as if it were current. Shared-record responses use private no-store browser and intermediary caching instructions.
-
-### Why database federation and replication are excluded
-
-Matching schemas make contract validation and query translation easier, but they do not make database-level federation the simpler customer-sharing boundary. [PostgreSQL foreign data wrappers](https://www.postgresql.org/docs/current/postgres-fdw.html) require foreign servers, user mappings, remote credentials, matching column definitions, and coupled remote connections and transactions. That is useful for controlled operator analytics, not for carrying a different recipient account and grant through every customer request.
-
-[PostgreSQL logical replication](https://www.postgresql.org/docs/current/logical-replication-restrictions.html) copies data and does not replicate schema changes, so subscriber schemas must still be coordinated. It would also add recipient storage, conflict, deletion, retention, search, recovery, and residency obligations that the source-authoritative, no-recipient-copy design deliberately avoids.
+Populated changes use the same owning primitives in bounded add/migrate/switch/retire steps. Initial creation needs no new worker, queue or owner credential in Vercel.
 
 ## Event dispatch without a permanent web worker
 
-The [record save](06-records-and-lifecycle.md#save-sequence) writes an event outbox entry and a message to a logged durable [Supabase Queue](https://supabase.com/docs/guides/queues) in the same database transaction. Queue access is server-only and is not added to an exposed Data API schema. After each committed request the Vercel server schedules the bounded dispatcher in process, after the response. The dispatcher claims a bounded batch, honours per-record sequence, and starts [Kestra executions](https://kestra.io/docs/workflow-components/execution) for matched flows.
+The [record save](06-records-and-lifecycle.md#save-sequence) writes an event outbox entry in the same database transaction; `event_outbox` is the one delivery path. After each committed request the Vercel server schedules the bounded dispatcher in process, after the response. The dispatcher claims a bounded batch, honours per-record sequence, and starts matched flows on the back-end adapter. Delivered rows older than 30 days and finished backend runs older than 90 days are deleted in bounded batches by the same wake-up.
 
-A scheduled [Kestra](https://kestra.io/docs/workflow-components/triggers) recovery flow calls the platform dispatcher endpoint; it does not read the database. This recovers messages after a failed or interrupted in-process dispatch or web deployment, while the after-commit dispatch provides the normal delivery path.
+A scheduled operational recovery flow calls the platform dispatcher endpoint; it does not read the database. This recovers messages after a failed or interrupted in-process dispatch or web deployment, while the after-commit dispatch provides the normal delivery path.
 
 ## Cache model
 
@@ -577,22 +479,16 @@ The [Access service](04-access-and-permissions.md) owns access versions. The [Re
 - Data cache keys name every record-type data version used by the query.
 - Read current account, session, Access and relevant data versions before lookup. A hit never bypasses current permission or field checks. Reuse ends at the earliest cache-policy lifetime, authority validity or session/context expiry; there is no fixed 60-second security policy.
 - Permission-administration and Activity responses are not cross-request cached. Provider failure falls back to the ordinary authorised query, never unverifiable stale content.
-- Publication does not retarget an existing installation. Installed applications, grants, flows and in-flight operations continue to use their stored exact release references until an explicit upgrade changes them. A format mismatch uses the protected rebuild path, while a stale revision returns a reload outcome.
+- Publication does not retarget an existing installation. Installed applications, role assignments, flows and in-flight operations continue to use their stored exact release references until an explicit upgrade changes them. A format mismatch uses the protected rebuild path, while a stale revision returns a reload outcome.
 - [Vercel cache invalidation](https://vercel.com/docs/cli/cache) may reclaim old entries but is not the security mechanism.
 - Private page responses instruct browsers and shared networks not to store them.
 
 Implement [permission-safe query caching #39](https://github.com/Abzum-NZ/Abzum-Vortex/issues/39)
 with the actual [query engine #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54).
 Native dependencies govern its order relative to [live refresh #56](https://github.com/Abzum-NZ/Abzum-Vortex/issues/56).
-No dormant Phase 3 cache framework or duplicate version counter is required.
+No dormant cache framework or duplicate version counter is required.
 The [application runtime #64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) owns
 its later immutable-definition and resolved-application cache integration.
-
-### Grant cache invalidation
-
-Creating, activating, changing, revoking, or expiring a cross-organisation grant increases the source organisation's access version and the recipient organisation's local access version. Inside one cluster this is one protected transaction. Across clusters, signed duplicate-safe messages and reconciliation update each side independently; the source decision never waits on a recipient cache or mirror.
-
-The first release does not place cross-organisation shared-record results in the shared data-result cache. A source record can change without changing the recipient organisation's own data version, so disabling this cache prevents stale or over-broad results until a complete cross-organisation version contract is proven. Published saved sharing conditions are evaluated by the database at query time; free-form grant conditions are not executed.
 
 ## Acceptance examples
 
@@ -602,7 +498,7 @@ The first release does not place cross-organisation shared-record results in the
 - Publishing a definition makes explicit discovery and Studio views see the new current release without waiting for cache expiry, while existing consumers remain pinned to their previously selected exact releases.
 - Changing a record makes a cached data result under the old record-type data version unreachable.
 - A cross-organisation shared-record query bypasses the cross-request data-result cache.
-- A grant cannot expose an identity, connection, activity, grant-consent, entitlement-policy, or access-control row.
+- A query cannot expose an identity, connection, activity, entitlement-policy or access-control row.
 - A same-cluster request and its cross-cluster equivalent produce the same allowed fields, action outcome, and stable refusal code.
 - A remote request with an altered body, reused nonce, expired signature, unregistered cluster, or incompatible contract version is refused before record access.
 - Source revocation refuses a cross-cluster request even while the recipient mirror still says active.

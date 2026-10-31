@@ -156,7 +156,7 @@ flowchart TD
 ## Scheduled time-based calculations
 
 A value that depends on the current time, such as whether a named deadline has
-passed, is a read-time computed field ([Decision 4](../../build-plan/architecture-decisions-2026-09-25.md#decision-4--formulas-and-read-time-computed-fields)).
+passed, is a read-time computed field ([Decision 4](../../build-plan/architecture-decisions.md#decision-4--formulas-and-read-time-computed-fields)).
 It is a [formula](frontend-rule-designer.md#formulas) that uses `now`, and it is
 computed whenever the record is read. It is never stored, and no background
 worker, due-time metadata or recalculation refreshes it. The first release's
@@ -188,7 +188,7 @@ depend on the current time remain stored and save-driven.
 
 An overdue escalation is an ordinary flow with a `Schedule` trigger and `durable`
 execution, not a stored value
-([Decision 1](../../build-plan/architecture-decisions-2026-09-25.md#decision-1--one-flow-definition-one-vortex-flow-engine-kestra-for-durable-work)).
+([Decision 1](../../build-plan/architecture-decisions.md#decision-1--one-flow-definition-one-in-house-flow-engine)).
 It belongs to the release of the module or application that owns it; the platform
 provides no managed escalation flow. Kestra runs the schedule and is
 authoritative for whether an occurrence ran. Each occurrence queries the records
