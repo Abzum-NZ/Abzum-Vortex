@@ -1,13 +1,12 @@
 {
-  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "$schema": "https://unpkg.com/knip@6/schema.json",
   "tags": ["-@knipignore"],
   "exclude": ["duplicates"],
   "workspaces": {
     ".": {
       "includeEntryExports": false,
       "entry": ["tooling/supabase/lane.mjs", "tooling/theme/off-theme-detector.js"],
-      "project": ["tooling/**/*.{js,mjs,ts}"],
-      "ignore": ["tooling/typescript/types/**"]
+      "project": ["tooling/**/*.{js,mjs,ts}"]
     },
     "apps/web": {
       "includeEntryExports": false,
@@ -25,8 +24,7 @@
       "project": ["src/**/*.{ts,tsx}"]
     },
     "packages/ui": {
-      "entry": ["src/icons/adapters/*.{ts,tsx}"],
-      "ignoreDependencies": ["tailwindcss", "tw-animate-css"]
+      "entry": ["src/icons/adapters/*.{ts,tsx}"]
     }
   }
 }

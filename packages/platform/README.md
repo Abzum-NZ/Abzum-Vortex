@@ -1,6 +1,6 @@
 # Vortex platform
 
-[Platform specification](../../docs/specification/README.md) | [Data-contract appendix](../../docs/specification/appendices/data-contracts.md) | [Build plan](../../docs/build-plan/README.md#phases) | [Definition validation error guide](VALIDATION_ERRORS.md)
+[Platform specification](../../docs/specification/README.md) | [Data-contract appendix](../../docs/specification/appendices/data-contracts.md) | [Build plan](../../docs/build-plan/README.md) | [Definition validation error guide](VALIDATION_ERRORS.md)
 
 `@vortex/platform` contains the platform's shared contracts and server operations. Its public entry points are `@vortex/platform/schema` for browser-safe schemas, types and pure helpers, and `@vortex/platform/server` for database-backed operations. The server entry point imports `server-only`; schema modules do not import server implementations.
 
@@ -27,9 +27,8 @@ The source folders group implementation by domain:
 The files `src/catalogue/catalogue/shadcn-create-theme-catalogue.json`,
 `shadcn-create-theme-releases.json` and `shadcn-fonts.json` are checked-in shadcn 4.21.0 catalogue
 data. Theme and font release data stays behind the server entry; `shadcn-font-options.json` is the
-small browser-safe font view used by the renderer. The unused registry source snapshot and its
-importer were removed, so these files are maintained as platform data rather than generated at
-build time.
+small browser-safe font view used by the renderer. These files are maintained as platform data, not
+generated at build time.
 
 These folders describe source ownership; the package entry points above define what consumers can import. A schema parse establishes that data matches its contract. It does not authenticate a caller, decide permissions, read protected current state, commit a transaction or perform an operation.
 

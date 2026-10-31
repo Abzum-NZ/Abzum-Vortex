@@ -203,6 +203,9 @@ catalogs:
     '@types/react':
       specifier: 19.3.0
       version: 19.3.0
+    '@types/react-dom':
+      specifier: 19.3.0
+      version: 19.3.0
     '@types/semver':
       specifier: 7.8.0
       version: 7.8.0
@@ -230,9 +233,9 @@ catalogs:
     motion:
       specifier: 14.6.0
       version: 14.6.0
-    postcss:
-      specifier: 8.5.31
-      version: 8.5.31
+    next:
+      specifier: 16.4.3
+      version: 16.4.3
     postgres:
       specifier: 3.4.9
       version: 3.4.9
@@ -254,6 +257,9 @@ catalogs:
     semver:
       specifier: 7.8.5
       version: 7.8.5
+    server-only:
+      specifier: 0.0.1
+      version: 0.0.1
     sonner:
       specifier: 2.0.8
       version: 2.0.8
@@ -278,6 +284,9 @@ catalogs:
     ws:
       specifier: 8.22.0
       version: 8.22.0
+    zod:
+      specifier: 4.6.7
+      version: 4.6.7
 
 overrides:
   exceljs>uuid: 11.1.1
@@ -339,7 +348,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
       next:
-        specifier: 16.4.3
+        specifier: 'catalog:'
         version: 16.4.3(@babel/core@7.29.7(supports-color@7.2.0))(@types/node@26.6.5)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       react:
         specifier: 'catalog:'
@@ -348,30 +357,27 @@ importers:
         specifier: 'catalog:'
         version: 19.3.1(react@19.3.1)
       server-only:
-        specifier: 0.0.1
+        specifier: 'catalog:'
         version: 0.0.1
       ws:
         specifier: 'catalog:'
         version: 8.22.0
       zod:
-        specifier: 4.6.7
+        specifier: 'catalog:'
         version: 4.6.7
     devDependencies:
       '@tailwindcss/postcss':
         specifier: 'catalog:'
         version: 4.3.3
       '@types/react':
-        specifier: 19.3.0
+        specifier: 'catalog:'
         version: 19.3.0
       '@types/react-dom':
-        specifier: 19.3.0
+        specifier: 'catalog:'
         version: 19.3.0(@types/react@19.3.0)
       '@types/ws':
         specifier: 'catalog:'
         version: 8.18.2
-      postcss:
-        specifier: 'catalog:'
-        version: 8.5.31
       tsx:
         specifier: 'catalog:'
         version: 4.23.15
@@ -409,10 +415,10 @@ importers:
         specifier: 'catalog:'
         version: 7.8.5
       server-only:
-        specifier: 0.0.1
+        specifier: 'catalog:'
         version: 0.0.1
       zod:
-        specifier: 4.6.7
+        specifier: 'catalog:'
         version: 4.6.7
     devDependencies:
       '@types/semver':
@@ -467,7 +473,7 @@ importers:
         specifier: 'catalog:'
         version: 14.6.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       next:
-        specifier: 16.4.3
+        specifier: 'catalog:'
         version: 16.4.3(@babel/core@7.29.7(supports-color@7.2.0))(@types/node@26.6.5)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       react:
         specifier: 'catalog:'
@@ -498,7 +504,7 @@ importers:
         specifier: 'catalog:'
         version: 19.3.0
       '@types/react-dom':
-        specifier: 19.3.0
+        specifier: 'catalog:'
         version: 19.3.0(@types/react@19.3.0)
 
 packages:

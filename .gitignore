@@ -4,8 +4,6 @@ node_modules/
 .env.*
 !.env.example
 .vercel/
-coverage/
-dist/
 .turbo/
 .pnpm-store/
 *.log
