@@ -52,7 +52,6 @@ type AcceptedPlacement = Readonly<{
   placementId: string;
   data: PageDataState;
   editFormBaseline: EditFormBaseline | null;
-  subject?: ApplicationPageModel["subject"] | null;
 }>;
 
 const subscribeToNothing = (): (() => void) => () => undefined;
@@ -85,13 +84,19 @@ export function usePlacementRefresh({
   setRefreshedPlacementData: Dispatch<SetStateAction<RefreshedPlacementData | undefined>>;
   refreshedPlacementData: RefreshedPlacementData | undefined;
 }>) {
-  /** Apply all placement reads through the same generation path. */
+  /**
+   * Apply all placement reads through the same generation path. Every read of the page addresses the
+   * same subject, so the subject a read returns is the page's current one whatever placement it
+   * asked for: a write's new concurrency number therefore reaches the page on the refresh that
+   * follows it, and the next action is not refused as stale.
+   */
   const applyAcceptedPlacements = useCallback(
     (
       scopeKey: string,
       accepted: readonly AcceptedPlacement[],
       loadedContent?: Readonly<Record<string, unknown>>,
       contentOnly = false,
+      loadedSubject?: ApplicationPageModel["subject"] | null,
     ) => {
       const scope = placementRequestsRef.current;
       if (scope.key !== scopeKey) return;
@@ -101,14 +106,14 @@ export function usePlacementRefresh({
         const same = current?.navigationKey === scopeKey;
         const data = { ...(same ? current.data : {}) };
         const editFormBaselines = { ...(same ? current.editFormBaselines : {}) };
-        let subject = same ? current.subject : undefined;
+        const subject =
+          loadedSubject !== undefined ? loadedSubject : same ? current.subject : undefined;
         let changed = false;
         for (const entry of accepted) {
           if (!isCurrentComponentRequestGeneration(live.generations.get(entry.key), entry.request))
             continue;
           data[entry.placementId] = entry.data;
           editFormBaselines[entry.placementId] = entry.editFormBaseline;
-          if (entry.subject !== undefined) subject = entry.subject;
           changed = true;
         }
         if (!changed && !(contentOnly && loadedContent !== undefined)) return current;
@@ -183,7 +188,13 @@ export function usePlacementRefresh({
           return;
         }
         if (contentResult.kind !== "available" || contentResult.content === undefined) return;
-        applyAcceptedPlacements(requestScope.key, [], contentResult.content, true);
+        applyAcceptedPlacements(
+          requestScope.key,
+          [],
+          contentResult.content,
+          true,
+          contentResult.subject,
+        );
         return;
       }
       // A refreshed board shows the same columns it showed: only those columns' cards are read.
@@ -203,7 +214,8 @@ export function usePlacementRefresh({
       });
       const loadedData = new Map<string, PageDataState>();
       const loadedBaselines = new Map<string, EditFormBaseline | null>();
-      const loadedSubjects = new Map<string, ApplicationPageModel["subject"] | null>();
+      /** The page's current subject as the reads saw it; undefined while no read has answered. */
+      let loadedSubject: ApplicationPageModel["subject"] | null | undefined;
       let loadedContent: Readonly<Record<string, unknown>> | undefined;
       const requestEntries = [...requests.entries()];
       for (let offset = 0; offset < requestEntries.length; offset += 500) {
@@ -255,6 +267,7 @@ export function usePlacementRefresh({
 
         if (result.kind === "available" && result.content !== undefined)
           loadedContent ??= result.content;
+        if (result.kind === "available") loadedSubject = result.subject;
         for (const [key, request] of batch) {
           if (!isCurrentComponentRequestGeneration(requestScope.generations.get(key), request))
             continue;
@@ -272,11 +285,6 @@ export function usePlacementRefresh({
               : null;
           loadedData.set(key, data ?? { status: "error" });
           loadedBaselines.set(key, baseline);
-          const displayKey =
-            Object.keys(model.data).find((candidate) => candidate.toLowerCase() === key) ??
-            request.componentId;
-          if (Object.hasOwn(model.editFormBaselines, displayKey) || baseline !== null)
-            loadedSubjects.set(key, result.kind === "available" ? result.subject : null);
         }
       }
 
@@ -296,10 +304,10 @@ export function usePlacementRefresh({
           placementId: displayKey,
           data: loadedData.get(key) ?? { status: "error" },
           editFormBaseline: loadedBaselines.get(key) ?? null,
-          ...(loadedSubjects.has(key) ? { subject: loadedSubjects.get(key) } : {}),
         });
       }
-      if (accepted.length > 0) applyAcceptedPlacements(requestScope.key, accepted, loadedContent);
+      if (accepted.length > 0 || loadedSubject !== undefined)
+        applyAcceptedPlacements(requestScope.key, accepted, loadedContent, false, loadedSubject);
     },
     [
       address,
@@ -422,12 +430,9 @@ export function usePlacementRefresh({
               placementId,
               data,
               editFormBaseline: baseline,
-              ...(Object.hasOwn(model.editFormBaselines, placementId) || baseline !== null
-                ? { subject: result.subject }
-                : {}),
             };
           });
-          applyAcceptedPlacements(scope.key, entries, content, requests.size === 0);
+          applyAcceptedPlacements(scope.key, entries, content, requests.size === 0, result.subject);
         },
       };
     },
