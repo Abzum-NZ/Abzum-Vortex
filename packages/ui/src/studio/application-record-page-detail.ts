@@ -254,8 +254,15 @@ export const ensureRelatedAdds = (plan: Plan, childResolved: Resolved): void => 
           {
             key: "details",
             title: "Details",
+            // A field shows once: the header's key facts and the stage strip are not repeated here.
             fields: record.fields
-              .filter((entry) => entry.type !== "attachment" && resolved.readable.has(entry.key))
+              .filter(
+                (entry) =>
+                  entry.type !== "attachment" &&
+                  resolved.readable.has(entry.key) &&
+                  !keyFacts.includes(entry) &&
+                  field(resolved, entry) !== stage?.reference,
+              )
               .map((entry) => ({ field: field(resolved, entry), label: entry.label })),
           },
         ],

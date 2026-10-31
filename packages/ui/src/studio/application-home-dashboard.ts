@@ -146,7 +146,7 @@ export const ensureHomeDashboard = (
       blockItem(
         release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.HEADING_BLOCK_RELEASE, "heading"),
         freshAlias(plan, "heading_home"),
-        { text: "Overview", level: "one" },
+        { text: "Overview", level: "two" },
         {},
       ),
     );
@@ -199,7 +199,7 @@ export const ensureHomeDashboard = (
           blockItem(
             release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.HEADING_BLOCK_RELEASE, "heading"),
             freshAlias(plan, `heading_recent_${record.key}`),
-            { text: `Recent ${record.plural_name}`, level: "two" },
+            { text: `Recent ${record.plural_name}`, level: "three" },
             {},
           ),
           blockItem(
