@@ -54,7 +54,8 @@ export const optionsFlowRefusal = (flow: OptionsFlowShape): string | undefined =
       return `holds the step ${namedStep(task, task.type)}, which is not a step this version runs`;
     if (definition.effect === "change" || definition.effect === "background_start")
       return `changes data with the step ${namedStep(task, definition.title)}; an options flow only reads`;
-    if (definition.runs.page && definition.runLocations.includes("browser"))
+    // A pure step (Build list, Calculate) runs wherever its inputs are; only a page step is refused.
+    if (definition.effect === "interface")
       return `runs the step ${namedStep(task, definition.title)} in the page; an options flow works out its list on the server`;
   }
   return undefined;
