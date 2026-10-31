@@ -234,7 +234,7 @@ export type PlatformComponentRegistration = Readonly<{
   );
 
 /** Registration after its exact release identity has been resolved from the supplied catalogue. */
-export type RegisteredPlatformComponent = Readonly<{
+type RegisteredPlatformComponent = Readonly<{
   metadata: PlatformBlockRelease;
   parsePayload: PlatformComponentPayloadParser;
 }>;

@@ -1,11 +1,9 @@
 export {
-  DISPLAY_EVENT_NAMES,
   type DisplayBatchEditAnswer,
   type DisplayEventHandler,
   type DisplayEventHandlers,
   type DisplayInlineEditResult,
   type DisplaySemanticEvent,
-  type DisplaySemanticEventName,
 } from "./display-events";
 import {
   DISPLAY_EVENT_NAMES,
@@ -21,8 +19,6 @@ import { fail, requireRecord } from "./payload-parse";
 export {
   isInternalAddress,
   type BoardBucketPayload,
-  type BoardColumnPayload,
-  type BoardPage,
   type BoardPayload,
   type CalendarPayload,
   type CalendarView,

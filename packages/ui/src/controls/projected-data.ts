@@ -37,7 +37,7 @@ export {
 } from "@vortex/platform/schema";
 
 /** Every event name any control accepts; each block further narrows this to its own declaration. */
-export const CONTROL_EVENT_NAMES = Object.freeze([
+const CONTROL_EVENT_NAMES = Object.freeze([
   "action",
   "field_changed",
   "field_focus_lost",

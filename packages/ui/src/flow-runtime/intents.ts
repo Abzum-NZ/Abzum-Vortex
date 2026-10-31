@@ -32,8 +32,6 @@ export type FlowIntent = Readonly<{
   properties: Readonly<Record<string, JsonValue>>;
 }>;
 
-export type FlowIntentKind = FlowIntent["kind"];
-
 /**
  * The person's answer to a form intent, using the same shape sent to the server. Cancel is an
  * answer: the run resumes and the flow's own `submitted` branch decides what a cancel means.

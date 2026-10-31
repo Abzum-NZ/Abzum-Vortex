@@ -14,7 +14,7 @@ import {
   type ReactElement,
   type RefObject,
 } from "react";
-import type { FlowFieldCorrection, FormFlowFeedback } from "@vortex/platform/schema";
+import type { FlowFieldCorrection } from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import { FlowSurfaceContext } from "../flow-runtime/flow-surface-context";
 import { FlowRuntimeStateContext } from "../flow-runtime/flow-runtime-state-context";
@@ -75,7 +75,6 @@ const useHydrated = (): boolean =>
   );
 
 /** A safe, final result returned by the form's bound flow. */
-export type { FormFlowFeedback };
 
 const fieldCorrectionText: Readonly<Record<FlowFieldCorrection["code"], string>> = {
   required_value: "This field is required.",

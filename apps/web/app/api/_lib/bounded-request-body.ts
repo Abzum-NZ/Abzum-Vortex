@@ -13,7 +13,7 @@ type BoundedRequestText =
  * while it is read, so a chunked or understated body is cancelled as soon as it passes the limit
  * instead of being buffered in full.
  */
-export const readBoundedRequestBytes = async (
+const readBoundedRequestBytes = async (
   request: Request,
   maximumBytes: number,
 ): Promise<

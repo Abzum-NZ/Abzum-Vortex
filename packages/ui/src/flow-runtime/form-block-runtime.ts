@@ -12,7 +12,7 @@ import type { FlowDispatchResult } from "./flow-runtime";
  * the server's form-submit adapter reads; the client never names a flow input, a node or an outcome.
  */
 
-export type FormFieldAnswers = Readonly<Record<string, unknown>>;
+type FormFieldAnswers = Readonly<Record<string, unknown>>;
 type PreparedForm = Readonly<{
   values: FormFieldAnswers;
   selectedOwnerGroupId?: string;

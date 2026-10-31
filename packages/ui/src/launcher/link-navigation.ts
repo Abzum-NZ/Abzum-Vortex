@@ -8,7 +8,7 @@ import type { FlowIntent } from "../flow-runtime/intents";
  * it names; an internal target is only ever resolved against the viewer's current server-side
  * access, never trusted from the browser.
  */
-export type LinkTarget = Readonly<{
+type LinkTarget = Readonly<{
   kind: "page";
   pageId: string;
   /** Parameters of the Navigate task that opened it; the shell decides how a page uses them. */
@@ -42,7 +42,7 @@ const mayDiscardUnsavedWork = async (guard: UnsavedWorkGuard | undefined): Promi
   guard === undefined || !guard.hasUnsavedWork() || (await guard.confirmDiscardUnsavedWork());
 
 /** The page target a Navigate task intent names; undefined when it names no valid page. */
-export const linkTargetForNavigateIntent = (intent: FlowIntent): LinkTarget | undefined => {
+const linkTargetForNavigateIntent = (intent: FlowIntent): LinkTarget | undefined => {
   const { page, parameters } = intent.properties;
   if (intent.kind !== "navigate" || typeof page !== "string" || page.length === 0) return undefined;
   const bag =

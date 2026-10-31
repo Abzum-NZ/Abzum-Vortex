@@ -13,7 +13,7 @@ import {
 import { motion, useReducedMotion } from "motion/react";
 import { Icon } from "../icons/icon";
 import { readMotionTiming, type MotionTiming } from "./motion-tokens";
-import type { ProjectedNavigation, ProjectedNavigationItem } from "@vortex/platform/schema";
+import type { ProjectedNavigation } from "@vortex/platform/schema";
 import { Button } from "../components/button";
 import {
   Sidebar,
@@ -37,9 +37,7 @@ import { getAccessibleName } from "../display/display-state-container";
 import { cn } from "../lib/utils";
 import type { PlatformBlockRenderProps } from "../registry";
 
-export type { ProjectedNavigation, ProjectedNavigationItem };
-
-export type ApplicationNavigationProps = Readonly<{
+type ApplicationNavigationProps = Readonly<{
   /** The viewer's already permission-filtered navigation, in definition order. */
   navigation: ProjectedNavigation;
   /** Accessible name for the navigation landmark, from the application or shell. */
@@ -240,7 +238,7 @@ function NavigationList({
  * `aria-current` when it names the shown page, and external links are marked external and carry
  * no referrer or opener access.
  */
-export function ApplicationNavigation({
+function ApplicationNavigation({
   navigation,
   label,
   resolvePageHref,

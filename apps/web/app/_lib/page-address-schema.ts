@@ -14,8 +14,6 @@ export const pageAddressSchema = z
   })
   .strict();
 
-export type PageAddress = z.infer<typeof pageAddressSchema>;
-
 /** The page address's search string as one parameter map, keeping every repeated value. */
 export const searchParametersOf = (
   search: string,
