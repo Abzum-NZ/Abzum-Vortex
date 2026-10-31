@@ -73,7 +73,9 @@ export function StudioRecordPageForm({
       type: effectiveKind ?? "list",
       shellAlias: shellChoice === "" ? null : shellChoice,
       addToMenu: menuAllowed && addToMenu,
-      ...(effectiveKind === "list" && listName.trim() !== "" ? { name: listName } : {}),
+      ...((effectiveKind === "list" || effectiveKind === "board") && listName.trim() !== ""
+        ? { name: listName }
+        : {}),
     }),
     [effectiveRecordType, effectiveKind, shellChoice, addToMenu, menuAllowed, listName],
   );
