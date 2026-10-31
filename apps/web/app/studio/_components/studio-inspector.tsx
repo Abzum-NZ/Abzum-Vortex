@@ -134,7 +134,7 @@ export function StudioInspector({
           />
         </header>
       )}
-      <div className={STUDIO_RAIL_BODY_CLASS}>
+      <div className={STUDIO_RAIL_BODY_CLASS} data-studio-rail-body="">
         {labels !== undefined ? (
           <StudioInspectorGroup title="General">
             <LabelsForm key={labelsKey} labels={labels} />
