@@ -547,11 +547,24 @@ export function useStudioReleasesTab({
       parsed.data.root_alias !== expected.rootAlias
     )
       return "stale";
+    // The reviewed file is what the draft must hold: a parse that drops anything is a defect, not a silent replace.
+    if (canonicalJson(parsed.data) !== canonicalJson(candidate)) {
+      console.error(
+        "[studio] the imported source did not survive its own contract: STUDIO_SOURCE_IMPORT_PARSE_LOST",
+      );
+      return "stale";
+    }
     const outcome = draft.run(() => ({ kind: "edit", source: parsed.data, result: true }), {
       expected: expected.source,
     });
     if (outcome.kind === "blocked") return "stale";
     if (!outcome.changed) return "unchanged";
+    if (canonicalJson(draft.history.getState().source) !== canonicalJson(parsed.data)) {
+      console.error(
+        "[studio] the draft did not keep the imported source: STUDIO_SOURCE_IMPORT_EDIT_LOST",
+      );
+      return "stale";
+    }
     return "applied";
   };
 
