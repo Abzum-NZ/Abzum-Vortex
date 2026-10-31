@@ -18,6 +18,10 @@ set compilation_output = compilation_output - 'toolBundle'
 where compilation_output ? 'toolBundle';
 alter table vortex_definition.releases enable trigger releases_append_only;
 
+alter table vortex_definition.installation_runtime_bundle_parts
+  drop constraint installation_runtime_bundle_parts_section_check;
+alter table vortex_definition.installation_runtime_bundles
+  drop constraint installation_runtime_bundles_parts_check;
 delete from vortex_definition.installation_runtime_bundle_parts where section = 'tool_bundle';
 update vortex_definition.installation_runtime_bundles as bundle
 set parts = kept.parts, total_size_bytes = kept.total_size_bytes
@@ -41,12 +45,8 @@ where bundle.organization_id = kept.organization_id
   and bundle.bundle_format_version = kept.bundle_format_version
   and bundle.parts @> '[{"section": "tool_bundle"}]'::jsonb;
 alter table vortex_definition.installation_runtime_bundle_parts
-  drop constraint installation_runtime_bundle_parts_section_check;
-alter table vortex_definition.installation_runtime_bundle_parts
   add constraint installation_runtime_bundle_parts_section_check
   check (section = any (array['pages', 'navigation', 'flows', 'theme', 'component_registry', 'access_plan']));
-alter table vortex_definition.installation_runtime_bundles
-  drop constraint installation_runtime_bundles_parts_check;
 alter table vortex_definition.installation_runtime_bundles
   add constraint installation_runtime_bundles_parts_check
   check (pg_catalog.jsonb_typeof(parts) = 'array' and pg_catalog.jsonb_array_length(parts) >= 6);
