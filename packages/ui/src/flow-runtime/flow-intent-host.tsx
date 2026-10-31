@@ -335,7 +335,7 @@ function FlowSurfaceHost({
 }
 
 /** Presents flow intents without re-rendering the page when a surface changes. */
-/** Shows every review line; a nested group is listed under the entry it belongs to. */
+/** Shows every review line; a role entry lists what it allows under its own line. */
 // item 10: CRM-FIX-PLATFORM
 const ConfirmationDetails = ({
   entries,
@@ -345,9 +345,14 @@ const ConfirmationDetails = ({
       typeof entry === "string" ? (
         <li key={index}>{entry}</li>
       ) : (
-        <li key={index} className="list-none">
+        <li key={index}>
+          {entry.text}
           {/* item 10: CRM-FIX-PLATFORM */}
-          <ConfirmationDetails entries={entry} />
+          <ul className="flex list-[circle] flex-col gap-1 pl-5">
+            {entry.lines.map((line, lineIndex) => (
+              <li key={lineIndex}>{line}</li>
+            ))}
+          </ul>
         </li>
       ),
     )}
