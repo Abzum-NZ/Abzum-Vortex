@@ -107,7 +107,9 @@ export function TableSummary({
       className="m-0 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-muted-foreground tabular-nums"
     >
       <span className="font-medium text-foreground">
-        {recordCount === 1 ? `1 ${label.replace(/s$/i, "")}` : `${recordCount} ${label.toLowerCase()}`}
+        {recordCount === 1
+          ? `1 ${label.replace(/s$/i, "")}`
+          : `${recordCount} ${label.toLowerCase()}`}
       </span>
       {sums.map((sum) => (
         <span key={sum.key}>{sum.text}</span>

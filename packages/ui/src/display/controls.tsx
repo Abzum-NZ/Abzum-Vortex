@@ -5,7 +5,13 @@ import Link from "next/link";
 import { Button } from "../components/button";
 import { Card, CardContent } from "../components/card";
 import { Checkbox } from "../components/checkbox";
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "../components/empty";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "../components/empty";
 import { Pagination, PaginationContent, PaginationItem } from "../components/pagination";
 import { Skeleton } from "../components/skeleton";
 import { Spinner } from "../components/spinner";
@@ -102,10 +108,7 @@ export function RecordsEmptyState({
       </EmptyHeader>
       {create === undefined ? null : (
         <EmptyContent>
-          <Button
-            nativeButton={false}
-            render={<Link href={create.href} prefetch={false} />}
-          >
+          <Button nativeButton={false} render={<Link href={create.href} prefetch={false} />}>
             {create.label}
           </Button>
         </EmptyContent>

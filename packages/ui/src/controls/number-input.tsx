@@ -83,8 +83,9 @@ export function NumberInput(props: NumberInputProps): ReactElement {
           currency,
           currencyDisplay: "narrowSymbol",
         });
-  const currencyPrefix = numberFormat?.formatToParts(0).find((part) => part.type === "currency")
-    ?.value;
+  const currencyPrefix = numberFormat
+    ?.formatToParts(0)
+    .find((part) => part.type === "currency")?.value;
   const groupSeparator =
     new Intl.NumberFormat().formatToParts(1000).find((part) => part.type === "group")?.value ?? ",";
   /** The typed text with its integer part grouped, while the exact typed value stays in `raw`. */

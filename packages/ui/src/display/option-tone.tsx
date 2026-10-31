@@ -49,7 +49,11 @@ export function OptionToneDot({
     <span
       aria-hidden="true"
       data-vortex-option-tone={tone}
-      className={cn("inline-block size-2 shrink-0 rounded-full", optionToneFillClass[tone], className)}
+      className={cn(
+        "inline-block size-2 shrink-0 rounded-full",
+        optionToneFillClass[tone],
+        className,
+      )}
     />
   );
 }

@@ -28,14 +28,14 @@ const sectionsOf = (
 ): readonly RecordDetailSection[] => {
   if (contract === undefined) return values.sections;
   const projected = new Map(
-    values.sections.flatMap((section) => section.fields.map((field) => [field.key, field] as const)),
+    values.sections.flatMap((section) =>
+      section.fields.map((field) => [field.key, field] as const),
+    ),
   );
   return contract.sections.flatMap((section): RecordDetailSection[] => {
     const fields = section.fields.flatMap((declared): DisplayDetailField[] => {
       const field = projected.get(declared.field);
-      return field === undefined
-        ? []
-        : [{ ...field, label: declared.label ?? field.label }];
+      return field === undefined ? [] : [{ ...field, label: declared.label ?? field.label }];
     });
     if (fields.length === 0) return [];
     const projectedSection = values.sections.find((candidate) => candidate.key === section.key);
@@ -256,7 +256,10 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
                             {row.fields.length === 0 ? null : (
                               <dl className="m-0 flex flex-wrap gap-x-4 gap-y-1">
                                 {row.fields.map((field) => (
-                                  <div key={field.key} className="flex min-w-0 items-baseline gap-1">
+                                  <div
+                                    key={field.key}
+                                    className="flex min-w-0 items-baseline gap-1"
+                                  >
                                     <dt className="text-xs text-muted-foreground">{field.label}</dt>
                                     <dd className="m-0 truncate text-xs">
                                       <DisplayCellView value={field.value} />
