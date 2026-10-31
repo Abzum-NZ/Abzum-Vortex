@@ -1114,10 +1114,15 @@ const applyAccessCommand = (source: Source, command: StudioAccessCommand): Studi
         return setStandardPermission(candidate, command);
       case "add_permission": {
         const permission = addPermission(candidate, command);
-        return applied(
-          candidate,
-          `Permission ${quoted(permission.label)} added. Give it to roles, or use it to open pages.`,
-        );
+        // A record permission cannot open a page, and with no fields it lets nobody read or change
+        // anything: say the next step instead of leaving the builder with a permission that does nothing.
+        const next =
+          permission.record_type === undefined
+            ? "Give it to roles, or use it to open pages."
+            : `Give it to roles, then choose the fields it reads and changes in Permissions.${
+                permission.action_kind === "named" ? " Or choose it as an action's permission." : ""
+              }`;
+        return applied(candidate, `Permission ${quoted(permission.label)} added. ${next}`);
       }
       case "edit_permission": {
         const summary = permissionOf(candidate, command.permissionKey);
