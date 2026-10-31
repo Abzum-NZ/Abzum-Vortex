@@ -14,7 +14,6 @@
     "./theme": "./src/theme/index.ts",
     "./theme/appearance": "./src/theme/appearance.ts",
     "./theme/styles": "./src/theme/theme-styles.ts",
-    "./display/projected-data": "./src/display/projected-data.ts",
     "./launcher/bindings": "./src/launcher/bindings.ts",
     "./studio/contextual-palette": "./src/studio/contextual-palette.ts",
     "./studio": "./src/studio/index.ts",

@@ -29,19 +29,6 @@ export type FlowIntent = Readonly<{
 
 export type FlowIntentKind = FlowIntent["kind"];
 
-export const FLOW_INTENT_KINDS: readonly FlowIntentKind[] = Object.freeze([
-  "show_message",
-  "clear_message",
-  "show_form",
-  "confirm",
-  "navigate",
-  "refresh",
-  "set_panel",
-  "set_filter",
-  "set_value",
-  "validate_form",
-]);
-
 /**
  * The person's answer to a form intent, using the same shape sent to the server. Cancel is an
  * answer: the run resumes and the flow's own `submitted` branch decides what a cancel means.
@@ -107,18 +94,6 @@ const text = (candidate: JsonValue | undefined): string | undefined =>
 
 const record = (candidate: JsonValue | undefined): Readonly<Record<string, JsonValue>> =>
   typeof candidate === "object" && candidate !== null && !Array.isArray(candidate) ? candidate : {};
-
-export const isFlowIntent = (candidate: unknown): candidate is FlowIntent => {
-  if (typeof candidate !== "object" || candidate === null) return false;
-  const intent = candidate as Record<string, unknown>;
-  return (
-    FLOW_INTENT_KINDS.includes(intent.kind as FlowIntentKind) &&
-    typeof intent.taskId === "string" &&
-    typeof intent.properties === "object" &&
-    intent.properties !== null &&
-    !Array.isArray(intent.properties)
-  );
-};
 
 /** Undefined when a platform-produced intent does not match the message contract. */
 export const readMessageIntent = (intent: FlowIntent): FlowMessageIntent | undefined => {

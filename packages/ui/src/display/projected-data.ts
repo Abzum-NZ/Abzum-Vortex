@@ -43,7 +43,6 @@ export {
   type DisplayRefusalReason,
   type DisplayRow,
   type DisplayScalarCell,
-  type DisplaySummaryMetric,
   type DisplayTableBulkRun,
   type DisplayTableExportRun,
   type DisplayTableExportScope,
@@ -55,7 +54,6 @@ export {
   type DisplayTableSelectionScope,
   type LauncherRowsPayload,
   type RecordDetailPayload,
-  type RecordsTableBulkRunSummary,
   type RichTextPayload,
   type SummaryPayload,
   type TextPayload,
@@ -78,14 +76,6 @@ export type DisplayRichTextInline = Extract<
   DisplayRichTextBlock,
   { kind: "paragraph" }
 >["children"][number];
-
-export type TextData = DisplayDataState<TextPayload>;
-export type RichTextData = DisplayDataState<RichTextPayload>;
-export type LauncherRowsData = DisplayDataState<LauncherRowsPayload>;
-export type TableData = DisplayDataState<DisplayTablePayload>;
-export type RecordDetailData = DisplayDataState<RecordDetailPayload>;
-export type SummaryData = DisplayDataState<SummaryPayload>;
-export type BoardData = DisplayDataState<BoardPayload>;
 
 // The data-free states carry no values, so one frozen instance serves every block's state type.
 const LOADING_STATE: DisplayDataState<never> = Object.freeze({ status: "loading" });

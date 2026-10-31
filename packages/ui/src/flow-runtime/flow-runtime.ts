@@ -502,10 +502,10 @@ export type FlowRuntime = Readonly<{
   /** Loads the page runner after visible data has been served. */
   prefetch: () => Promise<void>;
   /**
-   * Runs the flow bound to one component event: the server starts it and the page drives it through
-   * its continuations. `clickId` is the one identity of the user gesture: supplying the same
-   * identity for a repeated request makes the server reach the same run, so a resubmission never
-   * commits a second time.
+   * Runs the flow bound to one component event through the page runner: page segments run here and
+   * each protected segment is one call to the invocation endpoint. `clickId` is the one identity of
+   * the user gesture: supplying the same identity for a repeated request makes the server reach the
+   * same run, so a resubmission never commits a second time.
    */
   dispatch: (
     binding: PlacementFlowBinding,
@@ -548,7 +548,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
     let retry:
       { key: string; runId: string; inputs: Readonly<Record<string, unknown>> } | undefined;
     let end: (() => void) | undefined;
-    const execute = (nextSignal?: AbortSignal, resume?: () => Promise<FlowDispatchResult>) =>
+    const execute = (nextSignal?: AbortSignal) =>
       options.state.run(binding.bindingId, settings, nextSignal, async (runSignal) => {
         if (retry === undefined) {
           const inputs =
@@ -568,7 +568,6 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
           agent === undefined ? started : { ...started, agent },
         );
         try {
-          if (resume !== undefined) return await resume();
           const { runFlowBinding } = await import("./flow-runtime-driver");
           return await runFlowBinding(
             options,
@@ -594,7 +593,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
       return {
         ...result,
         controlId: settings.controlId,
-        retry: async () => keepRetry(await execute(undefined, result.retry)),
+        retry: async () => keepRetry(await execute()),
       };
     };
     try {

@@ -127,21 +127,6 @@ export type ControlEventHandlers = Readonly<
   Partial<Record<ControlSemanticEventName, ControlEventHandler>>
 >;
 
-export type TextInputData = ControlDataState<TextInputPayload>;
-export type LinkInputData = ControlDataState<LinkInputPayload>;
-export type RichTextInputData = ControlDataState<RichTextInputPayload>;
-export type NumberInputData = ControlDataState<NumberInputPayload>;
-export type BooleanInputData = ControlDataState<BooleanInputPayload>;
-export type DateInputData = ControlDataState<DateInputPayload>;
-export type ChoiceInputData = ControlDataState<ChoiceInputPayload>;
-export type FieldInputData = ControlDataState<FieldInputPayload>;
-export type ValidationData = ControlDataState<ValidationPayload>;
-export type ButtonData = ControlDataState<ButtonPayload>;
-export type TabsData = ControlDataState<TabsPayload>;
-export type DialogData = ControlDataState<DialogPayload>;
-export type DrawerData = ControlDataState<DrawerPayload>;
-export type FormContainerData = ControlDataState<FormPayload>;
-
 /**
  * Explicit, data-safe state for one control placement, parameterised by that block's own ready
  * values. `loading` means the control's data or a submission it started is pending, so it cannot be
