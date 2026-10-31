@@ -9,6 +9,7 @@ import {
   platformIdSchema,
   sameId,
   type SessionContext,
+  type StoredDefinitionDraft,
   type StoredDefinitionSource,
 } from "@vortex/platform/schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/platform/server";
@@ -17,9 +18,12 @@ import {
   createDatabaseDefinitionPublicationRepository,
   createDefinitionStore,
   type OrganizationBuilderRoot,
+  applicationModuleSources,
+  fingerprintCanonicalValue,
   type ImmutableDefinitionPublicationCatalogueDefinition,
   type TrustedApplicationRootOriginKind,
 } from "@vortex/platform/server";
+import { z } from "zod";
 import { shippedApplications } from "@vortex/definitions";
 import {
   developmentBuilderAuthority,
@@ -176,6 +180,64 @@ const applicationsInPublicationOrder = (
 };
 
 /**
+ * The live Application draft revision and stored source, read without the publication consistency
+ * check and only before the refresh saves a source over it. A forward migration that rewrote a
+ * stored source leaves its identity requirements behind; the Definition store save stores the
+ * requirements of the saved source exactly as every draft write does, and preparing the
+ * publication then checks the saved draft and its identities as one.
+ */
+const readLiveDraft = async (
+  transaction: RequestDatabaseTransaction,
+  rootId: string,
+): Promise<{ draftRevision: number; source: unknown } | undefined> => {
+  const rows = await transaction.query<DatabaseRow & { draft: unknown }>`
+    select vortex_definition.read_publication_state(${rootId}::uuid) -> 'draft' as draft
+  `;
+  if (rows.length !== 1) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
+  const draft = rows[0]!.draft;
+  if (draft === null) return undefined;
+  const parsed = z
+    .object({ draftRevision: z.number().int().min(1), source: z.unknown() })
+    .safeParse(draft);
+  if (!parsed.success) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
+  return { draftRevision: parsed.data.draftRevision, source: parsed.data.source };
+};
+
+/**
+ * After the Application draft is saved, each owned Module whose stored source is already the
+ * lowering of that draft's inline Module, but whose draft is not its release, is written again with
+ * that source through the Module draft write publication stages with, so its stored identity
+ * requirements are that source's. Publication restages only a Module whose source changed or whose
+ * draft is released, and a forward migration that rewrote a Module draft moved its revision past
+ * its release and left its requirements behind. Publication stages every other owned Module itself.
+ */
+const restageOwnedModuleDrafts = (
+  context: SessionContext,
+  draft: StoredDefinitionDraft,
+): Promise<void> =>
+  inSystemTransaction(context, (transaction) =>
+    createDatabaseDefinitionPublicationRepository(transaction).transaction(
+      context,
+      async (publication) => {
+        if (draft.source.kind !== "application")
+          throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
+        const lowered = new Map(
+          applicationModuleSources(draft.source).map((source) => [source.key, source] as const),
+        );
+        for (const root of await publication.readOwnedModuleRoots(String(draft.rootId))) {
+          const source = lowered.get(root.key);
+          if (
+            source !== undefined &&
+            root.draftRevision !== root.currentReleaseRevision &&
+            root.sourceFingerprint === fingerprintCanonicalValue(source)
+          )
+            await publication.stageOwnedModuleSource(root, source);
+        }
+      },
+    ),
+  );
+
+/**
  * Authors the current shipped source on its recorded root and asks publication whether a release
  * is needed. Only prepare's DEFINITION_NO_CHANGE means current. The live publication anchor also
  * recovers a publication committed before an interrupted activation, without publishing it again.
@@ -194,15 +256,14 @@ const publishOne = async (
   let draft = state.drafts[source.key];
   const existingRoot = recorded ?? draft;
   if (existingRoot !== undefined) {
-    const current = await inSystemTransaction(context, async (transaction) => {
-      const rootId = recordedRootId(existingRoot);
+    // The refresh replaces the whole shipped draft, so it needs only the live draft revision.
+    const rootId = recordedRootId(existingRoot);
+    const live = await inSystemTransaction(context, async (transaction) => {
       await verifyApplicationRoot(transaction, descriptor, rootId);
-      return createDatabaseDefinitionPublicationRepository(transaction).read(context, (reader) =>
-        reader.readDraftCandidate(rootId),
-      );
+      return readLiveDraft(transaction, rootId);
     });
-    if (current === undefined) throw new Error(`Shipped draft is missing for ${source.key}`);
-    draft = { rootId: current.draft.rootId, draftRevision: current.draft.draftRevision };
+    if (live === undefined) throw new Error(`Shipped draft is missing for ${source.key}`);
+    draft = { rootId, draftRevision: live.draftRevision };
   }
   if (draft === undefined) {
     const created = await inSystemTransaction(context, async (transaction) => {
@@ -233,6 +294,7 @@ const publishOne = async (
         source,
       });
     });
+    await restageOwnedModuleDrafts(context, saved);
     draft = { rootId: saved.rootId, draftRevision: saved.draftRevision };
     state.drafts[source.key] = draft;
     state.save();
@@ -328,18 +390,25 @@ export const publishStudioApplicationDraft = async (
 ): Promise<PublishedRelease> => {
   const authority = developmentBuilderAuthority(facts.organizationId);
   const context: SessionContext = mintSystemContext(facts);
-  const current = await inSystemTransaction(context, (transaction) =>
-    createDatabaseDefinitionPublicationRepository(transaction).read(context, (reader) =>
-      reader.readDraftCandidate(root.rootId),
-    ),
+  const live = await inSystemTransaction(context, (transaction) =>
+    readLiveDraft(transaction, root.rootId),
   );
-  if (current === undefined) throw new Error(`Studio draft is missing for ${root.key}`);
+  if (live === undefined) throw new Error(`Studio draft is missing for ${root.key}`);
+  // Save the converted draft as it stands, so its identity requirements are its own.
+  const saved = await inSystemTransaction(context, (transaction) =>
+    createDefinitionStore(transaction, authority, platformPermissionSource).saveDraft({
+      rootId: root.rootId,
+      expectedDraftRevision: live.draftRevision,
+      source: live.source,
+    }),
+  );
+  await restageOwnedModuleDrafts(context, saved);
   const prepared = await inSystemTransaction(context, (transaction) =>
     createDatabaseDefinitionPublicationService(
       developmentPublicationCatalogue,
       transaction,
       authority,
-    ).prepare(context, { rootId: root.rootId, expectedDraftRevision: current.draft.draftRevision }),
+    ).prepare(context, { rootId: root.rootId, expectedDraftRevision: saved.draftRevision }),
   );
   const published = await inSystemTransaction(context, (transaction) =>
     createDatabaseDefinitionPublicationService(
