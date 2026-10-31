@@ -78,7 +78,7 @@ export function SummaryValuesDisplay(props: DisplayRenderProps<SummaryPayload>):
         >
           <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
           <div
-            className="grid gap-[var(--vortex-space-md)]"
+            className="grid gap-3"
             style={{
               gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${minimumWidth.value}px), 1fr))`,
             }}

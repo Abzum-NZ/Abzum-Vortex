@@ -160,7 +160,7 @@ function TextEditor({
     return () => clearTimeout(timeout);
   }, [text]);
   return (
-    <div className="flex flex-col gap-[var(--vortex-space-sm)]">
+    <div className="flex flex-col gap-1.5">
       <Label htmlFor={id}>Contains</Label>
       {/* A plain text box: a search box empties itself on Escape, and closing the popover with
           Escape would then commit an empty filter. "Clear filter" clears it. */}
@@ -282,7 +282,7 @@ function RangeEditor({
     onCommit({ kind: "number", ...range });
   };
   const bound = (label: string, value: string, set: (next: string) => void, suffix: string) => (
-    <div className="flex flex-col gap-[var(--vortex-space-sm)]">
+    <div className="flex flex-col gap-1.5">
       <Label htmlFor={`${id}-${suffix}`}>{label}</Label>
       <InputGroup>
         {field.kind === "money" && currencyText !== "" ? (
@@ -309,9 +309,9 @@ function RangeEditor({
     </div>
   );
   return (
-    <div className="flex flex-col gap-[var(--vortex-space-md)]">
+    <div className="flex flex-col gap-3">
       {field.kind === "money" && field.currency === undefined ? (
-        <div className="flex flex-col gap-[var(--vortex-space-sm)]">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor={`${id}-currency`}>Currency</Label>
           <Input
             id={`${id}-currency`}
@@ -388,7 +388,7 @@ function DateEditor({
   const fromDay = dayOf(from);
   const toDay = dayOf(to);
   return (
-    <div className="flex flex-col gap-[var(--vortex-space-md)]">
+    <div className="flex flex-col gap-3">
       <Calendar
         mode="range"
         selected={fromDay === undefined ? undefined : { from: fromDay, to: toDay }}
@@ -399,7 +399,7 @@ function DateEditor({
         }}
       />
       <div className="grid grid-cols-2 gap-[var(--vortex-space-sm)]">
-        <div className="flex flex-col gap-[var(--vortex-space-sm)]">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor={`${id}-from`}>From</Label>
           <Input
             id={`${id}-from`}
@@ -410,7 +410,7 @@ function DateEditor({
             aria-invalid={problem !== undefined}
           />
         </div>
-        <div className="flex flex-col gap-[var(--vortex-space-sm)]">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor={`${id}-to`}>Until</Label>
           <Input
             id={`${id}-to`}
@@ -467,7 +467,7 @@ function LinkEditor({
     onCommit(next.length === 0 ? undefined : { kind: "link", recordIds: next });
   };
   return (
-    <div className="flex flex-col gap-[var(--vortex-space-md)]">
+    <div className="flex flex-col gap-3">
       {chosen.length === 0 ? null : (
         <ul
           className="flex flex-wrap gap-[var(--vortex-space-xs)]"
@@ -524,7 +524,7 @@ function YesNoEditor({
 }>): ReactElement {
   const id = useId();
   return (
-    <div className="flex flex-col gap-[var(--vortex-space-sm)]">
+    <div className="flex flex-col gap-1.5">
       <Label htmlFor={id}>{field.label}</Label>
       <NativeSelect
         id={id}
@@ -686,7 +686,7 @@ export function FiltersToolbar({
           Filter
         </PopoverTrigger>
         <PopoverContent className="w-72" align="start">
-          <div className="flex flex-col gap-[var(--vortex-space-sm)]">
+          <div className="flex flex-col gap-1.5">
             <Label htmlFor={selectId}>Field</Label>
             <NativeSelect
               id={selectId}

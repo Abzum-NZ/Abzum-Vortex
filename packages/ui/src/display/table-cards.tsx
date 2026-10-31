@@ -249,7 +249,7 @@ export function RecordsCards({
                 role="region"
                 aria-label={`${expansion.noun.charAt(0).toUpperCase()}${expansion.noun.slice(1)} of ${name}`}
                 data-vortex-related-panel=""
-                className="mt-1 bg-muted/40 px-[var(--vortex-space-md)] py-2"
+                className="mt-1 bg-muted/40 px-3 py-2"
               >
                 {expansion.panel(row)}
               </div>

@@ -230,7 +230,7 @@ export function PersonalFormattingDialog({
           <section
             key={active.id}
             aria-label="Rule details"
-            className="flex flex-col gap-[var(--vortex-space-md)] border-t pt-3"
+            className="flex flex-col gap-3 border-t pt-3"
           >
             <fieldset disabled={busy} className="min-w-0">
               <StudioConditionControls

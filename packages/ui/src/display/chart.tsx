@@ -80,7 +80,7 @@ export function ChartDisplay(props: DisplayRenderProps<ChartPayload>): ReactElem
                 <TableRow key={point.key} data-vortex-chart-key={point.key}>
                   <TableCell className="whitespace-nowrap">{point.label}</TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-[var(--vortex-space-md)]">
+                    <div className="flex items-center gap-3">
                       <Progress
                         aria-hidden="true"
                         className="min-w-0 flex-1"

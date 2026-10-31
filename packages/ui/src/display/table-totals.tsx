@@ -24,7 +24,7 @@ export function TotalValues({
   totals,
 }: Readonly<{ totals: readonly RecordsTableTotal[] }>): ReactElement {
   return (
-    <div className="flex min-w-0 flex-col gap-[var(--vortex-space-xs)] py-1 text-xs tabular-nums">
+    <div className="flex min-w-0 flex-col gap-0.5 py-1 text-xs tabular-nums">
       {totals.map((total) => (
         <span key={`${total.fieldId}:${total.operation}`} className="break-words">
           <span className="text-muted-foreground">

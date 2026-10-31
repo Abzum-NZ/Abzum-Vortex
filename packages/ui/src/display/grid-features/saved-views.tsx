@@ -166,7 +166,7 @@ function NameDialog({
             <DialogTitle>{title}</DialogTitle>
             <DialogDescription>{description}</DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col gap-[var(--vortex-space-sm)]">
+          <div className="flex flex-col gap-1.5">
             <Label htmlFor={inputId}>View name</Label>
             <Input
               id={inputId}
@@ -244,7 +244,7 @@ function ShareDialog({
             own access, so anything their role cannot see is left out.
           </DialogDescription>
         </DialogHeader>
-        <div className="flex max-h-80 flex-col gap-[var(--vortex-space-md)] overflow-y-auto">
+        <div className="flex max-h-80 flex-col gap-3 overflow-y-auto">
           <Label className="gap-[var(--vortex-space-sm)]">
             <Checkbox
               checked={organization}
@@ -406,7 +406,7 @@ function ViewSwitcher({
 
   const listOf = (title: string, items: readonly GridViewItem[]): ReactElement | null =>
     items.length === 0 ? null : (
-      <div role="group" aria-label={title} className="flex flex-col gap-[var(--vortex-space-xs)]">
+      <div role="group" aria-label={title} className="flex flex-col gap-0.5">
         <p className="px-[var(--vortex-space-sm)] pt-1 text-xs font-medium text-muted-foreground">
           {title}
         </p>
@@ -423,7 +423,7 @@ function ViewSwitcher({
               onClick={() => choose(view.viewId)}
             >
               <span className="truncate">{view.name}</span>
-              <span className="flex items-center gap-[var(--vortex-space-sm)]">
+              <span className="flex items-center gap-1.5">
                 {viewScopeBadge(view)}
                 {active ? <Icon name="check" aria-hidden="true" /> : null}
               </span>
@@ -449,7 +449,7 @@ function ViewSwitcher({
         <PopoverContent className="w-80" align="start">
           <PopoverTitle>Views</PopoverTitle>
           <div className="flex flex-col gap-[var(--vortex-space-sm)]">
-            <div className="flex flex-col gap-[var(--vortex-space-sm)]">
+            <div className="flex flex-col gap-1.5">
               <Label htmlFor={searchId} className="sr-only">
                 Search views
               </Label>
@@ -513,7 +513,7 @@ function ViewSwitcher({
               </p>
             ) : null}
             <Separator />
-            <div className="flex flex-wrap gap-[var(--vortex-space-sm)]">
+            <div className="flex flex-wrap gap-1.5">
               {selected !== null && canChange ? (
                 <Button
                   size="sm"

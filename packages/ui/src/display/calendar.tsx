@@ -182,7 +182,7 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
       {values === undefined ? null : (
         <section data-vortex-display="calendar" data-vortex-placement-id={placementId}>
           <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-[var(--vortex-space-md)]">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div
               className="flex flex-wrap items-center gap-[var(--vortex-space-sm)]"
               role="group"

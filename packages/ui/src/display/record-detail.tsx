@@ -128,7 +128,7 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
                 data-vortex-field-key={contract?.headingField}
                 data-vortex-heading-field-key={contract?.headingField}
               >
-                <div className="flex min-w-0 flex-wrap items-start justify-between gap-[var(--vortex-space-md)]">
+                <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
                   <div className="min-w-48 flex-1 *:mb-0">
                     <DisplayHeader
                       title={title}
@@ -154,10 +154,7 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
                     className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4"
                   >
                     {headerFacts.map((fact, index) => (
-                      <div
-                        key={index}
-                        className="flex min-w-0 flex-col gap-[var(--vortex-space-xs)]"
-                      >
+                      <div key={index} className="flex min-w-0 flex-col gap-0.5">
                         <dt className="truncate text-xs font-medium text-muted-foreground">
                           {fact.label}
                         </dt>
@@ -211,7 +208,7 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
               </div>
             </>
           )}
-          <CardContent className="grid gap-[var(--vortex-space-md)] md:grid-cols-2 xl:grid-cols-3">
+          <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {sections.map((section) => (
               <Card key={section.key} className="min-w-0">
                 {section.title === undefined ? null : (
@@ -219,14 +216,14 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
                     <CardTitle>{section.title}</CardTitle>
                   </CardHeader>
                 )}
-                <CardContent className="grid gap-[var(--vortex-space-md)]">
-                  <dl className="m-0 grid gap-[var(--vortex-space-md)]">
+                <CardContent className="grid gap-3">
+                  <dl className="m-0 grid gap-3">
                     {section.fields.map((field) => (
                       <div
                         key={field.key}
                         data-vortex-field-key={field.key}
                         className={cn(
-                          "flex min-w-0 flex-col gap-[var(--vortex-space-xs)]",
+                          "flex min-w-0 flex-col gap-0.5",
                           field.value.kind === "field_table" && "sm:col-span-2",
                         )}
                       >

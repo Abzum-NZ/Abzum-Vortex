@@ -234,10 +234,7 @@ function RunSummary({
         : ""}
       {summary.limited ? " More records matched than the action's limit." : ""}
       {summary.warnings.map(({ message, count }) => (
-        <span
-          key={message}
-          className="mt-1 flex items-start gap-[var(--vortex-space-sm)] text-muted-foreground"
-        >
+        <span key={message} className="mt-1 flex items-start gap-1.5 text-muted-foreground">
           <Icon name="triangle-alert" className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <span className="min-w-0 break-words">
             Warning on {recordsPhrase(count)}: {message}
@@ -288,7 +285,7 @@ function SelectionBand({
         ? null
         : Math.round((run.processed / run.total) * 100);
     body = (
-      <div className="flex min-w-0 flex-1 flex-col gap-[var(--vortex-space-sm)]">
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <span>
           {run.label}:{" "}
           {run.total === undefined
