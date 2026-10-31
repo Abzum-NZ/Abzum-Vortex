@@ -105,6 +105,8 @@ export type StudioDataModel = Readonly<{
   setCreating: (open: boolean) => void;
   newQuery: boolean;
   setNewQuery: (open: boolean) => void;
+  /** Fills the home dashboard for a record type just added. */
+  fillHome: (recordType: string) => void;
 }>;
 
 function Problems({ issues }: Readonly<{ issues: readonly string[] }>) {
@@ -876,6 +878,7 @@ export function StudioDataDialogs({ model }: Readonly<{ model: StudioDataModel }
     setCreating,
     newQuery,
     setNewQuery,
+    fillHome,
   } = model;
   const { source } = draft;
   return (
@@ -896,7 +899,10 @@ export function StudioDataDialogs({ model }: Readonly<{ model: StudioDataModel }
         publication={publication}
         edit={edit}
         onClose={() => setCreating(false)}
-        onCreated={(moduleKey, recordKey) => select({ kind: "record_type", moduleKey, recordKey })}
+        onCreated={(moduleKey, recordKey) => {
+          select({ kind: "record_type", moduleKey, recordKey });
+          fillHome(`${moduleKey}:${recordKey}`);
+        }}
       />
       <StudioQuerySheet
         key={newQuery ? "query-open" : "query-closed"}

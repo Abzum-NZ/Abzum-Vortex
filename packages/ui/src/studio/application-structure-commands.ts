@@ -47,6 +47,7 @@ import {
   resolveRecordType,
 } from "./application-record-page-shared";
 import { ensureFormCancel } from "./application-record-page-form";
+import { ensureHomeDashboard } from "./application-home-dashboard";
 import type { Plan } from "./application-record-plan";
 import { movePage, type StudioPageLayoutCommand } from "./application-page-layout";
 import { editLayoutOutlet, type StudioLayoutOutletCommand } from "./application-layout-outlets";
@@ -85,6 +86,8 @@ export type StudioStructureCommand =
   | Readonly<{ kind: "ensure_form_cancel"; pageAlias: string }>
   /** Edit in the detail header and each list's row menu, for an app whose edit page predates them. */
   | Readonly<{ kind: "ensure_record_page_actions"; recordType: string }>
+  /** Fill the home dashboard with a count, recent records and a stage chart per record type. */
+  | Readonly<{ kind: "fill_home"; recordType?: string }>
   | StudioPageLayoutCommand
   | StudioLayoutOutletCommand;
 
@@ -537,6 +540,18 @@ export const applyStudioStructureCommand = (
           select: null,
           details: plan.details,
           message: plan.details[0]!,
+        };
+      }
+      case "fill_home": {
+        const plan: Plan = { source: candidate, details: [], taken: takenIds(candidate) };
+        if (!ensureHomeDashboard(context, plan, command.recordType))
+          return refuse("The home page already shows its dashboard.");
+        return {
+          kind: "applied",
+          source: plan.source,
+          select: null,
+          details: plan.details,
+          message: `The home page now shows ${plan.details.length === 0 ? "the dashboard" : plan.details[0]!.replace(/^A query /u, "a query ")}.`,
         };
       }
       case "rename": {

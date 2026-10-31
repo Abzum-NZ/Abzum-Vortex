@@ -47,22 +47,25 @@ export function StudioRecordPageForm({
   const [listName, setListName] = useState("");
   const chooseKind = (next: StudioRecordPageKind) => {
     setKind(next);
-    setAddToMenu(next === "list");
+    setAddToMenu(next === "list" || next === "board");
   };
   const effectiveRecordType = recordTypes.some((entry) => entry.recordType === recordType)
     ? recordType
     : (recordTypes[0]?.recordType ?? "");
+  const selectedRecord = recordTypes.find((record) => record.recordType === effectiveRecordType);
   const availableKinds = studioRecordPageKinds.filter((entry) =>
-    recordTypes
-      .find((record) => record.recordType === effectiveRecordType)
-      ?.kinds.includes(entry.kind),
+    selectedRecord?.kinds.includes(entry.kind),
   );
+  const boardUnavailable = selectedRecord !== undefined && !selectedRecord.kinds.includes("board");
   const effectiveKind = availableKinds.some((entry) => entry.kind === kind)
     ? kind
     : availableKinds[0]?.kind;
   // A detail page or edit form opens one record, so it is never a menu entry.
   const menuAllowed =
-    effectiveKind === "list" || effectiveKind === "form_create" || effectiveKind === "guided";
+    effectiveKind === "list" ||
+    effectiveKind === "board" ||
+    effectiveKind === "form_create" ||
+    effectiveKind === "guided";
   const command = useMemo(
     (): StudioRecordPageCommand => ({
       kind: "add_record_page",
@@ -150,7 +153,12 @@ export function StudioRecordPageForm({
           />
         )}
       </StudioField>
-      {effectiveKind === "list" && (
+      {boardUnavailable && (
+        <p className="text-xs text-muted-foreground">
+          Board pages need a pipeline: add one on a choice field in Data first.
+        </p>
+      )}
+      {(effectiveKind === "list" || effectiveKind === "board") && (
         <StudioField
           label="Page name"
           hint="Leave empty to name it after the record type. A further list of the same records needs a name of its own."

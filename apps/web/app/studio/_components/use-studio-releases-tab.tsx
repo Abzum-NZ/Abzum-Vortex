@@ -1,5 +1,6 @@
 "use client";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   applicationSourceDocumentSchema,
@@ -23,6 +24,7 @@ import { studioReleasesSections, type StudioReleasesSection } from "./studio-rai
 import type { StudioDraft } from "./use-studio-draft";
 import { studioNotice } from "./studio-save-state";
 import { toast } from "@vortex/ui/components/sonner";
+import { Button } from "@vortex/ui/components/button";
 import { useStudioTabVisited } from "./studio-frame";
 import type { StudioCompositionContext } from "@vortex/ui/studio";
 import {
@@ -150,6 +152,7 @@ export function useStudioReleasesTab({
   hidden,
   initialSection,
   appStoreHref,
+  installed,
   compositionContext,
   structure,
 }: Readonly<{
@@ -158,6 +161,8 @@ export function useStudioReleasesTab({
   hidden: boolean;
   /** The App Store, where a published version is installed or upgraded to; absent when its address is unknown. */
   appStoreHref: string | undefined;
+  /** Whether this application is installed in the builder's organisation. */
+  installed: boolean;
   initialSection: StudioReleasesSection;
   /** The one Structure command runner, for the one-click offers Publish shows. */
   structure: Readonly<{
@@ -565,6 +570,26 @@ export function useStudioReleasesTab({
   ) : null;
   const centre: ReactNode = (
     <div className="mx-auto max-w-4xl px-8 py-6 text-foreground">
+      {!installed && appStoreHref !== undefined && (
+        <section
+          aria-label="Installation"
+          className="mb-4 space-y-2 rounded-md border border-border bg-muted/40 p-4"
+        >
+          <p className="font-medium">Not installed yet</p>
+          <p className="text-sm text-muted-foreground">
+            This application is not installed in your organisation, so people cannot open it yet.
+            Install it from the App Store to use the published version.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            nativeButton={false}
+            render={<Link href={appStoreHref} prefetch={false} />}
+          >
+            Install in this organisation
+          </Button>
+        </section>
+      )}
       {!hidden && section === "history" && (
         <StudioHistoryTab
           key={historyGeneration}
