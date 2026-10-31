@@ -200,7 +200,10 @@ alter table vortex_platform.flow_effect_ledger enable row level security, force 
 
 -- DF-15: these functions are reached only through security-definer callers, so the login roles do
 -- not need EXECUTE. (vortex_platform.validated is revoked by its full definition below.)
+-- Its EXECUTE grant was given by its owner, so only its owner can take it back.
+set role vortex_record_adapter;
 revoke execute on function vortex_record.complete_flow_segment_receipt(uuid, jsonb) from vortex_request;
+set role vortex_owner;
 revoke execute on function vortex_platform.record_flow_segment_effect(uuid, text, text, text, jsonb) from vortex_request;
 revoke execute on function vortex_platform.change_topic(uuid, uuid) from vortex_request, vortex_runtime;
 revoke execute on function vortex_platform.topic_organization_id(text) from vortex_request, vortex_runtime;
