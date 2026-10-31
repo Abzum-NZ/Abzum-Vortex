@@ -194,15 +194,25 @@ const publishOne = async (
   let draft = state.drafts[source.key];
   const existingRoot = recorded ?? draft;
   if (existingRoot !== undefined) {
-    const current = await inSystemTransaction(context, async (transaction) => {
-      const rootId = recordedRootId(existingRoot);
+    // The refresh replaces the whole shipped draft, so it needs only the live draft revision. A
+    // forward migration that rewrote the stored source leaves its identity requirements behind;
+    // the save below stores the requirements of the new source, and preparing the publication
+    // checks the saved draft and its identities as one.
+    const rootId = recordedRootId(existingRoot);
+    const draftRevision = await inSystemTransaction(context, async (transaction) => {
       await verifyApplicationRoot(transaction, descriptor, rootId);
-      return createDatabaseDefinitionPublicationRepository(transaction).read(context, (reader) =>
-        reader.readDraftCandidate(rootId),
-      );
+      const rows = await transaction.query<DatabaseRow & { draft_revision: unknown }>`
+        select vortex_definition.read_publication_state(${rootId}::uuid)
+          #>> '{draft,draftRevision}' as draft_revision
+      `;
+      return rows.length === 1 ? rows[0]!.draft_revision : undefined;
     });
-    if (current === undefined) throw new Error(`Shipped draft is missing for ${source.key}`);
-    draft = { rootId: current.draft.rootId, draftRevision: current.draft.draftRevision };
+    if (draftRevision === null || draftRevision === undefined)
+      throw new Error(`Shipped draft is missing for ${source.key}`);
+    const parsedRevision = Number(draftRevision);
+    if (!Number.isSafeInteger(parsedRevision) || parsedRevision < 1)
+      throw new Error(`Shipped draft revision is invalid for ${source.key}`);
+    draft = { rootId, draftRevision: parsedRevision };
   }
   if (draft === undefined) {
     const created = await inSystemTransaction(context, async (transaction) => {
