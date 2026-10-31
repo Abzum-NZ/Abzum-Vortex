@@ -57,9 +57,9 @@ import {
 
 /**
  * The pure interpreter of the in-house flow engine (architecture decision 1). It runs the nested
- * task list of a compiled flow as an explicit, serialisable state machine, so the same code drives
- * a flow in the server orchestrator and in the page, and a run can stop at a task it cannot run
- * itself and resume later from nothing but its state.
+ * task list of a compiled flow as an explicit, serialisable state machine, and every host that runs
+ * a flow uses it: the page runner drives a whole interactive flow, and the server orchestrator runs
+ * one admitted server segment and stops at its boundary.
  *
  * It performs no effect. Control tasks and pure tasks run here. A task that needs the world stops
  * the run with a step the host must answer:
@@ -67,8 +67,8 @@ import {
  *   orchestrator through the one protected-operation executor) and resumes with its safe outcome.
  *   The step carries the duplicate-protection key (task path and iteration) the host uses to make
  *   the effect happen once.
- * - `interface`: a Show form or Confirm task. The run is suspended with the typed intents so far,
- *   and the page or MCP client resumes it with the person's answer.
+ * - `interface`: a Show form or Confirm task. Only the page runner answers it: the page shows the
+ *   typed intent and resumes the run with the person's answer.
  *
  * It never reads a clock, a record or a session: `now`, the actor and every input come from the
  * host, and nothing in a flow is evaluated as text. Every refusal is a typed failure that names its

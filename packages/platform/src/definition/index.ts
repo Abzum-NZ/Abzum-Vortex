@@ -1,7 +1,4 @@
 export { installedNamedActions } from "./installed-named-actions";
-export * from "./definition-index";
-export * from "./module-index";
-export * from "./app-index";
 export { createFlowBindingEndpoint, type InstalledFlowBindings } from "./flow-binding-endpoint";
 export type { FlowGuidedDraftPort } from "./flow-orchestrator-types";
 export { createBackgroundFlowExecutor } from "./flow-background-run";
@@ -80,3 +77,144 @@ export {
   type FieldOptionsFlowResult,
 } from "./field-options-flow";
 export { createOptionMembershipCheck } from "./option-membership-check";
+
+export * from "./canonical-json-definition";
+export * from "./catalogue-release-content-hashes";
+export * from "./semantic-version";
+export * from "./version-impact-definition";
+export * from "./version-impact-error";
+export * from "./compilation-error";
+export * from "./definition-error";
+export * from "./flow-compilation";
+export * from "./flow-validation";
+export * from "./application-materialisation";
+export * from "./application-composition-catalogue";
+export * from "./application-resolution";
+export * from "./extension-contributions";
+export * from "./validation";
+export * from "./builder-authority";
+export {
+  listOrganizationBuilderRoots,
+  type OrganizationBuilderRoot,
+} from "./organization-builder-roots";
+export * from "./definition-store";
+export {
+  readApplicationDefinitionDraft,
+  requireApplicationDefinitionDraftConsistency,
+  readModuleDefinitionDraft,
+  type StoredApplicationDefinitionDraft,
+  type StoredModuleDefinitionDraft,
+} from "./definition-draft-read";
+export * from "./source-identities";
+export * from "./source-identity-reservations";
+export * from "./saved-condition-revisions";
+export * from "./installed-event-catalogue";
+export {
+  type DefinitionPublicationFailureCode,
+  type DefinitionPublicationCandidate,
+  type ResolvableModuleRelease,
+  type ModuleReleasePageCursor,
+  type ResolvableModuleReleasePage,
+  type ResolvableConnectionTypeRelease,
+  type DefinitionPublicationReader,
+  type DefinitionPublicationCatalogue,
+  type DefinitionReleaseAppend,
+  type DefinitionPublicationTransaction,
+  type PreparedDefinitionPublication,
+} from "./definition-publication-contracts";
+export {
+  type ApplicationDraftCompilation,
+  type ApplicationDraftConditionContext,
+  createDatabaseDefinitionPublicationService,
+} from "./definition-publication";
+export * from "./publication/publish";
+export * from "./publication/read";
+export * from "./application-bound-release-set";
+export * from "./prepared-installation-runtime-source";
+export * from "./application-release-adoption";
+export { createDefinitionHistoryService } from "./definition-history";
+
+export * from "./storage-provisioning";
+export * from "./preview-installation-repository";
+export * from "./installation-binding-reader";
+export * from "./installation-lifecycle";
+export * from "./active-installation-bundle-repository";
+export * from "./runtime-bundle-cleanup";
+export * from "./preview-installation-expiry";
+
+export { createAppTelemetryCollector } from "./telemetry";
+export { createOperationsAlertSink } from "./operations-alert-sink";
+export {
+  isReservedTenantSegment,
+  readAddressedApplicationAtAddress,
+  readAddressedApplicationFromInstalledBundleAtAddress,
+  readAddressedApplicationForFlowInRequest,
+  readPermittedApplicationsAtAddress,
+  resolvePermittedApplicationAddress,
+  type AddressedApplicationRead,
+  type AddressedApplicationBundleRead,
+  type ApplicationExperience,
+} from "./application-address";
+export type {
+  ApplicationLauncherEntry,
+  ApplicationLauncherRead,
+  PermittedApplication,
+  PermittedApplicationsRead,
+} from "./application-launcher-read";
+export {
+  requireInstalledRuntimeContext,
+  type InstalledRuntimeContext,
+} from "./installed-runtime-context";
+export { contributedActionControlIds } from "./installed-record-contributions";
+export {
+  createInstalledContextLoader,
+  isTrustedInstalledPageBundleContext,
+  isTrustedInstalledPageComposition,
+  matchesInstalledPageBundleIdentity,
+  readInstalledPageComposition,
+} from "./installed-page-bundle-context";
+
+export { resolveInstalledPageIdentity } from "./standard-page-resolution";
+
+export {
+  createViewerSafeRecordLinkService,
+  readVisiblePersonLabels,
+  recordLinkLabelKey,
+  type RecordLinkLabel,
+  type RecordLinkLabelsResult,
+  type RecordLinkReference,
+} from "./viewer-safe-record-link";
+
+export { createApplicationInstallationCoordinator } from "./installation-coordinator";
+
+export {
+  applicationInstallationActivationRequestSchema,
+  applicationInstallationPreparationRequestSchema,
+  type ApplicationInstallationActivationResult,
+  type ApplicationInstallationCoordinatorDependencies,
+  type HumanInstallationDefinitionAccess,
+} from "./installation-coordinator-contracts";
+
+export { createPreviewInstallationCoordinator } from "./preview-installation-coordinator";
+export {
+  PREVIEW_SEED_RECORD_BOUND,
+  runtimeContextSelection,
+  runtimePreviewOf,
+  type RuntimePreview,
+} from "./runtime-preview";
+export {
+  previewApplicationKey,
+  previewInstallationIdOfApplicationKey,
+} from "./preview-application-key";
+
+export { createProtectedOperationExecutor } from "./protected-operation-executor";
+
+export { createFlowOrchestrator, type FlowOrchestrator } from "./flow-orchestrator";
+export type {
+  FlowNamedAction,
+  FlowOrchestratorResponse,
+  FlowRecordType,
+  FlowRelease,
+  FlowUnavailableNotice,
+} from "./flow-orchestrator-types";
+export type { FlowSubject } from "../rules/index";

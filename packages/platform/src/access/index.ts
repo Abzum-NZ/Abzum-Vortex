@@ -101,7 +101,7 @@ export {
   type BuilderConferredPermission,
   type BuilderOperation,
   type BuilderTargetFacts,
-} from "../definition/definition-index";
+} from "../definition";
 export {
   createBuilderAuthority,
   readBuilderApplicationOrigin,

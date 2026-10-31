@@ -478,7 +478,9 @@ export const compareAction = (
     "subjectRecordTypeId",
     "sharing",
     "precondition",
-    "tasks",
+    "flowId",
+    "protectedOperation",
+    "writePolicy",
     "setsChoiceFieldId",
     "setsChoiceOption",
   ])

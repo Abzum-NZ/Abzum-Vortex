@@ -279,16 +279,9 @@ export function validateFlow(
     add(placement.path, ruleCode, family, placement.message);
   }
 
-  // ── Contract 4 step settings: closed values, and settings that do not run yet. ──
+  // ── Contract 4 step settings: closed values. ──
   for (const issue of flowStepSettingIssues(flow))
-    if (issue.notYetRunnable)
-      add(
-        issue.path,
-        "vortex.definition.unsupported_workflow_node",
-        "unsupported_choice",
-        issue.message,
-      );
-    else add(issue.path, "vortex.definition.workflow_node_values", "invalid_value", issue.message);
+    add(issue.path, "vortex.definition.workflow_node_values", "invalid_value", issue.message);
 
   // ── Structure and limits. ──
   validateStructure(flow, add);

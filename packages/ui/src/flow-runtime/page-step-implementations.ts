@@ -1,4 +1,4 @@
-import type { FormContinuationAnswer, PageIntentStepType } from "@vortex/platform/schema";
+import type { FormAnswer, PageIntentStepType } from "@vortex/platform/schema";
 import {
   confirmAnswer,
   performPresentationIntent,
@@ -12,7 +12,7 @@ type PageStepImplementation = (
   intent: FlowIntent,
   host: FlowIntentHost,
   signal?: AbortSignal,
-) => Promise<FormContinuationAnswer | undefined>;
+) => Promise<FormAnswer | undefined>;
 
 const presentation: PageStepImplementation = async (intent, host, signal) => {
   await performPresentationIntent(intent, host, signal);

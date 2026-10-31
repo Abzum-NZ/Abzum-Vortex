@@ -1,6 +1,6 @@
 import {
   maximumFlowConfirmationDetailLines,
-  type FormContinuationAnswer,
+  type FormAnswer,
   type JsonValue,
 } from "@vortex/platform/schema";
 import type { NoticeSeverity } from "../components/notice";
@@ -46,7 +46,7 @@ export const FLOW_INTENT_KINDS: readonly FlowIntentKind[] = Object.freeze([
  * The person's answer to a form intent, using the same shape sent to the server. Cancel is an
  * answer: the run resumes and the flow's own `submitted` branch decides what a cancel means.
  */
-export type FlowFormAnswer = Extract<FormContinuationAnswer, { kind: "submit" | "cancel" }>;
+export type FlowFormAnswer = Extract<FormAnswer, { kind: "submit" | "cancel" }>;
 
 /**
  * The one rejection of an interactive surface that went away unanswered: the page unmounted or the
@@ -201,7 +201,7 @@ export const readConfirmIntent = (intent: FlowIntent): FlowConfirmIntent | undef
 export const confirmAnswer = (
   confirmation: FlowConfirmIntent,
   answer: FlowConfirmAnswer,
-): Extract<FormContinuationAnswer, { kind: "confirm" }> => ({
+): Extract<FormAnswer, { kind: "confirm" }> => ({
   kind: "confirm",
   confirmed: answer.confirmed,
   ...(confirmation.choice === undefined

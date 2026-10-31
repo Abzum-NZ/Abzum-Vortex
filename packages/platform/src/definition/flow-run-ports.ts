@@ -152,7 +152,6 @@ export const createFlowRunPorts = (
     canonicalJson(session) === canonicalJson(boundRequest.session) &&
     canonicalJson(selection) === canonicalJson(boundRequest.selection);
   return {
-    continuationKey: host.continuationKey,
     ...admission,
     executor: executorFor(boundRequest, receipt),
     backend: host.backend,

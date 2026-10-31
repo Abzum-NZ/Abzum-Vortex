@@ -497,7 +497,7 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     },
   },
 
-  // Interface tasks: browser-only. A server-driven flow returns a typed intent and a continuation.
+  // Interface tasks: browser-only, answered by the page runner.
   "interface.show_message": {
     title: "Show message",
     summary:

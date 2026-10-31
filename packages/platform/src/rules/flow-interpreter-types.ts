@@ -2,7 +2,7 @@ import type { JsonValue } from "../catalogue/json-value";
 import type { FlowDefinition, FlowExecutionKind, FlowTask } from "../workflows/flow-contracts";
 import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
 import type { FlowReference } from "../workflows/flow-values";
-import type { FormContinuationAnswer } from "../workflows/form-continuation-answer";
+import type { FormAnswer } from "../workflows/form-answer";
 import type { FlowRuntimeValue } from "./flow-formula";
 import type { flowRunStateVersion } from "./flow-interpreter-state";
 
@@ -301,7 +301,7 @@ export type FlowRunResume =
       outputs?: Readonly<Record<string, JsonValue>>;
       diagnostic?: FlowRefusalFeedback;
     }>
-  | FormContinuationAnswer;
+  | FormAnswer;
 
 /** Safe effect outcomes indexed by task path and iteration. */
 export type FlowSegmentReplay = Readonly<

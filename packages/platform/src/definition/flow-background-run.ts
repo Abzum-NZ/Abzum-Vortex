@@ -181,7 +181,6 @@ export const runBackendFlow = async (
   };
   const subjectReader = createPageSubjectReader(requestDependencies);
   const ports: FlowOrchestratorDependencies = {
-    continuationKey: undefined as never,
     admitSegment: () => Promise.reject(new Error("BACKEND_RUN_HAS_NO_SEGMENTS")),
     admitPageStart: () => Promise.reject(new Error("BACKEND_RUN_HAS_NO_PAGE")),
     executor: createFlowProtectedExecutor(requestDependencies, dependencies.applicationStore),

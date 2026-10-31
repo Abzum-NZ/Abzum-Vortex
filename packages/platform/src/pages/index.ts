@@ -76,7 +76,7 @@ export {
   type StoredPageCapabilityDependencies,
   type StoredPageCapabilitySelection,
 } from "./stored-page-capability";
-export { recordLinkLabelKey } from "../definition/app-index";
+export { recordLinkLabelKey } from "../definition";
 export {
   projectRecordDetailData,
   projectRecordsTableData,
