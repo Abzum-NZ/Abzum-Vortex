@@ -417,7 +417,7 @@ export const runDevelopmentSetup = async (
     { identityAuthorityId, system, manifest, stewardIdentityId, state },
     log,
   );
-  // 3. Applications built in Studio follow a definition contract change the same way.
+  // 3. Applications built in Studio follow a definition contract or platform definition change the same way.
   await refreshStudioApplications(
     { identityAuthorityId, system, manifest, stewardIdentityId, state },
     log,
