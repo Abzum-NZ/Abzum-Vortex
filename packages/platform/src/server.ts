@@ -5,6 +5,7 @@ export * from "./db/index";
 export * from "./identity/index";
 export * from "./access/index";
 export * from "./definition/index";
+export { applicationModuleSources } from "./definition/application-module-lowering";
 export * from "./connections/index";
 export * from "./records/index";
 export * from "./queries/index";
