@@ -4,33 +4,6 @@ export * from "./file-metadata";
 export * from "./storage-policy";
 export * from "./content-safety";
 export * from "./attachment-authority";
-export {
-  STRUCTURED_RECORD_IMPORT_FORMAT_VERSION,
-  decodeStructuredRecordImport,
-  type StructuredRecordImportDecodeResult,
-} from "./structured-record-import-decoder";
-export {
-  STRUCTURED_RECORD_IMPORT_FORMAT,
-  STRUCTURED_RECORD_IMPORT_MAXIMUM_CELL_SOURCE_BYTES,
-  STRUCTURED_RECORD_IMPORT_MAXIMUM_COLUMNS,
-  STRUCTURED_RECORD_IMPORT_MAXIMUM_JSON_ENTRIES,
-  STRUCTURED_RECORD_IMPORT_MAXIMUM_NESTING_DEPTH,
-  STRUCTURED_RECORD_IMPORT_MAXIMUM_ROWS,
-  STRUCTURED_RECORD_IMPORT_MAXIMUM_SOURCE_BYTES,
-} from "../schema";
-export type {
-  DecodedRecordImportRow,
-  RecordImportSourceDescriptor,
-  RecordImportSourceRefusalReason,
-  RecordImportSourceResult,
-  StructuredRecordImportColumn,
-  StructuredRecordImportFormat,
-} from "../schema";
-export {
-  createFileRecordImportSourceService,
-  type FileRecordImportSourceDependencies,
-  type FileRecordImportSourceService,
-} from "./record-import-source";
 export * from "./storage-credentials";
 export { resolveFileStorageDestination, type FileStorageDestination } from "./storage-destination";
 export { createStoredUploadInspection } from "./upload-inspection";

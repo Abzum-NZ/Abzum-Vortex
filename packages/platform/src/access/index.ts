@@ -51,10 +51,6 @@ export {
 } from "./human-organization-request";
 export { readCurrentRecordOwnerGroupsAfterAuthorization } from "./record-owner-groups";
 export {
-  createVortexSuperAdministratorAdministrationService,
-  type VortexSuperAdministratorAdministrationDependencies,
-} from "./super-administrator-administration";
-export {
   readCurrentOrganizationDefaultApplicationAfterAuthorization,
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,
   readCurrentOrganizationAppStoreAddressAfterAuthorization,
@@ -68,11 +64,6 @@ export {
   runOrganizationAccessOperation,
   type OrganizationAccessOperationResult,
 } from "./organization-access-decision-access";
-export {
-  createRecordShareGrantService,
-  type RecordShareGrantDependencies,
-  type RecordShareGrantState,
-} from "./record-share-grants";
 export {
   createOrganizationAccessAdministrationService,
   type OrganizationAccessAdministrationDependencies,
@@ -109,15 +100,6 @@ export {
   type BuilderAuthorityDependencies,
   type BuilderTargetFactsReader,
 } from "./builder-authority";
-export {
-  meteringEventErrorCodes,
-  meteringEventRecordResultSchema,
-  recordMeteringEvent,
-  type MeteringEvent,
-  type MeteringEventErrorCode,
-  type MeteringEventRecordResult,
-  type RecordMeteringEventCommand,
-} from "./metering-events";
 export {
   evaluateOrganizationRecordPermissionAvailability,
   type OrganizationRecordPermissionAvailability,

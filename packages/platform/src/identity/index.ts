@@ -18,16 +18,6 @@ export {
   type VerifiedSignInResult,
 } from "./auth-journeys";
 export {
-  createIdentityAuthorityDisablement,
-  identityDisablementFailureCodes,
-  type IdentityAuthorityDisablement,
-  type IdentityAuthorityDisablementConfiguration,
-  type IdentityAuthorityDisablementDependencies,
-  type IdentityDisablementCommand,
-  type IdentityDisablementFailureCode,
-  type IdentityDisablementResult,
-} from "./identity-authority-disablement";
-export {
   createIdentityVerifier,
   type IdentityVerifier,
   type IdentityVerificationExecution,
@@ -59,14 +49,6 @@ export {
   createOrganizationLauncherService,
   type OrganizationLauncherServiceDependencies,
 } from "./organization-launcher";
-export {
-  createOrganizationRuntimeSettingsStore,
-  initializeOrganizationRuntimeSettings,
-  OrganizationRuntimeSettingsError,
-  organizationRuntimeSettingsErrorCodes,
-  type OrganizationRuntimeSettingsErrorCode,
-  type OrganizationRuntimeSettingsStoreDependencies,
-} from "./organization-runtime-settings";
 export {
   createTenantOrganization,
   createTenantGovernanceService,

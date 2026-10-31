@@ -35,18 +35,6 @@ export {
   type ProjectedPageCapability,
 } from "./page-capability-projection";
 export {
-  discardAndReprojectPageContent,
-  isRefusedPageContentRevision,
-  pageContentRevisionRelation,
-  projectPageContent,
-  readPageContentRevisions,
-  type PageContentDiscardOutcome,
-  type PageContentProjection,
-  type PageContentReprojection,
-  type PageContentRevisionRelation,
-  type PageContentRevisions,
-} from "./page-content-discard";
-export {
   requireProjectedPlacement,
   type ProjectedPlacementGate,
   type ProjectedPlacementRefusal,

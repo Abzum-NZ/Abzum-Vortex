@@ -107,7 +107,6 @@ export {
 export * from "./source-identities";
 export * from "./source-identity-reservations";
 export * from "./saved-condition-revisions";
-export * from "./installed-event-catalogue";
 export {
   type DefinitionPublicationFailureCode,
   type DefinitionPublicationCandidate,
