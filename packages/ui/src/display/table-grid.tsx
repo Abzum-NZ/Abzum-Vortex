@@ -289,7 +289,7 @@ const GridRow = memo(function GridRow({
           data-col={slot.id}
           tabIndex={activeColumnId === slot.id ? 0 : -1}
           className={cn(
-            "flex min-w-0 items-center overflow-hidden px-2 whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+            "flex min-w-0 items-center overflow-hidden px-[var(--vortex-space-sm)] whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
             "scroll-mt-[var(--grid-row-height)]",
             slot.kind === "data" && cellAlignment(slot.column),
             slot.kind !== "data" && "justify-center",
@@ -316,7 +316,10 @@ const GridRow = memo(function GridRow({
             renderers.actions(row)
           ) : slot.column === undefined ? null : slot.id === indentColumnId ? (
             <div
-              className={cn("flex w-full min-w-0 items-center gap-1", cellAlignment(slot.column))}
+              className={cn(
+                "flex w-full min-w-0 items-center gap-[var(--vortex-space-xs)]",
+                cellAlignment(slot.column),
+              )}
               style={{ paddingInlineStart: `${(level - 1) * SUB_ROW_INDENT_REM}rem` }}
             >
               {subExpandable ? (
@@ -1091,7 +1094,7 @@ export function RecordsGrid({
         tabIndex={activeRow < 0 && active.columnId === slot.id ? 0 : -1}
         title={sortable ? "Sort; hold Shift to add to the sort" : undefined}
         className={cn(
-          "relative flex min-w-0 items-center gap-1 overflow-hidden bg-muted px-2 text-xs font-medium whitespace-nowrap text-foreground outline-none select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+          "relative flex min-w-0 items-center gap-[var(--vortex-space-xs)] overflow-hidden bg-muted px-[var(--vortex-space-sm)] text-xs font-medium whitespace-nowrap text-foreground outline-none select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
           slot.kind === "data" ? cellAlignment(column) : "justify-center",
           sortable && "cursor-pointer hover:bg-muted/70",
           slot.sticky && "sticky z-30",
@@ -1304,7 +1307,7 @@ export function RecordsGrid({
         data-slot="grid-viewport"
         data-vortex-grid-virtualized={virtual ? "" : undefined}
         className={cn(
-          "relative max-w-full gap-0 overflow-auto py-0",
+          "relative max-w-full overflow-auto",
           fill ? "min-h-0 flex-1" : bounded && BOUNDED_VIEWPORT_CLASS,
         )}
       >
@@ -1394,7 +1397,7 @@ export function RecordsGrid({
                     data-col={slot.id}
                     tabIndex={activeRow === lines.length && active.columnId === slot.id ? 0 : -1}
                     className={cn(
-                      "min-w-0 shrink-0 px-2 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+                      "min-w-0 shrink-0 px-[var(--vortex-space-sm)] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                       cellAlignment(slot.column),
                       slot.sticky && "bg-muted",
                     )}

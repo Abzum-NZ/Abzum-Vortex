@@ -27,7 +27,6 @@ export function GroupedBody({
   placementId,
   accessibleName,
   grouped,
-  loading,
   members,
   columns,
   cells,
@@ -36,8 +35,6 @@ export function GroupedBody({
   placementId: string;
   accessibleName: string;
   grouped: GroupedTable;
-  /** The skeleton the open group shows while its first page is read, sized to the page. */
-  loading: ReactNode;
   /** Draws a page of the open group's rows. */
   members: () => ReactNode;
   columns: readonly Readonly<{ key: string; label: string }>[];
@@ -51,7 +48,7 @@ export function GroupedBody({
       data-vortex-grouped=""
       role={cells === undefined ? "group" : "rowgroup"}
       aria-label={`${accessibleName}: groups`}
-      className="flex flex-col gap-2"
+      className="flex flex-col gap-[var(--vortex-space-sm)]"
     >
       <p className="m-0 text-xs text-muted-foreground tabular-nums">
         {recordsPhrase(groups.total)} in{" "}
@@ -84,11 +81,15 @@ export function GroupedBody({
           open={expanded === group.key}
           onToggle={() => grouped.toggle(group.key)}
         >
-          {state === undefined || memberKey(state) !== group.key ? null : state.status ===
-            "loading" ? (
-            loading
-          ) : state.status === "ready" ? (
-            <div className={cn("flex flex-col gap-2", state.refreshing && "opacity-70")}>
+          {state === undefined ||
+          memberKey(state) !== group.key ||
+          state.status === "loading" ? null : state.status === "ready" ? (
+            <div
+              className={cn(
+                "flex flex-col gap-[var(--vortex-space-sm)]",
+                state.refreshing && "opacity-70",
+              )}
+            >
               {state.page.rows.length === 0 ? (
                 <Empty
                   role="status"
@@ -139,7 +140,7 @@ function GroupsPager({ grouped }: Readonly<{ grouped: GroupedTable }>): ReactEle
   if (page.first && page.next === undefined) return null;
   const movePage = grouped.movePage;
   return (
-    <div className="flex flex-wrap items-center justify-end gap-2">
+    <div className="flex flex-wrap items-center justify-end gap-[var(--vortex-space-sm)]">
       <Button
         type="button"
         variant="outline"
@@ -218,7 +219,9 @@ function GroupSection({
   return (
     <Collapsible open={open} onOpenChange={() => onToggle()}>
       {cells === undefined ? (
-        <div className="flex items-center gap-2 bg-muted/40 px-2 py-1.5">{label}</div>
+        <div className="flex items-center gap-[var(--vortex-space-sm)] bg-muted/40 px-[var(--vortex-space-sm)] py-1.5">
+          {label}
+        </div>
       ) : (
         <div role="row" aria-rowindex={rowIndex} className="flex w-full border-b bg-muted/40">
           {cells.map((cell, index) => (
@@ -227,7 +230,7 @@ function GroupSection({
               role="gridcell"
               aria-colindex={index + 1}
               style={cell.style}
-              className="flex min-w-0 shrink-0 items-center justify-end gap-2 px-2 py-1.5 text-right"
+              className="flex min-w-0 shrink-0 items-center justify-end gap-[var(--vortex-space-sm)] px-[var(--vortex-space-sm)] py-1.5 text-right"
             >
               {cell.key === cells.find((entry) => entry.column !== undefined)?.key ? label : null}
               {cell.column === undefined ? null : (
@@ -260,11 +263,11 @@ function GroupPager({
   const { rows, next, previous, page } = state.page;
   if (next === undefined && previous === undefined) return null;
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="flex flex-wrap items-center justify-between gap-[var(--vortex-space-sm)]">
       <p className="m-0 text-xs text-muted-foreground tabular-nums">
         {`${group.label} · page ${page} · ${rows.length === 1 ? "1 row" : `${rows.length} rows`}`}
       </p>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-[var(--vortex-space-sm)]">
         <Button
           type="button"
           variant="outline"

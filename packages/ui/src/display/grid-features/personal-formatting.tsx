@@ -107,15 +107,18 @@ export function PersonalFormattingDialog({
     <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
       <DialogContent className="min-w-0 max-h-[90dvh] grid-cols-1 overflow-y-auto break-words sm:max-w-xl [&>*]:min-w-0">
         <DialogHeader>
-          <DialogTitle className="pr-8">Formatting for “{selected.name}”</DialogTitle>
+          <DialogTitle>Formatting for "{selected.name}"</DialogTitle>
           <DialogDescription>
             Highlight the rows or cells of this view that match a condition. For each row or cell
             the first matching rule wins, after the rules the table already has. People you share
             the view with see the rules on the fields their role can read.
           </DialogDescription>
         </DialogHeader>
-        <section aria-labelledby={`${ownId}-rules`} className="flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-2">
+        <section
+          aria-labelledby={`${ownId}-rules`}
+          className="flex flex-col gap-[var(--vortex-space-sm)]"
+        >
+          <div className="flex items-center justify-between gap-[var(--vortex-space-sm)]">
             <h3 id={`${ownId}-rules`} className="text-sm font-medium">
               Rules
             </h3>
@@ -135,7 +138,10 @@ export function PersonalFormattingDialog({
           {rules.length === 0 ? (
             <p className="text-sm text-muted-foreground">No rules yet.</p>
           ) : (
-            <ol aria-label="Formatting rules" className="flex flex-col gap-1">
+            <ol
+              aria-label="Formatting rules"
+              className="flex flex-col gap-[var(--vortex-space-xs)]"
+            >
               {rules.map((rule, index) => {
                 const issue = issueOf(rule);
                 const switchId = `${ownId}-rule-${index}`;
@@ -143,7 +149,7 @@ export function PersonalFormattingDialog({
                   <li
                     key={rule.id}
                     className={cn(
-                      "flex items-start gap-2 p-2",
+                      "flex items-start gap-[var(--vortex-space-sm)] p-[var(--vortex-space-sm)]",
                       activeId === rule.id && "bg-accent text-accent-foreground",
                       !rule.enabled && "opacity-60",
                     )}

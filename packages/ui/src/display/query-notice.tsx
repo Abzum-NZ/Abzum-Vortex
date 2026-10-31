@@ -90,7 +90,7 @@ export function QueryNoticeDisplay(props: DisplayRenderProps<QueryNoticePayload>
         <div
           data-vortex-display="query_notice"
           data-vortex-placement-id={props.placementId}
-          className="flex flex-col gap-2"
+          className="flex flex-col gap-[var(--vortex-space-sm)]"
         >
           {values.truncated ? (
             <p role="status" aria-live="polite">

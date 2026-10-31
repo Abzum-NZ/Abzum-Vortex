@@ -239,8 +239,8 @@ function BoardColumn({
             },
           })}
     >
-      <header className="flex flex-col gap-1">
-        <h3 className="m-0 flex items-center gap-2 font-medium">
+      <header className="flex flex-col gap-[var(--vortex-space-xs)]">
+        <h3 className="m-0 flex items-center gap-[var(--vortex-space-sm)] font-medium">
           {bucket.stage === undefined ? null : (
             <span
               aria-hidden="true"
@@ -307,7 +307,7 @@ function BoardColumn({
             {emptyMessage}
           </p>
         ) : rows.length > 0 ? (
-          <ul className="flex list-none flex-col gap-2 p-0">
+          <ul className="flex list-none flex-col gap-[var(--vortex-space-sm)]">
             {rows.map((row) => {
               const fieldById = new Map(
                 row.fields.map((field) => [field.key.toLowerCase(), field] as const),
@@ -892,7 +892,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
             </Suspense>
           )}
           <div
-            className="flex gap-2 overflow-x-auto md:hidden"
+            className="flex gap-[var(--vortex-space-sm)] overflow-x-auto md:hidden"
             role="group"
             aria-label={`${accessibleName} column`}
           >

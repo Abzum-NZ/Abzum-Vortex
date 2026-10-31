@@ -4,8 +4,6 @@ import { useCallback, useEffect, useRef, useState, type ReactElement } from "rea
 import Link from "next/link";
 import { Alert, AlertDescription } from "../../components/alert";
 import { Button } from "../../components/button";
-import { Empty, EmptyHeader, EmptyTitle } from "../../components/empty";
-import { Skeleton } from "../../components/skeleton";
 import {
   Table,
   TableBody,
@@ -98,7 +96,7 @@ const settled = (state: PanelState): PanelState | undefined =>
  * related record's page when the viewer may open it, and loading, empty, refused and failed reads
  * each have their own state.
  */
-function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactElement {
+function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactElement | null {
   const read = context.events?.row_expanded;
   const pageSize = context.features.masterDetail?.pageSize;
   if (pageSize === undefined) fail("Related records require their feature projection", location);
@@ -185,13 +183,8 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
   };
 
   if (state.kind === "loading")
-    return (
-      <div role="status" aria-label="Reading related records" className="flex flex-col gap-2 py-1">
-        {Array.from({ length: Math.min(pageSize, 5) }, (_, index) => (
-          <Skeleton key={index} className="h-5 w-full" />
-        ))}
-      </div>
-    );
+    // No placeholder renders while the related records are read: the row stays as it is.
+    return null;
   if (state.kind === "refused")
     return (
       <p role="status" className="m-0 py-1 text-sm text-muted-foreground">
@@ -200,7 +193,10 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
     );
   if (state.kind === "error")
     return (
-      <div role="alert" className="flex flex-wrap items-center gap-2 py-1 text-sm">
+      <div
+        role="alert"
+        className="flex flex-wrap items-center gap-[var(--vortex-space-sm)] py-1 text-sm"
+      >
         <span className="text-muted-foreground">The related records could not be read.</span>
         <Button variant="outline" size="sm" onClick={() => void open()}>
           Try again
@@ -209,13 +205,9 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
     );
   if (state.kind === "empty")
     return (
-      <Empty role="status" className="p-2 md:p-2">
-        <EmptyHeader>
-          <EmptyTitle className="text-sm font-normal text-muted-foreground">
-            No related records
-          </EmptyTitle>
-        </EmptyHeader>
-      </Empty>
+      <p role="status" className="m-0 py-1 text-sm text-muted-foreground">
+        No related records
+      </p>
     );
   const { page, more } = state;
   const footer = (
@@ -239,8 +231,8 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
   );
   if (context.presentation === "cards")
     return (
-      <div className="flex min-w-0 flex-col items-start gap-1 text-sm">
-        <ul className="m-0 flex w-full min-w-0 list-none flex-col divide-y divide-border p-0">
+      <div className="flex min-w-0 flex-col items-start gap-[var(--vortex-space-xs)] text-sm">
+        <ul className="m-0 flex w-full min-w-0 list-none flex-col divide-y divide-border">
           {page.rows.map((related) => {
             const [titleColumn, ...detailColumns] = page.columns;
             const titleValue = titleColumn === undefined ? undefined : cellOf(related, titleColumn);
@@ -289,7 +281,7 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
       </div>
     );
   return (
-    <div className="flex flex-col items-start gap-1">
+    <div className="flex flex-col items-start gap-[var(--vortex-space-xs)]">
       <Table className="text-sm" containerClassName="border-0 bg-transparent">
         <TableHeader>
           <TableRow className="hover:bg-transparent">
@@ -306,7 +298,7 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
               {page.columns.map((column, index) => {
                 const cell = cellOf(related, column);
                 return (
-                  <TableCell key={column.key} className="max-w-64 truncate py-1.5">
+                  <TableCell key={column.key} className="max-w-64 truncate">
                     {index === 0 && related.href !== undefined ? (
                       <Link
                         href={related.href}

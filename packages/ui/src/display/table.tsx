@@ -53,7 +53,6 @@ import { columnWidth, useTablePresentation } from "./table-geometry";
 import { TableSummary, TableTotals } from "./table-totals";
 import { RecordsGrid, type GridRenderers } from "./table-grid";
 import { useGridLayout, type GridColumn } from "./table-layout";
-import { TableLoadingState, useLoadingReveal } from "./table-loading";
 
 const RecordsCards = lazy(async () => ({ default: (await import("./table-cards")).RecordsCards }));
 // Group headers load only for a grouped grid; a plain grid ships none of their code.
@@ -451,7 +450,9 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
       ),
       selectAll: () => null,
       rowEditor,
-      actions: (row) => <span className="flex items-center gap-1">{rowCommands(row)}</span>,
+      actions: (row) => (
+        <span className="flex items-center gap-[var(--vortex-space-xs)]">{rowCommands(row)}</span>
+      ),
     };
   }, [
     behaviours,
@@ -534,8 +535,6 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
     rows.length,
     announce,
   ]);
-
-  const revealed = useLoadingReveal(state.status === "loading");
 
   if (contract === undefined) {
     console.error("[display] Records table settings do not declare a readable contract", {
@@ -638,16 +637,8 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
     for (const filter of narrowing?.filters ?? [])
       void events?.filter_changed?.({ event: "filter_changed", field: filter.fieldId, value: "" });
   };
-  const loading = (
-    <TableLoadingState
-      accessibleName={accessibleName}
-      contract={contract}
-      density={layout.density}
-      presentation={presentation ?? "grid"}
-      selectionColumn={selectable}
-      actionsColumn={showActions}
-    />
-  );
+  // No placeholder renders while a block reads: the page stays as it is until rows are ready.
+  const loading = null;
 
   // The rows of one page as the grid, or as cards on a phone: the open group's rows use the same.
   const membersView = (): ReactElement =>
@@ -692,7 +683,6 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
                       placementId={placementId}
                       accessibleName={accessibleName}
                       grouped={grouped}
-                      loading={loading}
                       members={() => members}
                       columns={layout.shown}
                       cells={cells}
@@ -720,7 +710,7 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
       />
     );
 
-  const body = ((): ReactElement => {
+  const body = ((): ReactElement | null => {
     if (pivotOpen) return <>{gridFeatures.viewBody()}</>;
     if (state.status === "loading") return loading;
     if (state.status === "empty")
@@ -733,7 +723,7 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
       );
     if (state.status === "error" || state.status === "refused" || state.status === "awaiting_input")
       return (
-        <div className="flex flex-col items-start gap-2">
+        <div className="flex flex-col items-start gap-[var(--vortex-space-sm)]">
           <DisplayStateContainer
             accessibleName={accessibleName}
             availability={availability}
@@ -818,14 +808,13 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
               placementId={placementId}
               accessibleName={accessibleName}
               grouped={grouped}
-              loading={loading}
               members={membersView}
               columns={layout.shown}
             />
           </Suspense>
         );
     return values.groups?.status === "too_many" ? (
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-[var(--vortex-space-sm)]">
         <Alert>
           <AlertDescription>
             There are too many matching records or values to count in groups. Narrow the table with
@@ -847,10 +836,11 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
           data-vortex-display="table"
           data-vortex-placement-id={placementId}
           data-vortex-table-density={layout.density}
-          data-vortex-table-presentation={presentation ?? "pending"}
+          {...(presentation === undefined
+            ? {}
+            : { "data-vortex-table-presentation": presentation })}
           {...(fullScreen.active ? { "data-vortex-full-screen": "" } : {})}
           className={cn(fullScreen.active && FULL_SCREEN_CLASS)}
-          {...(revealed ? { "data-vortex-display-revealed": "" } : {})}
         >
           <DisplayHeader title={title} accessibleName={accessibleName} events={undefined} />
           {purpose === undefined ? null : (
@@ -881,9 +871,9 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
           </div>
           {subRowsOpen === undefined ? null : gridFeatures.subRowsController(subRowsOpen)}
           {/* While the server renders and the page hydrates the viewport is unknown: the body is
-              drawn as the grid a wide screen shows, so its rows are painted from the first HTML,
-              and a phone shows the declared skeleton in its place (the phone layout rule) until
-              its cards are drawn. The body keeps one element, so a wide screen keeps its grid. */}
+              drawn as the grid a wide screen shows, so its rows are painted from the first HTML.
+              The body keeps one element, so a wide screen keeps its grid; a phone shows that grid
+              until its cards are ready, with no placeholder in between. */}
           <div data-vortex-table-body="" className="contents">
             {ready && availability === "unavailable" ? (
               <DisplayStateContainer
@@ -898,11 +888,6 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
               body
             )}
           </div>
-          {presentation === undefined ? (
-            <div data-vortex-table-phone-skeleton="" className="contents">
-              {loading}
-            </div>
-          ) : null}
           {ready &&
           !pivotOpen &&
           values?.totals !== undefined &&
@@ -923,7 +908,7 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
             values.hasPreviousPage === true ||
             (values.page !== undefined && values.page > 1)
           ) ? null : (
-            <div className="mt-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
+            <div className="mt-2 flex shrink-0 flex-wrap items-center justify-between gap-[var(--vortex-space-sm)]">
               <p className="m-0 text-xs text-muted-foreground tabular-nums">
                 {/* A keyset table marks every later page as page 2 (it never counts rows), so only
                     page one and a numbered list name their page; the end of a keyset list is the
