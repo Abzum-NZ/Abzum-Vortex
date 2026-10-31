@@ -182,7 +182,7 @@ const SHARED_COMPONENT_STYLES_CSS = `
   position: absolute;
   inset: 0;
   z-index: 0;
-  border-radius: calc(var(--radius) * 0.8);
+  border-radius: var(--radius-md);
   background-color: var(--sidebar-accent);
   pointer-events: none;
 }

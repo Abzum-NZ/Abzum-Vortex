@@ -32,7 +32,6 @@ import {
   DropdownMenuTrigger,
 } from "../components/dropdown-menu";
 import { Button } from "../components/button";
-import { Skeleton } from "../components/skeleton";
 import { SidebarProvider, SidebarTrigger } from "../components/sidebar";
 import { FlowSurfaceContext } from "../flow-runtime/flow-surface-context";
 import { Icon } from "../icons/icon";
@@ -163,7 +162,7 @@ export function WebMcpStatus({
             : "Browser agent tools could not be enabled.";
   return (
     <div
-      className="flex max-w-full min-w-0 flex-wrap items-center gap-2 text-xs"
+      className="flex max-w-full min-w-0 flex-wrap items-center gap-[var(--vortex-space-sm)] text-xs"
       role="status"
       aria-live="polite"
       data-vortex-webmcp={runtime.working === undefined ? runtime.status : "working"}
@@ -238,7 +237,7 @@ function OrganizationSwitcher({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-56">
         <DropdownMenuGroup>
-          <DropdownMenuLabel className="flex flex-col gap-1">
+          <DropdownMenuLabel className="flex flex-col gap-[var(--vortex-space-xs)]">
             <span>{organizationName}</span>
             {organizationShortName === undefined ? null : (
               <span className="font-normal text-muted-foreground">{organizationShortName}</span>
@@ -350,7 +349,10 @@ function ApplicationSwitcher({
         aria-busy={switcher === undefined}
       >
         {source?.search === undefined ? null : (
-          <div className="w-full p-2" onKeyDown={(event) => event.stopPropagation()}>
+          <div
+            className="w-full p-[var(--vortex-space-sm)]"
+            onKeyDown={(event) => event.stopPropagation()}
+          >
             <ApplicationSearchControl
               placementId="application-switcher-search"
               settings={{
@@ -437,13 +439,18 @@ function ApplicationSwitcher({
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         {switcher === undefined ? (
-          <div role="status" aria-label="Loading applications" className="space-y-2 p-2">
-            <Skeleton className="h-5 w-full" />
-            <Skeleton className="h-5 w-3/4" />
+          <div
+            role="status"
+            className="px-[var(--vortex-space-md)] py-[var(--vortex-space-sm)] text-sm text-muted-foreground"
+          >
+            Loading applications…
           </div>
         ) : switcher.state !== "available" ? (
           <>
-            <div role="status" className="px-2 py-1.5 text-sm text-muted-foreground">
+            <div
+              role="status"
+              className="px-[var(--vortex-space-md)] py-[var(--vortex-space-sm)] text-sm text-muted-foreground"
+            >
               {switcher.state === "temporarily_unavailable"
                 ? "Applications temporarily unavailable"
                 : "Applications unavailable"}
@@ -453,7 +460,10 @@ function ApplicationSwitcher({
             </DropdownMenuItem>
           </>
         ) : switcher.applications.length === 0 ? (
-          <div role="status" className="px-2 py-1.5 text-sm text-muted-foreground">
+          <div
+            role="status"
+            className="px-[var(--vortex-space-md)] py-[var(--vortex-space-sm)] text-sm text-muted-foreground"
+          >
             No other applications
           </div>
         ) : (
@@ -547,16 +557,16 @@ export function ApplicationShellRoot({
       <div
         data-vortex-puck-root=""
         data-vortex-application-shell={shell.key}
-        className="flex min-h-svh w-full min-w-0 flex-col bg-background text-foreground [--vortex-header-height:3.5rem]"
+        className="flex min-h-svh w-full min-w-0 flex-col bg-background text-foreground [--vortex-header-height:4rem]"
         {...(editing ? { "data-vortex-editing": "" } : {})}
       >
         <style>{shellFrameCss}</style>
-        <header className="sticky top-0 z-20 flex min-h-14 w-full shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b py-1 sm:h-14 sm:flex-nowrap sm:py-0 bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <header className="sticky top-0 z-20 flex min-h-16 w-full shrink-0 flex-wrap items-center gap-x-[var(--vortex-space-sm)] gap-y-[var(--vortex-space-xs)] bg-background/95 px-[var(--vortex-space-md)] backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:h-16 sm:flex-nowrap">
           {/* The first stop for keyboard users: past the header and the navigation to the page. */}
           <a
             href={`#${mainContentId}`}
             onClick={skipToPageContent}
-            className="sr-only bg-background px-3 py-2 text-sm font-medium text-foreground focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:ring-2 focus:ring-ring"
+            className="sr-only bg-background px-[var(--vortex-space-md)] py-[var(--vortex-space-sm)] text-sm font-medium text-foreground focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:ring-2 focus:ring-ring"
           >
             Skip to main content
           </a>
@@ -566,7 +576,7 @@ export function ApplicationShellRoot({
           {presentation.topBar.breadcrumbs ? (
             <Breadcrumbs shellName={shell.name} runtime={runtime} />
           ) : null}
-          <div className="ms-auto flex min-w-0 items-center justify-end gap-1 max-sm:flex-wrap">
+          <div className="ms-auto flex min-w-0 items-center justify-end gap-[var(--vortex-space-xs)] max-sm:flex-wrap">
             {presentation.topBar.organizationSwitcher ? (
               <OrganizationSwitcher runtime={runtime} />
             ) : null}
