@@ -210,6 +210,7 @@ export const ensureHomeDashboard = (
             ),
             freshAlias(plan, `recent_${record.key}`),
             {
+              title: `Recent ${record.plural_name.toLowerCase()}`,
               empty_message: `There are no ${record.plural_name.toLowerCase()} yet.`,
               columns: tableColumns((entry) => field(resolved, entry), columns, record.title_field),
               page_size: 5,
