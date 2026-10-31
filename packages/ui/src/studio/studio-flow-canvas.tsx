@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "../components/alert";
 import "@xyflow/react/dist/style.css";
 import type { FlowTaskTypeKey } from "@vortex/platform/schema";
 import { createContext, memo, useContext, useId, useMemo, useRef, useState } from "react";
@@ -277,9 +278,9 @@ const StudioFlowInsertion = memo(function StudioFlowInsertion({
           }}
         />
         {problem === "" ? null : (
-          <p role="alert" className="mt-2 text-sm text-destructive">
-            {problem}
-          </p>
+          <Alert variant="destructive" className="mt-2">
+            <AlertDescription>{problem}</AlertDescription>
+          </Alert>
         )}
       </PopoverContent>
     </Popover>

@@ -9,7 +9,7 @@ import {
 } from "../components/dropdown-menu";
 import { MoreHorizontal } from "lucide-react";
 import { Copy } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "../components/sonner";
 import { StudioIconButton } from "./studio-entry-list";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 

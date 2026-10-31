@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useIntentPreload } from "../_lib/use-intent-preload";
 import dynamic from "next/dynamic";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -997,9 +998,9 @@ export function useStudioCanvasTab({
       aria-label="Selected item"
     >
       {notice !== "" && (
-        <p role="alert" className="text-sm text-destructive">
-          {notice}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{notice}</AlertDescription>
+        </Alert>
       )}
       {selected?.kind === "application" && <p>{source.body.description}</p>}
       {selected?.kind === "placement" && canvasPage === undefined && (
@@ -1031,9 +1032,9 @@ export function useStudioCanvasTab({
           />
         )}
       {canvasPage !== undefined && theme.problem.length > 0 && (
-        <p role="alert" className="text-sm text-destructive">
-          {theme.problem}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{theme.problem}</AlertDescription>
+        </Alert>
       )}
       {canvasPage !== undefined && viewAsRole !== undefined && viewDecisions !== null && (
         <p role="status" className="text-sm text-muted-foreground">

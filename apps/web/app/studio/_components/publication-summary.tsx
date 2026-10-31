@@ -109,6 +109,46 @@ const sentence = (reason: Reason, component: PublicationComponentLabel): string 
   return `${reasonLabels[reason.code]}: ${name}`;
 };
 
+/** A short plain summary of what changed for people, before the full list of internal changes. */
+const plainSummary = (
+  confirmation: DefinitionPublicationConfirmation,
+  names: ReadonlyMap<string, PublicationComponentLabel>,
+): readonly string[] => {
+  if (confirmation.outcome === "initial_release") return [];
+  const reasons = confirmation.reasons;
+  const lines: string[] = [];
+  const pages = (code: "component_added" | "component_removed") =>
+    reasons.filter((reason) => reason.location.componentKind === "page" && reason.code === code);
+  const addedPages = pages("component_added").length;
+  const removedPages = pages("component_removed").length;
+  if (addedPages > 0) lines.push(`${addedPages} page${addedPages === 1 ? "" : "s"} added`);
+  if (removedPages > 0) lines.push(`${removedPages} page${removedPages === 1 ? "" : "s"} removed`);
+  for (const reason of reasons) {
+    if (reason.location.componentKind !== "role" || reason.location.property !== "permission")
+      continue;
+    const role = names.get(reason.location.componentId?.toLowerCase() ?? "");
+    if (role === undefined) continue;
+    if (role.addedAccess?.length) lines.push(`${role.label} can now ${actions(role.addedAccess)}`);
+    if (role.removedAccess?.length)
+      lines.push(`${role.label} can no longer ${actions(role.removedAccess)}`);
+  }
+  if (reasons.some((reason) => reason.location.componentKind === "pipeline_stage"))
+    lines.push("Stage colours changed");
+  if (reasons.some((reason) => reason.location.componentKind === "theme"))
+    lines.push("The visual theme changed");
+  if (lines.length === 0) {
+    const kinds = [
+      ...new Set(
+        reasons
+          .map((reason) => kindLabels[reason.location.componentKind] ?? "item")
+          .map((kind) => kind.toLowerCase()),
+      ),
+    ];
+    lines.push(`Changes to ${list(kinds)}`);
+  }
+  return [...new Set(lines)].slice(0, 3);
+};
+
 export function PublicationSummary({
   confirmation,
   componentLabels,
@@ -121,6 +161,7 @@ export function PublicationSummary({
     confirmation.outcome === "initial_release"
       ? `This is the first release. It will be published as version ${confirmation.assignedVersion}.`
       : `${impactLabels[confirmation.impact]}: this will be published as version ${confirmation.assignedVersion}.`;
+  const summarised = plainSummary(confirmation, names);
   const groups = new Map<string, DefinitionPublicationConfirmation["reasons"]>();
   const wholePages = new Set(
     confirmation.reasons
@@ -152,105 +193,115 @@ export function PublicationSummary({
   return (
     <div className="min-w-0 space-y-4 text-sm wrap-anywhere">
       <p>{intro}</p>
-      {confirmation.reasons.length > 0 && (
-        <ul aria-label="Publication changes" className="m-0 min-w-0 list-none space-y-2 p-0">
-          {Array.from(groups).map(([key, reasons]) => {
-            const primary =
-              reasons.find((reason) => reason.location.componentKind === "page") ?? reasons[0]!;
-            const component = names.get(primary.location.componentId?.toLowerCase() ?? "") ?? {
-              componentId: "",
-              label: kindLabels[primary.location.componentKind] ?? "Item",
-            };
-            const sentences = [
-              ...new Set(
-                reasons
-                  .filter((reason) => partOfWholePage(reason) === undefined)
-                  .map((reason) => sentence(reason, component)),
-              ),
-            ];
-            const added = reasons.every(
-              (reason) =>
-                reason.code === "component_added" || reason.code === "required_component_added",
-            );
-            const removed = reasons.some((reason) => reason.code === "component_removed");
-            const impact = reasons.some((reason) => reason.impact === "major")
-              ? "major"
-              : reasons.some((reason) => reason.impact === "minor")
-                ? "minor"
-                : "patch";
-            return (
-              <li
-                key={key}
-                className="flex min-w-0 items-start gap-2 rounded-md py-3 hover:bg-muted/40"
-              >
-                {added || removed ? (
-                  <Icon
-                    name={removed ? "minus" : "plus"}
-                    className={`mt-1 size-4 shrink-0 ${removed ? "text-destructive" : "text-success"}`}
-                  />
-                ) : (
-                  <span
-                    aria-hidden="true"
-                    className="w-4 shrink-0 text-center font-medium text-info"
-                  >
-                    ~
-                  </span>
-                )}
-                <div className="min-w-0 flex-1 space-y-1">
-                  {sentences.map((value) => (
-                    <p key={value}>{value}</p>
-                  ))}
-                  <Badge variant="outline" className="max-w-full whitespace-normal">
-                    {impactLabels[impact]}
-                  </Badge>
-                </div>
-              </li>
-            );
-          })}
+      {summarised.length > 0 && (
+        <ul aria-label="What changed for people" className="m-0 min-w-0 list-none space-y-1 p-0">
+          {summarised.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
         </ul>
       )}
-      <StudioInspectorGroup title="Details" defaultOpen={false}>
-        <dl className="space-y-2 font-mono text-xs">
-          {confirmation.reasons.some((reason) => reason.location.componentId !== undefined) && (
-            <div>
-              <dt className="font-semibold">Changed item identities</dt>
-              <dd className="break-all">
-                {[
-                  ...new Set(
-                    confirmation.reasons.flatMap((reason) =>
-                      reason.location.componentId === undefined
-                        ? []
-                        : [reason.location.componentId],
+      <details className="min-w-0 space-y-2">
+        <summary className="cursor-pointer font-medium">Show all changes</summary>
+        {confirmation.reasons.length > 0 && (
+          <ul aria-label="Publication changes" className="m-0 min-w-0 list-none space-y-2 p-0">
+            {Array.from(groups).map(([key, reasons]) => {
+              const primary =
+                reasons.find((reason) => reason.location.componentKind === "page") ?? reasons[0]!;
+              const component = names.get(primary.location.componentId?.toLowerCase() ?? "") ?? {
+                componentId: "",
+                label: kindLabels[primary.location.componentKind] ?? "Item",
+              };
+              const sentences = [
+                ...new Set(
+                  reasons
+                    .filter((reason) => partOfWholePage(reason) === undefined)
+                    .map((reason) => sentence(reason, component)),
+                ),
+              ];
+              const added = reasons.every(
+                (reason) =>
+                  reason.code === "component_added" || reason.code === "required_component_added",
+              );
+              const removed = reasons.some((reason) => reason.code === "component_removed");
+              const impact = reasons.some((reason) => reason.impact === "major")
+                ? "major"
+                : reasons.some((reason) => reason.impact === "minor")
+                  ? "minor"
+                  : "patch";
+              return (
+                <li
+                  key={key}
+                  className="flex min-w-0 items-start gap-2 rounded-md py-3 hover:bg-muted/40"
+                >
+                  {added || removed ? (
+                    <Icon
+                      name={removed ? "minus" : "plus"}
+                      className={`mt-1 size-4 shrink-0 ${removed ? "text-destructive" : "text-success"}`}
+                    />
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className="w-4 shrink-0 text-center font-medium text-info"
+                    >
+                      ~
+                    </span>
+                  )}
+                  <div className="min-w-0 flex-1 space-y-1">
+                    {sentences.map((value) => (
+                      <p key={value}>{value}</p>
+                    ))}
+                    <Badge variant="outline" className="max-w-full whitespace-normal">
+                      {impactLabels[impact]}
+                    </Badge>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <StudioInspectorGroup title="Details" defaultOpen={false}>
+          <dl className="space-y-2 font-mono text-xs">
+            {confirmation.reasons.some((reason) => reason.location.componentId !== undefined) && (
+              <div>
+                <dt className="font-semibold">Changed item identities</dt>
+                <dd className="break-all">
+                  {[
+                    ...new Set(
+                      confirmation.reasons.flatMap((reason) =>
+                        reason.location.componentId === undefined
+                          ? []
+                          : [reason.location.componentId],
+                      ),
                     ),
-                  ),
-                ].join(", ")}
+                  ].join(", ")}
+                </dd>
+              </div>
+            )}
+            <div>
+              <dt className="font-semibold">Draft revision</dt>
+              <dd>{confirmation.expectedDraftRevision}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold">Source fingerprint</dt>
+              <dd className="break-all">
+                <code>{confirmation.sourceFingerprint}</code>
               </dd>
             </div>
-          )}
-          <div>
-            <dt className="font-semibold">Draft revision</dt>
-            <dd>{confirmation.expectedDraftRevision}</dd>
-          </div>
-          <div>
-            <dt className="font-semibold">Source fingerprint</dt>
-            <dd className="break-all">
-              <code>{confirmation.sourceFingerprint}</code>
-            </dd>
-          </div>
-          <div>
-            <dt className="font-semibold">Content fingerprint</dt>
-            <dd className="break-all">
-              <code>{confirmation.contentFingerprint}</code>
-            </dd>
-          </div>
-          <div>
-            <dt className="font-semibold">Resolution fingerprint</dt>
-            <dd className="break-all">
-              <code>{confirmation.resolutionFingerprint}</code>
-            </dd>
-          </div>
-        </dl>
-      </StudioInspectorGroup>
+            <div>
+              <dt className="font-semibold">Content fingerprint</dt>
+              <dd className="break-all">
+                <code>{confirmation.contentFingerprint}</code>
+              </dd>
+            </div>
+            <div>
+              <dt className="font-semibold">Resolution fingerprint</dt>
+              <dd className="break-all">
+                <code>{confirmation.resolutionFingerprint}</code>
+              </dd>
+            </div>
+          </dl>
+        </StudioInspectorGroup>
+      </details>
     </div>
   );
 }

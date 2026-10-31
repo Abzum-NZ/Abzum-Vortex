@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type ReactNode } from "react";
 import {
   applicationUses,
@@ -246,9 +247,9 @@ export function StudioQueryCatalogue({
         </Button>
       </header>
       {problem === "" ? null : (
-        <p role="alert" className="text-sm text-destructive">
-          {problem}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{problem}</AlertDescription>
+        </Alert>
       )}
       <section className="space-y-3" aria-labelledby="queries-this-app">
         <h3 id="queries-this-app" className="text-sm font-medium">

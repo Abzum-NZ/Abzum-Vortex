@@ -12,7 +12,7 @@ import {
   PopoverTitle,
 } from "@vortex/ui/components/popover";
 import { StudioNavItem } from "./studio-nav-tree";
-import { toast } from "@vortex/ui/components/sonner";
+import { studioNotice } from "./studio-save-state";
 import type {
   StudioAccessCommand,
   StudioAccessResult,
@@ -137,7 +137,7 @@ export function useStudioAccessTab({
     const result = onCommand(command, merge);
     if (result.kind === "applied") {
       setFeedback(null);
-      if (command.kind !== "rename_role") toast.success(result.message);
+      if (command.kind !== "rename_role") studioNotice(result.message, "success");
     } else setFeedback({ kind: "refused", message: result.message, where: result.where });
     if (result.kind === "applied" && result.roleKey !== undefined) {
       setView("role");

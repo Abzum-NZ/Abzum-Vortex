@@ -35,6 +35,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/t
 import { Separator } from "@vortex/ui/components/separator";
 import { cn } from "@vortex/ui/lib/utils";
 
+/** The one scroll body of a Studio rail panel and its inspector; positioned, so screen-reader-only text stays inside the scroll area. */
+export const STUDIO_RAIL_BODY_CLASS = "relative min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-3";
+
 /**
  * Studio's own frame: a top bar over an icon rail, the rail tab's panel, the canvas and the
  * inspector. The frame is platform chrome, so it uses the platform theme's tokens only; the
@@ -381,17 +384,6 @@ export function StudioFrame<Key extends string>({
     return () => window.removeEventListener("keydown", shortcut);
   }, [focusCanvas, toggleInspector]);
   const previousSelection = useRef(selectionKey);
-  useEffect(() => {
-    if (
-      hasInspector &&
-      previousSelection.current !== selectionKey &&
-      wide &&
-      !dockInspector &&
-      !focused
-    )
-      setNarrowInspectorOpen(true);
-    previousSelection.current = selectionKey;
-  }, [selectionKey, wide, dockInspector, focused, hasInspector]);
   const [hosts, setHosts] = useState<PaneHosts | null>(null);
   // The hosts are made once per frame: effects run again when a suspended part of Studio shows again,
   // and a new host would remount every panel and lose what is typed in it.
@@ -405,6 +397,21 @@ export function StudioFrame<Key extends string>({
     madeHosts.current ??= { panel: create(), inspector: create() };
     setHosts(madeHosts.current);
   }, []);
+  useEffect(() => {
+    if (
+      hasInspector &&
+      previousSelection.current !== selectionKey &&
+      wide &&
+      !dockInspector &&
+      !focused
+    )
+      setNarrowInspectorOpen(true);
+    // A new selection keeps the window and canvas where they are but starts its inspector at the
+    // top: the body may have been scrolled past the shorter content the new selection draws.
+    const inspectorBody = hosts?.inspector.querySelector<HTMLElement>("[data-studio-rail-body]");
+    if (inspectorBody !== null && inspectorBody !== undefined) inspectorBody.scrollTop = 0;
+    previousSelection.current = selectionKey;
+  }, [selectionKey, wide, dockInspector, focused, hasInspector, hosts]);
   const choose = (key: Key) => {
     setFocused(false);
     // Selecting a tab always reveals its pane, including the tab restored from the URL on reload.
@@ -568,7 +575,9 @@ export function StudioPanelShell({
         {action}
       </div>
       {search !== undefined && <div className="shrink-0 px-4 pb-3">{search}</div>}
-      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-3">{children}</div>
+      <div className={STUDIO_RAIL_BODY_CLASS} data-studio-rail-body="">
+        {children}
+      </div>
     </div>
   );
 }
