@@ -29,7 +29,7 @@ import {
 } from "./publication/read";
 import type { DefinitionPublicationCatalogue } from "./definition-publication-contracts";
 import { DefinitionError } from "./definition-error";
-import { applicationSourceContractVersion } from "./application-contract-versions";
+import { definitionContractVersion } from "./application-contract-versions";
 
 const storedSetSchema = z
   .object({
@@ -131,7 +131,7 @@ const projectBoundReleaseSet = async (
   if (
     isRecord(applicationEvidence) &&
     typeof applicationEvidence.sourceContractVersion === "string" &&
-    applicationEvidence.sourceContractVersion !== applicationSourceContractVersion
+    applicationEvidence.sourceContractVersion !== definitionContractVersion
   ) {
     const contributing = storedSet.data.modules.filter((module) => {
       const output = isRecord(module) ? module.compilationOutput : undefined;

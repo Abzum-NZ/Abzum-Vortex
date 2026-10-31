@@ -55,7 +55,7 @@ export type RecordsTablePivotView = Readonly<{ cursor?: string | undefined }>;
  * bucket start, a linked record's `{ recordTypeId, recordId }`, the text `not_available` for the
  * links the viewer cannot read, or `null` for the records with none), so it never holds a label.
  */
-export type RecordsTableGroupState = Readonly<{
+type RecordsTableGroupState = Readonly<{
   fieldId: string;
   after: string | null;
   expanded: string | null;
@@ -121,7 +121,7 @@ export type RecordsTableQueryState = Readonly<{
   group?: RecordsTableGroupState | undefined;
 }>;
 
-export type RecordsTableQueryStateRead =
+type RecordsTableQueryStateRead =
   | Readonly<{ kind: "valid"; state: RecordsTableQueryState }>
   | Readonly<{ kind: "malformed"; part: "sort" | "filter" | "search" | "group" }>;
 
@@ -161,7 +161,7 @@ const ADDRESS_TOKEN_PATTERN = /^[0-9a-f]{8}$/i;
  * the same position would name another table for another person. Placement identities are
  * random or hashed, so two tables of one page share a token only by a one-in-four-billion chance.
  */
-export const placementAddressToken = (placementId: string): string =>
+const placementAddressToken = (placementId: string): string =>
   placementId.slice(0, 8).toLowerCase();
 
 /** The address parameter of one kind for a placement, in the spelling this codec writes. */
@@ -230,11 +230,11 @@ const placementEntries = (
  * state, so it is not part of the query-state prefixes: opening it, paging its rows or closing it
  * never reads the table's rows again.
  */
-export const encodeRecordsTablePivotView = (view: RecordsTablePivotView): string =>
+const encodeRecordsTablePivotView = (view: RecordsTablePivotView): string =>
   view.cursor === undefined ? "on" : `on.${view.cursor}`;
 
 /** The pivot view an address value names; undefined for anything that is not a pivot view. */
-export const parseRecordsTablePivotView = (
+const parseRecordsTablePivotView = (
   value: string | undefined,
 ): RecordsTablePivotView | undefined => {
   if (value === "on") return {};
@@ -323,9 +323,7 @@ const decodeGroupExpansion = (value: string | undefined): string | null | undefi
 };
 
 /** The address value of a page request, or undefined for the first page. */
-export const encodeRecordsTablePagePosition = (
-  request: RecordsTablePageRequest,
-): string | undefined => {
+const encodeRecordsTablePagePosition = (request: RecordsTablePageRequest): string | undefined => {
   if (request.page <= 1) return undefined;
   if (request.continuationToken === undefined) return `${request.page}.last`;
   return `${request.page}.${request.pageDirection}.${request.continuationToken}`;
@@ -335,7 +333,7 @@ export const encodeRecordsTablePagePosition = (
  * The page request an address value names, `<page>.last` or `<page>.<direction>.<token>`, so the
  * table shows the same page number after a reload; a value that is not a position reads page one.
  */
-export const parseRecordsTablePagePosition = (
+const parseRecordsTablePagePosition = (
   value: string | undefined,
 ): RecordsTablePageRequest | undefined => {
   const [pageText, direction, token, ...rest] = value?.split(".") ?? [];

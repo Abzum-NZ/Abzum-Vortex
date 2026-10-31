@@ -2,7 +2,7 @@ import type { JsonValue } from "../catalogue/common";
 import type { FlowRecordType } from "./flow-orchestrator-types";
 
 /** The values a record step writes, named by field identity. */
-export type NamedRecordValues = Readonly<{
+type NamedRecordValues = Readonly<{
   submittedValues: Record<string, JsonValue>;
   /** The submitted name of each field, by lower-case field id. */
   submittedNames: ReadonlyMap<string, string>;

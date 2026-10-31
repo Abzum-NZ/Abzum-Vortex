@@ -1,84 +1,33 @@
 import "server-only";
-export {
-  searchConfiguredApplication,
-  type ApplicationSearchRecord,
-  type ApplicationSearchMatch,
-  type ApplicationSearchResult,
-} from "./application-search";
+export { searchConfiguredApplication, type ApplicationSearchResult } from "./application-search";
 export {
   searchInstalledApplication,
   sealApplicationSearchCursor,
   openApplicationSearchCursor,
-  type InstalledSearchModule,
 } from "./installed-application-search";
 
 export {
   buildSearchDocument,
   searchableFieldConfigurationFor,
   searchDocumentStoreCommand,
-  searchDocumentLimits,
-  searchDocumentSchemaVersion,
   searchPriorityWeights,
-  type BuildSearchDocumentResult,
-  type SearchableFieldConfiguration,
-  type SearchableFieldConfigurationEntry,
   type SearchableFieldPolicy,
-  type SearchDocument,
-  type SearchDocumentDeletion,
-  type SearchDocumentEntry,
   type SearchDocumentRefusalCode,
   type SearchDocumentStoreCommand,
   type SearchDocumentStoreOutcome,
   type SearchRecordSnapshot,
 } from "./document-store";
 
-export {
-  derivedFieldInputIds,
-  searchFieldDisclosure,
-  searchIndexDisclosableFieldIds,
-  searchIndexFieldDiscloses,
-  type PublishedSearchField,
-  type SearchFieldDisclosure,
-  type SearchIndexShareMetadata,
-} from "./sensitivity-policy";
+export { searchIndexFieldDiscloses } from "./sensitivity-policy";
 
 export { matchesLiteralSearchText } from "./literal-search";
 
 export { splitSearchFilters } from "./search-filters";
 
 export {
-  consumeSearchEvents,
   createSearchEventConsumer,
-  planSearchRebuildPage,
-  searchEventConsumerErrorCodes,
-  searchEventConsumerKey,
-  searchEventConsumerLimits,
-  searchIndexFreshness,
-  searchIndexFreshnessTargetMs,
-  searchIndexStaleCeilingMs,
-  SearchEventConsumerError,
-  type ConsumeSearchEventsInput,
-  type ConsumeSearchEventsResult,
-  type PlanSearchRebuildInput,
-  type SearchDeliveryFailureCode,
-  type SearchEventConsumer,
-  type SearchEventConsumerErrorCode,
-  type SearchEventConsumerOutcome,
-  type SearchEventDelivery,
-  type SearchIndexFreshness,
-  type SearchIndexFreshnessInput,
-  type SearchIndexFreshnessState,
   type SearchIndexOccurrenceDependencies,
-  type SearchIndexOccurrenceOutcome,
-  type SearchIndexOccurrenceResult,
   type SearchIndexRecordType,
-  type SearchOccurrenceSkipReason,
-  type SearchRebuildCandidate,
-  type SearchRebuildCheckpoint,
-  type SearchRebuildDependencies,
-  type SearchRebuildPageResult,
-  type SearchRebuildRefusal,
-  type SearchRebuildStored,
 } from "./event-consumer";
 
 export { createSearchIndexDependencies } from "./index-dependencies";

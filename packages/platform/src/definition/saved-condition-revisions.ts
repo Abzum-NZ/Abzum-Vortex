@@ -14,12 +14,12 @@ export type SavedConditionLike = Readonly<{
   Readonly<Record<string, unknown>>;
 
 /** Each saved condition's most recent published form, and the ids the latest release carried. */
-export type SavedConditionRevisionHistory = Readonly<{
+type SavedConditionRevisionHistory = Readonly<{
   lastSeen: readonly SavedConditionLike[];
   latestReleaseIds: ReadonlySet<string>;
 }>;
 
-export type SavedConditionRevisionInput = Readonly<{
+type SavedConditionRevisionInput = Readonly<{
   conditions: readonly SavedConditionLike[];
   history: SavedConditionRevisionHistory;
 }>;

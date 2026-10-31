@@ -269,12 +269,6 @@ export {
   type PageDataState,
   type PageSubjectType,
   type PlacementLogPlace,
-  type PlacementFailureReason,
   type PlacementReadEntry,
 } from "./shared";
-export type {
-  LauncherQueryRow,
-  PlacementGridLayouts,
-  PlacementReadInput,
-  PlacementReadServices,
-} from "./types";
+export type { LauncherQueryRow, PlacementReadInput } from "./types";

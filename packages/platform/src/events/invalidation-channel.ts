@@ -28,9 +28,9 @@ import {
 export const privateInvalidationBroadcastEvent = "invalidation";
 
 /** Topic prefix shared verbatim with the SQL policy's parser. */
-export const privateInvalidationTopicPrefix = "vortex:invalidation";
+const privateInvalidationTopicPrefix = "vortex:invalidation";
 
-export const privateInvalidationChannelLimits = Object.freeze({
+const privateInvalidationChannelLimits = Object.freeze({
   /** Supabase Realtime refuses a channel topic longer than 100 characters. */
   maximumTopicLength: 100,
 });
@@ -42,10 +42,9 @@ export const privateInvalidationChannelErrorCodes = [
   "INVALIDATION_PUBLISH_MISMATCH",
 ] as const;
 
-export type PrivateInvalidationChannelErrorCode =
-  (typeof privateInvalidationChannelErrorCodes)[number];
+type PrivateInvalidationChannelErrorCode = (typeof privateInvalidationChannelErrorCodes)[number];
 
-export class PrivateInvalidationChannelError extends Error {
+class PrivateInvalidationChannelError extends Error {
   readonly code: PrivateInvalidationChannelErrorCode;
 
   constructor(code: PrivateInvalidationChannelErrorCode) {
@@ -127,10 +126,10 @@ export const privateInvalidationAuthorizationRefusalReasons = [
   "invalid_access_version",
 ] as const;
 
-export type PrivateInvalidationAuthorizationRefusalReason =
+type PrivateInvalidationAuthorizationRefusalReason =
   (typeof privateInvalidationAuthorizationRefusalReasons)[number];
 
-export type PrivateInvalidationAuthorization =
+type PrivateInvalidationAuthorization =
   | Readonly<{ outcome: "authorized"; topic: string; accessVersion: number }>
   | Readonly<{
       outcome: "reauthorization_required";
@@ -139,7 +138,7 @@ export type PrivateInvalidationAuthorization =
     }>
   | Readonly<{ outcome: "refused"; reason: PrivateInvalidationAuthorizationRefusalReason }>;
 
-export type PrivateInvalidationChannelAuthorizerDependencies = Readonly<{
+type PrivateInvalidationChannelAuthorizerDependencies = Readonly<{
   accessReader: PrivateInvalidationChannelAccessReader;
 }>;
 

@@ -5,10 +5,7 @@ import {
 } from "./shared";
 
 /** Facts before capability decisions, with identities in the caller's source or compiled spelling. */
-export type RecordsTableQueryFactsSource = Omit<
-  RecordsTableQueryFacts,
-  "fields" | "unselectedFields"
-> &
+type RecordsTableQueryFactsSource = Omit<RecordsTableQueryFacts, "fields" | "unselectedFields"> &
   Readonly<{
     selectedFields: readonly string[];
     fields: readonly (Omit<RecordsTableFieldFacts, "editable"> &

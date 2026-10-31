@@ -12,23 +12,6 @@ import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-tran
 import { z } from "zod";
 import { DefinitionError, unexpectedDefinitionFailure } from "./definition-error";
 
-/**
- * Reads the published-current release an organisation may deliberately adopt for an application it
- * has installed. The read runs under the human request's own application scope and is gated by the
- * protected database function on platform.organization.applications.manage, so a viewer without
- * that permission learns nothing about the definition. Publication advances the root pointer but
- * never changes the installation, so the value is an offer, not the active release.
- */
-
-export const applicationReleaseAdoptionTargetErrorCodes = [
-  "INVALID_APPLICATION_RELEASE_ADOPTION_COMMAND",
-  "APPLICATION_RELEASE_ADOPTION_TARGET_UNAVAILABLE",
-  "APPLICATION_RELEASE_ADOPTION_TARGET_FAILED",
-] as const;
-
-export type ApplicationReleaseAdoptionTargetErrorCode =
-  (typeof applicationReleaseAdoptionTargetErrorCodes)[number];
-
 const storedTargetSchema = z
   .object({
     organizationId: organizationIdSchema,
@@ -38,7 +21,7 @@ const storedTargetSchema = z
   })
   .strict();
 
-export const applicationReleaseAdoptionTargetCommandSchema = z
+const applicationReleaseAdoptionTargetCommandSchema = z
   .object({ applicationRootId: applicationRootIdSchema })
   .strict();
 

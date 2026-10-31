@@ -12,9 +12,9 @@ import { withRuntimeTransaction } from "../db/request-transaction";
  * origin, source and flow, so a retried click or a re-delivered occurrence never runs twice.
  */
 
-export type BackendRunMode = "await" | "start";
-export type BackendRunOrigin = "backend_run" | "event";
-export type BackendRunState = "pending" | "running" | "succeeded" | "refused" | "failed";
+type BackendRunMode = "await" | "start";
+type BackendRunOrigin = "backend_run" | "event";
+type BackendRunState = "pending" | "running" | "succeeded" | "refused" | "failed";
 
 export type BackendRunRequest = Readonly<{
   organizationId: string;
@@ -29,7 +29,7 @@ export type BackendRunRequest = Readonly<{
 }>;
 
 /** An occurrence that ran nothing because its account could not act; no flow is named. */
-export type BackendRunRefusal = Readonly<{
+type BackendRunRefusal = Readonly<{
   organizationId: string;
   applicationRootId: string;
   actorId: string;
@@ -157,7 +157,7 @@ const listPending = async (limit: number): Promise<readonly string[]> => {
   return rows.map((row) => z.object({ id: z.uuid() }).parse(row).id);
 };
 
-export type BackendAdapterDependencies = Readonly<{
+type BackendAdapterDependencies = Readonly<{
   /** Runs one claimed run to a final state, under the actor's authority. */
   execute: (claimed: ClaimedBackendRun) => Promise<BackendRunOutcome>;
   /** Runs work after the current reply (Next `after`). */

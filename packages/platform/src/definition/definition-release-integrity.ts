@@ -1,13 +1,15 @@
+import {
+  assertDefinitionContractPair,
+  definitionContractVersion,
+} from "./application-contract-versions";
 import type { Fingerprint, OrganizationId, SemanticVersion } from "../catalogue/identifiers";
 import type { FlowDefinition } from "../workflows/flow-contracts";
-import { selectApplicationContractPair } from "./application-contract-versions";
 import type { ApplicationDraft } from "./application-contracts";
 import {
   applicationCompilationOutputSchema,
   type DefinitionCompilationOutput,
   type DefinitionResolutionSnapshot,
 } from "./definition-compilation-contracts";
-import { assertModuleContractPair } from "./definition-source";
 import type { ExactDefinitionDependency } from "./definition-store-contracts";
 import { fingerprintCanonicalValue } from "./canonical-json-definition";
 import { flowOperationNodeDescriptors, platformOperationsCalledBy } from "./flow-operation-calls";
@@ -354,21 +356,16 @@ export const hasAuthenticStoredCustomerDefinitionRelease = (
   release: StoredCustomerDefinitionReleaseEvidence,
 ): boolean => {
   const { compilationOutput: output, resolutionSnapshot: snapshot } = release;
-  const expectedVersion = "4.2.0";
+  const expectedVersion = definitionContractVersion;
   try {
-    if (release.kind === "application")
-      selectApplicationContractPair(
-        release.sourceContractVersion,
-        release.validationContractVersion,
-      );
-    else assertModuleContractPair(release.sourceContractVersion, release.validationContractVersion);
+    assertDefinitionContractPair(release.sourceContractVersion, release.validationContractVersion);
   } catch (error) {
     console.error(`[definition] RELEASE_CONTRACT_PAIR_INVALID: ${describeFailure(error)}`);
     return false;
   }
   if (
     output.validationContractVersion !== expectedVersion ||
-    snapshot.contractVersion !== "4.2.0" ||
+    snapshot.contractVersion !== definitionContractVersion ||
     output.validationContractVersion !== release.validationContractVersion
   )
     return false;

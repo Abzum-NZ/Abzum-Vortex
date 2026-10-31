@@ -24,6 +24,7 @@ import {
 import type { LinkNavigationEnvironment } from "../launcher/link-navigation";
 import { performNavigateTask } from "../launcher/link-navigation";
 import type {
+  FlowConfirmationDetail,
   FlowConfirmAnswer,
   FlowConfirmIntent,
   FlowFormAnswer,
@@ -142,11 +143,8 @@ function ConfirmSurface({
       details: (
         <div className="flex flex-col gap-3">
           {confirmation.details.length === 0 ? null : (
-            <ul className="flex list-disc flex-col gap-1 pl-5 text-sm">
-              {confirmation.details.map((line, index) => (
-                <li key={index}>{line}</li>
-              ))}
-            </ul>
+            // item 10: CRM-FIX-PLATFORM
+            <ConfirmationDetails entries={confirmation.details} />
           )}
           {confirmation.choice === undefined ? null : (
             <div className="flex items-start gap-2 text-sm">
@@ -337,6 +335,30 @@ function FlowSurfaceHost({
 }
 
 /** Presents flow intents without re-rendering the page when a surface changes. */
+/** Shows every review line; a role entry lists what it allows under its own line. */
+// item 10: CRM-FIX-PLATFORM
+const ConfirmationDetails = ({
+  entries,
+}: Readonly<{ entries: readonly FlowConfirmationDetail[] }>): ReactElement => (
+  <ul className="flex list-disc flex-col gap-1 pl-5 text-sm">
+    {entries.map((entry, index) =>
+      typeof entry === "string" ? (
+        <li key={index}>{entry}</li>
+      ) : (
+        <li key={index}>
+          {entry.text}
+          {/* item 10: CRM-FIX-PLATFORM */}
+          <ul className="flex list-[circle] flex-col gap-1 pl-5">
+            {entry.lines.map((line, lineIndex) => (
+              <li key={lineIndex}>{line}</li>
+            ))}
+          </ul>
+        </li>
+      ),
+    )}
+  </ul>
+);
+
 export function useFlowIntentHost(
   options: FlowIntentHostOptions,
 ): Readonly<{ host: FlowIntentHost; element: ReactElement; banner: ReactElement }> {

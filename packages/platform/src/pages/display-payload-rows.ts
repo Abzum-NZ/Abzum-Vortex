@@ -56,7 +56,7 @@ export const displayRowFormatSchema = z
  * carries the record revision an inline edit sends and its per-row capabilities; either is absent
  * when the payload does not carry it, and is never inferred.
  */
-export const displayRowSchema = z
+const displayRowSchema = z
   .object({
     recordId: displayTextSchema,
     revision: revisionSchema.exactOptional(),

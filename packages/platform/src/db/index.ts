@@ -2,14 +2,7 @@ import "server-only";
 
 export { withProtectedReadObserver, type ProtectedReadMeasurement } from "./query-attribution";
 
-export {
-  withRequestDatabaseLifetime,
-  type RequestDatabaseLifetime,
-  type RequestDatabaseLifetimeOptions,
-  type RequestDatabaseLookupOwner,
-  type DatabaseResourcesSettled,
-  type RequestDatabaseStopReason,
-} from "./request-lifetime";
+export { withRequestDatabaseLifetime, type RequestDatabaseLookupOwner } from "./request-lifetime";
 
 export {
   withRuntimeTransaction,
@@ -17,12 +10,10 @@ export {
   registerCommittedTransactionListener,
   withPooledRequestLifetime,
   runtimeDatabasePoolSize,
-  type PooledRequestLifetime,
   type DatabaseRow,
   type DatabaseValue,
   type RequestDatabaseTransaction,
   requireRequestSavepoint,
   type ResolvedRequestContext,
-  type RuntimeDatabaseTransaction,
   type SavepointRequestDatabaseTransaction,
 } from "./request-transaction";

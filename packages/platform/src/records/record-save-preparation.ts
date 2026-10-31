@@ -49,7 +49,7 @@ export type PreparedSave = Readonly<{
   beforeSaveFlows?: unknown;
 }>;
 
-export type PreparationOutcome =
+type PreparationOutcome =
   | PreparedSave
   | Readonly<{ outcome: "replayed"; result: SaveRecordResult }>
   | Readonly<{ outcome: "refused_recorded" }>
@@ -57,7 +57,7 @@ export type PreparationOutcome =
   | Readonly<{ outcome: "unavailable"; correlationId?: string }>;
 
 /** @internal Shared only by the fixed named-action save composition. */
-export type RelationshipTotalPreparationOutcome =
+type RelationshipTotalPreparationOutcome =
   | LockedRelationshipTotalPreparation
   | Readonly<{
       outcome: "restart" | "conflict" | "refused" | "refused_recorded" | "defer" | "not_required";

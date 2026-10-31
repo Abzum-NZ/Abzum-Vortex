@@ -36,7 +36,7 @@ const severalChoicesSchema = z
   );
 
 /** A linked record as a form holds it: only its stable record type and record identity. */
-export const typedRecordReferenceSchema = z
+const typedRecordReferenceSchema = z
   .object({ recordTypeId: displayTextSchema, recordId: displayTextSchema })
   .strict()
   .readonly();
@@ -68,7 +68,7 @@ export const typedFieldValueSchema = z.union(
 export type TypedFieldValue = z.output<typeof typedFieldValueSchema>;
 
 /** One choice option available in a choice input. */
-export const choiceOptionSchema = z
+const choiceOptionSchema = z
   .object({ key: choiceValueSchema, label: displayTextSchema })
   .strict()
   .readonly();
@@ -364,7 +364,7 @@ export type FormPayload = z.output<typeof formPayloadSchema>;
  * Located requirement messages, form-level warnings and an optional refusal for one exact draft.
  * Every entry is already located on the form's own declared field key by the supplying projection.
  */
-export const formDraftFeedbackSchema = z
+const formDraftFeedbackSchema = z
   .object({
     /** Exact draft fingerprint this feedback was computed from. */
     fingerprint: displayTextSchema,

@@ -1,6 +1,6 @@
 import {
   addOwnedInlineModule,
-  applicationSourceContractVersion,
+  definitionContractVersion,
   applicationSourceDocumentSchema,
   DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY,
   DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
@@ -85,7 +85,7 @@ export const minimumApplicationSource = (
     return invalid({ key: "The name has no letters to make a key from. Enter a key." });
   const permissionKey = `${applicationKey}.home.view`;
   const candidate = {
-    source_contract_version: applicationSourceContractVersion,
+    source_contract_version: definitionContractVersion,
     root_alias: "application_root",
     key: applicationKey,
     kind: "application",

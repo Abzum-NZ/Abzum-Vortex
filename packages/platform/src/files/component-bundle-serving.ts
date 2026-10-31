@@ -45,14 +45,14 @@ const REFUSAL_MESSAGES: Readonly<Record<ComponentBundleRefusalReason, string>> =
 
 const ADDRESS_PATTERN = new RegExp(`^[0-9a-f]{${COMPONENT_BUNDLE_CONTENT_ADDRESS_LENGTH}}$`);
 
-export type ServedComponentBundle = Readonly<{
+type ServedComponentBundle = Readonly<{
   outcome: "served";
   statusCode: 200;
   headers: Readonly<Record<string, string>>;
   bytes: Uint8Array;
 }>;
 
-export type RefusedComponentBundle = Readonly<{
+type RefusedComponentBundle = Readonly<{
   outcome: "refused";
   reason: ComponentBundleRefusalReason;
   message: string;

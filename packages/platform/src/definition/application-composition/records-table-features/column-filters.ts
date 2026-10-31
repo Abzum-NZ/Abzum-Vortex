@@ -27,7 +27,7 @@ export const recordsTableFilterKinds = [
   "link",
   "yes_no",
 ] as const;
-export type RecordsTableFilterKind = (typeof recordsTableFilterKinds)[number];
+type RecordsTableFilterKind = (typeof recordsTableFilterKinds)[number];
 
 /**
  * The filter kind of a canonical field type, or undefined for a type no column filter takes

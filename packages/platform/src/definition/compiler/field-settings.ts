@@ -202,6 +202,7 @@ export function fieldSettings(
         options: (settings.options as JsonObject[]).map((option) => ({
           value: option.value,
           label: option.label,
+          ...(option.tone ? { tone: option.tone } : {}),
           ...(option.required_permission
             ? {
                 requiredPermissionId: resolution.permission(
@@ -221,6 +222,7 @@ export function fieldSettings(
         options: (settings.options as JsonObject[]).map((option) => ({
           value: option.value,
           label: option.label,
+          ...(option.tone ? { tone: option.tone } : {}),
           ...(option.required_permission
             ? {
                 requiredPermissionId: resolution.permission(

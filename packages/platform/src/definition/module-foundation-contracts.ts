@@ -172,7 +172,7 @@ export const eventDefinitionSchema = z
   })
   .strict();
 
-export const standardInstalledEventKindSchema = z.enum([
+const standardInstalledEventKindSchema = z.enum([
   "created",
   "changed",
   "deleted",
@@ -188,7 +188,7 @@ const installedEventOwnerSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("module"), moduleRootId: moduleRootIdSchema }).strict(),
 ]);
 
-export const standardInstalledEventDescriptorSchema = z
+const standardInstalledEventDescriptorSchema = z
   .object({
     kind: z.literal("standard"),
     eventKind: standardInstalledEventKindSchema,
@@ -196,7 +196,7 @@ export const standardInstalledEventDescriptorSchema = z
   })
   .strict();
 
-export const declaredInstalledEventDescriptorSchema = z
+const declaredInstalledEventDescriptorSchema = z
   .object({
     kind: z.literal("declared"),
     owner: installedEventOwnerSchema,
@@ -219,4 +219,3 @@ export const installedEventDescriptorSchema = z.discriminatedUnion("kind", [
 
 export type Condition = z.infer<typeof conditionNodeSchema>;
 export type StandardInstalledEventKind = z.infer<typeof standardInstalledEventKindSchema>;
-export type InstalledEventDescriptor = z.infer<typeof installedEventDescriptorSchema>;

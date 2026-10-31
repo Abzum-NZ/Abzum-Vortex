@@ -34,7 +34,7 @@ export type BuilderTargetFactsReader = (
 ) => Promise<BuilderTargetFacts>;
 
 /** The persisted origin of an Application root. */
-export type BuilderApplicationOrigin = "ordinary" | "platform_system_application";
+type BuilderApplicationOrigin = "ordinary" | "platform_system_application";
 
 /**
  * The one read of an Application root's classification in the request's own organisation:
@@ -64,7 +64,7 @@ export const readBuilderApplicationOrigin = async (
 
 const unavailableCode = "BUILDER_AUTHORITY_UNAVAILABLE";
 
-export type BuilderAuthorityDependencies = Readonly<{
+type BuilderAuthorityDependencies = Readonly<{
   transaction: RequestDatabaseTransaction;
   /** The selected organisation scope resolved for the authenticated human's own request. */
   scope: SelectedOrganizationScope;

@@ -7,9 +7,8 @@ import {
 
 /**
  * A form page declares no commit of its own: it commits what the flows bound to its controls'
- * `form_submit` events commit. This is the one derivation of that commit, shared by Definition
- * validation, which refuses a form that commits nothing or anything outside its record type, and
- * by the compiler's agent tool bundle, so the two can never drift.
+ * `form_submit` events commit. This is the one derivation of that commit, used by Definition
+ * validation, which refuses a form that commits nothing or anything outside its record type.
  */
 
 type JsonObject = Record<string, unknown>;

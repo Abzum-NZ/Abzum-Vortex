@@ -875,9 +875,16 @@ export const studioRecordDetailItem = (
       heading_field: field(resolved, resolved.title),
       [STUDIO_ROW_ACTION_EVENT_SETTING]: studioRowActionEventId(alias),
       ...(recordFrom === undefined ? {} : { record_from: recordFrom }),
-      detail_fields: record.fields
-        .filter((entry) => entry.type !== "attachment" && resolved.readable.has(entry.key))
-        .map((entry) => ({ field: field(resolved, entry), label: entry.label })),
+      // item 25: CRM-FIX-PLATFORM
+      sections: [
+        {
+          key: "details",
+          title: "Details",
+          fields: record.fields
+            .filter((entry) => entry.type !== "attachment" && resolved.readable.has(entry.key))
+            .map((entry) => ({ field: field(resolved, entry), label: entry.label })),
+        },
+      ],
     },
     {},
   );

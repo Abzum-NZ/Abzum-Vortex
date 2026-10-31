@@ -15,7 +15,7 @@ import { loadRecordsTablePlacement } from "./placement";
 /** The most records one page of "every matching record" reads. */
 const matchingPageSize = 200;
 
-export type MatchingPage = HumanOrganizationRequestResult<
+type MatchingPage = HumanOrganizationRequestResult<
   | Readonly<{
       outcome: "read";
       recordIds: readonly string[];

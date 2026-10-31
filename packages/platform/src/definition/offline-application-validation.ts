@@ -16,7 +16,7 @@ import type { PlatformPermissionSource } from "../access/platform-permissions";
 import { applicationModuleKeys } from "./application-module-sources";
 import { applicationModuleSources } from "./application-module-lowering";
 import { createApplicationResolutionSnapshot } from "./application-resolution";
-import { applicationSourceContractVersion } from "./application-contract-versions";
+import { definitionContractVersion } from "./application-contract-versions";
 import { compareCanonicalStrings } from "./canonical-json-definition";
 import { compileParsedDefinition } from "./compiler";
 import { compatibleVersion } from "./compiler/resolution";
@@ -224,8 +224,8 @@ const compileApplication = async (
     ...connections.map((release) => release.compilationOutput),
   ].map((output) => definitionCompilationOutputSchema.parse(output));
   const parsedRequest = applicationCompilationRequestSchema.safeParse({
-    sourceContractVersion: applicationSourceContractVersion,
-    validationContractVersion: "4.2.0",
+    sourceContractVersion: definitionContractVersion,
+    validationContractVersion: definitionContractVersion,
     source,
     resolution: createApplicationResolutionSnapshot({
       definitions: definitions.sort((left, right) =>

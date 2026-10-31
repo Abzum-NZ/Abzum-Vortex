@@ -17,9 +17,10 @@ import {
 import {
   withRuntimeTransaction,
   type DatabaseRow,
-  type RequestDatabaseTransaction,
+  type RuntimeTransactionRunner,
 } from "../db/request-transaction";
 
+/** @knipignore */
 export const accessVersionErrorCodes = [
   "INVALID_ACCESS_VERSION_COMMAND",
   "INVALID_ACCESS_VERSION_STORAGE_RESULT",
@@ -29,9 +30,9 @@ export const accessVersionErrorCodes = [
   "ACCESS_VERSION_OPERATION_FAILED",
 ] as const;
 
-export type AccessVersionErrorCode = (typeof accessVersionErrorCodes)[number];
+type AccessVersionErrorCode = (typeof accessVersionErrorCodes)[number];
 
-export class AccessVersionError extends Error {
+class AccessVersionError extends Error {
   readonly code: AccessVersionErrorCode;
 
   constructor(code: AccessVersionErrorCode, options?: ErrorOptions) {
@@ -40,10 +41,6 @@ export class AccessVersionError extends Error {
     this.code = code;
   }
 }
-
-type RuntimeTransactionRunner = <Result>(
-  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
-) => Promise<Result>;
 
 interface AccessVersionStoreDependencies {
   readonly runtimeTransaction?: RuntimeTransactionRunner;
@@ -146,7 +143,7 @@ const mapStorageFailure = (error: unknown): AccessVersionError => {
 
 const normalizeEmail = (email: string): string => email.trim().toLowerCase();
 
-export const createAccessVersionStore = (dependencies: AccessVersionStoreDependencies = {}) => {
+const createAccessVersionStore = (dependencies: AccessVersionStoreDependencies = {}) => {
   const runtimeTransaction = dependencies.runtimeTransaction ?? withRuntimeTransaction;
 
   return Object.freeze({

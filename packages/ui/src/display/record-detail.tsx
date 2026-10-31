@@ -31,7 +31,7 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
     events,
   } = resolveDisplayContext<RecordDetailPayload>(
     props,
-    (detail) => detail.fields.length === 0 && detail.heading === undefined,
+    (detail) => detail.sections.length === 0 && detail.heading === undefined,
     "No details to show",
   );
   const contract = readRecordDetailContract(props.settings);
@@ -51,13 +51,17 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
     values === undefined
       ? []
       : contract === undefined
-        ? values.fields
-        : contract.fields.flatMap((declared): DisplayDetailField[] => {
-            const projected = values.fields.find((field) => field.key === declared.field);
-            return projected === undefined
-              ? []
-              : [{ ...projected, label: declared.label ?? projected.label }];
-          });
+        ? values.sections.flatMap((section) => section.fields)
+        : contract.sections.flatMap((section) =>
+            section.fields.flatMap((declared): DisplayDetailField[] => {
+              const projected = values.sections
+                .flatMap((candidate) => candidate.fields)
+                .find((field) => field.key === declared.field);
+              return projected === undefined
+                ? []
+                : [{ ...projected, label: declared.label ?? projected.label }];
+            }),
+          );
   const actions = props.slots.actions ?? undefined;
   const hasHeader = title !== undefined || events?.refresh !== undefined;
   // An actions slot with no placements adds nothing: its band shows only once a placement is in it.

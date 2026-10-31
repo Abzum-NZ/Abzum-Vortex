@@ -31,12 +31,12 @@ const flowOptionSchema = z
   })
   .strict();
 const flowOptionsSchema = z.array(flowOptionSchema).max(200);
-export type FieldOptionsFlowOption = z.infer<typeof flowOptionSchema>;
+type FieldOptionsFlowOption = z.infer<typeof flowOptionSchema>;
 
 /** The most steps an options flow's read loop takes before the read is refused. */
 const maximumReadSteps = 20;
 
-export type FieldOptionsFlowResult =
+type FieldOptionsFlowResult =
   | Readonly<{ kind: "options"; options: readonly FieldOptionsFlowOption[] }>
   | Readonly<{ kind: "failed"; reason: string }>
   | Readonly<{ kind: "temporarily_unavailable" }>;

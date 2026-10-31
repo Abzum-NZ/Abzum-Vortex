@@ -833,7 +833,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
       const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
       if (
         blockKey === "platform.display.record_detail" &&
-        settings.detail_fields !== undefined &&
+        settings.sections !== undefined &&
         detail === undefined
       )
         failures.push(
@@ -1134,7 +1134,9 @@ export function applicationPageRules(scope: ApplicationScope): void {
         (detail !== undefined &&
           !mapped(
             [
-              ...detail.fields.map((entry) => entry.field),
+              ...detail.sections.flatMap((section) => section.fields.map((entry) => entry.field)),
+              ...detail.headerFields,
+              ...(detail.stageField === undefined ? [] : [detail.stageField]),
               ...(detail.headingField === undefined ? [] : [detail.headingField]),
             ],
             selected,

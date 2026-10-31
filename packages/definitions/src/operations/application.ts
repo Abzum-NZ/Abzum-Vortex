@@ -1,7 +1,6 @@
 import {
-  applicationSourceDocumentSchema,
-  DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY,
   DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
+  definitionContractVersion,
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
   defaultDeleteFlowSource,
   defaultOpenFlowSource,
@@ -14,10 +13,9 @@ import {
   type SourceItemVortex,
   defaultFlowBindingSettings,
 } from "@vortex/platform/schema";
+import { loadApplicationSource } from "../application-source-loader";
 import { operationsModules } from "./module";
 import { operationsRunbooks, runbookPageKey, runbookPageText } from "./runbooks";
-
-type JsonObject = Record<string, unknown>;
 
 const {
   APPLICATION_NAVIGATION_BLOCK_RELEASE,
@@ -334,10 +332,16 @@ const pages = [
         heading_field: `${incidentRecordType}.incident_number`,
         title: "Incident",
         row_action_event_id: "row_action_operations_incident_detail_body",
-        detail_fields: incidentColumns.map(([field, label]) => ({
-          field: `${incidentRecordType}.${field}`,
-          label,
-        })),
+        sections: [
+          {
+            key: "details",
+            title: "Details",
+            fields: incidentColumns.map(([field, label]) => ({
+              field: `${incidentRecordType}.${field}`,
+              label,
+            })),
+          },
+        ],
       }),
       // Attach runs on the open incident as its subject; operators without the attach
       // permission never see the form, and the action refuses a resolved or closed incident and
@@ -473,45 +477,6 @@ const applicationPages = pages.map(({ blocks, ...page }) => ({
   },
 }));
 
-/** Every placed block release as `block_id@release_version`: one block can have several releases. */
-const collectBlockReleases = (value: unknown, result = new Set<string>()): Set<string> => {
-  if (Array.isArray(value)) {
-    for (const item of value) collectBlockReleases(item, result);
-  } else if (value !== null && typeof value === "object") {
-    const item = value as JsonObject;
-    const block = item.block as JsonObject | undefined;
-    if (block && typeof block.block_id === "string" && typeof block.release_version === "string")
-      result.add(`${block.block_id}@${block.release_version}`);
-    for (const child of Object.values(item)) collectBlockReleases(child, result);
-  }
-  return result;
-};
-
-/** Exactly the registered block releases the shell and pages place, in permanent-identity order. */
-const platformBlockDependencies = [
-  ...collectBlockReleases({ shell: applicationShell, pages: applicationPages }),
-]
-  .sort()
-  .map((releaseKey) => {
-    const separator = releaseKey.lastIndexOf("@");
-    if (separator < 1 || separator === releaseKey.length - 1)
-      throw new TypeError(`Invalid platform block release identity: ${releaseKey}`);
-    return {
-      kind: "platform_block" as const,
-      block_id: releaseKey.slice(0, separator),
-      release_version: releaseKey.slice(separator + 1),
-    };
-  });
-
-const theme = {
-  base: {
-    kind: "platform_theme" as const,
-    catalogue_theme_id: String(DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY.catalogueThemeId),
-    release_version: DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY.releaseVersion,
-  },
-  selection: DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
-};
-
 /**
  * The Operations application. Incidents are ordinary application-contained records that change only
  * when a signed-in operator acts: Create incident commits the standard create action; Attach, and
@@ -523,9 +488,9 @@ const theme = {
  * the incident's `runbook_reference`. No workflow, schedule or system path creates or changes an
  * incident. No page or action grants customer-content access, and no action approves itself.
  */
-export const operationsApplication: ApplicationSourceDocument =
-  applicationSourceDocumentSchema.parse({
-    source_contract_version: "4.2.0",
+export const operationsApplication: ApplicationSourceDocument = loadApplicationSource(
+  {
+    source_contract_version: definitionContractVersion,
     root_alias: "app_operations",
     key: "vortex.app.operations",
     kind: "application",
@@ -705,10 +670,8 @@ export const operationsApplication: ApplicationSourceDocument =
         },
       ],
       public_addresses: [],
-      platform_block_dependencies: platformBlockDependencies,
       shells: [applicationShell],
       pages: applicationPages,
-      theme,
       // Each form or operator button commits through one flow with one task: the default Save of
       // the incident form, or a call of the incident's attach, acknowledge, escalate or resolve
       // named action. The flows run as the signed-in operator, so the action's own permission,
@@ -868,4 +831,8 @@ export const operationsApplication: ApplicationSourceDocument =
         })),
       ],
     },
-  });
+  },
+  DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
+  operationsModules,
+  [],
+);

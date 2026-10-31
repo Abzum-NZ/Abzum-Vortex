@@ -58,7 +58,7 @@ export type SourceItemVortex = {
   slot_orders?: SourceSlotOrders | undefined;
 };
 
-export type SourceItemProps = { id: string; vortex: SourceItemVortex } & Record<string, unknown>;
+type SourceItemProps = { id: string; vortex: SourceItemVortex } & Record<string, unknown>;
 export type SourceItem = { type: string; props: SourceItemProps };
 
 const rootZone = "content";
@@ -292,7 +292,7 @@ export const sourcePageDataSchema = z
     ]);
   }) as unknown as z.ZodType<SourcePageData>;
 
-export type SourceGuidedFormPageComposition = { step_content: Record<string, SourcePageData> };
+type SourceGuidedFormPageComposition = { step_content: Record<string, SourcePageData> };
 
 /** A guided form's Puck data for every step, keyed by step alias; every step uses one frame. */
 export const sourceGuidedFormPageCompositionSchema = z
@@ -313,11 +313,6 @@ export const sourceGuidedFormPageCompositionSchema = z
         message: "Every step of a guided form uses the same frame",
       });
   }) as unknown as z.ZodType<SourceGuidedFormPageComposition>;
-
-export type SourceShellLayout = {
-  root: { props: { vortex: { slot_orders: SourceSlotOrders } } };
-  content: SourceItem[];
-};
 
 const sourceShellLayoutSchema = z
   .object({
@@ -405,7 +400,7 @@ export const sourceApplicationShellSchema = z
   });
 
 export type SourceApplicationShell = z.infer<typeof sourceApplicationShellSchema>;
-export type SourcePageComposition = SourcePageData | SourceGuidedFormPageComposition;
+type SourcePageComposition = SourcePageData | SourceGuidedFormPageComposition;
 
 /** The Puck data of every step of a guided form, or the page's one data otherwise. */
 export const sourcePageDataOf = (composition: SourcePageComposition): SourcePageData[] =>
@@ -429,7 +424,7 @@ export const sourcePageItems = (composition: SourcePageComposition): SourceItem[
  * is in `malformedSlots`; repeatable item identities that are duplicated or inadmissible are
  * reported once per repeatable declaration in `repeatableFailures`.
  */
-export type SourceItemReading = Readonly<{
+type SourceItemReading = Readonly<{
   settings: Record<string, SourceBlockPropertyValueContract>;
   settingFailures: readonly ComponentSettingFailure[];
   slots: ReadonlyMap<

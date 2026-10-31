@@ -123,9 +123,9 @@ export const createPlacementReadServices = (
       return undefined;
     }
   };
-  // The viewer's active organisation groups (their teams), read once per request under the
+  // The viewer's active organisation groups, read once per request under the
   // viewer's own verified context; a failure is logged with its cause and reads as unavailable.
-  const loadViewerTeams = async (): Promise<readonly string[] | undefined> => {
+  const loadViewerGroups = async (): Promise<readonly string[] | undefined> => {
     try {
       const read = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
         session,
@@ -133,19 +133,19 @@ export const createPlacementReadServices = (
         (transaction) => readCurrentRecordOwnerGroupsAfterAuthorization(transaction),
       );
       if (read.kind !== "available") {
-        console.error(`[page] viewer teams unavailable: kind=${read.kind}`);
+        console.error(`[page] viewer groups unavailable: kind=${read.kind}`);
         return undefined;
       }
       return read.value.map((group) => group.groupId);
     } catch (error) {
       console.error(
-        `[page] viewer teams unavailable: ${error instanceof Error ? error.message : "unknown"}`,
+        `[page] viewer groups unavailable: ${error instanceof Error ? error.message : "unknown"}`,
       );
       return undefined;
     }
   };
-  let viewerTeamsRead: ReturnType<typeof loadViewerTeams> | undefined;
-  const readViewerTeams = () => (viewerTeamsRead ??= loadViewerTeams());
+  let viewerGroupsRead: ReturnType<typeof loadViewerGroups> | undefined;
+  const readViewerGroups = () => (viewerGroupsRead ??= loadViewerGroups());
   const subjects = createPageSubjectReader(dependencies);
   // One labelled read per page and link target: a link shows its target's name as the viewer may
   // read it, and a detail address only where the viewer may open that page.
@@ -207,7 +207,7 @@ export const createPlacementReadServices = (
     queryNotices,
     linkTiles,
     readCalendarSettings,
-    readViewerTeams,
+    readViewerGroups,
     readTimeZone,
     subjects,
     recordLinkResolver,

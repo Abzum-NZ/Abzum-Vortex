@@ -14,14 +14,13 @@ import {
  * `updated_by`) and the record owner. No other physical system column is a
  * supported Query field, so an unsupported name can never be requested.
  */
-export const supportedRecordSystemFieldKeys = [
+const supportedRecordSystemFieldKeys = [
   "created_at",
   "created_by",
   "updated_at",
   "updated_by",
   "owner",
 ] as const;
-export type SupportedRecordSystemFieldKey = (typeof supportedRecordSystemFieldKeys)[number];
 export const supportedRecordSystemFieldKeySchema = z.enum(supportedRecordSystemFieldKeys);
 
 /** The record owner is exactly one account or one group, or absent (`null`). */
@@ -51,4 +50,3 @@ export const recordSystemValuesSchema = z
     owner: recordSystemOwnerSchema.optional(),
   })
   .strict();
-export type RecordSystemValues = z.infer<typeof recordSystemValuesSchema>;

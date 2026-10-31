@@ -45,14 +45,14 @@ export type ModuleFieldPublication = Readonly<{
 }>;
 
 /** What a field change is checked against besides the draft: what is published, and the people directory. */
-export type InlineModuleFieldContext = Readonly<{
+type InlineModuleFieldContext = Readonly<{
   publication: ModuleFieldPublication;
   /** The people directory's owner, which a first Person link adds to the Modules the application uses. */
   peopleDirectory: PeopleDirectoryOwner | null;
 }>;
 
 /** One field added to, or changed in, a record type of an owned inline Module, as a person set it. */
-export type InlineModuleFieldChange = Readonly<{
+type InlineModuleFieldChange = Readonly<{
   moduleKey: string;
   recordAlias: string;
   /** Absent to add a new field. */
@@ -76,7 +76,7 @@ export type InlineModuleFieldChange = Readonly<{
   cardinality: LinkCardinality | undefined;
 }>;
 
-export type InlineModuleFieldChangeResult =
+type InlineModuleFieldChangeResult =
   | Readonly<{
       kind: "changed";
       source: ApplicationSourceDocument;
@@ -454,15 +454,26 @@ export const changeInlineModuleField = (
     if (publication.fields.has(`${qualifiedRecord}.${field.key}`)) {
       // The display name and the source of the offered options are editable even after publication
       // (which values are offered is behaviour); stored relationship settings are fixed.
+      // An option's colour is presentation (a patch), so it is not part of the stored shape.
+      const withoutTones = (key: string, entry: unknown): unknown =>
+        key === "options" && Array.isArray(entry)
+          ? entry.map((option: unknown) =>
+              typeof option === "object" && option !== null
+                ? Object.fromEntries(Object.entries(option).filter(([name]) => name !== "tone"))
+                : option,
+            )
+          : entry;
       const storedSettings = (value: Readonly<Record<string, unknown>>) =>
         Object.fromEntries(
-          Object.entries(value).filter(
-            ([key]) =>
-              key !== "options_source" &&
-              (change.type === "calculation"
-                ? ["result_type", "decimal_places", "evaluation"].includes(key)
-                : change.type !== "link" || key !== "reverse_name"),
-          ),
+          Object.entries(value)
+            .filter(
+              ([key]) =>
+                key !== "options_source" &&
+                (change.type === "calculation"
+                  ? ["result_type", "decimal_places", "evaluation"].includes(key)
+                  : change.type !== "link" || key !== "reverse_name"),
+            )
+            .map(([key, entry]) => [key, withoutTones(key, entry)]),
         );
       const fixed = [
         ...(field.type === change.type ? [] : ["type"]),

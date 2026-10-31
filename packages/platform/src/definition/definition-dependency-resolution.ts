@@ -1,4 +1,8 @@
 import "server-only";
+import {
+  assertDefinitionContractPair,
+  definitionContractVersion,
+} from "./application-contract-versions";
 
 import type { ModuleRootId, Revision } from "../catalogue/identifiers";
 import type { FlowDefinition } from "../workflows/flow-contracts";
@@ -19,7 +23,7 @@ import {
   type DefinitionCompilationOutput,
   type DefinitionResolutionSnapshot,
 } from "./definition-compilation-contracts";
-import { assertModuleContractPair, type ApplicationSourceDocument } from "./definition-source";
+import type { ApplicationSourceDocument } from "./definition-source";
 import type {
   ExactDefinitionDependency,
   StoredDefinitionDraft,
@@ -61,7 +65,7 @@ export type ResolvedDependencies = Readonly<{
 const stable = (version: string): boolean =>
   stableDefinitionReleaseVersionSchema.safeParse(version).success;
 
-const moduleOutputContractVersion = (output: ModuleOutput): "4.2.0" =>
+const moduleOutputContractVersion = (output: ModuleOutput): typeof definitionContractVersion =>
   output.validationContractVersion;
 
 const accepts = (requirements: readonly VersionRequirement[], version: string): boolean =>
@@ -204,7 +208,7 @@ const verifyParsedModuleRelease = (
 ): void => {
   const publication = release.published.publication;
   try {
-    assertModuleContractPair(
+    assertDefinitionContractPair(
       moduleOutputContractVersion(release.compilationOutput),
       publication.validationContractVersion,
     );
@@ -1038,7 +1042,11 @@ export const buildResolution = (
     ),
   );
   if (candidate.draft.source.kind === "module") {
-    const evidence = { contractVersion: "4.2.0" as const, definitions, identities: allIdentities };
+    const evidence = {
+      contractVersion: definitionContractVersion,
+      definitions,
+      identities: allIdentities,
+    };
     return definitionResolutionSnapshotSchema.parse({
       ...evidence,
       fingerprint: fingerprintCanonicalValue(evidence),

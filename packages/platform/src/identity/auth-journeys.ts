@@ -36,7 +36,7 @@ export type LocalDevelopmentSignInConfiguration = Readonly<{
   adminKey: string;
 }>;
 
-export type IdentityJourneyFailure =
+type IdentityJourneyFailure =
   | "vortex.identity.invalid_input"
   | "vortex.identity.invalid_password"
   | "vortex.identity.invalid_credentials"
@@ -47,7 +47,7 @@ export type IdentityJourneyFailure =
   | "vortex.identity.registration_closed"
   | "vortex.identity.authority_unavailable";
 
-export type IdentityJourneyResult =
+type IdentityJourneyResult =
   Readonly<{ ok: true }> | Readonly<{ ok: false; code: IdentityJourneyFailure }>;
 
 export type VerifiedSignInResult =

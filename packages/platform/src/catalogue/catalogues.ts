@@ -29,7 +29,7 @@ export const fieldTypeKeys = [
  * does not itself have. Together with `fieldTypeKeys` these form the one Vortex value-type
  * catalogue.
  */
-export const flowOnlyValueTypeKeys = [
+const flowOnlyValueTypeKeys = [
   "record_reference",
   "record_reference_list",
   "organization_account_reference",
@@ -45,12 +45,12 @@ export const flowOnlyValueTypeKeys = [
  * type list is a view of this list, and `valueTypesCompatible` is the one type-compatibility
  * function.
  */
-export const valueTypeKeys = [...fieldTypeKeys, ...flowOnlyValueTypeKeys] as const;
-export const valueTypeSchema = z.enum(valueTypeKeys);
-export type ValueType = z.infer<typeof valueTypeSchema>;
+const valueTypeKeys = [...fieldTypeKeys, ...flowOnlyValueTypeKeys] as const;
+const valueTypeSchema = z.enum(valueTypeKeys);
+type ValueType = z.infer<typeof valueTypeSchema>;
 
 /** Flow value types: the view of the catalogue used by flow inputs, variables and task outputs. */
-export const workflowValueTypeKeys = [
+const workflowValueTypeKeys = [
   "text",
   "formatted_text",
   "whole_number",
@@ -86,7 +86,7 @@ export const actionInputValueTypes = {
 } as const satisfies Record<string, ValueType>;
 
 /** Sharing-parameter value types accepted by the current condition contract. */
-export const sharingParameterValueTypeKeys = [
+const sharingParameterValueTypeKeys = [
   "record_reference",
   "text",
   "whole_number",
@@ -99,7 +99,7 @@ export const sharingParameterValueTypeKeys = [
 ] as const satisfies readonly ValueType[];
 export const sharingParameterValueTypeSchema = z.enum(sharingParameterValueTypeKeys);
 
-export const blockPaletteGroupKeys = [
+const blockPaletteGroupKeys = [
   "data",
   "figures",
   "record",
@@ -114,7 +114,7 @@ export const fieldTypeSchema = z.enum(fieldTypeKeys);
  * The fixed application experience states. A page refused and a page missing share `not_found`,
  * so their surfaces stay indistinguishable and never reveal why an address is unavailable.
  */
-export const applicationExperienceStateKeys = ["not_found", "unavailable", "error"] as const;
+const applicationExperienceStateKeys = ["not_found", "unavailable", "error"] as const;
 export const applicationExperienceStateSchema = z.enum(applicationExperienceStateKeys);
 export const blockPaletteGroupSchema = z.enum(blockPaletteGroupKeys);
 
@@ -128,7 +128,7 @@ export type BlockPaletteGroup = z.infer<typeof blockPaletteGroupSchema>;
 export type PersonalDataClass = z.infer<typeof personalDataClassSchema>;
 export type SearchPriority = z.infer<typeof searchPrioritySchema>;
 
-export type ValueTypeCompatibilityContext =
+type ValueTypeCompatibilityContext =
   "value" | "flow" | "operation_input" | "exact" | "condition" | "mapping" | "cross_format";
 
 const numericValueTypes: ReadonlySet<string> = new Set(["whole_number", "decimal_number"]);

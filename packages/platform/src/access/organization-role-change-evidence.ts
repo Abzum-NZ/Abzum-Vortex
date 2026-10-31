@@ -6,20 +6,20 @@ import {
   preparedOrganizationRoleChangeSchema,
   type OrganizationRoleChangeCandidate,
   type OrganizationRoleChangePreparation,
-  type OrganizationRolePolicyChoice,
   type PreparedOrganizationRoleChange,
 } from "./organization-role-changes";
 import { canonicalJson } from "../definition/canonical-json";
 
+/** @knipignore */
 export const organizationRoleChangeEvidenceErrorCodes = [
   "INVALID_ORGANIZATION_ROLE_CHANGE_PREPARATION",
   "ORGANIZATION_ROLE_CHANGE_EVIDENCE_INVALID",
 ] as const;
 
-export type OrganizationRoleChangeEvidenceErrorCode =
+type OrganizationRoleChangeEvidenceErrorCode =
   (typeof organizationRoleChangeEvidenceErrorCodes)[number];
 
-export class OrganizationRoleChangeEvidenceError extends Error {
+class OrganizationRoleChangeEvidenceError extends Error {
   readonly code: OrganizationRoleChangeEvidenceErrorCode;
 
   constructor(code: OrganizationRoleChangeEvidenceErrorCode, options?: ErrorOptions) {
@@ -80,35 +80,6 @@ const normalizeAssignment = (assignment: AffectedRoleAssignment): AffectedRoleAs
       : { kind: "group", groupId: normalizedUuid(assignment.assignee.groupId) },
 });
 
-const normalizePolicyChoice = (
-  policy: OrganizationRolePolicyChoice,
-): OrganizationRolePolicyChoice =>
-  policy.kind === "standing"
-    ? policy
-    : policy.activationPolicy.selection === "existing"
-      ? {
-          kind: "activation_required",
-          activationPolicy: {
-            selection: "existing",
-            reference: {
-              ...policy.activationPolicy.reference,
-              activationPolicyId: normalizedUuid(
-                policy.activationPolicy.reference.activationPolicyId,
-              ),
-            },
-          },
-        }
-      : {
-          kind: "activation_required",
-          activationPolicy: {
-            selection: "new",
-            policy: {
-              ...policy.activationPolicy.policy,
-              activationPolicyId: normalizedUuid(policy.activationPolicy.policy.activationPolicyId),
-            },
-          },
-        };
-
 const normalizeCandidate = (
   candidate: OrganizationRoleChangeCandidate,
 ): OrganizationRoleChangeCandidate => {
@@ -121,7 +92,6 @@ const normalizeCandidate = (
       return {
         ...candidate,
         ...identity,
-        assignmentPolicy: normalizePolicyChoice(candidate.assignmentPolicy),
         permissions: normalizePermissions(candidate.permissions),
       };
     case "create_custom_from_template":
@@ -135,20 +105,17 @@ const normalizeCandidate = (
           ...candidate.templateSource,
           applicationRootId: normalizedUuid(candidate.templateSource.applicationRootId),
         },
-        assignmentPolicy: normalizePolicyChoice(candidate.assignmentPolicy),
         permissions: normalizePermissions(candidate.permissions),
       };
     case "revise_metadata_policy":
       return {
         ...candidate,
         ...identity,
-        assignmentPolicy: normalizePolicyChoice(candidate.assignmentPolicy),
       };
     case "revise_custom_permissions":
       return {
         ...candidate,
         ...identity,
-        assignmentPolicy: normalizePolicyChoice(candidate.assignmentPolicy),
         permissions: normalizePermissions(candidate.permissions),
       };
     case "retire_role":

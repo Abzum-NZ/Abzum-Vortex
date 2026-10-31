@@ -87,7 +87,7 @@ export type RecordLinkReference = Readonly<{ recordTypeId: string; recordId: str
  * What the viewer may see of one linked record: its display label and, when the viewer may open the
  * target's detail page, where that page is. A record the viewer may not read is only `restricted`.
  */
-export type RecordLinkLabel =
+type RecordLinkLabel =
   | Readonly<{
       outcome: "available";
       label: string;

@@ -25,7 +25,7 @@ export type ProjectedApplicationFrame = Readonly<{
 }>;
 
 /** One projected page split into the frame around it and the content it places in the outlet. */
-export type SplitProjectedPage = Readonly<{
+type SplitProjectedPage = Readonly<{
   frame: ProjectedApplicationFrame;
   content: Readonly<Record<string, unknown>>;
 }>;
@@ -56,7 +56,7 @@ const pathTo = (list: unknown, placementId: string): readonly string[] | undefin
 };
 
 /** The outlet location a shell declares through its content slots. */
-export const shellOutletLocation = (shell: ApplicationShell | undefined): ShellOutletLocation => {
+const shellOutletLocation = (shell: ApplicationShell | undefined): ShellOutletLocation => {
   if (shell === undefined || shell.contentSlots.length === 0) return { kind: "root" };
   const [first, ...rest] = shell.contentSlots;
   if (first !== undefined && rest.length === 0)

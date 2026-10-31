@@ -43,7 +43,7 @@ export const recordsRangeSummaryRequestSchema = z
   .strict();
 export type RecordsRangeSummaryRequest = z.infer<typeof recordsRangeSummaryRequestSchema>;
 
-export const recordsRangeSummaryTotalSchema = z.discriminatedUnion("kind", [
+const recordsRangeSummaryTotalSchema = z.discriminatedUnion("kind", [
   /** The total, ready to show: formatted by the server, never computed in the browser. */
   z.object({ kind: z.literal("value"), text: z.string().min(1).max(200) }).strict(),
   /** No selected cell held a value. */
@@ -54,7 +54,7 @@ export const recordsRangeSummaryTotalSchema = z.discriminatedUnion("kind", [
 
 export type RecordsRangeSummaryTotal = z.infer<typeof recordsRangeSummaryTotalSchema>;
 
-export const recordsRangeSummaryFieldSchema = z.discriminatedUnion("state", [
+const recordsRangeSummaryFieldSchema = z.discriminatedUnion("state", [
   z
     .object({
       state: z.literal("totals"),

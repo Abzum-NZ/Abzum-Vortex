@@ -21,7 +21,7 @@ import {
  */
 
 /** The static last path segment of the bootstrap route, under the shared component serving prefix. */
-export const COMPONENT_BOOTSTRAP_SERVING_SUBPATH = "bootstrap";
+const COMPONENT_BOOTSTRAP_SERVING_SUBPATH = "bootstrap";
 
 /** The bootstrap document path on the dedicated component origin. */
 export const COMPONENT_BOOTSTRAP_SERVING_PATH = `${COMPONENT_BUNDLE_SERVING_PREFIX}/${COMPONENT_BOOTSTRAP_SERVING_SUBPATH}`;
@@ -43,13 +43,13 @@ const HOST_PATTERN =
 const MAXIMUM_DECLARED_HOSTS = 50;
 
 /** One custom component bootstrap target, already validated to a safe, identifier-free shape. */
-export type ComponentBootstrapTarget = Readonly<{
+type ComponentBootstrapTarget = Readonly<{
   contentAddress: string;
   entryFile: string;
   allowedHosts: readonly string[];
 }>;
 
-export type ComponentBootstrapDocument = Readonly<{
+type ComponentBootstrapDocument = Readonly<{
   body: Uint8Array;
   headers: Readonly<Record<string, string>>;
 }>;
@@ -84,29 +84,12 @@ export const parseComponentBootstrapTarget = (
 };
 
 /**
- * The public bootstrap document URL for one target. The host component builds the same URL, so a
- * change here is a change to the contract both sides share.
- */
-export const componentBootstrapServingUrl = (
-  componentOrigin: string,
-  target: ComponentBootstrapTarget,
-): string => {
-  const origin = componentOrigin.replace(/\/+$/, "");
-  const params = new URLSearchParams();
-  params.set(COMPONENT_BOOTSTRAP_QUERY_PARAMETERS.contentAddress, target.contentAddress);
-  params.set(COMPONENT_BOOTSTRAP_QUERY_PARAMETERS.entryFile, target.entryFile);
-  if (target.allowedHosts.length > 0)
-    params.set(COMPONENT_BOOTSTRAP_QUERY_PARAMETERS.allowedHosts, target.allowedHosts.join(","));
-  return `${origin}${COMPONENT_BOOTSTRAP_SERVING_PATH}?${params.toString()}`;
-};
-
-/**
  * The Content-Security-Policy of the bootstrap document. `sandbox allow-scripts` keeps the frame
  * on an opaque origin, so it never shares the bundle host's origin; scripts may only load the
  * content-addressed bundle, and network access is limited to the bundle host and the hosts the
  * release declares. The Vortex site is the only permitted frame ancestor.
  */
-export const componentBootstrapContentSecurityPolicy = (
+const componentBootstrapContentSecurityPolicy = (
   input: Readonly<{ componentOrigin: string; siteOrigin: string; allowedHosts: readonly string[] }>,
 ): string => {
   const bundleHost = input.componentOrigin.replace(/\/+$/, "");

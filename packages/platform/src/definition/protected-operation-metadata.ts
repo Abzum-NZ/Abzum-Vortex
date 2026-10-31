@@ -56,11 +56,6 @@ export const protectedOperationMetadata: Record<
     transaction: "access_change",
     workflow: "single",
   },
-  deactivate_role_activation: {
-    authorityKind: "permission",
-    transaction: "access_change",
-    workflow: "single",
-  },
   revoke_delegation_authority: {
     authorityKind: "permission",
     transaction: "access_change",

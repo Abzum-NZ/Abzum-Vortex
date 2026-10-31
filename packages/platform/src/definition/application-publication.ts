@@ -7,9 +7,9 @@ import {
   type ExactDefinitionDependency,
   type PrepareDefinitionPublicationCommand,
 } from "./definition-store-contracts";
-import { definitionContractChangedReason } from "./version-impact";
+import { definitionContractChangedReason, nextDefinitionVersion } from "./version-impact";
 import type { VersionImpact, VersionImpactReason } from "./version-impact";
-import { applicationValidationContractVersion } from "./application-contract-versions";
+import { definitionContractVersion } from "./application-contract-versions";
 import type { ModuleSourceDocument } from "./module-source-contracts";
 import { applicationModuleSources } from "./application-module-lowering";
 import { readRetainedApplicationModule } from "./application-draft-compilation-cache";
@@ -45,7 +45,6 @@ import {
 import { createDraftModuleOverlay } from "./publication/draft-module-overlay";
 import { derivedOwnedModuleRootId } from "./derived-definition-id";
 import { moduleDependencies } from "./module-dependencies";
-import { assignNextDefinitionVersion } from "./semantic-version";
 import { compareDefinitionVersionImpactWithEvidence } from "./version-impact-definition";
 
 /**
@@ -267,7 +266,7 @@ const releaseInlineModules = async (
     const output = compiled.output;
     const impact = compareDefinitionVersionImpactWithEvidence({
       kind: "module",
-      validationContractVersion: "4.2.0",
+      validationContractVersion: definitionContractVersion,
       releaseHistory: module.releaseHistory,
       candidate: output.canonical,
     });
@@ -300,7 +299,7 @@ const releaseInlineModules = async (
       reasons,
       dependencyManifest: manifestFor(dependencies, output, resolution),
       resolutionSnapshot: resolution,
-      validationContractVersion: "4.2.0",
+      validationContractVersion: definitionContractVersion,
       releaseNote,
     };
     if (released) await transaction.appendModuleRelease(append);
@@ -362,7 +361,7 @@ const publicationReasons = (
       : [definitionContractChangedReason("application")];
   const own = compareDefinitionVersionImpactWithEvidence({
     kind: "application",
-    validationContractVersion: applicationValidationContractVersion,
+    validationContractVersion: definitionContractVersion,
     releaseHistory: candidate.releaseHistory,
     candidate: application.output.canonical,
   });
@@ -425,7 +424,7 @@ export const planApplicationPublication = async (
 ): Promise<ApplicationPublicationState> => {
   const latestVersion = latestReleaseVersion(candidate) ?? undefined;
   const provisional =
-    latestVersion === undefined ? "1.0.0" : assignNextDefinitionVersion(latestVersion, "major");
+    latestVersion === undefined ? "1.0.0" : nextDefinitionVersion(latestVersion, "major");
   const pass = async (version: string, pins?: typeof pinned) => {
     const application = await compileApplicationWithInlineModules(
       context,
@@ -446,7 +445,7 @@ export const planApplicationPublication = async (
   const version =
     latestVersion === undefined
       ? "1.0.0"
-      : assignNextDefinitionVersion(latestVersion, highestImpact(provisionalReasons));
+      : nextDefinitionVersion(latestVersion, highestImpact(provisionalReasons));
   const { modules, application, reasons } = await pass(version, pinned);
   assertReleasable(application, candidate.releaseHistory, catalogue.permissions);
   if (canonicalJson(reasons) !== canonicalJson(provisionalReasons))
@@ -590,7 +589,7 @@ export const compileApplicationWithInlineModules = async (
   const latestVersion = latestReleaseVersion(candidate);
   const version =
     options.version ??
-    (latestVersion === null ? "1.0.0" : assignNextDefinitionVersion(latestVersion, "major"));
+    (latestVersion === null ? "1.0.0" : nextDefinitionVersion(latestVersion, "major"));
   const moduleCompilations = await releaseInlineModules(
     context,
     transaction,

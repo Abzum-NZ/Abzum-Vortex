@@ -117,7 +117,7 @@ const settingText = (value: BlockPropertyValueContract | undefined): string | un
 /**
  * A group value in its readable form: a choice's installed label, a link's viewer-safe target
  * label (or its restricted state), or the plain text of a scalar. Records without a value form
- * their own group, named after the field ("No team").
+ * their own group, named after the field ("No group").
  */
 const groupLabel = (
   field: PlacementField,

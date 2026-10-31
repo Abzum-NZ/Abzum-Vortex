@@ -52,7 +52,7 @@ import { logRecordsTableRequestRefusal, recordsTableRequestRefusal } from "./ind
 const MEASURE_ALIAS = "pivot_measure";
 
 /** The one Query engine entry a pivot reads through: the protected summary. */
-export type RecordsTablePivotQueryRunner = Readonly<{
+type RecordsTablePivotQueryRunner = Readonly<{
   summarise(
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
@@ -60,7 +60,7 @@ export type RecordsTablePivotQueryRunner = Readonly<{
   ): Promise<HumanOrganizationRequestResult<ProtectedQuerySummaryResult>>;
 }>;
 
-export type PivotRequest = Readonly<{
+type PivotRequest = Readonly<{
   context: InstalledRuntimeContext;
   session: IdentitySession;
   selection: OrganizationSelectionCandidate;

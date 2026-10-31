@@ -51,7 +51,7 @@ export const viewerSafeRecordLinkTitleSchema = jsonValueSchema.refine(
 );
 
 /** Route identity for one configured detail page in the currently installed target Application. */
-export const viewerSafeRecordLinkDetailAddressSchema = z
+const viewerSafeRecordLinkDetailAddressSchema = z
   .object({
     applicationRootId: applicationRootIdSchema,
     applicationKey: namespacedKeySchema,
@@ -79,9 +79,6 @@ export type ViewerSafeRecordPinAcquisitionResult = z.infer<
   typeof viewerSafeRecordPinAcquisitionResultSchema
 >;
 export type ViewerSafeRecordLinkTitle = z.infer<typeof viewerSafeRecordLinkTitleSchema>;
-export type ViewerSafeRecordLinkDetailAddress = z.infer<
-  typeof viewerSafeRecordLinkDetailAddressSchema
->;
 export type ViewerSafeRecordLinkResult = z.infer<typeof viewerSafeRecordLinkResultSchema>;
 
 /** Content-free membership of one protected target, separate from its source tile revision. */
@@ -130,8 +127,7 @@ export const projectedRecordPinTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("unavailable") }).strict(),
 ]);
 
-export type MountedRecordPinAssociation = z.infer<typeof mountedRecordPinAssociationSchema>;
-export type ProjectedRecordPinTarget = z.infer<typeof projectedRecordPinTargetSchema>;
+type MountedRecordPinAssociation = z.infer<typeof mountedRecordPinAssociationSchema>;
 
 /** A mounted element returns membership only while its current row is actually visible. */
 export const mountedRecordPinElementProperty = "vortexRecordPinAssociation" as const;

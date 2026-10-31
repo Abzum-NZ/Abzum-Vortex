@@ -58,7 +58,7 @@ export type HumanDefinitionPublicationPreparationResult =
   Failure | Readonly<{ kind: "available"; preparation: PrepareDefinitionPublicationResult }>;
 export type HumanDefinitionPublicationResult =
   Failure | Readonly<{ kind: "available"; publication: PublishDefinitionResult }>;
-export type HumanDefinitionPublisherDependencies = Readonly<{
+type HumanDefinitionPublisherDependencies = Readonly<{
   requests: ReturnType<typeof createHumanOrganizationRequestService>;
   catalogue: ImmutableDefinitionPublicationCatalogueDefinition;
 }>;

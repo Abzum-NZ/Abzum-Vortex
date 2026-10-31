@@ -118,7 +118,7 @@ export const loadApplicationPivot = async (
       readSubject: (recordTypeId, recordId) =>
         services.subjects.read(session, selection, { recordTypeId, recordId }),
       readTimeZone: services.readTimeZone,
-      readViewerTeams: services.readViewerTeams,
+      readViewerGroups: services.readViewerGroups,
     });
     const pivot = await readRecordsTablePivot({
       context,

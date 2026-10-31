@@ -198,7 +198,7 @@ const isTemporarilyUnavailableApplicationRead = (
  * experience pages of that application when the viewer may open it. Experiences never enter
  * `PermittedApplicationsRead`, so the launcher and organisation reads keep their exact shape.
  */
-export type AddressedApplicationRead = Readonly<{
+type AddressedApplicationRead = Readonly<{
   read: PermittedApplicationsRead;
   experiences: readonly ApplicationExperience[];
 }>;
@@ -1190,29 +1190,6 @@ const readAddressedApplicationIdentityAtAddress = async (
   }
 };
 
-const readAtAddress = async (
-  permissions: PlatformPermissionSource,
-  session: IdentitySession,
-  tenantShortNameCandidate: string,
-  organizationShortNameCandidate: string,
-  identityAuthorityIdCandidate: IdentityAuthorityId,
-  applicationKeyCandidate: string,
-): Promise<AddressedApplicationRead> => {
-  let experiences: readonly ApplicationExperience[] = [];
-  const read = await readPermittedApplications(
-    permissions,
-    session,
-    tenantShortNameCandidate,
-    organizationShortNameCandidate,
-    identityAuthorityIdCandidate,
-    applicationKeyCandidate,
-    (addressed) => {
-      experiences = addressed;
-    },
-  );
-  return { read, experiences: read.kind === "available" ? experiences : [] };
-};
-
 function readPermittedApplications(
   permissions: PlatformPermissionSource,
   session: IdentitySession,
@@ -1406,4 +1383,27 @@ export const resolvePermittedApplicationAddress = (
     return { kind: "unavailable" as const };
 
   return { kind: "available" as const, read, application, pageKey };
+};
+
+const readAtAddress = async (
+  permissions: PlatformPermissionSource,
+  session: IdentitySession,
+  tenantShortNameCandidate: string,
+  organizationShortNameCandidate: string,
+  identityAuthorityIdCandidate: IdentityAuthorityId,
+  applicationKeyCandidate: string,
+): Promise<AddressedApplicationRead> => {
+  let experiences: readonly ApplicationExperience[] = [];
+  const read = await readPermittedApplications(
+    permissions,
+    session,
+    tenantShortNameCandidate,
+    organizationShortNameCandidate,
+    identityAuthorityIdCandidate,
+    applicationKeyCandidate,
+    (addressed) => {
+      experiences = addressed;
+    },
+  );
+  return { read, experiences: read.kind === "available" ? experiences : [] };
 };

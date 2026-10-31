@@ -1,9 +1,5 @@
 import { z } from "zod";
-import {
-  correlationIdSchema,
-  duplicateProtectionKeySchema,
-  secretReferenceSchema,
-} from "../catalogue/common";
+import { correlationIdSchema, secretReferenceSchema } from "../catalogue/common";
 import {
   actorIdSchema,
   applicationRootIdSchema,
@@ -318,8 +314,6 @@ const fileRemovalEligibleDecisionSchema = z
   })
   .strict();
 
-export type FileRemovalEligibleDecision = z.infer<typeof fileRemovalEligibleDecisionSchema>;
-
 const fileRemovalRefusedDecisionSchema = z
   .object({
     eligible: z.literal(false),
@@ -335,107 +329,6 @@ export const fileRemovalEligibilityDecisionSchema = z.discriminatedUnion("eligib
 ]);
 
 export type FileRemovalEligibilityDecision = z.infer<typeof fileRemovalEligibilityDecisionSchema>;
-
-/**
- * Canonical stages of file object and metadata removal under Specifications 11 and 14.
- * Previews and active derived copies are cleaned, the private storage object is
- * deleted, and the file metadata is transitioned to its terminal tombstone.
- */
-const fileRemovalStageSchema = z.enum(["previews", "storage_object", "metadata"]);
-
-export type FileRemovalStage = z.infer<typeof fileRemovalStageSchema>;
-
-/**
- * Safe request to coordinate permanent file object removal.
- * Requires an eligible file removal decision and a stable deletion key; carries no
- * private storage paths or credentials, and the service re-evaluates the
- * submitted decision before accepting a new intent.
- */
-export const fileObjectRemovalRequestSchema = z
-  .object({
-    fileId: fileIdSchema,
-    deletionKey: duplicateProtectionKeySchema,
-    decision: fileRemovalEligibleDecisionSchema,
-    correlationId: correlationIdSchema,
-  })
-  .strict();
-
-export type FileObjectRemovalRequest = z.infer<typeof fileObjectRemovalRequestSchema>;
-
-/**
- * Resumable partial state for an interrupted or in-progress file removal.
- * Accurately identifies completed and current stages without exposing private
- * storage paths or content.
- */
-export const fileObjectRemovalPartialStateSchema = z
-  .object({
-    fileId: fileIdSchema,
-    organizationId: organizationIdSchema,
-    deletionKey: duplicateProtectionKeySchema,
-    status: z.enum(["in_progress", "interrupted"]),
-    completedStages: z.array(fileRemovalStageSchema),
-    currentStage: fileRemovalStageSchema,
-    authorityFingerprint: fingerprintSchema,
-    startedAt: timestampSchema,
-    updatedAt: timestampSchema,
-  })
-  .strict()
-  .superRefine((value, context) => {
-    const stages = fileRemovalStageSchema.options;
-    const currentIndex = stages.indexOf(value.currentStage);
-    const expectedCompleted = stages.slice(0, currentIndex);
-    if (
-      value.completedStages.length !== expectedCompleted.length ||
-      value.completedStages.some((stage, index) => stage !== expectedCompleted[index])
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["completedStages"],
-        message: "Completed removal stages must be the canonical prefix before the current stage",
-      });
-  });
-
-export type FileObjectRemovalPartialState = z.infer<typeof fileObjectRemovalPartialStateSchema>;
-
-/**
- * Content-free terminal receipt for completed permanent file removal.
- * Emitted only when all owned stages (previews, storage object, metadata tombstone)
- * are complete. Converges idempotently on repeated calls with the same deletion key.
- */
-export const fileObjectRemovalReceiptSchema = z
-  .object({
-    receiptId: platformIdSchema,
-    fileId: fileIdSchema,
-    organizationId: organizationIdSchema,
-    deletionKey: duplicateProtectionKeySchema,
-    status: z.literal("completed"),
-    outcome: z.literal("removed"),
-    completedStages: z.array(fileRemovalStageSchema),
-    authorityFingerprint: fingerprintSchema,
-    removedAt: timestampSchema,
-    completedAt: timestampSchema,
-  })
-  .strict()
-  .superRefine((value, context) => {
-    const stages = fileRemovalStageSchema.options;
-    if (
-      value.completedStages.length !== stages.length ||
-      value.completedStages.some((stage, index) => stage !== stages[index])
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["completedStages"],
-        message: "A terminal removal receipt records every stage once in canonical order",
-      });
-    if (value.completedAt !== value.removedAt)
-      context.addIssue({
-        code: "custom",
-        path: ["completedAt"],
-        message: "The terminal receipt commits at the same instant as the file tombstone",
-      });
-  });
-
-export type FileObjectRemovalReceipt = z.infer<typeof fileObjectRemovalReceiptSchema>;
 
 export const fileRecordSchema = z
   .object({
@@ -655,21 +548,6 @@ export const fileUploadCompletionRefusalReasonSchema = z.enum([
 
 export type FileUploadCompletionRefusalReason = z.infer<
   typeof fileUploadCompletionRefusalReasonSchema
->;
-
-export const fileUploadActivationRefusalReasonSchema = z.enum([
-  "caller_not_authorized",
-  "field_not_writable",
-  "file_not_found",
-  "invalid_lifecycle_state",
-  "owner_mismatch",
-  "replacement_file_not_found",
-  "upload_expired",
-  "revision_conflict",
-]);
-
-export type FileUploadActivationRefusalReason = z.infer<
-  typeof fileUploadActivationRefusalReasonSchema
 >;
 
 export type FileLifecycleState = z.infer<typeof fileLifecycleStateSchema>;

@@ -18,7 +18,7 @@ export const shadcnThemeCatalogueDimensionKeys = [
 export type ShadcnThemeCatalogueDimensionKey = (typeof shadcnThemeCatalogueDimensionKeys)[number];
 
 /** A catalogue option's release identity, or an explicit refusal when it fails the contrast gate. */
-export type ShadcnThemeOptionRelease = Readonly<{
+type ShadcnThemeOptionRelease = Readonly<{
   refused?: boolean;
   catalogueThemeId?: string;
   releaseVersion?: string;
@@ -29,7 +29,7 @@ export type ShadcnThemeOptionRelease = Readonly<{
  * gate: the token and mode, shadcn's value, the compliant value (same hue and chroma, nearest
  * lightness) and the ratio it had to meet.
  */
-export type ShadcnThemeContrastDerivation = Readonly<{
+type ShadcnThemeContrastDerivation = Readonly<{
   token: string;
   mode: "light" | "dark";
   from: string;
@@ -38,7 +38,7 @@ export type ShadcnThemeContrastDerivation = Readonly<{
 }>;
 
 /** One checked-in catalogue option. Only the fields its dimension declares appear. */
-export type ShadcnThemeCatalogueOption = Readonly<{
+type ShadcnThemeCatalogueOption = Readonly<{
   id: string;
   label: string;
   /** The release key the option's token values live under; absent for style and menu variants. */
@@ -62,18 +62,18 @@ export type ShadcnThemeCatalogueOption = Readonly<{
   description?: string;
 }>;
 
-export type ShadcnThemeCatalogueDimension = Readonly<{
+type ShadcnThemeCatalogueDimension = Readonly<{
   label: string;
   options: readonly ShadcnThemeCatalogueOption[];
 }>;
 
-export type ShadcnThemeCatalogueRefusal = Readonly<{
+type ShadcnThemeCatalogueRefusal = Readonly<{
   dimension: string;
   option: string;
   failures: readonly string[];
 }>;
 
-export type ShadcnThemeCatalogue = Readonly<{
+type ShadcnThemeCatalogue = Readonly<{
   schemaVersion: string;
   registry: Readonly<Record<string, unknown>>;
   baseRelease: Readonly<{ catalogueThemeId: string; releaseVersion: string }>;
@@ -82,10 +82,10 @@ export type ShadcnThemeCatalogue = Readonly<{
   refused: readonly ShadcnThemeCatalogueRefusal[];
 }>;
 
-export const shadcnThemeCatalogue = index as unknown as ShadcnThemeCatalogue;
+const shadcnThemeCatalogue = index as unknown as ShadcnThemeCatalogue;
 
 /** One dimension's catalogue, or undefined for a dimension that has no catalogue entry. */
-export const shadcnThemeCatalogueDimension = (
+const shadcnThemeCatalogueDimension = (
   dimension: ShadcnThemeCatalogueDimensionKey,
 ): ShadcnThemeCatalogueDimension | undefined => shadcnThemeCatalogue.dimensions[dimension];
 

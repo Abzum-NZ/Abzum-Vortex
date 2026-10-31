@@ -1,4 +1,5 @@
 import "server-only";
+import { definitionContractVersion } from "./application-contract-versions";
 
 import { createHash } from "node:crypto";
 import type { DefinitionValidationLocation } from "../catalogue/validation-errors";
@@ -126,10 +127,10 @@ const compileModule = (
       ]),
     ).values(),
   ];
-  const evidence = { contractVersion: "4.2.0" as const, definitions, identities };
+  const evidence = { contractVersion: definitionContractVersion, definitions, identities };
   const parsedRequest = moduleCompilationRequestSchema.safeParse({
-    sourceContractVersion: "4.2.0",
-    validationContractVersion: "4.2.0",
+    sourceContractVersion: definitionContractVersion,
+    validationContractVersion: definitionContractVersion,
     source,
     resolution: { ...evidence, fingerprint: fingerprintCanonicalValue(evidence) },
     draftMetadata: {

@@ -1,13 +1,10 @@
 import "server-only";
 
 import { permissionIdSchema } from "../catalogue/identifiers";
-import {
-  actionDefinitionSchema,
-  moduleValidationContractVersion,
-  recordTypeDefinitionSchema,
-} from "../definition/module-contracts";
+import { actionDefinitionSchema, recordTypeDefinitionSchema } from "../definition/module-contracts";
 import { executeNamedActionResultSchema, type ExecuteNamedActionResult } from "./named-actions";
 import { revision } from "./save-record";
+import { definitionContractVersion } from "../definition/application-contract-versions";
 import type { PreparedNamedAction } from "./named-action-inputs";
 import type { DatabaseRow } from "../db/request-transaction";
 
@@ -94,7 +91,7 @@ export const parsePreparation = (candidate: unknown): ActionPreparation => {
     action.data.protectedOperation !== undefined ||
     !recordType.success ||
     recordType.data.systemProjection !== undefined ||
-    value.validationContractVersion !== moduleValidationContractVersion ||
+    value.validationContractVersion !== definitionContractVersion ||
     typeof value.recordId !== "string" ||
     typeof value.existingValues !== "object" ||
     value.existingValues === null ||
@@ -121,7 +118,7 @@ export const parsePreparation = (candidate: unknown): ActionPreparation => {
   }
   return {
     outcome: value.outcome,
-    validationContractVersion: moduleValidationContractVersion,
+    validationContractVersion: definitionContractVersion,
     action: action.data,
     recordType: recordType.data,
     recordId: value.recordId,

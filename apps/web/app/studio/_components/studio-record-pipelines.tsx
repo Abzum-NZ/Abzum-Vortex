@@ -5,7 +5,6 @@ import {
   deleteInlinePipeline,
   inlineActionSetsOption,
   inlineOptionOwner,
-  pipelineStageTones,
   saveInlinePipeline,
   type ApplicationSourceDocument,
   type ApplicationUsePlace,
@@ -68,23 +67,13 @@ type Source = ApplicationSourceDocument;
 type Module = Source["body"]["modules"][number];
 type RecordType = Module["record_types"][number];
 type Pipeline = RecordType["pipelines"][number];
-type Option = Readonly<{ value: string; label: string }>;
+type Option = Readonly<{ value: string; label: string; tone?: PipelineStageTone }>;
 type Refusal = Readonly<{
   name?: string;
   issue: string;
   references: readonly ApplicationUsePlace[];
 }>;
 
-const toneLabels: Readonly<Record<PipelineStageTone, string>> = {
-  neutral: "Neutral",
-  primary: "Primary",
-  destructive: "Alert",
-  chart_1: "Chart colour 1",
-  chart_2: "Chart colour 2",
-  chart_3: "Chart colour 3",
-  chart_4: "Chart colour 4",
-  chart_5: "Chart colour 5",
-};
 /** Each colour role as its theme token. */
 const toneClasses: Readonly<Record<PipelineStageTone, string>> = {
   neutral: "bg-muted-foreground",
@@ -178,7 +167,6 @@ function NewPipelineDialog({
           removedOptions: [],
           stages: optionsOf(located.record, stageField).map((option) => ({
             option: option.value,
-            tone: "neutral" as PipelineStageTone,
           })),
           gates: gatesOf(located.module, located.record, stageField),
         },
@@ -282,6 +270,8 @@ function PipelineDialog({
   const stageField = pipeline.stage_field;
   const options = optionsOf(record, stageField);
   const label = (value: string) => options.find((option) => option.value === value)?.label ?? value;
+  const toneOf = (value: string): PipelineStageTone =>
+    options.find((option) => option.value === value)?.tone ?? "neutral";
   const field = record.fields.find((candidate) => candidate.key === stageField);
   const stages = pipeline.stages;
   const moves = pipeline.transitions;
@@ -439,7 +429,7 @@ function PipelineDialog({
                 <Item key={stage.option} render={<li />} variant="outline" size="sm">
                   <ItemHeader className="flex-wrap gap-2">
                     <ItemTitle className="gap-2">
-                      <StageSwatch tone={stage.tone} />
+                      <StageSwatch tone={toneOf(stage.option)} />
                       {label(stage.option)}
                     </ItemTitle>
                     <ItemActions className="gap-1">
@@ -476,29 +466,9 @@ function PipelineDialog({
                     </ItemActions>
                   </ItemHeader>
                   <ItemContent className="basis-full grid gap-2 sm:grid-cols-2">
-                    <div className="space-y-1">
-                      <Label htmlFor={`stage-tone-${stage.option}`}>Colour</Label>
-                      <NativeSelect
-                        id={`stage-tone-${stage.option}`}
-                        className="w-full"
-                        value={stage.tone}
-                        onChange={(event) =>
-                          change({
-                            stages: stages.map((entry) =>
-                              entry === stage
-                                ? { ...entry, tone: event.target.value as PipelineStageTone }
-                                : entry,
-                            ),
-                          })
-                        }
-                      >
-                        {pipelineStageTones.map((tone) => (
-                          <NativeSelectOption key={tone} value={tone}>
-                            {toneLabels[tone]}
-                          </NativeSelectOption>
-                        ))}
-                      </NativeSelect>
-                    </div>
+                    <p className="space-y-1 text-sm text-muted-foreground">
+                      Colours come from the field&apos;s options.
+                    </p>
                     <div className="space-y-1">
                       <Label htmlFor={`stage-gate-${stage.option}`}>Moving here</Label>
                       <NativeSelect
@@ -741,6 +711,8 @@ export function StudioRecordPipelines({
           const options = optionsOf(record, pipeline.stage_field);
           const label = (value: string) =>
             options.find((option) => option.value === value)?.label ?? value;
+          const toneOf = (value: string): PipelineStageTone =>
+            options.find((option) => option.value === value)?.tone ?? "neutral";
           const fieldLabel =
             record.fields.find((field) => field.key === pipeline.stage_field)?.label ??
             pipeline.stage_field;
@@ -783,7 +755,7 @@ export function StudioRecordPipelines({
                     );
                     return (
                       <span key={stage.option} className="inline-flex items-center gap-1">
-                        <StageSwatch tone={stage.tone} />
+                        <StageSwatch tone={toneOf(stage.option)} />
                         {label(stage.option)}
                         {owner === undefined ? null : ` (runs ${owner.label})`}
                       </span>

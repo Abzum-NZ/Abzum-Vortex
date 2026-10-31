@@ -1,4 +1,6 @@
+import { definitionContractVersion } from "../application-contract-versions";
 import type { PlatformPermissionSource } from "../../access/platform-permissions";
+import { deepFreeze } from "../../catalogue/runtime-primitives";
 import "server-only";
 
 import {
@@ -61,7 +63,7 @@ import type {
   ResolvableConnectionTypeRelease,
 } from "../definition-publication-contracts";
 
-export type PlatformConnectionTypeReleaseDefinition = Readonly<{
+type PlatformConnectionTypeReleaseDefinition = Readonly<{
   source: ConnectionTypeSourceDocument;
   rootId: ConnectionTypeId;
   releaseVersion: SemanticVersion;
@@ -76,17 +78,17 @@ export type ImmutableDefinitionPublicationCatalogueDefinition = Readonly<{
   platformServiceOperationReleases?: readonly PlatformServiceOperationRelease[];
 }>;
 
-export type PlatformBlockReleaseDefinition = Omit<
+type PlatformBlockReleaseDefinition = Omit<
   PlatformBlockRelease,
   "contentFingerprint" | "customComponent"
 >;
 
-export type PlatformThemeReleaseDefinition = Omit<PlatformThemeRelease, "contentFingerprint">;
+type PlatformThemeReleaseDefinition = Omit<PlatformThemeRelease, "contentFingerprint">;
 
-export type CustomComponentReleaseDefinition = PlatformBlockReleaseDefinition &
+type CustomComponentReleaseDefinition = PlatformBlockReleaseDefinition &
   Readonly<{ customComponent: CustomComponentRelease }>;
 
-export type ApplicationCompositionCatalogueDefinition = Readonly<{
+type ApplicationCompositionCatalogueDefinition = Readonly<{
   compositionPolicy: ApplicationCompositionPolicy;
   platformBlockReleases: readonly PlatformBlockReleaseDefinition[];
   platformThemeReleases: readonly PlatformThemeReleaseDefinition[];
@@ -98,7 +100,7 @@ export type ApplicationCompositionCatalogueDefinition = Readonly<{
   customComponentReleases?: readonly CustomComponentReleaseDefinition[] | undefined;
 }>;
 
-export type ApplicationCompositionCatalogueSelection = Readonly<{
+type ApplicationCompositionCatalogueSelection = Readonly<{
   platformBlocks: readonly Readonly<{
     blockId: BlockId;
     releaseVersion: SemanticVersion;
@@ -115,7 +117,7 @@ export type ApplicationCompositionCatalogueSelection = Readonly<{
   customComponentPlacement?: CustomComponentPlacementContext;
 }>;
 
-export interface ApplicationCompositionCatalogue {
+interface ApplicationCompositionCatalogue {
   readPlatformBlockRelease(
     blockId: BlockId,
     releaseVersion: string,
@@ -181,14 +183,6 @@ const catalogueDefinitionSchema = z
       .optional(),
   })
   .strict();
-
-const deepFreeze = <Value>(value: Value): Value => {
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    for (const nested of Object.values(value)) deepFreeze(nested);
-    Object.freeze(value);
-  }
-  return value;
-};
 
 const duplicate = (): never => {
   throw new Error("INVALID_PLATFORM_RELEASE_CATALOGUE");
@@ -337,7 +331,7 @@ const compileConnectionTypeRelease = (
     },
   ];
   const resolutionEvidence = {
-    contractVersion: "4.2.0" as const,
+    contractVersion: definitionContractVersion,
     definitions,
     identities: [],
   };

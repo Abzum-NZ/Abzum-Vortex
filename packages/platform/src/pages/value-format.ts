@@ -63,7 +63,7 @@ export const unitCatalogue = {
 
 export type PageFormatter = (typeof formatterCatalogue)[number];
 type PageFormatUnit = keyof typeof unitCatalogue;
-export type PageFormatValue = string | number | Readonly<{ amount: string; currency: string }>;
+type PageFormatValue = string | number | Readonly<{ amount: string; currency: string }>;
 export type PageFormatOptions = Readonly<{
   places?: number;
   currency?: string;

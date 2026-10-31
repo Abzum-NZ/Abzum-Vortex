@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const privacyNoticeContentSchema = z
+const privacyNoticeContentSchema = z
   .object({
     title: z.string().min(1).max(200),
     collectionNotice: z.string().min(1).max(2000),

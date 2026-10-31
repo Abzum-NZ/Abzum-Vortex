@@ -5,11 +5,11 @@ import { recordsTableFeatureRefusals } from "../definition/application-compositi
 import { recordsTableFeatureRefusalCodes } from "../definition/application-composition/records-table-features/shared";
 import { describeFailure } from "./runtime-primitives";
 
-export const definitionValidationCatalogueVersion = "1.4.0" as const;
+const definitionValidationCatalogueVersion = "1.4.0" as const;
 
-export const definitionDocumentKindSchema = z.enum(["module", "application", "connection_type"]);
+const definitionDocumentKindSchema = z.enum(["module", "application", "connection_type"]);
 
-export const definitionLocationSegmentKindSchema = z.enum([
+const definitionLocationSegmentKindSchema = z.enum([
   "document",
   "module",
   "application",
@@ -36,7 +36,7 @@ export const definitionLocationSegmentKindSchema = z.enum([
 
 const displayableDefinitionKeySchema = z.union([builderKeySchema, namespacedKeySchema]);
 
-export const definitionValidationLocationSchema = z
+const definitionValidationLocationSchema = z
   .object({
     documentKind: definitionDocumentKindSchema,
     documentKey: namespacedKeySchema,
@@ -53,7 +53,7 @@ export const definitionValidationLocationSchema = z
   })
   .strict();
 
-export const definitionValidationErrorCodes = [
+const definitionValidationErrorCodes = [
   ...recordsTableFeatureRefusalCodes,
   "definition_required_value",
   "definition_invalid_value",
@@ -81,9 +81,9 @@ export const definitionValidationErrorCodes = [
   "definition_validation_failed",
 ] as const;
 
-export const definitionValidationErrorCodeSchema = z.enum(definitionValidationErrorCodes);
+const definitionValidationErrorCodeSchema = z.enum(definitionValidationErrorCodes);
 
-export const definitionValidationCatalogueEntrySchema = z
+const definitionValidationCatalogueEntrySchema = z
   .object({
     order: z.number().int().positive(),
     message: z.string().min(1).max(300),
@@ -101,7 +101,7 @@ const platformDefinitionValidationErrorCodes = definitionValidationErrorCodes.fi
     !(recordsTableFeatureRefusalCodes as readonly string[]).includes(code),
 );
 
-export const definitionValidationCatalogueSchema = z.record(
+const definitionValidationCatalogueSchema = z.record(
   z.enum(
     platformDefinitionValidationErrorCodes as [
       PlatformDefinitionValidationErrorCode,
@@ -111,9 +111,7 @@ export const definitionValidationCatalogueSchema = z.record(
   definitionValidationCatalogueEntrySchema,
 );
 
-export type DefinitionValidationCatalogueEntry = z.infer<
-  typeof definitionValidationCatalogueEntrySchema
->;
+type DefinitionValidationCatalogueEntry = z.infer<typeof definitionValidationCatalogueEntrySchema>;
 
 const definitionValidationErrorCatalogueSource = {
   definition_required_value: {
@@ -277,7 +275,7 @@ export const definitionValidationEntry = (
 export const definitionValidationMessage = (code: DefinitionValidationErrorCode): string =>
   definitionValidationEntry(code).message;
 
-export const publicDefinitionValidationErrorSchema = z
+const publicDefinitionValidationErrorSchema = z
   .object({
     catalogueVersion: z.literal(definitionValidationCatalogueVersion),
     code: definitionValidationErrorCodeSchema,
@@ -316,7 +314,7 @@ export const definitionValidationResultSchema = z
     });
   });
 
-export const definitionRuleFailureFamilySchema = z.enum([
+const definitionRuleFailureFamilySchema = z.enum([
   "required_value",
   "invalid_value",
   "unsupported_choice",
@@ -334,7 +332,7 @@ export const definitionRuleFailureFamilySchema = z.enum([
   "more_errors",
 ]);
 
-export const definitionRuleFailureSchema = z
+const definitionRuleFailureSchema = z
   .object({
     ruleCode: namespacedKeySchema,
     family: definitionRuleFailureFamilySchema,
@@ -348,14 +346,14 @@ export const definitionRuleFailureSchema = z
 
 const rawIssuePathSchema = z.array(z.union([z.string(), z.number().int().nonnegative()])).max(64);
 
-export const definitionValidationPathMapEntrySchema = z
+const definitionValidationPathMapEntrySchema = z
   .object({
     sourcePath: rawIssuePathSchema,
     location: definitionValidationLocationSchema,
   })
   .strict();
 
-export const definitionValidationTranslationContextSchema = z
+const definitionValidationTranslationContextSchema = z
   .object({
     correlationId: correlationIdSchema,
     rootLocation: definitionValidationLocationSchema,
@@ -367,28 +365,21 @@ export const definitionValidationTranslationContextSchema = z
 
 export type DefinitionValidationLocation = z.infer<typeof definitionValidationLocationSchema>;
 export type DefinitionValidationErrorCode = z.infer<typeof definitionValidationErrorCodeSchema>;
-export type PublicDefinitionValidationError = z.infer<typeof publicDefinitionValidationErrorSchema>;
+type PublicDefinitionValidationError = z.infer<typeof publicDefinitionValidationErrorSchema>;
 export type DefinitionValidationResult = z.infer<typeof definitionValidationResultSchema>;
 export type DefinitionRuleFailure = z.infer<typeof definitionRuleFailureSchema>;
 export type DefinitionRuleFailureFamily = z.infer<typeof definitionRuleFailureFamilySchema>;
-export type DefinitionValidationTranslationContext = z.input<
+type DefinitionValidationTranslationContext = z.input<
   typeof definitionValidationTranslationContextSchema
 >;
 
-export type ProtectedValidationDiagnostic = Readonly<{
+type ProtectedValidationDiagnostic = Readonly<{
   correlationId: z.infer<typeof correlationIdSchema>;
   source: "schema" | "rule";
   detail: unknown;
 }>;
 
-export type ProtectedValidationDiagnosticSink = (diagnostic: ProtectedValidationDiagnostic) => void;
-
-type RawIssue = Readonly<{
-  code?: unknown;
-  message?: unknown;
-  origin?: unknown;
-  path?: unknown;
-}>;
+type ProtectedValidationDiagnosticSink = (diagnostic: ProtectedValidationDiagnostic) => void;
 
 const failureCodeByFamily = {
   required_value: "definition_required_value",
@@ -410,66 +401,6 @@ const failureCodeByFamily = {
   z.infer<typeof definitionRuleFailureFamilySchema>,
   DefinitionValidationErrorCode
 >;
-
-function normalizeIssuePath(path: unknown): (string | number)[] {
-  if (!Array.isArray(path)) return [];
-  return path.filter(
-    (part): part is string | number =>
-      typeof part === "string" || (typeof part === "number" && Number.isInteger(part) && part >= 0),
-  );
-}
-
-function resolveLocation(
-  path: readonly (string | number)[],
-  pathMap: ReadonlyMap<string, DefinitionValidationLocation>,
-  rootLocation: DefinitionValidationLocation,
-) {
-  for (let length = path.length; length >= 0; length -= 1) {
-    const match = pathMap.get(JSON.stringify(path.slice(0, length)));
-    if (match) return match;
-  }
-  return rootLocation;
-}
-
-function schemaIssueCode(
-  issue: RawIssue,
-  path: readonly (string | number)[],
-  requiredPaths: ReadonlySet<string>,
-): DefinitionValidationErrorCode {
-  if (
-    issue.code === "custom" &&
-    issue.message === "A record type may declare at most eight sortable fields"
-  )
-    return "definition_sortable_field_limit";
-  if (issue.code === "invalid_type") {
-    return requiredPaths.has(JSON.stringify(path))
-      ? "definition_required_value"
-      : "definition_invalid_value";
-  }
-  if (issue.code === "invalid_value") return "definition_unsupported_choice";
-  if (issue.code === "unrecognized_keys") return "definition_unknown_property";
-  if (issue.code === "too_small") {
-    return issue.origin === "array" || issue.origin === "set"
-      ? "definition_too_few_items"
-      : "definition_invalid_value";
-  }
-  if (issue.code === "too_big") {
-    return issue.origin === "array" || issue.origin === "set"
-      ? "definition_too_many_items"
-      : "definition_invalid_value";
-  }
-  if (
-    issue.code === "invalid_format" ||
-    issue.code === "not_multiple_of" ||
-    issue.code === "invalid_union" ||
-    issue.code === "invalid_key" ||
-    issue.code === "invalid_element" ||
-    issue.code === "custom"
-  ) {
-    return "definition_invalid_value";
-  }
-  return "definition_validation_failed";
-}
 
 function makePublicError(
   code: DefinitionValidationErrorCode,
@@ -563,56 +494,6 @@ function parseTranslationContextOrFallback(
       correlation.data,
     ),
   };
-}
-
-export function translateDefinitionSchemaError(
-  error: z.ZodError,
-  inputContext: DefinitionValidationTranslationContext,
-  diagnosticSink?: ProtectedValidationDiagnosticSink,
-): DefinitionValidationResult {
-  const parsedContext = parseTranslationContextOrFallback(inputContext);
-  if (!parsedContext.success) return parsedContext.result;
-  const context = parsedContext.context;
-  emitDiagnostic(diagnosticSink, {
-    correlationId: context.correlationId,
-    source: "schema",
-    detail: error,
-  });
-  try {
-    const pathMap = new Map<string, DefinitionValidationLocation>();
-    for (const entry of context.pathMap) {
-      const key = JSON.stringify(entry.sourcePath);
-      if (!pathMap.has(key)) pathMap.set(key, entry.location);
-    }
-    const requiredPaths = new Set(context.requiredPaths.map((path) => JSON.stringify(path)));
-    const errors = error.issues.map((issue) => {
-      const path = normalizeIssuePath(issue.path);
-      return makePublicError(
-        schemaIssueCode(issue, path, requiredPaths),
-        context.correlationId,
-        resolveLocation(path, pathMap, context.rootLocation),
-      );
-    });
-    if (errors.some((entry) => entry.code === "definition_sortable_field_limit"))
-      console.error(
-        `[definition] definition_sortable_field_limit ${context.correlationId}: a record type declares more than eight sortable fields`,
-      );
-    return finishResult(errors, context.correlationId);
-  } catch (error) {
-    console.error(
-      `[definition] DEFINITION_VALIDATION_TRANSLATION_FAILED: ${describeFailure(error)}`,
-    );
-    return finishResult(
-      [
-        makePublicError(
-          "definition_validation_failed",
-          context.correlationId,
-          context.rootLocation,
-        ),
-      ],
-      context.correlationId,
-    );
-  }
 }
 
 export function translateDefinitionRuleFailures(

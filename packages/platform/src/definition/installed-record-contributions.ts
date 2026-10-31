@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
+import { uuidFromText } from "./derived-definition-id";
 import { z } from "zod";
 import { sameId } from "../catalogue/runtime-primitives";
 import { flowSchema } from "../workflows/flow-contracts";
@@ -202,16 +202,8 @@ export const parseInstalledRecordContributions = (
 };
 
 /** A permanent identity derived from the parts that name it, a valid RFC 9562 UUID. */
-const derivedId = (...parts: readonly string[]): string => {
-  const bytes = createHash("sha256")
-    .update(`contributed-action:${parts.map((part) => part.toLowerCase()).join(":")}`)
-    .digest()
-    .subarray(0, 16);
-  bytes[6] = (bytes[6]! & 0x0f) | 0x80;
-  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
-  const hex = bytes.toString("hex");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-};
+const derivedId = (...parts: readonly string[]): string =>
+  uuidFromText(`contributed-action:${parts.map((part) => part.toLowerCase()).join(":")}`, 8);
 
 /**
  * The identities of the control that runs one contributed action on one detail page: the placement

@@ -1,5 +1,5 @@
 {
-  "source_contract_version": "4.2.0",
+  "source_contract_version": "4.3.0",
   "root_alias": "app_iam",
   "key": "vortex.app.iam",
   "kind": "application",
@@ -89,7 +89,6 @@
             "lifecycle",
             "role_kind",
             "privilege_classification",
-            "assignment_policy",
             "accepted_permission_count",
             "revision"
           ],
@@ -183,7 +182,6 @@
             "role_label",
             "assignee_display_name",
             "assignee_kind",
-            "assignment_kind",
             "starts_at",
             "expires_at",
             "state",
@@ -193,34 +191,6 @@
             "organization_account_id",
             "group_id",
             "revision"
-          ],
-          "changeable_fields": []
-        }
-      },
-      {
-        "id": "perm_app_iam_role_activation_read",
-        "key": "application.iam.directory.role_activation.read",
-        "label": "Read IAM role activations",
-        "description": "Read IAM role activations under current role authority.",
-        "record_type": "vortex.system_directory:role_activation",
-        "action_kind": "read",
-        "administrative": true,
-        "record_scope": {
-          "routes": [
-            {
-              "kind": "all_records"
-            }
-          ]
-        },
-        "field_policy": {
-          "readable_fields": [
-            "account_display_name",
-            "role_key",
-            "role_label",
-            "activated_at",
-            "expires_at",
-            "state",
-            "temporal_state"
           ],
           "changeable_fields": []
         }
@@ -353,7 +323,6 @@
           "application.iam.directory.group.read",
           "application.iam.directory.group_membership.read",
           "application.iam.directory.role_assignment.read",
-          "application.iam.directory.role_activation.read",
           "application.iam.directory.delegation.read",
           "application.iam.directory.installed_application.read",
           "application.iam.directory.application_role_template.read"
@@ -550,14 +519,6 @@
         "personal_or_sensitive_values_allowed": false
       },
       {
-        "id": "event_deactivate_role_activation",
-        "key": "vortex.app.iam.deactivate_role_activation",
-        "label": "Deactivate role activation",
-        "record_type": "vortex.system_directory:role_activation",
-        "carries": [],
-        "personal_or_sensitive_values_allowed": false
-      },
-      {
         "id": "event_revoke_delegation_authority",
         "key": "vortex.app.iam.revoke_delegation_authority",
         "label": "Revoke delegation authority",
@@ -631,7 +592,6 @@
       }
     ],
     "public_addresses": [],
-    "platform_block_dependencies": [],
     "shells": [
       {
         "id": "shell_iam",
@@ -1137,22 +1097,28 @@
                     "heading_source": "field",
                     "heading_field": "vortex.system_directory:person.display_name",
                     "title": "Person detail",
-                    "detail_fields": [
+                    "sections": [
                       {
-                        "field": "vortex.system_directory:person.display_name",
-                        "label": "Display name"
-                      },
-                      {
-                        "field": "vortex.system_directory:person.state",
-                        "label": "State"
-                      },
-                      {
-                        "field": "vortex.system_directory:person.language",
-                        "label": "Language"
-                      },
-                      {
-                        "field": "vortex.system_directory:person.time_zone",
-                        "label": "Time zone"
+                        "key": "details",
+                        "title": "Details",
+                        "fields": [
+                          {
+                            "field": "vortex.system_directory:person.display_name",
+                            "label": "Display name"
+                          },
+                          {
+                            "field": "vortex.system_directory:person.state",
+                            "label": "State"
+                          },
+                          {
+                            "field": "vortex.system_directory:person.language",
+                            "label": "Language"
+                          },
+                          {
+                            "field": "vortex.system_directory:person.time_zone",
+                            "label": "Time zone"
+                          }
+                        ]
                       }
                     ],
                     "vortex": {
@@ -1255,12 +1221,6 @@
                       {
                         "field": "vortex.system_directory:role.privilege_classification",
                         "label": "Privilege",
-                        "visible": true,
-                        "pin": "unpinned"
-                      },
-                      {
-                        "field": "vortex.system_directory:role.assignment_policy",
-                        "label": "Assignment policy",
                         "visible": true,
                         "pin": "unpinned"
                       },
@@ -1847,42 +1807,6 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.choice_input",
-                        "props": {
-                          "id": "input_assign_role_assignment_person_assignment_kind",
-                          "name": "assignment_kind",
-                          "label": "Assignment kind",
-                          "required": true,
-                          "options": [
-                            {
-                              "key": "standing",
-                              "label": "Standing"
-                            },
-                            {
-                              "key": "eligible",
-                              "label": "Eligible"
-                            }
-                          ],
-                          "vortex": {
-                            "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.2.0"
-                            },
-                            "responsive": {
-                              "desktop": {
-                                "visible": true,
-                                "width": {
-                                  "kind": "fill"
-                                },
-                                "height": {
-                                  "kind": "content"
-                                }
-                              }
-                            }
-                          }
-                        }
-                      },
-                      {
                         "type": "platform.renderer.field_input",
                         "props": {
                           "id": "input_assign_role_assignment_person_starts_at",
@@ -1972,42 +1896,6 @@
                             "block": {
                               "block_id": "8d1b6a2f-4c3e-4f0a-9c2b-6f1d2e7a5b94",
                               "release_version": "1.0.0"
-                            },
-                            "responsive": {
-                              "desktop": {
-                                "visible": true,
-                                "width": {
-                                  "kind": "fill"
-                                },
-                                "height": {
-                                  "kind": "content"
-                                }
-                              }
-                            }
-                          }
-                        }
-                      },
-                      {
-                        "type": "platform.renderer.choice_input",
-                        "props": {
-                          "id": "input_assign_role_assignment_group_assignment_kind",
-                          "name": "assignment_kind",
-                          "label": "Assignment kind",
-                          "required": true,
-                          "options": [
-                            {
-                              "key": "standing",
-                              "label": "Standing"
-                            },
-                            {
-                              "key": "eligible",
-                              "label": "Eligible"
-                            }
-                          ],
-                          "vortex": {
-                            "block": {
-                              "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.2.0"
                             },
                             "responsive": {
                               "desktop": {
@@ -2163,12 +2051,6 @@
                       {
                         "field": "vortex.system_directory:role_assignment.assignee_kind",
                         "label": "Assignee kind",
-                        "visible": true,
-                        "pin": "unpinned"
-                      },
-                      {
-                        "field": "vortex.system_directory:role_assignment.assignment_kind",
-                        "label": "Assignment kind",
                         "visible": true,
                         "pin": "unpinned"
                       },
@@ -2733,87 +2615,6 @@
                       }
                     }
                   }
-                },
-                {
-                  "type": "platform.renderer.table",
-                  "props": {
-                    "presentation": "grid",
-                    "id": "iam_role_activations_region",
-                    "title": "Active roles",
-                    "empty_message": "No active roles",
-                    "columns": [
-                      {
-                        "field": "vortex.system_directory:role_activation.account_display_name",
-                        "label": "Person",
-                        "visible": true,
-                        "pin": "start"
-                      },
-                      {
-                        "field": "vortex.system_directory:role_activation.role_label",
-                        "label": "Role",
-                        "visible": true,
-                        "pin": "unpinned"
-                      },
-                      {
-                        "field": "vortex.system_directory:role_activation.activated_at",
-                        "label": "Activated at",
-                        "visible": true,
-                        "pin": "unpinned"
-                      },
-                      {
-                        "field": "vortex.system_directory:role_activation.expires_at",
-                        "label": "Expires at",
-                        "visible": true,
-                        "pin": "unpinned"
-                      },
-                      {
-                        "field": "vortex.system_directory:role_activation.state",
-                        "label": "State",
-                        "visible": true,
-                        "pin": "unpinned"
-                      }
-                    ],
-                    "row_actions": [
-                      {
-                        "event_id": "event_deactivate_role_activation",
-                        "label": "Deactivate role",
-                        "icon": "workflow",
-                        "placement": "menu"
-                      }
-                    ],
-                    "vortex": {
-                      "block": {
-                        "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "2.0.0"
-                      },
-                      "query": "vortex.system_directory:role_activations",
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      }
-                    },
-                    "features": {
-                      "pinning": {
-                        "enabled": true
-                      },
-                      "pivot": {
-                        "enabled": false
-                      },
-                      "spreadsheet": {
-                        "enabled": false
-                      },
-                      "row_actions": {
-                        "enabled": true
-                      }
-                    }
-                  }
                 }
               ],
               "vortex": {
@@ -3024,62 +2825,68 @@
                     "id": "iam_access_request_detail_body",
                     "heading_source": "field",
                     "heading_field": "vortex.iam.core:access_request.title",
-                    "detail_fields": [
+                    "sections": [
                       {
-                        "field": "vortex.iam.core:access_request.request_number",
-                        "label": "Request number"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.title",
-                        "label": "Title"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.request_type",
-                        "label": "Request type"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.state",
-                        "label": "State"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.beneficiary",
-                        "label": "Beneficiary"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.target_role_key",
-                        "label": "Target role"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.target_group_key",
-                        "label": "Target group"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.target_group",
-                        "label": "Target group record"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.application_context",
-                        "label": "Application context"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.reason",
-                        "label": "Reason"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.starts_on",
-                        "label": "Starts on"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.expires_on",
-                        "label": "Expires on"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.submitted_at",
-                        "label": "Submitted at"
-                      },
-                      {
-                        "field": "vortex.iam.core:access_request.decided_at",
-                        "label": "Decided at"
+                        "key": "details",
+                        "title": "Details",
+                        "fields": [
+                          {
+                            "field": "vortex.iam.core:access_request.request_number",
+                            "label": "Request number"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.title",
+                            "label": "Title"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.request_type",
+                            "label": "Request type"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.state",
+                            "label": "State"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.beneficiary",
+                            "label": "Beneficiary"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.target_role_key",
+                            "label": "Target role"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.target_group_key",
+                            "label": "Target group"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.target_group",
+                            "label": "Target group record"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.application_context",
+                            "label": "Application context"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.reason",
+                            "label": "Reason"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.starts_on",
+                            "label": "Starts on"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.expires_on",
+                            "label": "Expires on"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.submitted_at",
+                            "label": "Submitted at"
+                          },
+                          {
+                            "field": "vortex.iam.core:access_request.decided_at",
+                            "label": "Decided at"
+                          }
+                        ]
                       }
                     ],
                     "title": "Access request",
@@ -4950,13 +4757,6 @@
                               "value": null
                             }
                           },
-                          "assignment_kind": {
-                            "kind": "literal",
-                            "literal": {
-                              "type": "choice",
-                              "value": "standing"
-                            }
-                          },
                           "starts_at": {
                             "kind": "formula",
                             "formula": {
@@ -5045,15 +4845,6 @@
                                   "path": ["organization_account_id"]
                                 }
                               }
-                            }
-                          },
-                          "assignment_kind": {
-                            "kind": "reference",
-                            "reference": {
-                              "source": "task_output",
-                              "task": "person_form",
-                              "key": "values",
-                              "path": ["assignment_kind"]
                             }
                           },
                           "starts_at": {
@@ -5249,15 +5040,6 @@
                               }
                             }
                           },
-                          "assignment_kind": {
-                            "kind": "reference",
-                            "reference": {
-                              "source": "task_output",
-                              "task": "person_form",
-                              "key": "values",
-                              "path": ["assignment_kind"]
-                            }
-                          },
                           "starts_at": {
                             "kind": "reference",
                             "reference": {
@@ -5375,13 +5157,6 @@
                               "value": null
                             }
                           },
-                          "assignment_kind": {
-                            "kind": "literal",
-                            "literal": {
-                              "type": "choice",
-                              "value": "standing"
-                            }
-                          },
                           "starts_at": {
                             "kind": "formula",
                             "formula": {
@@ -5470,15 +5245,6 @@
                                   "path": ["group_id"]
                                 }
                               }
-                            }
-                          },
-                          "assignment_kind": {
-                            "kind": "reference",
-                            "reference": {
-                              "source": "task_output",
-                              "task": "group_form",
-                              "key": "values",
-                              "path": ["assignment_kind"]
                             }
                           },
                           "starts_at": {
@@ -5672,15 +5438,6 @@
                                   "path": ["group_id"]
                                 }
                               }
-                            }
-                          },
-                          "assignment_kind": {
-                            "kind": "reference",
-                            "reference": {
-                              "source": "task_output",
-                              "task": "group_form",
-                              "key": "values",
-                              "path": ["assignment_kind"]
                             }
                           },
                           "starts_at": {
@@ -7039,30 +6796,6 @@
             "name": "record_id"
           },
           "expected_assignment_revision": {
-            "kind": "caller",
-            "name": "revision"
-          }
-        },
-        "settings": {
-          "condition": null,
-          "debounceMs": 0,
-          "concurrency": "ignore_while_running",
-          "exclusive": "none",
-          "timeoutMs": null
-        }
-      },
-      {
-        "id": "binding_deactivate_role_activation",
-        "control": "iam_role_activations_region",
-        "event_id": "event_deactivate_role_activation",
-        "event": "row_action",
-        "flow": "flow_deactivate_role_activation",
-        "inputs": {
-          "role_activation_id": {
-            "kind": "caller",
-            "name": "record_id"
-          },
-          "expected_activation_revision": {
             "kind": "caller",
             "name": "revision"
           }

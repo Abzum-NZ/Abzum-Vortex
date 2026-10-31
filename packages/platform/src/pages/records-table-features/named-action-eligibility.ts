@@ -9,10 +9,10 @@ import {
 import { readableSubjectFromProjection } from "../page-subject-read";
 
 /** One record of a selection and the identity its command would run with. */
-export type NamedActionEligibilityTarget = Readonly<{ recordId: string; commandId: string }>;
+type NamedActionEligibilityTarget = Readonly<{ recordId: string; commandId: string }>;
 
 /** A selected record's eligibility, with the revision it was decided at when it is readable. */
-export type NamedActionRecordEligibility = Readonly<{
+type NamedActionRecordEligibility = Readonly<{
   recordId: string;
   revision?: number;
   actions: readonly Readonly<{

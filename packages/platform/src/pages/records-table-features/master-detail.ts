@@ -36,10 +36,10 @@ import type { RecordsTableQueryRunner } from "../records-table-query";
 import { logRecordsTableRequestRefusal, recordsTableRequestRefusal } from "./index";
 
 /** One related record of an expanded row: its own record page, when the viewer may open it. */
-export type RowDetailRow = z.input<typeof rowDetailRowSchema>;
+type RowDetailRow = z.input<typeof rowDetailRowSchema>;
 
 /** One expanded row's read: the installed placement, the row the browser named and the services. */
-export type RowDetailRequest = Readonly<{
+type RowDetailRequest = Readonly<{
   context: InstalledRuntimeContext;
   session: IdentitySession;
   selection: OrganizationSelectionCandidate;
@@ -233,7 +233,7 @@ const projectRowDetail = async (request: RowDetailRequest): Promise<RowDetailRes
     projected.push({
       recordId: String(related.recordId),
       ...(link?.kind === "record_link" && link.href !== undefined ? { href: link.href } : {}),
-      fields: detail.values.fields,
+      fields: detail.values.sections.flatMap((section) => section.fields),
     });
   }
   const columns = fieldIds.map((fieldId) => ({
