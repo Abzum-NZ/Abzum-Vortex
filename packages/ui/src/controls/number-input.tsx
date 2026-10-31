@@ -72,22 +72,20 @@ export function NumberInput(props: NumberInputProps): ReactElement {
   const minimum = settings.number("min_value");
   const maximum = settings.number("max_value");
   const step = settings.number("step_value");
-  // A money field's derived input carries its fixed currency and digit grouping.
+  // A money field's derived input carries its fixed currency and digit grouping, in the same "en"
+  // format the detail shows.
   const currency = settings.text("currency");
   const groupDigits = settings.boolean("group_digits");
   const numberFormat =
     currency === undefined
       ? undefined
-      : new Intl.NumberFormat(undefined, {
-          style: "currency",
-          currency,
-          currencyDisplay: "narrowSymbol",
-        });
+      : new Intl.NumberFormat("en", { style: "currency", currency });
   const currencyPrefix = numberFormat
     ?.formatToParts(0)
     .find((part) => part.type === "currency")?.value;
   const groupSeparator =
-    new Intl.NumberFormat().formatToParts(1000).find((part) => part.type === "group")?.value ?? ",";
+    new Intl.NumberFormat("en").formatToParts(1000).find((part) => part.type === "group")?.value ??
+    ",";
   /** The typed text with its integer part grouped, while the exact typed value stays in `raw`. */
   const groupedText = (text: string): string => {
     if (!groupDigits) return text;
