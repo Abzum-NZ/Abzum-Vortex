@@ -663,6 +663,10 @@ export const ensureDetailEdit = (
   );
 };
 
+/** Whether a records table shows its rows as a board; a board opens a card through its row click. */
+export const isBoardTable = (table: SourceItem): boolean =>
+  (table.props.features as { board?: { enabled?: boolean } } | undefined)?.board?.enabled === true;
+
 /** Edit in each list's row menu, once, wherever an edit page exists. */
 export const ensureListEdit = (
   context: StudioStructureContext,
@@ -675,7 +679,11 @@ export const ensureListEdit = (
     const list = plan.source.body.pages.find((entry) => entry.id === listId);
     if (list === undefined) continue;
     const table = recordTables(plan.source, list, resolved)[0];
-    if (table === undefined || controlOpens(plan.source, table.props.id, [found.edit.key]))
+    if (
+      table === undefined ||
+      isBoardTable(table) ||
+      controlOpens(plan.source, table.props.id, [found.edit.key])
+    )
       continue;
     openFlow(
       plan,

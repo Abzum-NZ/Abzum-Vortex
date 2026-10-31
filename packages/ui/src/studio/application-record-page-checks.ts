@@ -2,6 +2,7 @@ import { sourcePageItems, type SourceItem } from "@vortex/platform/schema";
 import {
   companions,
   controlOpens,
+  isBoardTable,
   recordTables,
   resolveRecordType,
 } from "./application-record-page-shared";
@@ -53,10 +54,9 @@ export const studioRecordPageChecks = (source: Source): readonly StudioRecordPag
         for (const list of found.list) {
           const table = recordTables(source, list, resolved)[0];
           // A board opens a card through its row click, so it has no row menu to add Edit to.
-          const features = table?.props.features as { board?: { enabled?: boolean } } | undefined;
           if (
             table === undefined ||
-            features?.board?.enabled === true ||
+            isBoardTable(table) ||
             controlOpens(source, table.props.id, [found.edit.key])
           )
             continue;
