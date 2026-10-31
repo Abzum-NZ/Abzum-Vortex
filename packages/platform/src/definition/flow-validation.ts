@@ -17,7 +17,7 @@ import {
   type FlowSource,
   type FlowTask,
 } from "../workflows/flow-contracts";
-import type { SourceFlow } from "../workflows/flow-source-contracts";
+import { sameRecordTypeAlias, type SourceFlow } from "../workflows/flow-source-contracts";
 import {
   flowTaskRegistry,
   validateFlowTaskPlacement,
@@ -946,15 +946,9 @@ export function validateFlow(
         rejectFormat("formatter", "Choose a registered formatter");
       const currency = task.properties.currency;
       const unit = task.properties.unit;
-      const input = task.properties.input;
-      // The input property is checked on its own; typing it here must not report its issues twice.
-      const reported = [issues.length, unreadableReferences.length] as const;
-      const inputType =
-        input === undefined ? undefined : valueType(input, where, [...path.slice(0, -1), "input"]);
-      issues.length = reported[0];
-      unreadableReferences.length = reported[1];
-      if (formatter === "money" && inputType !== "money" && currency === undefined)
-        rejectFormat("currency", "Money formatting needs a currency unless its input carries one");
+      // A flow holds money as its amount, so the format always names the currency it shows.
+      if (formatter === "money" && currency === undefined)
+        rejectFormat("currency", "Money formatting needs a currency");
       if (
         currency !== undefined &&
         (!isTextLiteral(currency) ||
@@ -1189,7 +1183,10 @@ export function validateFlow(
       );
       return;
     }
-    if (targetTypeId !== undefined && targetTypeId !== declaration.recordTypeIds[0])
+    if (
+      targetTypeId !== undefined &&
+      !sameRecordTypeAlias(targetTypeId, declaration.recordTypeIds[0] ?? "")
+    )
       add(
         [...path, "properties", "record"],
         "vortex.definition.workflow_node_values",

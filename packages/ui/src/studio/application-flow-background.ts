@@ -48,17 +48,20 @@ export const addStudioBackgroundFlow = (
     labels: { name },
     execution: "background",
     runAs: { kind: "initiator" },
-    inputs:
-      command.event === null
-        ? {
-            record: {
-              type: "record_reference",
-              required: true,
-              recordTypeIds: [recordTypeId],
-              description: "The record the flow runs on.",
-            },
-          }
-        : {},
+    // A subscriber receives the record its event is about in the record input a started flow
+    // names its record in, so a step can point at the record itself.
+    ...(command.event === null ? {} : { recordInput: "record" }),
+    inputs: {
+      record: {
+        type: "record_reference",
+        required: true,
+        recordTypeIds: [recordTypeId],
+        description:
+          command.event === null
+            ? "The record the flow runs on."
+            : "The record the event is about.",
+      },
+    },
     variables: {},
     outputs: {},
     errors: [],

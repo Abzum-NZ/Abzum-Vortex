@@ -17,6 +17,7 @@ const serverStepRunners = {
   "data.record_link": "interpreter",
   "data.format": "interpreter",
   "data.set_variable": "interpreter",
+  "data.build_list": "interpreter",
   "rule.require": "interpreter",
   "rule.warn": "interpreter",
   "rule.refuse": "interpreter",

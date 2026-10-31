@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Button } from "@vortex/ui/components/button";
+import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
 import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import { StudioInspectorGroup } from "@vortex/ui/studio";
@@ -26,14 +27,18 @@ const kindOf = (source: Plain | undefined, link: boolean): Kind => {
 export function StudioOptionsSourceEditor({
   link,
   source,
+  fieldLabel,
   fields,
   queries,
   flows,
   disabled,
   onChange,
+  onNewFlow,
 }: Readonly<{
   link: boolean;
   source: Plain | undefined;
+  /** The field's label, which names a new options flow by default. */
+  fieldLabel: string;
   /** The other fields of this record type, which an input can read. */
   fields: readonly Readonly<{ key: string; label: string }>[];
   /** The module's queries by qualified reference, with the inputs each declares. */
@@ -43,11 +48,14 @@ export function StudioOptionsSourceEditor({
   disabled: boolean;
   /** Writes the declared source; answers why it was refused, if it was. */
   onChange: (next: Plain) => string | undefined;
+  /** Creates a new options flow over the field's declared inputs, declares it, and opens it. */
+  onNewFlow: (name: string) => string | undefined;
 }>) {
   const current = kindOf(source, link);
   const [kind, setKind] = useState<Kind>(current);
   const [query, setQuery] = useState(typeof source?.query === "string" ? source.query : "");
   const [flow, setFlow] = useState(typeof source?.flow === "string" ? source.flow : "");
+  const [flowName, setFlowName] = useState(`${fieldLabel} options`);
   const [inputs, setInputs] = useState<Readonly<Record<string, string>>>(
     (source?.inputs as Readonly<Record<string, string>> | undefined) ?? {},
   );
@@ -126,24 +134,48 @@ export function StudioOptionsSourceEditor({
         </Label>
       )}
       {kind === "flow" && (
-        <Label className="flex flex-col items-start gap-1 text-xs">
-          Options flow
-          <NativeSelect
-            value={flow}
+        <>
+          <Label className="flex flex-col items-start gap-1 text-xs">
+            Options flow
+            <NativeSelect
+              value={flow}
+              disabled={disabled}
+              onChange={(event) => {
+                setFlow(event.target.value);
+                setInputs({});
+              }}
+            >
+              <NativeSelectOption value="">Choose a flow…</NativeSelectOption>
+              {flows.map((entry) => (
+                <NativeSelectOption key={entry.alias} value={entry.alias}>
+                  {entry.label}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          </Label>
+          <Label className="flex flex-col items-start gap-1 text-xs">
+            New options flow
+            <Input
+              value={flowName}
+              disabled={disabled}
+              maxLength={100}
+              onChange={(event) => setFlowName(event.target.value)}
+            />
+          </Label>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
             disabled={disabled}
-            onChange={(event) => {
-              setFlow(event.target.value);
-              setInputs({});
-            }}
+            onClick={() => setProblem(onNewFlow(flowName) ?? "")}
           >
-            <NativeSelectOption value="">Choose a flow…</NativeSelectOption>
-            {flows.map((entry) => (
-              <NativeSelectOption key={entry.alias} value={entry.alias}>
-                {entry.label}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-        </Label>
+            New options flow
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Creates an interactive flow over the inputs this field declares, with an{" "}
+            <code>options</code> output, and opens it in the flow editor.
+          </p>
+        </>
       )}
       {needed.map((input) => (
         <Label key={input.key} className="flex flex-col items-start gap-1 text-xs">

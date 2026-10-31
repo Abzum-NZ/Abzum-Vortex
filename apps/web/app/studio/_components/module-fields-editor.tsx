@@ -18,6 +18,7 @@ import { Label } from "@vortex/ui/components/label";
 import { Textarea } from "@vortex/ui/components/textarea";
 import {
   applyStudioFieldPlacements,
+  applyStudioFlowCreate,
   studioFieldPlacements,
   studioRelationshipChoices,
   studioSettingProblems,
@@ -37,6 +38,7 @@ import {
   deleteInlineModuleField,
   deriveFieldKey,
   fieldTypeKeys,
+  isOptionsFlowSource,
   joinTextAccepts,
   linkDependencyCandidates,
   moduleFieldDefaultDeclaration,
@@ -68,6 +70,7 @@ import {
 import { StudioField } from "./studio-field";
 import { StudioReferencesAlert, StudioUsedIn, useStudioPlaceOpener } from "./studio-used-in";
 import { StudioOptionsSourceEditor } from "./studio-options-source-editor";
+import { optionsFlowInputs, optionsFlowSeed } from "./module-field-options-flow";
 import { StudioLinkSection } from "./studio-link-section";
 import { useStudioDraftText } from "./use-studio-draft-text";
 import { useStudioDraftHeld } from "./use-studio-draft-held";
@@ -87,7 +90,12 @@ type SourceRecord = Source["body"]["modules"][number]["record_types"][number];
 type SourceField = SourceRecord["fields"][number];
 type Plain = Readonly<Record<string, unknown>>;
 /** The field types that declare where their options come from. */
-const optionsSourceTypes: ReadonlySet<string> = new Set(["choice", "several_choices", "link"]);
+const optionsSourceTypes: ReadonlySet<string> = new Set([
+  "choice",
+  "several_choices",
+  "link",
+  "link_to_one_of_several",
+]);
 
 /** A record type a link may point at: its qualified key, its name, and the label each record is shown by. */
 export type StudioLinkTarget = Readonly<{
@@ -384,6 +392,29 @@ export function ModuleFieldsEditor({
         : [];
 
   /** One edit of the field: the patch over the field as the draft holds it. */
+  const changeOf = (
+    next: FormState,
+    settings: Plain,
+    defaultValue: unknown,
+  ): Parameters<typeof changeInlineModuleField>[1] => ({
+    moduleKey,
+    recordAlias: record!.id,
+    fieldAlias: existing!.id,
+    label: next.label,
+    helpText: next.helpText,
+    required: next.required,
+    unique: next.unique,
+    filterable: next.filterable,
+    sortable: next.sortable,
+    searchPriority: next.searchPriority,
+    personalData: next.personalData,
+    publicDisplay: next.publicDisplay,
+    type: next.type,
+    settings,
+    defaultValue,
+    cardinality: linkTypes.has(next.type) ? next.cardinality : undefined,
+  });
+
   const commit = (
     patch: Partial<FormState>,
     merge?: string,
@@ -414,37 +445,82 @@ export function ModuleFieldsEditor({
       const problems = studioSettingProblems(next.defaultValue, [defaultModel.declaration]);
       if (problems.length > 0) return problems.join(" ");
     }
+    const defaultValue =
+      defaultModel.kind === "declared"
+        ? writeModuleFieldDefault(next.type, next.defaultValue.default)
+        : storedDefault;
     return studioEditProblem(
       edit(
         (current) =>
-          changeInlineModuleField(
-            current,
-            {
-              moduleKey,
-              recordAlias: record.id,
-              fieldAlias: existing.id,
-              label: next.label,
-              helpText: next.helpText,
-              required: next.required,
-              unique: next.unique,
-              filterable: next.filterable,
-              sortable: next.sortable,
-              searchPriority: next.searchPriority,
-              personalData: next.personalData,
-              publicDisplay: next.publicDisplay,
-              type: next.type,
-              settings,
-              defaultValue:
-                defaultModel.kind === "declared"
-                  ? writeModuleFieldDefault(next.type, next.defaultValue.default)
-                  : storedDefault,
-              cardinality: linkTypes.has(next.type) ? next.cardinality : undefined,
-            },
-            { publication: context.publication, peopleDirectory: context.peopleDirectory },
-          ),
+          changeInlineModuleField(current, changeOf(next, settings, defaultValue), {
+            publication: context.publication,
+            peopleDirectory: context.peopleDirectory,
+          }),
         merge === undefined ? {} : { merge },
       ),
     );
+  };
+  /**
+   * Creates the field's options flow in this Module, declares it as the field's source over the
+   * inputs the field already declares, and opens it in the flow editor. One edit of the draft, so a
+   * refused flow never leaves the field pointing at nothing.
+   */
+  const newOptionsFlow = (name: string): string | undefined => {
+    if (existing === undefined || module === undefined) return "Choose a field first.";
+    const flowName = name.trim();
+    if (flowName === "") return "Name the options flow.";
+    const declared = (existing.settings as { options_source?: Plain }).options_source;
+    const inputs = optionsFlowInputs(declared, module);
+    const seed = optionsFlowSeed(declared, module);
+    let flowAlias: string | undefined;
+    const problem = studioEditProblem(
+      edit((current) => {
+        const made = applyStudioFlowCreate(
+          current,
+          {
+            kind: "flow",
+            moduleKey: module.key,
+            name: flowName,
+            description: `${existing.label}: the options this field offers.`,
+            inputs,
+            tasks: seed.tasks,
+            outputs: seed.outputs,
+          },
+          null,
+        );
+        if (made.kind === "refused") return { kind: "invalid", issues: [made.reason] };
+        flowAlias = made.selection.flowAlias;
+        return changeInlineModuleField(
+          made.source,
+          changeOf(
+            stored,
+            {
+              ...(existing.settings as Plain),
+              // Each input the flow declares is filled by the field that filled it before.
+              options_source: {
+                kind: "flow",
+                flow: flowAlias,
+                inputs: Object.fromEntries(
+                  Object.entries(
+                    ((declared as { inputs?: Readonly<Record<string, string>> } | undefined)
+                      ?.inputs ?? {}) as Readonly<Record<string, string>>,
+                  ).filter(([input]) => Object.hasOwn(inputs, input)),
+                ),
+              },
+            },
+            storedDefault,
+          ),
+          { publication: context.publication, peopleDirectory: context.peopleDirectory },
+        );
+      }),
+    );
+    if (problem !== undefined) return problem;
+    if (flowAlias !== undefined)
+      placeOpener.open({
+        label: flowName,
+        open: { kind: "flow", flowAlias, moduleKey: module.key },
+      });
+    return undefined;
   };
   const mergeKey = (part: string) => `field-${part}:${qualifiedRecord}.${fieldKey ?? ""}`;
   const label = useStudioDraftText(existing?.label ?? "", (next) =>
@@ -841,13 +917,21 @@ export function ModuleFieldsEditor({
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 variant="destructive"
-                disabled={disabled}
+                // A published field keeps its stored values, so it is not offered for deletion.
+                disabled={disabled || published}
                 onClick={() => {
                   void remove();
                 }}
               >
-                Remove field
+                {published
+                  ? "Remove field (published: take it off the pages instead)"
+                  : "Remove field"}
               </DropdownMenuItem>
+              {!published && (
+                <p className="px-2 py-1 text-xs text-muted-foreground">
+                  Deletes it from the draft. It was never published, so no stored value is lost.
+                </p>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -1045,6 +1129,7 @@ export function ModuleFieldsEditor({
           key={`options-source:${qualifiedRecord}.${fieldKey ?? ""}`}
           link={linkTypes.has(form.type)}
           source={(existing.settings as { options_source?: Plain }).options_source}
+          fieldLabel={existing.label}
           fields={formulaFields.map(({ key, label }) => ({ key, label }))}
           queries={(module?.queries ?? []).map((query) => ({
             reference: `${moduleKey}:${query.key}`,
@@ -1055,7 +1140,7 @@ export function ModuleFieldsEditor({
               required: input.required,
             })),
           }))}
-          flows={(module?.flows ?? []).map((flow) => ({
+          flows={(module?.flows ?? []).filter(isOptionsFlowSource).map((flow) => ({
             alias: flow.id,
             label: flow.labels.name ?? flow.key,
             inputs: Object.entries(flow.inputs).map(([key, declaration]) => ({
@@ -1067,6 +1152,7 @@ export function ModuleFieldsEditor({
           // Which values are offered is behaviour, not stored shape, so it changes after publication.
           disabled={disabled}
           onChange={(next) => commit({}, undefined, next)}
+          onNewFlow={newOptionsFlow}
         />
       )}
       {linkTypes.has(form.type) && (

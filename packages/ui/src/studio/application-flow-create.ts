@@ -167,6 +167,8 @@ export type StudioFlowCreateCommand =
       kind: "flow";
       name: string;
       description: string;
+      /** The Module that owns the flow; absent for one of the application's own. */
+      moduleKey?: string;
       inputs: SourceFlow["inputs"];
       tasks: SourceFlow["tasks"];
       outputs: SourceFlow["outputs"];
@@ -826,6 +828,29 @@ export const applyStudioFlowCreate = (
       return typeof added === "string"
         ? { kind: "refused", reason: added }
         : created(candidate, added.flow, added.moduleKey, undefined);
+    }
+    if (command.kind === "flow" && command.moduleKey !== undefined) {
+      const module = body.modules.find((entry) => entry.key === command.moduleKey);
+      if (module === undefined)
+        return {
+          kind: "refused",
+          reason: "This application does not own that module, so it cannot hold a flow for it.",
+        };
+      const key = keyFrom(name, new Set(module.flows.flatMap((entry) => [entry.id, entry.key])));
+      if (key === undefined)
+        return {
+          kind: "refused",
+          reason: "No free name could be made for this flow. Choose another name.",
+        };
+      const flow = interactiveFlow(key, name, {
+        description: command.description,
+        inputs: command.inputs,
+        tasks: command.tasks,
+        outputs: command.outputs,
+        ...(command.errors === undefined ? {} : { errors: command.errors }),
+      });
+      module.flows.push(flow);
+      return created(candidate, flow, module.key, undefined);
     }
     // A table's next bulk action without a flow gets its default flows: the one the event runs, the
     // chosen records queued on the back end, and the matching flow that works through every match.

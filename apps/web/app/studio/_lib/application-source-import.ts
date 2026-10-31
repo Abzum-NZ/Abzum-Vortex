@@ -122,6 +122,76 @@ function hasUnambiguousMembers(text: string): boolean {
   return true;
 }
 
+const itemKinds: Readonly<Record<string, string>> = {
+  modules: "module",
+  record_types: "record type",
+  fields: "field",
+  actions: "action",
+  flows: "flow",
+  pages: "page",
+  permissions: "permission",
+  roles: "role",
+  queries: "query",
+  tasks: "step",
+};
+
+const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const nameOf = (item: unknown): string | undefined => {
+  if (!isObject(item)) return undefined;
+  const labels = item.labels;
+  const candidates = [
+    isObject(labels) ? labels.name : undefined,
+    item.label,
+    item.name,
+    item.key,
+    item.id,
+  ];
+  return candidates.find((entry): entry is string => typeof entry === "string");
+};
+
+/** Where in the file an issue is, in the builder's words: the module, action or flow by its name. */
+const describeIssuePlace = (input: unknown, path: readonly PropertyKey[]): string => {
+  const places: string[] = [];
+  let current: unknown = input;
+  path.forEach((segment, index) => {
+    current =
+      isObject(current) || Array.isArray(current)
+        ? (current as Record<PropertyKey, unknown>)[segment]
+        : undefined;
+    const parent = path[index - 1];
+    if (typeof segment === "number" && typeof parent === "string") {
+      const kind = itemKinds[parent];
+      const name = nameOf(current);
+      if (kind !== undefined && name !== undefined) places.push(`${kind} "${name}"`);
+    }
+  });
+  return places.length === 0 ? "the file" : places.reverse().join(" of ");
+};
+
+/**
+ * The sentence for a source that does not read as the current contract: what is wrong, where, and
+ * what to change. A file of an older contract is told to be exported again.
+ */
+const describeSourceImportIssue = (input: unknown, issue: z.core.$ZodIssue): string => {
+  const current = applicationSourceDocumentSchema.shape.source_contract_version.value;
+  if (issue.path[0] === "source_contract_version") {
+    const found = isObject(input) ? input.source_contract_version : undefined;
+    return `This file is source contract ${typeof found === "string" ? found : "unknown"}, and Studio reads ${current}. Export the application again from a current Studio, or change what the newer contract changed in the file and set source_contract_version to ${current}.`;
+  }
+  const where = describeIssuePlace(input, issue.path);
+  if (issue.code === "unrecognized_keys") {
+    const keys = issue.keys.map((key) => `"${key}"`).join(", ");
+    if (issue.keys.includes("tasks") && issue.path.at(-2) === "actions")
+      return `In ${where}, ${keys} is not used any more: put its steps in a Module flow and name that flow in the action's "flow".`;
+    return `In ${where}, ${keys} ${issue.keys.length === 1 ? "is" : "are"} not part of source contract ${current}. Remove ${issue.keys.length === 1 ? "it" : "them"}.`;
+  }
+  const property = issue.path.at(-1);
+  const last = typeof property === "string" ? ` "${property}"` : "";
+  return `In ${where}, the property${last} is not valid: ${issue.message}. Change it to match source contract ${current}.`;
+};
+
 export function readStudioApplicationSourceImport(
   text: string,
   key: string,
@@ -146,7 +216,7 @@ export function readStudioApplicationSourceImport(
       const issue = parsed.error.issues[0]!;
       return {
         kind: "invalid",
-        message: `Use one valid authored Application source document in format 2.0.0 (${issue.path.join(".")}: ${issue.message}).`,
+        message: describeSourceImportIssue(input, issue),
       };
     }
     if (parsed.data.key !== key || parsed.data.root_alias !== rootAlias)

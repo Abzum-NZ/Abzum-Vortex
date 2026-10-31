@@ -20,6 +20,7 @@ import {
 } from "../workflows/flow-refusal-feedback";
 import type { FlowValue } from "../workflows/flow-values";
 import { typedValueMatchesType } from "../rules/condition-types";
+import { isMoneyValue } from "../records/module-field-value-predicates";
 import type {
   FlowLibrary,
   FlowProtectedTaskCall,
@@ -218,8 +219,10 @@ export const aliasSelectedRecordValues = (
     const normalizedFieldId = field.fieldId.toLowerCase();
     if (!valuesByFieldId.has(normalizedFieldId)) return undefined;
     const value = valuesByFieldId.get(normalizedFieldId);
-    if (!typedValueMatchesType(value, field.type, "flow")) return undefined;
-    values.push([field.alias, value]);
+    // A record holds money with its currency; a flow holds money as its amount.
+    const flowValue = field.type === "money" && isMoneyValue(value) ? value.amount : value;
+    if (!typedValueMatchesType(flowValue, field.type, "flow")) return undefined;
+    values.push([field.alias, flowValue]);
   }
   return Object.fromEntries(values);
 };

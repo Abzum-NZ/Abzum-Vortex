@@ -609,7 +609,7 @@ export function useRuntimeInputs({
                     Object.values(store.drafts).find(
                       (entry) => entry.owner === owner && entry.fieldKey === key,
                     )?.value ??
-                      store.baselines[owner]?.[key] ??
+                      (store.baselines[owner] ?? unsavedWorkRegistry?.baselineOf(owner))?.[key] ??
                       null,
                   ]),
                 );

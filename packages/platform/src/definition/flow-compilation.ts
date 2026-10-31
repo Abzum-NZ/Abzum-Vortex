@@ -4,7 +4,7 @@ import { jsonValueSchema, type JsonValue } from "../catalogue/common";
 import type { DefinitionValidationLocation } from "../catalogue/validation-errors";
 import {
   flowReadFieldsProjectionSchema,
-  flowReadFieldsScalarTypeSchema,
+  flowReadFieldsScalarTypeForField,
   flowSchema,
   type FlowDefinition,
   type FlowReadFieldsScalarType,
@@ -66,26 +66,6 @@ export type ResolvedFlowFieldMetadata = Readonly<{
   type: string;
   valueType?: string;
 }>;
-
-/** Maps canonical Module field discriminators to the scalar types a Flow may expose. */
-export const flowReadFieldsScalarTypeForField = (
-  fieldType: string,
-): FlowReadFieldsScalarType | undefined => {
-  const direct = flowReadFieldsScalarTypeSchema.safeParse(fieldType);
-  // Module money and formatted-text values are structured objects, while the Flow scalar
-  // evaluator accepts decimal text and a string respectively. Neither can be projected as-is.
-  if (direct.success && fieldType !== "money" && fieldType !== "formatted_text") return direct.data;
-  switch (fieldType) {
-    case "long_text":
-    case "reference_number":
-    case "email_address":
-    case "phone_number":
-    case "web_address":
-      return "text";
-    default:
-      return undefined;
-  }
-};
 
 /**
  * How aliases become permanent identities. Each method throws the compiler's refusal when the
@@ -426,8 +406,30 @@ const resolveProperty = (
   }
 };
 
+/**
+ * Resolves each step; a refusal that does not yet name a step is placed on the step it came from,
+ * so the builder is told the flow and the step, not only the flow.
+ */
 const resolveTaskList = (ctx: Context, tasks: readonly SourceFlowTask[], path: Path): unknown[] =>
-  tasks.map((task, index) => resolveTask(ctx, task, [...path, index]));
+  tasks.map((task, index) => {
+    try {
+      return resolveTask(ctx, task, [...path, index]);
+    } catch (error) {
+      if (
+        !(error instanceof DefinitionCompilationError) ||
+        error.location === undefined ||
+        error.location.segments.some((segment) => segment.kind === "flow_node")
+      )
+        throw error;
+      throw new DefinitionCompilationError(
+        error.ruleCode,
+        error.family,
+        flowIssueLocation(error.location, { taskId: task.id }),
+        error.code,
+        error.sentence,
+      );
+    }
+  });
 
 const resolveReadFieldsTask = (
   ctx: Context,
@@ -498,7 +500,13 @@ const resolveReadFieldsTask = (
     selectedFieldIds.add(field.identifier);
     const scalarType = flowReadFieldsScalarTypeForField(metadata.type);
     if (scalarType === undefined)
-      throw refusal(ctx, "vortex.definition.unsupported_field_type", "unsupported_choice");
+      throw new DefinitionCompilationError(
+        "vortex.definition.unsupported_field_type",
+        "unsupported_choice",
+        ctx.location,
+        undefined,
+        `the property fields reads ${entry.field}, a ${metadata.type.replaceAll("_", " ")} field, which this step cannot return. Choose another field.`,
+      );
     typeEntries.push([entry.alias, scalarType]);
     const fieldPath: Path = [...path, "properties", "fields", "literal", "value", index, "field"];
     const fieldId = resolveAt(ctx, field, fieldPath);

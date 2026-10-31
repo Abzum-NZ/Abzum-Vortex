@@ -70,6 +70,7 @@ export const runQueryTask = async (
       outcome: "completed",
       outputs: {
         records: [...result.value.recordIds],
+        rows: [...result.value.rows],
         continuation: result.value.continuation,
       },
     };

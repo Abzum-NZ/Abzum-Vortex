@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Button } from "@vortex/ui/components/button";
+import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
 import { Icon } from "@vortex/ui";
@@ -183,6 +184,54 @@ function EntryRows({
 }
 
 /** Field values: one value that holds them all (a form's answers), or the fields one by one. */
+function ReadFields({
+  id,
+  label,
+  field,
+  value,
+  disabled,
+  onChange,
+}: Readonly<{
+  id: string;
+  label: string;
+  field: StudioFlowPropertyField;
+  value: StudioFlowPropertyDraft | null;
+  disabled: boolean;
+  onChange: (value: StudioFlowPropertyDraft | null) => void;
+}>) {
+  const selected = value?.kind === "read_fields" ? value.fields : [];
+  const options = field.options ?? [];
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <p className="text-xs text-muted-foreground">
+        The step returns these fields as its values output, keyed by field name.
+      </p>
+      {options.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Choose the record type first.</p>
+      ) : (
+        options.map((option) => (
+          <label key={option.value} className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={selected.includes(option.value)}
+              disabled={disabled}
+              onCheckedChange={(checked) =>
+                onChange({
+                  kind: "read_fields",
+                  fields: checked
+                    ? [...selected, option.value]
+                    : selected.filter((entry) => entry !== option.value),
+                })
+              }
+            />
+            {option.label}
+          </label>
+        ))
+      )}
+    </div>
+  );
+}
+
 function FieldValues({
   id,
   field,
@@ -460,6 +509,17 @@ function PropertyControl({
           onChange={onChange}
         />
       );
+    case "read_fields":
+      return (
+        <ReadFields
+          id={id}
+          label={label}
+          field={field}
+          value={value}
+          disabled={disabled}
+          onChange={onChange}
+        />
+      );
     case "input_map":
       if (value?.kind === "whole")
         return (
@@ -500,8 +560,14 @@ function PropertyControl({
         />
       );
     default: {
-      const text = value?.kind === "text" ? value.value : "";
       const options = pickerOptions(field, choices, flows);
+      const written = value?.kind === "text" ? value.value : "";
+      // A module's flow may name its own record type by key alone: the same item as `module:key`.
+      const text =
+        field.control === "record_type" &&
+        options?.some((entry) => entry.value === written) !== true
+          ? (options?.find((entry) => entry.value.endsWith(`:${written}`))?.value ?? written)
+          : written;
       return (
         <div className="space-y-1.5">
           <Label htmlFor={id}>
@@ -878,7 +944,38 @@ export function StudioFlowStepForm({
                     properties.rounding = null;
                   }
                 }
-                onChange({ ...draft, properties }, null, field.key);
+                // A message shown in a slot or inline names its component, any other does not: the two
+                // settings change together, so neither edit is refused for the other being unset.
+                let problem: string | null = null;
+                if (
+                  (field.key === "target" || field.key === "component") &&
+                  fields.some((entry) => entry.key === "component")
+                ) {
+                  if (field.key === "target" && value?.kind === "text") {
+                    const placed = value.value === "inline" || value.value === "slot";
+                    const current = choices.messagePlacements.find(
+                      (entry) =>
+                        properties.component?.kind === "text" &&
+                        entry.alias === properties.component.value,
+                    );
+                    const chosen =
+                      current?.kind === value.value
+                        ? current
+                        : choices.messagePlacements.find((entry) => entry.kind === value.value);
+                    properties.component =
+                      placed && chosen !== undefined ? { kind: "text", value: chosen.alias } : null;
+                    if (placed && chosen === undefined)
+                      problem = `This page has no ${value.value === "slot" ? "Notice slot" : "block to show a message under"}. Add one on the page first.`;
+                  }
+                  if (field.key === "component" && value?.kind === "text") {
+                    const placement = choices.messagePlacements.find(
+                      (entry) => entry.alias === value.value,
+                    );
+                    if (placement !== undefined)
+                      properties.target = { kind: "text", value: placement.kind };
+                  }
+                }
+                onChange({ ...draft, properties }, problem, field.key);
               }}
             />
             {field.help === undefined ? null : <StudioHelp hint={field.help} />}

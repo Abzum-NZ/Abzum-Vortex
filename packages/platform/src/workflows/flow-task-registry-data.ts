@@ -31,6 +31,7 @@ export const flowRegisteredTaskTypeKeys = [
   "data.record_link",
   "data.set_variable",
   "data.format",
+  "data.build_list",
   "rule.require",
   "rule.warn",
   "rule.refuse",
@@ -81,6 +82,7 @@ export const flowTaskRuns = Object.freeze({
   "data.record_link": serverAndBackend,
   "data.set_variable": everywhere,
   "data.format": serverAndBackend,
+  "data.build_list": everywhere,
   "rule.require": server,
   "rule.warn": server,
   "rule.refuse": server,
@@ -102,7 +104,7 @@ type StepsRunning<Where extends keyof FlowStepRuns> = {
 /** The steps with a page implementation, including control tasks handled by the interpreter. */
 export type PageStepType = StepsRunning<"page">;
 /** Registered page steps are dispatched through the page intent implementation map. */
-export type PageIntentStepType = Exclude<Extract<PageStepType, FlowRegisteredTaskTypeKey>, "data.calculate" | "data.set_variable">;
+export type PageIntentStepType = Exclude<Extract<PageStepType, FlowRegisteredTaskTypeKey>, "data.calculate" | "data.set_variable" | "data.build_list">;
 /** The steps with a server implementation; the server's implementation map covers exactly these. */
 export type ServerStepType = StepsRunning<"server">;
 
@@ -298,7 +300,7 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       selection: optional("text"),
       excluded: optional("json"),
     },
-    outputs: [output("records", "record_reference_list"), output("continuation", "text")],
+    outputs: [output("records", "record_reference_list"), output("rows", "json"), output("continuation", "text")],
     redaction: "safe_fields",
   },
   "record.read_fields": {
@@ -449,6 +451,24 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       unit: optional("builder_key"),
     },
     outputs: [output("value", "text")],
+  },
+  // One generic list: each item's keys name the value, the label and the description a picker shows.
+  "data.build_list": {
+    title: "Build list",
+    summary:
+      "Turns a list of items into the value, label and description entries an options output or a message needs.",
+    runLocations: allLocations,
+    effect: "pure",
+    properties: {
+      items: required("json"),
+      /** The key, or dotted path, each entry's value is read from: `record`, `values.name`. */
+      value: required("text"),
+      /** The key, or dotted path, each entry's label is read from. */
+      label: required("text"),
+      /** The key, or dotted path, each entry's description is read from; absent for none. */
+      description: optional("text"),
+    },
+    outputs: [output("list", "json")],
   },
   // Save rules give feedback in the browser and are authoritative in the save transaction.
   "rule.require": {

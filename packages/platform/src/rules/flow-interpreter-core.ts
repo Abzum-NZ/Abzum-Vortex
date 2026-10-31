@@ -3,7 +3,7 @@ export { flowPathGuardMatches } from "./flow-path-guard";
 import { flowSegmentValues } from "./flow-segment-values";
 import type { FlowPlan, FlowServerSegment } from "../workflows/flow-plan";
 import type { parseFlowSegmentSeed } from "./flow-segment-seed";
-import { pageStepIntents, pageValueAcceptsWrite, pageWritesIntent } from "./flow-page-steps";
+import { pageStepIntents, pageValueWrite, pageWritesIntent } from "./flow-page-steps";
 export { pageStepIntents } from "./flow-page-steps";
 import {
   at,
@@ -26,6 +26,7 @@ import {
 } from "./flow-interpreter-state";
 import { serverRuns } from "./flow-server-step-runners";
 import { formattedTaskValue } from "./flow-data-tasks";
+import { builtListTaskValue } from "./flow-build-list";
 import { evaluateRecordChangeValues } from "./flow-record-change-values";
 import { findTask, validReadFieldsResume } from "./flow-read-fields-resume";
 export { flowRunStateVersion } from "./flow-interpreter-state";
@@ -380,6 +381,22 @@ const nextPhase = (machine: Machine, activation: Activation): Activation | undef
   return undefined;
 };
 
+/**
+ * One declared output at the end of a run. A run that ended by Stop is a successful end, so an
+ * output whose step did not run is omitted (undefined) instead of failing the run.
+ */
+const finalOutput = (
+  machine: Machine,
+  activation: Activation,
+  flow: FlowProgram,
+  name: string,
+  expression: FlowValue,
+): FlowRuntimeValue | undefined =>
+  resolveFlowValue(
+    expression,
+    scopeOf(machine.state, activation, flow, machine.resolveMember, machine.resolveForm),
+  ) ?? (activation.stopped === undefined ? failed("value_unresolved", "failed", name) : undefined);
+
 const finishActivation = (machine: Machine, activation: Activation): FlowRunResult => {
   const flow = flowOf(machine, activation);
   if (activation.failure !== undefined) return { status: "failed", failure: activation.failure };
@@ -396,15 +413,8 @@ const finishActivation = (machine: Machine, activation: Activation): FlowRunResu
     );
     const finalOutputs: Record<string, FlowRuntimeValue> = {};
     for (const [name, expression] of Object.entries(machine.segment.finalOutputExpressions)) {
-      const value = evaluateValue(
-        expression,
-        machine.state,
-        activation,
-        flow,
-        name,
-        machine.resolveMember,
-        machine.resolveForm,
-      );
+      const value = finalOutput(machine, activation, flow, name, expression);
+      if (value === undefined) continue;
       if (value.type !== machine.segment.finalOutputTypes[name])
         failed("value_unresolved", "failed", name);
       finalOutputs[name] = value;
@@ -417,16 +427,10 @@ const finishActivation = (machine: Machine, activation: Activation): FlowRunResu
       ...(activation.stopped === undefined ? {} : { stopped: activation.stopped }),
     };
   }
-  for (const [name, declaration] of Object.entries(flow.outputs))
-    outputs[name] = evaluateValue(
-      declaration.value,
-      machine.state,
-      activation,
-      flow,
-      name,
-      machine.resolveMember,
-      machine.resolveForm,
-    );
+  for (const [name, declaration] of Object.entries(flow.outputs)) {
+    const value = finalOutput(machine, activation, flow, name, declaration.value);
+    if (value !== undefined) outputs[name] = value;
+  }
   return {
     status: "completed",
     outputs,
@@ -670,6 +674,12 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
       replaceTop(machine, storeTaskOutputs(next, taskId, { value: result.value }));
       return { kind: "continue" };
     }
+    if (registered.type === "data.build_list") {
+      const list = builtListTaskValue(properties);
+      if (list === undefined) return failed("value_unresolved", "failed", taskId);
+      replaceTop(machine, storeTaskOutputs(next, taskId, { list }));
+      return { kind: "continue" };
+    }
     if (registered.type === "data.set_variable") {
       const name = properties.variable?.value;
       const value = properties.value;
@@ -725,8 +735,11 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
   if (definition.effect === "interface") {
     if (registered.type === "interface.set_value" && properties.value !== undefined) {
       const name = properties.value.value;
-      const value = properties.to;
-      if (typeof name !== "string" || !pageValueAcceptsWrite(state.pageValues?.[name], value))
+      const value =
+        typeof name === "string"
+          ? pageValueWrite(state.pageValues?.[name], properties.to)
+          : undefined;
+      if (typeof name !== "string" || value === undefined)
         return failed("value_unresolved", "failed", taskId);
       machine.state.pageValues = { ...state.pageValues, [name]: value };
       machine.state.pageWrites = { ...state.pageWrites, [name]: value };

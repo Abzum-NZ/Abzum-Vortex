@@ -1,6 +1,7 @@
 import type { PageIntentStepType } from "../workflows/flow-task-registry-data";
 import type { FlowInterfaceIntent } from "./flow-interpreter-core";
 import type { FlowRuntimeValue } from "./flow-formula";
+import { isMoneyValue } from "../records/module-field-value-predicates";
 import { flowValueMatchesType } from "./flow-value-shapes";
 
 /**
@@ -20,17 +21,25 @@ export const pageStepIntents = {
   "interface.validate_form": "validate_form",
 } as const satisfies Record<PageIntentStepType, FlowInterfaceIntent["kind"]>;
 
-/** Whether `value` may be written to a page value held as `declared` (same type, valid shape). */
-export const pageValueAcceptsWrite = (
+/**
+ * The value a page value held as `declared` takes from a write, or undefined when the write is
+ * refused (other type, invalid shape). A page holds money as its amount: a money value that carries
+ * a currency, as record fields and calculations over them do, is written as its amount.
+ */
+export const pageValueWrite = (
   declared: FlowRuntimeValue | undefined,
   value: FlowRuntimeValue | undefined,
-): value is FlowRuntimeValue =>
-  declared !== undefined &&
-  value !== undefined &&
-  value.type === declared.type &&
-  (value.value === null ||
-    (flowValueMatchesType(value.value, declared.type) &&
-      (declared.type !== "json" || Array.isArray(value.value))));
+): FlowRuntimeValue | undefined => {
+  if (declared === undefined || value === undefined || value.type !== declared.type)
+    return undefined;
+  const content =
+    value.type === "money" && isMoneyValue(value.value) ? value.value.amount : value.value;
+  return content === null ||
+    (flowValueMatchesType(content, declared.type) &&
+      (declared.type !== "json" || Array.isArray(content)))
+    ? { type: value.type, value: content }
+    : undefined;
+};
 
 /** The one intent that delivers a segment's final page values to the page store. */
 export const pageWritesIntent = (

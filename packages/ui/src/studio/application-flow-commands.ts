@@ -381,6 +381,38 @@ const setFieldsSeed = (
   return field === undefined ? undefined : { kind: "map", entries: { [field.key]: text("") } };
 };
 
+/** Read selected record fields starts with the title field of the run's record type. */
+const readFieldsSeed = (
+  flow: SourceFlow,
+  source: Readonly<ApplicationSourceDocument>,
+): FlowValue | undefined => {
+  const recordType = flowRecordType(flow);
+  const moduleKey =
+    source.body.modules.find((module) => module.flows.some((candidate) => candidate.id === flow.id))
+      ?.key ?? null;
+  const found =
+    recordType === undefined ? undefined : studioDraftRecordType(source, recordType, moduleKey);
+  const field =
+    found?.record.fields.find((candidate) => candidate.key === found.record.title_field) ??
+    found?.record.fields[0];
+  return recordType === undefined || field === undefined
+    ? undefined
+    : {
+        kind: "literal",
+        literal: {
+          type: "json",
+          value: [{ alias: field.key, field: `${recordType}.${field.key}` }],
+        },
+      };
+};
+
+/** Build list starts empty, reading `value` and `label` from each item, which the builder points at a list. */
+const buildListSeeds: Readonly<Record<string, FlowValue>> = {
+  items: { kind: "literal", literal: { type: "json", value: [] } },
+  value: text("value"),
+  label: text("label"),
+};
+
 /** A number a default formatter can show. */
 const zeroSeed: FlowValue = { kind: "literal", literal: { type: "whole_number", value: 0 } };
 
@@ -471,7 +503,7 @@ const seededTask = (
       kind: "literal",
       literal:
         declared?.type === "money"
-          ? { type: "money", value: { amount: "0", currency: String(declared.currency) } }
+          ? { type: "money", value: "0" }
           : declared?.type === "decimal_number"
             ? { type: "decimal_number", value: "0" }
             : declared?.type === "yes_no"
@@ -512,7 +544,11 @@ const seededTask = (
                       zeroSeed
                     : definition.type === "record.set_fields" && key === "values"
                       ? setFieldsSeed(flow, source)
-                      : seedValue(declaration.type, flow, source, declaration.default);
+                      : definition.type === "record.read_fields" && key === "fields"
+                        ? readFieldsSeed(flow, source)
+                        : definition.type === "data.build_list"
+                          ? buildListSeeds[key]
+                          : seedValue(declaration.type, flow, source, declaration.default);
     if (seed === undefined) return undefined;
     properties[key] = seed;
   }
@@ -687,6 +723,48 @@ const uniqueTaskId = (type: string, used: Set<string>): string => {
   for (let n = 2; used.has(candidate); n += 1) candidate = `${base}_${n}`;
   used.add(candidate);
   return candidate;
+};
+
+/**
+ * The visible step before a form's save that stops with "No changes to save." when the form's
+ * answers carry no change: the same steps the default Save flow has, shown inline under the form
+ * the flow runs from (a dialog when the flow has none).
+ */
+const noChangeGuard = (
+  flow: SourceFlow,
+  source: Readonly<ApplicationSourceDocument>,
+  context: StudioFlowContext,
+  used: Set<string>,
+): SourceFlowTask[] => {
+  const form = projectStudioFlowDraftChoices({
+    ...context,
+    source: source as ApplicationSourceDocument,
+    flow,
+  }).forms.at(0);
+  return [
+    {
+      id: uniqueTaskId("unchanged", used),
+      type: "if",
+      condition: {
+        op: "is_empty",
+        arg: { op: "reference", reference: { source: "input", name: "values" } },
+      },
+      then: [
+        {
+          id: uniqueTaskId("none_changed", used),
+          type: "interface.show_message",
+          version: "1.0.0",
+          properties: {
+            message: text("No changes to save."),
+            target: text(form === undefined ? "dialog" : "inline"),
+            severity: text("info"),
+            ...(form === undefined ? {} : { component: text(form.alias) }),
+          },
+        },
+        { id: uniqueTaskId("stop_unchanged", used), type: "stop", outcome: "no_changes" },
+      ],
+    },
+  ] as unknown as SourceFlowTask[];
 };
 
 /** A new step of a type, with required decisions made explicitly by the author. */
@@ -1091,7 +1169,14 @@ export const applyStudioFlowCommand = (
         inputs.settings,
       );
       if ("kind" in task && !("id" in task)) return task;
-      target.splice(command.index, 0, task as SourceFlowTask);
+      // Saving the changes of a form's record starts by saying so when nothing changed.
+      const guard =
+        command.taskType === "record.save" &&
+        original.flow.inputs?.values?.type === "json" &&
+        flowRecordInput(original.flow) !== undefined
+          ? noChangeGuard(original.flow, inputs.source, current, used)
+          : [];
+      target.splice(command.index, 0, ...guard, task as SourceFlowTask);
       return done((task as SourceFlowTask).id);
     }
 

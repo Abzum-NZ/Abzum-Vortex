@@ -10,4 +10,5 @@ export * from "./flow-invocation-contracts";
 export * from "./flow-refusal-feedback";
 export * from "./flow-source-contracts";
 export * from "./flow-task-registry";
+export * from "./flow-options-source";
 export * from "./default-flow-sources";

@@ -83,6 +83,8 @@ export async function runBrowserFlow(
   let carriedValues: string | undefined;
   let completion: Readonly<Record<string, unknown>> = {};
   let committed = false;
+  // A run that ends by Stop is a successful end: it omits the outputs its skipped steps would give.
+  let stopped = false;
   let failure:
     | { kind: "page"; value: FlowFailure }
     | { kind: "server"; value: FlowDispatchResult }
@@ -167,6 +169,7 @@ export async function runBrowserFlow(
           };
         if (result.result.status === "failed")
           return { kind: "failure", value: { kind: "page", value: result.result.failure } };
+        if (result.result.stopped !== undefined) stopped = true;
         return {
           kind: "done",
           ...(result.result.stopped === undefined ? {} : { stopped: result.result.stopped }),
@@ -230,6 +233,7 @@ export async function runBrowserFlow(
         };
       if (isCompletion(segment)) completion = result.outputs;
       else state = addPageFlowOutputs(state, segment.outputs, result.outputs);
+      if (result.stopped !== undefined) stopped = true;
       return { kind: "done", ...(result.stopped === undefined ? {} : { stopped: result.stopped }) };
     };
     for (const segment of plan.segments.filter((part) => part.section === "tasks")) {
@@ -261,7 +265,7 @@ export async function runBrowserFlow(
     }
     if (failure?.kind === "server") return terminal(failure.value);
     if (failure?.kind === "page") return { kind: "failed", failure: failure.value };
-    const final = servers.find(isCompletion);
+    const final = stopped ? undefined : servers.find(isCompletion);
     if (final !== undefined) {
       const result = await run(final);
       if (result.kind === "terminal") return result.value;
@@ -278,6 +282,7 @@ export async function runBrowserFlow(
         program([]),
         plan,
         completion,
+        stopped,
         members,
         resolveForm,
       ),

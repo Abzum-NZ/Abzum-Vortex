@@ -18,6 +18,7 @@ import {
 export {
   flowMaximumRecordReadFields,
   flowReadFieldsScalarTypeKeys,
+  flowReadFieldsScalarTypeForField,
   type FlowReadFieldsScalarType,
 } from "./flow-read-fields";
 

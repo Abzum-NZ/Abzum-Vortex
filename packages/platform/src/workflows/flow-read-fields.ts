@@ -17,6 +17,28 @@ export const flowReadFieldsScalarTypeKeys = [
 ] as const;
 
 export type FlowReadFieldsScalarType = (typeof flowReadFieldsScalarTypeKeys)[number];
+
+const isFlowReadFieldsScalarType = (value: string): value is FlowReadFieldsScalarType =>
+  (flowReadFieldsScalarTypeKeys as readonly string[]).includes(value);
+
+/** Maps canonical Module field discriminators to the scalar types a Flow may expose. */
+export const flowReadFieldsScalarTypeForField = (
+  fieldType: string,
+): FlowReadFieldsScalarType | undefined => {
+  // A formatted-text value is a structured document, while the Flow scalar evaluator accepts a
+  // string: it cannot be projected as-is. Money is projected as its amount (see the reader).
+  if (fieldType !== "formatted_text" && isFlowReadFieldsScalarType(fieldType)) return fieldType;
+  switch (fieldType) {
+    case "long_text":
+    case "reference_number":
+    case "email_address":
+    case "phone_number":
+    case "web_address":
+      return "text";
+    default:
+      return undefined;
+  }
+};
 export type FlowReadFieldsProjectionEntry = { alias: string; field: string };
 export type FlowReadFieldsTypeMap = Record<string, FlowReadFieldsScalarType>;
 

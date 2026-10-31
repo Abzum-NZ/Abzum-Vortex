@@ -139,6 +139,7 @@ const taskIcons: Readonly<Record<string, LucideIcon>> = {
   "data.record_link": Link,
   "data.set_variable": Variable,
   "data.format": CaseSensitive,
+  "data.build_list": ListOrdered,
   "rule.require": CircleCheck,
   "rule.warn": TriangleAlert,
   "rule.refuse": CircleX,
