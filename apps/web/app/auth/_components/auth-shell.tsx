@@ -45,7 +45,7 @@ export function AuthShell({
             <div className="flex items-center justify-between">
               <NavigationLink
                 className="text-xs font-bold tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
-                href="/"
+                href="/auth/sign-in"
                 aria-label={`${organizationChooserShell.name} home`}
               >
                 {organizationChooserShell.name}

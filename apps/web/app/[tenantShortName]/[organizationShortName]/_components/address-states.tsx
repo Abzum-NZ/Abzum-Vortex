@@ -22,7 +22,7 @@ import {
 } from "@vortex/ui/components/empty";
 import { AuthShell } from "../../../auth/_components/auth-shell";
 import { loadOrganizationLauncher } from "../../../_lib/organization-context";
-import { organizationAddressPath } from "../../../_lib/address-paths";
+import { resolveOrganizationLandingPath } from "../../../_lib/organization-landing";
 import { platformBlockReleasesFor } from "../../../_lib/platform-block-releases";
 import { OrganizationAddressStatePage } from "./organization-launcher-page";
 
@@ -140,7 +140,12 @@ export async function OrganizationAddressState({
       : { email, displayName: entry.accountDisplayName };
   // An organisation the person does not belong to is never named back to them.
   const organizationName = entry?.organizationDisplayName ?? "your organisations";
-  const organizationHref = organizationAddressPath(tenantShortName, organizationShortName);
+  // The way back names the organisation's final page, never its address that would redirect.
+  const organizationHref = await resolveOrganizationLandingPath(
+    session,
+    tenantShortName,
+    organizationShortName,
+  );
   const content = stateContent(state, organizationName, organizationHref);
   const page = organizationAddressStatePage(content.page);
   return (
