@@ -1,6 +1,5 @@
 "use client";
 
-import { useAgentGrid } from "./agent-grid";
 import {
   lazy,
   Suspense,
@@ -16,6 +15,7 @@ import { Alert, AlertDescription } from "../components/alert";
 import { Button } from "../components/button";
 import { Empty, EmptyContent, EmptyHeader, EmptyTitle } from "../components/empty";
 import { cn } from "../lib/utils";
+import { useAgentGrid } from "./agent-grid";
 import { cellValueToText, DisplayCellView } from "./cell";
 import {
   DisplayHeader,
