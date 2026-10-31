@@ -132,7 +132,6 @@ export const addList = (
     release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE, "records table"),
     tableAlias,
     {
-      title: record.plural_name,
       purpose: `Every ${lowerFirst(record.name)} you can see in this organisation.`,
       empty_message: `There are no ${record.plural_name.toLowerCase()} yet.`,
       columns: tableColumns((entry) => field(resolved, entry), columns, title.key),
