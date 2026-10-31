@@ -92,8 +92,7 @@ record closure, current Access and RLS-visible rows from that context and locked
 database facts; it does not accept a caller-built context, selected parent set,
 or caller assertion that a recalculation is authorised. The narrow runtime-role
 to request-role setting read occurs only after that private preparation; the
-runtime role is restored in a `finally` path before persistence. Any future
-factoring must preserve that ordering and restoration.
+runtime role is restored in a `finally` path before persistence. Any factoring must preserve that ordering and restoration.
 
 A missing, stale, foreign, mismatched, or forged context/setting must fail
 closed before a private snapshot, relationship source, parent mutation, or

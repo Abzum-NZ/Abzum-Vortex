@@ -49,7 +49,7 @@ Incident records contain timeline, scope, affected organisations, containment, r
 Backups cover the production [PostgreSQL](https://www.postgresql.org/docs/) database, file manifests and bytes, published definitions, flow state, configuration needed to rebuild services, and privacy-removal receipts.
 
 - Before Production opens, Production enables [Supabase point-in-time recovery](https://supabase.com/docs/guides/platform/manage-your-usage/point-in-time-recovery) continuously with the provider's smallest available seven-day recovery window. PITR can restore to a chosen point with seconds-level granularity; it is not an hourly snapshot. The requested two-day PITR window is unavailable because Supabase currently offers seven, fourteen, or twenty-eight days.
-- An independent encrypted logical backup to the Cloudflare R2 account is decided, not built. It will use a dedicated Vortex bucket or prefix and a dedicated least-privilege credential.
+- An independent encrypted logical backup to the Cloudflare R2 account is decided, not built. It uses a dedicated Vortex bucket or prefix and a dedicated least-privilege credential.
 - The decided R2 logical-backup policy retains only the most recent 48 hours, with a lifecycle rule as a second expiry control. Cloudflare may complete lifecycle deletion up to 24 hours after expiry, so monitoring records the requested expiry and actual disappearance rather than claiming exact physical deletion at 48 hours.
 - Backup objects are encrypted before upload, carry a checksum, contain no plaintext secret, and are unreadable without the separately held recovery key.
 - Copies are sent to the independently controlled R2 location; no local host copy is treated as a recovery copy.
@@ -95,7 +95,6 @@ Supabase managed backups do not replace the independent copy because deleting or
 - Internal schemas are excluded from the Data API, and anonymous and signed-in browser roles have no grants on business or administrative tables. The browser uses Supabase directly only for approved Auth, private Realtime, and signed Storage flows.
 - Remote connections require SSL, separate least-privilege database roles, strong rotated credentials, unexposed internal schemas, row-level rules and monitoring. [Supabase database network restrictions](https://supabase.com/docs/guides/platform/network-restrictions) accept IPv4/IPv6 CIDR ranges only and apply to direct Postgres and pooler routes; enabling them waits for stable outbound ranges from the Vercel route.
 - Supabase security and performance advisers and representative [Index Advisor](https://supabase.com/docs/guides/database/extensions/index_advisor) results are reviewed in Testing and again before release. Findings become tracked work; changes are reviewed migrations, never automatic Production edits.
-- Read replicas are not part of the first release and have no implementation task. A future measured scaling review may propose one only with explicit read routing, consistency expectations, cost approval, monitoring, and failure tests.
 
 ## Secret management
 

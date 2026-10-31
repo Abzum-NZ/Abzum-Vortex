@@ -146,7 +146,6 @@ The registrations covered are:
 - search documents;
 - pending outbox entries and start intents, which are marked refused;
 - form drafts;
-- record-sharing grants, which are revoked with notice;
 - the default-application setting;
 - custom component bundles and assets that no other installation references;
 - cached runtime bundles;
