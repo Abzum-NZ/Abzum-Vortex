@@ -5,6 +5,7 @@ import type { IdentitySession, OrganizationSelectionCandidate } from "../access/
 import type { JsonValue } from "../catalogue/common";
 import { activityIdSchema, eventOccurrenceIdSchema } from "../catalogue/identifiers";
 import { describeFailure, isRecord } from "../catalogue/runtime-primitives";
+import { unlocatedCorrectionsRefusal } from "../workflows/flow-refusal-feedback";
 import {
   executeNamedActionCommandSchema,
   executeNamedActionResultSchema,
@@ -345,6 +346,13 @@ const runNamedCommand = async (
           "reason" in refused.error ? refused.error.reason : undefined,
         ),
       };
+    // A BeforeSave rule refusal reaches the person in the rule's own words, exactly as a Save
+    // shows it: the writer's corrections carry the authored message, which the flow task
+    // publishes as its rule refusal instead of the generic refusal sentence.
+    const ruleReason =
+      refused?.outcome === "correction_required"
+        ? unlocatedCorrectionsRefusal(refused.corrections)
+        : undefined;
     return {
       kind: "refused",
       index,
@@ -352,11 +360,12 @@ const runNamedCommand = async (
         refused !== undefined && "correlationId" in refused
           ? String(refused.correlationId)
           : correlationId,
-        refused?.outcome === "correction_required" || reasonCode === "command_invalid"
+        ruleReason === undefined &&
+          (refused?.outcome === "correction_required" || reasonCode === "command_invalid")
           ? "invalid_request"
           : "operation_refused",
         `the record changes were refused (${reasonCode ?? refused?.outcome ?? "no reason code"})`,
-        preparationReason(reasonCode),
+        ruleReason ?? preparationReason(reasonCode),
       ),
     };
   }

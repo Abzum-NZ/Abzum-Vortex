@@ -280,7 +280,12 @@ export function StudioAccessPermissionList({
                         )}
                         {permission.standard && permission.recordKey !== undefined && (
                           <StudioIconButton
-                            label={`Edit fields of ${permission.label}`}
+                            label={
+                              permission.actionKind === "create" ||
+                              permission.actionKind === "update"
+                                ? `Edit fields and scope of ${permission.label}`
+                                : `Edit fields of ${permission.label}`
+                            }
                             disabled={disabled}
                             onClick={() =>
                               setExpanded(

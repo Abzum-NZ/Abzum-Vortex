@@ -2,6 +2,7 @@ import {
   applicationSourceDocumentSchema,
   applicationUses,
   builderKeySchema,
+  canonicalJson,
   changeableByPeople,
   maximumApplicationRoles,
   isStandardRecordPermission,
@@ -95,10 +96,14 @@ export type StudioAccessCommand =
       changeable: boolean;
       readPermissionKey: string;
     }>
-  /** Sets the fields a standard record permission reads and changes, for every role holding it. */
+  /**
+   * Sets the record scope and fields of a standard record permission, for every role holding it.
+   * Only Create and Update may change their record scope.
+   */
   | Readonly<{
-      kind: "set_standard_field_policy";
+      kind: "set_standard_permission";
       permissionKey: string;
+      recordScope: NonNullable<ModulePermission["record_scope"]>;
       readableFields: readonly string[];
       changeableFields: readonly string[];
     }>
@@ -525,10 +530,17 @@ export type StudioStandardFieldPolicy =
       kind: "available";
       permissionKey: string;
       label: string;
+      moduleKey: string;
+      recordKey: string;
       recordName: string;
       actionKind: string;
       changesFields: boolean;
       needsReadableField: boolean;
+      /** Whether this permission's record scope may change here: only Create and Update. */
+      scopeEditable: boolean;
+      /** Its record scope, and whether the record type supports owned records at all. */
+      recordScope: NonNullable<ModulePermission["record_scope"]>;
+      ownershipAvailable: boolean;
       /** Roles holding the permission: every one of them gets its policy. */
       roles: readonly string[];
       fields: readonly Readonly<{
@@ -543,8 +555,9 @@ export type StudioStandardFieldPolicy =
 
 /**
  * Which fields a standard record permission (Read, Create, Update, Delete, Restore or Export) lets
- * people read and change. An unset list means every field. A field the platform fills shows as
- * changed only while the stored list still names it, so the builder sees what saving removes.
+ * people read and change, and for Create and Update its record scope. An unset list means every
+ * field. A field the platform fills shows as changed only while the stored list still names it, so
+ * the builder sees what saving removes.
  */
 export const studioStandardFieldPolicy = (
   source: Source,
@@ -570,10 +583,15 @@ export const studioStandardFieldPolicy = (
     kind: "available",
     permissionKey,
     label: permission.label,
+    moduleKey: module.key,
+    recordKey: record.key,
     recordName: record.plural_name,
     actionKind: permission.action_kind,
     changesFields: changes,
     needsReadableField: needsReadableField(permission.action_kind),
+    scopeEditable: permission.action_kind === "create" || permission.action_kind === "update",
+    recordScope: permission.record_scope ?? { routes: [{ kind: "all_records" }] },
+    ownershipAvailable: record.ownership_mode !== "none",
     roles: holders(source.body, permissionKey).map((role) => role.name),
     fields: record.fields.map((field) => ({
       key: field.key,
@@ -587,9 +605,29 @@ export const studioStandardFieldPolicy = (
   };
 };
 
-const setStandardFieldPolicy = (
+/** Whether two record scopes name the same routes and saved condition. */
+const sameScope = (
+  stored: ModulePermission["record_scope"],
+  next: NonNullable<ModulePermission["record_scope"]>,
+): boolean =>
+  stored !== undefined &&
+  canonicalJson(stored.saved_condition ?? null) === canonicalJson(next.saved_condition ?? null) &&
+  stored.routes.length === next.routes.length &&
+  stored.routes.every((route, index) => route.kind === next.routes[index]!.kind);
+
+/** The scope words a standard permission's one route shows. */
+const scopeWords = (scope: NonNullable<ModulePermission["record_scope"]>): string =>
+  scope.routes.length === 1 && scope.routes[0]!.kind === "ownership"
+    ? "owned records"
+    : scope.routes.length === 1 && scope.routes[0]!.kind === "direct_share"
+      ? "directly shared records"
+      : scope.routes.length > 1
+        ? "owned or directly shared records"
+        : "all records";
+
+const setStandardPermission = (
   candidate: Source,
-  command: Extract<StudioAccessCommand, { kind: "set_standard_field_policy" }>,
+  command: Extract<StudioAccessCommand, { kind: "set_standard_permission" }>,
 ): StudioAccessResult => {
   const current = studioStandardFieldPolicy(candidate, command.permissionKey);
   if (current.kind === "unavailable") return refuse(current.message);
@@ -617,16 +655,44 @@ const setStandardFieldPolicy = (
     readable_fields: order(readable),
     changeable_fields: current.changesFields ? order(new Set(command.changeableFields)) : [],
   };
-  if (samePolicy(permission.field_policy, policy))
+  // Only Create and Update may change their record scope: Read, Delete, Restore and Export keep
+  // the scope their record type gave them. A different scope on those is refused, not flattened.
+  const scopeChanged = !sameScope(permission.record_scope, command.recordScope);
+  if (scopeChanged && !current.scopeEditable)
+    refuse(
+      `${quoted(current.label)} comes with its record type: only Create and Update permissions change their record scope.`,
+    );
+  if (scopeChanged) {
+    if (
+      command.recordScope.saved_condition !== undefined ||
+      command.recordScope.routes.some((route) => route.kind === "relationship")
+    )
+      refuse(
+        "This scope uses a relationship or saved condition. Its declaration cannot be changed here.",
+      );
+    if (
+      command.recordScope.routes.length !== 1 ||
+      (command.recordScope.routes[0]!.kind !== "all_records" &&
+        command.recordScope.routes[0]!.kind !== "ownership")
+    )
+      refuse("Choose all records or owned records for a standard permission.");
+    if (command.recordScope.routes[0]!.kind === "ownership" && !current.ownershipAvailable)
+      refuse("This record type has no ownership. Choose all records.");
+  }
+  if (!scopeChanged && samePolicy(permission.field_policy, policy))
     refuse(`Nothing changes for ${quoted(current.label)}.`);
+  (permission as { record_scope?: unknown }).record_scope = command.recordScope;
   (permission as { field_policy?: unknown }).field_policy = policy;
   const holdersText =
     current.roles.length === 0
       ? "No role holds it yet."
       : `Every role holding it gets this: ${current.roles.join(", ")}.`;
+  const scopeText = scopeChanged
+    ? ` Its record scope is now ${scopeWords(command.recordScope)}.`
+    : "";
   return applied(
     candidate,
-    `${quoted(current.label)} now reads ${policy.readable_fields.length} of ${record.fields.length} fields${current.changesFields ? ` and changes ${policy.changeable_fields.length}` : ""}. ${holdersText}`,
+    `${quoted(current.label)} now reads ${policy.readable_fields.length} of ${record.fields.length} fields${current.changesFields ? ` and changes ${policy.changeable_fields.length}` : ""}.${scopeText} ${holdersText}`,
   );
 };
 
@@ -1044,8 +1110,8 @@ const applyAccessCommand = (source: Source, command: StudioAccessCommand): Studi
       }
       case "set_field_access":
         return setFieldAccess(candidate, command);
-      case "set_standard_field_policy":
-        return setStandardFieldPolicy(candidate, command);
+      case "set_standard_permission":
+        return setStandardPermission(candidate, command);
       case "add_permission": {
         const permission = addPermission(candidate, command);
         return applied(
