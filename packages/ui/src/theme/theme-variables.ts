@@ -34,15 +34,6 @@ type ThemeVariableName =
   | "--vortex-space-sm"
   | "--vortex-space-md"
   | "--vortex-space-lg"
-  | "--vortex-border-width"
-  | "--vortex-border-style"
-  | "--vortex-elevation-low"
-  | "--vortex-elevation-high"
-  | "--vortex-control-padding-y"
-  | "--vortex-control-padding-x"
-  | "--vortex-control-min-height"
-  | "--vortex-cell-padding-y"
-  | "--vortex-cell-padding-x"
   | "--background"
   | "--foreground"
   | "--card"
@@ -147,31 +138,6 @@ function platformDefaults(tokens: ThemeTokens): Readonly<{
 /** The catalogue's default body and heading fonts, which a theme without a font of its own paints. */
 const PLATFORM_FONTS = resolveShadcnFontSelection(DEFAULT_APPLICATION_THEME_SELECTION);
 
-const PLATFORM_ELEVATION = [
-  "none",
-  "0 1px 2px rgba(0, 0, 0, 0.12)",
-  "0 4px 8px rgba(0, 0, 0, 0.16)",
-  "0 10px 24px rgba(0, 0, 0, 0.2)",
-  "0 20px 48px rgba(0, 0, 0, 0.26)",
-] as const;
-
-const DENSITY = {
-  comfortable: {
-    controlY: "0.5rem",
-    controlX: "0.75rem",
-    minHeight: "2.5rem",
-    cellY: "0.625rem",
-    cellX: "0.875rem",
-  },
-  compact: {
-    controlY: "0.25rem",
-    controlX: "0.5rem",
-    minHeight: "2rem",
-    cellY: "0.375rem",
-    cellX: "0.5rem",
-  },
-} as const;
-
 const colorValue = (pair: ColorPair): string => `light-dark(${pair.light}, ${pair.dark})`;
 
 const rem = (value: number, minimum = 0): string | undefined =>
@@ -261,8 +227,8 @@ function filledPair(tokens: ThemeTokens, key: string): readonly [ColorPair, Colo
  *   (accent); the filled pairs `primary`, `secondary`, `danger` with `<key>_foreground`;
  *   `danger_text`, `warning_text`, `info_text`, `success_text`.
  * - typography `body` and `heading`; spacing `space_xs`..`space_lg`; corners
- *   `radius_sm`..`radius_lg`; border `border`; elevation `elevation_low`, `elevation_high`;
- *   focus `focus`; density `density`.
+ *   `radius_sm`..`radius_lg` which the shadcn radius scale derives from `radius_base`; focus
+ *   `focus`.
  *
  * Every shadcn CSS variable the shared components read is set from the same resolved theme:
  * `--background`/`--foreground` from the validated surface and text; `--card`, `--popover`,
@@ -328,7 +294,6 @@ function generateThemeCssVariables(
 
   const body = tokenOfKind(tokens, "body", "typography");
   const heading = tokenOfKind(tokens, "heading", "typography");
-  const density = DENSITY[tokenOfKind(tokens, "density", "density")?.value ?? "comfortable"];
 
   const spacing = (key: string, fallback: string): string => {
     const token = tokenOfKind(tokens, key, "spacing");
@@ -337,11 +302,6 @@ function generateThemeCssVariables(
   const corners = (key: string, fallback: string): string => {
     const token = tokenOfKind(tokens, key, "corners");
     return (token === undefined ? undefined : rem(token.rem)) ?? fallback;
-  };
-  const elevation = (key: string, fallback: string): string => {
-    const token = tokenOfKind(tokens, key, "elevation");
-    if (token === undefined || !Number.isInteger(token.level) || token.level < 0) return fallback;
-    return PLATFORM_ELEVATION[Math.min(token.level, PLATFORM_ELEVATION.length - 1)] ?? fallback;
   };
 
   // Without a body token the page paints the default catalogue font; the heading paints the body
@@ -388,16 +348,6 @@ function generateThemeCssVariables(
     "--vortex-space-sm": spacing("space_sm", "0.5rem"),
     "--vortex-space-md": spacing("space_md", "1rem"),
     "--vortex-space-lg": spacing("space_lg", "1.5rem"),
-    "--vortex-border-width":
-      (border === undefined ? undefined : rem(border.widthRem, 0.0625)) ?? "0.0625rem",
-    "--vortex-border-style": border?.style === "dashed" ? "dashed" : "solid",
-    "--vortex-elevation-low": elevation("elevation_low", PLATFORM_ELEVATION[1]),
-    "--vortex-elevation-high": elevation("elevation_high", PLATFORM_ELEVATION[3]),
-    "--vortex-control-padding-y": density.controlY,
-    "--vortex-control-padding-x": density.controlX,
-    "--vortex-control-min-height": density.minHeight,
-    "--vortex-cell-padding-y": density.cellY,
-    "--vortex-cell-padding-x": density.cellX,
     "--background": colorValue(surface),
     "--foreground": colorValue(text),
     "--card": card,
