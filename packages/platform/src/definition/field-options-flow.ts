@@ -59,8 +59,17 @@ export const runFieldOptionsFlow = async (
   flowId: string,
   inputs: Readonly<Record<string, JsonValue>>,
 ): Promise<FieldOptionsFlowResult> => {
+  // A link field holds its record as a record type and a record; a flow input names the record.
+  const flowInputs = Object.fromEntries(
+    Object.entries(inputs).map(([name, value]) => [
+      name,
+      typeof value === "object" && value !== null && !Array.isArray(value) && "recordId" in value
+        ? (value.recordId as JsonValue)
+        : value,
+    ]),
+  );
   let step: FlowRunStep = startFlowRun(
-    { runId: ports.runId, flowId, inputs, now: ports.now },
+    { runId: ports.runId, flowId, inputs: flowInputs, now: ports.now },
     ports.library,
   );
   for (let reads = 0; ; reads += 1) {

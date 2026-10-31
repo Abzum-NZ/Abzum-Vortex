@@ -496,7 +496,17 @@ export function ModuleFieldsEditor({
             stored,
             {
               ...(existing.settings as Plain),
-              options_source: { kind: "flow", flow: flowAlias, inputs: {} },
+              // Each input the flow declares is filled by the field that filled it before.
+              options_source: {
+                kind: "flow",
+                flow: flowAlias,
+                inputs: Object.fromEntries(
+                  Object.entries(
+                    ((declared as { inputs?: Readonly<Record<string, string>> } | undefined)
+                      ?.inputs ?? {}) as Readonly<Record<string, string>>,
+                  ).filter(([input]) => Object.hasOwn(inputs, input)),
+                ),
+              },
             },
             storedDefault,
           ),
