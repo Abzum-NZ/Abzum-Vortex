@@ -59,7 +59,7 @@ export function TableTotals({
       role="group"
       aria-label={label}
       data-vortex-table-totals=""
-      className="border-t border-border px-2 py-1"
+      className="border-t border-border px-[var(--vortex-space-sm)] py-1"
     >
       <p className="m-0 text-xs text-muted-foreground">{label}</p>
       <dl className="m-0 flex flex-wrap gap-x-6 gap-y-1">

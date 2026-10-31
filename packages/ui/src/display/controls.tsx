@@ -3,11 +3,9 @@
 import { NavigationLink } from "../routing/navigation-link";
 import type { ReactElement } from "react";
 import { Button } from "../components/button";
-import { Card, CardContent } from "../components/card";
 import { Checkbox } from "../components/checkbox";
 import { Empty, EmptyContent, EmptyHeader, EmptyTitle } from "../components/empty";
 import { Pagination, PaginationContent, PaginationItem } from "../components/pagination";
-import { Skeleton } from "../components/skeleton";
 import { Spinner } from "../components/spinner";
 import { usePendingGesture } from "../controls/pending-gesture";
 import { Icon } from "../icons/icon";
@@ -46,7 +44,7 @@ export function DisplayHeader({
   const refresh = events?.refresh;
   if (title === undefined && refresh === undefined) return null;
   return (
-    <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-2">
+    <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-[var(--vortex-space-sm)]">
       {title === undefined ? null : (
         <h2 className="m-0 min-w-0 break-words font-heading text-lg font-semibold text-foreground">
           {title}
@@ -56,31 +54,6 @@ export function DisplayHeader({
         <DisplayRefreshButton accessibleName={accessibleName} refresh={refresh} />
       )}
     </div>
-  );
-}
-
-/**
- * The loading state of the Records table and lists: a data-free skeleton announced as a status at
- * the component, carrying the same state identity and accessible name the standard state container
- * gives a loading state.
- */
-export function RecordsLoadingState({
-  accessibleName,
-}: Readonly<{ accessibleName: string }>): ReactElement {
-  return (
-    <Card
-      role="status"
-      aria-busy="true"
-      data-vortex-display-state="loading"
-      aria-label={`Loading ${accessibleName}`}
-    >
-      <CardContent className="flex flex-col gap-2">
-        <Skeleton className="h-4 w-1/3" />
-        <Skeleton className="h-8 w-full" />
-        <Skeleton className="h-8 w-full" />
-        <Skeleton className="h-8 w-full" />
-      </CardContent>
-    </Card>
   );
 }
 
@@ -166,7 +139,7 @@ export function SelectionControl({
   if (mode === "single")
     return (
       <label
-        className="inline-flex min-h-6 min-w-6 items-center justify-center p-1 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
+        className="inline-flex min-h-6 min-w-6 items-center justify-center p-[var(--vortex-space-xs)] [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
         onClick={(event) => event.stopPropagation()}
       >
         <input
@@ -182,7 +155,7 @@ export function SelectionControl({
     );
   return (
     <label
-      className="inline-flex min-h-6 min-w-6 items-center justify-center p-1 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
+      className="inline-flex min-h-6 min-w-6 items-center justify-center p-[var(--vortex-space-xs)] [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
       onClick={(event) => event.stopPropagation()}
     >
       <Checkbox
@@ -217,7 +190,7 @@ export function SelectAllControl({
   if (onSelection === undefined) return null;
   const onScope = events?.selection_scope_changed;
   return (
-    <label className="inline-flex min-h-6 min-w-6 items-center justify-center p-1 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11">
+    <label className="inline-flex min-h-6 min-w-6 items-center justify-center p-[var(--vortex-space-xs)] [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11">
       <Checkbox
         aria-label={
           allSelected
@@ -332,7 +305,7 @@ export function PaginationControl({
   const lastTarget = pageCount ?? 2;
   return (
     <Pagination aria-label={`Pages of ${accessibleName}`} className="mt-2">
-      <PaginationContent className="flex-wrap justify-center gap-1">
+      <PaginationContent className="flex-wrap justify-center gap-[var(--vortex-space-xs)]">
         {onPage === undefined ? null : (
           <PaginationItem>
             <Button
@@ -376,7 +349,7 @@ export function PaginationControl({
         )}
         {pageCount === undefined ? null : (
           <PaginationItem>
-            <span className="px-2 text-sm">
+            <span className="px-[var(--vortex-space-sm)] text-sm">
               Page {page} of {pageCount}
             </span>
           </PaginationItem>

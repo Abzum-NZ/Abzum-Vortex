@@ -497,7 +497,10 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
 
 function SaveControls({ editing }: Readonly<{ editing: RowEditing }>): ReactElement {
   return (
-    <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
+    <div
+      className="flex items-center gap-[var(--vortex-space-xs)]"
+      onClick={(event) => event.stopPropagation()}
+    >
       {editing.draft === undefined ? null : (
         <>
           <Button

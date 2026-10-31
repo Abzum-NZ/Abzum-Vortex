@@ -159,7 +159,7 @@ function ConditionalFormatCell({
       data-vortex-format={styled === undefined ? undefined : styled.own ? "cell" : "row"}
       className={cn(
         "relative flex min-w-0 flex-1 items-center gap-1.5 self-stretch",
-        "[[data-grid-cell]_&]:-mx-2 [[data-grid-cell]_&]:px-2",
+        "[[data-grid-cell]_&]:-mx-2 [[data-grid-cell]_&]:px-[var(--vortex-space-sm)]",
         tint,
       )}
     >
@@ -221,7 +221,7 @@ function ConditionalFormatMenu({ context, column }: GridFeatureColumnProps): Rea
   return columnFormatOf(context, column) === undefined ? null : (
     <>
       <DropdownMenuGroup>
-        <DropdownMenuLabel className="max-w-64 whitespace-normal font-normal">
+        <DropdownMenuLabel className="max-w-64 whitespace-normal">
           Formatting uses the values on this page.
         </DropdownMenuLabel>
       </DropdownMenuGroup>
@@ -261,7 +261,7 @@ export function BoardCardFormat({
     <div
       data-vortex-format="row"
       className={cn(
-        "flex flex-col gap-1",
+        "flex flex-col gap-[var(--vortex-space-xs)]",
         style.tint && cardTintClasses[style.token],
         style.text && cardTitleTextClasses[style.token],
         style.bold && "[&_[data-slot=card-title]]:font-bold",

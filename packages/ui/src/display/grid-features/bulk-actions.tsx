@@ -153,7 +153,7 @@ function BulkActionsMenu({
                   else run(action);
                 }}
               >
-                <span className="flex max-w-72 flex-col gap-1 whitespace-normal">
+                <span className="flex max-w-72 flex-col gap-[var(--vortex-space-xs)] whitespace-normal">
                   <span className="group-data-disabled/dropdown-menu-item:opacity-50">
                     {action.label}
                   </span>
@@ -321,7 +321,7 @@ function SelectionBand({
           <Button
             variant="link"
             size="sm"
-            className="h-auto px-0"
+            className="h-auto"
             onClick={() => void onScope({ event: "selection_scope_changed", scope: "matching" })}
           >
             Select all matching records
@@ -335,9 +335,8 @@ function SelectionBand({
     <div
       role="status"
       aria-live="polite"
-      className="flex min-w-0 flex-1 items-center gap-2 text-sm text-foreground"
+      className="flex min-w-0 flex-1 items-center gap-[var(--vortex-space-sm)] text-sm text-foreground"
     >
-      {scope?.kind === "counting" ? <Spinner aria-hidden="true" /> : null}
       {body}
       {run?.status === "running" ? null : <span className="ms-auto">{clear}</span>}
     </div>

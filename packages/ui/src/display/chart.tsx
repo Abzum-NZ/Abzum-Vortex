@@ -59,7 +59,7 @@ export function ChartDisplay(props: DisplayRenderProps<ChartPayload>): ReactElem
         <section
           data-vortex-display="chart"
           data-vortex-placement-id={placementId}
-          className="flex flex-col gap-2"
+          className="flex flex-col gap-[var(--vortex-space-sm)]"
           aria-label={accessibleName}
         >
           <DisplayHeader title={title} accessibleName={accessibleName} events={events} />

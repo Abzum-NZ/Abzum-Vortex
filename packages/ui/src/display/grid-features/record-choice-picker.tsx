@@ -276,13 +276,13 @@ export function LinkDraftPicker({
     />
   );
   return inline === true ? (
-    <span className="flex min-w-0 items-center gap-1">
+    <span className="flex min-w-0 items-center gap-[var(--vortex-space-xs)]">
       <span className="min-w-0 flex-1">{picker}</span>
       {clear}
     </span>
   ) : (
-    <span className="flex min-w-0 flex-col gap-1">
-      <span className="flex min-w-0 items-center gap-1">
+    <span className="flex min-w-0 flex-col gap-[var(--vortex-space-xs)]">
+      <span className="flex min-w-0 items-center gap-[var(--vortex-space-xs)]">
         <span className="min-w-0 flex-1 truncate text-sm">{chosen}</span>
         {clear}
       </span>

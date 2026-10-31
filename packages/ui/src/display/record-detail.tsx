@@ -123,7 +123,7 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
           {hasHeader || actions !== undefined ? (
             <div className={headerClassName}>
               <CardHeader
-                className="gap-4 *:mb-0"
+                className="gap-[var(--vortex-space-md)] *:mb-0"
                 // The heading shows a field's value, so a projection refresh can find it on screen.
                 data-vortex-field-key={contract?.headingField}
                 data-vortex-heading-field-key={contract?.headingField}
@@ -173,7 +173,7 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
             <>
               <div
                 data-vortex-record-stage=""
-                className="flex flex-wrap items-center gap-2 border-b border-border px-6 py-3"
+                className="flex flex-wrap items-center gap-[var(--vortex-space-sm)] border-b border-border px-[var(--vortex-space-lg)] py-3"
                 role="group"
                 aria-label={`${stage.fieldLabel} stage`}
               >
@@ -185,7 +185,7 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
                     key={step.value}
                     aria-current={step.current ? "step" : undefined}
                     data-vortex-stage-current={step.current ? "true" : undefined}
-                    className="flex min-w-0 flex-1 items-center gap-2"
+                    className="flex min-w-0 flex-1 items-center gap-[var(--vortex-space-sm)]"
                   >
                     <span
                       aria-hidden="true"
@@ -208,15 +208,15 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
               </div>
             </>
           )}
-          <CardContent className="grid gap-3 bg-muted/20 p-4 sm:p-6 md:grid-cols-2 xl:grid-cols-3">
+          <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {sections.map((section) => (
-              <Card key={section.key} className="min-w-0 border-border/70 shadow-none">
+              <Card key={section.key} className="min-w-0">
                 {section.title === undefined ? null : (
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-semibold">{section.title}</CardTitle>
+                  <CardHeader>
+                    <CardTitle>{section.title}</CardTitle>
                   </CardHeader>
                 )}
-                <CardContent className={cn("grid gap-3", section.title === undefined && "pt-4")}>
+                <CardContent className="grid gap-3">
                   <dl className="m-0 grid gap-3">
                     {section.fields.map((field) => (
                       <div
@@ -240,13 +240,9 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
             {relatedLists.map((list) => {
               const href = relatedAddHref(list);
               return (
-                <Card
-                  key={list.key}
-                  data-vortex-related-list={list.key}
-                  className="min-w-0 border-border/70 shadow-none"
-                >
-                  <CardHeader className="flex-row items-center justify-between gap-2 pb-2">
-                    <CardTitle className="flex min-w-0 items-center gap-2 text-sm font-semibold">
+                <Card key={list.key} data-vortex-related-list={list.key} className="min-w-0">
+                  <CardHeader className="flex-row items-center justify-between gap-[var(--vortex-space-sm)]">
+                    <CardTitle className="flex min-w-0 items-center gap-[var(--vortex-space-sm)]">
                       <span className="truncate">{list.title}</span>
                       <Badge variant="secondary">{list.rows.length}</Badge>
                     </CardTitle>
@@ -260,16 +256,16 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
                       </NavigationLink>
                     )}
                   </CardHeader>
-                  <CardContent className="pt-0">
+                  <CardContent>
                     {list.rows.length === 0 ? (
                       <p className="m-0 text-sm text-muted-foreground">Nothing yet.</p>
                     ) : (
-                      <ul className="m-0 flex list-none flex-col gap-2 p-0">
+                      <ul className="m-0 flex list-none flex-col gap-[var(--vortex-space-sm)]">
                         {list.rows.map((row) => (
                           <li
                             key={row.recordId}
                             data-vortex-related-record-id={row.recordId}
-                            className="flex min-w-0 flex-col gap-1 border-b border-border/60 pb-2 last:border-b-0 last:pb-0"
+                            className="flex min-w-0 flex-col gap-[var(--vortex-space-xs)] border-b border-border pb-2 last:border-b-0 last:pb-0"
                           >
                             <span className="truncate text-sm font-medium">
                               <DisplayCellView value={row.title} />
@@ -279,7 +275,7 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
                                 {row.fields.map((field) => (
                                   <div
                                     key={field.key}
-                                    className="flex min-w-0 items-baseline gap-1"
+                                    className="flex min-w-0 items-baseline gap-[var(--vortex-space-xs)]"
                                   >
                                     <dt className="text-xs text-muted-foreground">{field.label}</dt>
                                     <dd className="m-0 truncate text-xs">
@@ -299,7 +295,7 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
             })}
           </CardContent>
           {events?.row_action === undefined ? null : (
-            <CardContent className="pt-0">
+            <CardContent>
               <RowActionControl
                 recordId={values.recordId}
                 name={accessibleName}
