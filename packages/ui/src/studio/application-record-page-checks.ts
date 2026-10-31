@@ -52,7 +52,13 @@ export const studioRecordPageChecks = (source: Source): readonly StudioRecordPag
       if (update && found.edit !== undefined)
         for (const list of found.list) {
           const table = recordTables(source, list, resolved)[0];
-          if (table === undefined || controlOpens(source, table.props.id, [found.edit.key]))
+          // A board opens a card through its row click, so it has no row menu to add Edit to.
+          const features = table?.props.features as { board?: { enabled?: boolean } } | undefined;
+          if (
+            table === undefined ||
+            features?.board?.enabled === true ||
+            controlOpens(source, table.props.id, [found.edit.key])
+          )
             continue;
           checks.push({
             kind: "missing_row_edit",

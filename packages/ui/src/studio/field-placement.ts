@@ -105,11 +105,22 @@ const fieldListSettings = (release: Release): readonly FieldList[] =>
     if (property.kind !== "list" || property.item.kind !== "group") return [];
     if (holdsFields(property))
       return property.maximumItems <= highlightLimit ? [] : [{ setting: property }];
+    // Cards that read a query of their own (related lists) show another record type's fields.
+    if (property.item.properties.some((candidate) => candidate.kind === "query_reference"))
+      return [];
     const nested = property.item.properties.find(
       (candidate): candidate is ListSetting => candidate.kind === "list" && holdsFields(candidate),
     );
     return nested === undefined ? [] : [{ setting: property, nested }];
   });
+
+/** Whether the block already shows the field anywhere in its settings (heading, key facts, stage, cards). */
+const showsField = (value: unknown, reference: string): boolean =>
+  value === reference ||
+  (Array.isArray(value) && value.some((entry) => showsField(entry, reference))) ||
+  (value !== null &&
+    typeof value === "object" &&
+    Object.entries(value).some(([key, entry]) => key !== "vortex" && showsField(entry, reference)));
 
 const blockTitle = (item: SourceItem, release: Release): string => {
   const title = item.props.title;
@@ -180,15 +191,7 @@ export const studioFieldPlacements = (
             ...(nested === undefined ? {} : { nestedKey: nested.key }),
             shown:
               reference !== undefined &&
-              Array.isArray(entries) &&
-              (nested === undefined
-                ? names(entries)
-                : entries.some(
-                    (card: unknown) =>
-                      card !== null &&
-                      typeof card === "object" &&
-                      names((card as Record<string, unknown>)[nested.key]),
-                  )),
+              (nested === undefined ? names(entries) : showsField(item.props, reference)),
             label: `${pageLabel}: ${blockTitle(item, release)}, ${nested === undefined ? setting.label : nested.label}`,
           });
         }
