@@ -601,15 +601,18 @@ export const finalizeCalculatedValues = async (
       new Set(Object.keys(command.submittedValues)),
     );
     if (corrections === undefined || corrections.length === 0) {
-      // A rule's authored refusal is the one reason safe to show; every other cause stays in the log.
+      // A rule's authored refusal or requirement is the one reason safe to show; every other
+      // cause stays in the log. A named action has no form field to correct, so its rule's
+      // sentence must reach the person as the refusal's reason, exactly as a Save shows it.
       return safeRefusal(
         prepared.correlationId,
         "operation_refused",
         values.issues.flatMap((issue) =>
-          issue.code === beforeSaveRuleRefusedIssueCode &&
+          (issue.code === beforeSaveRuleRefusedIssueCode ||
+            issue.code === "required_field_missing") &&
           "requirement" in issue &&
           issue.requirement !== undefined
-            ? [issue.requirement]
+            ? [{ code: issue.requirement.code, message: issue.requirement.message }]
             : [],
         )[0],
       );

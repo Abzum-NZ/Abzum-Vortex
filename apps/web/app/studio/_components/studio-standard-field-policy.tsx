@@ -9,12 +9,13 @@ import {
   StudioInspectorGroup,
   studioStandardFieldPolicy,
 } from "@vortex/ui/studio";
+import { StudioRecordScopeField } from "./studio-record-scope";
 import type { StudioAccessRun } from "./studio-access-role";
 
 /**
- * The fields one standard record permission (Read, Create, Update, Delete, Restore or Export) lets
- * people read and change. Its name and scope come with the record type; only its fields change
- * here, and every role holding it gets them.
+ * The access one standard record permission (Read, Create, Update, Delete, Restore or Export)
+ * allows: the fields it lets people read and change, and, for Create and Update, its record scope.
+ * Every role holding it gets the same answer.
  */
 export function StudioStandardFieldPolicy({
   source,
@@ -39,6 +40,11 @@ export function StudioStandardFieldPolicy({
       .filter((field) => field.changeable && !field.producedByPlatform)
       .map((field) => field.key) ?? [],
   );
+  const [scope, setScope] = useState<
+    NonNullable<
+      ApplicationSourceDocument["body"]["modules"][number]["permissions"][number]["record_scope"]
+    >
+  >(available?.recordScope ?? { routes: [{ kind: "all_records" }] });
   if (available === undefined)
     return (
       <p className="text-sm text-muted-foreground">
@@ -53,8 +59,9 @@ export function StudioStandardFieldPolicy({
     event.preventDefault();
     if (
       run({
-        kind: "set_standard_field_policy",
+        kind: "set_standard_permission",
         permissionKey,
+        recordScope: scope,
         readableFields: readable,
         changeableFields: available.changesFields ? changeable : [],
       })
@@ -62,8 +69,22 @@ export function StudioStandardFieldPolicy({
       close();
   };
   return (
-    <form aria-label={`Fields of ${available.label}`} className="space-y-4" onSubmit={submit}>
-      <StudioInspectorGroup title={`Fields of ${available.label}`}>
+    <form aria-label={`Access of ${available.label}`} className="space-y-4" onSubmit={submit}>
+      <StudioInspectorGroup
+        title={`${available.scopeEditable ? "Fields and scope" : "Fields"} of ${available.label}`}
+      >
+        {available.scopeEditable && (
+          <StudioRecordScopeField
+            record={source.body.modules
+              .find((module) => module.key === available.moduleKey)
+              ?.record_types.find((record) => record.key === available.recordKey)}
+            scope={scope}
+            allowShared={false}
+            disabled={disabled}
+            hint="Owned records lets people create or change only records they own."
+            onChange={setScope}
+          />
+        )}
         <p className="text-sm text-muted-foreground">
           {available.changesFields
             ? `Choose the ${available.recordName} fields this permission reads and changes. A changed field is read too.`
@@ -73,8 +94,8 @@ export function StudioStandardFieldPolicy({
         </p>
         <p className="text-sm text-muted-foreground">
           {available.roles.length === 0
-            ? "No role holds it yet. Its name and scope come with the record type."
-            : `Every role holding it gets these fields: ${available.roles.join(", ")}. Its name and scope come with the record type.`}
+            ? "No role holds it yet. Its name comes with the record type."
+            : `Every role holding it gets these fields${available.scopeEditable ? " and this record scope" : ""}: ${available.roles.join(", ")}. Its name${available.scopeEditable ? "" : " and scope"} comes with the record type.`}
         </p>
         <div className="flex justify-end gap-3 text-xs text-muted-foreground" aria-hidden="true">
           <span className="w-8 text-center">Read</span>
@@ -129,7 +150,7 @@ export function StudioStandardFieldPolicy({
       <div className="flex items-center gap-2">
         <Button type="submit" variant="secondary" size="sm" disabled={disabled}>
           <Icon name="check" />
-          Save fields
+          {available.scopeEditable ? "Save fields and scope" : "Save fields"}
         </Button>
         <StudioIconButton label="Cancel field edit" onClick={close}>
           <Icon name="close" />
