@@ -16,7 +16,7 @@ const workspaceRoot = path.resolve(import.meta.dirname, "../..");
 const cliPath = path.join(workspaceRoot, "node_modules", "supabase", "dist", "supabase.js");
 const lanesRoot = path.resolve(process.env.VORTEX_LANES_ROOT ?? "A:/Apps/vortex-lanes");
 // Lane 6 is skipped: its ports (5932x) fall in a TCP range Windows reserves for Hyper-V on this host.
-const laneNumbers = new Set([2, 3, 4, 5, 7, 8]);
+const laneNumbers = new Set([3, 4, 5, 7, 8]);
 
 // The app needs the database, Auth, the Data API, Kong, Storage and Realtime. Auth sends sign-up
 // confirmation and recovery email, so the Mailpit inbox stays on. Studio, logs, the edge runtime
@@ -27,6 +27,13 @@ const copiedDirectories = ["migrations", "schemas", "templates"];
 const copiedFiles = ["seed.sql"];
 const runtimeRole = "vortex_runtime:vortex-runtime-local-only";
 
+const laneList = [...laneNumbers]
+  .map((lane) => `  ${lane}: ${54321 + 1000 * (lane - 1)}, ${54322 + 1000 * (lane - 1)}`)
+  .join("\n");
+const laneDescription = `Lanes on this host (API and database ports):
+${laneList}
+Lanes live under VORTEX_LANES_ROOT (${lanesRoot}).`;
+
 const usage = `Usage:
   node tooling/supabase/lane.mjs init <n>
   node tooling/supabase/lane.mjs sync <n> <worktreePath>
@@ -36,8 +43,8 @@ const usage = `Usage:
   node tooling/supabase/lane.mjs status <n>
   node tooling/supabase/lane.mjs env <n>
 where <n> is one of these lanes (API and database ports):
-${[...laneNumbers].map((lane) => `  ${lane}: ${54321 + 1000 * (lane - 1)}, ${54322 + 1000 * (lane - 1)}`).join("\n")}
-Lane 2 is blocked on this Windows host by dynamic port exclusion 55262-55361. Lanes live under VORTEX_LANES_ROOT (${lanesRoot}).`;
+${laneList}
+Lanes live under VORTEX_LANES_ROOT (${lanesRoot}).`;
 
 const fail = (message) => {
   process.stderr.write(`[lane] ${message}\n`);
@@ -149,7 +156,11 @@ const runtimeDatabaseUrl = (status) => {
 };
 
 const [command, laneArgument, worktreeArgument] = process.argv.slice(2);
-if (command === undefined || laneArgument === undefined) fail(usage);
+if (command === undefined) {
+  process.stdout.write(`${laneDescription}\n`);
+  process.exit(0);
+}
+if (laneArgument === undefined) fail(usage);
 const lane = parseLane(laneArgument);
 
 switch (command) {

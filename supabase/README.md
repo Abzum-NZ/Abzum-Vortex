@@ -17,10 +17,11 @@ workspace package and not an application data model.
 
 The complete migration and canonical-function rule is in [schemas/README.md](schemas/README.md).
 
-## Optional local database operations
+## Local database operations
 
-Use pnpm db:start, pnpm db:stop and pnpm db:reset for interactive development with the Local
-Supabase stack.
+Use `pnpm db:start`, `pnpm db:stop` and `pnpm db:reset` for interactive development with the Local
+Supabase stack. Lanes are the normal path for worker databases: they carry every port of
+`config.toml` shifted per lane, and their rules live in [AGENTS.md](../AGENTS.md).
 
 `pnpm db:start` first prepares a Local-only P-256 `ES256` signing key through the pinned Supabase
 CLI. The key is generated once per checkout and reused: it is kept in the ignored `supabase/.temp`
@@ -61,9 +62,7 @@ Generated record adapters remain subject to row policies and field bounds.
 
 ### Request connection
 
-The Supabase project owner is an operational credential used by Kestra for
-migrations and controlled database verification. Vercel never receives it.
-The server runtime instead connects as the restricted `vortex_runtime` login.
+The server runtime connects as the restricted `vortex_runtime` login.
 Inside one explicit transaction, that role establishes one complete
 transaction-local context through its private initializer, which stores the
 validated context in the owner-only `vortex_platform.request_contexts` row for the
@@ -87,15 +86,8 @@ the resolved Identity and Access rows stable until that work finishes. The
 Access validator needed to confirm the live scope. Rich account-list and
 standalone Access-version reads are not runtime grants.
 
-Local and pgTAP checks may connect as the local owner and switch to the request
-role to prove its restrictions. An owner-control assertion may prove that a
-refused row exists, but it never represents an application success path.
-A suite that switches account mid-transaction clears the owner row
-(`delete from vortex_platform.request_contexts where backend_pid = pg_catalog.pg_backend_pid();`)
-before initialising again.
-
-Before the Access service is available, the private Definition entry points accept only a validated
-system context. They derive tenant, organisation, actor, and time from trusted context/database state,
+The private Definition entry points accept only a validated system context.
+They derive tenant, organisation, actor, and time from trusted context/database state,
 allocate root and contained-component identifiers inside PostgreSQL, and expose no underlying table
 permission. The trusted Definition service supplies parsed authored source, source-derived identity
 requirements, and an expected draft revision, but no permanent identifier, organisation, actor,
@@ -104,15 +96,6 @@ append-only. Nested components use a stable parent-owner scope alongside their c
 compiler lookup scope, so a parent-key rename preserves child identifiers and retains every historical
 alias. Each draft also stores its exact current source-derived requirements, so publication preparation
 returns only current aliases while immutable earlier releases keep their own resolution snapshots.
-
-Definition publication preparation reads the organisation-owned draft, immutable history, permanent
-identity evidence and available exact Module releases through narrow operations. Publication then locks
-the root and draft and appends the authored source, complete canonical compilation output, exact resolution
-snapshot, exact dependency manifest, actor and database time as one immutable effect before advancing only
-that root's current discovery pointer. The append refuses a root that already has 10,000 releases before
-writing anything. The two-connection proof verifies that only one publication from the
-same draft can commit and that an Application's prepared exact Module release is not retargeted when a newer
-Module release commits concurrently.
 
 ### Private service-schema pattern
 
@@ -180,7 +163,7 @@ operator owns rotation of each environment's `vortex_runtime` password and its
 matching Vercel-synchronised Doppler root config. After the exact
 Doppler-to-Vercel sync and redeployment, the operated proof must verify a real
 protected request. Never copy the project-owner password, a migration variable,
-a general `DATABASE_*` variable, an SMTP credential, or a Kestra credential into
+a general `DATABASE_*` variable, an SMTP credential, or a service credential into
 a Vercel-synchronised config.
 
 The database operations operator owns the separate project-owner and migration

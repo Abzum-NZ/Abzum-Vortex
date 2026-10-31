@@ -2,11 +2,6 @@
 
 [Build plan](README.md) · [Target architecture](target-architecture.md)
 
-Tasks: [#376](https://github.com/Abzum-NZ/Abzum-Vortex/issues/376) blocks,
-[#377](https://github.com/Abzum-NZ/Abzum-Vortex/issues/377) application,
-[#378](https://github.com/Abzum-NZ/Abzum-Vortex/issues/378) record links,
-[#379](https://github.com/Abzum-NZ/Abzum-Vortex/issues/379) action-items rail.
-
 The user asked for a personal start page: a rail down one side, and a main area with
 search, favourites accepting drag-and-drop, and a grid of applications.
 Each person configures their own. Tiles may point at an application, a page, a record or
@@ -24,7 +19,7 @@ nothing to the launcher's entry contract.
 
 Every organisation gets the Landing Zone. It joins the platform applications that
 [#72](https://github.com/Abzum-NZ/Abzum-Vortex/issues/72) ships as protected, versioned
-definitions built from ordinary modules, records, pages and permissions. These system applications are customisable through the guarded extension and replacement path in [Architecture Decision 11](architecture-decisions-2026-09-25.md#decision-11--building-installing-and-system-applications-are-permission-gated). Organisation
+definitions built from ordinary modules, records, pages and permissions. These system applications are customisable through the guarded extension and replacement path in [Architecture Decision 11](architecture-decisions.md#decision-11--building-installing-and-system-applications-are-permission-gated). Organisation
 provisioning installs it and marks it the organisation's default application through the
 **same protected installation operation** any application uses; provisioning supplies the
 authority and adds no second installation path or backdoor. This reuses an existing concept
@@ -80,9 +75,7 @@ renders its unavailable state, which is what the specification's requirement tha
 capabilities stay visibly unavailable rather than mocked means here. An unregistered block
 cannot publish at all, so it can never appear.
 
-"Items needing my action" is one placement in that slot, delivered by
-[#379](https://github.com/Abzum-NZ/Abzum-Vortex/issues/379) once the Workflow Inbox exists.
-The Landing Zone can ship its rail before the later Workflow Inbox placement is available.
+The rail is the Landing Zone's own optional page slot, and nothing else occupies it.
 
 ## Tiles and live availability
 
@@ -124,11 +117,3 @@ targets opened through the Landing Zone itself. Rather than ship a partial versi
 idea, the tile record carries no `last_opened_at` field, there is no recency query, and
 opening a tile performs no write. Opening becomes a pure navigation.
 
-## Sequencing
-
-The Landing Zone follows the phase-6 application and consumes Application runtime,
-registered blocks and page permission projection. #376 supplies generic blocks,
-#377 supplies the definition-led application and default installation, #378 supplies
-viewer-safe record links, and #379 adds the later Workflow Inbox placement.
-The original roadmap recorded their dependencies. Landing Zone authoring introduces
-no product dependency for the first visible application.

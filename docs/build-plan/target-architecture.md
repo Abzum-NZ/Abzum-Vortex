@@ -82,7 +82,7 @@ flowchart LR
 
 **Theme.** One stylesheet plus per-application CSS variables, with fonts loaded through `next/font`.
 
-**Runtime data.** Queries, form state, actions and flow continuations reach blocks through Puck `metadata`, never through module globals.
+**Runtime data.** Queries, form state, actions and flow state reach blocks through Puck `metadata`, never through module globals.
 
 ## 4. Database
 
@@ -94,16 +94,15 @@ flowchart LR
 | `vortex_access` | permission catalogue, roles, role permissions, assignments, groups, access version |
 | `vortex_definition` | roots, drafts, releases (with one `content_hash`), dependencies, installations |
 | `vortex_record` | storage catalogue, field and relationship mappings, `record_data.*` tables, activity, change notices, idempotency |
-| `vortex_platform` | files, search documents, connections, workflow runs, events, added only when their feature is built |
+| `vortex_platform` | files, search documents, connections, flow runs and events, added only when their feature is built |
 
 ### Roles
 
-- `vortex_owner` owns the tables, sequences, types and functions in the five `vortex_*` schemas, except the record objects deliberately owned by `vortex_record_adapter` or `vortex_record_inventory` and three integration functions. `vortex_identity.complete_identity_disablement` deletes GoTrue-managed `auth.sessions` rows; `vortex_platform.may_receive_topic` calls `auth.uid()`; `vortex_platform.publish_change_notice` calls `realtime.send`, which inserts into the `supabase_realtime_admin`-owned `realtime.messages` that `postgres` may use but cannot grant onward. These retain `postgres` ownership so the integration privileges stay within their existing boundaries. Where `postgres` can grant the integration privilege, the function moves to `vortex_owner` with only that privilege: the Event append holds just the PGmq schema and its one occurrence queue.
-- `vortex_owner` is NOLOGIN and has `BYPASSRLS`. Security-definer functions owned by it retain the access that their former `postgres` ownership provided on FORCE RLS tables. The restricted record roles do not have `BYPASSRLS`; their organisation-scoped policies continue to apply.
+- `vortex_owner` owns the tables, sequences, types and functions in the five `vortex_*` schemas, except the record objects deliberately owned by `vortex_record_adapter` and functions that call an integration the owner role cannot be granted. Those retain `postgres` ownership so the integration privileges stay within their existing boundaries: `vortex_platform.may_receive_topic` calls `auth.uid()`, and `vortex_platform.publish_change_notice` calls `realtime.send`, which inserts into the `supabase_realtime_admin`-owned `realtime.messages` that `postgres` may use but cannot grant onward. Where `postgres` can grant the integration privilege, the function moves to `vortex_owner` with only that privilege.
+- `vortex_owner` is NOLOGIN and has `BYPASSRLS`. Security-definer functions owned by it retain the access that their former `postgres` ownership provided on FORCE RLS tables. Every organisation-owned table has RLS enabled and forced; the inert policies that duplicated those rules are removed. The restricted record roles do not have `BYPASSRLS`; their organisation-scoped policies continue to apply.
 - `vortex_runtime` is the application login and may only execute the API functions.
 - `vortex_request` is the role every request transaction runs as; the API functions, record writes included, are granted to it, never the owner-only `*_internal` helpers. Request code never switches back to `vortex_runtime`, with one explicit exception: tenant governance and the connection executor run each authorised operation under `vortex_runtime` inside a savepoint that admits exactly one call and restores `vortex_request` before it settles (`identity/tenant-governance-request-bound.ts`).
 - `vortex_record_adapter` is the role the record-data RLS policies are written for.
-- `vortex_record_inventory` is the second restricted role: the account-deletion inventory reads record data through organisation-scoped policies.
 
 The local signup privacy integration uses `vortex_identity.before_user_created`, owned by
 `vortex_owner` and executable only by `supabase_auth_admin`. It validates the acknowledgement and
@@ -135,14 +134,13 @@ Tables are private. The application calls `security definer` functions with `set
 
 ### Record writes
 
-- **Every record write goes through `vortex_record.apply_record_changes`.** That covers create, update, relationships, named actions, lifecycle, restore, settings records and offboarding transfers.
+- **Every record write goes through `vortex_record.apply_record_changes`.** That covers create, update, relationships, named actions, lifecycle, restore and settings records.
 - **Within that path, three steps each happen once:**
   - save rules run inside its transaction;
   - it appends activity through one composer, `append_record_activity_internal`, over the one
     insert `append_organization_activity_entry`;
   - it publishes one change notice at its end.
-- **There are no parallel writers.** Account offboarding transfers, including those of a retained
-  row or a detached installation's record, are `apply_record_changes` operations.
+- **There are no parallel writers.** Every record change is an `apply_record_changes` operation.
 - **One maintenance write.** `apply_derived_field_backfill` stores the totals and stored
   calculations the platform works out for existing records when a definition adds a derived
   field. It is not a change anyone made: it writes only those derived columns under the record's
@@ -174,10 +172,6 @@ Static checks run in CI on every pull request and locally with `pnpm guard`. The
 
 Every pull request that changes behaviour states which pages were exercised on a local database lane (sign-in, then the affected application pages). Reviewers re-run that walkthrough before merging, and a pull request that changes what users see includes screenshots.
 
-### Review checklist (pull request template)
+### Review checklist
 
-- [ ] Matches this document. No new layer, version copy or process artefact.
-- [ ] Root cause fixed, not a workaround at the symptom.
-- [ ] No business names, no absent-setting behaviour, no hard-coded shell or theme.
-- [ ] Errors keep their cause in the log.
-- [ ] `pnpm guard`, `pnpm typecheck` and the local walkthrough pass.
+The checklist lives in the [pull request template](../../.github/pull_request_template.md); it covers this document, the absence of new layers and process artefacts, loud errors, and the guard and walk gates.

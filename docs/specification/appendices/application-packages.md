@@ -1,11 +1,10 @@
 # Application packages, custom components and the installation lifecycle
 
-[Specification index](../README.md) · [Architecture decisions of 25 September 2026](../../build-plan/architecture-decisions-2026-09-25.md) · [Composition and publication](../03-composition-and-publication.md)
+[Specification index](../README.md) · [Architecture decisions](../../build-plan/architecture-decisions.md) · [Composition and publication](../03-composition-and-publication.md)
 
 An application package is what people install, upgrade, uninstall and share. This appendix defines:
 - what a package contains;
 - how custom components are bundled and isolated;
-- how platform-reviewed custom scripts are installed;
 - what installation and uninstallation must do;
 - how installed applications are cached;
 - how agents build applications.
@@ -19,9 +18,7 @@ Publishing an application derives its package. The package is that application r
 | Application release | Pages, navigation, theme overrides, forms, component placements, experience pages and the flows the application owns. |
 | Module releases | Record types, fields, relationships, computed fields, flows (rules and named actions), queries, extension points and events. |
 | Access declarations | Permission declarations and role templates. |
-| Tool bundle | The agent tools derived at publication. |
 | Custom components | Browser component bundles with their component contracts. |
-| Custom scripts | Platform-reviewed Kestra script-task sources, present only in packages installed by a Vortex super administrator. |
 | Seed reference data | Optional records, such as a price list, imported once at activation as ordinary organisation records. |
 | Assets | Images, icons and fonts referenced by the definitions. |
 
@@ -36,7 +33,7 @@ The package manifest lists:
 - the external hosts its custom components may load from;
 - its seed reference data.
 
-Signatures are added only when a package crosses clusters ([16](../16-copying-sharing-import-export.md)). Inside one cluster, the release fingerprints are enough.
+Signatures are added only when a package crosses clusters ([16](../16-copying-import-export.md)). Inside one cluster, the release fingerprints are enough.
 
 ## Custom logic
 
@@ -44,9 +41,8 @@ Builders use the first level that meets the need:
 
 1. **Configuration.** Flows, registered tasks, formulas and reference data held in ordinary records.
 2. **Custom components.** Browser components bundled with an application or module release.
-3. **Custom scripts.** Platform-reviewed code, installed only by Vortex super administrators (see below).
 
-Customer-authored code never runs on a Vortex server, in Kestra or in the Vortex browser origin.
+Customer-authored code never runs on a Vortex server or in the Vortex browser origin.
 
 ### Custom components
 
@@ -87,15 +83,6 @@ A custom component belongs to the application or module release that bundles it.
   - The host passes the application's theme tokens as properties.
 - **Designer.** The App Designer lists a custom component in the palette only where it may be placed, and configures it with the ordinary property inspector.
 
-### Custom scripts
-
-Custom backend scripts are platform-reviewed code, not customer code:
-- **Who installs them.** Only a Vortex super administrator can add a script to a package and install a package that contains scripts. They do so after reviewing and testing it. Installation by anyone else is refused.
-- **Where they run.** A script runs as a Kestra script task inside a durable flow, on the application Kestra instance. That instance's environment holds only the callback signing key.
-- **What they can use.** The script source is passed as a file, never as a rendered template property. A script receives only its declared inputs and has time and memory limits.
-- **How results return.** Results reach Vortex only through the flow's next protected task, which runs under the flow's run-as identity.
-- **When they run.** Scripts run asynchronously. Values that must be authoritative at save time use formulas.
-
 ## Permissions
 
 The current platform permission catalogue is version 1.4.0. Its declaration sources and organisation-creation registration path are described in the [platform permission catalogue](platform-permission-catalogue.md#declaration-ownership-and-registration); the four system-core builder permissions below are part of that current declaration set.
@@ -107,11 +94,11 @@ The current platform permission catalogue is version 1.4.0. Its declaration sour
 | `platform.organization.applications.manage` | Install, upgrade and uninstall packages. This permission already exists. |
 | `platform.organization.custom_code.manage` | Required in addition to `applications.manage` when a package contains custom components. |
 | `platform.organization.system_applications.manage` | Change system applications. |
-| Named Vortex super administrator (global Identity assignment, not a customer role) | Install packages that contain custom scripts, operate Kestra, and set, re-pin or revoke a capability ceiling for any independently verified active tenant after recent primary authentication. The selected active organisation account is the request anchor; the target tenant need not have an active organisation. |
+| Named Vortex super administrator (global Identity assignment, not a customer role) | Operate the platform and set, re-pin or revoke a capability ceiling for any independently verified active tenant after recent primary authentication. The selected active organisation account is the request anchor; the target tenant need not have an active organisation. |
 | Configured system operator | Bootstrap named super-administrator assignments, define and publish entitlement policies, and retain the context-free tenant-ceiling bootstrap command. |
 
 These permissions have further rules:
-- **Approvals and the one fixed rule.** The organisation's approval workflow decides who must approve a grant, and the required-caller policy can make that workflow mandatory. Independently of any workflow, the grant operation refuses any role or role template that contains a permission outside the actor's own delegated scope ([04](../04-access-and-permissions.md)). Workflows are editable definitions, so this rule is what stops anyone granting themselves more than they hold.
+- **The one fixed rule.** The grant operation refuses any role or role template that contains a permission outside the actor's own delegated scope ([04](../04-access-and-permissions.md)). This rule stops anyone granting themselves more than they hold.
 - **Recent authentication.** Installing custom components, or accepting role templates, requires the person to have signed in within the last 15 minutes.
 - **One server-side check.** Every draft change, publication, installation, upgrade and uninstallation passes the same server-side permission check, whether it comes from the designer, the API or MCP.
 - **Who holds them.** Ordinary organisation administrators do not hold these permissions unless a role grants them.
@@ -129,17 +116,16 @@ Installation is one command. Its inputs are the package and the installer's conf
 **Prepare.** A failure at any point leaves the previous installation active:
 1. Verify the platform version and the installer's permissions.
 2. Provision module storage and extension fields.
-3. Compile the durable flows and register them in Kestra as inactive, under a namespace generated for this installation.
 4. Upload custom component bundles and assets to immutable, content-addressed storage.
 5. Build the runtime bundle (see Caching).
 
 **Activate.** This is one transaction:
 - move the installation's active revision;
-- import seed reference data the first time only. The import runs under a System actor scoped to the package's seed record types, and the records pass normal validation and BeforeSave rules;
+- import seed reference data the first time only. The import runs under a scoped installation authority for the package's seed record types, and the records pass normal validation and BeforeSave rules;
 - increment the Access version;
 - record the activation in Activity.
 
-Navigation, launcher entries and agent tools follow from the active revision. Kestra triggers and schedules are enabled after the commit ([09](../09-workflows-and-pipelines.md)).
+Navigation, launcher entries and page-model tools follow from the active revision.
 
 Prepared candidates that are never activated are cleaned up.
 
@@ -155,14 +141,11 @@ Prepared candidates that are never activated are cleaned up.
 **Registration ledger.** Each owning service records the registrations it creates for an installation, and can list and remove them. The uninstall report is the union of those lists. Uninstallation is complete when nothing remains except the items the uninstaller chose to keep.
 
 The registrations covered are:
-- Kestra flows, triggers, namespace files, key-value entries and execution storage, purged according to retention and legal hold;
-- execution grants and connection-instance grants;
+- connection-instance grants;
 - interface operations, public addresses and incoming-message routes;
 - search documents;
 - pending outbox entries and start intents, which are marked refused;
 - form drafts;
-- record-sharing grants, which are revoked with notice;
-- agent (MCP) grant scopes and tool bundles;
 - the default-application setting;
 - custom component bundles and assets that no other installation references;
 - cached runtime bundles;
@@ -192,7 +175,6 @@ Deletion applies only to record types that no other active installation binds. A
 - theme tokens;
 - component registry entries, including custom component contracts and bundle addresses;
 - the access plan, which holds declared permission requirements only;
-- the tool bundle.
 
 The bundle is an index plus parts of under 1 MB each, stored in Postgres.
 
@@ -210,19 +192,18 @@ The bundle is an index plus parts of under 1 MB each, stored in Postgres.
 
 ## Building with an agent
 
-Every builder operation is one typed, revision-checked operation, shared by the App Designer, the API and MCP. The operations cover:
+Every builder operation is one typed, revision-checked operation, shared by App Studio and by agents acting through the page model. The operations cover:
 - creating and changing modules, fields, relationships, pages, placements, flows and role templates;
 - uploading component bundles;
 - validating, and running a flow in test mode;
 - previewing, including a **preview installation**:
   - it compiles the draft into an ephemeral candidate, never a release;
   - its record types get fresh preview storage identities;
-  - durable tasks are simulated, and nothing is registered in Kestra;
-  - only the previewing person and their agent can use it;
+    - only the previewing person and their agent can use it;
   - expiry removes its storage, records and registrations;
 - publishing, installing, upgrading and uninstalling.
 
-Validation returns located errors, so an agent can correct its draft and try again. An agent holds only the permissions of the person it acts for. Its MCP grant must include explicit build and install scopes.
+Validation returns located errors, so an agent can correct its draft and try again. An agent holds only the permissions of the person it acts for. Its grant must include explicit build and install scopes.
 
 ## Acceptance examples
 
@@ -239,4 +220,3 @@ Validation returns located errors, so an agent can correct its draft and try aga
   - tests the page in a preview installation;
   - publishes, installs and opens it, without any code change.
 - **Caching.** Opening an installed page reads no definition from the database once its bundle parts are in the server's memory cache.
-- **Scripts.** A package that contains a script installs only for a Vortex super administrator. Its script runs as a Kestra script task that sees only its declared inputs and the callback key.

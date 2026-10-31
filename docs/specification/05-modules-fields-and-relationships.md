@@ -20,7 +20,6 @@ flowchart TD
     APP --> USE[Pages, roles and workflows use the bound module]
 ```
 
-Examples are provided in the [CRM and Service Desk worked examples](appendices/worked-examples.md).
 
 ## Module requirements
 
@@ -139,11 +138,9 @@ There is no separate duration type in this release. Each calendar page explicitl
 
 ## Record value formats
 
-The Record engine must preserve the meaning of values from form entry through
+The Record engine preserves the meaning of values from form entry through
 save, read, conditions, calculations and queries. A display format is not the
-stored value. The [field-runtime plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/44)
-records the coordinated contract and consumer changes; these requirements do not
-claim that Record execution is already delivered.
+stored value.
 
 - Decimal values use exact base-10 text at the service boundary, including bounds
   and defaults; their storage uses an exact numeric type. No conversion through
@@ -209,10 +206,9 @@ explicit product operations.
 
 ## Calculations and totals
 
-Every calculation is a [formula](appendices/frontend-rule-designer.md#formulas): one typed JSON expression tree over a closed operator catalogue, never text. A value that depends on the current time, such as whether a deadline has passed, is a read-time computed field: it is computed whenever it is read and is never stored, and queries that use it bypass the data-result cache ([17](17-runtime-storage-and-caching.md#cache-model)). Stored calculations and relationship totals never depend on it. [Scheduled time-based calculations](appendices/record-ownership-and-lifecycle.md#scheduled-time-based-calculations) defines read-time evaluation and how overdue escalations run as durable flows with a `Schedule` trigger.
+Every calculation is a [formula](appendices/frontend-rule-designer.md#formulas): one typed JSON expression tree over a closed operator catalogue, never text. A value that depends on the current time, such as whether a deadline has passed, is a read-time computed field: it is computed whenever it is read and is never stored, and queries that use it bypass the data-result cache ([17](17-runtime-storage-and-caching.md#cache-model)). Stored calculations and relationship totals never depend on it. Read-time evaluation and deadline escalation are defined in [record ownership and lifecycle](appendices/record-ownership-and-lifecycle.md#scheduled-time-based-calculations).
 
-The [calculation-engine plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48) defines
-the first executable arithmetic and missing-value meanings. Decimal/money
+The calculation engine defines the executable arithmetic and missing-value meanings. Decimal/money
 calculations and average totals declare result precision from zero to twelve
 decimal places and use half-even rounding once at the final result. Ordinary
 non-terminating division is supported at that precision; division by zero is not.
@@ -230,7 +226,7 @@ operation's declared scope, not a general permission bypass.
 A calculated field is disclosed only when that field and its recursive input
 dependencies are readable to the viewer. Apply the same restriction to query
 filters, sorting, grouping/aggregation, search, event/activity output, interfaces
-and MCP. Computing from authoritative inputs and omitting disallowed output is
+and the page model. Computing from authoritative inputs and omitting disallowed output is
 different from computing from a redacted subset or refusing a permitted save.
 
 - A calculation is deterministic and cannot perform network calls, change records, or read data the current operation is not allowed to read.
@@ -240,8 +236,7 @@ different from computing from a redacted subset or refusing a permitted save.
 - Supported operations are count, sum, minimum, maximum, and average where the source type permits them. Count produces a whole number; sum, minimum, and maximum preserve the compatible source-field type; average produces a decimal number, or money when averaging money. Publication checks the declared result against the referenced field instead of treating every calculated or total value as a number.
 - A money total is valid only when every included non-empty value uses one currency. A mixed-currency total is refused with a stable internal diagnostic identifying the currency codes present; caller-visible errors must not reveal hidden inputs. Vortex never silently converts or splits the total.
 
-The [relationship-total delivery plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48)
-defines the executable meanings. Count counts filtered related records; field
+Relationship totals have these executable meanings. Count counts filtered related records; field
 operations ignore absent/null inputs but do not silently ignore invalid values.
 Empty count and dimensionless sum are zero; empty minimum, maximum and average
 are absent. An empty money sum needs an explicit currency to produce zero.
@@ -256,8 +251,7 @@ Related totals may form valid finite hierarchies even when their record types
 refer back to themselves. A type-level cycle is not automatically a forbidden
 record-level cycle. The protected save checks the actual record/field dependency
 graph, updates affected old/new parents and dependent totals atomically, and
-refuses a real cycle without partial changes. Follow the reviewed
-[integrated totals rules](https://github.com/Abzum-NZ/Abzum-Vortex/issues/48).
+refuses a real cycle without partial changes.
 
 ## Relationships
 
@@ -291,17 +285,13 @@ All affected link values, edges and record revisions change atomically.
 
 Many-to-many relationships use an explicit joining record type so ownership, permissions, activity, fields, and deletion behaviour remain visible.
 
-The private relationship mutation from
-[#402](https://github.com/Abzum-NZ/Abzum-Vortex/issues/402) supports to-one links
+The relationship mutation supports to-one links
 to one target record type or to one of several. It enforces target uniqueness
 only for declared one-to-one relationships; many-to-one permits several sources.
 A link value names its concrete target record type, which must be one of the
-relationship's declared targets. The stored edge keeps that concrete target, and
-[#562](https://github.com/Abzum-NZ/Abzum-Vortex/issues/562) makes save, reads,
-permissions, totals, delete and restore use the same identity. The mutation does
-not implement a hidden many-to-many edge model; that broader relationship
-integration remains with
-[#49](https://github.com/Abzum-NZ/Abzum-Vortex/issues/49).
+relationship's declared targets. The stored edge keeps that concrete target, and save, reads,
+permissions, totals, delete and restore use the same identity. There is no
+hidden many-to-many edge model.
 
 ### Cross-module relationships
 
@@ -313,7 +303,7 @@ Cross-module links follow the same relationship rules as intra-module links: one
 
 Removing a record type from a new release is an incompatible change, but does not by itself prevent publishing an inert breaking release. Existing external consumers keep their exact older dependency pins. Publication refuses a dangling link inside the candidate release's own resolved dependency set; an explicit upgrade refuses adoption where that consumer's required target would be missing. See [publication and adoption](03-composition-and-publication.md).
 
-A relationship still joins records owned by the same organisation. Viewing a source organisation's record through a cross-organisation grant does not permit creating a stored relationship from a recipient-owned record to that source record. A separately designed federation-reference field would be required for that future behaviour.
+A relationship joins records owned by the same organisation. There is no cross-organisation stored relationship.
 
 ## Extension points
 
@@ -351,9 +341,7 @@ Changing stored meaning is never an arbitrary in-place retype. Only a proven wid
 - A field with an unknown property or unsupported setting cannot be published.
 - A required relationship cannot be configured to become empty on parent deletion.
 - A workflow-backed choice belongs to an application binding, not to the reusable module.
-- Every reference in the [CRM and Service Desk examples](appendices/worked-examples.md) resolves to a published module, application component, or documented platform definition.
 - A link field targeting a record type in another module requires a declared module dependency.
 - A record links to a person or a group with an ordinary link to the People or Group system record type; no special person-link field type exists.
 - An organisation adds a Department field to the People system record type; it appears in that organisation's People lists, filters, rules and access conditions and never changes the protected account fact or its protected-operation write path.
 - A breaking release may omit a record type while existing external consumers remain pinned. A dangling link in the candidate's own dependency set or in an explicitly proposed consumer upgrade is refused with the affected reference; publication never silently retargets consumers.
-- A cross-organisation grant does not bypass the same-organisation rule for stored relationships.
