@@ -637,17 +637,8 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
     for (const filter of narrowing?.filters ?? [])
       void events?.filter_changed?.({ event: "filter_changed", field: filter.fieldId, value: "" });
   };
-  // A block that is still reading renders no placeholder: the page stays as it is until rows are
-  // ready. The status keeps the state identity and accessible name for assistive technology.
-  const loading = (
-    <span
-      role="status"
-      aria-busy="true"
-      data-vortex-display-state="loading"
-      aria-label={`Loading ${accessibleName}`}
-      className="sr-only"
-    />
-  );
+  // No placeholder renders while a block reads: the page stays as it is until rows are ready.
+  const loading = null;
 
   // The rows of one page as the grid, or as cards on a phone: the open group's rows use the same.
   const membersView = (): ReactElement =>
@@ -719,7 +710,7 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
       />
     );
 
-  const body = ((): ReactElement => {
+  const body = ((): ReactElement | null => {
     if (pivotOpen) return <>{gridFeatures.viewBody()}</>;
     if (state.status === "loading") return loading;
     if (state.status === "empty")

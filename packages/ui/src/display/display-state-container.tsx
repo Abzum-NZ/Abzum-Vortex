@@ -84,19 +84,10 @@ export function DisplayStateContainer<Values>({
   refusedMessage,
   errorMessage,
   children,
-}: DisplayStateContainerProps<Values>): ReactElement {
+}: DisplayStateContainerProps<Values>): ReactElement | null {
   if (projectedData.status === "loading") {
-    // No placeholder renders: the page stays as it is until the block's data is ready. The status
-    // keeps the state identity and accessible name for assistive technology.
-    return (
-      <span
-        role="status"
-        aria-busy="true"
-        data-vortex-display-state="loading"
-        aria-label={`Loading ${accessibleName}`}
-        className="sr-only"
-      />
-    );
+    // No placeholder renders: the page stays as it is until the block's data is ready.
+    return null;
   }
 
   if (projectedData.status === "empty") {

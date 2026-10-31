@@ -96,7 +96,7 @@ const settled = (state: PanelState): PanelState | undefined =>
  * related record's page when the viewer may open it, and loading, empty, refused and failed reads
  * each have their own state.
  */
-function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactElement {
+function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactElement | null {
   const read = context.events?.row_expanded;
   const pageSize = context.features.masterDetail?.pageSize;
   if (pageSize === undefined) fail("Related records require their feature projection", location);
@@ -184,7 +184,7 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
 
   if (state.kind === "loading")
     // No placeholder renders while the related records are read: the row stays as it is.
-    return <span role="status" aria-label="Reading related records" className="sr-only" />;
+    return null;
   if (state.kind === "refused")
     return (
       <p role="status" className="m-0 py-1 text-sm text-muted-foreground">

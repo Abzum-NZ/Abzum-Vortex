@@ -167,7 +167,7 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
   if (!open || settings === undefined) return null;
   if (state.kind === "loading")
     // No placeholder renders while the pivot is read: the table stays as it is.
-    return <span role="status" aria-label="Reading the pivot" className="sr-only" />;
+    return null;
   if (state.kind === "refused")
     return (
       <Alert role="status">
