@@ -11,7 +11,7 @@ import {
   type StudioMenuCommand,
   type StudioMenuResult,
 } from "@vortex/ui/studio";
-import type { StudioThemeOptions } from "../_lib/studio-theme-options";
+import type { StudioThemeOptions, StudioThemePreset } from "../_lib/studio-theme-options";
 import { StudioMenuPanel } from "./studio-menu-panel";
 import type { StudioThemeChangeOutcome } from "./studio-theme-panel";
 import { useStudioTabVisited } from "./studio-frame";
@@ -67,9 +67,9 @@ export function useStudioMenuThemeTabs({
     return outcome.result;
   };
 
-  // A Theme tab change: resolved with publication's checks first, then one edit of the draft's theme selection.
-  const changeThemeSelection = async (
-    next: ApplicationSourceDocument["body"]["theme"]["selection"],
+  // A Theme tab change: resolved with publication's checks first, then one edit of the draft's theme.
+  const changeTheme = async (
+    next: ApplicationSourceDocument["body"]["theme"],
     what: string,
   ): Promise<StudioThemeChangeOutcome & Readonly<{ problems?: readonly string[] }>> => {
     const blocked = draft.blockedReason();
@@ -78,7 +78,7 @@ export function useStudioMenuThemeTabs({
       structuredClone(draft.history.getState().source),
     );
     const checkedFrom = canonicalJson(candidate.body.theme);
-    candidate.body.theme.selection = next;
+    candidate.body.theme = next;
     const result = await theme.resolve(candidate.body.theme);
     if (result.kind !== "available")
       return {
@@ -94,12 +94,12 @@ export function useStudioMenuThemeTabs({
         message: `${what}: refused, so nothing was changed.`,
         problems: result.problems,
       };
-    // The check is asynchronous and covers the theme only: the selection applies to the current
+    // The check is asynchronous and covers the theme only: the change applies to the current
     // draft (edits made elsewhere meanwhile are kept) as long as its theme is the one checked.
     const outcome = draft.run<boolean>((current) => {
       if (canonicalJson(current.body.theme) !== checkedFrom) return { kind: "keep", result: false };
       const edited = applicationSourceDocumentSchema.parse(structuredClone(current));
-      edited.body.theme.selection = next;
+      edited.body.theme = next;
       return { kind: "edit", source: edited, result: true };
     });
     if (outcome.kind === "blocked") return { kind: "refused", message: outcome.message };
@@ -111,6 +111,27 @@ export function useStudioMenuThemeTabs({
             "The theme changed while this was being checked, so nothing was changed. Try again.",
         };
   };
+
+  const changeThemeSelection = (
+    next: ApplicationSourceDocument["body"]["theme"]["selection"],
+    what: string,
+  ) => changeTheme({ ...draft.history.getState().source.body.theme, selection: next }, what);
+
+  /** One click on a theme card sets both the release it paints from and its selection. */
+  const changeThemePreset = (next: StudioThemePreset, what: string) =>
+    changeTheme(
+      {
+        ...draft.history.getState().source.body.theme,
+        base: {
+          kind: "platform_theme",
+          catalogue_theme_id: next.base
+            .catalogueThemeId as ApplicationSourceDocument["body"]["theme"]["base"]["catalogue_theme_id"],
+          release_version: next.base.releaseVersion,
+        },
+        selection: next.selection,
+      },
+      what,
+    );
 
   const menuPanel = (
     <StudioMenuPanel
@@ -130,9 +151,11 @@ export function useStudioMenuThemeTabs({
       <StudioThemePanel
         hidden={themeHidden}
         selection={source.body.theme.selection}
+        base={source.body.theme.base}
         options={themeOptions}
         disabled={draft.locked}
         onChange={changeThemeSelection}
+        onPreset={changeThemePreset}
       />
     ) : null;
   return { menuPanel, themePanel };

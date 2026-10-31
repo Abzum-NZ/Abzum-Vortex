@@ -291,5 +291,1177 @@
         "value": "comfortable"
       }
     }
+  },
+  "PLATFORM_THEME_MIRA_SLATE": {
+    "catalogueThemeId": "73710ee4-9c1c-4405-b878-076f694a8748",
+    "releaseVersion": "1.0.0",
+    "loaderMark": {
+      "segments": [
+        [12, 101.569, 60, 18.431],
+        [60, 18.431, 108, 101.569],
+        [108, 101.569, 12, 101.569],
+        [12, 101.569, 84, 60],
+        [84, 60, 36, 60],
+        [36, 60, 48, 80.784]
+      ],
+      "cycleSeconds": 5
+    },
+    "tokens": {
+      "background": {
+        "kind": "color_pair",
+        "light": "oklch(1 0 0)",
+        "dark": "oklch(0.147 0.004 49.25)",
+        "role": "background"
+      },
+      "surface": {
+        "kind": "color_pair",
+        "light": "oklch(0.985 0.001 106.423)",
+        "dark": "oklch(0.216 0.006 56.043)",
+        "role": "background"
+      },
+      "text": {
+        "kind": "color_pair",
+        "light": "oklch(0.147 0.004 49.25)",
+        "dark": "oklch(0.985 0.001 106.423)",
+        "role": "foreground"
+      },
+      "muted_text": {
+        "kind": "color_pair",
+        "light": "oklch(0.553 0.013 58.071)",
+        "dark": "oklch(0.709 0.01 56.259)",
+        "role": "foreground"
+      },
+      "border_color": {
+        "kind": "color_pair",
+        "light": "oklch(0.923 0.003 48.717)",
+        "dark": "oklch(1 0 0 / 10%)"
+      },
+      "border": {
+        "kind": "border",
+        "widthRem": 0.0625,
+        "style": "solid",
+        "colorToken": "border_color"
+      },
+      "primary": {
+        "kind": "color_pair",
+        "light": "oklch(0.488 0.243 264.376)",
+        "dark": "oklch(0.493 0.199 265.638)"
+      },
+      "primary_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.97 0.014 254.604)",
+        "dark": "oklch(0.97 0.014 254.604)",
+        "role": "foreground"
+      },
+      "secondary": {
+        "kind": "color_pair",
+        "light": "oklch(0.967 0.001 286.375)",
+        "dark": "oklch(0.274 0.006 286.033)"
+      },
+      "secondary_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.21 0.006 285.885)",
+        "dark": "oklch(0.985 0 0)",
+        "role": "foreground"
+      },
+      "danger": {
+        "kind": "color_pair",
+        "light": "oklch(0.577 0.245 27.325)",
+        "dark": "oklch(0.704 0.191 22.216)"
+      },
+      "danger_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.985 0 0)",
+        "dark": "oklch(0.205 0 0)",
+        "role": "foreground"
+      },
+      "danger_text": {
+        "kind": "color_pair",
+        "light": "oklch(0.577 0.245 27.325)",
+        "dark": "oklch(0.704 0.191 22.216)",
+        "role": "foreground"
+      },
+      "warning_text": {
+        "kind": "color_pair",
+        "light": "#92400E",
+        "dark": "#FBBF24",
+        "role": "foreground"
+      },
+      "info_text": {
+        "kind": "color_pair",
+        "light": "#1D4ED8",
+        "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
+      "card": {
+        "kind": "color_pair",
+        "light": "oklch(1 0 0)",
+        "dark": "oklch(0.216 0.006 56.043)",
+        "role": "background"
+      },
+      "card_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.147 0.004 49.25)",
+        "dark": "oklch(0.985 0.001 106.423)",
+        "role": "foreground"
+      },
+      "popover": {
+        "kind": "color_pair",
+        "light": "oklch(1 0 0)",
+        "dark": "oklch(0.216 0.006 56.043)",
+        "role": "background"
+      },
+      "popover_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.147 0.004 49.25)",
+        "dark": "oklch(0.985 0.001 106.423)",
+        "role": "foreground"
+      },
+      "muted": {
+        "kind": "color_pair",
+        "light": "oklch(0.97 0.001 106.424)",
+        "dark": "oklch(0.268 0.007 34.298)",
+        "role": "background"
+      },
+      "accent": {
+        "kind": "color_pair",
+        "light": "oklch(0.97 0.001 106.424)",
+        "dark": "oklch(0.268 0.007 34.298)",
+        "role": "background"
+      },
+      "accent_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.216 0.006 56.043)",
+        "dark": "oklch(0.985 0.001 106.423)",
+        "role": "foreground"
+      },
+      "input": {
+        "kind": "color_pair",
+        "light": "oklch(0.923 0.003 48.717)",
+        "dark": "oklch(1 0 0 / 15%)"
+      },
+      "ring": {
+        "kind": "color_pair",
+        "light": "oklch(0.670045 0.01 56.259)",
+        "dark": "oklch(0.553 0.013 58.071)"
+      },
+      "chart_1": {
+        "kind": "color_pair",
+        "light": "oklch(0.809 0.105 251.813)",
+        "dark": "oklch(0.809 0.105 251.813)"
+      },
+      "chart_2": {
+        "kind": "color_pair",
+        "light": "oklch(0.623 0.214 259.815)",
+        "dark": "oklch(0.623 0.214 259.815)"
+      },
+      "chart_3": {
+        "kind": "color_pair",
+        "light": "oklch(0.546 0.245 262.881)",
+        "dark": "oklch(0.546 0.245 262.881)"
+      },
+      "chart_4": {
+        "kind": "color_pair",
+        "light": "oklch(0.488 0.243 264.376)",
+        "dark": "oklch(0.488 0.243 264.376)"
+      },
+      "chart_5": {
+        "kind": "color_pair",
+        "light": "oklch(0.424 0.199 265.638)",
+        "dark": "oklch(0.424 0.199 265.638)"
+      },
+      "sidebar": {
+        "kind": "color_pair",
+        "light": "oklch(0.985 0.001 106.423)",
+        "dark": "oklch(0.216 0.006 56.043)",
+        "role": "background"
+      },
+      "sidebar_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.147 0.004 49.25)",
+        "dark": "oklch(0.985 0.001 106.423)",
+        "role": "foreground"
+      },
+      "sidebar_primary": {
+        "kind": "color_pair",
+        "light": "oklch(0.216 0.006 56.043)",
+        "dark": "oklch(0.488 0.243 264.376)"
+      },
+      "sidebar_primary_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.985 0.001 106.423)",
+        "dark": "oklch(0.985 0.001 106.423)",
+        "role": "foreground"
+      },
+      "sidebar_accent": {
+        "kind": "color_pair",
+        "light": "oklch(0.97 0.001 106.424)",
+        "dark": "oklch(0.268 0.007 34.298)"
+      },
+      "sidebar_accent_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.216 0.006 56.043)",
+        "dark": "oklch(0.985 0.001 106.423)",
+        "role": "foreground"
+      },
+      "sidebar_border": {
+        "kind": "color_pair",
+        "light": "oklch(0.923 0.003 48.717)",
+        "dark": "oklch(1 0 0 / 10%)"
+      },
+      "sidebar_ring": {
+        "kind": "color_pair",
+        "light": "oklch(0.709 0.01 56.259)",
+        "dark": "oklch(0.553 0.013 58.071)"
+      },
+      "focus": {
+        "kind": "focus",
+        "colorToken": "primary",
+        "widthRem": 0.125
+      },
+      "body": {
+        "kind": "typography",
+        "family": "geist",
+        "sizeRem": 1,
+        "lineHeight": 1.5,
+        "weight": 400
+      },
+      "heading": {
+        "kind": "typography",
+        "family": "geist",
+        "sizeRem": 1.5,
+        "lineHeight": 1.25,
+        "weight": 600
+      },
+      "space_xs": {
+        "kind": "spacing",
+        "rem": 0.25
+      },
+      "space_sm": {
+        "kind": "spacing",
+        "rem": 0.5
+      },
+      "space_md": {
+        "kind": "spacing",
+        "rem": 1
+      },
+      "space_lg": {
+        "kind": "spacing",
+        "rem": 1.5
+      },
+      "radius_sm": {
+        "kind": "corners",
+        "rem": 0.09
+      },
+      "radius_md": {
+        "kind": "corners",
+        "rem": 0.18
+      },
+      "radius_lg": {
+        "kind": "corners",
+        "rem": 0.36
+      },
+      "radius_base": {
+        "kind": "corners",
+        "rem": 0.45
+      },
+      "elevation_low": {
+        "kind": "elevation",
+        "level": 1
+      },
+      "elevation_high": {
+        "kind": "elevation",
+        "level": 3
+      },
+      "density": {
+        "kind": "density",
+        "value": "compact"
+      }
+    }
+  },
+  "PLATFORM_THEME_LYRA_SAND": {
+    "catalogueThemeId": "37c40d16-d616-4ce3-a6ff-5d797c1a803d",
+    "releaseVersion": "1.0.0",
+    "loaderMark": {
+      "segments": [
+        [12, 101.569, 60, 18.431],
+        [60, 18.431, 108, 101.569],
+        [108, 101.569, 12, 101.569],
+        [12, 101.569, 84, 60],
+        [84, 60, 36, 60],
+        [36, 60, 48, 80.784]
+      ],
+      "cycleSeconds": 5
+    },
+    "tokens": {
+      "background": {
+        "kind": "color_pair",
+        "light": "oklch(1 0 0)",
+        "dark": "oklch(0.147 0.004 49.3)",
+        "role": "background"
+      },
+      "surface": {
+        "kind": "color_pair",
+        "light": "oklch(0.986 0.002 67.8)",
+        "dark": "oklch(0.214 0.009 43.1)",
+        "role": "background"
+      },
+      "text": {
+        "kind": "color_pair",
+        "light": "oklch(0.147 0.004 49.3)",
+        "dark": "oklch(0.986 0.002 67.8)",
+        "role": "foreground"
+      },
+      "muted_text": {
+        "kind": "color_pair",
+        "light": "oklch(0.547 0.021 43.1)",
+        "dark": "oklch(0.714 0.014 41.2)",
+        "role": "foreground"
+      },
+      "border_color": {
+        "kind": "color_pair",
+        "light": "oklch(0.922 0.005 34.3)",
+        "dark": "oklch(1 0 0 / 10%)"
+      },
+      "border": {
+        "kind": "border",
+        "widthRem": 0.0625,
+        "style": "solid",
+        "colorToken": "border_color"
+      },
+      "primary": {
+        "kind": "color_pair",
+        "light": "oklch(0.555 0.163 48.998)",
+        "dark": "oklch(0.494 0.137 46.201)"
+      },
+      "primary_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.987 0.022 95.277)",
+        "dark": "oklch(0.987 0.022 95.277)",
+        "role": "foreground"
+      },
+      "secondary": {
+        "kind": "color_pair",
+        "light": "oklch(0.967 0.001 286.375)",
+        "dark": "oklch(0.274 0.006 286.033)"
+      },
+      "secondary_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.21 0.006 285.885)",
+        "dark": "oklch(0.985 0 0)",
+        "role": "foreground"
+      },
+      "danger": {
+        "kind": "color_pair",
+        "light": "oklch(0.577 0.245 27.325)",
+        "dark": "oklch(0.704 0.191 22.216)"
+      },
+      "danger_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.985 0 0)",
+        "dark": "oklch(0.205 0 0)",
+        "role": "foreground"
+      },
+      "danger_text": {
+        "kind": "color_pair",
+        "light": "oklch(0.577 0.245 27.325)",
+        "dark": "oklch(0.704 0.191 22.216)",
+        "role": "foreground"
+      },
+      "warning_text": {
+        "kind": "color_pair",
+        "light": "#92400E",
+        "dark": "#FBBF24",
+        "role": "foreground"
+      },
+      "info_text": {
+        "kind": "color_pair",
+        "light": "#1D4ED8",
+        "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
+      "card": {
+        "kind": "color_pair",
+        "light": "oklch(1 0 0)",
+        "dark": "oklch(0.214 0.009 43.1)",
+        "role": "background"
+      },
+      "card_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.147 0.004 49.3)",
+        "dark": "oklch(0.986 0.002 67.8)",
+        "role": "foreground"
+      },
+      "popover": {
+        "kind": "color_pair",
+        "light": "oklch(1 0 0)",
+        "dark": "oklch(0.214 0.009 43.1)",
+        "role": "background"
+      },
+      "popover_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.147 0.004 49.3)",
+        "dark": "oklch(0.986 0.002 67.8)",
+        "role": "foreground"
+      },
+      "muted": {
+        "kind": "color_pair",
+        "light": "oklch(0.96 0.002 17.2)",
+        "dark": "oklch(0.268 0.011 36.5)",
+        "role": "background"
+      },
+      "accent": {
+        "kind": "color_pair",
+        "light": "oklch(0.96 0.002 17.2)",
+        "dark": "oklch(0.268 0.011 36.5)",
+        "role": "background"
+      },
+      "accent_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.214 0.009 43.1)",
+        "dark": "oklch(0.986 0.002 67.8)",
+        "role": "foreground"
+      },
+      "input": {
+        "kind": "color_pair",
+        "light": "oklch(0.922 0.005 34.3)",
+        "dark": "oklch(1 0 0 / 15%)"
+      },
+      "ring": {
+        "kind": "color_pair",
+        "light": "oklch(0.670672 0.014 41.2)",
+        "dark": "oklch(0.547 0.021 43.1)"
+      },
+      "chart_1": {
+        "kind": "color_pair",
+        "light": "oklch(0.879 0.169 91.605)",
+        "dark": "oklch(0.879 0.169 91.605)"
+      },
+      "chart_2": {
+        "kind": "color_pair",
+        "light": "oklch(0.769 0.188 70.08)",
+        "dark": "oklch(0.769 0.188 70.08)"
+      },
+      "chart_3": {
+        "kind": "color_pair",
+        "light": "oklch(0.666 0.179 58.318)",
+        "dark": "oklch(0.666 0.179 58.318)"
+      },
+      "chart_4": {
+        "kind": "color_pair",
+        "light": "oklch(0.555 0.163 48.998)",
+        "dark": "oklch(0.555 0.163 48.998)"
+      },
+      "chart_5": {
+        "kind": "color_pair",
+        "light": "oklch(0.473 0.137 46.201)",
+        "dark": "oklch(0.473 0.137 46.201)"
+      },
+      "sidebar": {
+        "kind": "color_pair",
+        "light": "oklch(0.986 0.002 67.8)",
+        "dark": "oklch(0.214 0.009 43.1)",
+        "role": "background"
+      },
+      "sidebar_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.147 0.004 49.3)",
+        "dark": "oklch(0.986 0.002 67.8)",
+        "role": "foreground"
+      },
+      "sidebar_primary": {
+        "kind": "color_pair",
+        "light": "oklch(0.214 0.009 43.1)",
+        "dark": "oklch(0.488 0.243 264.376)"
+      },
+      "sidebar_primary_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.986 0.002 67.8)",
+        "dark": "oklch(0.986 0.002 67.8)",
+        "role": "foreground"
+      },
+      "sidebar_accent": {
+        "kind": "color_pair",
+        "light": "oklch(0.96 0.002 17.2)",
+        "dark": "oklch(0.268 0.011 36.5)"
+      },
+      "sidebar_accent_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.214 0.009 43.1)",
+        "dark": "oklch(0.986 0.002 67.8)",
+        "role": "foreground"
+      },
+      "sidebar_border": {
+        "kind": "color_pair",
+        "light": "oklch(0.922 0.005 34.3)",
+        "dark": "oklch(1 0 0 / 10%)"
+      },
+      "sidebar_ring": {
+        "kind": "color_pair",
+        "light": "oklch(0.714 0.014 41.2)",
+        "dark": "oklch(0.547 0.021 43.1)"
+      },
+      "focus": {
+        "kind": "focus",
+        "colorToken": "primary",
+        "widthRem": 0.125
+      },
+      "body": {
+        "kind": "typography",
+        "family": "source_sans_3",
+        "sizeRem": 1,
+        "lineHeight": 1.5,
+        "weight": 400
+      },
+      "heading": {
+        "kind": "typography",
+        "family": "source_serif_4",
+        "sizeRem": 1.5,
+        "lineHeight": 1.25,
+        "weight": 600
+      },
+      "space_xs": {
+        "kind": "spacing",
+        "rem": 0.25
+      },
+      "space_sm": {
+        "kind": "spacing",
+        "rem": 0.5
+      },
+      "space_md": {
+        "kind": "spacing",
+        "rem": 1
+      },
+      "space_lg": {
+        "kind": "spacing",
+        "rem": 1.5
+      },
+      "radius_sm": {
+        "kind": "corners",
+        "rem": 0.175
+      },
+      "radius_md": {
+        "kind": "corners",
+        "rem": 0.35
+      },
+      "radius_lg": {
+        "kind": "corners",
+        "rem": 0.7
+      },
+      "radius_base": {
+        "kind": "corners",
+        "rem": 0.875
+      },
+      "elevation_low": {
+        "kind": "elevation",
+        "level": 0
+      },
+      "elevation_high": {
+        "kind": "elevation",
+        "level": 2
+      },
+      "density": {
+        "kind": "density",
+        "value": "comfortable"
+      }
+    }
+  },
+  "PLATFORM_THEME_VEGA_INK": {
+    "catalogueThemeId": "0d975618-c40b-4910-9e43-12e88466a5f9",
+    "releaseVersion": "1.0.0",
+    "loaderMark": {
+      "segments": [
+        [12, 101.569, 60, 18.431],
+        [60, 18.431, 108, 101.569],
+        [108, 101.569, 12, 101.569],
+        [12, 101.569, 84, 60],
+        [84, 60, 36, 60],
+        [36, 60, 48, 80.784]
+      ],
+      "cycleSeconds": 5
+    },
+    "tokens": {
+      "background": {
+        "kind": "color_pair",
+        "light": "oklch(1 0 0)",
+        "dark": "oklch(0.13 0.028 261.692)",
+        "role": "background"
+      },
+      "surface": {
+        "kind": "color_pair",
+        "light": "oklch(0.985 0.002 247.839)",
+        "dark": "oklch(0.21 0.034 264.665)",
+        "role": "background"
+      },
+      "text": {
+        "kind": "color_pair",
+        "light": "oklch(0.13 0.028 261.692)",
+        "dark": "oklch(0.985 0.002 247.839)",
+        "role": "foreground"
+      },
+      "muted_text": {
+        "kind": "color_pair",
+        "light": "oklch(0.551 0.027 264.364)",
+        "dark": "oklch(0.707 0.022 261.325)",
+        "role": "foreground"
+      },
+      "border_color": {
+        "kind": "color_pair",
+        "light": "oklch(0.928 0.006 264.531)",
+        "dark": "oklch(1 0 0 / 10%)"
+      },
+      "border": {
+        "kind": "border",
+        "widthRem": 0.0625,
+        "style": "solid",
+        "colorToken": "border_color"
+      },
+      "primary": {
+        "kind": "color_pair",
+        "light": "oklch(0.491 0.27 292.581)",
+        "dark": "oklch(0.508 0.232 292.759)"
+      },
+      "primary_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.969 0.016 293.756)",
+        "dark": "oklch(0.969 0.016 293.756)",
+        "role": "foreground"
+      },
+      "secondary": {
+        "kind": "color_pair",
+        "light": "oklch(0.967 0.001 286.375)",
+        "dark": "oklch(0.274 0.006 286.033)"
+      },
+      "secondary_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.21 0.006 285.885)",
+        "dark": "oklch(0.985 0 0)",
+        "role": "foreground"
+      },
+      "danger": {
+        "kind": "color_pair",
+        "light": "oklch(0.577 0.245 27.325)",
+        "dark": "oklch(0.704 0.191 22.216)"
+      },
+      "danger_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.985 0 0)",
+        "dark": "oklch(0.205 0 0)",
+        "role": "foreground"
+      },
+      "danger_text": {
+        "kind": "color_pair",
+        "light": "oklch(0.577 0.245 27.325)",
+        "dark": "oklch(0.704 0.191 22.216)",
+        "role": "foreground"
+      },
+      "warning_text": {
+        "kind": "color_pair",
+        "light": "#92400E",
+        "dark": "#FBBF24",
+        "role": "foreground"
+      },
+      "info_text": {
+        "kind": "color_pair",
+        "light": "#1D4ED8",
+        "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
+      "card": {
+        "kind": "color_pair",
+        "light": "oklch(1 0 0)",
+        "dark": "oklch(0.21 0.034 264.665)",
+        "role": "background"
+      },
+      "card_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.13 0.028 261.692)",
+        "dark": "oklch(0.985 0.002 247.839)",
+        "role": "foreground"
+      },
+      "popover": {
+        "kind": "color_pair",
+        "light": "oklch(1 0 0)",
+        "dark": "oklch(0.21 0.034 264.665)",
+        "role": "background"
+      },
+      "popover_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.13 0.028 261.692)",
+        "dark": "oklch(0.985 0.002 247.839)",
+        "role": "foreground"
+      },
+      "muted": {
+        "kind": "color_pair",
+        "light": "oklch(0.967 0.003 264.542)",
+        "dark": "oklch(0.278 0.033 256.848)",
+        "role": "background"
+      },
+      "accent": {
+        "kind": "color_pair",
+        "light": "oklch(0.967 0.003 264.542)",
+        "dark": "oklch(0.278 0.033 256.848)",
+        "role": "background"
+      },
+      "accent_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.21 0.034 264.665)",
+        "dark": "oklch(0.985 0.002 247.839)",
+        "role": "foreground"
+      },
+      "input": {
+        "kind": "color_pair",
+        "light": "oklch(0.928 0.006 264.531)",
+        "dark": "oklch(1 0 0 / 15%)"
+      },
+      "ring": {
+        "kind": "color_pair",
+        "light": "oklch(0.669373 0.022 261.325)",
+        "dark": "oklch(0.551 0.027 264.364)"
+      },
+      "chart_1": {
+        "kind": "color_pair",
+        "light": "oklch(0.811 0.111 293.571)",
+        "dark": "oklch(0.811 0.111 293.571)"
+      },
+      "chart_2": {
+        "kind": "color_pair",
+        "light": "oklch(0.606 0.25 292.717)",
+        "dark": "oklch(0.606 0.25 292.717)"
+      },
+      "chart_3": {
+        "kind": "color_pair",
+        "light": "oklch(0.541 0.281 293.009)",
+        "dark": "oklch(0.541 0.281 293.009)"
+      },
+      "chart_4": {
+        "kind": "color_pair",
+        "light": "oklch(0.491 0.27 292.581)",
+        "dark": "oklch(0.491 0.27 292.581)"
+      },
+      "chart_5": {
+        "kind": "color_pair",
+        "light": "oklch(0.432 0.232 292.759)",
+        "dark": "oklch(0.432 0.232 292.759)"
+      },
+      "sidebar": {
+        "kind": "color_pair",
+        "light": "oklch(0.985 0.002 247.839)",
+        "dark": "oklch(0.21 0.034 264.665)",
+        "role": "background"
+      },
+      "sidebar_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.13 0.028 261.692)",
+        "dark": "oklch(0.985 0.002 247.839)",
+        "role": "foreground"
+      },
+      "sidebar_primary": {
+        "kind": "color_pair",
+        "light": "oklch(0.21 0.034 264.665)",
+        "dark": "oklch(0.488 0.243 264.376)"
+      },
+      "sidebar_primary_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.985 0.002 247.839)",
+        "dark": "oklch(0.985 0.002 247.839)",
+        "role": "foreground"
+      },
+      "sidebar_accent": {
+        "kind": "color_pair",
+        "light": "oklch(0.967 0.003 264.542)",
+        "dark": "oklch(0.278 0.033 256.848)"
+      },
+      "sidebar_accent_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.21 0.034 264.665)",
+        "dark": "oklch(0.985 0.002 247.839)",
+        "role": "foreground"
+      },
+      "sidebar_border": {
+        "kind": "color_pair",
+        "light": "oklch(0.928 0.006 264.531)",
+        "dark": "oklch(1 0 0 / 10%)"
+      },
+      "sidebar_ring": {
+        "kind": "color_pair",
+        "light": "oklch(0.707 0.022 261.325)",
+        "dark": "oklch(0.551 0.027 264.364)"
+      },
+      "focus": {
+        "kind": "focus",
+        "colorToken": "primary",
+        "widthRem": 0.125
+      },
+      "body": {
+        "kind": "typography",
+        "family": "manrope",
+        "sizeRem": 1,
+        "lineHeight": 1.5,
+        "weight": 400
+      },
+      "heading": {
+        "kind": "typography",
+        "family": "manrope",
+        "sizeRem": 1.5,
+        "lineHeight": 1.25,
+        "weight": 600
+      },
+      "space_xs": {
+        "kind": "spacing",
+        "rem": 0.25
+      },
+      "space_sm": {
+        "kind": "spacing",
+        "rem": 0.5
+      },
+      "space_md": {
+        "kind": "spacing",
+        "rem": 1
+      },
+      "space_lg": {
+        "kind": "spacing",
+        "rem": 1.5
+      },
+      "radius_sm": {
+        "kind": "corners",
+        "rem": 0.125
+      },
+      "radius_md": {
+        "kind": "corners",
+        "rem": 0.25
+      },
+      "radius_lg": {
+        "kind": "corners",
+        "rem": 0.5
+      },
+      "radius_base": {
+        "kind": "corners",
+        "rem": 0.625
+      },
+      "elevation_low": {
+        "kind": "elevation",
+        "level": 2
+      },
+      "elevation_high": {
+        "kind": "elevation",
+        "level": 4
+      },
+      "density": {
+        "kind": "density",
+        "value": "compact"
+      }
+    }
+  },
+  "PLATFORM_THEME_MAIA_CLAY": {
+    "catalogueThemeId": "5dc2d49a-4fd2-426d-b98d-5eaf3d3f7e37",
+    "releaseVersion": "1.0.0",
+    "loaderMark": {
+      "segments": [
+        [12, 101.569, 60, 18.431],
+        [60, 18.431, 108, 101.569],
+        [108, 101.569, 12, 101.569],
+        [12, 101.569, 84, 60],
+        [84, 60, 36, 60],
+        [36, 60, 48, 80.784]
+      ],
+      "cycleSeconds": 5
+    },
+    "tokens": {
+      "background": {
+        "kind": "color_pair",
+        "light": "oklch(1 0 0)",
+        "dark": "oklch(0.153 0.006 107.1)",
+        "role": "background"
+      },
+      "surface": {
+        "kind": "color_pair",
+        "light": "oklch(0.988 0.003 106.5)",
+        "dark": "oklch(0.228 0.013 107.4)",
+        "role": "background"
+      },
+      "text": {
+        "kind": "color_pair",
+        "light": "oklch(0.153 0.006 107.1)",
+        "dark": "oklch(0.988 0.003 106.5)",
+        "role": "foreground"
+      },
+      "muted_text": {
+        "kind": "color_pair",
+        "light": "oklch(0.566 0.031 107.3)",
+        "dark": "oklch(0.737 0.021 106.9)",
+        "role": "foreground"
+      },
+      "border_color": {
+        "kind": "color_pair",
+        "light": "oklch(0.93 0.007 106.5)",
+        "dark": "oklch(1 0 0 / 10%)"
+      },
+      "border": {
+        "kind": "border",
+        "widthRem": 0.0625,
+        "style": "solid",
+        "colorToken": "border_color"
+      },
+      "primary": {
+        "kind": "color_pair",
+        "light": "oklch(0.508 0.118 165.612)",
+        "dark": "oklch(0.469 0.095 166.913)"
+      },
+      "primary_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.979 0.021 166.113)",
+        "dark": "oklch(0.979 0.021 166.113)",
+        "role": "foreground"
+      },
+      "secondary": {
+        "kind": "color_pair",
+        "light": "oklch(0.967 0.001 286.375)",
+        "dark": "oklch(0.274 0.006 286.033)"
+      },
+      "secondary_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.21 0.006 285.885)",
+        "dark": "oklch(0.985 0 0)",
+        "role": "foreground"
+      },
+      "danger": {
+        "kind": "color_pair",
+        "light": "oklch(0.577 0.245 27.325)",
+        "dark": "oklch(0.704 0.191 22.216)"
+      },
+      "danger_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.985 0 0)",
+        "dark": "oklch(0.205 0 0)",
+        "role": "foreground"
+      },
+      "danger_text": {
+        "kind": "color_pair",
+        "light": "oklch(0.577 0.245 27.325)",
+        "dark": "oklch(0.704 0.191 22.216)",
+        "role": "foreground"
+      },
+      "warning_text": {
+        "kind": "color_pair",
+        "light": "#92400E",
+        "dark": "#FBBF24",
+        "role": "foreground"
+      },
+      "info_text": {
+        "kind": "color_pair",
+        "light": "#1D4ED8",
+        "dark": "#60A5FA",
+        "role": "foreground"
+      },
+      "success_text": {
+        "kind": "color_pair",
+        "light": "#166534",
+        "dark": "#4ADE80",
+        "role": "foreground"
+      },
+      "card": {
+        "kind": "color_pair",
+        "light": "oklch(1 0 0)",
+        "dark": "oklch(0.228 0.013 107.4)",
+        "role": "background"
+      },
+      "card_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.153 0.006 107.1)",
+        "dark": "oklch(0.988 0.003 106.5)",
+        "role": "foreground"
+      },
+      "popover": {
+        "kind": "color_pair",
+        "light": "oklch(1 0 0)",
+        "dark": "oklch(0.228 0.013 107.4)",
+        "role": "background"
+      },
+      "popover_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.153 0.006 107.1)",
+        "dark": "oklch(0.988 0.003 106.5)",
+        "role": "foreground"
+      },
+      "muted": {
+        "kind": "color_pair",
+        "light": "oklch(0.966 0.005 106.5)",
+        "dark": "oklch(0.286 0.016 107.4)",
+        "role": "background"
+      },
+      "accent": {
+        "kind": "color_pair",
+        "light": "oklch(0.966 0.005 106.5)",
+        "dark": "oklch(0.286 0.016 107.4)",
+        "role": "background"
+      },
+      "accent_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.228 0.013 107.4)",
+        "dark": "oklch(0.988 0.003 106.5)",
+        "role": "foreground"
+      },
+      "input": {
+        "kind": "color_pair",
+        "light": "oklch(0.93 0.007 106.5)",
+        "dark": "oklch(1 0 0 / 15%)"
+      },
+      "ring": {
+        "kind": "color_pair",
+        "light": "oklch(0.668468 0.021 106.9)",
+        "dark": "oklch(0.58 0.031 107.3)"
+      },
+      "chart_1": {
+        "kind": "color_pair",
+        "light": "oklch(0.845 0.143 164.978)",
+        "dark": "oklch(0.845 0.143 164.978)"
+      },
+      "chart_2": {
+        "kind": "color_pair",
+        "light": "oklch(0.696 0.17 162.48)",
+        "dark": "oklch(0.696 0.17 162.48)"
+      },
+      "chart_3": {
+        "kind": "color_pair",
+        "light": "oklch(0.596 0.145 163.225)",
+        "dark": "oklch(0.596 0.145 163.225)"
+      },
+      "chart_4": {
+        "kind": "color_pair",
+        "light": "oklch(0.508 0.118 165.612)",
+        "dark": "oklch(0.508 0.118 165.612)"
+      },
+      "chart_5": {
+        "kind": "color_pair",
+        "light": "oklch(0.432 0.095 166.913)",
+        "dark": "oklch(0.432 0.095 166.913)"
+      },
+      "sidebar": {
+        "kind": "color_pair",
+        "light": "oklch(0.988 0.003 106.5)",
+        "dark": "oklch(0.228 0.013 107.4)",
+        "role": "background"
+      },
+      "sidebar_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.153 0.006 107.1)",
+        "dark": "oklch(0.988 0.003 106.5)",
+        "role": "foreground"
+      },
+      "sidebar_primary": {
+        "kind": "color_pair",
+        "light": "oklch(0.228 0.013 107.4)",
+        "dark": "oklch(0.488 0.243 264.376)"
+      },
+      "sidebar_primary_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.988 0.003 106.5)",
+        "dark": "oklch(0.988 0.003 106.5)",
+        "role": "foreground"
+      },
+      "sidebar_accent": {
+        "kind": "color_pair",
+        "light": "oklch(0.966 0.005 106.5)",
+        "dark": "oklch(0.286 0.016 107.4)"
+      },
+      "sidebar_accent_foreground": {
+        "kind": "color_pair",
+        "light": "oklch(0.228 0.013 107.4)",
+        "dark": "oklch(0.988 0.003 106.5)",
+        "role": "foreground"
+      },
+      "sidebar_border": {
+        "kind": "color_pair",
+        "light": "oklch(0.93 0.007 106.5)",
+        "dark": "oklch(1 0 0 / 10%)"
+      },
+      "sidebar_ring": {
+        "kind": "color_pair",
+        "light": "oklch(0.737 0.021 106.9)",
+        "dark": "oklch(0.58 0.031 107.3)"
+      },
+      "focus": {
+        "kind": "focus",
+        "colorToken": "primary",
+        "widthRem": 0.125
+      },
+      "body": {
+        "kind": "typography",
+        "family": "inter",
+        "sizeRem": 1,
+        "lineHeight": 1.5,
+        "weight": 400
+      },
+      "heading": {
+        "kind": "typography",
+        "family": "playfair_display",
+        "sizeRem": 1.5,
+        "lineHeight": 1.25,
+        "weight": 600
+      },
+      "space_xs": {
+        "kind": "spacing",
+        "rem": 0.25
+      },
+      "space_sm": {
+        "kind": "spacing",
+        "rem": 0.5
+      },
+      "space_md": {
+        "kind": "spacing",
+        "rem": 1
+      },
+      "space_lg": {
+        "kind": "spacing",
+        "rem": 1.5
+      },
+      "radius_sm": {
+        "kind": "corners",
+        "rem": 0.125
+      },
+      "radius_md": {
+        "kind": "corners",
+        "rem": 0.25
+      },
+      "radius_lg": {
+        "kind": "corners",
+        "rem": 0.5
+      },
+      "radius_base": {
+        "kind": "corners",
+        "rem": 0.625
+      },
+      "elevation_low": {
+        "kind": "elevation",
+        "level": 1
+      },
+      "elevation_high": {
+        "kind": "elevation",
+        "level": 2
+      },
+      "density": {
+        "kind": "density",
+        "value": "comfortable"
+      }
+    }
   }
 }
