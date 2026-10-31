@@ -24,7 +24,7 @@ canonical file synchronized with the migration that installs its function.
 `postgres` ownership only where it calls an integration the `vortex_owner` role cannot be granted;
 every other function is owned by `vortex_owner`.
 
-`vortex_owner` is NOLOGIN and has `BYPASSRLS`, so the security-definer functions it owns keep the
+`vortex_owner` is NOLOGIN and, like `postgres`, has `BYPASSRLS`, so the security-definer functions it owns keep the
 access that their former `postgres` ownership provided on FORCE RLS tables. Every organisation-owned
 table has RLS enabled and forced; the inert policies that duplicated those rules are removed. The
 restricted record role `vortex_record_adapter` does not have `BYPASSRLS`, and its
