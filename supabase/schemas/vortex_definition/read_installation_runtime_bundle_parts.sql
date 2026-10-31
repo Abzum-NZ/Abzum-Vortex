@@ -12,8 +12,7 @@ set search_path = ''
 as $function$
 declare
   allowed_sections constant text[] := array[
-    'pages', 'navigation', 'flows', 'theme', 'component_registry',
-    'access_plan', 'tool_bundle'
+    'pages', 'navigation', 'flows', 'theme', 'component_registry', 'access_plan'
   ];
   checked_context jsonb;
   selected_organization_id uuid;

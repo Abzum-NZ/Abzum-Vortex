@@ -38,7 +38,6 @@ import { Button } from "@vortex/ui/components/button";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { FirstRecordTypeEmptyState } from "../../../../../../_components/first-record-type-empty-state";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
-import type { PageWebMcpTool } from "../../../../../../_lib/application-page";
 import type {
   PageMessageDraft,
   SubmittedForm,
@@ -354,34 +353,6 @@ export function ApplicationPageViewContent({
     void applyDispatch(dispatch, undefined, undefined, bindingId);
   };
 
-  const invokeWebMcpTool = useCallback(
-    async (tool: PageWebMcpTool, input: unknown, signal?: AbortSignal): Promise<unknown> => {
-      if (signal?.aborted) return { outcome: "cancelled" };
-      if (!isRecord(input)) return { outcome: "refused" };
-      showPageMessage(undefined);
-      try {
-        const result = await webMcpRuntime.dispatchReference(
-          tool.binding,
-          input,
-          crypto.randomUUID(),
-          signal,
-        );
-        await applyDispatch(Promise.resolve(result), undefined, undefined, tool.binding.bindingId);
-        if (signal?.aborted) return { outcome: "cancelled" };
-        if (result.kind === "finished")
-          return {
-            outcome: result.descriptor.outcome,
-            ...(result.descriptor.outputs === "available" ? { outputs: result.outputs } : {}),
-          };
-        return { outcome: result.kind };
-      } catch (error) {
-        console.error(`[webmcp] flow dispatch failed for ${tool.name}: ${describeFailure(error)}`);
-        return { outcome: "unavailable" };
-      }
-    },
-    [applyDispatch, webMcpRuntime],
-  );
-
   const webMcpContextKey = JSON.stringify([
     model.accessVersion,
     application.tenantShortName,
@@ -641,12 +612,6 @@ export function ApplicationPageViewContent({
         className="contents"
         {...(pageHold === "held" ? { "data-vortex-page-held": "" } : {})}
       >
-        <WebMcpAdapter
-          contextKey={webMcpContextKey}
-          tools={model.webMcpTools}
-          onInvoke={invokeWebMcpTool}
-          onStatusChange={reportWebMcpShellState}
-        />
         <PagePuckRenderer
           readSettings={readCompiledItemSettings}
           contentRegion

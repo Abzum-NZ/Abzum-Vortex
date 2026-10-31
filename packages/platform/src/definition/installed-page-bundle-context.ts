@@ -144,7 +144,6 @@ const bundleFromSections = (
         ...pages.application.identity,
         correlationId,
         content: applicationContent,
-        toolBundle: requireSection(sections, "tool_bundle"),
       },
       modules: pages.modules.map((module) => ({
         ...module.identity,

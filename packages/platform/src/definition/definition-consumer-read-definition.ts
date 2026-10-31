@@ -319,10 +319,7 @@ export const projectStoredConsumerRelease = async (
     // An Application consumer release always carries the platform compatibility its release was
     // compiled under; the release evidence above makes the field's absence a refusal, not a gap.
     ...(release.kind === "application" && output.kind === "application"
-      ? {
-          toolBundle: output.toolBundle,
-          platformCompatibilityVersion: output.platformCompatibilityVersion,
-        }
+      ? { platformCompatibilityVersion: output.platformCompatibilityVersion }
       : {}),
     dependencyManifest: release.dependencyManifest,
     correlationId,

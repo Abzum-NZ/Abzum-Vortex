@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { applicationContentSchema } from "./application-contracts";
 import { correlationIdSchema } from "../catalogue/common";
-import { applicationToolBundleSchema } from "./definition-compilation-contracts";
 import { exactDefinitionDependencySchema } from "./definition-store-contracts";
 import {
   applicationRootIdSchema,
@@ -82,20 +81,11 @@ export const applicationDefinitionConsumerReadResultSchema = z
     kind: z.literal("application"),
     rootId: applicationRootIdSchema,
     content: applicationContentSchema,
-    toolBundle: applicationToolBundleSchema,
     ...definitionConsumerReadResultCommon,
     validationContractVersion: z.literal("4.2.0"),
     platformCompatibilityVersion: applicationPlatformCompatibilityVersionSchema,
   })
-  .strict()
-  .superRefine((value, context) => {
-    if (value.toolBundle.applicationKey !== value.definitionKey)
-      context.addIssue({
-        code: "custom",
-        path: ["toolBundle", "applicationKey"],
-        message: "A consumer release's tool bundle belongs to its Definition key",
-      });
-  });
+  .strict();
 
 /** The Module 4.2.0 stored consumer projection and its exact immutable release identity. */
 export const moduleDefinitionConsumerReadResultSchema = z

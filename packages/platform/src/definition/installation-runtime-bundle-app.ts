@@ -434,7 +434,6 @@ const buildInstallationRuntimeBundleWriteCommand = (
           .sort((left, right) => compareCanonical(left.rootId, right.rootId)),
       },
     },
-    tool_bundle: application.toolBundle,
   } satisfies Record<(typeof installationRuntimeBundleSections)[number], unknown>;
 
   return installationRuntimeBundleWriteCommandSchema.parse({
