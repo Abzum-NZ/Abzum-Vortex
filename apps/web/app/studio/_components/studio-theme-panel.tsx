@@ -5,14 +5,15 @@ import { createVortexStyleRootProps, Icon, VORTEX_STYLES } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 import { InputGroup, InputGroupInput, InputGroupAddon } from "@vortex/ui/components/input-group";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
+import { Notice } from "@vortex/ui/components/notice";
 import { RadioGroup, RadioGroupItem } from "@vortex/ui/components/radio-group";
 import { ToggleGroup, ToggleGroupItem } from "@vortex/ui/components/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
-import { toast } from "@vortex/ui/components/sonner";
+import { studioNotice } from "./studio-save-state";
 import { cn } from "@vortex/ui/lib/utils";
 import {
   StudioInspectorGroup,
+  StudioOptionControl,
   StudioIconButton,
   StudioCopyButton,
   decodeStudioThemePreset,
@@ -245,7 +246,7 @@ export function StudioThemePanel({
       const outcome = await onChange(next, what);
       if (outcome.kind === "applied") {
         setFeedback(null);
-        toast.success(outcome.message);
+        studioNotice(outcome.message, "success");
       } else setFeedback(outcome);
       return outcome.kind === "applied";
     } finally {
@@ -265,7 +266,7 @@ export function StudioThemePanel({
       const outcome = await onPreset(preset, `Theme ${preset.label} applied`);
       if (outcome.kind === "applied") {
         setFeedback(null);
-        toast.success(outcome.message);
+        studioNotice(outcome.message, "success");
       } else setFeedback(outcome);
     } finally {
       setPending(false);
@@ -292,7 +293,7 @@ export function StudioThemePanel({
         const outcome = await onChange(next, "Shuffled");
         if (outcome.kind === "applied") {
           setFeedback(null);
-          toast.success(outcome.message);
+          studioNotice(outcome.message, "success");
           return;
         }
         if (outcome.problems === undefined) {
@@ -312,21 +313,13 @@ export function StudioThemePanel({
   const select = (entry: StudioThemeDimension) => (
     <StudioField label={entry.label}>
       {(control) => (
-        <NativeSelect
+        <StudioOptionControl
           {...control}
           value={selection[entry.key]}
+          options={entry.options.map((option) => ({ value: option.id, label: option.label }))}
           disabled={locked}
-          onChange={(event) => pick(entry.key, event.target.value)}
-        >
-          {entry.options.some((option) => option.id === selection[entry.key]) ? null : (
-            <NativeSelectOption value={selection[entry.key]}>Not offered</NativeSelectOption>
-          )}
-          {entry.options.map((option) => (
-            <NativeSelectOption key={option.id} value={option.id}>
-              {option.label}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
+          onChange={(id) => pick(entry.key, id)}
+        />
       )}
     </StudioField>
   );
@@ -365,15 +358,11 @@ export function StudioThemePanel({
       }
     >
       {feedback !== null && (
-        <div
-          role={feedback.kind === "refused" ? "alert" : "status"}
-          className={
-            feedback.kind === "refused"
-              ? "space-y-1 text-sm text-destructive"
-              : "text-sm text-muted-foreground"
-          }
-        >
-          <p>{feedback.message}</p>
+        <div className="space-y-1 text-sm">
+          <Notice
+            severity={feedback.kind === "refused" ? "error" : "info"}
+            content={feedback.message}
+          />
           {feedback.problems !== undefined && (
             <ul className="list-disc pl-5">
               {feedback.problems.map((problem) => (

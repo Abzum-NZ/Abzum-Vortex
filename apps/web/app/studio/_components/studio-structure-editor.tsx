@@ -24,7 +24,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@vortex/ui/components/dialog";
-import { toast } from "@vortex/ui/components/sonner";
+import { studioNotice } from "./studio-save-state";
 import type { StudioSemanticSelection } from "@vortex/ui/studio";
 import {
   studioStructureDefaultShell,
@@ -113,7 +113,7 @@ export function StudioStructureEditor({
     const result = onCommand(command, merge);
     if (result.kind === "refused") {
       const hasReferences = result.where !== undefined && result.where.length > 0;
-      toast.error("Nothing was changed", {
+      studioNotice("Nothing was changed", "error", undefined, {
         id: "studio-structure-refusal",
         description: <span className="text-muted-foreground">{result.message}</span>,
         duration: Infinity,

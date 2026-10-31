@@ -15,7 +15,7 @@ import type { StudioActionChoice } from "../contextual-palette";
 import type { StudioFlowCreateCommand, StudioFlowCreateChoices } from "../application-flow-create";
 import { Input } from "../../components/input";
 import { Label } from "../../components/label";
-import { NativeSelect, NativeSelectOption } from "../../components/native-select";
+import { StudioOptionControl } from "../studio-setting-controls";
 import { StudioEntryList } from "../studio-entry-list";
 import { pruneUnboundEvents } from "../stored-composition";
 import {
@@ -278,54 +278,53 @@ function StudioRowActionsEditor({
                 onChange={(event) => change(index, "label", event.target.value)}
               />
               <Label htmlFor={`${id}-${index}-icon`}>Icon</Label>
-              <NativeSelect
+              <StudioOptionControl
                 id={`${id}-${index}-icon`}
                 value={action.icon}
                 disabled={disabled}
-                onChange={(event) => change(index, "icon", event.target.value)}
-              >
-                {recordsTableRowActionIcons.map((icon) => (
-                  <NativeSelectOption key={icon} value={icon}>
-                    {iconLabels[icon]}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+                options={recordsTableRowActionIcons.map((icon) => ({
+                  value: icon,
+                  label: iconLabels[icon],
+                }))}
+                onChange={(value) => change(index, "icon", value)}
+              />
               <Label htmlFor={`${id}-${index}-placement`}>Show in</Label>
-              <NativeSelect
+              <StudioOptionControl
                 id={`${id}-${index}-placement`}
                 value={action.placement}
                 disabled={disabled}
-                onChange={(event) => change(index, "placement", event.target.value)}
-              >
-                <NativeSelectOption value="inline">Beside the row</NativeSelectOption>
-                <NativeSelectOption value="menu">Row menu</NativeSelectOption>
-              </NativeSelect>
+                options={[
+                  { value: "inline", label: "Beside the row" },
+                  { value: "menu", label: "Row menu" },
+                ]}
+                onChange={(value) => change(index, "placement", value)}
+              />
               <Label htmlFor={`${id}-${index}-capability`}>Required capability</Label>
-              <NativeSelect
+              <StudioOptionControl
                 id={`${id}-${index}-capability`}
                 value={action.capability ?? ""}
                 disabled={disabled}
-                onChange={(event) => {
+                options={[
+                  { value: "", label: "None" },
+                  ...recordsTableActionCapabilities.map((capability) => ({
+                    value: capability,
+                    label: { update: "Update", delete: "Delete", restore: "Restore" }[capability],
+                  })),
+                ]}
+                onChange={(value) => {
                   const rest = { ...action };
                   delete rest.capability;
                   commit(
                     actions.map((entry, i) =>
                       i !== index
                         ? entry
-                        : event.target.value === ""
+                        : value === ""
                           ? rest
-                          : { ...rest, capability: event.target.value },
+                          : { ...rest, capability: value as never },
                     ),
                   );
                 }}
-              >
-                <NativeSelectOption value="">None</NativeSelectOption>
-                {recordsTableActionCapabilities.map((capability) => (
-                  <NativeSelectOption key={capability} value={capability}>
-                    {{ update: "Update", delete: "Delete", restore: "Restore" }[capability]}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              />
             </div>
           ),
         }))}

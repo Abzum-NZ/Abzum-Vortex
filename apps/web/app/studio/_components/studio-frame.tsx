@@ -35,6 +35,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/t
 import { Separator } from "@vortex/ui/components/separator";
 import { cn } from "@vortex/ui/lib/utils";
 
+/** The one scroll body of a Studio rail panel and its inspector. */
+export const STUDIO_RAIL_BODY_CLASS = "min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-3";
+
 /**
  * Studio's own frame: a top bar over an icon rail, the rail tab's panel, the canvas and the
  * inspector. The frame is platform chrome, so it uses the platform theme's tokens only; the
@@ -568,7 +571,7 @@ export function StudioPanelShell({
         {action}
       </div>
       {search !== undefined && <div className="shrink-0 px-4 pb-3">{search}</div>}
-      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-3">{children}</div>
+      <div className={STUDIO_RAIL_BODY_CLASS}>{children}</div>
     </div>
   );
 }

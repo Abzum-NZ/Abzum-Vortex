@@ -172,7 +172,7 @@ export function ActionDialog({
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-screen overflow-y-auto sm:max-w-3xl">
+      <DialogContent className="sm:max-w-3xl">
         <form onSubmit={submit} className="space-y-4">
           <DialogHeader>
             <DialogTitle>

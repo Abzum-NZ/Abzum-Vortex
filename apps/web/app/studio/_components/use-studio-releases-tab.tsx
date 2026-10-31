@@ -23,7 +23,6 @@ import { describeStudioCompileFailure } from "../_lib/studio-compile-failure";
 import { studioReleasesSections, type StudioReleasesSection } from "./studio-rail-tabs";
 import type { StudioDraft } from "./use-studio-draft";
 import { studioNotice } from "./studio-save-state";
-import { toast } from "@vortex/ui/components/sonner";
 import { Button } from "@vortex/ui/components/button";
 import { useStudioTabVisited } from "./studio-frame";
 import type { StudioCompositionContext } from "@vortex/ui/studio";
@@ -479,24 +478,26 @@ export function useStudioReleasesTab({
         if (latest.current.isActive()) setPreviewPending(false);
       }
     })();
-    toast.promise(starting, {
-      loading: "Preview is starting…",
-      success: (href) => ({
-        message: "Preview ready",
-        action: {
-          label: "Open",
-          onClick: () => {
-            window.open(href, "_blank", "noopener");
+    studioNotice("Preview is starting…");
+    void starting
+      .then((href) =>
+        studioNotice("Preview ready", "success", undefined, {
+          action: {
+            label: "Open",
+            onClick: () => {
+              window.open(href, "_blank", "noopener");
+            },
           },
-        },
-      }),
-      error: (error: unknown) => ({
-        message: "Preview could not start",
-        duration: Infinity,
-        description:
-          error instanceof Error ? error.message : "Your changes are kept. Try Preview again.",
-      }),
-    });
+        }),
+      )
+      .catch((error: unknown) =>
+        studioNotice(
+          error instanceof Error
+            ? error.message
+            : "Preview could not start. Your changes are kept. Try Preview again.",
+          "error",
+        ),
+      );
   };
 
   /** The saved draft the agent's preview runs; null while edits are being saved or a request holds the draft. */

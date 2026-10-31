@@ -146,7 +146,7 @@ export function StudioRecordTypeDialog({
         }
       }}
     >
-      <DialogContent className="max-h-screen max-w-lg overflow-y-auto" aria-label="New record type">
+      <DialogContent className="max-w-lg" aria-label="New record type">
         <DialogHeader>
           <DialogTitle>New record type</DialogTitle>
           <DialogDescription>Name this kind of record, then add its fields.</DialogDescription>
