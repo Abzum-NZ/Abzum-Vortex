@@ -7,10 +7,10 @@ import { cn } from "../lib/utils";
  * text role on the title and the style's left rule. Tailwind only emits utilities it finds as
  * complete strings in source, so each variant spells its own classes out.
  */
-const infoVariant = "after:bg-info text-info";
-const successVariant = "after:bg-success text-success";
-const warningVariant = "after:bg-warning text-warning";
-const dangerVariant = "after:bg-destructive text-destructive";
+const infoVariant = "cn-alert-variant-default text-info after:bg-info";
+const successVariant = "cn-alert-variant-default text-success after:bg-success";
+const warningVariant = "cn-alert-variant-default text-warning after:bg-warning";
+const dangerVariant = "cn-alert-variant-destructive text-destructive after:bg-destructive";
 
 const alertVariants = cva("cn-alert group/alert relative w-full", {
   variants: {
