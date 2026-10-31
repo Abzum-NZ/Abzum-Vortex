@@ -20,14 +20,6 @@
         "administrative": false
       },
       {
-        "id": "app_permission_manage",
-        "key": "application.organisation_administration.manage",
-        "label": "Manage Organisation Administration",
-        "description": "Allows managing Organisation Administration definition-level administration.",
-        "action_kind": "manage",
-        "administrative": true
-      },
-      {
         "id": "app_permission_3",
         "key": "application.organisation_administration.organisation_notice.read",
         "label": "Open organisation notice pages",
@@ -285,14 +277,6 @@
     "interfaces": [],
     "events": [
       {
-        "id": "event_organisation_settings_action",
-        "key": "vortex.app.organisation_administration.settings_action",
-        "label": "Settings action",
-        "record_type": "vortex.organisation_administration:organisation_notice",
-        "carries": [],
-        "personal_or_sensitive_values_allowed": false
-      },
-      {
         "id": "event_open_organization_settings",
         "key": "vortex.app.organisation_administration.open_organization_settings",
         "label": "Open organization settings",
@@ -422,7 +406,6 @@
       }
     ],
     "public_addresses": [],
-    "platform_block_dependencies": [],
     "shells": [
       {
         "id": "shell_organisation_administration",

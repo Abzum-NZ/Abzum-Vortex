@@ -25,14 +25,6 @@
         "administrative": false
       },
       {
-        "id": "app_permission_manage",
-        "key": "application.tenant_administration.manage",
-        "label": "Manage Tenant Administration",
-        "description": "Allows managing Tenant Administration definition-level administration.",
-        "action_kind": "manage",
-        "administrative": true
-      },
-      {
         "id": "app_permission_organization_read",
         "key": "vortex.tenant_administration.organization.read",
         "label": "Read organisations",
@@ -219,7 +211,6 @@
       }
     ],
     "public_addresses": [],
-    "platform_block_dependencies": [],
     "shells": [
       {
         "id": "shell_tenant_administration",

@@ -9,7 +9,7 @@ import {
 type JsonObject = Record<string, unknown>;
 
 /** Every placed block release as `block_id@release_version`: one block can have several releases. */
-const collectBlockReleases = (value: unknown, result = new Set<string>()): Set<string> => {
+export const collectBlockReleases = (value: unknown, result = new Set<string>()): Set<string> => {
   if (Array.isArray(value)) {
     for (const item of value) collectBlockReleases(item, result);
   } else if (value !== null && typeof value === "object") {

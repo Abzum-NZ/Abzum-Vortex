@@ -592,7 +592,6 @@
       }
     ],
     "public_addresses": [],
-    "platform_block_dependencies": [],
     "shells": [
       {
         "id": "shell_iam",

@@ -8,7 +8,7 @@ export const paths = {
   definitions: ["packages/definitions/src/"],
   web: ["apps/web/"],
   // Scripts and development setup name shipped applications on purpose; they are not engines.
-  scripts: ["apps/web/scripts/", "apps/web/app/_lib/development-setup/"],
+  scripts: ["apps/web/scripts/"],
   canonical: "supabase/schemas/",
   migrations: "supabase/migrations/",
   applicationSources: "packages/definitions/src/",
@@ -126,7 +126,8 @@ export const guardRules = {
     tier: "warning",
     owner: "lead",
     reviewBy: "2026-11-15",
-    reviewNote: "No file exceeds the limit; reconsider promoting the rule to blocking",
+    reviewNote:
+      "No source file exceeds the limit; the three near-limit platform files were split by CRM-FIX-PLATFORM; reconsider promoting the rule to blocking",
     description: "Source and canonical SQL files over 1,500 lines",
   },
   "silent-catch": {
@@ -202,4 +203,6 @@ export const scannedRuleIds = new Set([
   "derived-id-parity",
   "contract-version-parity",
   "grid-feature-definition",
+  "query-input-name-matching",
+  "catalogue-release-superseded",
 ]);

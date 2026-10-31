@@ -83,8 +83,6 @@ export const requestTypeOptions = [
   { value: "grant_role", label: "Grant role" },
   { value: "remove_role", label: "Remove role" },
   { value: "group_membership", label: "Group membership" },
-  { value: "role_activation", label: "Activate privileged role" },
-  { value: "role_deactivation", label: "Deactivate privileged role" },
   { value: "delegation", label: "Delegated management" },
   { value: "group_change", label: "Change a group" },
   { value: "other", label: "Other" },
