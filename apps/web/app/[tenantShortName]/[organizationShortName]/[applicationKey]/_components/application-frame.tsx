@@ -275,9 +275,12 @@ export function ApplicationFrame({
   // Forward cannot join the transition: the router carries those out itself.
   const leaveIfConfirmedRef = useRef(leaveIfConfirmed);
   leaveIfConfirmedRef.current = leaveIfConfirmed;
+  // The address Back or Forward restored, until its page has re-read its placements.
+  const historyPathname = useRef<string | undefined>(undefined);
   const navigator = useMemo<Navigator>(
     () => ({
       navigate: (path, options) => {
+        historyPathname.current = undefined;
         void (async () => {
           if (!(await leaveIfConfirmedRef.current())) return;
           startPageTransition(() =>
@@ -331,12 +334,32 @@ export function ApplicationFrame({
   };
 
   const navigation = pageState.navigation ?? model.navigation;
+  const refreshPageRef = useRef(pageState.refreshPage);
+  refreshPageRef.current = pageState.refreshPage;
+  const refreshShownPage = useCallback(() => refreshPageRef.current?.(), []);
+  // Back and Forward restore a page as it was read, and its release or the person's access may have
+  // changed since. The restored page re-reads its own placements once it is shown (a placement
+  // read answers `reload` when the release changed); nothing else is fetched again. A change of
+  // query within the same page is reread by the page's own address handling.
+  useEffect(() => {
+    const restored = (): void => {
+      historyPathname.current = window.location.pathname;
+    };
+    window.addEventListener("popstate", restored);
+    return () => window.removeEventListener("popstate", restored);
+  }, []);
+  useEffect(() => {
+    if (historyPathname.current !== pathname || pageState.refreshPage === undefined) return;
+    historyPathname.current = undefined;
+    pageState.refreshPage();
+  }, [pageState.refreshPage, pathname]);
   const frameState = useMemo<ApplicationFrameStateValue>(
     () => ({
       controlDraftsRef,
       navigation,
       setPageState,
       clearPageState,
+      refreshShownPage,
       applicationSearch,
       applicationSearchPageSubject,
       locale: model.locale,
@@ -348,6 +371,7 @@ export function ApplicationFrame({
       applicationSearch,
       applicationSearchPageSubject,
       clearPageState,
+      refreshShownPage,
       setPageState,
       navigation,
     ],

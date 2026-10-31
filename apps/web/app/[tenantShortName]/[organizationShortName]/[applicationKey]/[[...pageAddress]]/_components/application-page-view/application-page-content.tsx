@@ -603,6 +603,12 @@ export function ApplicationPageViewContent({
     [adoptReleaseAction, application.applicationKey, application.pageKey, showPageMessage],
   );
   useFramePageState("adoptRelease", adoptRelease);
+  // A change an earlier page finished after it had gone re-reads this page's data placements.
+  const refreshPage = useCallback(
+    () => void refreshPlacements(Object.keys(model.data), undefined, { content: true }),
+    [model.data, refreshPlacements],
+  );
+  useFramePageState("refreshPage", refreshPage);
 
   return (
     <>

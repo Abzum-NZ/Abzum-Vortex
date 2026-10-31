@@ -12,7 +12,6 @@ import { Toaster } from "@vortex/ui/components/sonner";
 import { loadDocumentTheme } from "./_lib/document-theme";
 import { documentStylesheetHref } from "./_lib/document-styles";
 import "@vortex/ui/styles/globals.css";
-import { HistoryRefresh } from "./_components/history-refresh";
 
 export const metadata: Metadata = {
   title: "Vortex",
@@ -45,7 +44,6 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       </head>
       <body>
         <AppearanceProvider initial={appearance}>
-          <HistoryRefresh />
           {children}
           {/* One notifications region for every page, so a toast survives opening another
               application. The document root carries the on-screen application's theme. */}

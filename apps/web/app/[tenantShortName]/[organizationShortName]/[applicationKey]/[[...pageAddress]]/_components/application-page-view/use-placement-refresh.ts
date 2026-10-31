@@ -379,11 +379,21 @@ export function usePlacementRefresh({
         apply: (candidate: unknown) => {
           const result = flowRefreshResultSchema.parse(candidate);
           if (placementRequestsRef.current.key !== scope.key) return;
+          // Another installed release: the page itself is out of date and is read again in full.
           if (result.kind === "reload") {
             router.refresh();
             return;
           }
-          if (result.kind !== "available") throw new Error("FLOW_PLACEMENT_REFRESH_UNAVAILABLE");
+          // The write committed but its rows could not be read with the reply: they are read again
+          // on their own, so the page never keeps showing what the write changed.
+          if (result.kind !== "available") {
+            void refreshPlacements(
+              [...requests.values()].map((entry) => entry.componentId),
+              undefined,
+              { content: true },
+            );
+            return;
+          }
           const accepted = [...requests.entries()].flatMap(([key, request]) => {
             const current = scope.generations.get(key);
             const previous = order.applied.get(key);
@@ -437,6 +447,7 @@ export function usePlacementRefresh({
       model.data,
       model.editFormBaselines,
       navigationKey,
+      refreshPlacements,
       refreshedPlacementData,
       router,
     ],

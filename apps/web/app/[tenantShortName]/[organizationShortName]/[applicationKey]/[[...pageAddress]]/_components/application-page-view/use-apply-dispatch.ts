@@ -130,7 +130,17 @@ export function useApplyDispatch({
           return outcome;
         }
         if (server.kind === "reload") {
-          router.refresh();
+          // Another installed release: the page itself is out of date and is read again in full.
+          if (server.installationRevision !== model.invocation.installationRevision)
+            router.refresh();
+          // The same release: only rows changed under the person (a row shown at an older
+          // revision), so the placements this run reads are re-read as they now are.
+          else
+            void refreshPlacements(
+              sourceBindingId === undefined ? [] : refreshTargetsForBinding(sourceBindingId),
+              undefined,
+              { content: true },
+            );
           return outcome;
         }
         if (server.kind === "cells_refused") {

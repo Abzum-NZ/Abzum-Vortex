@@ -474,9 +474,9 @@ export function useFlowRuntime({
     );
     applyMessageActionRef.current(dispatched, action.bindingId);
     // An action carried to the next page (Undo after a delete that opened the list) finishes after
-    // this page has gone: the page now showing re-reads what the action changed.
+    // this page has gone: the page now showing re-reads the data it shows.
     void dispatched.then(() => {
-      if (!mountedRef.current) router.refresh();
+      if (!mountedRef.current) applicationFrame?.refreshShownPage();
     });
   };
   useEffect(() => {
