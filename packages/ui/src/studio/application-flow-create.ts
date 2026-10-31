@@ -18,6 +18,7 @@ import {
   defaultChangeFlowSource,
   defaultGuidedCancelFlowSource,
   defaultGuidedStepFlowSource,
+  defaultOpenFlowSource,
   defaultOperationFlowSource,
   sourceItemTree,
   sourcePageItems,
@@ -996,40 +997,87 @@ export const applyStudioFlowCreate = (
       command.kind === "action" &&
       (command.event === "guided_step_changed" || command.event === "form_cancel")
     ) {
-      // A guided form's step change and cancel each get their default flow, every step visible.
+      // A guided form's step change and cancel each get their default flow, every step visible. A
+      // plain form's cancel returns to the edited record's detail page, or to its list, unsaved.
       const page = body.pages.find((entry) =>
         sourcePageItems(entry.composition).some((item) => item.props.id === command.controlAlias),
       );
-      if (page === undefined || page.type !== "guided_form")
-        return refuse("Only a guided form's forms change step or cancel.");
       const identity = { id: key, key };
-      flow =
-        command.event === "guided_step_changed"
-          ? {
-              ...defaultGuidedStepFlowSource({
-                ...identity,
-                form: command.controlAlias,
-                page: page.key,
-              }),
-              labels: { name },
-            }
-          : {
-              ...defaultGuidedCancelFlowSource({
-                ...identity,
-                after: { kind: "navigate", page: page.key, withRecord: false },
-              }),
-              labels: { name },
-            };
-      binding = bindControl(
-        candidate,
-        command.controlAlias,
-        command.event,
-        key,
-        Object.fromEntries(
-          Object.keys(flow.inputs).map((input) => [input, { kind: "caller", name: input }]),
-        ) as SourceBinding["inputs"],
-        borrowed,
-      );
+      if (
+        command.event === "form_cancel" &&
+        page !== undefined &&
+        page.type === "form" &&
+        "record_type" in page &&
+        typeof page.record_type === "string"
+      ) {
+        const recordType = page.record_type;
+        const controls = new Set(sourcePageItems(page.composition).map((item) => item.props.id));
+        const saves = body.flow_bindings
+          .filter((entry) => entry.event === "form_submit" && controls.has(entry.control))
+          .map((entry) => body.flows.find((one) => one.key === entry.flow || one.id === entry.flow))
+          .flatMap((one) => one?.tasks ?? [])
+          .find((task) => task.type === "record.save");
+        const editing =
+          saves !== undefined && "properties" in saves && "record" in (saves.properties ?? {});
+        const sameType = body.pages.filter(
+          (entry) => "record_type" in entry && entry.record_type === recordType,
+        );
+        const back = editing
+          ? sameType.find((entry) => entry.type === "detail")
+          : sameType.find((entry) => entry.type === "list");
+        if (back === undefined)
+          return refuse(
+            editing
+              ? "Add a detail page for this record type, so Cancel has a page to return to."
+              : "Add a list page for this record type, so Cancel has a page to return to.",
+          );
+        flow = {
+          ...defaultOpenFlowSource({
+            ...identity,
+            page: back.key,
+            ...(editing ? { recordType } : {}),
+          }),
+          labels: { name },
+        };
+        binding = bindControl(
+          candidate,
+          command.controlAlias,
+          command.event,
+          key,
+          editing ? { record_id: { kind: "caller", name: "record" } } : {},
+          borrowed,
+        );
+      } else {
+        if (page === undefined || page.type !== "guided_form")
+          return refuse("Only a form changes step or cancels.");
+        flow =
+          command.event === "guided_step_changed"
+            ? {
+                ...defaultGuidedStepFlowSource({
+                  ...identity,
+                  form: command.controlAlias,
+                  page: page.key,
+                }),
+                labels: { name },
+              }
+            : {
+                ...defaultGuidedCancelFlowSource({
+                  ...identity,
+                  after: { kind: "navigate", page: page.key, withRecord: false },
+                }),
+                labels: { name },
+              };
+        binding = bindControl(
+          candidate,
+          command.controlAlias,
+          command.event,
+          key,
+          Object.fromEntries(
+            Object.keys(flow.inputs).map((input) => [input, { kind: "caller", name: input }]),
+          ) as SourceBinding["inputs"],
+          borrowed,
+        );
+      }
     } else if (command.kind === "action") {
       const recordSupplied =
         command.recordType !== null &&
