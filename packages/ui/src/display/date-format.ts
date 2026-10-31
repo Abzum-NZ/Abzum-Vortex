@@ -66,6 +66,64 @@ export function formatLocaleNumber(value: number, locale = DEFAULT_LOCALE): stri
   }
 }
 
+/** A whole count rendered with the same explicit locale fallback as dates. */
+export function formatCount(value: number, options: DateFormatOptions = {}): string {
+  return formatLocaleNumber(value, options.locale ?? DEFAULT_LOCALE);
+}
+
+/** The one record-count sentence: "1 record" or "1,234 records". */
+export function recordsPhrase(count: number, options: DateFormatOptions = {}): string {
+  return count === 1 ? "1 record" : `${formatCount(count, options)} records`;
+}
+
+/** The one byte-size sentence: B, KB, MB, GB or TB, grouped in the fallback locale. */
+export function formatBytes(bytes: number, options: DateFormatOptions = {}): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return "Unavailable";
+  if (bytes < 1024) return `${formatCount(Math.round(bytes), options)} B`;
+  const units = ["KB", "MB", "GB", "TB"] as const;
+  let value = bytes / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  const rounded = value < 10 ? value.toFixed(1) : String(Math.round(value));
+  return `${formatLocaleNumber(Number(rounded), options.locale ?? DEFAULT_LOCALE)} ${units[unit]}`;
+}
+
+/** Throws for an unsupported IANA time zone, so a malformed zone never becomes UTC silently. */
+export function assertTimeZone(timeZone: string): void {
+  new Intl.DateTimeFormat(DEFAULT_LOCALE, { timeZone });
+}
+
+/** One instant's wall-clock parts in an IANA time zone, from the one cached formatter. */
+export type ZonedDateTimeParts = Readonly<{
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}>;
+
+export function zonedDateTimeParts(
+  instant: Date | number,
+  timeZone: string | undefined,
+): ZonedDateTimeParts {
+  const formatter = formatterFor(INPUT_PARTS, DEFAULT_LOCALE, timeZone ?? DEFAULT_TIME_ZONE);
+  const parts = formatter.formatToParts(typeof instant === "number" ? new Date(instant) : instant);
+  const part = (type: Intl.DateTimeFormatPartTypes): number =>
+    Number(parts.find((candidate) => candidate.type === type)?.value);
+  return {
+    year: part("year"),
+    month: part("month"),
+    day: part("day"),
+    hour: part("hour"),
+    minute: part("minute"),
+    second: part("second"),
+  };
+}
+
 /** One cached formatter; an unsupported locale or time zone uses the fixed fallbacks. */
 const formatterFor = (
   parts: Intl.DateTimeFormatOptions,

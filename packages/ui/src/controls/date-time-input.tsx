@@ -21,7 +21,8 @@ import {
   fieldFocusLost,
 } from "./field-parts";
 import { useFormFieldPublisher, useRequiredFormField } from "./form-context";
-import { formatterFor, toLocalInputValue, toStoredInstant } from "./date-time-zone";
+import { assertTimeZone } from "../display/date-format";
+import { toLocalInputValue, toStoredInstant } from "./date-time-zone";
 
 type DateTimeInputProps = ControlRenderProps<DateTimeInputPayload>;
 
@@ -62,7 +63,7 @@ export function DateTimeInput(props: DateTimeInputProps): ReactElement {
         ? (context.values?.organizationTimeZone ?? "UTC")
         : "UTC";
   // A malformed supplied zone must never reinterpret a person's input as UTC.
-  formatterFor(timeZone);
+  assertTimeZone(timeZone);
   const help = [authoredHelp, `Time zone: ${timeZone}.`].filter(Boolean).join(" ");
   const projected = context.values?.value ?? null;
   const initialInput = toLocalInputValue(projected, timeZone);
