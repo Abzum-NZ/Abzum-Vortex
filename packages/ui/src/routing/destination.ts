@@ -8,12 +8,17 @@ export type Destination =
   | Readonly<{ kind: "internal"; path: string }>
   | Readonly<{ kind: "external"; address: string; web: boolean }>;
 
-const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
+/** A control character (C0 or delete) never belongs in an address. */
+const hasControlCharacter = (value: string): boolean =>
+  Array.from(value).some((character) => {
+    const code = character.charCodeAt(0);
+    return code < 0x20 || code === 0x7f;
+  });
 const INTERNAL_BASE = "https://vortex.invalid";
 
 /** The destination an address names, or undefined when it is neither internal nor a safe external one. */
 export function destinationOf(address: string): Destination | undefined {
-  if (address.length === 0 || CONTROL_CHARACTER.test(address) || address.includes("\\"))
+  if (address.length === 0 || hasControlCharacter(address) || address.includes("\\"))
     return undefined;
   if (address.startsWith("/") && !address.startsWith("//")) {
     try {
