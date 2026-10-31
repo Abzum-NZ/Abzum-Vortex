@@ -108,7 +108,7 @@ export function TableSummary({
     >
       <span className="font-medium text-foreground">
         {recordCount === 1
-          ? `1 ${label.replace(/s$/i, "")}`
+          ? `1 ${label.replace(/ies$/i, "y").replace(/s$/i, "")}`
           : `${recordCount} ${label.toLowerCase()}`}
       </span>
       {sums.map((sum) => (

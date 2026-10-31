@@ -245,7 +245,7 @@ export function readControlSettings(
           return {
             key: optionKey?.kind === "text" ? optionKey.value : undefined,
             label: optionLabel?.kind === "text" ? optionLabel.value : undefined,
-            tone: optionTone?.kind === "choice" ? optionTone.value : undefined,
+            ...(optionTone?.kind === "choice" ? { tone: optionTone.value } : {}),
           };
         }),
         { ...location, propertyPath: [key] },
