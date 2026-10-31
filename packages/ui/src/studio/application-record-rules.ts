@@ -172,3 +172,33 @@ export const moveStudioRecordRule = (
   record.before_save_rules = order;
   return { kind: "moved", source: candidate };
 };
+
+export type StudioRecordSubscriber = Readonly<{
+  flowAlias: string;
+  name: string;
+  /** When it runs, in words: after a record is created, changed or another event happens. */
+  when: string;
+}>;
+
+/** The after-save subscribers of one record type of an owned module: back-end flows started by its events. */
+export const studioRecordSubscribers = (
+  source: Readonly<ApplicationSourceDocument>,
+  moduleKey: string,
+  recordKey: string,
+): readonly StudioRecordSubscriber[] =>
+  (source.body.modules.find((entry) => entry.key === moduleKey)?.flows ?? []).flatMap((flow) =>
+    flow.triggers.flatMap((trigger) =>
+      trigger.type === "Event" && trigger.recordTypeId === recordKey
+        ? [
+            {
+              flowAlias: flow.id,
+              name: studioFlowLabel(flow),
+              when:
+                trigger.event.kind === "standard"
+                  ? `After a record is ${trigger.event.eventKind.replaceAll("_", " ")}`
+                  : "After a declared event",
+            },
+          ]
+        : [],
+    ),
+  );
