@@ -10,7 +10,6 @@
       "outputs": []
     },
     "@vortex/web#build": {
-      "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**"]
     }
   },
