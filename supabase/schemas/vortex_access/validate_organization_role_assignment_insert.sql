@@ -21,13 +21,6 @@ begin
     where role.organization_id = new.organization_id
       and role.role_id = new.role_id
       and revision.lifecycle = 'active'
-      and (
-        (new.assignment_kind = 'standing' and revision.assignment_policy = 'standing')
-        or (
-          new.assignment_kind = 'eligible'
-          and revision.assignment_policy = 'activation_required'
-        )
-      )
   ) then
     raise exception using errcode = '23514',
       message = 'A new role assignment requires a compatible active role';

@@ -11,20 +11,13 @@ declare
   target_role_kind text;
   target_lifecycle text;
   target_privilege_classification text;
-  target_assignment_policy text;
   target_policy_continuity_revision bigint;
   target_authority_continuity_revision bigint;
-  target_activation_policy_id uuid;
-  target_activation_policy_revision bigint;
   target_application_root_id uuid;
   target_registration_revision bigint;
   previous_lifecycle text;
-  previous_assignment_policy text;
   previous_policy_continuity_revision bigint;
   previous_authority_continuity_revision bigint;
-  previous_activation_policy_id uuid;
-  previous_activation_policy_revision bigint;
-  policy_unchanged boolean;
   authority_broadened boolean;
   permission_count bigint;
   administrative_permission_count bigint;
@@ -36,15 +29,13 @@ begin
   target_role_revision := new.revision;
 
   select revision.role_kind, revision.lifecycle, revision.privilege_classification,
-    revision.assignment_policy, revision.policy_continuity_revision,
-    revision.authority_continuity_revision, revision.activation_policy_id,
-    revision.activation_policy_revision,
+    revision.policy_continuity_revision,
+    revision.authority_continuity_revision,
     revision.application_root_id,
     revision.accepted_registration_revision
   into target_role_kind, target_lifecycle, target_privilege_classification,
-    target_assignment_policy, target_policy_continuity_revision,
-    target_authority_continuity_revision, target_activation_policy_id,
-    target_activation_policy_revision,
+    target_policy_continuity_revision,
+    target_authority_continuity_revision,
     target_application_root_id,
     target_registration_revision
   from vortex_access.organization_role_revisions as revision
@@ -66,14 +57,12 @@ begin
         message = 'An initial organization role authority continuity revision must be one';
     end if;
   else
-    select revision.lifecycle, revision.assignment_policy,
+    select revision.lifecycle,
       revision.policy_continuity_revision,
-      revision.authority_continuity_revision, revision.activation_policy_id,
-      revision.activation_policy_revision
-    into previous_lifecycle, previous_assignment_policy,
+      revision.authority_continuity_revision
+    into previous_lifecycle,
       previous_policy_continuity_revision,
-      previous_authority_continuity_revision, previous_activation_policy_id,
-      previous_activation_policy_revision
+      previous_authority_continuity_revision
     from vortex_access.organization_role_revisions as revision
     where revision.organization_id = target_organization_id
       and revision.role_id = target_role_id
@@ -84,24 +73,10 @@ begin
         message = 'An organization role revision requires its immediate predecessor';
     end if;
 
-    policy_unchanged :=
-      target_assignment_policy = previous_assignment_policy
-      and target_activation_policy_id is not distinct from previous_activation_policy_id
-      and target_activation_policy_revision is not distinct
-        from previous_activation_policy_revision;
-
-    if policy_unchanged and
-      target_policy_continuity_revision <> previous_policy_continuity_revision then
+    -- No role setting changes a role's policy, so every revision keeps its policy continuity.
+    if target_policy_continuity_revision <> previous_policy_continuity_revision then
       raise exception using errcode = '23514',
         message = 'Unchanged role policy must preserve policy continuity';
-    end if;
-
-    if not policy_unchanged and (
-      previous_policy_continuity_revision = 9007199254740991
-      or target_policy_continuity_revision <> previous_policy_continuity_revision + 1
-    ) then
-      raise exception using errcode = '23514',
-        message = 'Changed role policy must advance policy continuity exactly once';
     end if;
 
     select exists (

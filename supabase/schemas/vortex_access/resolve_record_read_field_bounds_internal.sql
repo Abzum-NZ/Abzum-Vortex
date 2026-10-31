@@ -30,11 +30,6 @@ declare
   first_route boolean := true;
   covers_all_records boolean := false;
   condition_free boolean := true;
-  wants_share boolean := false;
-  member_group_ids uuid[];
-  share_row record;
-  share_intersection text[];
-  share_seen boolean := false;
 begin
   -- The planner only knows how to reason about a record read; anything else is
   -- a caller error, never a wider grant.
@@ -62,89 +57,13 @@ begin
     return nothing;
   end if;
 
-  -- A direct-share route narrows its permission to the individual share's own
-  -- readable fields, which are current rows rather than a static declaration.
-  -- When any eligible alternative can match through such a route, take the
-  -- intersection of every current share's own bounds once, so a field that a
-  -- share withholds is never treated as visible.
-  select exists (
-    select 1
-    from pg_catalog.jsonb_array_elements(
-      coalesce(eligibility -> 'eligiblePermissions', '[]'::jsonb)
-    ) as listed(value)
-    cross join lateral pg_catalog.jsonb_array_elements(
-      coalesce(listed.value -> 'recordScope' -> 'routes', '[]'::jsonb)
-    ) as listed_route(value)
-    where listed_route.value ->> 'kind' = 'direct_share'
-  ) into wants_share;
-
-  if wants_share then
-    -- The groups the caller belongs to now: an active group and a live,
-    -- started, unexpired membership, exactly as the share tests require.
-    select coalesce(pg_catalog.array_agg(distinct membership.group_id), array[]::uuid[])
-    into member_group_ids
-    from vortex_access.organization_group_memberships as membership
-    join vortex_access.organization_groups as organization_group
-      on organization_group.organization_id = membership.organization_id
-      and organization_group.group_id = membership.group_id
-      and organization_group.state = 'active'
-    where membership.organization_id = decision_organization_id
-      and membership.organization_account_id = account_id
-      and membership.state = 'live'
-      and membership.starts_at <= checked_at
-      and (membership.expires_at is null or membership.expires_at > checked_at);
-
-    for share_row in
-      select share.readable_field_ids
-      from vortex_access.organization_direct_record_shares as share
-      where share.organization_id = decision_organization_id
-        and share.storage_scope = binding ->> 'storageScope'
-        and share.application_scope_id = coalesce(case
-          when binding ->> 'storageScope' = 'application_contained'
-            then (p_declaration -> 'target' ->> 'applicationRootId')::uuid
-          else null::uuid
-        end, '00000000-0000-0000-0000-000000000000'::uuid)
-        and share.module_root_id = (binding ->> 'moduleRootId')::uuid
-        and share.record_type_id = (binding ->> 'recordTypeId')::uuid
-        and share.storage_contract_id = (binding ->> 'storageContractId')::uuid
-        and share.state = 'active'
-        and share.starts_at <= checked_at
-        and (share.expires_at is null or share.expires_at > checked_at)
-        and (
-          (share.recipient_kind = 'organization_account'
-            and share.organization_account_id = account_id)
-          or (share.recipient_kind = 'group'
-            and share.group_id = any (member_group_ids))
-        )
-    loop
-      if not share_seen then
-        share_intersection := array(
-          select pg_catalog.lower(field.value)
-          from pg_catalog.unnest(share_row.readable_field_ids::text[]) as field(value)
-        );
-        share_seen := true;
-      else
-        share_intersection := array(
-          select field.value
-          from pg_catalog.unnest(share_intersection) as field(value)
-          where field.value = any (
-            select pg_catalog.lower(shared.value)
-            from pg_catalog.unnest(share_row.readable_field_ids::text[]) as shared(value)
-          )
-        );
-      end if;
-    end loop;
-  end if;
-
   -- Each record is admitted by at least one (alternative, route) pair, and the
   -- exact decision exposes the union of the fields of the pairs that admit it.
   -- A field is therefore guaranteed on every admitted record only when every
   -- pair that can admit a record exposes it: the intersection over every pair,
   -- never a union within one alternative. An ownership, all-records or
-  -- relationship pair exposes its permission's policy; a direct-share pair
-  -- exposes that policy narrowed by the share, bounded here by the common
-  -- bounds of every current share, and with no current share it admits no
-  -- record and constrains nothing. Any unknown route fails closed. An
+  -- relationship pair exposes its permission's policy. Any unknown route fails
+  -- closed. An
   -- all-records alternative without a saved condition admits every record, so
   -- its policy's fields are visible on every record whatever else admits it:
   -- they are guaranteed even when another alternative exposes fewer, so an
@@ -233,15 +152,6 @@ begin
       case route ->> 'kind'
         when 'all_records', 'ownership', 'relationship' then
           route_readable := policy_readable;
-        when 'direct_share' then
-          if not share_seen then
-            continue;
-          end if;
-          route_readable := array(
-            select shared.value
-            from pg_catalog.unnest(policy_readable) as shared(value)
-            where shared.value = any (share_intersection)
-          );
         else
           return nothing;
       end case;
@@ -298,7 +208,7 @@ grant execute on function vortex_access.resolve_record_read_field_bounds_interna
   to vortex_record_adapter;
 
 comment on function vortex_access.resolve_record_read_field_bounds_internal(jsonb) is
-  'Private whole-record-type field bounds for the fixed record query: from the caller''s own current eligible read alternatives it returns the fields every alternative route is guaranteed to expose on every record it can admit (the intersection over every alternative and route, each direct-share route narrowed by every current share''s own bounds), plus every field of an all-records alternative without a saved condition, since it admits every record, plus each field another installed Module contributed that the person holds an unconditional read grant for, whether an unconditioned all-records alternative admits every active record, and whether no alternative carries a saved condition; any unknown route or missing policy yields no fields. It only decides which fields a scan may order or filter by and never decides access.';
+  'Private whole-record-type field bounds for the fixed record query: from the caller''s own current eligible read alternatives it returns the fields every alternative route is guaranteed to expose on every record it can admit (the intersection over every alternative and route), plus every field of an all-records alternative without a saved condition, since it admits every record, plus each field another installed Module contributed that the person holds an unconditional read grant for, whether an unconditioned all-records alternative admits every active record, and whether no alternative carries a saved condition; any unknown route or missing policy yields no fields. It only decides which fields a scan may order or filter by and never decides access.';
 
 alter function vortex_access.resolve_record_read_field_bounds_internal(jsonb)
   owner to vortex_owner;

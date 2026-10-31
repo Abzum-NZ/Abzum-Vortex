@@ -5,7 +5,6 @@ create or replace function vortex_access.assign_organization_role_assignment_for
   p_assignee_kind text,
   p_organization_account_id uuid,
   p_group_id uuid,
-  p_assignment_kind text,
   p_starts_at timestamptz,
   p_expires_at timestamptz,
   p_activity_id uuid
@@ -53,8 +52,6 @@ begin
     or p_expected_role_revision not between 1 and 9007199254740991
     or p_assignee_kind is null
     or p_assignee_kind not in ('organization_account', 'group')
-    or p_assignment_kind is null
-    or p_assignment_kind not in ('standing', 'eligible')
     or p_starts_at in ('-infinity'::timestamptz, 'infinity'::timestamptz)
     or p_expires_at in ('-infinity'::timestamptz, 'infinity'::timestamptz)
     or (p_expires_at is not null and p_expires_at <= p_starts_at)
@@ -116,16 +113,7 @@ begin
     and revision.role_id = p_role_id
     and revision.revision = role_fact.live_revision;
   if revision_fact.lifecycle <> 'acceptance_required'
-    and (
-      revision_fact.lifecycle <> 'active'
-      or not (
-        (p_assignment_kind = 'standing' and revision_fact.assignment_policy = 'standing')
-        or (
-          p_assignment_kind = 'eligible'
-          and revision_fact.assignment_policy = 'activation_required'
-        )
-      )
-    ) then
+    and revision_fact.lifecycle <> 'active' then
     raise exception using errcode = '40001',
       message = 'Organization role-assignment assignment is stale or unavailable';
   end if;
@@ -232,7 +220,6 @@ begin
     and existing.assignee_kind = p_assignee_kind
     and existing.organization_account_id is not distinct from p_organization_account_id
     and existing.group_id is not distinct from p_group_id
-    and existing.assignment_kind = p_assignment_kind
     and existing.state = 'live'
     and existing.role_assignment_id <> p_role_assignment_id
     and existing.starts_at < coalesce(p_expires_at, 'infinity'::timestamptz)
@@ -245,7 +232,7 @@ begin
     from vortex_access.coordinate_organization_role_assignment_change(
       'grant', context_organization_id, p_role_assignment_id, null,
       p_role_id, p_expected_role_revision, p_assignee_kind,
-      p_organization_account_id, p_group_id, p_assignment_kind,
+      p_organization_account_id, p_group_id,
       p_starts_at, p_expires_at, context_account_id, context_correlation_id
     ) as result;
     summary_assignment_id := p_role_assignment_id;
@@ -274,7 +261,6 @@ begin
         'key', organization_group.group_key, 'label', organization_group.label,
         'state', organization_group.state
       ) end,
-    'assignmentKind', assignment.assignment_kind,
     'revision', assignment.revision, 'startsAt', assignment.starts_at,
     'expiresAt', assignment.expires_at, 'state', assignment.state,
     'temporalState', case
@@ -329,6 +315,6 @@ to vortex_request;
 comment on function vortex_access.assign_organization_role_assignment_for_administration(uuid, uuid, bigint, text, uuid, uuid, text, timestamptz, timestamptz, uuid) is
   'Standalone request entry: performs grant_role_assignment after fixed protected checks of the caller current authority, the delegation subset and the target organisation account, with one atomic completed Activity or one content-free refused Activity row; no SQL function composes this result.';
 
-alter function vortex_access.assign_organization_role_assignment_for_administration(p_role_assignment_id uuid, p_role_id uuid, p_expected_role_revision bigint, p_assignee_kind text, p_organization_account_id uuid, p_group_id uuid, p_assignment_kind text, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_activity_id uuid) owner to vortex_owner;
+alter function vortex_access.assign_organization_role_assignment_for_administration(p_role_assignment_id uuid, p_role_id uuid, p_expected_role_revision bigint, p_assignee_kind text, p_organization_account_id uuid, p_group_id uuid, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_activity_id uuid) owner to vortex_owner;
 
-grant execute on function vortex_access.assign_organization_role_assignment_for_administration(p_role_assignment_id uuid, p_role_id uuid, p_expected_role_revision bigint, p_assignee_kind text, p_organization_account_id uuid, p_group_id uuid, p_assignment_kind text, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_activity_id uuid) to postgres;
+grant execute on function vortex_access.assign_organization_role_assignment_for_administration(p_role_assignment_id uuid, p_role_id uuid, p_expected_role_revision bigint, p_assignee_kind text, p_organization_account_id uuid, p_group_id uuid, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_activity_id uuid) to postgres;

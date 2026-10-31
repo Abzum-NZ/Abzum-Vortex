@@ -138,7 +138,7 @@ begin
           case when pg_catalog.jsonb_typeof(alternative.value -> 'recordScope' -> 'routes') = 'array'
             then alternative.value -> 'recordScope' -> 'routes' else '[]'::jsonb end
         ) as route(value)
-        where coalesce(route.value ->> 'kind', '') not in ('all_records', 'ownership', 'direct_share')
+        where coalesce(route.value ->> 'kind', '') not in ('all_records', 'ownership')
       )
   ) then
     raise log 'Choice option permission refused for permission % on record type %: record scope is not decided by the record alone',

@@ -49,7 +49,6 @@ as $function$
       and assignment.assignee_kind = 'organization_account'
       and assignment.organization_account_id = account.organization_account_id
       and assignment.group_id is null
-      and assignment.assignment_kind = 'standing'
       and assignment.state = 'live'
       and assignment.starts_at <= p_checked_at
       and assignment.expires_at is null
@@ -61,7 +60,6 @@ as $function$
       and revision.role_id = role.role_id
       and revision.revision = role.live_revision
       and revision.lifecycle = 'active'
-      and revision.assignment_policy = 'standing'
     join vortex_access.organization_delegation_authorities as delegation
       on delegation.organization_id = account.organization_id
       and delegation.holder_kind = 'organization_account'

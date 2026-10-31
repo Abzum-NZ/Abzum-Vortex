@@ -413,14 +413,9 @@ begin
         case contribution.value -> 'route' ->> 'kind'
           when 'all_records' then 0
           when 'ownership' then 1
-          when 'direct_share' then 2
           when 'relationship' then 3
         end,
-        coalesce(
-          contribution.value -> 'route' ->> 'directShareId',
-          contribution.value -> 'route' ->> 'sourceRecordId',
-          ''
-        )
+        coalesce(contribution.value -> 'route' ->> 'sourceRecordId', '')
     ),
     '[]'::jsonb
   )

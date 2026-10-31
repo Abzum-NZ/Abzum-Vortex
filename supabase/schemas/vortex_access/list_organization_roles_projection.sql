@@ -89,8 +89,7 @@ begin
       "label": {"sql": "role_revision.label", "database": "text", "filter": true, "search": true},
       "lifecycle": {"sql": "role_revision.lifecycle::text", "database": "text", "filter": true},
       "role_kind": {"sql": "role.role_kind::text", "database": "text", "filter": true},
-      "privilege_classification": {"sql": "role_revision.privilege_classification::text", "database": "text", "filter": true},
-      "assignment_policy": {"sql": "role_revision.assignment_policy::text", "database": "text", "filter": true}
+      "privilege_classification": {"sql": "role_revision.privilege_classification::text", "database": "text", "filter": true}
     }$declared$::jsonb,
     6
   );
@@ -120,7 +119,6 @@ begin
       'lifecycle', role_revision.lifecycle,
       'role_kind', role.role_kind,
       'privilege_classification', role_revision.privilege_classification,
-      'assignment_policy', role_revision.assignment_policy,
       'accepted_permission_count', (
         select pg_catalog.count(*)
         from vortex_access.organization_role_permission_entries as permission

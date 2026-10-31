@@ -33,15 +33,18 @@ begin
     if effect_row.effect_kind in ('soft_deleted', 'optional_cleared', 'restored') then
       event_kind := case effect_row.effect_kind
         when 'soft_deleted' then 'deleted' when 'restored' then 'restored' else 'unlinked' end;
-      event_result := vortex_platform.append_record_occurrences(
-        effect_row.storage_contract_id, effect_row.record_id,
+      event_result := vortex_platform.append_record_occurrence_set(
         pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-          'occurrenceId', pg_catalog.gen_random_uuid(),
-          'descriptor', pg_catalog.jsonb_build_object('kind', 'standard',
-            'eventKind', event_kind, 'recordTypeId', effect_row.record_type_id),
-          'payload', pg_catalog.jsonb_build_object('kind', event_kind)
+          'storageContractId', effect_row.storage_contract_id,
+          'recordId', effect_row.record_id,
+          'occurrences', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+            'occurrenceId', pg_catalog.gen_random_uuid(),
+            'descriptor', pg_catalog.jsonb_build_object('kind', 'standard',
+              'eventKind', event_kind, 'recordTypeId', effect_row.record_type_id),
+            'payload', pg_catalog.jsonb_build_object('kind', event_kind)
+          ))
         ))
-      );
+      ) -> 0;
       if pg_catalog.jsonb_typeof(event_result) is distinct from 'array'
         or pg_catalog.jsonb_array_length(event_result) is distinct from 1 then
         raise exception using errcode = '55000', message = 'Record lifecycle Event append failed';

@@ -22,7 +22,6 @@ begin
       'role_catalogue_changed',
       'group_membership_changed',
       'application_access_changed',
-      'direct_share_changed',
       'record_ownership_changed',
       'access_grant_changed',
       'public_policy_changed',

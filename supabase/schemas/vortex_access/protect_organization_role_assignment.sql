@@ -23,7 +23,6 @@ begin
     or new.assignee_kind is distinct from old.assignee_kind
     or new.organization_account_id is distinct from old.organization_account_id
     or new.group_id is distinct from old.group_id
-    or new.assignment_kind is distinct from old.assignment_kind
     or new.starts_at is distinct from old.starts_at
     or new.expires_at is distinct from old.expires_at
     or new.granted_by is distinct from old.granted_by

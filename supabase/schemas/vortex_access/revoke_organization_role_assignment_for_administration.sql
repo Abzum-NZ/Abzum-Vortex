@@ -194,7 +194,6 @@ begin
         'key', organization_group.group_key, 'label', organization_group.label,
         'state', organization_group.state
       ) end,
-    'assignmentKind', assignment.assignment_kind,
     'revision', assignment.revision, 'startsAt', assignment.starts_at,
     'expiresAt', assignment.expires_at, 'state', assignment.state,
     'temporalState', 'revoked'

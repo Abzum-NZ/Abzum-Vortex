@@ -33,7 +33,7 @@ begin
   narrowed := false;
   -- When nothing about this record type can reach another record or another
   -- record type (no total field or saved condition, and every route of every
-  -- permission on it is an all-record, owner or direct-share route), each record's facts carry
+  -- permission on it is an all-record or owner route), each record's facts carry
   -- only its own type and its own permissions, and no relationship: every
   -- reader of these facts (projection, derived fields, capabilities) looks at
   -- nothing else.
@@ -58,7 +58,7 @@ begin
               case when pg_catalog.jsonb_typeof(declared.value #> '{recordScope,routes}') = 'array'
                 then declared.value #> '{recordScope,routes}' else '[]'::jsonb end
             ) as route(value)
-            where coalesce(route.value ->> 'kind', '') not in ('all_records', 'ownership', 'direct_share')
+            where coalesce(route.value ->> 'kind', '') not in ('all_records', 'ownership')
           ))
     ) then
     envelope := pg_catalog.jsonb_set(pg_catalog.jsonb_set(pg_catalog.jsonb_set(

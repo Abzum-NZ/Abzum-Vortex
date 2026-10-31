@@ -1,6 +1,25 @@
-create or replace function vortex_platform.append_record_occurrence_set_internal(
-  p_items jsonb,
-  p_installation jsonb
+-- One record occurrence append (review findings DT-1 and DF-17).
+--
+-- DT-1: every occurrence was written twice, to vortex_platform.event_outbox and to the PGMQ queue
+-- vortex_event_occurrences, but nothing ever read the queue. The outbox is the one delivery path,
+-- so the producer, the queue and the extension go. Dropping the extension also removes the pgmq
+-- queue tables and the queue-table grants vortex_owner held for the producer; the empty pgmq schema
+-- the baseline took ownership of (with vortex_owner's USAGE) goes after it.
+select pgmq.drop_queue('vortex_event_occurrences');
+drop extension pgmq;
+drop schema pgmq;
+
+-- DF-17: append_record_occurrences and append_record_occurrences_for_resolved_installation_internal
+-- only wrapped one record's batch for append_record_occurrence_set_internal, and
+-- append_record_occurrence_set only passed it a null installation; no caller ever supplied the
+-- trusted installation pin-set. The one function keeps the name the record writer already calls,
+-- vortex_platform.append_record_occurrence_set(jsonb), always resolves the active installation, and
+-- every caller passes its records directly.
+
+set role vortex_owner;
+
+create or replace function vortex_platform.append_record_occurrence_set(
+  p_items jsonb
 )
 returns jsonb
 language plpgsql
@@ -50,7 +69,6 @@ declare
   field_id_text text;
   previous_field_id_text text;
   field_definition jsonb;
-  queued_message_id bigint;
   envelope jsonb;
   envelopes jsonb;
   item jsonb;
@@ -173,14 +191,8 @@ begin
       -- never before it.  A lifecycle detach that commits while this append waits
       -- for the canonical binding lock above is only observed by a read taken
       -- after that wait: this assignment is its own statement, so in read
-      -- committed it sees the committed lifecycle state.  `p_installation` carries
-      -- an exact pin-set only from a trusted reader that already resolved it while
-      -- holding the same canonical lifecycle lock.
-      if p_installation is null then
-        installation := vortex_definition.read_current_active_installation();
-      else
-        installation := p_installation;
-      end if;
+      -- committed it sees the committed lifecycle state.
+      installation := vortex_definition.read_current_active_installation();
       if installation is null
         or pg_catalog.jsonb_typeof(installation) <> 'object'
         or not installation ?& array[
@@ -547,17 +559,6 @@ begin
         next_sequence, occurrence_time, envelope
       );
 
-      select sent.msg_id into strict queued_message_id
-      from pgmq.send(
-        'vortex_event_occurrences',
-        pg_catalog.jsonb_build_object(
-          'contractVersion', '2.0.0', 'occurrenceId', occurrence_id
-        )
-      ) as sent(msg_id);
-      if queued_message_id is null then
-        raise exception using errcode = '55000', message = 'Event queue append failed';
-      end if;
-
       envelopes := envelopes || pg_catalog.jsonb_build_array(envelope);
       next_sequence := next_sequence + 1;
     end loop;
@@ -569,11 +570,292 @@ begin
 end
 $function$;
 
-revoke all on function vortex_platform.append_record_occurrence_set_internal(jsonb, jsonb)
+revoke all on function vortex_platform.append_record_occurrence_set(jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
-grant execute on function vortex_platform.append_record_occurrence_set_internal(jsonb, jsonb) to vortex_owner;
-comment on function vortex_platform.append_record_occurrence_set_internal(jsonb, jsonb) is
-  'Appends exact validated record occurrence batches for any number of records, one answer per record in order; resolves the active installation, release and record type once per storage contract under the canonical binding lock unless a trusted reader supplies an exact pin-set it resolved under that same lock.';
 
-alter function vortex_platform.append_record_occurrence_set_internal(jsonb, jsonb)
-  owner to vortex_owner;
+grant execute on function vortex_platform.append_record_occurrence_set(jsonb)
+  to vortex_record_adapter;
+
+comment on function vortex_platform.append_record_occurrence_set(jsonb) is
+  'Appends exact validated record occurrence batches to the event outbox for any number of records (each item names its storage contract, record and occurrences), one answer per record in order, in the caller transaction; resolves the active installation, release and record type once per storage contract under the canonical binding lock.';
+
+alter function vortex_platform.append_record_occurrence_set(jsonb) owner to vortex_owner;
+
+drop function vortex_platform.append_record_occurrences(uuid, uuid, jsonb);
+drop function vortex_platform.append_record_occurrences_for_resolved_installation_internal(uuid, uuid, jsonb, jsonb);
+drop function vortex_platform.append_record_occurrence_set_internal(jsonb, jsonb);
+
+set role vortex_record_adapter;
+
+CREATE OR REPLACE FUNCTION vortex_record.append_declared_named_action_occurrences_internal(p_storage_contract_id uuid, p_record_id uuid, p_event_descriptors jsonb, p_occurrence_ids jsonb, p_field_values jsonb) RETURNS jsonb
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+declare
+  occurrence_values jsonb := '[]'::jsonb;
+  descriptor_value jsonb;
+  carried_values jsonb;
+  occurrence_id_value jsonb;
+begin
+  if pg_catalog.jsonb_typeof(p_event_descriptors) is distinct from 'array'
+    or pg_catalog.jsonb_typeof(p_occurrence_ids) is distinct from 'array'
+    or pg_catalog.jsonb_typeof(p_field_values) is distinct from 'object'
+    or pg_catalog.jsonb_array_length(p_event_descriptors) <>
+      pg_catalog.jsonb_array_length(p_occurrence_ids)
+    or exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(p_occurrence_ids) item(value)
+      where pg_catalog.jsonb_typeof(item.value) is distinct from 'string'
+        or not pg_catalog.pg_input_is_valid(item.value #>> '{}', 'uuid')
+        or (item.value #>> '{}')::uuid =
+          '00000000-0000-0000-0000-000000000000'::uuid
+    ) then
+    raise exception using errcode = '22023',
+      message = 'Named action Event occurrence input is invalid';
+  end if;
+  for descriptor_value, occurrence_id_value in
+    select descriptor.value, occurrence.value
+    from pg_catalog.jsonb_array_elements(p_event_descriptors)
+      with ordinality descriptor(value, ordinal)
+    join pg_catalog.jsonb_array_elements(p_occurrence_ids)
+      with ordinality occurrence(value, ordinal) using (ordinal)
+    order by descriptor.ordinal
+  loop
+    select coalesce(pg_catalog.jsonb_object_agg(
+      pg_catalog.lower(field.value #>> '{}'),
+      p_field_values -> pg_catalog.lower(field.value #>> '{}')
+    ), '{}'::jsonb)
+    into carried_values
+    from pg_catalog.jsonb_array_elements(descriptor_value -> 'carriedFieldIds') field(value)
+    where p_field_values ? pg_catalog.lower(field.value #>> '{}');
+    occurrence_values := occurrence_values || pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'occurrenceId', occurrence_id_value,
+        'descriptor', descriptor_value,
+        'payload', pg_catalog.jsonb_build_object(
+          'kind', 'declared', 'carriedValues', carried_values
+        )
+      )
+    );
+  end loop;
+  return vortex_platform.append_record_occurrence_set(
+    pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'storageContractId', p_storage_contract_id, 'recordId', p_record_id,
+      'occurrences', occurrence_values
+    ))
+  ) -> 0;
+end
+$$;
+alter function vortex_record.append_declared_named_action_occurrences_internal(uuid,uuid,jsonb,jsonb,jsonb) owner to vortex_record_adapter;
+
+
+REVOKE ALL ON FUNCTION vortex_record.append_declared_named_action_occurrences_internal(p_storage_contract_id uuid, p_record_id uuid, p_event_descriptors jsonb, p_occurrence_ids jsonb, p_field_values jsonb) FROM PUBLIC;
+
+create or replace function vortex_record.complete_record_lifecycle_set_internal(
+  p_command_id uuid,
+  p_preparation jsonb,
+  p_written jsonb
+)
+returns void
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  context_value jsonb := vortex_access.validated_human_request_context();
+  effect_row vortex_record.record_lifecycle_command_effects%rowtype;
+  plan jsonb;
+  subject_ids uuid[];
+  event_kind text;
+  event_result jsonb;
+  revision_value bigint;
+  notice_sequence bigint;
+  storage_value record;
+begin
+  -- The journal has already deduplicated shared closures. Each effect emits
+  -- once, irrespective of how many explicit roots reached the affected row.
+  for effect_row in
+    select effect.* from vortex_record.record_lifecycle_command_effects as effect
+    where effect.organization_id = (context_value ->> 'organizationId')::uuid
+      and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
+      and effect.actor_organization_account_id = (context_value ->> 'organizationAccountId')::uuid
+      and effect.command_id = p_command_id
+    order by effect.effect_sequence
+  loop
+    if effect_row.effect_kind in ('soft_deleted', 'optional_cleared', 'restored') then
+      event_kind := case effect_row.effect_kind
+        when 'soft_deleted' then 'deleted' when 'restored' then 'restored' else 'unlinked' end;
+      event_result := vortex_platform.append_record_occurrence_set(
+        pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+          'storageContractId', effect_row.storage_contract_id,
+          'recordId', effect_row.record_id,
+          'occurrences', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+            'occurrenceId', pg_catalog.gen_random_uuid(),
+            'descriptor', pg_catalog.jsonb_build_object('kind', 'standard',
+              'eventKind', event_kind, 'recordTypeId', effect_row.record_type_id),
+            'payload', pg_catalog.jsonb_build_object('kind', event_kind)
+          ))
+        ))
+      ) -> 0;
+      if pg_catalog.jsonb_typeof(event_result) is distinct from 'array'
+        or pg_catalog.jsonb_array_length(event_result) is distinct from 1 then
+        raise exception using errcode = '55000', message = 'Record lifecycle Event append failed';
+      end if;
+    end if;
+  end loop;
+  -- Every changed lifecycle row publishes its revision, including optional links
+  -- cleared or recovered.
+  for storage_value in
+    select effect.record_type_id, effect.record_id, effect.storage_contract_id,
+      storage.storage_scope, pg_catalog.bool_or(effect.effect_kind = 'soft_deleted') as deleted
+    from vortex_record.record_lifecycle_command_effects as effect
+    join vortex_record.storage_catalogue as storage using (storage_contract_id)
+    where effect.organization_id = (context_value ->> 'organizationId')::uuid
+      and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
+      and effect.actor_organization_account_id = (context_value ->> 'organizationAccountId')::uuid
+      and effect.command_id = p_command_id
+    group by effect.record_type_id, effect.record_id, effect.storage_contract_id, storage.storage_scope
+  loop
+    select (item.value ->> 'concurrencyNumber')::bigint into strict revision_value
+    from pg_catalog.jsonb_array_elements(p_written) as item(value)
+    where (item.value ->> 'storageContractId')::uuid = storage_value.storage_contract_id
+      and (item.value ->> 'recordId')::uuid = storage_value.record_id;
+    if storage_value.storage_scope = 'application_contained' then
+      begin
+        notice_sequence := pg_catalog.nextval('vortex_record.record_invalidation_sequence'::pg_catalog.regclass);
+        perform vortex_platform.publish_change_notice(
+          (context_value ->> 'organizationId')::uuid, (context_value ->> 'applicationRootId')::uuid,
+          storage_value.record_type_id, storage_value.record_id, revision_value,
+          case when storage_value.deleted then 'deleted' else 'changed' end,
+          notice_sequence, notice_sequence, (context_value ->> 'correlationId')::uuid
+        );
+      exception when others then
+        raise warning 'Record lifecycle notice failed: [%] %', sqlstate, sqlerrm;
+      end;
+    end if;
+  end loop;
+  for storage_value in
+    select distinct effect.storage_contract_id, storage.storage_scope
+    from vortex_record.record_lifecycle_command_effects as effect
+    join vortex_record.storage_catalogue as storage using (storage_contract_id)
+    where effect.organization_id = (context_value ->> 'organizationId')::uuid
+      and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
+      and effect.actor_organization_account_id = (context_value ->> 'organizationAccountId')::uuid
+      and effect.command_id = p_command_id and (storage.storage_scope <> 'application_contained'
+        or effect.effect_kind in ('optional_cleared', 'links_restored'))
+  loop
+    perform vortex_record.bump_record_data_version_internal(
+      (context_value ->> 'organizationId')::uuid, storage_value.storage_contract_id,
+      case when storage_value.storage_scope = 'application_contained'
+        then (context_value ->> 'applicationRootId')::uuid else null end
+    );
+  end loop;
+  for plan in select item.value from pg_catalog.jsonb_array_elements(p_preparation -> 'plans') as item(value)
+    where item.value #>> '{subject,operation}' in ('delete', 'restore')
+  loop
+    select pg_catalog.array_agg(distinct effect.record_id order by effect.record_id) into subject_ids
+    from vortex_record.record_lifecycle_command_effects as effect
+    where effect.organization_id = (context_value ->> 'organizationId')::uuid
+      and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
+      and effect.actor_organization_account_id = (context_value ->> 'organizationAccountId')::uuid
+      and effect.command_id = p_command_id
+      and effect.delete_roots @> pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordTypeId', plan #> '{subject,recordTypeId}', 'recordId', plan #> '{subject,recordId}'
+      ));
+    if subject_ids is null then
+      raise exception using errcode = '55000', message = 'Record lifecycle effects are unavailable';
+    end if;
+    perform vortex_record.append_record_activity_internal(
+      (plan #>> '{subject,activityId}')::uuid,
+      case plan #>> '{subject,operation}' when 'delete' then 'delete_record' else 'restore_record' end,
+      subject_ids, array[]::uuid[], 'completed'
+    );
+  end loop;
+end
+$function$;
+alter function vortex_record.complete_record_lifecycle_set_internal(uuid,jsonb,jsonb) owner to vortex_record_adapter;
+revoke all on function vortex_record.complete_record_lifecycle_set_internal(uuid,jsonb,jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+comment on function vortex_record.complete_record_lifecycle_set_internal(uuid,jsonb,jsonb) is
+  'Completes the common record command lifecycle effects: one Event per deduplicated delete, clear or restore effect, current revisions and data versions for changed rows, and Activity for each explicit lifecycle root.';
+
+create or replace function vortex_record.complete_relationship_total_parent_internal(p_prepared jsonb)
+returns void
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  snapshot jsonb := p_prepared -> 'snapshot';
+  saved_record_id uuid := (p_prepared ->> 'recordId')::uuid;
+  new_revision bigint := (p_prepared ->> 'concurrencyNumber')::bigint;
+  changed_field_ids uuid[];
+  preview_installation jsonb;
+  pending_exact_notice boolean := false;
+  notice_sequence bigint;
+  event_result jsonb;
+begin
+  context_value := vortex_access.validated_human_request_context();
+  select pg_catalog.array_agg(value::uuid) into changed_field_ids
+  from pg_catalog.jsonb_array_elements_text(p_prepared -> 'changedFieldIds') as field(value);
+  preview_installation := vortex_record.read_current_preview_installation_internal();
+  if preview_installation is null
+    and snapshot #>> '{recordType,storageScope}' = 'application_contained' then
+    pending_exact_notice := true;
+  else
+    perform vortex_record.bump_record_data_version_internal(
+      (context_value ->> 'organizationId')::uuid,
+      (snapshot ->> 'storageContractId')::uuid,
+      case when snapshot #>> '{recordType,storageScope}' = 'application_contained'
+        then (context_value ->> 'applicationRootId')::uuid else null end
+    );
+  end if;
+  perform vortex_record.append_record_activity_internal(pg_catalog.gen_random_uuid(), 'update_record', array[saved_record_id]::uuid[], changed_field_ids, 'completed');
+  event_result := vortex_platform.append_record_occurrence_set(
+    pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'storageContractId', (snapshot ->> 'storageContractId')::uuid,
+      'recordId', saved_record_id,
+      'occurrences', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'occurrenceId', pg_catalog.gen_random_uuid(),
+        'descriptor', pg_catalog.jsonb_build_object(
+          'kind', 'standard', 'eventKind', 'changed', 'recordTypeId', (p_prepared ->> 'recordTypeId')::uuid
+        ),
+        'payload', pg_catalog.jsonb_build_object(
+          'kind', 'changed', 'changedFieldIds', pg_catalog.to_jsonb(changed_field_ids)
+        )
+      ))
+    ))
+  ) -> 0;
+  if pg_catalog.jsonb_array_length(event_result) <> 1 then
+    raise exception using errcode = '55000', message = 'Relationship total parent Event append failed';
+  end if;
+  if pending_exact_notice then
+    begin
+      notice_sequence := pg_catalog.nextval(
+        'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
+      );
+      perform vortex_platform.publish_change_notice(
+        (context_value ->> 'organizationId')::uuid,
+        (context_value ->> 'applicationRootId')::uuid,
+        (p_prepared ->> 'recordTypeId')::uuid, saved_record_id, new_revision, 'changed',
+        notice_sequence, notice_sequence, (context_value ->> 'correlationId')::uuid
+      );
+    exception
+      when others then
+        -- Invalidation is advisory; a lost notice must not refuse the parent write.
+        raise warning 'Generated record notice failed: [%] %', sqlstate, sqlerrm;
+    end;
+  end if;
+end
+$function$;
+
+alter function vortex_record.complete_relationship_total_parent_internal(jsonb) owner to vortex_record_adapter;
+revoke all on function vortex_record.complete_relationship_total_parent_internal(jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+comment on function vortex_record.complete_relationship_total_parent_internal(jsonb) is
+  'Appends the Activity, standard Event and invalidation for a protected generated-field update after the shared record storage writer has applied it.';
+
+reset role;
