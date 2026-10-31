@@ -36,6 +36,8 @@ export type StudioFieldPlacement = Readonly<{
   placementAlias: string;
   /** The list setting a list entry is appended to. */
   settingKey?: string;
+  /** The list each entry of `settingKey` holds, when the entries are cards of fields. */
+  nestedKey?: string;
   /** Why the field cannot be shown here, when it cannot. */
   unavailable?: string;
   /** The existing field is already declared in this place. */
@@ -80,22 +82,34 @@ const releaseOf = (context: StudioCompositionContext, item: SourceItem): Release
   );
 };
 
+type ListSetting = Extract<BlockPropertySchemaContract, { kind: "list" }>;
+type FieldList = Readonly<{ setting: ListSetting; nested?: ListSetting }>;
+
+const holdsFields = (list: ListSetting): boolean =>
+  list.item.kind === "group" &&
+  list.item.properties.some(
+    (nested) => nested.kind === "field_reference" && nested.key === list.presentationIdentity,
+  );
+
+/** A list capped below five entries is a curated highlight, not a place every field belongs. */
+const highlightLimit = 4;
+
 /**
  * The list settings of a release whose entries each show one field: lists identified by a field
- * (columns, detail fields), not lists that only name fields, such as a table's default sort.
+ * (columns, detail fields), not lists that only name fields, such as a table's default sort, and
+ * not a few curated highlights. A list of cards (the record page's sections) offers the fields
+ * list each card holds.
  */
-const fieldListSettings = (
-  release: Release,
-): readonly Extract<BlockPropertySchemaContract, { kind: "list" }>[] =>
-  release.properties.flatMap((property) =>
-    property.kind === "list" &&
-    property.item.kind === "group" &&
-    property.item.properties.some(
-      (nested) => nested.kind === "field_reference" && nested.key === property.presentationIdentity,
-    )
-      ? [property]
-      : [],
-  );
+const fieldListSettings = (release: Release): readonly FieldList[] =>
+  release.properties.flatMap((property): FieldList[] => {
+    if (property.kind !== "list" || property.item.kind !== "group") return [];
+    if (holdsFields(property))
+      return property.maximumItems <= highlightLimit ? [] : [{ setting: property }];
+    const nested = property.item.properties.find(
+      (candidate): candidate is ListSetting => candidate.kind === "list" && holdsFields(candidate),
+    );
+    return nested === undefined ? [] : [{ setting: property, nested }];
+  });
 
 const blockTitle = (item: SourceItem, release: Release): string => {
   const title = item.props.title;
@@ -136,25 +150,46 @@ export const studioFieldPlacements = (
         // A related-record table reads its query's record type, not the page's record type.
         const query = item.props.vortex.query;
         if (query !== undefined && queryRecordTypes.get(query) !== qualified) continue;
-        for (const setting of fieldListSettings(release)) {
+        // A board's cards show what the board names, not a column list.
+        const features = item.props.features;
+        const boardOn =
+          features !== null &&
+          typeof features === "object" &&
+          "board" in features &&
+          features.board !== null &&
+          typeof features.board === "object" &&
+          "enabled" in features.board &&
+          features.board.enabled === true;
+        for (const { setting, nested } of boardOn ? [] : fieldListSettings(release)) {
           const entries = item.props[setting.key];
+          const names = (list: unknown): boolean =>
+            Array.isArray(list) &&
+            list.some(
+              (entry: unknown) =>
+                entry !== null &&
+                typeof entry === "object" &&
+                "field" in entry &&
+                entry.field === reference,
+            );
           result.push({
             id: `${page.id}|${item.props.id}|${setting.key}`,
             pageAlias: page.id,
             kind: "list_entry",
             placementAlias: item.props.id,
             settingKey: setting.key,
+            ...(nested === undefined ? {} : { nestedKey: nested.key }),
             shown:
               reference !== undefined &&
               Array.isArray(entries) &&
-              entries.some(
-                (entry: unknown) =>
-                  entry !== null &&
-                  typeof entry === "object" &&
-                  "field" in entry &&
-                  entry.field === reference,
-              ),
-            label: `${pageLabel}: ${blockTitle(item, release)}, ${setting.label}`,
+              (nested === undefined
+                ? names(entries)
+                : entries.some(
+                    (card: unknown) =>
+                      card !== null &&
+                      typeof card === "object" &&
+                      names((card as Record<string, unknown>)[nested.key]),
+                  )),
+            label: `${pageLabel}: ${blockTitle(item, release)}, ${nested === undefined ? setting.label : nested.label}`,
           });
         }
         if (page.type === "form" && release.key === formContainerKey)
@@ -266,15 +301,43 @@ export const applyStudioFieldPlacements = (
         reasons.push(`${place.label}: the block has no such list.`);
         continue;
       }
-      const entry = listEntry(setting, reference, field.label);
+      // The list the field is appended to: the setting itself, or the list inside its last card.
+      const target: ListSetting | undefined =
+        place.nestedKey === undefined
+          ? setting
+          : setting.item.kind === "group"
+            ? setting.item.properties.find(
+                (property): property is ListSetting =>
+                  property.kind === "list" && property.key === place.nestedKey,
+              )
+            : undefined;
+      if (target === undefined) {
+        reasons.push(`${place.label}: the block has no such list.`);
+        continue;
+      }
+      const entry = listEntry(target, reference, field.label);
       if (typeof entry === "string") {
         reasons.push(`${place.label}: ${entry}.`);
         continue;
       }
       const existing = model.settings[setting.key];
       const items = existing?.kind === "list" ? existing.items : [];
+      const card = place.nestedKey === undefined ? undefined : items.at(-1);
+      if (place.nestedKey !== undefined && card?.kind !== "group") {
+        reasons.push(`${place.label}: add a card to the page first.`);
+        continue;
+      }
+      const heldIn = (entries: typeof items): typeof items =>
+        entries.flatMap((item) =>
+          place.nestedKey === undefined || item.kind !== "group"
+            ? [item]
+            : item.properties[place.nestedKey]?.kind === "list"
+              ? (item.properties[place.nestedKey] as { items: typeof items }).items
+              : [],
+        );
+      const held = heldIn(items);
       if (
-        items.some(
+        held.some(
           (item) =>
             item.kind === "group" &&
             Object.values(item.properties).some(
@@ -283,10 +346,26 @@ export const applyStudioFieldPlacements = (
         )
       )
         continue;
-      if (items.length >= setting.maximumItems) {
+      if (held.length >= target.maximumItems) {
         reasons.push(`${place.label}: the list is full.`);
         continue;
       }
+      const written: typeof items =
+        card?.kind === "group" && place.nestedKey !== undefined
+          ? [
+              ...items.slice(0, -1),
+              {
+                ...card,
+                properties: {
+                  ...card.properties,
+                  [place.nestedKey]: {
+                    kind: "list",
+                    items: [...heldIn([card]), entry],
+                  },
+                },
+              },
+            ]
+          : [...items, entry];
       let withQuery = current;
       if (model.query !== null) {
         const selected = selectInQuery(source, model.query, field.key);
@@ -298,7 +377,7 @@ export const applyStudioFieldPlacements = (
       }
       const result = applyStudioCompositionCommand(withQuery, withQuery, selection, {
         kind: "settings",
-        settings: { ...model.settings, [setting.key]: { kind: "list", items: [...items, entry] } },
+        settings: { ...model.settings, [setting.key]: { kind: "list", items: written } },
         query: model.query,
       });
       if (result.kind === "applied") source = result.source;
