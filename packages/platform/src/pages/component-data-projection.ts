@@ -347,7 +347,10 @@ const headingFor = (
   return label !== undefined && label.trim().length > 0 ? label : undefined;
 };
 
-const isReadable = (field: string, input: ComponentDataProjectionInput): boolean =>
+const isReadable = (
+  field: string,
+  input: Pick<ComponentDataProjectionInput, "readableFieldIds">,
+): boolean =>
   input.readableFieldIds === undefined ||
   input.readableFieldIds.some((readable) => sameField(readable, field));
 
@@ -682,4 +685,69 @@ export const projectRecordDetailData = (
           relatedLists: input.recordRelatedLists ?? [],
         },
       };
+};
+
+/** One related-list card a record detail declares: what it lists, its columns and where Add opens. */
+export type ProjectedRecordRelatedList = Readonly<{
+  key: string;
+  title: string;
+  columns: readonly Readonly<{ field: string; label?: string }>[];
+  add?: Readonly<{ pageKey: string; parentFieldId: string }>;
+}>;
+
+/** What a related-list projection reads of one module's display maps; it needs no placement settings. */
+export type RelatedListProjectionInput = Pick<
+  ComponentDataProjectionInput,
+  | "fieldLabels"
+  | "fieldChoiceLabels"
+  | "fieldDateTypes"
+  | "fieldLinkTypes"
+  | "recordLinks"
+  | "readableFieldIds"
+> &
+  Readonly<{ titleFieldId: string }>;
+
+/**
+ * Projects the rows one related list returned into its card. A row's title is the related record
+ * type's title field and its fields are the list's declared columns, under the same access and
+ * display rules as the detail's sections: a field the viewer cannot read shows as Restricted under
+ * its label and a table field has no scalar form in a row title.
+ */
+export const projectRecordRelatedList = (
+  input: RelatedListProjectionInput,
+  list: ProjectedRecordRelatedList,
+  rows: readonly ProtectedQueryRow[],
+): RecordDetailPayload["relatedLists"][number] => {
+  const cellOf = (row: ProtectedQueryRow, fieldId: string): ProjectedCellValue => {
+    const stored = isReadable(fieldId, input) ? valueOf(row, fieldId) : undefined;
+    return stored === undefined
+      ? RESTRICTED_CELL
+      : projectCell(
+          stored.value,
+          "automatic",
+          input.fieldChoiceLabels?.[fieldId.toLowerCase()],
+          input.fieldDateTypes?.[fieldId.toLowerCase()],
+          recordLinkIn(input.recordLinks),
+          input.fieldLinkTypes?.[fieldId.toLowerCase()],
+        );
+  };
+  const titleOf = (row: ProtectedQueryRow): ProjectedScalarCellValue => {
+    const value = cellOf(row, input.titleFieldId);
+    return value.kind === "field_table" ? emptyCell : value;
+  };
+  return {
+    key: list.key,
+    title: list.title,
+    rows: rows.map((row) => ({
+      recordId: row.recordId,
+      title: titleOf(row),
+      fields: list.columns.flatMap((column) => {
+        const label = headingFor(column.field, column.label, input.fieldLabels);
+        return label === undefined
+          ? []
+          : [{ key: column.field, label, value: cellOf(row, column.field) }];
+      }),
+    })),
+    ...(list.add === undefined ? {} : { add: list.add }),
+  };
 };
