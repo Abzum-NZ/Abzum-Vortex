@@ -16,7 +16,6 @@ import {
   field,
   keyColumns,
   listQuery,
-  openButton,
   openRows,
   release,
   tableColumns,
@@ -100,24 +99,46 @@ export const addList = (
     PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE,
     "records table",
   ).properties.find((property) => property.key === "features");
-  const features =
-    boardMode === undefined || featuresProperty?.defaultValue === undefined
+  const found = companions(plan.source, resolved.qualified);
+  const featureDefaults =
+    featuresProperty?.defaultValue === undefined
       ? undefined
-      : {
-          ...(plainSettingValue(featuresProperty.defaultValue) as Record<string, unknown>),
-          board: {
-            enabled: true,
-            column_field: boardMode.columnField,
-            card_title_field: boardMode.cardTitleField,
-            card_fields: [],
-            totals: [],
-            quick_add: false,
-          },
-        };
+      : (plainSettingValue(featuresProperty.defaultValue) as Record<string, unknown>);
+  // A list's summary row: how many there are, and the total of each money column it shows.
+  const measures = [
+    { field: field(resolved, title), operation: "count" },
+    ...columns
+      .filter((entry) => entry.type === "money")
+      .slice(0, 5)
+      .map((entry) => ({ field: field(resolved, entry), operation: "sum" })),
+  ];
+  const features =
+    featureDefaults === undefined
+      ? undefined
+      : boardMode === undefined
+        ? { ...featureDefaults, totals: { enabled: true, measures } }
+        : {
+            ...featureDefaults,
+            board: {
+              enabled: true,
+              column_field: boardMode.columnField,
+              card_title_field: boardMode.cardTitleField,
+              card_fields: [],
+              totals: [],
+              quick_add: false,
+            },
+          };
+  const addFromList =
+    boardMode === undefined &&
+    record.standard_actions.includes("create") &&
+    found.create !== undefined;
   const table = blockItem(
     release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE, "records table"),
     tableAlias,
     {
+      title: record.plural_name,
+      purpose: `Every ${lowerFirst(record.name)} you can see in this organisation.`,
+      ...(addFromList ? { inline_create: true, create_page: found.create!.key } : {}),
       empty_message: `There are no ${record.plural_name.toLowerCase()} yet.`,
       columns: tableColumns((entry) => field(resolved, entry), columns, title.key),
       ...(features === undefined ? {} : { features }),
@@ -161,7 +182,6 @@ export const addList = (
   );
   if (phoneColumns.length < columns.length)
     plan.details.push(`On a phone it shows ${listing(phoneColumns.map((entry) => entry.label))}.`);
-  const found = companions(plan.source, resolved.qualified);
   if (found.detail !== undefined) {
     openRows(plan, tableAlias, resolved, found.detail);
     plan.details.push(`Clicking a row opens ${quoted(found.detail.name)}.`);
@@ -205,22 +225,13 @@ export const addList = (
         : `Dragging a card runs ${quoted("Save " + lowerFirst(record.name) + " changes")}: the card's stage is saved.`,
     );
   }
-  if (record.standard_actions.includes("create") && found.create !== undefined) {
-    const label = `New ${lowerFirst(record.name)}`;
-    openButton(
-      context,
-      plan,
-      label,
-      resolved.permission(plan.source, "create", plan.details),
-      found.create,
-      undefined,
-      { beside: tableAlias },
-    );
-    plan.details.push(`A ${quoted(label)} button opens ${quoted(found.create.name)}.`);
-  } else
-    plan.details.push(
-      `No New button yet: ${record.plural_name.toLowerCase()} have no create form. Adding one puts the button here.`,
-    );
+  plan.details.push(
+    addFromList
+      ? `The list has an ${quoted("Add " + lowerFirst(record.name))} button that opens ${quoted(found.create!.name)}.`
+      : boardMode === undefined
+        ? `No Add button yet: ${record.plural_name.toLowerCase()} have no create form. Adding one puts the button here.`
+        : `Adding a card is done from the board's quick add.`,
+  );
   if (record.standard_actions.includes("soft_delete") && boardMode === undefined) {
     bindDelete(
       plan,

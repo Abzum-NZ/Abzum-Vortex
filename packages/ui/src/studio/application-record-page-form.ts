@@ -28,7 +28,7 @@ import {
   ensureDetailEdit,
   ensureListEdit,
   field,
-  openButton,
+  ensureListCreate,
   opensAny,
   recordTables,
   release,
@@ -351,7 +351,7 @@ export const addForm = (
   return placedPage.page;
 };
 
-/** A new create form gets a New button on each list of the record type; a new edit form an Edit button on its detail page. */
+/** A new create form turns on adding from each list of the record type; a new edit form an Edit button on its detail page. */
 const linkFormBack = (
   context: StudioStructureContext,
   plan: Plan,
@@ -361,44 +361,9 @@ const linkFormBack = (
 ) => {
   const found = companions(plan.source, resolved.qualified);
   if (mode === "create") {
-    for (const listId of found.list.map((entry) => entry.id)) {
-      // Each button's flow-create replaces the draft, so the list page is read again from the current one.
-      const list = plan.source.body.pages.find((entry) => entry.id === listId)!;
-      if (
-        opensAny(
-          plan.source,
-          list,
-          plan.source.body.pages
-            .filter(
-              (entry) =>
-                entry.id !== page.id &&
-                (entry.type === "form" || entry.type === "guided_form") &&
-                "record_type" in entry &&
-                entry.record_type === resolved.qualified,
-            )
-            .map((entry) => entry.key),
-        )
-      )
-        continue;
-      const table = recordTables(plan.source, list, resolved)[0];
-      const label = `New ${lowerFirst(resolved.record.name)}`;
-      const data = list.composition as unknown as Parameters<typeof sourcePageZones>[0];
-      const zone =
-        sourcePageZones(data).find(([, items]) => items.length > 0)?.[1] ??
-        sourcePageZones(data).at(-1)![1];
-      openButton(
-        context,
-        plan,
-        label,
-        resolved.permission(plan.source, "create", plan.details),
-        page,
-        undefined,
-        table === undefined ? { items: zone } : { beside: table.props.id },
-      );
-      plan.details.push(`A ${quoted(label)} button on ${quoted(list.name)} opens this form.`);
-    }
+    ensureListCreate(plan, resolved);
     // A related list elsewhere asks for this record type: the create form makes its Add action.
-    ensureRelatedAdds(context, plan, resolved);
+    ensureRelatedAdds(plan, resolved);
     return;
   }
   const detail = found.detail;

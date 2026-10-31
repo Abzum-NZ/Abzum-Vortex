@@ -706,3 +706,22 @@ export const ensureListEdit = (
     );
   }
 };
+
+/** Adding from the list, on each list of the record type that does not have it yet, once a create page exists. */
+export const ensureListCreate = (plan: Plan, resolved: Resolved): void => {
+  const found = companions(plan.source, resolved.qualified);
+  if (found.create === undefined || !resolved.record.standard_actions.includes("create")) return;
+  const source = judged(plan.source);
+  for (const listId of found.list.map((entry) => entry.id)) {
+    const list = source.body.pages.find((entry) => entry.id === listId);
+    if (list === undefined) continue;
+    const table = recordTables(source, list, resolved)[0];
+    if (table === undefined || table.props.inline_create === true) continue;
+    table.props.inline_create = true;
+    table.props.create_page = found.create.key;
+    plan.details.push(
+      `${quoted(list.name)} has an ${quoted("Add " + lowerFirst(resolved.record.name))} button that opens ${quoted(found.create.name)}.`,
+    );
+  }
+  plan.source = judged(source);
+};

@@ -4,6 +4,7 @@ import {
   type ImmutablePlatformBlockCatalogue,
 } from "@vortex/platform/schema";
 import { listing, lowerFirst, pageSize } from "./application-record-page-kinds";
+import { studioBoardPipelines } from "./board-source";
 import { freshAlias, type Plan } from "./application-record-plan";
 import {
   companions,
@@ -39,21 +40,23 @@ import {
 } from "./application-structure-common";
 import type { SourceItem } from "@vortex/platform/schema";
 
-/** One related list's "Add <record>" action, bound once the page that holds its table exists. */
-type RelatedAdd = Readonly<{
-  tableAlias: string;
-  label: string;
-  create: Page;
-  child: Resolved;
+/** One related list card of the record detail block, in the block's own setting shape. */
+type RelatedList = Readonly<{
+  key: string;
+  title: string;
+  query: string;
+  parent_input: string;
+  columns: readonly Readonly<{ field: string }>[];
+  add_page?: string;
+  add_field?: string;
 }>;
 
-const relatedTables = (
+const relatedLists = (
   context: StudioStructureContext,
   plan: Plan,
   resolved: Resolved,
-): Readonly<{ items: SourceItem[]; adds: RelatedAdd[] }> => {
-  const items: SourceItem[] = [];
-  const adds: RelatedAdd[] = [];
+): RelatedList[] => {
+  const lists: RelatedList[] = [];
   for (const module of plan.source.body.modules)
     for (const child of module.record_types)
       for (const relationship of child.relationships.filter(
@@ -149,126 +152,66 @@ const relatedTables = (
             entry.key !== link.key &&
             childResolved.readable.has(entry.key),
         );
-        const viewPermission = childResolved.permission(plan.source, "read", plan.details);
+        childResolved.permission(plan.source, "read", plan.details);
         plan.details.push(
-          `A table of the ${child.plural_name.toLowerCase()} whose ${link.label} is this ${lowerFirst(resolved.record.name)}, showing ${listing(shown.map((entry) => entry.label))}, seen only by people who can open ${child.plural_name.toLowerCase()}${existing === undefined ? ` (a new query ${quoted(query.label ?? query.key)})` : ""}.`,
-        );
-        const tableAlias = freshAlias(plan, `table_${child.key}_of_${resolved.record.key}`);
-        items.push(
-          blockItem(
-            release(
-              context,
-              PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE,
-              "records table",
-            ),
-            tableAlias,
-            {
-              title: child.plural_name,
-              empty_message: `No ${child.plural_name.toLowerCase()} link to this ${lowerFirst(resolved.record.name)} yet.`,
-              columns: tableColumns(
-                (entry) => `${module.key}:${child.key}.${entry.key}`,
-                shown,
-                childResolved.title.key,
-              ),
-              query_parameters: [{ input, source: "page_parameter", name: "record_id" }],
-            },
-            {},
-            { query: `${module.key}:${query.key}`, view_permission: viewPermission },
-          ),
+          `A related list card of the ${child.plural_name.toLowerCase()} whose ${link.label} is this ${lowerFirst(resolved.record.name)}, showing ${listing(shown.map((entry) => entry.label))}, seen only by people who can open ${child.plural_name.toLowerCase()}${existing === undefined ? ` (a new query ${quoted(query.label ?? query.key)})` : ""}.`,
         );
         const create = companions(plan.source, childResolved.qualified).create;
-        if (create === undefined) {
+        if (create === undefined)
           plan.details.push(
             `No Add button for ${child.plural_name.toLowerCase()}: they have no create form yet.`,
           );
-          continue;
-        }
-        adds.push({
-          tableAlias,
-          label: `Add ${child.name.toLowerCase()}`,
-          create,
-          child: childResolved,
+        else
+          plan.details.push(
+            `The card's ${quoted("Add " + child.name.toLowerCase())} button opens ${quoted(create.name)} with this ${lowerFirst(resolved.record.name)}, so the new ${lowerFirst(child.name)} is linked to it.`,
+          );
+        lists.push({
+          key: uniqueKey(child.key, "", new Set(lists.map((entry) => entry.key)), 40),
+          title: child.plural_name,
+          query: `${module.key}:${query.key}`,
+          parent_input: input,
+          columns: shown.map((entry) => ({ field: `${module.key}:${child.key}.${entry.key}` })),
+          ...(create === undefined
+            ? {}
+            : { add_page: create.key, add_field: `${module.key}:${child.key}.${link.key}` }),
         });
       }
-  return { items, adds };
+  return lists;
 };
 
 /**
- * An "Add <record>" action on a related list: a button before the table that opens the child's
- * create form with this record already passed as the page's record, so the form shows it as the
- * link (the form's link input fills from the page's record when it points at that record type).
- */
-const bindRelatedAdd = (
-  context: StudioStructureContext,
-  plan: Plan,
-  resolved: Resolved,
-  add: RelatedAdd,
-): void => {
-  const alias = placeButton(
-    context,
-    plan,
-    add.label,
-    add.child.permission(plan.source, "create", plan.details),
-    { beside: add.tableAlias },
-    "primary",
-    "first",
-  );
-  openFlow(plan, alias, "action", add.label, add.create, add.child);
-  plan.details.push(
-    `A ${quoted(add.label)} button on the related list opens ${quoted(add.create.name)} with this ${lowerFirst(resolved.record.name)}, so the new ${lowerFirst(add.child.record.name)} is linked to it.`,
-  );
-};
-
-/**
- * The "Add <record>" action on every related list of the application that lists this record type,
- * added when its create form is made after the parent's detail page: whichever page is made
+ * The "Add <record>" action on every related list card of the application that lists this record
+ * type, added when its create form is made after the parent's detail page: whichever page is made
  * second brings the action.
  */
-export const ensureRelatedAdds = (
-  context: StudioStructureContext,
-  plan: Plan,
-  childResolved: Resolved,
-): void => {
+export const ensureRelatedAdds = (plan: Plan, childResolved: Resolved): void => {
   const create = companions(plan.source, childResolved.qualified).create;
   if (create === undefined) return;
-  const child = childResolved.record;
-  for (const page of [...plan.source.body.pages]) {
-    if (page.type !== "detail" || !("record_type" in page)) continue;
-    const parentQualified = String(page.record_type);
-    const parentResolved = resolveRecordType(plan.source, parentQualified);
-    for (const table of sourcePageItems(page.composition)) {
-      if (String(table.type) !== "platform.renderer.table") continue;
-      const reference = table.props.vortex.query;
-      if (typeof reference !== "string") continue;
-      const module = plan.source.body.modules.find((entry) =>
-        entry.queries.some((query) => `${entry.key}:${query.key}` === reference),
-      );
-      const query = module?.queries.find((entry) => `${module.key}:${entry.key}` === reference);
-      if (query === undefined || query.record_type !== child.key) continue;
-      if (
-        !query.inputs.some(
-          (input) =>
-            input.type === "record_reference" &&
-            Array.isArray(input.record_types) &&
-            input.record_types.includes(parentQualified),
-        )
-      )
-        continue;
-      const label = `Add ${child.name.toLowerCase()}`;
-      if (
-        sourcePageItems(page.composition).some(
-          (item) => String(item.type) === "platform.renderer.button" && item.props.label === label,
-        )
-      )
-        continue;
-      bindRelatedAdd(context, plan, parentResolved, {
-        tableAlias: table.props.id,
-        label,
-        create,
-        child: childResolved,
-      });
+  const source = judged(plan.source);
+  for (const page of source.body.pages) {
+    if (page.type !== "detail") continue;
+    for (const shown of sourcePageItems(page.composition)) {
+      if (String(shown.type) !== "platform.renderer.record_detail") continue;
+      const lists = shown.props.related_lists;
+      if (!Array.isArray(lists)) continue;
+      for (const list of lists as Record<string, unknown>[]) {
+        if (list.add_page !== undefined || typeof list.query !== "string") continue;
+        const module = source.body.modules.find((entry) =>
+          entry.queries.some((query) => `${entry.key}:${query.key}` === list.query),
+        );
+        const query = module?.queries.find((entry) => `${module.key}:${entry.key}` === list.query);
+        const filter = query?.filter as { field?: string } | undefined;
+        if (module === undefined || query?.record_type !== childResolved.record.key) continue;
+        if (typeof filter?.field !== "string") continue;
+        list.add_page = create.key;
+        list.add_field = `${module.key}:${query.record_type}.${filter.field}`;
+        plan.details.push(
+          `The ${quoted(String(list.title))} card on ${quoted(page.name)} has an ${quoted("Add " + childResolved.record.name.toLowerCase())} button that opens ${quoted(create.name)}.`,
+        );
+      }
     }
   }
+  plan.source = judged(source);
 };
 
 /** The same ordinary Record detail block for a generated page and a record side sheet. */ export const studioRecordDetailItem =
@@ -286,11 +229,28 @@ export const ensureRelatedAdds = (
       PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_DETAIL_BLOCK_RELEASE,
     );
     if (detail === undefined) return refuse("The block catalogue has no Record detail block.");
+    // Key facts beside the heading: the first three money, choice or date fields people can read.
+    const keyFacts = record.fields
+      .filter(
+        (entry) =>
+          ["money", "choice", "date", "date_time"].includes(entry.type) &&
+          resolved.readable.has(entry.key) &&
+          entry.key !== resolved.title.key,
+      )
+      .slice(0, 3);
+    const stage = studioBoardPipelines(source).find(
+      (candidate) =>
+        candidate.selectable && candidate.reference.startsWith(`${resolved.qualified}.`),
+    );
     return blockItem(
       detail,
       alias,
       {
         title: record.name,
+        ...(keyFacts.length === 0
+          ? {}
+          : { header_fields: keyFacts.map((entry) => ({ field: field(resolved, entry) })) }),
+        ...(stage === undefined ? {} : { stage_field: stage.reference }),
         heading_source: "field",
         heading_field: field(resolved, resolved.title),
         [STUDIO_ROW_ACTION_EVENT_SETTING]: studioRowActionEventId(alias),
@@ -345,7 +305,8 @@ export const addDetail = (
       ),
     );
   const name = record.name.slice(0, 60);
-  const related = relatedTables(context, plan, resolved);
+  const related = relatedLists(context, plan, resolved);
+  if (related.length > 0) detail.props.related_lists = related;
   const placedPage = placeNewPage(
     plan.source,
     name,
@@ -354,18 +315,11 @@ export const addDetail = (
       record_type: resolved.qualified,
       permission: resolved.permission(plan.source, "read", plan.details),
     },
-    pageData(
-      context,
-      plan.source,
-      command.shellAlias,
-      [detail, ...attachments, ...related.items],
-      name,
-    ),
+    pageData(context, plan.source, command.shellAlias, [detail, ...attachments], name),
     command.addToMenu,
   );
   plan.source = judged(placedPage.source);
   const page = placedPage.page;
-  for (const add of related.adds) bindRelatedAdd(context, plan, resolved, add);
   plan.details.unshift(
     `A page ${quoted(name)} that shows one ${lowerFirst(record.name)}, for people who can read ${record.plural_name.toLowerCase()}.`,
   );
@@ -377,7 +331,7 @@ export const addDetail = (
       (item) => `An attachment list shows the files in ${String(item.props.title)}.`,
     ),
   );
-  if (related.items.length === 0)
+  if (related.length === 0)
     plan.details.push(
       `No related tables: no record type of this application links to ${record.plural_name.toLowerCase()}.`,
     );
@@ -396,21 +350,6 @@ export const addDetail = (
     page,
     plan.source.body.pages.map((entry) => entry.id),
   );
-  for (const module of plan.source.body.modules) {
-    for (const target of module.record_types) {
-      const qualified = `${module.key}:${target.key}`;
-      const targetDetail = companions(plan.source, qualified).detail;
-      if (
-        targetDetail === undefined ||
-        qualified === resolved.qualified ||
-        recordTables(plan.source, page, { module, record: target }).length === 0
-      )
-        continue;
-      linkTablesToDetail(context, plan, resolveRecordType(plan.source, qualified), targetDetail, [
-        page.id,
-      ]);
-    }
-  }
   return page;
 };
 
