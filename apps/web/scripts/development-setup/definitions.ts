@@ -201,6 +201,33 @@ const readLiveDraft = async (
 };
 
 /**
+ * Writes each Module the Application owns again with its own stored source, through the Module
+ * draft write publication stages with, so its stored identity requirements are that source's. A
+ * forward migration that rewrote a Module draft moved its revision past its release, and
+ * publication restages only a Module whose source changed or whose draft is released.
+ */
+const restageOwnedModuleDrafts = (
+  context: SessionContext,
+  applicationRootId: string,
+): Promise<void> =>
+  inSystemTransaction(context, (transaction) =>
+    createDatabaseDefinitionPublicationRepository(transaction).transaction(
+      context,
+      async (publication) => {
+        for (const root of await publication.readOwnedModuleRoots(applicationRootId)) {
+          const live = await readLiveDraft(transaction, String(root.rootId));
+          if (live === undefined || live.draftRevision !== root.draftRevision)
+            throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
+          await publication.stageOwnedModuleSource(
+            root,
+            live.source as Parameters<typeof publication.stageOwnedModuleSource>[1],
+          );
+        }
+      },
+    ),
+  );
+
+/**
  * Authors the current shipped source on its recorded root and asks publication whether a release
  * is needed. Only prepare's DEFINITION_NO_CHANGE means current. The live publication anchor also
  * recovers a publication committed before an interrupted activation, without publishing it again.
@@ -247,6 +274,7 @@ const publishOne = async (
     state.drafts[source.key] = draft;
     state.save();
   } else {
+    await restageOwnedModuleDrafts(context, recordedRootId(draft));
     // Save on the observed live revision; a concurrent edit or publication must refuse.
     const saved = await inSystemTransaction(context, async (transaction) => {
       const rootId = recordedRootId(draft);
@@ -356,6 +384,7 @@ export const publishStudioApplicationDraft = async (
     readLiveDraft(transaction, root.rootId),
   );
   if (live === undefined) throw new Error(`Studio draft is missing for ${root.key}`);
+  await restageOwnedModuleDrafts(context, root.rootId);
   // Save the converted draft as it stands, so its identity requirements are its own.
   const saved = await inSystemTransaction(context, (transaction) =>
     createDefinitionStore(transaction, authority, platformPermissionSource).saveDraft({

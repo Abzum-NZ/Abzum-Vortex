@@ -457,11 +457,6 @@ begin
             and counter.field_id = stored_field.field_id
         )
         or exists (
-          select 1 from vortex_record.preview_reference_counters as counter
-          where counter.storage_contract_id = storage_id
-            and counter.field_id = stored_field.field_id
-        )
-        or exists (
           select 1 from vortex_record.relationship_storage_mappings as relationship
           where relationship.source_storage_contract_id = storage_id
             and relationship.source_field_id = stored_field.field_id
@@ -560,10 +555,6 @@ begin
         where counter.storage_contract_id = storage_id
       )
       or exists (
-        select 1 from vortex_record.preview_reference_counters as counter
-        where counter.storage_contract_id = storage_id
-      )
-      or exists (
         select 1 from vortex_record.preview_storage_bindings as preview
         where storage_id in (preview.storage_contract_id, preview.release_storage_contract_id)
       )
@@ -583,10 +574,6 @@ begin
       or exists (
         select 1 from vortex_access.record_share_grants as grant_row
         where grant_row.record_type_id = stored_catalogue.record_type_id
-      )
-      or exists (
-        select 1 from vortex_record.record_lifecycle_command_effects as effect
-        where effect.storage_contract_id = storage_id
       )
       or exists (
         select 1 from vortex_record.documents as document
