@@ -1307,7 +1307,7 @@ export function RecordsGrid({
         data-slot="grid-viewport"
         data-vortex-grid-virtualized={virtual ? "" : undefined}
         className={cn(
-          "relative max-w-full gap-[0] overflow-auto py-0",
+          "relative max-w-full overflow-auto",
           fill ? "min-h-0 flex-1" : bounded && BOUNDED_VIEWPORT_CLASS,
         )}
       >
