@@ -7172,6 +7172,73 @@ alter function vortex_platform.grid_view_viewer_targets_internal(uuid, uuid, uui
   owner to vortex_owner;
 
 
+-- IAM access requests of the removed kinds role_activation and role_deactivation can never be acted
+-- on once role activations are gone. They go in every installation, with the request items linked
+-- to them, the relationship edges that touch either and their search documents; activity history
+-- stays.
+do $$
+declare
+  request_store record;
+  item_store record;
+  removed_requests uuid[];
+  removed_items uuid[];
+  removed_records uuid[];
+begin
+  for request_store in
+    select catalogue.storage_contract_id, catalogue.physical_table_token,
+      mapping.physical_column_token
+    from vortex_record.storage_catalogue as catalogue
+    join vortex_record.field_storage_mappings as mapping
+      on mapping.storage_contract_id = catalogue.storage_contract_id
+    where catalogue.physical_schema_token = 'record_data'
+      and catalogue.record_type_definition ->> 'key' = 'access_request'
+      and mapping.field_definition ->> 'key' = 'request_type'
+      and pg_catalog.to_regclass(
+        pg_catalog.format('record_data.%I', catalogue.physical_table_token)
+      ) is not null
+  loop
+    execute pg_catalog.format(
+      'with removed as (delete from record_data.%I where %I in (''role_activation'', ''role_deactivation'') returning record_id) '
+        || 'select coalesce(pg_catalog.array_agg(record_id), array[]::uuid[]) from removed',
+      request_store.physical_table_token, request_store.physical_column_token
+    ) into removed_requests;
+    raise notice 'IAM access requests of removed kinds deleted from %: %',
+      request_store.physical_table_token, pg_catalog.cardinality(removed_requests);
+    if pg_catalog.cardinality(removed_requests) = 0 then
+      continue;
+    end if;
+    removed_records := removed_requests;
+    for item_store in
+      select distinct catalogue.storage_contract_id, catalogue.physical_table_token
+      from vortex_record.relationship_edges as edge
+      join vortex_record.storage_catalogue as catalogue
+        on catalogue.storage_contract_id = edge.from_storage_contract_id
+      where edge.to_storage_contract_id = request_store.storage_contract_id
+        and edge.to_record_id = any (removed_requests)
+        and catalogue.physical_schema_token = 'record_data'
+        and catalogue.record_type_definition ->> 'key' = 'access_request_item'
+    loop
+      execute pg_catalog.format(
+        'with removed as (delete from record_data.%I as item where item.record_id in ('
+          || 'select edge.from_record_id from vortex_record.relationship_edges as edge '
+          || 'where edge.from_storage_contract_id = $1 and edge.to_storage_contract_id = $2 '
+          || 'and edge.to_record_id = any ($3)) returning item.record_id) '
+          || 'select coalesce(pg_catalog.array_agg(record_id), array[]::uuid[]) from removed',
+        item_store.physical_table_token
+      ) into removed_items
+        using item_store.storage_contract_id, request_store.storage_contract_id, removed_requests;
+      raise notice 'IAM request items of those requests deleted from %: %',
+        item_store.physical_table_token, pg_catalog.cardinality(removed_items);
+      removed_records := removed_records || removed_items;
+    end loop;
+    delete from vortex_record.relationship_edges as edge
+    where edge.from_record_id = any (removed_records) or edge.to_record_id = any (removed_records);
+    delete from vortex_record.documents as document
+    where document.record_id = any (removed_records);
+  end loop;
+end
+$$;
+
 -- The IAM system projection of role activations: its storage contract and registry row.
 delete from vortex_record.field_storage_mappings
 where storage_contract_id in (
