@@ -20,6 +20,7 @@ import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-tran
 import { BuilderAuthorityError, requireBuilderAuthority } from "../definition/builder-authority";
 import { readApplicationDefinitionDraft } from "../definition/definition-draft-read";
 import { createDatabaseDefinitionPublicationService } from "../definition/definition-publication";
+import { createDefinitionStore } from "../definition/definition-store";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "../definition/publication/read";
 import {
   assertBeforeLiveDeadline,
@@ -244,7 +245,7 @@ export const createHumanDefinitionPublisher = (
       console.error(`[publication] ${mode} refused reason=command_invalid cause=schema/none`);
       return { kind: "refused", reason: "command_invalid" };
     }
-    const command = { rootId: root.data, expectedDraftRevision: supplied.expectedDraftRevision };
+    let command = { rootId: root.data, expectedDraftRevision: supplied.expectedDraftRevision };
     let failure: Failure | undefined;
     const operation = async (
       transaction: RequestDatabaseTransaction,
@@ -267,16 +268,9 @@ export const createHumanDefinitionPublisher = (
             rootId: root.data,
             expectedDraftRevision: command.expectedDraftRevision,
           });
-        const initial = await readDraftAtRevision();
+        let initial = await readDraftAtRevision();
         if (initial.kind !== "application")
           throw new PublicationContextRefused("draft_kind_mismatch");
-        // A draft not saved since the last release has nothing to publish.
-        if (
-          initial.publishedRevision !== undefined &&
-          initial.publishedRevision !== null &&
-          initial.draftRevision <= initial.publishedRevision
-        )
-          throw new DefinitionError("DEFINITION_NO_CHANGE");
         const clocks =
           await transaction.query<DatabaseRow>`select pg_catalog.clock_timestamp() as started_at`;
         const started = timestampSchema.safeParse(databaseTimestamp(clocks[0]?.started_at));
@@ -287,6 +281,31 @@ export const createHumanDefinitionPublisher = (
           transaction,
           authority,
         );
+        // A draft not saved since the last release is published only when the platform has moved on:
+        // preparing it compares what it compiles to with the latest release, and refuses with
+        // DEFINITION_NO_CHANGE when they are the same. A release takes the draft's revision, so the
+        // unchanged draft is saved once more, in this transaction, to get the newer revision.
+        if (
+          initial.publishedRevision !== undefined &&
+          initial.publishedRevision !== null &&
+          initial.draftRevision <= initial.publishedRevision
+        ) {
+          if (mode !== "prepare") throw new DefinitionError("DEFINITION_NO_CHANGE");
+          await service.prepare(context, command);
+          const saved = await createDefinitionStore(
+            transaction,
+            authority,
+            dependencies.catalogue.permissions,
+          ).saveDraft({
+            rootId: command.rootId,
+            expectedDraftRevision: initial.draftRevision,
+            source: initial.source,
+          });
+          command = { rootId: command.rootId, expectedDraftRevision: saved.draftRevision };
+          initial = await readDraftAtRevision();
+          if (initial.kind !== "application")
+            throw new PublicationContextRefused("draft_kind_mismatch");
+        }
         let value: Value;
         if (mode === "prepare") {
           const preparation = prepareDefinitionPublicationResultSchema.parse(
