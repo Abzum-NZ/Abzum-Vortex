@@ -409,6 +409,14 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     return false;
   };
 
+  /** Whether a release read failed because a platform definition the release pins was superseded. */
+  const dependencySupersededRelease = (error: unknown): boolean => {
+    for (let cause: unknown = error; cause instanceof Error; cause = cause.cause)
+      if (cause instanceof DefinitionError && cause.code === "DEFINITION_DEPENDENCY_SUPERSEDED")
+        return true;
+    return false;
+  };
+
   /**
    * The storage set an upgrade replaces. A release published under an earlier definition contract is
    * never read as a storage set: it stays as history, and the upgrade reads the release before it
@@ -850,9 +858,16 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
               applicationRootId: request.applicationRootId,
               applicationReleaseRevision: request.expectedActiveReleaseRevision,
             }).catch((error: unknown) => {
-              // A prior release of an earlier contract has no registered authority to preserve.
-              if (!supersededRelease(error))
-                logRefusal("installation", "prior release read", "prior_release_unreadable", error);
+              // A prior release of an earlier contract, or on superseded platform definitions, has
+              // no registered authority to preserve: this upgrade replaces it.
+              if (supersededRelease(error)) return null;
+              if (dependencySupersededRelease(error)) {
+                console.info(
+                  `[installation] prior release ${request.expectedActiveReleaseRevision} uses superseded platform definitions: replaced by release ${request.applicationReleaseRevision}`,
+                );
+                return null;
+              }
+              logRefusal("installation", "prior release read", "prior_release_unreadable", error);
               return null;
             });
 
