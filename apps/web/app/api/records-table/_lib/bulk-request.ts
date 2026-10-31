@@ -11,6 +11,7 @@ import {
 import {
   createRecordsTableBulkService,
   createRecordsTableExportService,
+  createRecordsTableRunService,
   createStoredPageCapabilityService,
   resolveProjectedTablePlacement,
   runtimeContextSelection,
@@ -48,6 +49,10 @@ export const recordsTableBulkService = () =>
     channel: "web",
     continuationKey: getQueryContinuationKey(),
   });
+
+/** The one reader of a background run a Records table's action started. */
+export const recordsTableRunService = () =>
+  createRecordsTableRunService(humanOrganizationRequestDependencies());
 
 /** The one export service of a Records table, composed for this request. */
 export const recordsTableExportService = () =>

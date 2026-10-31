@@ -167,6 +167,23 @@ export const createRecordsSelectionSealer =
     );
 
 /**
+ * The page and placement a genuine sealed descriptor addresses, for a reader that does not hold
+ * them (a flow given the token as an input). Only authenticity is decided here; the person, scope,
+ * release and lifetime are decided when the descriptor is opened with them.
+ */
+export const recordsSelectionPlacement = (
+  token: string,
+  key: QueryContinuationKey,
+): Readonly<{ pageId: string; placementId: string }> | undefined => {
+  const opening = openToken(key, purpose, token);
+  if (opening.kind === "refused") return undefined;
+  const parsed = selectionDescriptorSchema.safeParse(opening.payload);
+  return parsed.success
+    ? { pageId: parsed.data.pageId, placementId: parsed.data.placementId }
+    : undefined;
+};
+
+/**
  * Opens a sealed descriptor for the person it was sealed for, in the same organisation,
  * application and installed release, for the same placement, within its lifetime. Anything else
  * (a tampered or foreign token, another person, a newer release) is refused, with the cause logged.

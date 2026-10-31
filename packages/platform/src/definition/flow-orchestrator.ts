@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
 import { isRecord } from "../catalogue/runtime-primitives";
 import type { ExecuteNamedActionCommand } from "../records/named-actions";
+import type { NamedActionBatchResult } from "../records/action-record-port";
 import type { FlowBindingInput, FlowDefinition } from "../workflows/flow-contracts";
 import { resolveFlowValue } from "../rules/flow-value-runtime";
 import { parseFlowSegmentSeed } from "../rules/flow-segment-seed";
@@ -44,6 +45,7 @@ import {
   type FlowRunExpectation,
   type FlowStartRequest,
   type NamedActionExecutionResult,
+  type NamedActionRunner,
   type PreparedPersonRun,
   type Run,
 } from "./flow-orchestrator-types";
@@ -333,9 +335,11 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       // The segment that ended before a Run on back end task has committed: the task runs now, in
       // its own claim, so its child never sees or blocks on the caller's uncommitted changes.
       if (step.kind === "protected_task" && step.call.taskType === "backend.run") {
-        const result = await createFlowTaskRunner(dependencies, (session, selection, command) =>
-          runNamedAction(session, selection, command),
-        ).run(run, step.state, step.call);
+        const result = await createFlowTaskRunner(dependencies, namedRunner()).run(
+          run,
+          step.state,
+          step.call,
+        );
         step = resumeFlowRun(
           step.state,
           { kind: "task_result", ...result },
@@ -356,14 +360,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       if (segment === undefined || segment.kind !== "server") return withCommit(refused);
       const boundary = step.state;
       const admitted = await dependencies.admitSegment(run, boundary, segment, (ports, replay) =>
-        runFlowSegmentFromBoundary(
-          ports,
-          (session, selection, command) => runNamedAction(session, selection, command, ports),
-          run,
-          boundary,
-          segment,
-          replay,
-        ),
+        runFlowSegmentFromBoundary(ports, namedRunner(ports), run, boundary, segment, replay),
       );
       committedNow ||= admitted.committedNow;
       replayedCommitted ||= admitted.replayedCommitted === true;
@@ -456,28 +453,38 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
   const runNamedAction = async (
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
-    command: ExecuteNamedActionCommand,
+    command: ExecuteNamedActionCommand | readonly ExecuteNamedActionCommand[],
     ports: FlowOrchestratorDependencies = dependencies,
-  ): Promise<NamedActionExecutionResult> => {
-    if (ports.actionRecords === undefined) return { kind: "unavailable" };
-    const installed = await ports.resolveRelease(selection.organizationId, command.action.actionId);
+  ): Promise<NamedActionExecutionResult | NamedActionBatchResult> => {
+    const commands = Array.isArray(command) ? command : [command as ExecuteNamedActionCommand];
+    if (ports.actionRecords === undefined || commands.length === 0) return { kind: "unavailable" };
+    const head = commands[0]!;
+    const installed = await ports.resolveRelease(selection.organizationId, head.action.actionId);
     const flowId = [...(installed?.namedActions?.values() ?? [])].find(
-      (named) => named.action.actionId.toLowerCase() === command.action.actionId.toLowerCase(),
+      (named) => named.action.actionId.toLowerCase() === head.action.actionId.toLowerCase(),
     )?.flowId;
     if (flowId === undefined) return { kind: "unavailable" };
     const prepared = await prepare(session, selection, flowId, "action", ports);
     if (prepared === undefined) return { kind: "unavailable" };
     if (prepared.release.recordTypes === undefined) return { kind: "unavailable" };
-    const runId = newRunId();
-    return ports.actionRecords.execute(
-      session,
-      selection,
-      command,
-      namedActionFlowRunner(prepared.library, prepared.release.recordTypes, flowId, runId),
+    const runner = namedActionFlowRunner(
+      prepared.library,
+      prepared.release.recordTypes,
+      flowId,
+      newRunId(),
     );
+    return Array.isArray(command)
+      ? ports.actionRecords.executeMany(session, selection, commands, runner)
+      : ports.actionRecords.execute(session, selection, head, runner);
   };
+  /** The one named-action path as the task runner calls it, bound to the ports of its attempt. */
+  const namedRunner = (ports?: FlowOrchestratorDependencies): NamedActionRunner =>
+    ((session: IdentitySession, selection: OrganizationSelectionCandidate, command: never) =>
+      runNamedAction(session, selection, command, ports)) as NamedActionRunner;
 
   return Object.freeze({
+    /** The one named-action path, for a host that runs flow steps itself (a back-end run). */
+    namedActionRunner: namedRunner(),
     /** Admits and executes exactly the server segment selected by the page. */
     async invokeSegment(
       request: FlowStartRequest,
@@ -603,8 +610,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
             );
             const executed = await runFlowSegment(
               ports,
-              (nextSession, nextSelection, command) =>
-                runNamedAction(nextSession, nextSelection, command, ports),
+              namedRunner(ports),
               attempt,
               segment,
               initial,
@@ -624,11 +630,11 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         let step = admitted.value.step;
         // The segment committed before its Run on back end task; the task runs now.
         if (step.kind === "protected_task" && step.call.taskType === "backend.run") {
-          const result = await createFlowTaskRunner(
-            dependencies,
-            (nextSession, nextSelection, command) =>
-              runNamedAction(nextSession, nextSelection, command),
-          ).run(attempt, step.state, step.call);
+          const result = await createFlowTaskRunner(dependencies, namedRunner()).run(
+            attempt,
+            step.state,
+            step.call,
+          );
           step = resumeFlowRun(
             step.state,
             { kind: "task_result", ...result },

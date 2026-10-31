@@ -11,6 +11,10 @@ import {
   recordLoadedPageTypes,
   authoredRecordsTableEventAvailable,
   defaultFlowBindingSettings,
+  defaultBatchEditFlowSource,
+  defaultBulkActionFlowSource,
+  defaultBulkIdsFlowSource,
+  defaultBulkMatchingFlowSource,
   defaultChangeFlowSource,
   defaultGuidedCancelFlowSource,
   defaultGuidedStepFlowSource,
@@ -96,6 +100,7 @@ const controlEventRecordType = (
   if (
     event === "row_clicked" ||
     event === "row_action" ||
+    event === "batch_edit" ||
     event === recordsTableInlineEditEvent ||
     event === recordsTableRowEditEvent
   ) {
@@ -117,6 +122,7 @@ export const studioFlowCreateSavesChange = (
   recordType: string | null,
 ): boolean =>
   (event === "card_moved" ||
+    event === "batch_edit" ||
     event === recordsTableInlineEditEvent ||
     event === recordsTableRowEditEvent) &&
   recordType !== null;
@@ -265,6 +271,7 @@ export const projectStudioFlowCreateChoices = (
         // a card added from a column is offered while the board's quick add is on.
         ((event === recordsTableInlineEditEvent ||
           event === recordsTableRowEditEvent ||
+          event === "batch_edit" ||
           event === "card_added") &&
           (placed === undefined || !authoredRecordsTableEventAvailable(placed.props, event)))
       )
@@ -350,6 +357,7 @@ const bindControl = (
   const rowActionMenu = event === "row_action" && hasRowActionMenu(item);
   if (
     !rowActionMenu &&
+    event !== "bulk_action" &&
     body.flow_bindings.some(
       (binding) => binding.control === controlAlias && binding.event === event,
     )
@@ -403,8 +411,10 @@ const bindControl = (
   const declared = new Set(
     body.events.filter((entry) => entry.record_type === recordType).map((entry) => entry.id),
   );
+  // Each bulk action of a table is its own event, as each row action menu entry is.
+  const ownEvent = rowActionMenu || event === "bulk_action";
   const shared =
-    rowActionMenu || recordType === undefined
+    ownEvent || recordType === undefined
       ? undefined
       : body.flow_bindings.find(
           (binding) => binding.event === event && declared.has(binding.event_id),
@@ -425,7 +435,7 @@ const bindControl = (
       : blockEventId) ??
     shared ??
     keyFrom(
-      rowActionMenu || recordType === undefined
+      ownEvent || recordType === undefined
         ? `event_${flowKey}`
         : `event_${recordType.slice(recordType.lastIndexOf(":") + 1)}_${event}`,
       aliases,
@@ -457,6 +467,14 @@ const bindControl = (
     (item.props as Record<string, unknown>).row_action_event_id = eventId;
   if (event === "row_clicked") {
     if (item !== undefined) item.props.row_click = { mode: "flow", event_id: eventId };
+  }
+  if (event === "batch_edit") {
+    if (item === undefined) return refuse("The table is no longer on the page.");
+    // The table names the action that saves a batch in its Spreadsheet controls feature.
+    const props = item.props as Record<string, unknown>;
+    const features = isRecord(props.features) ? props.features : {};
+    const feature = isRecord(features.spreadsheet) ? features.spreadsheet : {};
+    props.features = { ...features, spreadsheet: { ...feature, event_id: eventId } };
   }
   if (event === recordsTableInlineEditEvent || event === recordsTableRowEditEvent) {
     if (item === undefined) return refuse("The table is no longer on the page.");
@@ -809,12 +827,94 @@ export const applyStudioFlowCreate = (
         ? { kind: "refused", reason: added }
         : created(candidate, added.flow, added.moduleKey, undefined);
     }
+    // A table's next bulk action without a flow gets its default flows: the one the event runs, the
+    // chosen records queued on the back end, and the matching flow that works through every match.
+    if (command.kind === "action" && command.event === "bulk_action") {
+      const page = body.pages.find((candidate) =>
+        sourcePageItems(candidate.composition).some(
+          (item) => item.props.id === command.controlAlias,
+        ),
+      );
+      const item =
+        page === undefined
+          ? undefined
+          : sourcePageItems(page.composition).find(
+              (entry) => entry.props.id === command.controlAlias,
+            );
+      const features = isRecord(item?.props.features) ? item.props.features : {};
+      const declared = isRecord(features.bulk_actions) ? features.bulk_actions : {};
+      const entries = Array.isArray(declared.actions) ? declared.actions : [];
+      const entry = entries.find(
+        (candidate) => isRecord(candidate) && candidate.event_id === undefined,
+      );
+      if (item === undefined || !isRecord(entry))
+        return refuse("Every bulk action of the table already runs a flow.");
+      const declaredAction = String(entry.action);
+      const operation = body.modules
+        .flatMap((module) => module.actions)
+        .find(
+          (candidate) =>
+            candidate.key === declaredAction || declaredAction.endsWith(`:${candidate.key}`),
+        );
+      if (operation === undefined) return refuse("That action is no longer in the application.");
+      const key = keyFrom(name, new Set(body.flows.flatMap((flow) => [flow.id, flow.key])));
+      const matchingKey =
+        key === undefined
+          ? undefined
+          : keyFrom(`${key}_matching`, new Set(body.flows.flatMap((flow) => [flow.id, flow.key])));
+      if (key === undefined || matchingKey === undefined)
+        return refuse("No free name could be made for this flow. Choose another name.");
+      const idsKey = keyFrom(
+        `${key}_chosen`,
+        new Set(body.flows.flatMap((flow) => [flow.id, flow.key])),
+      );
+      if (idsKey === undefined)
+        return refuse("No free name could be made for this flow. Choose another name.");
+      const input = {
+        id: key,
+        key,
+        idsFlow: idsKey,
+        operation: operation.key,
+        query: String(item.props.vortex.query),
+        matchingFlow: matchingKey,
+        started: "Started; it will finish in the background.",
+        done: `${operation.label} done.`,
+      };
+      const flow: SourceFlow = {
+        ...defaultBulkActionFlowSource(input),
+        labels: { name },
+      };
+      body.flows.push(
+        flow,
+        {
+          ...defaultBulkMatchingFlowSource(input),
+          labels: { name: `${name} (every matching record)` },
+        },
+        { ...defaultBulkIdsFlowSource(input), labels: { name: `${name} (chosen records)` } },
+      );
+      const bound = bindControl(
+        candidate,
+        command.controlAlias,
+        "bulk_action",
+        key,
+        {
+          subjects: { kind: "caller", name: "subjects" },
+          queued: { kind: "caller", name: "queued" },
+          selection: { kind: "caller", name: "selection" },
+          excluded: { kind: "caller", name: "excluded" },
+        },
+        borrowed,
+      );
+      entry.event_id = bound.eventId;
+      return created(candidate, flow, null, bound);
+    }
     if (command.kind === "action" && command.event === "card_moved" && command.recordType === null)
       return { kind: "refused", reason: "Choose the board's choice field first." };
     if (
       command.kind === "action" &&
       (command.event === recordsTableInlineEditEvent ||
-        command.event === recordsTableRowEditEvent) &&
+        command.event === recordsTableRowEditEvent ||
+        command.event === "batch_edit") &&
       command.recordType === null
     )
       return { kind: "refused", reason: "Choose the table's query first." };
@@ -831,24 +931,42 @@ export const applyStudioFlowCreate = (
       command.recordType !== null &&
       studioFlowCreateSavesChange(command.event, command.recordType)
     ) {
-      // A board's card move and a table's inline edit each save the changed value of one record
-      // through the one Save record task: the record and the changed field with its new value.
-      flow = {
-        ...defaultChangeFlowSource({ id: key, key, recordType: command.recordType }),
-        labels: { name },
-        recordInput: "record",
-      };
-      binding = bindControl(
-        candidate,
-        command.controlAlias,
-        command.event,
-        key,
-        {
-          record: { kind: "caller", name: "record_id" },
-          values: { kind: "caller", name: "values" },
-        },
-        borrowed,
-      );
+      if (command.event === "batch_edit") {
+        flow = {
+          ...defaultBatchEditFlowSource({ id: key, key, recordType: command.recordType }),
+          labels: { name },
+        };
+        binding = bindControl(
+          candidate,
+          command.controlAlias,
+          command.event,
+          key,
+          {
+            rows: { kind: "caller", name: "rows" },
+            operation: { kind: "caller", name: "operation" },
+          },
+          borrowed,
+        );
+      } else {
+        // A board's card move and a table's inline edit each save the changed value of one record
+        // through the one Save record task: the record and the changed field with its new value.
+        flow = {
+          ...defaultChangeFlowSource({ id: key, key, recordType: command.recordType }),
+          labels: { name },
+          recordInput: "record",
+        };
+        binding = bindControl(
+          candidate,
+          command.controlAlias,
+          command.event,
+          key,
+          {
+            record: { kind: "caller", name: "record_id" },
+            values: { kind: "caller", name: "values" },
+          },
+          borrowed,
+        );
+      }
     } else if (
       command.kind === "action" &&
       (command.event === "guided_step_changed" || command.event === "form_cancel")

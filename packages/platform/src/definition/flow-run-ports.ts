@@ -188,6 +188,16 @@ export const createFlowRunPorts = (
                     run,
                   )
                 : { kind: "unavailable" },
+            executeMany: async (session, selection, commands, run) =>
+              matchesBound(session, selection)
+                ? host.actionRecords.executeManyInTransaction(
+                    boundRequest.transaction,
+                    boundRequest.issuedAt,
+                    selection,
+                    commands,
+                    run,
+                  )
+                : { kind: "unavailable" },
           },
     subjects: {
       read: async (session, selection, subject) => {

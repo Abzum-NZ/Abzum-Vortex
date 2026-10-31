@@ -8,6 +8,8 @@ const bulkActionSchema = z
     label: textSchema,
     confirm: z.boolean(),
     maxRecords: z.number().int().min(1).max(recordsTableBulkActionRecordLimit),
+    /** The binding that runs the action over the selection. */
+    eventId: z.string().min(1).max(60),
   })
   .strict()
   .readonly();

@@ -45,6 +45,7 @@ export type RecordsTableRequestPart =
   | "command"
   | "cursor"
   | "bulk_action"
+  | "batch_edit"
   | typeof recordsTableInlineEditEvent
   | typeof recordsTableRowEditEvent
   | "row_action"

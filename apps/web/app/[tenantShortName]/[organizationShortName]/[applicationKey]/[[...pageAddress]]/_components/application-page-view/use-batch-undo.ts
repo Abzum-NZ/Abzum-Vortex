@@ -1,13 +1,14 @@
 import { useCallback, useMemo, useRef } from "react";
 import {
-  recordsTableBatchEditResultSchema,
+  isRecord,
   type RecordsTableBatchEditRequest,
   type RecordsTableBatchEditResult,
 } from "@vortex/platform/schema";
 import type { DisplayBatchEditAnswer, DisplaySemanticEvent } from "@vortex/ui";
-import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
-import { recordsTableAddress } from "./records-table-address";
+import type { PlacementFlowBinding } from "../../../../../../_lib/application-page";
 import type { PageAddress } from "./page-address";
+import type { DispatchOutcome } from "./types";
+import { bindingOfEvent } from "./event-values";
 
 type Rows = RecordsTableBatchEditRequest["rows"];
 type Saved = Extract<RecordsTableBatchEditResult, { kind: "saved" }>;
@@ -44,18 +45,50 @@ const rebase = (stacks: Stacks, replaced: Rows, saved: Saved): void => {
     });
 };
 
+/** What a batch flow reports it applied, as the saved batch the grid and the undo stack read. */
+const savedOf = (applied: unknown): Saved => ({
+  kind: "saved",
+  rows: (Array.isArray(applied) ? applied : []).flatMap((entry) =>
+    isRecord(entry) &&
+    typeof entry.record === "string" &&
+    typeof entry.revision === "number" &&
+    isRecord(entry.previous)
+      ? [
+          {
+            recordId: entry.record,
+            revision: entry.revision,
+            previous: entry.previous,
+          } as Saved["rows"][number],
+        ]
+      : [],
+  ),
+});
+
 /**
- * Paste, Fill and Undo of a Records table: one request per batch to the server, which validates
+ * Paste, Fill and Undo of a Records table: one run of the table's bound batch flow per gesture, which validates
  * every cell and commits all of the batch or none of it, and the session-local stack of the batches
  * committed here. Undo and redo send the inverse batch with the revisions the batches left, so a
  * record changed since by anyone else refuses it. The stack lives in this page's memory only and is
  * forgotten when the person navigates or changes the query.
  */
 export function useBatchUndo({
-  model,
   navigationKey,
   address,
-}: Readonly<{ model: ApplicationPageModel; navigationKey: string; address: PageAddress }>) {
+  runBinding,
+}: Readonly<{
+  navigationKey: string;
+  address: PageAddress;
+  runBinding: (
+    placementId: string,
+    binding: PlacementFlowBinding,
+    supplied: Record<string, unknown>,
+    selectedRecordId?: string,
+    gestureSubject?: undefined,
+    afterAccepted?: undefined,
+    clickId?: string,
+    reportOnControl?: "in_place",
+  ) => Promise<DispatchOutcome>;
+}>) {
   const held = useRef<{ scope: string; stacks: Map<string, Stacks> }>({
     scope: "",
     stacks: new Map(),
@@ -77,35 +110,38 @@ export function useBatchUndo({
   const post = useCallback(
     async (
       placementId: string,
+      bindings: readonly PlacementFlowBinding[],
       operation: RecordsTableBatchEditRequest["operation"],
       rows: Rows,
     ): Promise<RecordsTableBatchEditResult> => {
-      try {
-        const response = await fetch("/api/records-table/batch-edit", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          credentials: "same-origin",
-          cache: "no-store",
-          body: JSON.stringify({
-            ...recordsTableAddress(model),
-            placementId,
-            commandId: crypto.randomUUID(),
-            operation,
-            rows,
-          }),
-        });
-        const parsed = recordsTableBatchEditResultSchema.safeParse(await response.json());
-        return parsed.success ? parsed.data : { kind: "unavailable" };
-      } catch (error) {
-        console.error("[grid] the batch edit request failed", error);
+      const binding = bindingOfEvent(bindings, "batch_edit");
+      if (binding === undefined) {
+        console.error("[grid] the table has no batch edit binding: BATCH_EDIT_BINDING_MISSING");
         return { kind: "unavailable" };
       }
+      const outcome = await runBinding(
+        placementId,
+        binding,
+        { rows, operation },
+        undefined,
+        undefined,
+        undefined,
+        crypto.randomUUID(),
+        "in_place",
+      );
+      if (outcome.cellProblems !== undefined)
+        return { kind: "cells_refused", problems: [...outcome.cellProblems] };
+      if (outcome.confirmed) return savedOf(outcome.applied);
+      // No notice and no change reported: the run may have committed (the page offers Retry).
+      return outcome.notice === undefined && !outcome.changed
+        ? { kind: "unknown" }
+        : { kind: "unavailable" };
     },
-    [model],
+    [runBinding],
   );
 
   const eventsFor = useCallback(
-    (placementId: string) => ({
+    (placementId: string, bindings: readonly PlacementFlowBinding[]) => ({
       batch_edit_requested: async (
         event: DisplaySemanticEvent,
       ): Promise<DisplayBatchEditAnswer | undefined> => {
@@ -121,7 +157,7 @@ export function useBatchUndo({
         if (event.action === "state") return depths(undefined);
         if (event.action === "paste" || event.action === "fill") {
           if (event.rows === undefined) return undefined;
-          const result = await post(placementId, event.action, event.rows);
+          const result = await post(placementId, bindings, event.action, event.rows);
           if (result.kind === "saved") {
             rebase(stacks, event.rows, result);
             stacks.undo.push(inverseOf(result));
@@ -133,7 +169,7 @@ export function useBatchUndo({
         const to = event.action === "undo" ? stacks.redo : stacks.undo;
         const rows = from.pop();
         if (rows === undefined) return depths(undefined);
-        const result = await post(placementId, event.action, rows);
+        const result = await post(placementId, bindings, event.action, rows);
         if (result.kind === "saved") {
           rebase(stacks, rows, result);
           to.push(inverseOf(result));

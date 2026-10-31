@@ -232,6 +232,19 @@ export const createFlowInvocationHandler =
               telemetry: appTelemetry,
               releaseCatalogue: installedReleaseCatalogue,
               continuationKey: getQueryContinuationKey(),
+              // A pasted link title is read from its target record type, which a Studio preview makes ready.
+              prepareLinkTargets: async (session, installed, recordTypeIds) => {
+                const demand = await prepareRuntimePreviewChoices(
+                  session,
+                  installed,
+                  recordTypeIds,
+                );
+                return demand.kind === "ready"
+                  ? "ready"
+                  : demand.kind === "temporarily_unavailable"
+                    ? "temporarily_unavailable"
+                    : "refused";
+              },
               projectRowForm: (bound, context, page, pageId, formId, subject) =>
                 projectRowOptionsForm(
                   bound.transaction,

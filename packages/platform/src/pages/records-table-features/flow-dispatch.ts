@@ -3,6 +3,7 @@ import "server-only";
 import { recordIdSchema, fieldIdSchema } from "../../catalogue/identifiers";
 import { isRecord, sameId } from "../../catalogue/runtime-primitives";
 import { recordsTableContractOrLog } from "../../definition/application-composition/records-display";
+import { recordsTableBulkRequestMaximum } from "../../definition/application-composition/records-table-features/bulk-actions";
 import { recordsTableInlineEditEvent } from "../../definition/application-composition/records-table-features/inline-edit";
 import { recordsTableRowEditEvent } from "../../definition/application-composition/records-table-features/row-edit";
 import type { ComponentFlowBinding } from "../../definition/application-flow-bindings";
@@ -190,6 +191,7 @@ export const recordsTableBindingRefusal = async (
     event !== "row_action" &&
     event !== "row_clicked" &&
     event !== "bulk_action" &&
+    event !== "batch_edit" &&
     event !== recordsTableInlineEditEvent &&
     event !== recordsTableRowEditEvent
   )
@@ -211,8 +213,54 @@ export const recordsTableBindingRefusal = async (
   const contract = recordsTableContractOrLog(placementSettings(props), "flow dispatch");
   if (contract === undefined)
     return recordsTableRequestRefusal("contract", "placement_contract_unreadable");
-  // A bulk action runs a named action through the table's own bulk run, never a flow binding.
-  if (event === "bulk_action") return recordsTableRequestRefusal(event, "command_not_declared");
+  // A bulk action runs its bound flow over the selected rows: the binding must be the one the
+  // table declares for an action, and the rows a bounded list of distinct records at their
+  // displayed revisions. The action itself decides each record under current access when it runs.
+  if (event === "bulk_action") {
+    const { bulkActions } = contract.features;
+    const declared = bulkActions.enabled
+      ? bulkActions.actions.find(
+          (action) => action.eventId !== undefined && sameId(action.eventId, binding.eventId),
+        )
+      : undefined;
+    if (declared === undefined) return recordsTableRequestRefusal(event, "command_not_declared");
+    const listed = (value: unknown, most: number): boolean =>
+      Array.isArray(value) &&
+      value.length > 0 &&
+      value.length <= Math.min(most, declared.maxRecords) &&
+      value.every(
+        (entry) =>
+          Array.isArray(entry) &&
+          entry.length === 2 &&
+          recordIdSchema.safeParse(entry[0]).success &&
+          typeof entry[1] === "number",
+      ) &&
+      new Set(value.map((entry) => String((entry as [string, number])[0]).toLowerCase())).size ===
+        value.length;
+    const empty = (value: unknown): boolean => Array.isArray(value) && value.length === 0;
+    // Exactly one way in: the chosen rows run in the request (few), or queue on the back end
+    // (more), or every matching record stands for itself by its sealed selection and runs there.
+    const matching = typeof inputs.selection === "string" && inputs.selection !== "";
+    const excludedValid =
+      Array.isArray(inputs.excluded) &&
+      inputs.excluded.every((id) => recordIdSchema.safeParse(id).success);
+    const valid = matching
+      ? empty(inputs.subjects) && empty(inputs.queued) && excludedValid
+      : empty(inputs.excluded) &&
+        ((listed(inputs.subjects, recordsTableBulkRequestMaximum) && empty(inputs.queued)) ||
+          (empty(inputs.subjects) && listed(inputs.queued, 200)));
+    return valid ? undefined : recordsTableRequestRefusal(event, "record_selection_invalid");
+  }
+  // A batch of pasted, filled or undone cells names its rows itself; every cell is decided when
+  // the batch is prepared, so only the feature and its declared binding are checked here.
+  if (event === "batch_edit") {
+    const { spreadsheet } = contract.features;
+    return !spreadsheet.enabled
+      ? recordsTableRequestRefusal(event, "feature_off")
+      : spreadsheet.eventId === undefined || !sameId(spreadsheet.eventId, binding.eventId)
+        ? recordsTableRequestRefusal(event, "binding_not_declared")
+        : undefined;
+  }
   const command =
     event === "row_action"
       ? contract.rowBehaviours.rowActions.find((action) => sameId(action.eventId, binding.eventId))

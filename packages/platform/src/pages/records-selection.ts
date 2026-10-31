@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { platformIdSchema, recordIdSchema, revisionSchema } from "../catalogue/identifiers";
+import { recordIdSchema, revisionSchema } from "../catalogue/identifiers";
 
 /**
  * What a person selected in a Records table, as every bulk command over a table takes it: bulk
@@ -66,6 +66,30 @@ export const recordsSelectionCountRequestSchema = z
   .strict();
 export type RecordsSelectionCountRequest = z.infer<typeof recordsSelectionCountRequestSchema>;
 
+/**
+ * Where a background run a table's action started has got to: the reference the start returned,
+ * read by the person who started it. The reply never carries what the run produced.
+ */
+export const recordsTableRunRequestSchema = z
+  .object({ ...placementCommandBase, run: z.uuid() })
+  .strict();
+export type RecordsTableRunRequest = z.infer<typeof recordsTableRunRequestSchema>;
+
+export const recordsTableRunResultSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("read"),
+      state: z.enum(["running", "succeeded", "failed"]),
+      /** How many runs the chain has reached: a matching run starts one after another. */
+      pages: z.number().int().min(1),
+      failureCode: z.string().max(100).nullable(),
+    })
+    .strict(),
+  recordsTableRequestRejectionSchema,
+  z.object({ kind: z.literal("unavailable") }).strict(),
+]);
+export type RecordsTableRunResult = z.infer<typeof recordsTableRunResultSchema>;
+
 /** The most records the one capped count path counts; above it the person narrows the filter. */
 export const recordsSelectionCountCeiling = 100_000;
 
@@ -77,20 +101,6 @@ export const recordsSelectionCountResultSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("unavailable") }).strict(),
 ]);
 export type RecordsSelectionCountResult = z.infer<typeof recordsSelectionCountResultSchema>;
-
-/**
- * One run of a declared bulk action over a selection. `commandId` is the person's one gesture:
- * submitting the same command again replays each record's completed change instead of repeating it.
- */
-export const recordsTableBulkActionRequestSchema = z
-  .object({
-    ...placementCommandBase,
-    action: z.string().min(1).max(200),
-    commandId: platformIdSchema,
-    selection: recordsSelectionSchema,
-  })
-  .strict();
-export type RecordsTableBulkActionRequest = z.infer<typeof recordsTableBulkActionRequestSchema>;
 
 /** Why a record of a bulk run was not changed, in the words the summary groups them by. */
 export const recordsTableBulkRefusalReasons = [
