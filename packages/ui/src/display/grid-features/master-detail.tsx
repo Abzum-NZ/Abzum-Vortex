@@ -232,7 +232,7 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
   if (context.presentation === "cards")
     return (
       <div className="flex min-w-0 flex-col items-start gap-[var(--vortex-space-xs)] text-sm">
-        <ul className="m-0 flex w-full min-w-0 list-none flex-col divide-y divide-border p-[0]">
+        <ul className="m-0 flex w-full min-w-0 list-none flex-col divide-y divide-border">
           {page.rows.map((related) => {
             const [titleColumn, ...detailColumns] = page.columns;
             const titleValue = titleColumn === undefined ? undefined : cellOf(related, titleColumn);

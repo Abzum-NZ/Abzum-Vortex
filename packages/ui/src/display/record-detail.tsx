@@ -211,9 +211,9 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
               </div>
             </>
           )}
-          <CardContent className="grid gap-[var(--vortex-space-md)] bg-muted/20 md:grid-cols-2 xl:grid-cols-3">
+          <CardContent className="grid gap-[var(--vortex-space-md)] md:grid-cols-2 xl:grid-cols-3">
             {sections.map((section) => (
-              <Card key={section.key} className="min-w-0 border-border/70 shadow-none">
+              <Card key={section.key} className="min-w-0">
                 {section.title === undefined ? null : (
                   <CardHeader>
                     <CardTitle>{section.title}</CardTitle>
@@ -243,11 +243,7 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
             {relatedLists.map((list) => {
               const href = relatedAddHref(list);
               return (
-                <Card
-                  key={list.key}
-                  data-vortex-related-list={list.key}
-                  className="min-w-0 border-border/70 shadow-none"
-                >
+                <Card key={list.key} data-vortex-related-list={list.key} className="min-w-0">
                   <CardHeader className="flex-row items-center justify-between gap-[var(--vortex-space-sm)]">
                     <CardTitle className="flex min-w-0 items-center gap-[var(--vortex-space-sm)]">
                       <span className="truncate">{list.title}</span>
@@ -268,12 +264,12 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
                     {list.rows.length === 0 ? (
                       <p className="m-0 text-sm text-muted-foreground">Nothing yet.</p>
                     ) : (
-                      <ul className="m-0 flex list-none flex-col gap-[var(--vortex-space-sm)] p-[0]">
+                      <ul className="m-0 flex list-none flex-col gap-[var(--vortex-space-sm)]">
                         {list.rows.map((row) => (
                           <li
                             key={row.recordId}
                             data-vortex-related-record-id={row.recordId}
-                            className="flex min-w-0 flex-col gap-[var(--vortex-space-xs)] border-b border-border/60 pb-2 last:border-b-0 last:pb-0"
+                            className="flex min-w-0 flex-col gap-[var(--vortex-space-xs)] border-b border-border pb-2 last:border-b-0 last:pb-0"
                           >
                             <span className="truncate text-sm font-medium">
                               <DisplayCellView value={row.title} />

@@ -307,7 +307,7 @@ function BoardColumn({
             {emptyMessage}
           </p>
         ) : rows.length > 0 ? (
-          <ul className="flex list-none flex-col gap-[var(--vortex-space-sm)] p-[0]">
+          <ul className="flex list-none flex-col gap-[var(--vortex-space-sm)]">
             {rows.map((row) => {
               const fieldById = new Map(
                 row.fields.map((field) => [field.key.toLowerCase(), field] as const),
