@@ -37,6 +37,8 @@ export function actionWritePolicy(
   const eventKeys: string[] = [];
   let deletesSubject = false;
   for (const task of flow.tasks as JsonObject[]) {
+    // A stop step carries no properties and writes nothing.
+    if (task.type === "stop") continue;
     const properties = asObject(task.properties);
     switch (String(task.type)) {
       case "record.set_fields":
@@ -66,8 +68,6 @@ export function actionWritePolicy(
       }
       case "record.delete":
         deletesSubject = true;
-        break;
-      case "stop":
         break;
       case "event.announce":
         eventKeys.push(literalText(properties.event));

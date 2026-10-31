@@ -33,6 +33,10 @@ import {
   type StudioQueryChoice,
 } from "./contextual-palette";
 import { studioOperationCallProperties } from "./application-flow-commands";
+import {
+  addStudioBackgroundFlow,
+  type StudioBackgroundFlowCommand,
+} from "./application-flow-background";
 import { studioFlowCallerNames } from "./application-flow-start";
 import { projectStudioFlowDraftChoices } from "./application-flow-step-form";
 import {
@@ -176,6 +180,7 @@ export type StudioFlowCreateCommand =
       bindingInputs: SourceBinding["inputs"];
       rowActionLabel?: string;
     }>
+  | StudioBackgroundFlowCommand
   | Readonly<{
       kind: "before_save";
       moduleKey: string;
@@ -605,7 +610,12 @@ const existingRowActionFlow = (
   source: Readonly<ApplicationSourceDocument>,
   command: StudioFlowCreateCommand,
 ): SourceFlow | undefined => {
-  if (command.kind === "before_save" || command.kind === "flow" || command.event !== "row_action")
+  if (
+    command.kind === "before_save" ||
+    command.kind === "flow" ||
+    command.kind === "background" ||
+    command.event !== "row_action"
+  )
     return undefined;
   const wantedOperation =
     command.kind === "action"
@@ -668,7 +678,9 @@ export const applyStudioFlowCreate = (
     const name = uniqueFlowName(
       candidate,
       wantedName,
-      command.kind === "before_save" || command.kind === "flow" ? undefined : command.controlAlias,
+      command.kind === "before_save" || command.kind === "flow" || command.kind === "background"
+        ? undefined
+        : command.controlAlias,
     );
     if (command.kind === "before_save") {
       if (!command.message.trim())
@@ -808,6 +820,12 @@ export const applyStudioFlowCreate = (
         .find((recordType) => recordType.key === command.recordTypeKey)!
         .before_save_rules.push(flow.id);
       return created(candidate, flow, module.key, undefined);
+    }
+    if (command.kind === "background") {
+      const added = addStudioBackgroundFlow(body, command, name);
+      return typeof added === "string"
+        ? { kind: "refused", reason: added }
+        : created(candidate, added.flow, added.moduleKey, undefined);
     }
     // A table's next bulk action without a flow gets its default flows: the one the event runs, the
     // chosen records queued on the back end, and the matching flow that works through every match.
