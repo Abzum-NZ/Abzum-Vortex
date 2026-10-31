@@ -1421,9 +1421,24 @@ export const createFlowTaskRunner = (
       const failed =
         [...slices].reverse().find((slice) => slice.start <= changed.index) ?? slices[0]!;
       const failure = changed.result;
+      // A BeforeSave rule refusal ends the task with the writer's authored correction sentence,
+      // exactly as a Save record task shows it; never discard it as a bare refusal.
+      const correctionRule =
+        failure?.outcome === "correction_required"
+          ? unlocatedCorrectionsRefusal(failure.corrections)
+          : undefined;
       return stop(failed.call.taskId, {
-        outcome: failure?.outcome === "refused" ? refusalOutcome(failure.error.code) : "refused",
-        ...(failure?.outcome === "refused" ? ruleRefusalResult(failure.error) : {}),
+        outcome:
+          failure?.outcome === "refused"
+            ? refusalOutcome(failure.error.code)
+            : failure?.outcome === "correction_required"
+              ? "validation"
+              : "refused",
+        ...(failure?.outcome === "refused"
+          ? ruleRefusalResult(failure.error)
+          : correctionRule === undefined
+            ? {}
+            : ruleRefusalResult({ code: "operation_refused", reason: correctionRule })),
       });
     }
     for (const [index, result] of (changed?.results ?? []).entries())
