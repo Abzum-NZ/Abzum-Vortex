@@ -2305,6 +2305,28 @@
         "required": false
       },
       {
+        "kind": "text",
+        "key": "currency",
+        "presentation": true,
+        "label": "Currency",
+        "help": "Shows this three-letter currency as the input's prefix, for example NZD",
+        "required": false,
+        "minLength": 3,
+        "maxLength": 3
+      },
+      {
+        "kind": "boolean",
+        "key": "group_digits",
+        "presentation": true,
+        "label": "Group thousands",
+        "help": "Shows thousands separators in the value",
+        "required": false,
+        "defaultValue": {
+          "kind": "boolean",
+          "value": false
+        }
+      },
+      {
         "kind": "choice",
         "key": "display_time_zone",
         "label": "Display time zone",
