@@ -1,13 +1,4 @@
-import {
-  use,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactElement,
-  type ReactNode,
-} from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   type FieldInputControlReleaseMap,
@@ -47,6 +38,7 @@ import type {
   PageSelection,
 } from "./types";
 import { ownersByPlacement } from "./form-surface";
+import { releaseAdoptionNotices, type ReleaseAdoptionOutcome } from "./notices";
 import { usePageEvents } from "./use-page-events";
 import { placementEventNamesByPage, applicationLauncherPlacementIds } from "./placement-helpers";
 import { useUnsavedWorkPrompt } from "./use-unsaved-work-prompt";
@@ -88,7 +80,6 @@ export function ApplicationPageViewContent({
   frame,
   onOpenApplication,
   adoptReleaseAction,
-  pageFeedback,
   platformComponentRegistry,
   fieldInputControlReleases,
   platformThemeTokens,
@@ -99,8 +90,7 @@ export function ApplicationPageViewContent({
   /** The frame projected with this page, handed to the application frame around it. */
   frame: ProjectedApplicationFrame;
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
-  adoptReleaseAction?: ((formData: FormData) => Promise<void>) | undefined;
-  pageFeedback?: ReactNode;
+  adoptReleaseAction?: ((formData: FormData) => Promise<ReleaseAdoptionOutcome>) | undefined;
   platformComponentRegistry: ReturnType<typeof createPlatformComponentRegistryForReleases>;
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
@@ -620,12 +610,12 @@ export function ApplicationPageViewContent({
             const formData = new FormData();
             formData.set("applicationKey", application.applicationKey);
             formData.set("pageKey", application.pageKey);
-            formData.set("pageParameters", address.search());
             formData.set("targetReleaseRevision", String(offeredReleaseRevision));
             formData.set("expectedActiveReleaseRevision", String(installedReleaseRevision));
-            await adoptReleaseAction(formData);
+            const outcome = await adoptReleaseAction(formData);
+            if (outcome !== "adopted") showPageMessage(releaseAdoptionNotices[outcome]);
           },
-    [adoptReleaseAction, address, application.applicationKey, application.pageKey],
+    [adoptReleaseAction, application.applicationKey, application.pageKey, showPageMessage],
   );
   useFramePageState("adoptRelease", adoptRelease);
 
@@ -648,7 +638,6 @@ export function ApplicationPageViewContent({
           feedback={
             <>
               {messageBanner}
-              {pageFeedback}
               {model.bodyContentAvailable !== false ? null : model.firstRecordTypeHref !==
                 undefined ? (
                 <FirstRecordTypeEmptyState

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, use, useMemo, useState, type ReactElement, type ReactNode } from "react";
+import { Suspense, use, useMemo, useState, type ReactElement } from "react";
 import {
   createPlatformComponentRegistryForReleases,
   type FieldInputControlReleaseMap,
@@ -13,6 +13,7 @@ import {
 import type { PlatformBlockRelease, ProjectedApplicationFrame } from "@vortex/platform/schema";
 import type { ApplicationPageModel } from "../../../../../_lib/application-page";
 import { ApplicationPageViewContent } from "./application-page-view/application-page-content";
+import type { ReleaseAdoptionOutcome } from "./application-page-view/notices";
 
 /** The page model with one streamed placement's settled state served as ready data. */
 const withSettledPlacement = (
@@ -79,7 +80,6 @@ export function ApplicationPageView({
   frame,
   onOpenApplication,
   adoptReleaseAction,
-  pageFeedback,
   platformBlockReleases,
   fieldInputControlReleases,
   platformThemeTokens,
@@ -89,8 +89,7 @@ export function ApplicationPageView({
   content: Readonly<Record<string, unknown>>;
   frame: ProjectedApplicationFrame;
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
-  adoptReleaseAction?: ((formData: FormData) => Promise<void>) | undefined;
-  pageFeedback?: ReactNode;
+  adoptReleaseAction?: ((formData: FormData) => Promise<ReleaseAdoptionOutcome>) | undefined;
   platformBlockReleases: readonly PlatformBlockRelease[];
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
@@ -108,7 +107,6 @@ export function ApplicationPageView({
       frame={frame}
       onOpenApplication={onOpenApplication}
       adoptReleaseAction={adoptReleaseAction}
-      pageFeedback={pageFeedback}
       platformComponentRegistry={platformComponentRegistry}
       fieldInputControlReleases={fieldInputControlReleases}
       platformThemeTokens={platformThemeTokens}

@@ -3,15 +3,13 @@ import { withPageReadAttribution } from "../../../../_lib/page-read-attribution"
 
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
-import { NavigationLink } from "@vortex/ui/routing";
 import { redirect } from "next/navigation";
-import { flowRefusalFeedbackSentences, splitProjectedPage } from "@vortex/platform/schema";
+import { splitProjectedPage } from "@vortex/platform/schema";
 import type { ApplicationAccount, DisplaySemanticEvent } from "@vortex/ui";
 import { DEFAULT_PLATFORM_THEME_RELEASE, DefinitionError } from "@vortex/platform/server";
-import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { ApplicationExperiencePage } from "./_components/application-experience-page";
 import { ApplicationPageView } from "./_components/application-page-view";
-import { multiFactorPath } from "./_components/application-page-view/notices";
+import type { ReleaseAdoptionOutcome } from "./_components/application-page-view/notices";
 import { BarePage } from "../_components/bare-page";
 import {
   OrganizationAddressState,
@@ -123,25 +121,19 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
    * offered target and the installation revision the page loaded; the server re-resolves the
    * signed-in person's address, re-reads the offered release and the active installation, and
    * refuses on any mismatch, so a stale page can never upgrade the wrong release. The page model is
-   * never cached (the page is dynamic, ADR 9): only a committed switch revalidates this address so
-   * the client drops its rendered copy, and on any refusal the prior release keeps rendering.
+   * never cached (the page is dynamic, ADR 9): only a committed switch revalidates this address, so
+   * the same reply carries the page under the new release; on any refusal the prior release keeps
+   * rendering and the reply names the outcome the page shows.
    */
-  async function adoptRelease(formData: FormData): Promise<void> {
+  async function adoptRelease(formData: FormData): Promise<ReleaseAdoptionOutcome> {
     "use server";
     const currentIdentity = await continueSessionOrEnd(await resolveIdentitySession());
-    if (currentIdentity.kind === "temporarily_unavailable")
-      redirect(launcherPath(tenantShortName, organizationShortName));
+    if (currentIdentity.kind === "temporarily_unavailable") return "refused";
 
     const addressedApplicationKey = String(formData.get("applicationKey") ?? "");
     const pageKey = String(formData.get("pageKey") ?? "");
     const offeredReleaseRevision = Number(formData.get("targetReleaseRevision"));
     const expectedActiveReleaseRevision = Number(formData.get("expectedActiveReleaseRevision"));
-    // Posted parameters only reconstruct the destination URL; loading it authorizes the subject.
-    const postedParameters = formData.get("pageParameters");
-    if (typeof postedParameters !== "string" || postedParameters.length > 8_192)
-      throw new Error("APPLICATION_ADOPTION_PAGE_ADDRESS_INVALID");
-    const pageParameters = new URLSearchParams(postedParameters);
-    pageParameters.delete("adoption");
 
     const rechecked = await resolveApplicationAddress(
       currentIdentity.session,
@@ -150,8 +142,7 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
       addressedApplicationKey,
       pageKey,
     );
-    if (rechecked.kind !== "application_page")
-      redirect(launcherPath(tenantShortName, organizationShortName));
+    if (rechecked.kind !== "application_page") return "refused";
     const back = addressPath(
       tenantShortName,
       organizationShortName,
@@ -187,20 +178,14 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
     }
     // A refusal, a stale revision or a failed preparation changes nothing; the page keeps showing
     // the prior release. Only a committed switch revalidates the address.
-    if (refused) {
-      pageParameters.set(
-        "adoption",
-        multiFactorRequired
-          ? "multi_factor_required"
-          : recentAuthenticationRequired
-            ? "recent_authentication_required"
-            : "refused",
-      );
-      redirect(`${back}?${pageParameters.toString()}`);
-    }
+    if (refused)
+      return multiFactorRequired
+        ? "multi_factor_required"
+        : recentAuthenticationRequired
+          ? "recent_authentication_required"
+          : "refused";
     revalidatePath(back);
-    pageParameters.set("adoption", "adopted");
-    redirect(`${back}?${pageParameters.toString()}`);
+    return "adopted";
   }
 
   if (identity.kind === "temporarily_unavailable")
@@ -383,14 +368,6 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
   const { frame, content } = splitProjectedPage(page.model.page, page.applicationShell);
   // The page runtime keeps the whole projection, so shell placements keep their data and events;
   // only the rendering is split between the frame and the content.
-  const adoptionOutcome =
-    parameters.adoption === "multi_factor_required"
-      ? flowRefusalFeedbackSentences.multi_factor_required
-      : parameters.adoption === "recent_authentication_required"
-        ? "A recent sign-in is required to adopt this release. Sign out, then sign in again with your email address and password before adopting. The current release is still in use."
-        : parameters.adoption === "refused"
-          ? "The release could not be adopted. The current release is still in use."
-          : undefined;
   const preview =
     resolved.installedContext === undefined
       ? undefined
@@ -414,21 +391,6 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
         platformThemeTokens={DEFAULT_PLATFORM_THEME_RELEASE.tokens}
         onOpenApplication={openApplication}
         adoptReleaseAction={adoptRelease}
-        pageFeedback={
-          adoptionOutcome === undefined ? undefined : (
-            <Alert role="status" aria-live="polite" data-vortex-release-adoption="outcome">
-              <AlertDescription>
-                {adoptionOutcome}
-                {parameters.adoption === "multi_factor_required" ? (
-                  <>
-                    {" "}
-                    <NavigationLink href={multiFactorPath}>Verify</NavigationLink>
-                  </>
-                ) : null}
-              </AlertDescription>
-            </Alert>
-          )
-        }
       />
     </>
   );
