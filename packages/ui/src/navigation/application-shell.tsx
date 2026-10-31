@@ -550,7 +550,7 @@ export function ApplicationShellRoot({
         {...(editing ? { "data-vortex-editing": "" } : {})}
       >
         <style>{shellFrameCss}</style>
-        <header className="sticky top-0 z-20 flex min-h-16 w-full shrink-0 flex-wrap items-center gap-x-[var(--vortex-space-sm)] gap-y-[var(--vortex-space-xs)] border-b bg-background/95 px-[var(--vortex-space-md)] backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:h-16 sm:flex-nowrap">
+        <header className="sticky top-0 z-20 flex min-h-16 w-full shrink-0 flex-wrap items-center gap-x-[var(--vortex-space-sm)] gap-y-[var(--vortex-space-xs)] bg-background/95 px-[var(--vortex-space-md)] backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:h-16 sm:flex-nowrap">
           {/* The first stop for keyboard users: past the header and the navigation to the page. */}
           <a
             href={`#${mainContentId}`}

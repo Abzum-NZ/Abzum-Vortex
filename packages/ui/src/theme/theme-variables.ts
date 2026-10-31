@@ -28,10 +28,6 @@ type ThemeVariableName =
   | "--vortex-font-size"
   | "--vortex-line-height"
   | "--vortex-font-weight"
-  | "--vortex-heading-font-family"
-  | "--vortex-heading-font-size"
-  | "--vortex-heading-line-height"
-  | "--vortex-heading-font-weight"
   | "--font-sans-family"
   | "--font-heading-family"
   | "--vortex-space-xs"
@@ -386,13 +382,6 @@ function generateThemeCssVariables(
     "--vortex-line-height":
       (body === undefined ? undefined : plainNumber(body.lineHeight)) ?? "1.5",
     "--vortex-font-weight": (body === undefined ? undefined : fontWeight(body.weight)) ?? "400",
-    "--vortex-heading-font-family": headingFamily,
-    "--vortex-heading-font-size":
-      (heading === undefined ? undefined : rem(heading.sizeRem, 0.5)) ?? "1.25rem",
-    "--vortex-heading-line-height":
-      (heading === undefined ? undefined : plainNumber(heading.lineHeight)) ?? "1.25",
-    "--vortex-heading-font-weight":
-      (heading === undefined ? undefined : fontWeight(heading.weight)) ?? "700",
     "--font-sans-family": bodyFamily,
     "--font-heading-family": headingFamily,
     "--vortex-space-xs": spacing("space_xs", "0.25rem"),
