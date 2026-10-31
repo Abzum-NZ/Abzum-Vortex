@@ -167,7 +167,9 @@ function PublishedOptionColours({
         kind: "list",
         items: current.items.map((item, position) => {
           if (position !== index || item.kind !== "group") return item;
-          const { tone: _previous, ...rest } = item.properties;
+          const rest = Object.fromEntries(
+            Object.entries(item.properties).filter(([key]) => key !== "tone"),
+          );
           return {
             kind: "group",
             properties: next === "" ? rest : { ...rest, tone: { kind: "choice", value: next } },
