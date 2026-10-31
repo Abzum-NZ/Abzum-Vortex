@@ -1,6 +1,4 @@
 .next/
-coverage/
-dist/
 .turbo/
 .pnpm-store/
 node_modules/

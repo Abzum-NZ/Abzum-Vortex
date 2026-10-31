@@ -30,18 +30,9 @@ roles retain meanings from different releases. Adding the selected version's 917
 gives exactly 100,663,296 bytes (96 MiB), the database continuation capacity. The 500-role count
 ceiling is shared with confirmation entries. Both publication allowances must pass.
 
-For the review's counterexample, a large role with two 216-byte grants, four-byte name/key and
-1,000 field grants costs `512 + 4 + 4 + 2 * 216 + 384 * 1,000 = 384,952` bytes. A release with
-only two such roles can pass the per-version allowance, but `500 * 384,952 = 192,476,000` exceeds
-the historical allowance and publication now refuses it. Eighteen older large roles would otherwise
-produce at least 2,346,678 bytes of field-removal text, exceeding the former 2 MiB continuation.
-That sequence can no longer be published. Every accepted role's independently retained permission
-set is bounded before publication, including resolved Module permissions and wildcards.
-
 The publication refusal uses business language: use fewer roles, permissions or field-level grants.
 It leaves the draft editable and preserves every grant. There is no read-time review-size refusal;
-a published, supported history remains available for a complete review. Data reset required when
-applying this contract: run demo:setup to republish shipped definitions and discard earlier state.
+a published, supported history remains available for a complete review.
 
-The shipped applications have a maximum measured historical allowance of 76,241,000 bytes (the
-largest role is 152,482 bytes), so they satisfy the publication rule without changing their grants.
+The shipped applications satisfy the publication rule without changing their grants: their largest
+role is 152,482 bytes and their measured allowance is 76,241,000 bytes.

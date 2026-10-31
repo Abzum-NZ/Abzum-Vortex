@@ -4,7 +4,7 @@
 
 ## Development acceptance
 
-Every behaviour change is walked through in the running app on a freshly reset local database before merge. The walkthrough covers sign-in and the affected application pages; pull requests that change what users see include screenshots.
+Every behaviour change is walked through in the running app on a local database lane you hold (reset only that lane) before merge. The walkthrough covers sign-in and the affected application pages; pull requests that change what users see include screenshots.
 
 ## Repository layout convention
 
@@ -35,20 +35,18 @@ Database behavior preserves these product invariants:
 
 ## Environments
 
-Local, Testing and Production are separate product environments with separate addresses, secrets, databases, files, queues, connections and runtime settings. An environment may contain several Vortex clusters, but it has one shared [Vortex Identity Authority](02-people-organisations-and-sign-in.md#identity-across-clusters). Identity, trust, credentials, federation routes, cached authority and business data never cross an environment boundary.
+Local, Testing and Production are separate product environments with separate addresses, secrets, databases, files, connections and runtime settings. Identity, trust, credentials, cached authority and business data never cross an environment boundary.
 
-Application workflow execution is a product capability owned by [Workflows and pipelines](09-workflows-and-pipelines.md). Each environment has explicit namespaces, flow identities, webhook authentication, configuration and least-privilege credentials. A workflow for one environment cannot read another environment's database, file store, queue, workflow state, cache or secrets.
+Application flow execution is a product capability owned by [Workflows and pipelines](09-workflows-and-pipelines.md). Each environment has explicit configuration and least-privilege credentials. A flow in one environment cannot read another environment's database, file store, flow state, cache or secrets.
 
 ## Release and recovery behavior
 
-A running environment either exposes the complete current application behavior for its installed revision or a safe unavailable state. Partial schema application, missing configuration, failed installation, unknown workflow state or incomplete recovery cannot be presented as successful functionality.
+A running environment either exposes the complete current application behavior for its installed revision or a safe unavailable state. Partial schema application, missing configuration, failed installation, unknown flow state or incomplete recovery cannot be presented as successful functionality.
 
 Forward correction is the default for accepted data. A reverse operation is valid only when its owning product operation can preserve accepted records, authority, privacy removals and immutable history. Feature flags and recovery paths cannot bypass access, protected data handling, retention or entitlement rules. Restored state remains unavailable until current identity, permission, migration and privacy-removal state is internally consistent.
-
-Cross-cluster product changes preserve source authority, signed trust and safe refusal as defined in [runtime storage and federation](17-runtime-storage-and-caching.md#vortex-federation-between-clusters). A cluster advertises only protocol and contract versions its running source implements. Unsupported peers receive a stable refusal and never a partially interpreted request.
 
 ## Credentials and runtime connections
 
 Runtime services use restricted credentials, not schema-owner or migration credentials; browser bundles contain only settings intended for public use. Preserve certificate verification, connection semantics, request identity and current permissions. The Identity Authority, selected organisation account, current permissions and installed definition determine request authority; a deployment variable, page parameter or stale browser cache cannot grant access. Never place credentials in issue bodies, prompts, logs or commits.
 
-Secrets are referenced by stable configuration keys and resolved only in the owning runtime. Migration, runtime, webhook and external-provider credentials have separate purposes and cannot be exchanged. Rotation, revocation and temporary unavailability must fail closed without exposing the secret or silently falling back to broader authority.
+Secrets are referenced by stable configuration keys and resolved only in the owning runtime. Migration, runtime and external-provider credentials have separate purposes and cannot be exchanged. Rotation, revocation and temporary unavailability must fail closed without exposing the secret or silently falling back to broader authority.

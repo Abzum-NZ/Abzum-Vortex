@@ -33,7 +33,7 @@ An organisation can:
 3. Control who can discover, read, create, change, delete, export, or administer information through [access and permissions](04-access-and-permissions.md).
 4. Guide work through [forms, rules and events](08-forms-actions-rules-and-events.md) and [workflows and process pipelines](09-workflows-and-pipelines.md).
 5. Read information through [queries, reports, search and live updates](10-queries-reports-search.md).
-6. Exchange information through [files](11-files-and-attachments.md), [connections, programmable interfaces, and governed MCP access](12-connections-and-interfaces.md), and explicit [sharing, import, and export](16-copying-sharing-import-export.md).
+6. Exchange information through [files](11-files-and-attachments.md), [connections and interfaces](12-connections-and-interfaces.md), and explicit [copying, import, and export](16-copying-import-export.md).
 7. Meet operational obligations through [privacy and retention](14-activity-privacy-and-retention.md), [delivery and testing](18-delivery-and-testing.md), and [backup and recovery](19-operations-backup-and-recovery.md).
 
 ## Product boundaries
@@ -46,19 +46,18 @@ The first complete release includes:
 - Published versions so people use a known, validated configuration.
 - Web experiences that work on desktop and phone.
 - Public pages and programmable interfaces where an organisation explicitly enables them.
-- A governed [Model Context Protocol](12-connections-and-interfaces.md#governed-mcp-access) surface through which an authorised agent, whether in the person's browser or a remote client, can discover and use the same navigation, forms, actions, files, builder operations and administration operations available to that person in the web interface.
+- Agents act through the page model: an authorised agent in the person's browser discovers and uses the same navigation, forms, actions, files, builder operations and administration operations available to that person in the web interface.
 - Generic entitlement decisions, resource metering, export, retention, activity history, and recovery.
-- Governed cross-organisation record sharing with the same product behaviour whether the organisations are in one cluster or different clusters.
 
 The first complete release does not include:
 
-- Customer-supplied code running on Vortex servers or in the Vortex browser origin. An [application package](appendices/application-packages.md) may bundle custom browser components, rendered in a sandboxed frame on a dedicated domain without Vortex credentials. Installing such a package requires a dedicated permission. Custom backend scripts are platform-reviewed code that only Vortex super administrators install, and they run as isolated Kestra script tasks.
+- Customer-supplied code running on Vortex servers or in the Vortex browser origin. An [application package](appendices/application-packages.md) may bundle custom browser components, rendered in a sandboxed frame on a dedicated domain without Vortex credentials. Installing such a package requires a dedicated permission. Custom backend scripts are platform-reviewed code that only Vortex super administrators install.
 - A general-purpose website hosting product.
 - Direct customer access to platform databases or infrastructure accounts.
 - Automatic sharing of records, definitions, files, or learned information between organisations.
-- Replicating shared records into recipient-cluster storage or directly connecting customer databases. Cross-cluster access uses the approved [Vortex Federation API](17-runtime-storage-and-caching.md#vortex-federation-between-clusters).
+- Directly connecting customer databases or replicating records across clusters.
 - A marketplace in which unreviewed packages become automatically trusted.
-- A Vortex-provided artificial-intelligence assistant, hosted model, model-generated work, autonomous execution, or model-assisted workflow step. The governed MCP surfaces are interoperability boundaries for an agent the person brings, in their browser or as a remote client; they do not add a model or assistant to Vortex.
+- A Vortex-provided artificial-intelligence assistant, hosted model, model-generated work, autonomous execution, or model-assisted workflow step. The page model is an interoperability boundary for an agent the person brings, in their browser; it does not add a model or assistant to Vortex.
 - Privileged business domains. Commercial billing, ordinary approvals, tasks, comments, notices, business calendars and operational case management are built as ordinary applications under the [core contract boundary](appendices/core-contract-boundary.md).
 
 ## Product principles
@@ -68,13 +67,13 @@ The first complete release does not include:
 3. **One place owns each decision.** Identity, access, data, files, workflows, and entitlements each have one named owning service in [runtime services](17-runtime-storage-and-caching.md).
 4. **The server rechecks every request.** Page visibility never substitutes for [access enforcement](04-access-and-permissions.md).
 5. **Unsafe requests fail closed.** When the platform cannot prove an operation is allowed, it refuses the operation and records why.
-6. **Business choices are visible.** An undecided policy is listed in the [decision register](appendices/decisions.md), not embedded as an implementation assumption.
+6. **Business choices are visible.** A policy decision is stated in the specification, not embedded as an implementation assumption.
 7. **Core knows primitives, not business domains.** Every privileged contract must pass the [core contract admission test](appendices/core-contract-boundary.md#admission-test).
 8. **Everything is a definition.** Modules, applications, flows, pages, components and role templates are stored definitions, and packages are derived from published applications that generic engines render and execute. A person with the builder permissions, or an agent acting for them, creates, changes, installs and uninstalls applications through the same operations, without code changes or redeployment.
-9. **Every authorised interface operation has one behaviour.** The web interface and [MCP](12-connections-and-interfaces.md#governed-mcp-access) expose the same permission-filtered semantic controls and call the same platform services. Neither surface invents a second save, action, validation, or access path.
+9. **Every authorised interface operation has one behaviour.** The page and the agent acting through it expose the same permission-filtered controls and call the same platform services. Neither surface invents a second save, action, validation, or access path.
 
 ## Acceptance examples
 
 - A builder can explain whether a requirement belongs to a [module](05-modules-fields-and-relationships.md), an [application](07-applications-pages-and-themes.md), or organisation data in [records](06-records-and-lifecycle.md).
-- A developer can follow links from a product requirement to its [data contract](appendices/data-contracts.md), [code-review acceptance](20-quality-and-acceptance.md), and [build phase](../build-plan/README.md).
-- No core feature automatically shares one organisation's private state with another. Every cross-organisation grant is explicit, limited, approved by both organisations, revocable, independently testable, and enforced by the source organisation's cluster.
+- A developer can follow links from a product requirement to its [data contract](appendices/data-contracts.md), [code-review acceptance](20-quality-and-acceptance.md), and [build plan](../build-plan/README.md).
+- No core feature shares one organisation's private state with another. Organisations exchange information only through copied definition packages, files and connections.

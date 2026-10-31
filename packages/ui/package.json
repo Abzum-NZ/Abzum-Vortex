@@ -52,15 +52,10 @@
     "@vortex/platform": "workspace:*",
     "@xyflow/react": "catalog:",
     "motion": "catalog:",
-    "next": "16.4.3"
+    "next": "catalog:"
   },
   "devDependencies": {
     "@types/react": "catalog:",
-    "@types/react-dom": "19.3.0"
-  },
-  "vortex": {
-    "tier": 10,
-    "environment": "browser",
-    "ships": true
+    "@types/react-dom": "catalog:"
   }
 }
