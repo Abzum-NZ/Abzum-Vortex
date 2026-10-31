@@ -1,6 +1,6 @@
 "use client";
 
-import { Alert, AlertDescription } from "../components/alert";
+import { Alert, AlertDescription } from "../../components/alert";
 import { useId, useState, type ReactElement } from "react";
 import {
   applicationSourceDocumentSchema,

@@ -1,6 +1,6 @@
 "use client";
 
-import { Alert, AlertDescription } from "../components/alert";
+import { Alert, AlertDescription } from "../../components/alert";
 import { useId, useMemo, useState, type DragEvent, type ReactElement } from "react";
 import {
   recordsTableConditionalFormattingFeature,
