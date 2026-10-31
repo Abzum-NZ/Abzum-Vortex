@@ -1,6 +1,7 @@
 import { asRecord } from "../catalogue/runtime-primitives";
 
 /** The longest event consumer key in characters; every consumer path bounds it the same way. */
+/** @knipignore */
 export const maximumEventConsumerKeyLength = 128;
 
 /**

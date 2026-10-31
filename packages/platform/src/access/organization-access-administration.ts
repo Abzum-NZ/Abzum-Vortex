@@ -182,6 +182,8 @@ const organizationAdministrationRoleFields = {
   lifecycle: z.enum(["active", "acceptance_required", "unavailable", "retired"]),
   liveRevision: revisionSchema,
   privilegeClassification: rolePrivilegeClassificationSchema,
+  // assignment_policy: removed by FIX-DB-SECURITY
+  assignmentPolicy: z.unknown().optional(),
   source: organizationAdministrationRoleSourceSchema,
   acceptedPermissionCount: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
 };
@@ -426,6 +428,8 @@ const organizationAdministrationRoleAssignmentSchema = z
     roleAssignmentId: roleAssignmentIdSchema,
     role: organizationAdministrationAssignedRoleSchema,
     assignee: organizationAdministrationAssignmentSubjectSchema,
+    // assignment_kind: removed by FIX-DB-SECURITY
+    assignmentKind: z.unknown().optional(),
     ...organizationAdministrationTemporalFactFields,
   })
   .strict()

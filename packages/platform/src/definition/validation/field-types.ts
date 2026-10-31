@@ -50,6 +50,7 @@ export {
   conditionValueType as typedSemanticFieldType,
   conditionFieldType as typedFieldValueType,
 } from "../../rules/condition-types";
+/** @knipignore */
 export { fieldValueMatches, fieldRecordTypeIds } from "../../rules/condition-field-types";
 
 export const calculationDependencyFieldIds = (expression: JsonObject): string[] =>

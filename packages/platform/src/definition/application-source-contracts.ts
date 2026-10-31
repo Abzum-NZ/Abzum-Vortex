@@ -253,6 +253,7 @@ const sourceGuidedFormStepSchema = z
   })
   .strict();
 
+/** @knipignore */
 export const sourcePageDefinitionSchema = z.discriminatedUnion("type", [
   sourceListPageSchema,
   z
@@ -998,5 +999,3 @@ export const applicationSourceDocumentSchema = z
   .strict();
 
 export type ApplicationSourceDocument = z.infer<typeof applicationSourceDocumentSchema>;
-export type SourceApplicationBody = z.infer<typeof sourceApplicationBodySchema>;
-export type SourcePageDefinition = z.infer<typeof sourcePageDefinitionSchema>;

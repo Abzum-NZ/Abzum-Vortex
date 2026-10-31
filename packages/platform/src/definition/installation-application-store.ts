@@ -133,6 +133,7 @@ const listWords = (words: readonly string[]): string =>
  * what the role allows, one line per record type and one line for each other permission. The
  * confirmation nests these lines under the role, so no dense sentence is ever shown.
  */
+/** @knipignore */
 export type ApplicationStoreRoleSummary = Readonly<{
   text: string;
   lines: string[];

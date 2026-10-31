@@ -163,7 +163,7 @@ export const createAccessAdministrationAssignmentOperations = ({
             ${command.data.assigneeKind}::text,
             ${command.data.organizationAccountId ?? null}::uuid,
             ${command.data.groupId ?? null}::uuid,
-            // assignment_kind: removed by FIX-DB-SECURITY
+            -- assignment_kind: removed by FIX-DB-SECURITY
             'standing'::text,
             ${command.data.startsAt ?? null}::timestamptz,
             ${command.data.expiresAt ?? null}::timestamptz,

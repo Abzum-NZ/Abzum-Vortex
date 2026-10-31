@@ -194,6 +194,7 @@ type PrivateFormDraftAbandonResult =
   | Readonly<{ outcome: "stale_revision" }>
   | Readonly<{ outcome: "unavailable" }>;
 
+/** @knipignore */
 export const privateFormDraftErrorCodes = [
   "INVALID_PRIVATE_FORM_DRAFT_COMMAND",
   "INVALID_PRIVATE_FORM_DRAFT_STORAGE_RESULT",

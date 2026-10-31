@@ -11,6 +11,7 @@ import type {
   flowTaskOutputDeclarationSchema,
 } from "./flow-task-registry";
 
+/** @knipignore */
 export const flowRegisteredTaskTypeKeys = [
   "record.save",
   "record.create",

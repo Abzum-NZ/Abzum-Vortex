@@ -20,6 +20,7 @@ import {
   type RuntimeTransactionRunner,
 } from "../db/request-transaction";
 
+/** @knipignore */
 export const accessVersionErrorCodes = [
   "INVALID_ACCESS_VERSION_COMMAND",
   "INVALID_ACCESS_VERSION_STORAGE_RESULT",

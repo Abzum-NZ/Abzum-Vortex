@@ -35,6 +35,7 @@ export function fieldValueMatches(
   );
 }
 
+/** @knipignore */
 export function fieldRecordTypeIds(
   field: Record<string, unknown> | undefined,
 ): string[] | undefined {
