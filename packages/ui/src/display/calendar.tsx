@@ -81,7 +81,7 @@ const periodDays = (values: CalendarPayload): readonly string[] => {
 };
 
 /** A query-bound calendar that keeps its view and period in this placement's page parameters. */
-export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): ReactElement {
+export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): ReactElement | null {
   const { locale } = useDateFormatOptions();
   const { placementId, availability } = props;
   const {
