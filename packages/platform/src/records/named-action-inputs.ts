@@ -1,3 +1,4 @@
+import { definitionContractVersion } from "../definition/application-contract-versions";
 import type { JsonValue } from "../catalogue/common";
 import { organizationAccountIdSchema, timestampSchema } from "../catalogue/identifiers";
 import type {
@@ -36,7 +37,7 @@ export type PreparedNamedAction = Readonly<{
    * The sole current Module validation contract the subject Record's owning Module release was
    * published under. It is checked, never branched on.
    */
-  validationContractVersion: "4.2.0";
+  validationContractVersion: typeof definitionContractVersion;
   action: NamedActionDefinition;
   recordType: RecordTypeDefinition;
   recordId: string;

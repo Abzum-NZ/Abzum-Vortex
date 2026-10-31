@@ -4,12 +4,13 @@ import { builderKeySchema, fieldIdSchema, pipelineIdSchema } from "../catalogue/
 
 /**
  * A record type's pipeline: the lifecycle of one of its choice fields. Its stages are that field's
- * options, each exactly once, in the order a board shows them, each with a colour role from the
- * theme. Its transitions are the only moves between two stages a save accepts; a stage whose option
- * a named action owns is gated by that action (the action model, not the pipeline, says so).
+ * options, each exactly once, in the order a board shows them; each option's `tone` is the colour
+ * role the theme gives it. Its transitions are the only moves between two stages a save accepts; a
+ * stage whose option a named action owns is gated by that action (the action model, not the
+ * pipeline, says so).
  */
 
-/** The theme colour roles a stage may take; each names a theme token, never a colour value. */
+/** The theme colour roles a choice option may take; each names a theme token, never a colour value. */
 export const pipelineStageTones = [
   "neutral",
   "primary",
@@ -29,9 +30,8 @@ export const maximumPipelineTransitions = 1_000;
 
 const optionValueSchema = z.string().min(1).max(120);
 
-export const pipelineStageSchema = z
-  .object({ option: optionValueSchema, tone: pipelineStageToneSchema })
-  .strict();
+/** One stage of a pipeline: an option of its stage field. The option carries the colour role. */
+export const pipelineStageSchema = z.object({ option: optionValueSchema }).strict();
 export const pipelineTransitionSchema = z
   .object({ from: optionValueSchema, to: optionValueSchema })
   .strict();

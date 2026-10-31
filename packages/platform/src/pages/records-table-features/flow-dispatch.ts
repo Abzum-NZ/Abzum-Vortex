@@ -114,7 +114,7 @@ export const projectedTableMembershipRefusal = async (
       readPageSubjectInTransaction(bound.transaction, { recordTypeId, recordId }),
     readTimeZone: async () =>
       (await readCurrentOrganizationRuntimeSettingsAfterAuthorization(bound.transaction))?.timeZone,
-    readViewerTeams: async () =>
+    readViewerGroups: async () =>
       (await readCurrentRecordOwnerGroupsAfterAuthorization(bound.transaction)).map(
         (group) => group.groupId,
       ),

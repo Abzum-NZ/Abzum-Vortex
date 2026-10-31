@@ -910,8 +910,8 @@ for (const file of files.filter(
 }
 
 // Each definition kind accepts exactly one contract version. The SQL function is the single
-// source of truth; the TypeScript source and validation constants must equal what it returns, and
-// it must return one element per kind.
+// source of truth; the one TypeScript definition contract constant must equal what it returns, and
+// the function must return one element per kind.
 {
   const sqlFile = "supabase/schemas/vortex_definition/accepted_contract_version.sql";
   const sql = read(sqlFile);
@@ -934,31 +934,16 @@ for (const file of files.filter(
   const constant = (file: string, name: string): string | undefined =>
     new RegExp(`export const ${name} = "([^"]+)"`).exec(read(file))?.[1];
   const definitionDir = "packages/platform/src/definition";
-  const expectations: Array<[string, string, string]> = [
-    [
-      "application",
-      `${definitionDir}/application-contract-versions.ts`,
-      "applicationSourceContractVersion",
-    ],
-    [
-      "application",
-      `${definitionDir}/application-contract-versions.ts`,
-      "applicationValidationContractVersion",
-    ],
-    ["module", `${definitionDir}/module-source-contracts.ts`, "moduleSourceContractVersion"],
-    ["module", `${definitionDir}/module-contracts.ts`, "moduleValidationContractVersion"],
-    ["record_type", `${definitionDir}/module-contracts.ts`, "moduleValidationContractVersion"],
-  ];
-  for (const [kind, file, name] of expectations) {
-    const value = constant(file, name);
-    if (value === undefined || value !== accepted.get(kind)?.[0])
+  const constantFile = `${definitionDir}/application-contract-versions.ts`;
+  const version = constant(constantFile, "definitionContractVersion");
+  for (const kind of ["application", "module", "record_type"])
+    if (version === undefined || version !== accepted.get(kind)?.[0])
       add(
         "contract-version-parity",
-        file,
+        constantFile,
         1,
-        `${name} is ${value}, SQL accepts ${accepted.get(kind)?.[0]} for ${kind}`,
+        `definitionContractVersion is ${version}, SQL accepts ${accepted.get(kind)?.[0]} for ${kind}`,
       );
-  }
 }
 
 // A Records table grid feature is declared once, in its definition file: its key, its setting

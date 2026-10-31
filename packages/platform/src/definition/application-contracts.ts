@@ -1,3 +1,4 @@
+import { definitionContractVersion } from "./application-contract-versions";
 import { z } from "zod";
 import { currencyCodeSchema } from "../records/module-field-values";
 import { isIsoCurrencyCode } from "../catalogue/currencies";
@@ -1015,7 +1016,7 @@ export const applicationDraftSchema = z
 export const publishedApplicationDefinitionSchema = z
   .object({
     publication: publishedApplicationReferenceSchema.extend({
-      validationContractVersion: z.literal("4.2.0"),
+      validationContractVersion: z.literal(definitionContractVersion),
     }),
     content: applicationContentSchema,
     dependencyManifest: z.array(publishedDefinitionReferenceSchema),

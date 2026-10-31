@@ -1,4 +1,8 @@
 import "server-only";
+import {
+  definitionContractVersion,
+  assertDefinitionContractPair,
+} from "../application-contract-versions";
 import { platformPins } from "../platform-pins";
 
 import type { SessionContext } from "../../access/identity-access";
@@ -14,10 +18,6 @@ import {
   timestampSchema,
 } from "../../catalogue/identifiers";
 import {
-  applicationSourceContractVersion,
-  selectApplicationContractPair,
-} from "../application-contract-versions";
-import {
   publishedApplicationDefinitionSchema,
   type ApplicationDraft,
 } from "../application-contracts";
@@ -29,11 +29,7 @@ import {
   type PublishedDefinitionHistory,
   type DefinitionResolutionSnapshot,
 } from "../definition-compilation-contracts";
-import {
-  assertModuleContractPair,
-  type ApplicationSourceDocument,
-  type ModuleSourceDocument,
-} from "../definition-source";
+import { type ApplicationSourceDocument, type ModuleSourceDocument } from "../definition-source";
 import {
   storedDefinitionSourceSchema,
   exactDefinitionDependencySchema,
@@ -177,8 +173,7 @@ const supersededContract = (stored: unknown): boolean =>
   stored !== null &&
   typeof stored === "object" &&
   typeof (stored as { sourceContractVersion?: unknown }).sourceContractVersion === "string" &&
-  (stored as { sourceContractVersion: string }).sourceContractVersion !==
-    applicationSourceContractVersion;
+  (stored as { sourceContractVersion: string }).sourceContractVersion !== definitionContractVersion;
 
 const publicationStateSchema = z
   .object({
@@ -544,8 +539,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     // A latest release published under an earlier definition contract is history only: it anchors
     // the next release and its version, but its content is never decoded or compared.
     const superseded =
-      anchor !== null &&
-      state.historyLatestReleaseContractVersion !== applicationSourceContractVersion;
+      anchor !== null && state.historyLatestReleaseContractVersion !== definitionContractVersion;
     const latestApplication =
       anchor === null || superseded || state.draft.kind === "module"
         ? undefined
@@ -893,7 +887,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     if (
       evidence.authoredSource.kind !== "application" ||
       evidence.compilationOutput.kind !== "application" ||
-      evidence.resolutionSnapshot.contractVersion !== "4.2.0"
+      evidence.resolutionSnapshot.contractVersion !== definitionContractVersion
     )
       return invalidStorage(
         "readApplicationPageAdoptionRelease found inconsistent stored evidence",
@@ -939,14 +933,17 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         )
           return invalidStorage("materializeHistory found inconsistent stored evidence");
         try {
-          selectApplicationContractPair(
+          assertDefinitionContractPair(
             release.evidence.sourceContractVersion,
             release.publication.validationContractVersion,
           );
         } catch (error) {
           return invalidStorage("materializeHistory found inconsistent stored evidence", error);
         }
-        if (output.validationContractVersion !== "4.2.0" || resolution.contractVersion !== "4.2.0")
+        if (
+          output.validationContractVersion !== definitionContractVersion ||
+          resolution.contractVersion !== definitionContractVersion
+        )
           return invalidStorage("materializeHistory found inconsistent stored evidence");
       }
       if (kind === "module") {
@@ -957,14 +954,17 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         )
           return invalidStorage("materializeHistory found inconsistent stored evidence");
         try {
-          assertModuleContractPair(
+          assertDefinitionContractPair(
             release.evidence.sourceContractVersion,
             release.publication.validationContractVersion,
           );
         } catch (error) {
           return invalidStorage("materializeHistory found inconsistent stored evidence", error);
         }
-        if (output.validationContractVersion !== "4.2.0" || resolution.contractVersion !== "4.2.0")
+        if (
+          output.validationContractVersion !== definitionContractVersion ||
+          resolution.contractVersion !== definitionContractVersion
+        )
           return invalidStorage("materializeHistory found inconsistent stored evidence");
       }
       const ownResolution = resolution.definitions.filter(
@@ -1068,7 +1068,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     const validationContractVersion = output.validationContractVersion;
     const sourceContractVersion = release.sourceContractVersion;
     try {
-      assertModuleContractPair(sourceContractVersion, validationContractVersion);
+      assertDefinitionContractPair(sourceContractVersion, validationContractVersion);
     } catch (error) {
       return invalidStorage("materializeModuleRelease found inconsistent stored evidence", error);
     }

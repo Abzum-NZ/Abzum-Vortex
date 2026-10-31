@@ -1,4 +1,5 @@
 import "server-only";
+import { definitionContractVersion } from "./application-contract-versions";
 
 import type {
   BlockId,
@@ -225,7 +226,7 @@ export type DefinitionReleaseAppend = Readonly<{
   reasons: DefinitionPublicationConfirmation["reasons"];
   dependencyManifest: readonly ExactDefinitionDependency[];
   resolutionSnapshot: DefinitionResolution;
-  validationContractVersion: "4.2.0";
+  validationContractVersion: typeof definitionContractVersion;
   releaseNote: string;
 }>;
 

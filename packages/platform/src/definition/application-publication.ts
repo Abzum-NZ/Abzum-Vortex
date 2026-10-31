@@ -9,7 +9,7 @@ import {
 } from "./definition-store-contracts";
 import { definitionContractChangedReason } from "./version-impact";
 import type { VersionImpact, VersionImpactReason } from "./version-impact";
-import { applicationValidationContractVersion } from "./application-contract-versions";
+import { definitionContractVersion } from "./application-contract-versions";
 import type { ModuleSourceDocument } from "./module-source-contracts";
 import { applicationModuleSources } from "./application-module-lowering";
 import { readRetainedApplicationModule } from "./application-draft-compilation-cache";
@@ -267,7 +267,7 @@ const releaseInlineModules = async (
     const output = compiled.output;
     const impact = compareDefinitionVersionImpactWithEvidence({
       kind: "module",
-      validationContractVersion: "4.2.0",
+      validationContractVersion: definitionContractVersion,
       releaseHistory: module.releaseHistory,
       candidate: output.canonical,
     });
@@ -300,7 +300,7 @@ const releaseInlineModules = async (
       reasons,
       dependencyManifest: manifestFor(dependencies, output, resolution),
       resolutionSnapshot: resolution,
-      validationContractVersion: "4.2.0",
+      validationContractVersion: definitionContractVersion,
       releaseNote,
     };
     if (released) await transaction.appendModuleRelease(append);
@@ -362,7 +362,7 @@ const publicationReasons = (
       : [definitionContractChangedReason("application")];
   const own = compareDefinitionVersionImpactWithEvidence({
     kind: "application",
-    validationContractVersion: applicationValidationContractVersion,
+    validationContractVersion: definitionContractVersion,
     releaseHistory: candidate.releaseHistory,
     candidate: application.output.canonical,
   });

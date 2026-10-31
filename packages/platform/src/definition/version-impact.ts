@@ -1,3 +1,4 @@
+import { definitionContractVersion } from "./application-contract-versions";
 import { z } from "zod";
 import {
   applicationDraftSchema,
@@ -14,11 +15,7 @@ import {
   platformIdSchema,
   stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
-import {
-  moduleContentSchema,
-  moduleDraftSchema,
-  moduleValidationContractVersion,
-} from "./module-contracts";
+import { moduleContentSchema, moduleDraftSchema } from "./module-contracts";
 
 export const versionImpactSchema = z.enum(["patch", "minor", "major"]);
 export const moduleVersionImpactPolicyVersion = "4.0.0" as const;
@@ -190,7 +187,7 @@ const historyLimit = 10_000;
 export const applicationVersionImpactRequestSchema = z
   .object({
     kind: z.literal("application"),
-    validationContractVersion: z.literal("4.2.0"),
+    validationContractVersion: z.literal(definitionContractVersion),
     history: z.array(publishedApplicationDefinitionSchema).max(historyLimit),
     candidate: applicationDraftSchema,
   })
@@ -200,7 +197,7 @@ export const applicationVersionImpactRequestSchema = z
 export const moduleVersionImpactHistoryEntrySchema = z
   .object({
     publication: publishedModuleReferenceSchema.extend({
-      validationContractVersion: z.literal("4.2.0"),
+      validationContractVersion: z.literal(definitionContractVersion),
     }),
     content: moduleContentSchema,
     dependencyManifest: z.array(publishedDefinitionReferenceSchema),
@@ -214,7 +211,7 @@ export const moduleVersionImpactHistoryEntrySchema = z
 export const moduleVersionImpactRequestSchema = z
   .object({
     kind: z.literal("module"),
-    validationContractVersion: z.literal(moduleValidationContractVersion),
+    validationContractVersion: z.literal(definitionContractVersion),
     history: z.array(moduleVersionImpactHistoryEntrySchema).max(historyLimit),
     candidate: moduleDraftSchema,
   })

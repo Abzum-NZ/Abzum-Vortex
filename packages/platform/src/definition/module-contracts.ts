@@ -1,3 +1,4 @@
+import { definitionContractVersion } from "./application-contract-versions";
 import {
   flowFormulaSchema,
   flowFormulaUsesNow,
@@ -46,10 +47,7 @@ import {
   moduleDependencySchema,
   relationshipDefinitionSchema,
 } from "./module-foundation-contracts";
-import {
-  isWritableSystemProjection,
-  moduleSourceContractVersion as moduleSourceContractVersion,
-} from "./module-source-contracts";
+import { isWritableSystemProjection } from "./module-source-contracts";
 export { isWritableSystemProjection };
 import { permissionDeclarationSchema } from "../access/permissions";
 import { protectedOperationReferenceSchema } from "./application-flow-bindings";
@@ -62,23 +60,15 @@ import {
   maximumRecordTypePipelines,
   pipelineShapeProblems,
   recordTypePipelineSchema,
+  pipelineStageToneSchema,
 } from "./record-type-pipelines";
 import { flowIdSchema } from "../catalogue/identifiers";
-
-export const moduleValidationContractVersion = "4.2.0" as const;
-
-/** The one current Module source/validation contract pair. */
-export const moduleContractVersionPairSchema = z
-  .object({
-    sourceContractVersion: z.literal(moduleSourceContractVersion),
-    validationContractVersion: z.literal(moduleValidationContractVersion),
-  })
-  .strict();
 
 const optionSchema = z
   .object({
     value: z.string().min(1).max(120),
     label: labelSchema,
+    tone: pipelineStageToneSchema.optional(),
     requiredPermissionId: permissionIdSchema.optional(),
   })
   .strict();

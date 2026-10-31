@@ -53,7 +53,7 @@ export type QueryBindingContext = Readonly<{
    * The group directory type and a reader of the viewer's active organisation groups, read inside
    * the verified request and only when a binding asks; undefined without the group directory.
    */
-  viewerTeams:
+  viewerGroups:
     | Readonly<{
         recordTypeId: string;
         /** The group identities, or undefined when the read failed (already logged). */
@@ -78,7 +78,7 @@ type Resolved =
   | Readonly<{ kind: "value"; value: JsonValue }>
   | Readonly<{ kind: "missing"; cause?: string }>
   /** The viewer is in no team: the block reads nothing, optional input or not. */
-  | Readonly<{ kind: "no_team" }>
+  | Readonly<{ kind: "no_group" }>
   | Readonly<{ kind: "refused"; reason: string }>;
 
 const firstValue = (value: string | readonly string[] | undefined): string | undefined =>
@@ -237,26 +237,26 @@ const resolveOne = async (
         return type.kind === "text"
           ? { kind: "value", value: context.viewerOrganisation }
           : { kind: "refused", reason: "current_organisation_type_mismatch" };
-      if (source.part === "team") {
-        if (context.viewerTeams === undefined)
-          return { kind: "refused", reason: "viewer_teams_unavailable" };
+      if (source.part === "group") {
+        if (context.viewerGroups === undefined)
+          return { kind: "refused", reason: "viewer_groups_unavailable" };
         if (
           !queryBindingTypesFit(type, {
             kind: "record",
-            recordTypes: [context.viewerTeams.recordTypeId],
+            recordTypes: [context.viewerGroups.recordTypeId],
           })
         )
-          return { kind: "refused", reason: "current_team_type_mismatch" };
-        const groupIds = await context.viewerTeams.read();
-        if (groupIds === undefined) return { kind: "refused", reason: "viewer_teams_unavailable" };
-        // No team: the block reads nothing and shows its awaiting message, even for an optional
+          return { kind: "refused", reason: "current_group_type_mismatch" };
+        const groupIds = await context.viewerGroups.read();
+        if (groupIds === undefined) return { kind: "refused", reason: "viewer_groups_unavailable" };
+        // No group: the block reads nothing and shows its awaiting message, even for an optional
         // input, because leaving the input out would widen the read beyond the viewer's team. An
-        // input holds one value, so a viewer in several teams is refused, never guessed for.
-        if (groupIds.length === 0) return { kind: "no_team" };
-        if (groupIds.length > 1) return { kind: "refused", reason: "current_team_ambiguous" };
+        // input holds one value, so a viewer in several groups is refused, never guessed for.
+        if (groupIds.length === 0) return { kind: "no_group" };
+        if (groupIds.length > 1) return { kind: "refused", reason: "current_group_ambiguous" };
         return {
           kind: "value",
-          value: { recordTypeId: context.viewerTeams.recordTypeId, recordId: groupIds[0]! },
+          value: { recordTypeId: context.viewerGroups.recordTypeId, recordId: groupIds[0]! },
         };
       }
       return context.viewerPerson === undefined
@@ -342,7 +342,7 @@ export const resolveQueryBindings = async (
     const resolved = await resolveOne(binding, type, context);
     if (resolved.kind === "refused")
       return { kind: "refused", part: `input:${input.key}`, reason: resolved.reason };
-    if (resolved.kind === "no_team")
+    if (resolved.kind === "no_group")
       return {
         kind: "awaiting",
         input: input.key,

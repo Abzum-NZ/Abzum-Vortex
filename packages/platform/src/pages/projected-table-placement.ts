@@ -39,7 +39,7 @@ export type ProjectedTablePlacementRefusal =
 export type ProjectedTableBindingReaders = Readonly<{
   readSubject: (recordTypeId: string, recordId: string) => Promise<PageSubjectReadResult>;
   readTimeZone: () => Promise<string | undefined>;
-  readViewerTeams: () => Promise<readonly string[] | undefined>;
+  readViewerGroups: () => Promise<readonly string[] | undefined>;
 }>;
 
 export type ProjectedTablePlacement =
@@ -137,7 +137,7 @@ export const resolveProjectedTablePlacement = (
         subjectRecordTypeId:
           subjectRecordType === undefined ? undefined : String(subjectRecordType.recordTypeId),
         readTimeZone: readers.readTimeZone,
-        readViewerTeams: readers.readViewerTeams,
+        readViewerGroups: readers.readViewerGroups,
       }),
   };
 };

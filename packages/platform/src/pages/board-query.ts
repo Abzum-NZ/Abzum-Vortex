@@ -45,7 +45,7 @@ import { boardFilterProblem } from "../definition/application-composition/record
 import type { RecordsTableFilterField } from "../definition/application-composition/records-table-features/projections/column-filters";
 import type { ConditionalFormatStyle } from "../definition/application-composition/records-table-features/conditional-formatting";
 import { boardColumnReadRequestSchema } from "../definition/application-contracts";
-import { pipelineMovesFrom } from "../definition/record-type-pipelines";
+import { pipelineMovesFrom, type PipelineStageTone } from "../definition/record-type-pipelines";
 import { exactDecimalTextSchema, moneyValueSchema } from "../records/module-field-values";
 import { richTextDocumentSchema } from "../records/rich-text";
 import type { RecordsTableFilterValue } from "./records-table-filters";
@@ -561,10 +561,15 @@ export const projectBoardPlacement = async (
     const recordLinks =
       cardLinks.length === 0 ? undefined : await input.resolveRecordLinks(cardLinks);
 
-    // Columns follow the pipeline's stage order; each carries its colour role, the stages a card
-    // in it may move to, the named action that owns it, if one does, and whether a new record may
-    // start there: a record with no stage moves as if from the start stage, never into a stage an
-    // action owns.
+    // Columns follow the pipeline's stage order; each carries its option's colour role, the stages
+    // a card in it may move to, the named action that owns it, if one does, and whether a new
+    // record may start there: a record with no stage moves as if from the start stage, never into a
+    // stage an action owns.
+    const stageField = fieldsById.get(lower(choiceFieldId));
+    const optionTone = (value: string): PipelineStageTone =>
+      stageField?.type === "choice"
+        ? (stageField.settings.options.find((option) => option.value === value)?.tone ?? "neutral")
+        : "neutral";
     const starts = pipelineMovesFrom(pipeline, undefined);
     const stageOrder = new Map(pipeline.stages.map((stage, index) => [stage.option, index]));
     const owners = binding.module.content.actions.filter(
@@ -597,7 +602,7 @@ export const projectBoardPlacement = async (
           {
             value: column.value,
             label: column.label,
-            tone: stage.tone,
+            tone: optionTone(column.value),
             moves: pipelineMovesFrom(pipeline, column.value).filter((target) =>
               arranged.columns.some((candidate) => candidate.value === target),
             ),

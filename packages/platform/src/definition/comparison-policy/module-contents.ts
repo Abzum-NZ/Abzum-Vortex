@@ -263,6 +263,16 @@ const compareOptions = (
       ),
       pushChange(
         reasons,
+        left.tone,
+        right.tone,
+        "patch",
+        "presentation_changed",
+        "field",
+        "presentation",
+        candidate.fieldId,
+      ),
+      pushChange(
+        reasons,
         left.requiredPermissionId,
         right.requiredPermissionId,
         "major",
@@ -765,17 +775,8 @@ const comparePipeline = (
     candidate.stages as RecordValue[],
     "option",
     "pipeline_stage",
-    (left, right) =>
-      pushChange(
-        reasons,
-        left.tone,
-        right.tone,
-        "patch",
-        "presentation_changed",
-        "pipeline_stage",
-        "name",
-        id,
-      ),
+    // A stage is its option; the option's label and colour role are compared with its field.
+    () => {},
     () => "minor",
     () => id,
   );

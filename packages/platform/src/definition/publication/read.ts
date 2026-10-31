@@ -1,3 +1,4 @@
+import { definitionContractVersion } from "../application-contract-versions";
 import type { PlatformPermissionSource } from "../../access/platform-permissions";
 import "server-only";
 
@@ -337,7 +338,7 @@ const compileConnectionTypeRelease = (
     },
   ];
   const resolutionEvidence = {
-    contractVersion: "4.2.0" as const,
+    contractVersion: definitionContractVersion,
     definitions,
     identities: [],
   };

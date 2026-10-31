@@ -121,7 +121,7 @@ export const loadApplicationRowDetail = async (
     const bindings = resolved.bindings({
       readSubject,
       readTimeZone: services.readTimeZone,
-      readViewerTeams: services.readViewerTeams,
+      readViewerGroups: services.readViewerGroups,
     });
     // A tree level and a group's members are read through the table's own read, which takes the
     // person's stored layout and field policy as the page read does.

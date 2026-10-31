@@ -1,3 +1,4 @@
+import { definitionContractVersion } from "./application-contract-versions";
 import {
   definitionResolutionSnapshotSchema,
   type DefinitionResolutionSnapshot,
@@ -277,7 +278,7 @@ export const createApplicationResolutionSnapshot = (
   const identities = [...input.identities].sort((left, right) =>
     compareCanonicalStrings(identityOrder(left), identityOrder(right)),
   );
-  const evidence = { contractVersion: "4.2.0" as const, definitions, identities };
+  const evidence = { contractVersion: definitionContractVersion, definitions, identities };
   return definitionResolutionSnapshotSchema.parse({
     ...evidence,
     fingerprint: fingerprintCanonicalValue(evidence),

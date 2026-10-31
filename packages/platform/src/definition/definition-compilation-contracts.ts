@@ -3,17 +3,13 @@ import { applicationDraftSchema } from "./application-contracts";
 import { applicationCompositionCatalogueSnapshotSchema } from "./application-composition/catalogue-snapshot";
 import { applicationSourceDocumentSchema } from "./application-source-contracts";
 import {
-  applicationSourceContractVersion,
-  applicationValidationContractVersion,
+  definitionContractVersion,
+  definitionContractVersionPairSchema,
 } from "./application-contract-versions";
 import { publishedApplicationDefinitionSchema } from "./application-contracts";
 import { connectionTypeSourceDocumentSchema } from "../connections/connection-source-contracts";
 import { connectionTypeSchema } from "../connections/integration-contracts";
-import {
-  moduleContractVersionPairSchema,
-  moduleDraftSchema,
-  moduleValidationContractVersion,
-} from "./module-contracts";
+import { moduleDraftSchema } from "./module-contracts";
 import { moduleSourceDocumentSchema } from "./definition-source";
 import { definitionProvenanceEntrySchema } from "./definition-provenance";
 import {
@@ -118,7 +114,7 @@ export const resolvedDefinitionSchema = z.discriminatedUnion("kind", [
 
 export const definitionResolutionSnapshotSchema = z
   .object({
-    contractVersion: z.literal("4.2.0"),
+    contractVersion: z.literal(definitionContractVersion),
     fingerprint: fingerprintSchema,
     definitions: z.array(resolvedDefinitionSchema).min(1),
     identities: z.array(sourceIdentityAssignmentSchema),
@@ -159,7 +155,7 @@ export const definitionCompilationRequestSchema = z
 /** The one current Module compilation request; runtime dispatch requires this exact pair. */
 export const moduleCompilationRequestSchema = z
   .object({
-    ...moduleContractVersionPairSchema.shape,
+    ...definitionContractVersionPairSchema.shape,
     source: moduleSourceDocumentSchema,
     resolution: definitionResolutionSnapshotSchema,
     draftMetadata: definitionDraftMetadataSchema,
@@ -170,8 +166,7 @@ export const moduleCompilationRequestSchema = z
 /** The one current Application compilation request; runtime dispatch requires this exact pair. */
 export const applicationCompilationRequestSchema = z
   .object({
-    sourceContractVersion: z.literal(applicationSourceContractVersion),
-    validationContractVersion: z.literal(applicationValidationContractVersion),
+    ...definitionContractVersionPairSchema.shape,
     source: applicationSourceDocumentSchema,
     resolution: definitionResolutionSnapshotSchema,
     catalogueSnapshot: applicationCompositionCatalogueSnapshotSchema,
@@ -210,7 +205,7 @@ const compiledConnectionArtifactSchema = z
 export const applicationCompilationOutputSchema = z
   .object({
     kind: z.literal("application"),
-    validationContractVersion: z.literal(applicationValidationContractVersion),
+    validationContractVersion: z.literal(definitionContractVersion),
     platformCompatibilityVersion: applicationPlatformCompatibilityVersionSchema,
     canonical: applicationDraftSchema,
     artifact: compiledApplicationArtifactSchema,
@@ -224,7 +219,7 @@ export const applicationCompilationOutputSchema = z
 export const moduleCompilationOutputSchema = z
   .object({
     kind: z.literal("module"),
-    validationContractVersion: z.literal(moduleValidationContractVersion),
+    validationContractVersion: z.literal(definitionContractVersion),
     canonical: moduleDraftSchema,
     artifact: compiledModuleArtifactSchema,
     provenance: z.array(definitionProvenanceEntrySchema),

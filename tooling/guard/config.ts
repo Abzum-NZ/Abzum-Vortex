@@ -150,7 +150,7 @@ export const guardRules = {
     owner: "lead",
     reviewBy: "2027-01-15",
     description:
-      "Each definition kind accepts exactly one contract version: vortex_definition.accepted_contract_version returns a single element per kind and the TypeScript source and validation constants equal it",
+      "Each definition kind accepts exactly one contract version: vortex_definition.accepted_contract_version returns a single element per kind and the one definitionContractVersion constant equals it",
   },
   "derived-id-parity": {
     tier: "blocking",

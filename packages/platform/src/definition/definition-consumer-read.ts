@@ -1,3 +1,4 @@
+import { definitionContractVersion } from "./application-contract-versions";
 import { z } from "zod";
 import { applicationContentSchema } from "./application-contracts";
 import { correlationIdSchema } from "../catalogue/common";
@@ -82,7 +83,7 @@ export const applicationDefinitionConsumerReadResultSchema = z
     rootId: applicationRootIdSchema,
     content: applicationContentSchema,
     ...definitionConsumerReadResultCommon,
-    validationContractVersion: z.literal("4.2.0"),
+    validationContractVersion: z.literal(definitionContractVersion),
     platformCompatibilityVersion: applicationPlatformCompatibilityVersionSchema,
   })
   .strict();
@@ -94,7 +95,7 @@ export const moduleDefinitionConsumerReadResultSchema = z
     rootId: moduleRootIdSchema,
     content: moduleContentSchema,
     ...definitionConsumerReadResultCommon,
-    validationContractVersion: z.literal("4.2.0"),
+    validationContractVersion: z.literal(definitionContractVersion),
   })
   .strict();
 

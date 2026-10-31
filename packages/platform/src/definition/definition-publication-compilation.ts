@@ -15,12 +15,7 @@ import {
   type StoredDefinitionDraft,
 } from "./definition-store-contracts";
 import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "./platform-compatibility";
-import {
-  applicationSourceContractVersion,
-  applicationValidationContractVersion,
-} from "./application-contract-versions";
-import { moduleSourceContractVersion } from "./module-source-contracts";
-import { moduleValidationContractVersion } from "./module-contracts";
+import { definitionContractVersion } from "./application-contract-versions";
 import type { z } from "zod";
 import { fingerprintCanonicalValue } from "./canonical-json-definition";
 import { compileParsedDefinition } from "./compiler";
@@ -153,7 +148,10 @@ export const compileModuleCandidate = (
   resolution: DefinitionResolution,
   permissions: PlatformPermissionSource,
 ): CompiledModuleCandidate => {
-  if (candidate.draft.source.kind !== "module" || resolution.contractVersion !== "4.2.0")
+  if (
+    candidate.draft.source.kind !== "module" ||
+    resolution.contractVersion !== definitionContractVersion
+  )
     return refuse("DEFINITION_COMPILATION_REFUSED");
   // Dependency resolution authenticated these outputs and checked that they parse, but passes them
   // as stored: schema defaults (such as a Module's empty `queries`) are not filled in here.
@@ -162,8 +160,8 @@ export const compileModuleCandidate = (
     ...dependencies.connections.map((release) => release.compilationOutput),
   ];
   const common = {
-    sourceContractVersion: moduleSourceContractVersion,
-    validationContractVersion: moduleValidationContractVersion,
+    sourceContractVersion: definitionContractVersion,
+    validationContractVersion: definitionContractVersion,
     source: candidate.draft.source,
     resolution,
     draftMetadata: draftMetadata(candidate.draft),
@@ -177,7 +175,7 @@ export const compileModuleCandidate = (
   if (
     provisional.kind !== "module" ||
     !("validationContractVersion" in provisional) ||
-    provisional.validationContractVersion !== moduleValidationContractVersion
+    provisional.validationContractVersion !== definitionContractVersion
   )
     return refuse("DEFINITION_COMPILATION_REFUSED");
   const savedConditionRevisions = deriveSavedConditionRevisionsFromHistory(
@@ -205,7 +203,7 @@ export const compileModuleCandidate = (
     output === undefined ||
     output.kind !== "module" ||
     !("validationContractVersion" in output) ||
-    output.validationContractVersion !== moduleValidationContractVersion
+    output.validationContractVersion !== definitionContractVersion
   )
     return refuse("DEFINITION_COMPILATION_REFUSED");
   return { request, output, dependencyOutputs };
@@ -227,7 +225,7 @@ export const compileApplicationCandidate = (
 }> => {
   if (
     candidate.draft.source.kind !== "application" ||
-    resolution.contractVersion !== "4.2.0" ||
+    resolution.contractVersion !== definitionContractVersion ||
     dependencies.composition === undefined
   )
     return refuse("DEFINITION_COMPILATION_REFUSED");
@@ -250,8 +248,8 @@ export const compileApplicationCandidate = (
     ...dependencies.connections.map((release) => release.compilationOutput),
   ];
   const request = parsedCompilationRequest(applicationCompilationRequestSchema, {
-    sourceContractVersion: applicationSourceContractVersion,
-    validationContractVersion: applicationValidationContractVersion,
+    sourceContractVersion: definitionContractVersion,
+    validationContractVersion: definitionContractVersion,
     source: candidate.draft.source,
     resolution,
     catalogueSnapshot: dependencies.composition,

@@ -372,6 +372,7 @@ export const fieldChoiceLabelsOf = (
                 field.settings.options.map((option) => ({
                   value: option.value,
                   label: option.label,
+                  ...(option.tone === undefined ? {} : { tone: option.tone }),
                 })),
               ] as const,
             ],
@@ -510,6 +511,7 @@ export const fieldEditorsOf = (
                     return {
                       value: option.value,
                       label: option.label,
+                      ...(option.tone === undefined ? {} : { tone: option.tone }),
                       ...(parentValues === undefined ? {} : { parentValues }),
                     };
                   }),

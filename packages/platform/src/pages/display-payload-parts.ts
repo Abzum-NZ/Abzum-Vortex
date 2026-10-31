@@ -2,6 +2,7 @@ import { z } from "zod";
 import { isSafeLinkAddress } from "../catalogue/common";
 import { builderKeySchema, fieldIdSchema, timestampSchema } from "../catalogue/identifiers";
 import { moduleFieldValueSchemas } from "../records/module-field-values";
+import { pipelineStageToneSchema } from "../definition/record-type-pipelines";
 import { richTextDocumentSchema } from "../records/rich-text";
 
 /*
@@ -84,6 +85,8 @@ export const displayScalarCellSchema = z.discriminatedUnion("kind", [
       kind: z.literal("choice"),
       key: moduleFieldValueSchemas.choice,
       label: displayTextSchema,
+      /** The option's theme colour role; absent means neutral. */
+      tone: pipelineStageToneSchema.optional(),
     })
     .strict()
     .readonly(),

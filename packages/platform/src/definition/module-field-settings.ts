@@ -149,6 +149,17 @@ const currencyModes = [
   ["organization_default", "The organisation's currency"],
   ["fixed", "One fixed currency"],
 ] as const;
+/** The theme colour roles a choice option may take, as the option form lists them. */
+const optionTones = [
+  ["neutral", "Neutral"],
+  ["primary", "Primary"],
+  ["destructive", "Destructive"],
+  ["chart_1", "Chart 1"],
+  ["chart_2", "Chart 2"],
+  ["chart_3", "Chart 3"],
+  ["chart_4", "Chart 4"],
+  ["chart_5", "Chart 5"],
+] as const;
 /** Fields and table columns author the same money settings, including their stored default. */
 const moneyCurrencyDeclarations = (subject: "field" | "column"): Declaration[] => [
   choice("currency_mode", "Currency", true, currencyModes, undefined, {
@@ -182,6 +193,13 @@ const optionItem = (
       1,
       120,
       "Made from the label when added. Renaming the option keeps this value.",
+    ),
+    choice(
+      "tone",
+      "Colour",
+      false,
+      optionTones,
+      "The colour a board column, list badge and record page give this option. No colour is neutral.",
     ),
     choice(
       "required_permission",
