@@ -59,7 +59,7 @@ export function NewApplicationWorkspace({
   }, []);
 
   const edit = (changes: Partial<MinimumApplicationInputs>) => {
-    setInputs({ ...inputs, ...changes });
+    setInputs((current) => ({ ...current, ...changes }));
     setFieldErrors((current) =>
       Object.fromEntries(
         Object.entries(current).filter(

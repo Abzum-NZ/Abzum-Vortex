@@ -34,9 +34,6 @@ import { platformBlockReleasesFor } from "../../_lib/platform-block-releases";
 
 export const dynamic = "force-dynamic";
 
-/** The launcher row that opens Studio rather than an installed application. */
-const STUDIO_TILE_ID = "studio";
-
 type OrganizationPageProps = Readonly<{
   params: Promise<{ tenantShortName: string; organizationShortName: string }>;
 }>;
@@ -117,20 +114,17 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
     throw new Error("Available organisation launcher read produced an unavailable projection");
   const permittedValues = permittedApplicationsToListValues(projection);
   const studioCreateAccess = await loadStudioCreateAccess(resolved.read.organizationId);
-  const studio =
-    studioCreateAccess.kind === "available" &&
-    studioCreateAccess.organizationId === resolved.read.organizationId
-      ? { href: "/studio", tileId: STUDIO_TILE_ID }
-      : undefined;
+  // Studio is an ordinary launcher row when the one access check says this person may build here.
   const launcherValues =
-    studio === undefined
+    studioCreateAccess.kind !== "available" ||
+    studioCreateAccess.organizationId !== resolved.read.organizationId
       ? permittedValues
       : {
           ...permittedValues,
           rows: [
             ...permittedValues.rows,
             {
-              recordId: studio.tileId,
+              recordId: studioCreateAccess.organizationId,
               cells: {
                 name: { kind: "text" as const, text: "Studio" },
                 icon: { kind: "text" as const, text: "blocks" },
@@ -157,7 +151,6 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
       platformBlockReleases={platformBlockReleasesFor(page, organizationLauncherShell)}
       fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}
       platformThemeTokens={DEFAULT_PLATFORM_THEME_RELEASE.tokens}
-      {...(studio === undefined ? {} : { studio })}
     />
   );
 }
