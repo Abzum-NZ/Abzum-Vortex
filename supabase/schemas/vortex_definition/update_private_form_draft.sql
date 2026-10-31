@@ -80,8 +80,6 @@ begin
     vortex_definition.private_form_draft_to_json_internal(stored, 'active');
 end
 $function$;
-alter function vortex_definition.update_private_form_draft(uuid,bigint,uuid,uuid,uuid,uuid,jsonb,jsonb) owner to vortex_owner;
-
 
 revoke all on function vortex_definition.update_private_form_draft(
   uuid, bigint, uuid, uuid, uuid, uuid, jsonb, jsonb

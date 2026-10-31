@@ -181,8 +181,6 @@ const liveRoleFields = {
   description: descriptionSchema,
   liveRevision: revisionSchema,
   privilegeClassification: rolePrivilegeClassificationSchema,
-  // assignment_policy: removed by FIX-DB-SECURITY
-  assignmentPolicy: z.unknown().optional(),
   policyContinuityRevision: revisionSchema,
   authorityContinuityRevision: revisionSchema,
   permissions: rolePermissionSetSchema,

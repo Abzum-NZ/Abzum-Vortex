@@ -213,7 +213,6 @@ begin
       and revision.revision = role.live_revision
     where role.organization_id = context_organization_id
       and revision.lifecycle = 'active'
-      and revision.assignment_policy = 'standing'
       and (select pg_catalog.count(*) from required_declaration) > 0
       and (select pg_catalog.count(distinct permission_id) from required_declaration)
         = (select pg_catalog.count(*) from required_declaration)
@@ -262,7 +261,6 @@ begin
       and assignment.assignee_kind = 'organization_account'
       and assignment.organization_account_id = p_organization_account_id
       and assignment.group_id is null
-      and assignment.assignment_kind = 'standing'
       and assignment.state = 'live'
       and assignment.starts_at <= appointment_starts_at
       and assignment.expires_at is null
@@ -304,8 +302,7 @@ begin
     and revision.revision = steward_role.live_revision
   for share;
   if not found
-    or steward_role_revision.lifecycle is distinct from 'active'
-    or steward_role_revision.assignment_policy is distinct from 'standing' then
+    or steward_role_revision.lifecycle is distinct from 'active' then
     raise exception using errcode = '42501',
       message = 'Organization steward appointment is unavailable';
   end if;
@@ -427,13 +424,13 @@ begin
   appointment_starts_at := pg_catalog.clock_timestamp();
   insert into vortex_access.organization_role_assignments (
     organization_id, role_assignment_id, role_id, assignee_kind,
-    organization_account_id, group_id, assignment_kind, revision, starts_at,
+    organization_account_id, group_id, revision, starts_at,
     expires_at, state, granted_by, granted_at, grant_correlation_id,
     changed_by, changed_at, change_correlation_id, revoked_by, revoked_at,
     revocation_correlation_id
   ) values (
     context_organization_id, generated_role_assignment_id, steward_role.role_id,
-    'organization_account', p_organization_account_id, null, 'standing', 1,
+    'organization_account', p_organization_account_id, null, 1,
     appointment_starts_at, null, 'live', context_account_id, appointment_starts_at,
     context_correlation_id, context_account_id, appointment_starts_at,
     context_correlation_id, null, null, null
@@ -506,7 +503,6 @@ begin
         and assignment.assignee_kind = 'organization_account'
         and assignment.organization_account_id = p_organization_account_id
         and assignment.group_id is null
-        and assignment.assignment_kind = 'standing'
         and assignment.revision = 1
         and assignment.state = 'live'
         and assignment.starts_at = appointment_starts_at
@@ -521,7 +517,6 @@ begin
         and assignment.revocation_correlation_id is null
         and role.live_revision = steward_role.live_revision
         and revision.lifecycle = 'active'
-        and revision.assignment_policy = 'standing'
         and delegation.delegation_authority_id = generated_delegation_authority_id
         and delegation.holder_kind = 'organization_account'
         and delegation.organization_account_id = p_organization_account_id

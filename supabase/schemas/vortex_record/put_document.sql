@@ -94,7 +94,6 @@ begin
   return query select 'stored'::text;
 end
 $function$;
-alter function vortex_record.put_document(uuid,uuid,uuid,uuid,bigint,boolean,jsonb,text) owner to vortex_owner;
 
 revoke execute on function vortex_record.put_document(
   uuid, uuid, uuid, uuid, bigint, boolean, jsonb, text

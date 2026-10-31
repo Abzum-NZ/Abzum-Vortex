@@ -1,12 +1,9 @@
 import { z } from "zod";
 import {
   applicationRootIdSchema,
-  connectionInstanceIdSchema,
   organizationIdSchema,
   revisionSchema,
   storageContractIdSchema,
-  timestampSchema,
-  flowIdSchema,
 } from "../catalogue/identifiers";
 
 const nonNilUuidSchema = z
@@ -27,21 +24,6 @@ const recordLifecyclePolicyIdSchema = nonNilUuidSchema.brand<"RecordLifecyclePol
 const recordLifecycleActionSchema = z.literal("delete");
 
 /**
- * Closed, typed archive destination reference identifier.
- * Must be a lowercase alphanumeric identifier using hyphen or underscore delimiters.
- * Strictly excludes URLs, connection strings, SQL escape hatches, and credential patterns.
- */
-const archiveDestinationReferenceSchema = z
-  .string()
-  .min(1)
-  .max(80)
-  .regex(
-    /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/,
-    "Archive destination reference must be a lowercase alphanumeric identifier using hyphen or underscore delimiters",
-  )
-  .brand<"ArchiveDestinationReference">();
-
-/**
  * Organisation runtime settings lifecycle ceiling schema.
  * Bound to organizationId and settingsRevision.
  * Limits must be internally closed: either a finite positive ceiling is set,
@@ -56,8 +38,6 @@ export const organizationLifecycleLimitsSchema = z
     allowUnlimitedRetentionDays: z.boolean(),
     allowUnlimitedRecordCount: z.boolean(),
     allowedActions: z.array(recordLifecycleActionSchema).min(1),
-    // archive leftover: removed by FIX-DB-SECURITY
-    allowedArchiveDestinations: z.array(archiveDestinationReferenceSchema),
   })
   .strict()
   .superRefine((limits, context) => {
@@ -219,52 +199,6 @@ export const initialRecordLifecyclePolicySchema = z
 const recordTypeLifecyclePolicySchema = deleteRecordLifecyclePolicySchema;
 
 /**
- * Evidence item for an exact active registered workflow in runtime.
- * Scope-bound to matching organizationId and authorizedApplicationIds.
- */
-const registeredWorkflowEvidenceSchema = z
-  .object({
-    workflowId: flowIdSchema,
-    workflowRevision: revisionSchema,
-    organizationId: organizationIdSchema,
-    authorizedApplicationIds: z.array(applicationRootIdSchema).default([]),
-    state: z.literal("active"),
-  })
-  .strict();
-
-/**
- * Evidence item for an exact active connection instance in runtime.
- * Scope-bound to matching organizationId, closed destinationKey, and canonical authorizedApplicationIds (min 1).
- */
-const activeConnectionEvidenceSchema = z
-  .object({
-    connectionInstanceId: connectionInstanceIdSchema,
-    destinationKey: archiveDestinationReferenceSchema,
-    destinationFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-    organizationId: organizationIdSchema,
-    authorizedApplicationIds: z.array(applicationRootIdSchema).min(1),
-    state: z.literal("active"),
-    revision: revisionSchema,
-    lastHealthOutcome: z.literal("healthy"),
-    verifiedAt: timestampSchema.optional(),
-  })
-  .strict();
-
-/**
- * Scope-bound live readiness evidence contract required for activation and live policy validation.
- * Proves that exact workflows and connections are active and bound to the matching organisation.
- */
-const lifecycleReadinessEvidenceSchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    // archive leftover: removed by FIX-DB-SECURITY
-    registeredWorkflows: z.array(registeredWorkflowEvidenceSchema),
-    // archive leftover: removed by FIX-DB-SECURITY
-    activeConnections: z.array(activeConnectionEvidenceSchema),
-  })
-  .strict();
-
-/**
  * Protected Record-owned snapshot taken immediately after the Module
  * activation write and before that write is accepted.  It contains no mutable
  * request input: target completeness comes from the repository and every
@@ -276,7 +210,6 @@ export const applicationLifecyclePolicyReadinessSchema = z
     applicationRootId: applicationRootIdSchema,
     policies: z.array(recordTypeLifecyclePolicySchema),
     organizationLimits: organizationLifecycleLimitsSchema,
-    readinessEvidence: lifecycleReadinessEvidenceSchema,
   })
   .strict();
 
@@ -296,8 +229,6 @@ interface PolicyValidationResult {
 export const validateRecordTypeLifecyclePolicy = (
   policyCandidate: unknown,
   organizationLimitsCandidate: unknown,
-  // archive leftover: removed by FIX-DB-SECURITY, with the readiness evidence it was read from.
-  _readinessEvidenceCandidate: unknown,
   expectedSettingsRevisionCandidate: unknown,
 ): PolicyValidationResult => {
   const issues: PolicyValidationIssue[] = [];

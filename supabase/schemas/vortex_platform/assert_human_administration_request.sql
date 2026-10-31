@@ -16,8 +16,6 @@ $function$;
 
 revoke all on function vortex_platform.assert_human_administration_request()
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_platform.assert_human_administration_request()
-  to postgres;
 
 comment on function vortex_platform.assert_human_administration_request() is
   'Refuses any caller whose request context is not a human request; used by the connection administration entry points.';

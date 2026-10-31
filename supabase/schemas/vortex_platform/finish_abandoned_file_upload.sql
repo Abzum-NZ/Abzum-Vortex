@@ -7,7 +7,7 @@ begin
   select * into file_value from vortex_platform.file_records where file_id = p_file_id for update;
   if not found or file_value.lifecycle_state <> 'abandoned' or file_value.activated_at is not null
     or pg_catalog.cardinality(file_value.owning_attachment_references) <> 0
-    or file_value.preview_references <> '[]'::jsonb or file_value.legal_hold then return false; end if;
+    or file_value.preview_references <> '[]'::jsonb then return false; end if;
   -- The caller reaches this boundary only after the exact-object Storage API delete succeeds.
   delete from vortex_platform.file_uploads where file_id = p_file_id and cleanup_claim_id = p_claim_id;
   if not found then return false; end if;

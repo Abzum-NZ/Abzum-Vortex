@@ -26,8 +26,6 @@ begin
   return selected_values;
 end
 $function$;
-alter function vortex_access.validation_reference_list(text) owner to vortex_owner;
-
 
 revoke all on function vortex_access.validation_reference_list(text)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;

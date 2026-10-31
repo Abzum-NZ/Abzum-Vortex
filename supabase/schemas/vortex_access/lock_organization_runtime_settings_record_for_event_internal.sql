@@ -38,9 +38,6 @@ exception
 end
 $function$;
 
-alter function vortex_access.lock_organization_runtime_settings_record_for_event_internal(uuid)
-  owner to postgres;
-
 revoke all on function vortex_access.lock_organization_runtime_settings_record_for_event_internal(uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_access.lock_organization_runtime_settings_record_for_event_internal(uuid)

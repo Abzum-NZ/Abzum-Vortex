@@ -87,7 +87,7 @@ begin
   -- Explicit definition-derived columns shape the bounded reader values.
   -- No record_data relation is created or read for a system projection.
   scan_source_sql := pg_catalog.format($source$
-    pg_catalog.jsonb_to_recordset($11) as projection(
+    pg_catalog.jsonb_to_recordset($10) as projection(
       organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
     )
     cross join lateral pg_catalog.jsonb_to_record(

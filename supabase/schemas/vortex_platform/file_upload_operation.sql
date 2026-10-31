@@ -70,11 +70,11 @@ begin
     insert into vortex_platform.file_records(
       file_id,organization_id,application_root_id,owner_record_type_id,owner_record_id,owner_field_id,
       lifecycle_state,original_safe_display_name,detected_media_type,extension,size_bytes,checksum,
-      storage_key,bucket_id,scanner_name,scanner_version,scanner_result,preview_references,uploaded_by,legal_hold,created_at,owning_attachment_references)
+      storage_key,bucket_id,scanner_name,scanner_version,scanner_result,preview_references,uploaded_by,created_at,owning_attachment_references)
     values(file_id_value,organization_value,(context_value ->> 'applicationRootId')::uuid,
       (candidate ->> 'ownerRecordTypeId')::uuid,(candidate ->> 'ownerRecordId')::uuid,(candidate ->> 'ownerFieldId')::uuid,
       'pending',candidate ->> 'originalSafeDisplayName','application/octet-stream',candidate ->> 'extension',0,
-      'sha256:' || pg_catalog.repeat('0',64),candidate ->> 'storageKey','private_files','vortex_file_preflight','1','pending','[]',actor_value,false,evaluated_at,'{}')
+      'sha256:' || pg_catalog.repeat('0',64),candidate ->> 'storageKey','private_files','vortex_file_preflight','1','pending','[]',actor_value,evaluated_at,'{}')
     returning * into file_value;
     insert into vortex_platform.file_uploads(file_id,maximum_bytes,upload_expires_at,replacing_file_id,correlation_id,grant_value)
     values(file_id_value,(grant_value ->> 'maximumBytes')::bigint,(p_input ->> 'uploadExpiresAt')::timestamptz,

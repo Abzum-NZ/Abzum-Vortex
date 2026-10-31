@@ -32,18 +32,21 @@ begin
     );
   end if;
   perform vortex_record.append_record_activity_internal(pg_catalog.gen_random_uuid(), 'update_record', array[saved_record_id]::uuid[], changed_field_ids, 'completed');
-  event_result := vortex_platform.append_record_occurrences(
-    (snapshot ->> 'storageContractId')::uuid, saved_record_id,
+  event_result := vortex_platform.append_record_occurrence_set(
     pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-      'occurrenceId', pg_catalog.gen_random_uuid(),
-      'descriptor', pg_catalog.jsonb_build_object(
-        'kind', 'standard', 'eventKind', 'changed', 'recordTypeId', (p_prepared ->> 'recordTypeId')::uuid
-      ),
-      'payload', pg_catalog.jsonb_build_object(
-        'kind', 'changed', 'changedFieldIds', pg_catalog.to_jsonb(changed_field_ids)
-      )
+      'storageContractId', (snapshot ->> 'storageContractId')::uuid,
+      'recordId', saved_record_id,
+      'occurrences', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'occurrenceId', pg_catalog.gen_random_uuid(),
+        'descriptor', pg_catalog.jsonb_build_object(
+          'kind', 'standard', 'eventKind', 'changed', 'recordTypeId', (p_prepared ->> 'recordTypeId')::uuid
+        ),
+        'payload', pg_catalog.jsonb_build_object(
+          'kind', 'changed', 'changedFieldIds', pg_catalog.to_jsonb(changed_field_ids)
+        )
+      ))
     ))
-  );
+  ) -> 0;
   if pg_catalog.jsonb_array_length(event_result) <> 1 then
     raise exception using errcode = '55000', message = 'Relationship total parent Event append failed';
   end if;

@@ -16,8 +16,6 @@ as $function$
       and root.kind = 'application'
   )
 $function$;
-alter function vortex_definition.application_root_exists_for_organization_internal(uuid,uuid) owner to vortex_owner;
-
 
 revoke all on function vortex_definition.application_root_exists_for_organization_internal(uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;

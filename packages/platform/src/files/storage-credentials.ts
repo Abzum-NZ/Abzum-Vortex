@@ -426,8 +426,7 @@ const validateCurrentAuthority = (
           fileRecord.lifecycleState !== "abandoned" ||
           fileRecord.activatedAt !== undefined ||
           fileRecord.owningAttachmentReferences.length !== 0 ||
-          fileRecord.previewReferences.length !== 0 ||
-          fileRecord.legalHold.isHeld
+          fileRecord.previewReferences.length !== 0
         )
           throw new Error("Storage credential minting refused: upload is not abandoned");
         break;

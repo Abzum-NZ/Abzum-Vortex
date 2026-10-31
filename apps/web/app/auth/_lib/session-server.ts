@@ -372,8 +372,13 @@ export const readMfaFactor = async (): Promise<
   }
 };
 
+/**
+ * Enrols a new authenticator for the signed-in person. The issuer is Vortex and the account label is
+ * their email address, so the QR code (an SVG data address) and the text key name the same account.
+ * The QR code and the key are shown once to that person; never log them or put them in an address.
+ */
 export const enrollMfaFactor = async (): Promise<
-  { kind: "enrolled"; factorId: string; secret: string } | { kind: "unavailable" }
+  { kind: "enrolled"; factorId: string; secret: string; qrCode: string } | { kind: "unavailable" }
 > => {
   try {
     const { boundary } = await mfaBoundary();
@@ -387,13 +392,23 @@ export const enrollMfaFactor = async (): Promise<
       const removed = await boundary.client.auth.mfa.unenroll({ factorId: factor.id });
       if (removed.error) throw removed.error;
     }
-    const enrolled = await boundary.client.auth.mfa.enroll({ factorType: "totp" });
+    const enrolled = await boundary.client.auth.mfa.enroll({
+      factorType: "totp",
+      issuer: "Vortex",
+    });
     if (enrolled.error) throw enrolled.error;
     if (enrolled.data.type !== "totp") throw new Error("Unexpected MFA factor type");
+    if (!enrolled.data.totp.qr_code.startsWith("data:image/svg+xml;"))
+      throw new Error("Unexpected MFA QR code format");
     const staged = boundary.stage.snapshot();
     if (staged.refused || staged.mutations.length)
       throw new Error("MFA enrolment changed the session");
-    return { kind: "enrolled", factorId: enrolled.data.id, secret: enrolled.data.totp.secret };
+    return {
+      kind: "enrolled",
+      factorId: enrolled.data.id,
+      secret: enrolled.data.totp.secret,
+      qrCode: enrolled.data.totp.qr_code,
+    };
   } catch (error) {
     return mapWebError(error, {
       route: "auth/mfa",

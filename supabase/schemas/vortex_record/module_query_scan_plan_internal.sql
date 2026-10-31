@@ -462,7 +462,7 @@ begin
     search_prefilter_sql := vortex_record.query_search_prefilter_internal(
       v_storage_contract_id, fields_by_id,
       array(select item.value from pg_catalog.jsonb_array_elements_text(p_bound #> '{searchPlan,fieldIds}') as item(value)),
-      readable_field_ids, p_bound #>> '{searchPlan,search}', 17, 18);
+      readable_field_ids, p_bound #>> '{searchPlan,search}', 16, 17);
   end if;
   -- The scan plan: every SQL fragment comes from the storage catalogue and the prepared plan,
   -- every value it compares is a bound parameter of the one scan.

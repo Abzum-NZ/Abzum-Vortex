@@ -5,7 +5,8 @@ create or replace function vortex_record.prepare_relationship_value_internal(
   p_source_record_id uuid,
   p_relationship_id uuid,
   p_target_value jsonb,
-  p_bump_data_version boolean
+  p_bump_data_version boolean,
+  p_named_action jsonb default null
 )
 returns jsonb
 language plpgsql
@@ -31,11 +32,33 @@ declare
   target_application_root_id uuid;
   mapping_row vortex_record.relationship_storage_mappings%rowtype;
   application_root_required boolean;
+  action_owner_kind text;
+  action_owner_id uuid;
+  action_release_revision bigint;
+  action_id uuid;
 
 begin
   if p_source_record_type_id is null or p_source_record_id is null
     or p_relationship_id is null or p_bump_data_version is null then
     raise exception using errcode = '22023', message = 'Relationship change is invalid';
+  end if;
+  -- A named action's relationship change names the action (its plan's action object); the
+  -- action's subject is the source record.
+  if p_named_action is not null then
+    begin
+      action_owner_kind := p_named_action ->> 'ownerKind';
+      action_owner_id := (p_named_action ->> 'ownerId')::uuid;
+      action_release_revision := (p_named_action ->> 'releaseRevision')::bigint;
+      action_id := (p_named_action ->> 'actionId')::uuid;
+    exception when invalid_text_representation or numeric_value_out_of_range then
+      raise exception using errcode = '22023', message = 'Relationship change is invalid';
+    end;
+    if action_owner_kind is null or action_owner_kind not in ('application', 'module')
+      or action_owner_id is null or action_id is null
+      or action_release_revision is null
+      or action_release_revision not between 1 and 9007199254740991 then
+      raise exception using errcode = '22023', message = 'Relationship change is invalid';
+    end if;
   end if;
   source_meta := vortex_record.resolve_record_action_context_internal(
     p_source_record_type_id, 'read'
@@ -152,12 +175,34 @@ begin
     (source_context ->> 'organizationId')::uuid
   );
 
-  target_loaded := (vortex_record.load_record_access_facts_internal('read', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', target_type_id, 'recordId', target_record_id))) -> 0);
+  -- Executing a permitted named action must not require ordinary read authority on its own
+  -- subject, so when the target is exactly the action's subject the decision is taken on the
+  -- installed named declaration: the loader re-resolves the active installation, the owner kind,
+  -- id and release revision, the action and its declared subject record type. Every other
+  -- target keeps the ordinary read check.
+  if p_named_action is not null
+    and target_type_id = p_source_record_type_id and target_record_id = p_source_record_id then
+    target_loaded := vortex_record.load_named_action_facts_internal(
+      action_owner_kind, action_owner_id, action_release_revision,
+      action_id, target_type_id, target_record_id, null
+    );
+  else
+    target_loaded := (vortex_record.load_record_access_facts_internal('read', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object('recordTypeId', target_type_id, 'recordId', target_record_id))) -> 0);
+  end if;
   if target_loaded ->> 'outcome' <> 'loaded'
     or pg_catalog.jsonb_typeof(target_loaded -> 'declaration') <> 'object' then
     raise exception using errcode = 'P0002', message = 'Relationship target is unavailable';
   end if;
-  if source_meta ? 'previewInstallationId'
+  if p_named_action is not null
+    and target_type_id = p_source_record_type_id and target_record_id = p_source_record_id then
+    target_decision := (vortex_access.evaluate_organization_record_access_internal(pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'declaration', target_loaded -> 'declaration',
+        'recordId', target_record_id,
+        'facts', target_loaded -> 'facts'
+      )
+    )) -> 0);
+  elsif source_meta ? 'previewInstallationId'
     and target_loaded ->> 'previewInstallationId' = source_meta ->> 'previewInstallationId'
     and exists (
       select 1 from vortex_definition.roots as root
@@ -237,10 +282,10 @@ begin
 end
 $function$;
 
-alter function vortex_record.prepare_relationship_value_internal(uuid,uuid,uuid,jsonb,boolean) owner to vortex_record_adapter;
+alter function vortex_record.prepare_relationship_value_internal(uuid,uuid,uuid,jsonb,boolean,jsonb) owner to vortex_record_adapter;
 
-revoke all on function vortex_record.prepare_relationship_value_internal(uuid, uuid, uuid, jsonb, boolean)
+revoke all on function vortex_record.prepare_relationship_value_internal(uuid, uuid, uuid, jsonb, boolean, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
-comment on function vortex_record.prepare_relationship_value_internal(uuid, uuid, uuid, jsonb, boolean) is
-  'Private relationship preparation: validates the declared relationship and target eligibility, locks target and edge identities, and returns the typed field and edge mutation for the record writer.';
+comment on function vortex_record.prepare_relationship_value_internal(uuid, uuid, uuid, jsonb, boolean, jsonb) is
+  'Private relationship preparation: validates the declared relationship and target eligibility, locks target and edge identities, and returns the typed field and edge mutation for the record writer. A named action''s change passes the action, and a target that is the action''s own subject is decided on the installed named declaration.';

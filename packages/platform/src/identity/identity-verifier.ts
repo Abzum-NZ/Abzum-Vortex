@@ -9,6 +9,7 @@ import {
   type IdentityAuthority,
   type VerifiedIdentity,
 } from "../access/identity-access";
+import { withRuntimeTransaction, type RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   IdentityVerificationError,
   type IdentityVerificationRefusalCode,
@@ -50,7 +51,10 @@ const identityVerifierMaximumClockSkewSeconds = 60;
 
 export type IdentityVerifier = Readonly<{
   authority: IdentityAuthority;
-  verifyAccessToken(accessToken: string): Promise<VerifiedIdentity>;
+  verifyAccessToken(
+    accessToken: string,
+    transaction?: RequestDatabaseTransaction,
+  ): Promise<VerifiedIdentity>;
   checkpoint?(): void;
 }>;
 
@@ -185,7 +189,42 @@ const projectVerifiedIdentity = (
 };
 
 /**
- * Internal construction seam used by contract tests. Production callers use
+ * A signed token outlives its provider session: GoTrue deletes the session when a password change,
+ * a sign-out or another provider revocation ends it, while the token stays valid until it expires.
+ * One primary-key read of the session refuses such a token. The read runs in the caller's open
+ * transaction when there is one, since a request-owned connection holds one transaction at a time.
+ */
+const requireCurrentSession = async (
+  identity: VerifiedIdentity,
+  transaction: RequestDatabaseTransaction | undefined,
+  checkpoint: (() => void) | undefined,
+): Promise<void> => {
+  const read = (current: RequestDatabaseTransaction) =>
+    current.query<{ current: unknown }>`
+      select vortex_identity.identity_session_is_current(
+        ${identity.identityId}::uuid,
+        ${identity.sessionId}::uuid
+      ) as current
+    `;
+  let rows: readonly { current: unknown }[];
+  try {
+    checkpoint?.();
+    rows = await (transaction === undefined ? withRuntimeTransaction(read) : read(transaction));
+    checkpoint?.();
+  } catch (error) {
+    return refuse("vortex.identity.authority_unavailable", error);
+  }
+  const current = rows.length === 1 ? rows[0]?.current : undefined;
+  if (typeof current !== "boolean")
+    return refuse(
+      "vortex.identity.token_verification_failed",
+      new Error("The session read returned no boolean"),
+    );
+  if (!current) refuse("vortex.identity.session_ended");
+};
+
+/**
+ * Builds the verifier over a claims client. Callers use
  * createIdentityVerifier, which supplies the official Supabase client.
  */
 const createIdentityVerifierWithClient = (
@@ -199,7 +238,7 @@ const createIdentityVerifierWithClient = (
   return Object.freeze({
     authority,
     ...(options.execution === undefined ? {} : { checkpoint: options.execution.checkpoint }),
-    async verifyAccessToken(accessToken: string) {
+    async verifyAccessToken(accessToken: string, transaction?: RequestDatabaseTransaction) {
       if (accessToken.trim().length === 0) return refuse("vortex.identity.missing_access_token");
 
       let result: ClaimsVerificationResult;
@@ -228,7 +267,9 @@ const createIdentityVerifierWithClient = (
             ? "vortex.identity.authority_unavailable"
             : "vortex.identity.token_verification_failed",
         );
-      return projectVerifiedIdentity(authority, result.data, clock);
+      const identity = projectVerifiedIdentity(authority, result.data, clock);
+      await requireCurrentSession(identity, transaction, options.execution?.checkpoint);
+      return identity;
     },
   });
 };

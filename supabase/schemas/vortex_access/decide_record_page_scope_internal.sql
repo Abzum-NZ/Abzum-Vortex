@@ -22,17 +22,14 @@ declare
   target_type jsonb;
   ownership_mode text;
   evidence jsonb;
-  wants_share boolean;
-  share_candidates uuid[] := array[]::uuid[];
-  page_record_ids uuid[];
   constant_matched jsonb;
   constant_valid_until text;
   decisions jsonb;
 begin
   -- One decision per record of one page, for one action declaration and the
   -- eligibility the caller computed once for it in this invocation. It is the
-  -- exact-record composition (target check, all-record, owner, owner-group and
-  -- direct-share routes) applied to every record in one pass. It returns JSON
+  -- exact-record composition (target check, all-record, owner and owner-group
+  -- routes) applied to every record in one pass. It returns JSON
   -- null for a record, or SQL null for the whole page, whenever a route, a
   -- saved condition or the record's evidence has no exact set form here; the
   -- caller then decides that record through the exact single-record path.
@@ -87,8 +84,8 @@ begin
   limit 1;
   ownership_mode := target_type ->> 'ownershipMode';
 
-  -- Only routes with an exact set form: all records, the record's own owner or
-  -- owner group, and a direct share; never a relationship route, an inherited
+  -- Only routes with an exact set form: all records and the record's own owner
+  -- or owner group; never a relationship route, an inherited
   -- owner chase or a saved condition. The bound type must agree with the
   -- binding, as the owner test compares the record with the type.
   if target_type is null
@@ -109,45 +106,15 @@ begin
             case when pg_catalog.jsonb_typeof(alt.value #> '{recordScope,routes}') = 'array'
               then alt.value #> '{recordScope,routes}' else '[]'::jsonb end
           ) as route(value)
-          where coalesce(route.value ->> 'kind', '') not in ('all_records', 'ownership', 'direct_share')
+          where coalesce(route.value ->> 'kind', '') not in ('all_records', 'ownership')
         )
     ) then
     return null;
   end if;
 
-  wants_share := action_kind in ('read', 'update') and exists (
-    select 1
-    from pg_catalog.jsonb_array_elements(p_eligibility -> 'eligiblePermissions') as alt(value)
-    cross join lateral pg_catalog.jsonb_array_elements(alt.value #> '{recordScope,routes}') as route(value)
-    where route.value ->> 'kind' = 'direct_share'
-  );
-  if wants_share then
-    -- The page's record identities, once; then a superset of the records any
-    -- current share of this binding can reach, through the active share scope
-    -- index. The exact share reader still decides each of them.
-    select coalesce(pg_catalog.array_agg((item.value #>> '{recordScope,recordId}')::uuid), array[]::uuid[])
-    into page_record_ids
-    from pg_catalog.jsonb_array_elements(p_records) as item(value)
-    where pg_catalog.jsonb_typeof(item.value) = 'object'
-      and vortex_platform.is_non_nil_uuid(item.value #>> '{recordScope,recordId}');
-    select coalesce(pg_catalog.array_agg(distinct share.record_id), array[]::uuid[])
-    into share_candidates
-    from vortex_access.organization_direct_record_shares as share
-    where share.organization_id = v_organization_id
-      and share.storage_scope = binding ->> 'storageScope'
-      and share.application_scope_id = coalesce(case
-        when binding ->> 'storageScope' = 'application_contained' then v_application_root_id
-        else null::uuid end, '00000000-0000-0000-0000-000000000000'::uuid)
-      and share.module_root_id = (binding ->> 'moduleRootId')::uuid
-      and share.record_type_id = (binding ->> 'recordTypeId')::uuid
-      and share.storage_contract_id = (binding ->> 'storageContractId')::uuid
-      and share.record_id = any (page_record_ids)
-      and share.state = 'active';
-  end if;
-
-  -- When every eligible alternative admits all records and no share applies,
-  -- every target record gets the same contributions: build them once.
-  if not wants_share and not exists (
+  -- When every eligible alternative admits all records, every target record
+  -- gets the same contributions: build them once.
+  if not exists (
     select 1
     from pg_catalog.jsonb_array_elements(p_eligibility -> 'eligiblePermissions') as alt(value)
     where not exists (
@@ -179,9 +146,7 @@ begin
       exists (select 1 from pg_catalog.jsonb_array_elements(alt.value #> '{recordScope,routes}') as route(value)
         where route.value ->> 'kind' = 'all_records') as has_all,
       exists (select 1 from pg_catalog.jsonb_array_elements(alt.value #> '{recordScope,routes}') as route(value)
-        where route.value ->> 'kind' = 'ownership') as has_owner,
-      exists (select 1 from pg_catalog.jsonb_array_elements(alt.value #> '{recordScope,routes}') as route(value)
-        where route.value ->> 'kind' = 'direct_share') as has_share
+        where route.value ->> 'kind' = 'ownership') as has_owner
     from pg_catalog.jsonb_array_elements(p_eligibility -> 'eligiblePermissions')
       with ordinality as alt(value, ordinality)
   ),
@@ -233,20 +198,6 @@ begin
             and not (records.record ? 'ownerOrganizationAccountId') end end as evidence_ok
     from records
   ),
-  -- Each shared record's current shares, read once by the exact share reader
-  -- whatever the number of alternatives.
-  shares as materialized (
-    select assessed.row_index, share.*
-    from assessed
-    cross join lateral vortex_access.read_current_direct_record_share_contributions(
-      v_organization_id, v_application_root_id,
-      (target_type ->> 'moduleRootId')::uuid, (target_type ->> 'recordTypeId')::uuid,
-      (target_type ->> 'storageContractId')::uuid, target_type ->> 'storageScope',
-      assessed.record_id, v_organization_id, v_application_root_id, v_account_id, p_checked_at
-    ) as share
-    where wants_share and assessed.record_id = any (share_candidates)
-      and assessed.target_ok and assessed.evidence_ok
-  ),
   contributions as (
     -- All-record and owner routes: one contribution when admitted.
     select assessed.row_index, alternatives.alt_index, alternatives.candidate,
@@ -279,24 +230,6 @@ begin
         or (alternatives.has_owner and ownership_mode = 'organization_account'
           and assessed.owner_account_id = v_account_id)
         or (alternatives.has_owner and ownership_mode = 'group' and membership.found))
-    union all
-    -- Direct shares: every current share is its own contribution with its own
-    -- field bounds, decided by the exact share reader.
-    select assessed.row_index, alternatives.alt_index, alternatives.candidate,
-      pg_catalog.jsonb_build_object(
-        'kind', 'direct_share',
-        'directShareId', share.direct_share_id,
-        'directShareRevision', share.direct_share_revision,
-        'readableFieldIds', pg_catalog.to_jsonb(share.readable_field_ids),
-        'changeableFieldIds', pg_catalog.to_jsonb(share.changeable_field_ids)
-      ),
-      share.valid_until,
-      alternatives.candidate_valid_until
-    from shares as share
-    join assessed on assessed.row_index = share.row_index
-    cross join alternatives
-    where alternatives.has_share
-      and (action_kind = 'read' or pg_catalog.cardinality(share.changeable_field_ids) > 0)
   ),
   matched as (
     select contribution.row_index,
@@ -304,9 +237,8 @@ begin
         contribution.alt_index,
         case contribution.value -> 'route' ->> 'kind'
           when 'all_records' then 0 when 'ownership' then 1
-          when 'direct_share' then 2 when 'relationship' then 3 end,
-        coalesce(contribution.value -> 'route' ->> 'directShareId',
-          contribution.value -> 'route' ->> 'sourceRecordId', '')
+          when 'relationship' then 3 end,
+        coalesce(contribution.value -> 'route' ->> 'sourceRecordId', '')
       ) as contributions
     from (
       select contributions.row_index, contributions.alt_index,
@@ -364,4 +296,4 @@ grant execute on function vortex_access.decide_record_page_scope_internal(jsonb,
   to vortex_record_adapter;
 
 comment on function vortex_access.decide_record_page_scope_internal(jsonb,timestamptz,jsonb,jsonb,jsonb,jsonb,boolean) is
-  'Private set-based record decision for one page and one action declaration: applies the exact-record target check and the all-record, owner, owner-group and direct-share routes of the eligibility the caller computed once in this invocation to every record in one pass, producing the same decision the exact single-record composition produces; returns null for the page when an eligible alternative has a relationship route or a saved condition or the record type inherits its owner, and null for a record whose evidence is not well formed, so the caller decides those through the exact path.';
+  'Private set-based record decision for one page and one action declaration: applies the exact-record target check and the all-record, owner and owner-group routes of the eligibility the caller computed once in this invocation to every record in one pass, producing the same decision the exact single-record composition produces; returns null for the page when an eligible alternative has a relationship route or a saved condition or the record type inherits its owner, and null for a record whose evidence is not well formed, so the caller decides those through the exact path.';

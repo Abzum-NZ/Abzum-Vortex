@@ -139,7 +139,7 @@ begin
                     else '[]'::jsonb end
                 ) as route(value)
                 where coalesce(route.value ->> 'kind', '') not in
-                  ('all_records', 'ownership', 'direct_share')
+                  ('all_records', 'ownership')
               )
           ) into simple_action;
           if not simple_action then

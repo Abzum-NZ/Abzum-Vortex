@@ -72,7 +72,6 @@ begin
   );
 end
 $function$;
-alter function vortex_platform.record_alert_signal(text,text,text,text,text,text) owner to vortex_owner;
 
 revoke all on function vortex_platform.record_alert_signal(
   text, text, text, text, text, text

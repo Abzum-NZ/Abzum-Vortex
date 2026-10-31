@@ -1,7 +1,9 @@
-CREATE FUNCTION vortex_record.is_lifecycle_action_list(p_values text[]) RETURNS boolean
-    LANGUAGE sql IMMUTABLE
-    SET search_path TO ''
-    AS $$
+create or replace function vortex_record.is_lifecycle_action_list(p_values text[])
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $function$
   select coalesce(
     p_values is not null
     and pg_catalog.array_ndims(p_values) = 1
@@ -10,7 +12,7 @@ CREATE FUNCTION vortex_record.is_lifecycle_action_list(p_values text[]) RETURNS 
       select 1
       from pg_catalog.unnest(p_values) as item(value)
       where item.value is null
-        or item.value <> all (array['delete', 'archive_workflow']::text[])
+        or item.value <> 'delete'
     )
     and pg_catalog.cardinality(p_values) = (
       select pg_catalog.count(distinct item.value)
@@ -18,8 +20,8 @@ CREATE FUNCTION vortex_record.is_lifecycle_action_list(p_values text[]) RETURNS 
     ),
     false
   );
-$$;
+$function$;
+
 alter function vortex_record.is_lifecycle_action_list(text[]) owner to vortex_owner;
 
-
-REVOKE ALL ON FUNCTION vortex_record.is_lifecycle_action_list(p_values text[]) FROM PUBLIC;
+revoke all on function vortex_record.is_lifecycle_action_list(text[]) from public;

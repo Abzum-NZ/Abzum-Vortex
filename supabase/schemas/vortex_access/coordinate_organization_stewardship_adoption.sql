@@ -354,9 +354,8 @@ begin
 
   insert into vortex_access.organization_role_revisions (
     organization_id, role_id, revision, role_kind, application_root_id,
-    lifecycle, privilege_classification, assignment_policy,
+    lifecycle, privilege_classification,
     policy_continuity_revision, authority_continuity_revision,
-    activation_policy_id, activation_policy_revision,
     role_key, label, description,
     source_definition_key, source_release_revision, source_release_version,
     source_validation_contract_version, accepted_registration_revision,
@@ -364,20 +363,20 @@ begin
     changed_by, changed_at, change_correlation_id
   ) values (
     p_organization_id, p_role_id, 1, 'custom', null, 'active', 'privileged',
-    'standing', 1, 1, null, null, p_role_key, p_role_label,
+    1, 1, p_role_key, p_role_label,
     p_role_description, null, null, null, null, null, null,
     p_changed_by, checked_at, p_correlation_id
   );
 
   insert into vortex_access.organization_role_assignments (
     organization_id, role_assignment_id, role_id, assignee_kind,
-    organization_account_id, group_id, assignment_kind, revision, starts_at,
+    organization_account_id, group_id, revision, starts_at,
     expires_at, state, granted_by, granted_at, grant_correlation_id,
     changed_by, changed_at, change_correlation_id, revoked_by, revoked_at,
     revocation_correlation_id
   ) values (
     p_organization_id, p_role_assignment_id, p_role_id,
-    'organization_account', p_organization_account_id, null, 'standing', 1,
+    'organization_account', p_organization_account_id, null, 1,
     checked_at, null, 'live', p_changed_by, checked_at, p_correlation_id,
     p_changed_by, checked_at, p_correlation_id, null, null, null
   );
@@ -452,3 +451,5 @@ revoke execute on function
   ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 grant execute on function vortex_access.coordinate_organization_stewardship_adoption(uuid, uuid, uuid, text, text, text, uuid, uuid, uuid, uuid) to postgres;
+
+alter function vortex_access.coordinate_organization_stewardship_adoption(uuid, uuid, uuid, text, text, text, uuid, uuid, uuid, uuid) owner to vortex_owner;

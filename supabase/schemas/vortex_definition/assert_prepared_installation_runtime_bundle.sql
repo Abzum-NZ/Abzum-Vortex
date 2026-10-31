@@ -252,8 +252,6 @@ exception
       message = 'Prepared runtime bundle evidence is ambiguous';
 end
 $function$;
-alter function vortex_definition.assert_prepared_installation_runtime_bundle(uuid,bigint,jsonb,text) owner to vortex_owner;
-
 
 alter function vortex_definition.assert_prepared_installation_runtime_bundle(uuid,bigint,jsonb,text)
   owner to vortex_owner;

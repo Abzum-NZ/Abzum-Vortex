@@ -27,7 +27,6 @@ declare
   target_type jsonb;
   has_all_records boolean;
   has_ownership boolean;
-  has_direct_share boolean;
   route_list jsonb[] := array[]::jsonb[];
   deadline_list timestamptz[] := array[]::timestamptz[];
   ownership_admitted boolean;
@@ -45,7 +44,6 @@ declare
   visited_ids uuid[];
   chase_admitted boolean;
   chase_deadline timestamptz;
-  share_row record;
   route jsonb;
   relationship_decl jsonb;
   source_owner_kind text;
@@ -96,10 +94,6 @@ begin
   has_ownership := exists (
     select 1 from pg_catalog.jsonb_array_elements(candidate_record_scope -> 'routes') as item(value)
     where item.value ->> 'kind' = 'ownership'
-  );
-  has_direct_share := exists (
-    select 1 from pg_catalog.jsonb_array_elements(candidate_record_scope -> 'routes') as item(value)
-    where item.value ->> 'kind' = 'direct_share'
   );
 
   -- Step 2: base ownership/all-record routes, then inherited-ownership chase.
@@ -232,40 +226,7 @@ begin
     end if;
   end if;
 
-  -- Step 3: direct share, read/update only, each recipient contributing
-  -- independently with its own field bounds.
-  if has_direct_share and action_kind in ('read', 'update') then
-    for share_row in
-      select *
-      from vortex_access.read_current_direct_record_share_contributions(
-        context_organization_id,
-        p_application_root_id,
-        (target_type ->> 'moduleRootId')::uuid,
-        (target_type ->> 'recordTypeId')::uuid,
-        (target_type ->> 'storageContractId')::uuid,
-        target_type ->> 'storageScope',
-        p_record_id,
-        context_organization_id,
-        p_application_root_id,
-        context_account_id,
-        p_checked_at
-      )
-    loop
-      if action_kind = 'update' and pg_catalog.cardinality(share_row.changeable_field_ids) = 0 then
-        continue;
-      end if;
-      route_list := pg_catalog.array_append(route_list, pg_catalog.jsonb_build_object(
-        'kind', 'direct_share',
-        'directShareId', share_row.direct_share_id,
-        'directShareRevision', share_row.direct_share_revision,
-        'readableFieldIds', pg_catalog.to_jsonb(share_row.readable_field_ids),
-        'changeableFieldIds', pg_catalog.to_jsonb(share_row.changeable_field_ids)
-      ));
-      deadline_list := pg_catalog.array_append(deadline_list, share_row.valid_until);
-    end loop;
-  end if;
-
-  -- Step 4: relationship routes. The target record is always the relationship's
+  -- Step 3: relationship routes. The target record is always the relationship's
   -- `to` endpoint and the source record its `from` endpoint (see
   -- runtime/definition/src/validation.ts). Every recursive step re-evaluates
   -- the source permission's own eligibility and own complete scope; authority
@@ -427,7 +388,7 @@ begin
     end loop;
   end loop;
 
-  -- Step 5: a saved condition narrows every route, including all_records.
+  -- Step 4: a saved condition narrows every route, including all_records.
   if coalesce(pg_catalog.array_length(route_list, 1), 0) > 0
     and candidate_record_scope ? 'savedCondition' then
     condition_id := (candidate_record_scope -> 'savedCondition' ->> 'conditionId')::uuid;
@@ -475,7 +436,7 @@ begin
     end if;
   end if;
 
-  -- Step 6: map to full matched contributions for this candidate.
+  -- Step 5: map to full matched contributions for this candidate.
   result := '[]'::jsonb;
   for route_index in 1 .. coalesce(pg_catalog.array_length(route_list, 1), 0) loop
     result := result || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(

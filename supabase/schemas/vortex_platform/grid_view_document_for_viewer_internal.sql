@@ -50,7 +50,7 @@ begin
     );
     if declaration is not null then
       -- A saved operand stays only on a field every record the reader reaches exposes (the query
-      -- engine's field bounds, including direct-share restrictions) and the reader's column
+      -- engine's field bounds) and the reader's column
       -- decision (the visible fields) offers.
       eligibility := vortex_access.resolve_record_read_field_bounds_internal(declaration);
       select coalesce(pg_catalog.array_agg(pg_catalog.lower(field.value)), '{}'::text[])

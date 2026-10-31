@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.read_organization_group_for_administration(p_group_id uuid) RETURNS TABLE(organization_id uuid, outcome text, group_summary jsonb, access_version bigint)
+CREATE OR REPLACE FUNCTION vortex_access.read_organization_group_for_administration(p_group_id uuid) RETURNS TABLE(organization_id uuid, outcome text, group_summary jsonb, access_version bigint)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -13,7 +13,9 @@ begin
   end if;
 
   select authorized.* into strict scope
-  from vortex_access.organization_groups_administration_scope() as authorized;
+  from vortex_access.organization_administration_read_scope(
+      'platform.organization.groups.read', 'Organization Group administration is unavailable'
+    ) as authorized;
 
   select pg_catalog.jsonb_build_object(
     'groupId', organization_group.group_id,

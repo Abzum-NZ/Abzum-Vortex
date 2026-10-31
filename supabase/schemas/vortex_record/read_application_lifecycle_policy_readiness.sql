@@ -1,7 +1,14 @@
-CREATE OR REPLACE FUNCTION vortex_record.read_application_lifecycle_policy_readiness(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) RETURNS jsonb
-    LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO ''
-    AS $$
+create or replace function vortex_record.read_application_lifecycle_policy_readiness(
+  p_organization_id uuid,
+  p_application_root_id uuid,
+  p_application_release_revision bigint,
+  p_expected_module_bindings jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $function$
 declare
   target record;
   policy_row vortex_record.record_type_lifecycle_policies%rowtype;
@@ -9,9 +16,6 @@ declare
   target_storage_contract_ids uuid[];
   target_count integer := 0;
   policies jsonb := '[]'::jsonb;
-  workflows jsonb := '[]'::jsonb;
-  connections jsonb := '[]'::jsonb;
-  connection_readiness jsonb;
 begin
   if p_organization_id is null
     or p_organization_id = '00000000-0000-0000-0000-000000000000'::uuid
@@ -57,76 +61,6 @@ begin
         message = 'Record-type lifecycle policy is unavailable';
     end if;
     policies := policies || pg_catalog.jsonb_build_array(policy_row.policy_body);
-
-    if policy_row.action = 'archive_workflow' then
-      -- An archive policy always carries a permanent Application scope; the policy
-      -- save refuses to store an organisation-shared one.
-      if policy_row.application_root_id is distinct from p_application_root_id then
-        raise exception using errcode = '23514',
-          message = 'Record-type lifecycle archive policy scope is unavailable';
-      end if;
-
-      if not vortex_definition.record_lifecycle_workflow_is_installed_internal(
-        p_organization_id,
-        p_application_root_id,
-        target.storage_contract_id,
-        (policy_row.policy_body ->> 'archiveWorkflowId')::uuid,
-        (policy_row.policy_body #>> '{expectedWorkflowRevision}')::bigint
-      ) then
-        raise exception using errcode = '23514',
-          message = 'Record-type lifecycle archive workflow is unavailable';
-      end if;
-
-      connection_readiness := vortex_platform.resolve_connection_instance_readiness(
-        p_organization_id,
-        p_application_root_id,
-        (policy_row.policy_body ->> 'archiveConnectionInstanceId')::uuid,
-        policy_row.policy_body ->> 'archiveDestination',
-        (policy_row.policy_body #>> '{expectedConnectionRevision}')::bigint,
-        policy_row.policy_body ->> 'expectedDestinationFingerprint'
-      );
-      -- Every returned fact is checked against the stored policy, exactly as
-      -- the policy save does: a 'ready' outcome alone is not evidence that the
-      -- readiness answers the policy this activation is gating on.
-      if connection_readiness ->> 'outcome' is distinct from 'ready'
-        or pg_catalog.lower(connection_readiness ->> 'connectionInstanceId')
-          is distinct from pg_catalog.lower(
-            policy_row.policy_body ->> 'archiveConnectionInstanceId')
-        or connection_readiness ->> 'organizationId' is distinct from p_organization_id::text
-        or connection_readiness ->> 'applicationRootId'
-          is distinct from p_application_root_id::text
-        or connection_readiness ->> 'destinationKey'
-          is distinct from policy_row.policy_body ->> 'archiveDestination'
-        or connection_readiness ->> 'destinationFingerprint'
-          is distinct from policy_row.policy_body ->> 'expectedDestinationFingerprint'
-        or connection_readiness ->> 'revision'
-          is distinct from policy_row.policy_body #>> '{expectedConnectionRevision}'
-        or connection_readiness ->> 'healthOutcome' is distinct from 'healthy'
-        or connection_readiness ->> 'state' is distinct from 'active' then
-        raise exception using errcode = '23514',
-          message = 'Record-type lifecycle archive connection is unavailable';
-      end if;
-
-      workflows := workflows || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-        'workflowId', policy_row.policy_body ->> 'archiveWorkflowId',
-        'workflowRevision',
-          (policy_row.policy_body #>> '{expectedWorkflowRevision}')::bigint,
-        'organizationId', p_organization_id,
-        'authorizedApplicationIds', pg_catalog.jsonb_build_array(p_application_root_id),
-        'state', 'active'
-      ));
-      connections := connections || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
-        'connectionInstanceId', connection_readiness ->> 'connectionInstanceId',
-        'destinationKey', connection_readiness ->> 'destinationKey',
-        'destinationFingerprint', connection_readiness ->> 'destinationFingerprint',
-        'organizationId', p_organization_id,
-        'authorizedApplicationIds', pg_catalog.jsonb_build_array(p_application_root_id),
-        'state', connection_readiness ->> 'state',
-        'revision', (connection_readiness ->> 'revision')::bigint,
-        'lastHealthOutcome', connection_readiness ->> 'healthOutcome',
-        'verifiedAt', connection_readiness -> 'verifiedAt'
-      ));
-    end if;
   end loop;
 
   -- Every installed storage contract must be an active catalogue entry with a
@@ -157,21 +91,16 @@ begin
       'maxRecordCount', limits_row.max_record_count,
       'allowUnlimitedRetentionDays', limits_row.allow_unlimited_retention_days,
       'allowUnlimitedRecordCount', limits_row.allow_unlimited_record_count,
-      'allowedActions', pg_catalog.to_jsonb(limits_row.allowed_actions),
-      'allowedArchiveDestinations', pg_catalog.to_jsonb(limits_row.allowed_archive_destinations)
-    ),
-    'readinessEvidence', pg_catalog.jsonb_build_object(
-      'organizationId', p_organization_id,
-      'registeredWorkflows', workflows,
-      'activeConnections', connections
+      'allowedActions', pg_catalog.to_jsonb(limits_row.allowed_actions)
     )
   );
 end
-$$;
-alter function vortex_record.read_application_lifecycle_policy_readiness(uuid,uuid,bigint,jsonb) owner to vortex_owner;
+$function$;
 
+alter function vortex_record.read_application_lifecycle_policy_readiness(uuid, uuid, bigint, jsonb) owner to vortex_owner;
 
-COMMENT ON FUNCTION vortex_record.read_application_lifecycle_policy_readiness(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) IS 'Complete executable-policy snapshot for one activating Application installation: every owned record type''s current policy, the organisation ceilings and the live archive readiness those policies name.';
+revoke all on function vortex_record.read_application_lifecycle_policy_readiness(uuid, uuid, bigint, jsonb) from public;
+grant all on function vortex_record.read_application_lifecycle_policy_readiness(uuid, uuid, bigint, jsonb) to vortex_request;
 
-REVOKE ALL ON FUNCTION vortex_record.read_application_lifecycle_policy_readiness(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) FROM PUBLIC;
-GRANT ALL ON FUNCTION vortex_record.read_application_lifecycle_policy_readiness(p_organization_id uuid, p_application_root_id uuid, p_application_release_revision bigint, p_expected_module_bindings jsonb) TO vortex_request;
+comment on function vortex_record.read_application_lifecycle_policy_readiness(uuid, uuid, bigint, jsonb) is
+  'Complete executable-policy snapshot for one activating Application installation: every owned record type''s current policy and the organisation ceilings. The one lifecycle action is delete, so it carries no archive readiness.';

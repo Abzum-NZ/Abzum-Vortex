@@ -7,7 +7,6 @@ returns table (
   outcome text,
   operation text,
   role jsonb,
-  created_activation_policy jsonb,
   access_version bigint,
   correlation_id uuid
 )
@@ -28,11 +27,8 @@ declare
   target_label text;
   target_description text;
   target_privilege_classification text;
-  target_assignment_policy text;
   target_policy_continuity_revision bigint;
   target_authority_continuity_revision bigint;
-  target_activation_policy_id uuid;
-  target_activation_policy_revision bigint;
   target_application_root_id uuid;
   target_source_role_id uuid;
   target_source_definition_key text;
@@ -49,9 +45,6 @@ declare
   template_source jsonb;
   live_permissions jsonb;
   selected_template_count bigint;
-  policy_choice jsonb;
-  policy_value jsonb;
-  policy_reference jsonb;
   manifest jsonb;
   canonical_assignments jsonb;
   manifest_required boolean := false;
@@ -60,11 +53,9 @@ declare
   configured_state_changed boolean := false;
   role_identity vortex_access.organization_roles%rowtype;
   current_revision vortex_access.organization_role_revisions%rowtype;
-  maximum_policy_revision bigint;
   operation_at timestamptz;
   next_access_version bigint;
   role_result jsonb;
-  policy_result jsonb;
 begin
   if p_evidence is null
     or pg_catalog.jsonb_typeof(p_evidence) is distinct from 'object'
@@ -145,15 +136,13 @@ begin
   else
     if not (candidate ?& array[
       'operation', 'organizationId', 'roleId', 'key', 'label', 'description',
-      'privilegeClassification', 'assignmentPolicy'
+      'privilegeClassification'
     ])
       or pg_catalog.jsonb_typeof(candidate -> 'key') is distinct from 'string'
       or pg_catalog.jsonb_typeof(candidate -> 'label') is distinct from 'string'
       or pg_catalog.jsonb_typeof(candidate -> 'description') is distinct from 'string'
       or pg_catalog.jsonb_typeof(candidate -> 'privilegeClassification')
         is distinct from 'string'
-      or pg_catalog.jsonb_typeof(candidate -> 'assignmentPolicy')
-        is distinct from 'object'
       or pg_catalog.char_length(candidate ->> 'key') not between 1 and 40
       or candidate ->> 'key' !~ '^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$'
       or candidate ->> 'label' <> pg_catalog.btrim(candidate ->> 'label')
@@ -217,14 +206,14 @@ begin
   if operation_name = 'create_custom' then
     if candidate - array[
       'operation', 'organizationId', 'roleId', 'key', 'label', 'description',
-      'privilegeClassification', 'assignmentPolicy', 'permissions'
+      'privilegeClassification', 'permissions'
     ]::text[] <> '{}'::jsonb then
       raise exception using errcode = '22023', message = 'Custom role shape is invalid';
     end if;
   elsif operation_name in ('create_custom_from_template', 'accept_new_application_role') then
     if candidate - array[
       'operation', 'organizationId', 'roleId', 'key', 'label', 'description',
-      'privilegeClassification', 'assignmentPolicy', 'templateSource',
+      'privilegeClassification', 'templateSource',
       'sourceRoleId', 'templateContinuityRevision', 'permissions'
     ]::text[] <> '{}'::jsonb then
       raise exception using errcode = '22023', message = 'New template role shape is invalid';
@@ -232,14 +221,14 @@ begin
   elsif operation_name = 'revise_metadata_policy' then
     if candidate - array[
       'operation', 'organizationId', 'roleId', 'expectedRoleRevision', 'key',
-      'label', 'description', 'privilegeClassification', 'assignmentPolicy'
+      'label', 'description', 'privilegeClassification'
     ]::text[] <> '{}'::jsonb then
       raise exception using errcode = '22023', message = 'Role metadata shape is invalid';
     end if;
   elsif operation_name = 'revise_custom_permissions' then
     if candidate - array[
       'operation', 'organizationId', 'roleId', 'expectedRoleRevision', 'key',
-      'label', 'description', 'privilegeClassification', 'assignmentPolicy',
+      'label', 'description', 'privilegeClassification',
       'permissions'
     ]::text[] <> '{}'::jsonb then
       raise exception using errcode = '22023', message = 'Custom permission shape is invalid';
@@ -247,129 +236,10 @@ begin
   elsif operation_name = 'accept_application_role_revision' then
     if candidate - array[
       'operation', 'organizationId', 'roleId', 'expectedRoleRevision', 'key',
-      'label', 'description', 'privilegeClassification', 'assignmentPolicy',
+      'label', 'description', 'privilegeClassification',
       'templateSource', 'sourceRoleId', 'templateContinuityRevision', 'permissions'
     ]::text[] <> '{}'::jsonb then
       raise exception using errcode = '22023', message = 'Application acceptance shape is invalid';
-    end if;
-  end if;
-
-  if operation_name <> 'retire_role' then
-    policy_choice := candidate -> 'assignmentPolicy';
-    if policy_choice ->> 'kind' = 'standing' then
-      if policy_choice <> pg_catalog.jsonb_build_object('kind', 'standing') then
-        raise exception using errcode = '22023', message = 'Standing policy shape is invalid';
-      end if;
-      target_assignment_policy := 'standing';
-    elsif policy_choice ->> 'kind' = 'activation_required'
-      and policy_choice - array['kind', 'activationPolicy']::text[] = '{}'::jsonb
-      and policy_choice ?& array['kind', 'activationPolicy']
-      and pg_catalog.jsonb_typeof(policy_choice -> 'activationPolicy') = 'object' then
-      target_assignment_policy := 'activation_required';
-      if policy_choice #>> '{activationPolicy,selection}' = 'existing' then
-        if (policy_choice -> 'activationPolicy') - array['selection', 'reference']::text[] <>
-            '{}'::jsonb
-          or not ((policy_choice -> 'activationPolicy') ?& array['selection', 'reference'])
-          or pg_catalog.jsonb_typeof(policy_choice #> '{activationPolicy,reference}') <>
-            'object' then
-          raise exception using errcode = '22023',
-            message = 'Existing activation policy shape is invalid';
-        end if;
-        policy_reference := policy_choice #> '{activationPolicy,reference}';
-        if policy_reference - array[
-          'activationPolicyId', 'revision'
-        ]::text[] <> '{}'::jsonb
-          or not (policy_reference ?& array[
-            'activationPolicyId', 'revision'
-          ])
-          or pg_catalog.jsonb_typeof(policy_reference -> 'activationPolicyId') <> 'string'
-          or pg_catalog.jsonb_typeof(policy_reference -> 'revision') <> 'number'
-          or (policy_reference ->> 'revision')::numeric < 1
-          or (policy_reference ->> 'revision')::numeric > 9007199254740991
-          or (policy_reference ->> 'revision')::numeric <>
-            pg_catalog.trunc((policy_reference ->> 'revision')::numeric) then
-          raise exception using errcode = '22023',
-            message = 'Existing activation policy evidence is invalid';
-        end if;
-        target_activation_policy_id := (policy_reference ->> 'activationPolicyId')::uuid;
-        target_activation_policy_revision :=
-          (policy_reference ->> 'revision')::numeric::bigint;
-      elsif policy_choice #>> '{activationPolicy,selection}' = 'new' then
-        if (policy_choice -> 'activationPolicy') - array['selection', 'policy']::text[] <>
-            '{}'::jsonb
-          or not ((policy_choice -> 'activationPolicy') ?& array['selection', 'policy'])
-          or pg_catalog.jsonb_typeof(policy_choice #> '{activationPolicy,policy}') <> 'object' then
-          raise exception using errcode = '22023',
-            message = 'New activation policy shape is invalid';
-        end if;
-        policy_value := policy_choice #> '{activationPolicy,policy}';
-        if policy_value - array[
-          'activationPolicyId', 'revision', 'maximumActivationDurationSeconds',
-          'reasonRequired', 'recentAuthentication'
-        ]::text[] <> '{}'::jsonb
-          or not (policy_value ?& array[
-            'activationPolicyId', 'revision', 'maximumActivationDurationSeconds',
-            'reasonRequired', 'recentAuthentication'
-          ])
-          or pg_catalog.jsonb_typeof(policy_value -> 'activationPolicyId') <> 'string'
-          or pg_catalog.jsonb_typeof(policy_value -> 'revision') <> 'number'
-          or pg_catalog.jsonb_typeof(policy_value -> 'maximumActivationDurationSeconds') <>
-            'number'
-          or pg_catalog.jsonb_typeof(policy_value -> 'reasonRequired') <> 'boolean'
-          or pg_catalog.jsonb_typeof(policy_value -> 'recentAuthentication') <> 'object'
-          or (policy_value ->> 'revision')::numeric < 1
-          or (policy_value ->> 'revision')::numeric > 9007199254740991
-          or (policy_value ->> 'revision')::numeric <>
-            pg_catalog.trunc((policy_value ->> 'revision')::numeric)
-          or (policy_value ->> 'maximumActivationDurationSeconds')::numeric < 1
-          or (policy_value ->> 'maximumActivationDurationSeconds')::numeric >
-            9007199254740991
-          or (policy_value ->> 'maximumActivationDurationSeconds')::numeric <>
-            pg_catalog.trunc(
-              (policy_value ->> 'maximumActivationDurationSeconds')::numeric
-            ) then
-          raise exception using errcode = '22023',
-            message = 'New activation policy evidence is invalid';
-        end if;
-        if policy_value #>> '{recentAuthentication,kind}' = 'none' then
-          if policy_value -> 'recentAuthentication' <>
-            pg_catalog.jsonb_build_object('kind', 'none') then
-            raise exception using errcode = '22023',
-              message = 'Recent authentication policy is invalid';
-          end if;
-        elsif policy_value #>> '{recentAuthentication,kind}' in ('primary', 'multi_factor') then
-          if (policy_value -> 'recentAuthentication') - array[
-            'kind', 'maximumAgeSeconds'
-          ]::text[] <> '{}'::jsonb
-            or not ((policy_value -> 'recentAuthentication') ?& array[
-              'kind', 'maximumAgeSeconds'
-            ])
-            or pg_catalog.jsonb_typeof(
-              policy_value #> '{recentAuthentication,maximumAgeSeconds}'
-            ) <> 'number'
-            or (policy_value #>> '{recentAuthentication,maximumAgeSeconds}')::numeric < 1
-            or (policy_value #>> '{recentAuthentication,maximumAgeSeconds}')::numeric >
-              9007199254740991
-            or (policy_value #>> '{recentAuthentication,maximumAgeSeconds}')::numeric <>
-              pg_catalog.trunc(
-                (policy_value #>> '{recentAuthentication,maximumAgeSeconds}')::numeric
-              ) then
-            raise exception using errcode = '22023',
-              message = 'Recent authentication policy is invalid';
-          end if;
-        else
-          raise exception using errcode = '22023',
-            message = 'Recent authentication policy is invalid';
-        end if;
-        target_activation_policy_id := (policy_value ->> 'activationPolicyId')::uuid;
-        target_activation_policy_revision :=
-          (policy_value ->> 'revision')::numeric::bigint;
-      else
-        raise exception using errcode = '22023',
-          message = 'Activation-required policy selection is invalid';
-      end if;
-    else
-      raise exception using errcode = '22023', message = 'Assignment policy is invalid';
     end if;
   end if;
 
@@ -797,16 +667,10 @@ begin
       when operation_name = 'retire_role' then current_revision.privilege_classification
       else target_privilege_classification
     end;
-    target_assignment_policy := case
-      when operation_name = 'retire_role' then current_revision.assignment_policy
-      else target_assignment_policy
-    end;
     if operation_name = 'retire_role' then
       target_role_key := current_revision.role_key;
       target_label := current_revision.label;
       target_description := current_revision.description;
-      target_activation_policy_id := current_revision.activation_policy_id;
-      target_activation_policy_revision := current_revision.activation_policy_revision;
     end if;
     target_source_definition_key := current_revision.source_definition_key;
     target_source_release_revision := current_revision.source_release_revision;
@@ -827,55 +691,9 @@ begin
     target_lifecycle := 'active';
   end if;
 
-  if operation_name <> 'retire_role' then
-    if target_assignment_policy = 'standing' then
-      target_activation_policy_id := null;
-      target_activation_policy_revision := null;
-    elsif policy_value is null then
-      perform 1
-      from vortex_access.organization_role_activation_policy_revisions as policy
-      where policy.organization_id = target_organization_id
-        and policy.role_id = target_role_id
-        and policy.activation_policy_id = target_activation_policy_id
-        and policy.revision = target_activation_policy_revision;
-      if not found then
-        raise exception using errcode = '40001',
-          message = 'Existing role activation policy is stale or unavailable';
-      end if;
-    else
-      select pg_catalog.max(policy.revision) into maximum_policy_revision
-      from vortex_access.organization_role_activation_policy_revisions as policy
-      where policy.organization_id = target_organization_id
-        and policy.role_id = target_role_id
-        and policy.activation_policy_id = target_activation_policy_id;
-      if maximum_policy_revision = 9007199254740991 then
-        raise exception using errcode = '22003',
-          message = 'New role activation policy revision is exhausted';
-      end if;
-      if (maximum_policy_revision is null and target_activation_policy_revision <> 1)
-        or (maximum_policy_revision is not null
-          and target_activation_policy_revision <> maximum_policy_revision + 1) then
-        raise exception using errcode = '40001',
-          message = 'New role activation policy revision is stale or invalid';
-      end if;
-    end if;
-  end if;
-
+  -- A role's policy continuity is fixed: no role setting advances it.
   if current_revision.organization_id is not null then
-    if current_revision.assignment_policy = target_assignment_policy
-      and current_revision.activation_policy_id is not distinct from
-        target_activation_policy_id
-      and current_revision.activation_policy_revision is not distinct from
-        target_activation_policy_revision then
-      target_policy_continuity_revision := current_revision.policy_continuity_revision;
-    else
-      if current_revision.policy_continuity_revision = 9007199254740991 then
-        raise exception using errcode = '22003',
-          message = 'Organization role policy continuity is exhausted';
-      end if;
-      target_policy_continuity_revision :=
-        current_revision.policy_continuity_revision + 1;
-    end if;
+    target_policy_continuity_revision := current_revision.policy_continuity_revision;
   end if;
 
   if current_revision.organization_id is not null then
@@ -936,10 +754,6 @@ begin
       or current_revision.description is distinct from target_description
       or current_revision.privilege_classification is distinct from
         target_privilege_classification
-      or current_revision.assignment_policy is distinct from target_assignment_policy
-      or current_revision.activation_policy_id is distinct from target_activation_policy_id
-      or current_revision.activation_policy_revision is distinct from
-        target_activation_policy_revision
       or current_revision.lifecycle is distinct from target_lifecycle
       or permissions_changed
       or current_revision.source_definition_key is distinct from target_source_definition_key
@@ -976,8 +790,7 @@ begin
     ) into authority_broadened;
 
     manifest_required :=
-      current_revision.assignment_policy <> target_assignment_policy
-      or (
+      (
         current_revision.lifecycle in ('unavailable', 'retired')
         and target_lifecycle in ('active', 'acceptance_required')
       )
@@ -1148,31 +961,10 @@ begin
     order by item.ordinality;
   end if;
 
-  if policy_value is not null then
-    insert into vortex_access.organization_role_activation_policy_revisions (
-      organization_id, role_id, activation_policy_id, revision,
-      maximum_activation_duration_seconds,
-      reason_required, authentication_requirement,
-      authentication_maximum_age_seconds,
-      changed_by, changed_at, change_correlation_id
-    ) values (
-      target_organization_id, target_role_id, target_activation_policy_id,
-      target_activation_policy_revision,
-      (policy_value ->> 'maximumActivationDurationSeconds')::numeric::bigint,
-      (policy_value ->> 'reasonRequired')::boolean,
-      policy_value #>> '{recentAuthentication,kind}',
-      case when policy_value #>> '{recentAuthentication,kind}' = 'none' then null
-        else (policy_value #>>
-          '{recentAuthentication,maximumAgeSeconds}')::numeric::bigint end,
-      p_changed_by, operation_at, p_correlation_id
-    );
-  end if;
-
   insert into vortex_access.organization_role_revisions (
     organization_id, role_id, revision, role_kind, application_root_id,
-    lifecycle, privilege_classification, assignment_policy,
+    lifecycle, privilege_classification,
     policy_continuity_revision, authority_continuity_revision,
-    activation_policy_id, activation_policy_revision,
     role_key, label, description,
     source_definition_key, source_release_revision, source_release_version,
     source_validation_contract_version, accepted_registration_revision,
@@ -1181,9 +973,8 @@ begin
   ) values (
     target_organization_id, target_role_id, target_role_revision,
     target_role_kind, target_application_root_id, target_lifecycle,
-    target_privilege_classification, target_assignment_policy,
+    target_privilege_classification,
     target_policy_continuity_revision, target_authority_continuity_revision,
-    target_activation_policy_id, target_activation_policy_revision,
     target_role_key, target_label,
     target_description, target_source_definition_key,
     target_source_release_revision, target_source_release_version,
@@ -1222,17 +1013,6 @@ begin
     'kind', revision.role_kind,
     'liveRevision', revision.revision,
     'privilegeClassification', revision.privilege_classification,
-    'assignmentPolicy', case
-      when revision.assignment_policy = 'standing' then
-        pg_catalog.jsonb_build_object('kind', 'standing')
-      else pg_catalog.jsonb_build_object(
-        'kind', 'activation_required',
-        'activationPolicy', pg_catalog.jsonb_build_object(
-          'activationPolicyId', revision.activation_policy_id,
-          'revision', revision.activation_policy_revision
-        )
-      )
-    end,
     'policyContinuityRevision', revision.policy_continuity_revision,
     'authorityContinuityRevision', revision.authority_continuity_revision,
     'lifecycle', revision.lifecycle,
@@ -1317,35 +1097,8 @@ begin
   where identity.organization_id = target_organization_id
     and identity.role_id = target_role_id;
 
-  if policy_value is not null then
-    select pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
-      'organizationId', policy.organization_id,
-      'roleId', policy.role_id,
-      'activationPolicyId', policy.activation_policy_id,
-      'revision', policy.revision,
-      'maximumActivationDurationSeconds', policy.maximum_activation_duration_seconds,
-      'reasonRequired', policy.reason_required,
-      'recentAuthentication', case
-        when policy.authentication_requirement = 'none' then
-          pg_catalog.jsonb_build_object('kind', 'none')
-        else pg_catalog.jsonb_build_object(
-          'kind', policy.authentication_requirement,
-          'maximumAgeSeconds', policy.authentication_maximum_age_seconds
-        )
-      end,
-      'changedByActorId', policy.changed_by,
-      'changedAt', policy.changed_at,
-      'changeCorrelationId', policy.change_correlation_id
-    )) into policy_result
-    from vortex_access.organization_role_activation_policy_revisions as policy
-    where policy.organization_id = target_organization_id
-      and policy.role_id = target_role_id
-      and policy.activation_policy_id = target_activation_policy_id
-      and policy.revision = target_activation_policy_revision;
-  end if;
-
   return query select 'changed'::text, operation_name, role_result,
-    policy_result, next_access_version, p_correlation_id;
+    next_access_version, p_correlation_id;
 exception
   when invalid_text_representation or invalid_parameter_value then
     raise exception using errcode = '22023',

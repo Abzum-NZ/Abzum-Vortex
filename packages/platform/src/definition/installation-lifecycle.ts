@@ -168,8 +168,7 @@ const requireExecutableLifecyclePolicies = async (
     !readiness.success ||
     !sameId(readiness.data.organizationId, activated.organizationId) ||
     !sameId(readiness.data.applicationRootId, activated.applicationRootId) ||
-    !sameId(readiness.data.organizationLimits.organizationId, readiness.data.organizationId) ||
-    !sameId(readiness.data.readinessEvidence.organizationId, readiness.data.organizationId)
+    !sameId(readiness.data.organizationLimits.organizationId, readiness.data.organizationId)
   )
     throw bindingsIncomplete();
 
@@ -188,7 +187,6 @@ const requireExecutableLifecyclePolicies = async (
       !validateRecordTypeLifecyclePolicy(
         policy,
         readiness.data.organizationLimits,
-        readiness.data.readinessEvidence,
         readiness.data.organizationLimits.settingsRevision,
       ).valid
     )

@@ -236,8 +236,6 @@ exception
       message = 'Prepared installation mapping evidence is ambiguous';
 end
 $function$;
-alter function vortex_definition.lock_prepared_installation_runtime_mapping_internal(uuid,bigint,jsonb) owner to vortex_owner;
-
 
 alter function vortex_definition.lock_prepared_installation_runtime_mapping_internal(uuid,bigint,jsonb)
   owner to vortex_owner;

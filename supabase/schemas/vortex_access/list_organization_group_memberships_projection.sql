@@ -125,7 +125,9 @@ begin
   end if;
   begin
     select authorized.* into strict scope_row
-    from vortex_access.organization_groups_administration_scope() as authorized;
+    from vortex_access.organization_administration_read_scope(
+      'platform.organization.groups.read', 'Organization Group administration is unavailable'
+    ) as authorized;
   exception when insufficient_privilege then
     return;
   end;

@@ -1,0 +1,861 @@
+-- One record occurrence append (review findings DT-1 and DF-17).
+--
+-- DT-1: every occurrence was written twice, to vortex_platform.event_outbox and to the PGMQ queue
+-- vortex_event_occurrences, but nothing ever read the queue. The outbox is the one delivery path,
+-- so the producer, the queue and the extension go. Dropping the extension also removes the pgmq
+-- queue tables and the queue-table grants vortex_owner held for the producer; the empty pgmq schema
+-- the baseline took ownership of (with vortex_owner's USAGE) goes after it.
+select pgmq.drop_queue('vortex_event_occurrences');
+drop extension pgmq;
+drop schema pgmq;
+
+-- DF-17: append_record_occurrences and append_record_occurrences_for_resolved_installation_internal
+-- only wrapped one record's batch for append_record_occurrence_set_internal, and
+-- append_record_occurrence_set only passed it a null installation; no caller ever supplied the
+-- trusted installation pin-set. The one function keeps the name the record writer already calls,
+-- vortex_platform.append_record_occurrence_set(jsonb), always resolves the active installation, and
+-- every caller passes its records directly.
+
+set role vortex_owner;
+
+create or replace function vortex_platform.append_record_occurrence_set(
+  p_items jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000'::uuid;
+  maximum_safe_revision constant bigint := 9007199254740991;
+  context_value jsonb;
+  installation jsonb;
+  context_organization_id uuid;
+  context_application_root_id uuid;
+  context_actor_id uuid;
+  context_correlation_id uuid;
+  application_release_revision bigint;
+  catalogue_row vortex_record.storage_catalogue%rowtype;
+  binding_value jsonb;
+  binding_count integer;
+  binding_module_root_id uuid;
+  binding_module_release_revision bigint;
+  binding_revision bigint;
+  module_release vortex_definition.releases%rowtype;
+  application_release vortex_definition.releases%rowtype;
+  module_content jsonb;
+  application_content jsonb;
+  record_type jsonb;
+  record_type_count integer;
+  locked_definition_revision bigint;
+  locked_record_count integer;
+  sequence_application_scope_id uuid;
+  next_sequence bigint;
+  occurrence_time timestamptz := pg_catalog.statement_timestamp();
+  occurrence_time_text text;
+  occurrence_item jsonb;
+  occurrence_id uuid;
+  descriptor jsonb;
+  payload jsonb;
+  event_kind text;
+  owner_kind text;
+  owner_root_id uuid;
+  declared_event jsonb;
+  declared_event_count integer;
+  definition_release jsonb;
+  field_item jsonb;
+  field_id_text text;
+  previous_field_id_text text;
+  field_definition jsonb;
+  envelope jsonb;
+  envelopes jsonb;
+  item jsonb;
+  item_storage_contract_id uuid;
+  item_record_id uuid;
+  item_occurrences jsonb;
+  contracts jsonb := '{}'::jsonb;
+  contract jsonb;
+  contract_key text;
+  results jsonb := '[]'::jsonb;
+begin
+  if pg_catalog.jsonb_typeof(p_items) is distinct from 'array'
+    or pg_catalog.jsonb_array_length(p_items) not between 1 and 200
+    or exists (
+      select 1 from pg_catalog.jsonb_array_elements(p_items) as candidate(value)
+      where pg_catalog.jsonb_typeof(candidate.value) is distinct from 'object'
+        or not candidate.value ?& array['storageContractId', 'recordId', 'occurrences']
+        or candidate.value - array['storageContractId', 'recordId', 'occurrences'] <> '{}'::jsonb
+        or pg_catalog.jsonb_typeof(candidate.value -> 'storageContractId') is distinct from 'string'
+        or pg_catalog.jsonb_typeof(candidate.value -> 'recordId') is distinct from 'string'
+        or not pg_catalog.pg_input_is_valid(candidate.value ->> 'storageContractId', 'uuid')
+        or not pg_catalog.pg_input_is_valid(candidate.value ->> 'recordId', 'uuid')
+    ) then
+    raise exception using errcode = '22023', message = 'Event append input is invalid';
+  end if;
+
+  context_value := vortex_access.validated_human_request_context();
+  if context_value ->> 'callerKind' is distinct from 'human'
+    or not context_value ?& array[
+      'organizationId', 'applicationRootId', 'organizationAccountId', 'correlationId'
+    ] then
+    raise exception using errcode = '42501', message = 'Human Application context is required';
+  end if;
+  context_actor_id := (context_value ->> 'organizationAccountId')::uuid;
+  context_organization_id := (context_value ->> 'organizationId')::uuid;
+  context_application_root_id := (context_value ->> 'applicationRootId')::uuid;
+  context_correlation_id := (context_value ->> 'correlationId')::uuid;
+  occurrence_time_text := vortex_platform.format_timestamp_utc(occurrence_time);
+
+
+  for item in
+    select entry.value
+    from pg_catalog.jsonb_array_elements(p_items) with ordinality as entry(value, ordinality)
+    order by entry.ordinality
+  loop
+    item_storage_contract_id := (item ->> 'storageContractId')::uuid;
+    item_record_id := (item ->> 'recordId')::uuid;
+    item_occurrences := item -> 'occurrences';
+    envelopes := '[]'::jsonb;
+
+    if item_storage_contract_id is null or item_storage_contract_id = nil_uuid
+      or item_record_id is null or item_record_id = nil_uuid
+      or pg_catalog.jsonb_typeof(item_occurrences) is distinct from 'array' then
+      raise exception using errcode = '22023', message = 'Event append input is invalid';
+    end if;
+
+    if pg_catalog.jsonb_array_length(item_occurrences) = 0 then
+      results := results || pg_catalog.jsonb_build_array(envelopes);
+      continue;
+    end if;
+
+    if exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(item_occurrences) as candidate(value)
+      where pg_catalog.jsonb_typeof(candidate.value) is distinct from 'object'
+        or not candidate.value ?& array['occurrenceId', 'descriptor', 'payload']
+        or candidate.value - array['occurrenceId', 'descriptor', 'payload'] <> '{}'::jsonb
+        or pg_catalog.jsonb_typeof(candidate.value -> 'occurrenceId') is distinct from 'string'
+        or pg_catalog.jsonb_typeof(candidate.value -> 'descriptor') is distinct from 'object'
+        or pg_catalog.jsonb_typeof(candidate.value -> 'payload') is distinct from 'object'
+    ) then
+      raise exception using errcode = '22023', message = 'Event occurrence batch is invalid';
+    end if;
+
+    begin
+      if exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(item_occurrences) as candidate(value)
+        where (candidate.value ->> 'occurrenceId')::uuid = nil_uuid
+      ) or (
+        select pg_catalog.count(*)
+        from pg_catalog.jsonb_array_elements(item_occurrences)
+      ) <> (
+        select pg_catalog.count(distinct (candidate.value ->> 'occurrenceId')::uuid)
+        from pg_catalog.jsonb_array_elements(item_occurrences) as candidate(value)
+      ) then
+        raise exception using errcode = '22023', message = 'Event occurrence identities are invalid';
+      end if;
+    exception when invalid_text_representation then
+      raise exception using errcode = '22023', message = 'Event occurrence identities are invalid';
+    end;
+
+
+    contract_key := item_storage_contract_id::text;
+    if not contracts ? contract_key then
+      select catalogue.* into catalogue_row
+      from vortex_record.storage_catalogue as catalogue
+      where catalogue.storage_contract_id = item_storage_contract_id;
+      if not found
+        or catalogue_row.state is distinct from 'active'
+        or catalogue_row.physical_schema_token is null
+        or catalogue_row.physical_schema_token not in ('record_data', 'system_projection')
+        or (catalogue_row.physical_schema_token = 'system_projection'
+          and catalogue_row.protected_read_model_key
+            is distinct from 'organization_runtime_settings') then
+        raise exception using errcode = 'P0002', message = 'Event record is unavailable';
+      end if;
+
+      -- Coordinate with the approved installation lifecycle writer before trusting
+      -- the exact Module binding. The actual generated row is locked below and is
+      -- the ordering lock shared by every consuming Application.
+      perform pg_catalog.pg_advisory_xact_lock_shared(
+        pg_catalog.hashtextextended(
+          'vortex_definition.binding:' || context_organization_id::text || ':' ||
+            context_application_root_id::text || ':' || catalogue_row.module_root_id::text,
+          0
+        )
+      );
+      -- Installation evidence is resolved here, inside the protected region, and
+      -- never before it.  A lifecycle detach that commits while this append waits
+      -- for the canonical binding lock above is only observed by a read taken
+      -- after that wait: this assignment is its own statement, so in read
+      -- committed it sees the committed lifecycle state.
+      installation := vortex_definition.read_current_active_installation();
+      if installation is null
+        or pg_catalog.jsonb_typeof(installation) <> 'object'
+        or not installation ?& array[
+          'organizationId', 'applicationRootId', 'applicationReleaseRevision',
+          'moduleBindings'
+        ]
+        or (installation ->> 'organizationId')::uuid is distinct from context_organization_id
+        or (installation ->> 'applicationRootId')::uuid is distinct from context_application_root_id
+        or pg_catalog.jsonb_typeof(installation -> 'moduleBindings') <> 'array' then
+        raise exception using errcode = '42501', message = 'Resolved Event installation is unavailable';
+      end if;
+      application_release_revision :=
+        (installation ->> 'applicationReleaseRevision')::bigint;
+      -- Module's existing reader has already proved the complete binding set
+      -- against the published dependency closure. Read the one exact binding from
+      -- that result while its canonical lifecycle lock is held; do not add a
+      -- second binding reader or broader cross-owner table grants.
+      select pg_catalog.count(*), pg_catalog.jsonb_agg(item.value) -> 0
+      into binding_count, binding_value
+      from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') as item(value)
+      where (item.value ->> 'moduleRootId')::uuid = catalogue_row.module_root_id;
+      if binding_count <> 1 then
+        raise exception using errcode = '55000', message = 'Installed Event binding is unavailable';
+      end if;
+      binding_module_root_id := (binding_value ->> 'moduleRootId')::uuid;
+      binding_module_release_revision :=
+        (binding_value ->> 'moduleReleaseRevision')::bigint;
+      binding_revision := (binding_value ->> 'bindingRevision')::bigint;
+
+      select release.* into module_release
+      from vortex_definition.releases as release
+      where release.root_id = binding_module_root_id
+        and release.release_revision = binding_module_release_revision;
+      if not found
+        or not exists (
+          select 1 from vortex_record.release_provisions as provision
+          where provision.module_root_id = module_release.root_id
+            and provision.release_revision = module_release.release_revision
+            and item_storage_contract_id = any (provision.storage_contract_ids)
+        ) then
+        raise exception using errcode = '55000', message = 'Installed Event storage is unavailable';
+      end if;
+      module_content := module_release.compilation_output #> '{canonical,content}';
+      -- An Event about a record names the fields of its record type, which include the fields other
+      -- installed Modules contributed to it.
+      module_content := vortex_record.with_installed_record_contributions_internal(
+        module_content, context_organization_id, binding_module_root_id
+      );
+
+      select pg_catalog.count(*), pg_catalog.jsonb_agg(item.value) -> 0
+      into record_type_count, record_type
+      from pg_catalog.jsonb_array_elements(module_content -> 'recordTypes') as item(value)
+      where (item.value ->> 'recordTypeId')::uuid = catalogue_row.record_type_id;
+      if record_type_count <> 1
+        or (record_type ->> 'storageContractId')::uuid is distinct from item_storage_contract_id
+        or record_type ->> 'storageScope' is distinct from catalogue_row.storage_scope then
+        raise exception using errcode = '55000', message = 'Installed Event record type is unavailable';
+      end if;
+
+      select release.* into application_release
+      from vortex_definition.releases as release
+      join vortex_definition.roots as root on root.root_id = release.root_id
+      where release.root_id = context_application_root_id
+        and release.release_revision = application_release_revision
+        and root.organization_id = context_organization_id
+        and root.kind = 'application';
+      if not found then
+        raise exception using errcode = '55000', message = 'Installed Application release is unavailable';
+      end if;
+      application_content := application_release.compilation_output #> '{canonical,content}';
+
+      contracts := contracts || pg_catalog.jsonb_build_object(contract_key, pg_catalog.jsonb_build_object(
+        'catalogue', pg_catalog.to_jsonb(catalogue_row),
+        'applicationReleaseRevision', application_release_revision,
+        'bindingModuleRootId', binding_module_root_id,
+        'bindingModuleReleaseRevision', binding_module_release_revision,
+        'bindingRevision', binding_revision,
+        'moduleRelease', pg_catalog.to_jsonb(module_release) - 'compilation_output',
+        'applicationRelease', pg_catalog.to_jsonb(application_release) - 'compilation_output',
+        'recordType', record_type,
+        'moduleEvents', module_content -> 'events',
+        'applicationEvents', application_content -> 'events'
+      ));
+    end if;
+    contract := contracts -> contract_key;
+    catalogue_row := pg_catalog.jsonb_populate_record(null::vortex_record.storage_catalogue, contract -> 'catalogue');
+    application_release_revision := (contract ->> 'applicationReleaseRevision')::bigint;
+    binding_module_root_id := (contract ->> 'bindingModuleRootId')::uuid;
+    binding_module_release_revision := (contract ->> 'bindingModuleReleaseRevision')::bigint;
+    binding_revision := (contract ->> 'bindingRevision')::bigint;
+    module_release := pg_catalog.jsonb_populate_record(null::vortex_definition.releases, contract -> 'moduleRelease');
+    application_release := pg_catalog.jsonb_populate_record(null::vortex_definition.releases, contract -> 'applicationRelease');
+    record_type := contract -> 'recordType';
+    module_content := pg_catalog.jsonb_build_object('events', contract -> 'moduleEvents');
+    application_content := pg_catalog.jsonb_build_object('events', contract -> 'applicationEvents');
+
+    if catalogue_row.storage_scope = 'organization_shared' then
+      sequence_application_scope_id := null;
+    else
+      sequence_application_scope_id := context_application_root_id;
+    end if;
+    if catalogue_row.physical_schema_token = 'system_projection' then
+      locked_definition_revision := null;
+      locked_record_count := case when
+        vortex_access.lock_organization_runtime_settings_record_for_event_internal(item_record_id)
+        then 1 else 0 end;
+      if locked_record_count = 1 then
+        locked_definition_revision := binding_module_release_revision;
+      end if;
+    elsif catalogue_row.storage_scope = 'organization_shared' then
+      locked_definition_revision := null;
+      execute pg_catalog.format(
+        'select stored.definition_revision
+         from record_data.%I as stored
+         where stored.organisation_id = $1 and stored.record_id = $2
+           and stored.application_root_id is null
+         for update',
+        catalogue_row.physical_table_token
+      ) into locked_definition_revision
+      using context_organization_id, item_record_id;
+      get diagnostics locked_record_count = row_count;
+    else
+      locked_definition_revision := null;
+      execute pg_catalog.format(
+        'select stored.definition_revision
+         from record_data.%I as stored
+         where stored.organisation_id = $1 and stored.record_id = $2
+           and stored.application_root_id = $3
+         for update',
+        catalogue_row.physical_table_token
+      ) into locked_definition_revision
+      using context_organization_id, item_record_id, context_application_root_id;
+      get diagnostics locked_record_count = row_count;
+    end if;
+    if locked_record_count <> 1 or locked_definition_revision is null
+      or locked_definition_revision < catalogue_row.first_compatible_release_revision
+      or (catalogue_row.last_compatible_release_revision is not null
+        and locked_definition_revision > catalogue_row.last_compatible_release_revision) then
+      raise exception using errcode = 'P0002', message = 'Event record is unavailable';
+    end if;
+
+    select coalesce(pg_catalog.max(stored.record_sequence), 0) + 1
+    into next_sequence
+    from vortex_platform.event_outbox as stored
+    where stored.organization_id = context_organization_id
+      and stored.storage_contract_id = item_storage_contract_id
+      and stored.sequence_application_root_id is not distinct from
+        sequence_application_scope_id
+      and stored.record_id = item_record_id;
+    if next_sequence + pg_catalog.jsonb_array_length(item_occurrences) - 1 >
+        maximum_safe_revision then
+      raise exception using errcode = '22003', message = 'Event record sequence is exhausted';
+    end if;
+
+    for occurrence_item in
+      select item.value
+      from pg_catalog.jsonb_array_elements(item_occurrences) with ordinality as item(value, ordinal)
+      order by item.ordinal
+    loop
+      occurrence_id := (occurrence_item ->> 'occurrenceId')::uuid;
+      descriptor := occurrence_item -> 'descriptor';
+      payload := occurrence_item -> 'payload';
+
+      if descriptor ->> 'kind' = 'standard' then
+        if not descriptor ?& array['kind', 'eventKind', 'recordTypeId']
+          or descriptor - array['kind', 'eventKind', 'recordTypeId'] <> '{}'::jsonb
+          or pg_catalog.jsonb_typeof(descriptor -> 'eventKind') is distinct from 'string'
+          or pg_catalog.jsonb_typeof(descriptor -> 'recordTypeId') is distinct from 'string'
+          or (descriptor ->> 'recordTypeId')::uuid is distinct from catalogue_row.record_type_id
+          or descriptor ->> 'eventKind' is null
+          or descriptor ->> 'eventKind' not in (
+            'created', 'changed', 'deleted', 'restored', 'linked', 'unlinked', 'reassigned',
+            'state_changed'
+          ) then
+          raise exception using errcode = '22023', message = 'Installed Event descriptor is invalid';
+        end if;
+        event_kind := descriptor ->> 'eventKind';
+
+        if event_kind = 'changed' then
+          if not payload ?& array['kind', 'changedFieldIds']
+            or payload - array['kind', 'changedFieldIds'] <> '{}'::jsonb
+            or payload ->> 'kind' is distinct from event_kind
+            or pg_catalog.jsonb_typeof(payload -> 'changedFieldIds') is distinct from 'array'
+            or pg_catalog.jsonb_array_length(payload -> 'changedFieldIds') = 0 then
+            raise exception using errcode = '22023', message = 'Installed Event payload is invalid';
+          end if;
+          previous_field_id_text := null;
+          for field_item in
+            select item.value
+            from pg_catalog.jsonb_array_elements(payload -> 'changedFieldIds')
+              with ordinality as item(value, ordinal)
+            order by item.ordinal
+          loop
+            if pg_catalog.jsonb_typeof(field_item) is distinct from 'string' then
+              raise exception using errcode = '22023', message = 'Installed Event payload is invalid';
+            end if;
+            field_id_text := pg_catalog.lower(field_item #>> '{}');
+            if previous_field_id_text is not null
+                and previous_field_id_text >= field_id_text
+              or not exists (
+                select 1 from pg_catalog.jsonb_array_elements(record_type -> 'fields') as field(value)
+                where pg_catalog.lower(field.value ->> 'fieldId') = field_id_text
+              ) then
+              raise exception using errcode = '22023', message = 'Installed Event payload is invalid';
+            end if;
+            previous_field_id_text := field_id_text;
+          end loop;
+        elsif event_kind = 'state_changed' then
+          if not payload ?& array['kind', 'fieldId']
+            or payload - array['kind', 'fieldId', 'previousValue', 'newValue'] <> '{}'::jsonb
+            or payload ->> 'kind' is distinct from event_kind
+            or pg_catalog.jsonb_typeof(payload -> 'fieldId') is distinct from 'string' then
+            raise exception using errcode = '22023', message = 'Installed Event payload is invalid';
+          end if;
+          select field.value into field_definition
+          from pg_catalog.jsonb_array_elements(record_type -> 'fields') as field(value)
+          where (field.value ->> 'fieldId')::uuid = (payload ->> 'fieldId')::uuid;
+          if not found
+            or (field_definition ->> 'personalData' = 'none'
+              and not (payload ? 'previousValue' or payload ? 'newValue'))
+            or (field_definition ->> 'personalData' <> 'none'
+              and (payload ? 'previousValue' or payload ? 'newValue')) then
+            raise exception using errcode = '22023', message = 'Installed Event payload is invalid';
+          end if;
+        elsif payload <> pg_catalog.jsonb_build_object('kind', event_kind) then
+          raise exception using errcode = '22023', message = 'Installed Event payload is invalid';
+        end if;
+
+        definition_release := pg_catalog.jsonb_build_object(
+          'kind', 'module',
+          'rootId', module_release.root_id,
+          'releaseRevision', module_release.release_revision,
+          'releaseVersion', module_release.release_version,
+          'contentFingerprint', module_release.content_fingerprint,
+          'resolutionFingerprint', module_release.resolution_fingerprint
+        );
+      elsif descriptor ->> 'kind' = 'declared' then
+        if not descriptor ?& array[
+            'kind', 'owner', 'declarationId', 'key', 'recordTypeId', 'carriedFieldIds'
+          ]
+          or descriptor - array[
+            'kind', 'owner', 'declarationId', 'key', 'recordTypeId', 'carriedFieldIds'
+          ] <> '{}'::jsonb
+          or pg_catalog.jsonb_typeof(descriptor -> 'owner') is distinct from 'object'
+          or pg_catalog.jsonb_typeof(descriptor -> 'declarationId') is distinct from 'string'
+          or pg_catalog.jsonb_typeof(descriptor -> 'key') is distinct from 'string'
+          or pg_catalog.jsonb_typeof(descriptor -> 'recordTypeId') is distinct from 'string'
+          or pg_catalog.jsonb_typeof(descriptor -> 'carriedFieldIds') is distinct from 'array'
+          or (descriptor ->> 'recordTypeId')::uuid is distinct from catalogue_row.record_type_id then
+          raise exception using errcode = '22023', message = 'Installed Event descriptor is invalid';
+        end if;
+
+        owner_kind := descriptor #>> '{owner,kind}';
+        if owner_kind = 'application'
+          and (descriptor -> 'owner') - array['kind', 'applicationRootId'] = '{}'::jsonb
+          and (descriptor -> 'owner') ?& array['kind', 'applicationRootId']
+          and pg_catalog.jsonb_typeof(
+            descriptor #> '{owner,applicationRootId}'
+          ) is not distinct from 'string' then
+          owner_root_id := (descriptor #>> '{owner,applicationRootId}')::uuid;
+          if owner_root_id <> context_application_root_id then
+            raise exception using errcode = '22023', message = 'Installed Event descriptor is invalid';
+          end if;
+          select pg_catalog.count(*), pg_catalog.jsonb_agg(event.value) -> 0
+          into declared_event_count, declared_event
+          from pg_catalog.jsonb_array_elements(application_content -> 'events') as event(value)
+          where (event.value ->> 'eventId')::uuid = (descriptor ->> 'declarationId')::uuid
+            and event.value ->> 'key' = descriptor ->> 'key';
+          definition_release := pg_catalog.jsonb_build_object(
+            'kind', 'application',
+            'rootId', application_release.root_id,
+            'releaseRevision', application_release.release_revision,
+            'releaseVersion', application_release.release_version,
+            'contentFingerprint', application_release.content_fingerprint,
+            'resolutionFingerprint', application_release.resolution_fingerprint
+          );
+        elsif owner_kind = 'module'
+          and (descriptor -> 'owner') - array['kind', 'moduleRootId'] = '{}'::jsonb
+          and (descriptor -> 'owner') ?& array['kind', 'moduleRootId']
+          and pg_catalog.jsonb_typeof(
+            descriptor #> '{owner,moduleRootId}'
+          ) is not distinct from 'string' then
+          owner_root_id := (descriptor #>> '{owner,moduleRootId}')::uuid;
+          if owner_root_id <> module_release.root_id then
+            raise exception using errcode = '22023', message = 'Installed Event descriptor is invalid';
+          end if;
+          select pg_catalog.count(*), pg_catalog.jsonb_agg(event.value) -> 0
+          into declared_event_count, declared_event
+          from pg_catalog.jsonb_array_elements(module_content -> 'events') as event(value)
+          where (event.value ->> 'eventId')::uuid = (descriptor ->> 'declarationId')::uuid
+            and event.value ->> 'key' = descriptor ->> 'key';
+          definition_release := pg_catalog.jsonb_build_object(
+            'kind', 'module',
+            'rootId', module_release.root_id,
+            'releaseRevision', module_release.release_revision,
+            'releaseVersion', module_release.release_version,
+            'contentFingerprint', module_release.content_fingerprint,
+            'resolutionFingerprint', module_release.resolution_fingerprint
+          );
+        else
+          raise exception using errcode = '22023', message = 'Installed Event descriptor is invalid';
+        end if;
+
+        if declared_event_count <> 1
+          or (declared_event ->> 'recordTypeId')::uuid <> catalogue_row.record_type_id
+          or declared_event -> 'carriedFieldIds' is distinct from
+            descriptor -> 'carriedFieldIds'
+          or declared_event -> 'personalOrSensitiveValuesAllowed' is distinct from
+            'false'::jsonb
+          or not payload ?& array['kind', 'carriedValues']
+          or payload - array['kind', 'carriedValues'] <> '{}'::jsonb
+          or payload ->> 'kind' is distinct from 'declared'
+          or pg_catalog.jsonb_typeof(payload -> 'carriedValues') is distinct from 'object' then
+          raise exception using errcode = '22023', message = 'Installed Event declaration is invalid';
+        end if;
+
+        if exists (
+          select 1
+          from pg_catalog.jsonb_each(payload -> 'carriedValues') as carried(field_id, value)
+          where not (descriptor -> 'carriedFieldIds') ? carried.field_id
+            or not exists (
+              select 1
+              from pg_catalog.jsonb_array_elements(record_type -> 'fields') as field(value)
+              where pg_catalog.lower(field.value ->> 'fieldId') = pg_catalog.lower(carried.field_id)
+                and field.value ->> 'personalData' = 'none'
+            )
+        ) then
+          raise exception using errcode = '22023', message = 'Installed Event payload is invalid';
+        end if;
+      else
+        raise exception using errcode = '22023', message = 'Installed Event descriptor is invalid';
+      end if;
+
+      envelope := pg_catalog.jsonb_build_object(
+        'contractVersion', '2.0.0',
+        'occurrenceId', occurrence_id,
+        'organizationId', context_organization_id,
+        'installation', pg_catalog.jsonb_build_object(
+          'applicationRootId', context_application_root_id,
+          'applicationReleaseRevision', application_release_revision,
+          'moduleBinding', pg_catalog.jsonb_build_object(
+            'moduleRootId', binding_module_root_id,
+            'moduleReleaseRevision', binding_module_release_revision,
+            'bindingRevision', binding_revision
+          )
+        ),
+        'descriptor', descriptor,
+        'definitionRelease', definition_release,
+        'recordId', item_record_id,
+        'occurredAt', occurrence_time_text,
+        'actorId', context_actor_id,
+        'correlationId', context_correlation_id,
+        'recordSequence', next_sequence,
+        'payload', payload
+      );
+
+      insert into vortex_platform.event_outbox (
+        occurrence_id, organization_id, storage_contract_id, storage_scope,
+        sequence_application_root_id, record_id, record_sequence, occurred_at,
+        envelope
+      ) values (
+        occurrence_id, context_organization_id, item_storage_contract_id,
+        catalogue_row.storage_scope, sequence_application_scope_id, item_record_id,
+        next_sequence, occurrence_time, envelope
+      );
+
+      envelopes := envelopes || pg_catalog.jsonb_build_array(envelope);
+      next_sequence := next_sequence + 1;
+    end loop;
+
+    results := results || pg_catalog.jsonb_build_array(envelopes);
+  end loop;
+
+  return results;
+end
+$function$;
+
+revoke all on function vortex_platform.append_record_occurrence_set(jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+
+grant execute on function vortex_platform.append_record_occurrence_set(jsonb)
+  to vortex_record_adapter;
+
+comment on function vortex_platform.append_record_occurrence_set(jsonb) is
+  'Appends exact validated record occurrence batches to the event outbox for any number of records (each item names its storage contract, record and occurrences), one answer per record in order, in the caller transaction; resolves the active installation, release and record type once per storage contract under the canonical binding lock.';
+
+alter function vortex_platform.append_record_occurrence_set(jsonb) owner to vortex_owner;
+
+drop function vortex_platform.append_record_occurrences(uuid, uuid, jsonb);
+drop function vortex_platform.append_record_occurrences_for_resolved_installation_internal(uuid, uuid, jsonb, jsonb);
+drop function vortex_platform.append_record_occurrence_set_internal(jsonb, jsonb);
+
+set role vortex_record_adapter;
+
+CREATE OR REPLACE FUNCTION vortex_record.append_declared_named_action_occurrences_internal(p_storage_contract_id uuid, p_record_id uuid, p_event_descriptors jsonb, p_occurrence_ids jsonb, p_field_values jsonb) RETURNS jsonb
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+declare
+  occurrence_values jsonb := '[]'::jsonb;
+  descriptor_value jsonb;
+  carried_values jsonb;
+  occurrence_id_value jsonb;
+begin
+  if pg_catalog.jsonb_typeof(p_event_descriptors) is distinct from 'array'
+    or pg_catalog.jsonb_typeof(p_occurrence_ids) is distinct from 'array'
+    or pg_catalog.jsonb_typeof(p_field_values) is distinct from 'object'
+    or pg_catalog.jsonb_array_length(p_event_descriptors) <>
+      pg_catalog.jsonb_array_length(p_occurrence_ids)
+    or exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(p_occurrence_ids) item(value)
+      where pg_catalog.jsonb_typeof(item.value) is distinct from 'string'
+        or not pg_catalog.pg_input_is_valid(item.value #>> '{}', 'uuid')
+        or (item.value #>> '{}')::uuid =
+          '00000000-0000-0000-0000-000000000000'::uuid
+    ) then
+    raise exception using errcode = '22023',
+      message = 'Named action Event occurrence input is invalid';
+  end if;
+  for descriptor_value, occurrence_id_value in
+    select descriptor.value, occurrence.value
+    from pg_catalog.jsonb_array_elements(p_event_descriptors)
+      with ordinality descriptor(value, ordinal)
+    join pg_catalog.jsonb_array_elements(p_occurrence_ids)
+      with ordinality occurrence(value, ordinal) using (ordinal)
+    order by descriptor.ordinal
+  loop
+    select coalesce(pg_catalog.jsonb_object_agg(
+      pg_catalog.lower(field.value #>> '{}'),
+      p_field_values -> pg_catalog.lower(field.value #>> '{}')
+    ), '{}'::jsonb)
+    into carried_values
+    from pg_catalog.jsonb_array_elements(descriptor_value -> 'carriedFieldIds') field(value)
+    where p_field_values ? pg_catalog.lower(field.value #>> '{}');
+    occurrence_values := occurrence_values || pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'occurrenceId', occurrence_id_value,
+        'descriptor', descriptor_value,
+        'payload', pg_catalog.jsonb_build_object(
+          'kind', 'declared', 'carriedValues', carried_values
+        )
+      )
+    );
+  end loop;
+  return vortex_platform.append_record_occurrence_set(
+    pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'storageContractId', p_storage_contract_id, 'recordId', p_record_id,
+      'occurrences', occurrence_values
+    ))
+  ) -> 0;
+end
+$$;
+alter function vortex_record.append_declared_named_action_occurrences_internal(uuid,uuid,jsonb,jsonb,jsonb) owner to vortex_record_adapter;
+
+
+REVOKE ALL ON FUNCTION vortex_record.append_declared_named_action_occurrences_internal(p_storage_contract_id uuid, p_record_id uuid, p_event_descriptors jsonb, p_occurrence_ids jsonb, p_field_values jsonb) FROM PUBLIC;
+
+create or replace function vortex_record.complete_record_lifecycle_set_internal(
+  p_command_id uuid,
+  p_preparation jsonb,
+  p_written jsonb
+)
+returns void
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  context_value jsonb := vortex_access.validated_human_request_context();
+  effect_row vortex_record.record_lifecycle_command_effects%rowtype;
+  plan jsonb;
+  subject_ids uuid[];
+  event_kind text;
+  event_result jsonb;
+  revision_value bigint;
+  notice_sequence bigint;
+  storage_value record;
+begin
+  -- The journal has already deduplicated shared closures. Each effect emits
+  -- once, irrespective of how many explicit roots reached the affected row.
+  for effect_row in
+    select effect.* from vortex_record.record_lifecycle_command_effects as effect
+    where effect.organization_id = (context_value ->> 'organizationId')::uuid
+      and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
+      and effect.actor_organization_account_id = (context_value ->> 'organizationAccountId')::uuid
+      and effect.command_id = p_command_id
+    order by effect.effect_sequence
+  loop
+    if effect_row.effect_kind in ('soft_deleted', 'optional_cleared', 'restored') then
+      event_kind := case effect_row.effect_kind
+        when 'soft_deleted' then 'deleted' when 'restored' then 'restored' else 'unlinked' end;
+      event_result := vortex_platform.append_record_occurrence_set(
+        pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+          'storageContractId', effect_row.storage_contract_id,
+          'recordId', effect_row.record_id,
+          'occurrences', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+            'occurrenceId', pg_catalog.gen_random_uuid(),
+            'descriptor', pg_catalog.jsonb_build_object('kind', 'standard',
+              'eventKind', event_kind, 'recordTypeId', effect_row.record_type_id),
+            'payload', pg_catalog.jsonb_build_object('kind', event_kind)
+          ))
+        ))
+      ) -> 0;
+      if pg_catalog.jsonb_typeof(event_result) is distinct from 'array'
+        or pg_catalog.jsonb_array_length(event_result) is distinct from 1 then
+        raise exception using errcode = '55000', message = 'Record lifecycle Event append failed';
+      end if;
+    end if;
+  end loop;
+  -- Every changed lifecycle row publishes its revision, including optional links
+  -- cleared or recovered.
+  for storage_value in
+    select effect.record_type_id, effect.record_id, effect.storage_contract_id,
+      storage.storage_scope, pg_catalog.bool_or(effect.effect_kind = 'soft_deleted') as deleted
+    from vortex_record.record_lifecycle_command_effects as effect
+    join vortex_record.storage_catalogue as storage using (storage_contract_id)
+    where effect.organization_id = (context_value ->> 'organizationId')::uuid
+      and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
+      and effect.actor_organization_account_id = (context_value ->> 'organizationAccountId')::uuid
+      and effect.command_id = p_command_id
+    group by effect.record_type_id, effect.record_id, effect.storage_contract_id, storage.storage_scope
+  loop
+    select (item.value ->> 'concurrencyNumber')::bigint into strict revision_value
+    from pg_catalog.jsonb_array_elements(p_written) as item(value)
+    where (item.value ->> 'storageContractId')::uuid = storage_value.storage_contract_id
+      and (item.value ->> 'recordId')::uuid = storage_value.record_id;
+    if storage_value.storage_scope = 'application_contained' then
+      begin
+        notice_sequence := pg_catalog.nextval('vortex_record.record_invalidation_sequence'::pg_catalog.regclass);
+        perform vortex_platform.publish_change_notice(
+          (context_value ->> 'organizationId')::uuid, (context_value ->> 'applicationRootId')::uuid,
+          storage_value.record_type_id, storage_value.record_id, revision_value,
+          case when storage_value.deleted then 'deleted' else 'changed' end,
+          notice_sequence, notice_sequence, (context_value ->> 'correlationId')::uuid
+        );
+      exception when others then
+        raise warning 'Record lifecycle notice failed: [%] %', sqlstate, sqlerrm;
+      end;
+    end if;
+  end loop;
+  for storage_value in
+    select distinct effect.storage_contract_id, storage.storage_scope
+    from vortex_record.record_lifecycle_command_effects as effect
+    join vortex_record.storage_catalogue as storage using (storage_contract_id)
+    where effect.organization_id = (context_value ->> 'organizationId')::uuid
+      and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
+      and effect.actor_organization_account_id = (context_value ->> 'organizationAccountId')::uuid
+      and effect.command_id = p_command_id and (storage.storage_scope <> 'application_contained'
+        or effect.effect_kind in ('optional_cleared', 'links_restored'))
+  loop
+    perform vortex_record.bump_record_data_version_internal(
+      (context_value ->> 'organizationId')::uuid, storage_value.storage_contract_id,
+      case when storage_value.storage_scope = 'application_contained'
+        then (context_value ->> 'applicationRootId')::uuid else null end
+    );
+  end loop;
+  for plan in select item.value from pg_catalog.jsonb_array_elements(p_preparation -> 'plans') as item(value)
+    where item.value #>> '{subject,operation}' in ('delete', 'restore')
+  loop
+    select pg_catalog.array_agg(distinct effect.record_id order by effect.record_id) into subject_ids
+    from vortex_record.record_lifecycle_command_effects as effect
+    where effect.organization_id = (context_value ->> 'organizationId')::uuid
+      and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
+      and effect.actor_organization_account_id = (context_value ->> 'organizationAccountId')::uuid
+      and effect.command_id = p_command_id
+      and effect.delete_roots @> pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'recordTypeId', plan #> '{subject,recordTypeId}', 'recordId', plan #> '{subject,recordId}'
+      ));
+    if subject_ids is null then
+      raise exception using errcode = '55000', message = 'Record lifecycle effects are unavailable';
+    end if;
+    perform vortex_record.append_record_activity_internal(
+      (plan #>> '{subject,activityId}')::uuid,
+      case plan #>> '{subject,operation}' when 'delete' then 'delete_record' else 'restore_record' end,
+      subject_ids, array[]::uuid[], 'completed'
+    );
+  end loop;
+end
+$function$;
+alter function vortex_record.complete_record_lifecycle_set_internal(uuid,jsonb,jsonb) owner to vortex_record_adapter;
+revoke all on function vortex_record.complete_record_lifecycle_set_internal(uuid,jsonb,jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+comment on function vortex_record.complete_record_lifecycle_set_internal(uuid,jsonb,jsonb) is
+  'Completes the common record command lifecycle effects: one Event per deduplicated delete, clear or restore effect, current revisions and data versions for changed rows, and Activity for each explicit lifecycle root.';
+
+create or replace function vortex_record.complete_relationship_total_parent_internal(p_prepared jsonb)
+returns void
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  snapshot jsonb := p_prepared -> 'snapshot';
+  saved_record_id uuid := (p_prepared ->> 'recordId')::uuid;
+  new_revision bigint := (p_prepared ->> 'concurrencyNumber')::bigint;
+  changed_field_ids uuid[];
+  preview_installation jsonb;
+  pending_exact_notice boolean := false;
+  notice_sequence bigint;
+  event_result jsonb;
+begin
+  context_value := vortex_access.validated_human_request_context();
+  select pg_catalog.array_agg(value::uuid) into changed_field_ids
+  from pg_catalog.jsonb_array_elements_text(p_prepared -> 'changedFieldIds') as field(value);
+  preview_installation := vortex_record.read_current_preview_installation_internal();
+  if preview_installation is null
+    and snapshot #>> '{recordType,storageScope}' = 'application_contained' then
+    pending_exact_notice := true;
+  else
+    perform vortex_record.bump_record_data_version_internal(
+      (context_value ->> 'organizationId')::uuid,
+      (snapshot ->> 'storageContractId')::uuid,
+      case when snapshot #>> '{recordType,storageScope}' = 'application_contained'
+        then (context_value ->> 'applicationRootId')::uuid else null end
+    );
+  end if;
+  perform vortex_record.append_record_activity_internal(pg_catalog.gen_random_uuid(), 'update_record', array[saved_record_id]::uuid[], changed_field_ids, 'completed');
+  event_result := vortex_platform.append_record_occurrence_set(
+    pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'storageContractId', (snapshot ->> 'storageContractId')::uuid,
+      'recordId', saved_record_id,
+      'occurrences', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'occurrenceId', pg_catalog.gen_random_uuid(),
+        'descriptor', pg_catalog.jsonb_build_object(
+          'kind', 'standard', 'eventKind', 'changed', 'recordTypeId', (p_prepared ->> 'recordTypeId')::uuid
+        ),
+        'payload', pg_catalog.jsonb_build_object(
+          'kind', 'changed', 'changedFieldIds', pg_catalog.to_jsonb(changed_field_ids)
+        )
+      ))
+    ))
+  ) -> 0;
+  if pg_catalog.jsonb_array_length(event_result) <> 1 then
+    raise exception using errcode = '55000', message = 'Relationship total parent Event append failed';
+  end if;
+  if pending_exact_notice then
+    begin
+      notice_sequence := pg_catalog.nextval(
+        'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
+      );
+      perform vortex_platform.publish_change_notice(
+        (context_value ->> 'organizationId')::uuid,
+        (context_value ->> 'applicationRootId')::uuid,
+        (p_prepared ->> 'recordTypeId')::uuid, saved_record_id, new_revision, 'changed',
+        notice_sequence, notice_sequence, (context_value ->> 'correlationId')::uuid
+      );
+    exception
+      when others then
+        -- Invalidation is advisory; a lost notice must not refuse the parent write.
+        raise warning 'Generated record notice failed: [%] %', sqlstate, sqlerrm;
+    end;
+  end if;
+end
+$function$;
+
+alter function vortex_record.complete_relationship_total_parent_internal(jsonb) owner to vortex_record_adapter;
+revoke all on function vortex_record.complete_relationship_total_parent_internal(jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+comment on function vortex_record.complete_relationship_total_parent_internal(jsonb) is
+  'Appends the Activity, standard Event and invalidation for a protected generated-field update after the shared record storage writer has applied it.';
+
+reset role;

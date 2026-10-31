@@ -53,8 +53,6 @@ begin
     checked_at_value;
 end;
 $function$;
-alter function vortex_access.evaluate_organization_record_permission_availability(jsonb) owner to vortex_owner;
-
 
 comment on function vortex_access.evaluate_organization_record_permission_availability(jsonb) is
   'Human-context-bound singleton record permission availability only; does not decide row access or invoke an operation.';

@@ -26,8 +26,6 @@ begin
   return null;
 end
 $function$;
-alter function vortex_record.preview_scoped_command_id_internal(uuid) owner to vortex_record_adapter;
-
 
 alter function vortex_record.preview_scoped_command_id_internal(uuid)
   owner to vortex_record_adapter;

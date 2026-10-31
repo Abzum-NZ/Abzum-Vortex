@@ -67,8 +67,6 @@ begin
   return query select 'unavailable'::text, null::jsonb;
 end
 $function$;
-alter function vortex_definition.read_private_form_draft(uuid,uuid,uuid,uuid) owner to vortex_owner;
-
 
 revoke all on function vortex_definition.read_private_form_draft(uuid, uuid, uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;

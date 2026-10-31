@@ -49,8 +49,6 @@ begin
   );
 end
 $function$;
-alter function vortex_record.read_module_query_inputs(uuid,uuid) owner to vortex_record_adapter;
-
 
 alter function vortex_record.read_module_query_inputs(uuid, uuid)
   owner to vortex_record_adapter;
