@@ -91,8 +91,7 @@ related-total dependency contributes no value. Total sources, money calculations
 omitted or read-time calculations, nonnumeric calculations, and complex derived
 grouping remain unsupported. The field-less `count` descriptor is unchanged.
 
-These requirements belong to [Query execution #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54)
-and its real storage path, not to a browser-only correction after rows are paged.
+These requirements belong to the query engine and its real storage path, not to a browser-only correction after rows are paged.
 
 ## Pagination and limits
 
@@ -105,7 +104,7 @@ and its real storage path, not to a browser-only correction after rows are paged
 
 ## Records table grid features
 
-The Records table grid itself (columns, sorting, density, sticky headings, resizing, reordering and showing or hiding columns) is always available. Everything else is an optional **grid feature**, authored in the table's one `features` setting group as `{ enabled, ...its settings }` and off by default: search, column filters, saved views, bulk actions, export, inline editing, related records (master/detail), tree data, grouping, column pinning, conditional formatting, pivot and board. Later features join the same gate. Export reads its rows through the protected query path in keyset pages of at most 200 and takes its count from the one capped selection count; the [record export flow](16-copying-sharing-import-export.md#grid-export-csv) describes its authority, columns and audit.
+The Records table grid itself (columns, sorting, density, sticky headings, resizing, reordering and showing or hiding columns) is always available. Everything else is an optional **grid feature**, authored in the table's one `features` setting group as `{ enabled, ...its settings }` and off by default: search, column filters, saved views, bulk actions, export, inline editing, related records (master/detail), tree data, grouping, column pinning, conditional formatting, pivot and board. Later features join the same gate. Export reads its rows through the protected query path in keyset pages of at most 200 and takes its count from the one capped selection count; the [record export flow](16-copying-import-export.md#grid-export-csv) describes its authority, columns and audit.
 
 One gate decides every feature, in three places that cannot disagree:
 
@@ -255,7 +254,7 @@ readable projection and equal the selector value, with JSON null matching only
 JSON null. A missing or withheld grouping value belongs to no generic group, and
 the grouping fields need not be selected for row output or declared filterable.
 The page returns the installed group identity even when it has no rows. Its
-opaque `protected-group-members-v1` continuation binds the actor, installation,
+opaque `protected-group-members` continuation binds the actor, installation,
 release revision, selector, inputs, filters, projection, page size and
 record-identity order. Each page rechecks the installation and live record
 authority; grouped-member pages are uncached and scan at most 500 candidates
@@ -263,38 +262,6 @@ while returning at most 200 rows. This operation returns no group counts or
 aggregates and does not compose or place grouped tables.
 
 Every chart or report states its measure, grouping, filter, time zone, and treatment of missing values. A money total is refused unless the filtered group contains at most one currency; no implicit conversion or split result is produced.
-
-## Shared-record reads
-
-A shared-record query uses the same validated query contract whether the source is local or in another cluster. It names the source cluster, source organisation, grant, recipient application, and requested surface. Every returned row retains its source identities and displays a plain source-organisation marker. A query cannot join, group, or total source-owned records with recipient-owned records as though they had one owner, and one query cannot join records from several source clusters.
-
-For a cross-cluster read, the complete filter, sort, field projection, page size, and continuation token are sent once to the source through the [federation query contract](appendices/data-contracts.md#federated-query-and-action). The source validates and executes the query, applies the grant and database row restrictions, and returns only the approved fields. The recipient never fetches a broad remote set and filters it locally, and it never makes one remote call per returned record.
-
-The recipient uses the ordinary list, record-detail, search-result, report, and export components for shared records, so supported work behaves consistently with recipient-owned records. The component obtains an operation-capability description with the result and shows only the fields and actions permitted by the complete grant. Source ownership, temporary unavailability, and any measured remote delay remain visible rather than being disguised as local ownership.
-
-```mermaid
-flowchart LR
-    UI[Ordinary record component] --> GW[Shared-record gateway]
-    GW --> SOURCE[Source Query service]
-    SOURCE --> CHECK[Grant, application, role, condition and field checks]
-    CHECK --> MODE{Approved request}
-    MODE --> VIEW[List or record detail]
-    MODE --> SEARCH[Search result]
-    MODE --> REPORT[Report or dashboard block]
-    MODE --> EXPORT[Source-generated export]
-    VIEW --> EPHEMERAL[Request-only result with source marker]
-    SEARCH --> EPHEMERAL
-    REPORT --> EPHEMERAL
-    EXPORT --> FILE[Short-lived approved download]
-```
-
-Application search may include a **Shared** result group. The search coordinator asks only the bounded set of active grants known from non-content grant mirrors, runs each search at its source, and merges only the returned approved projections for the current response. Shared content is never written into the recipient search index. An unavailable source produces an unavailable source group; it does not make the whole local search fail or return stale results.
-
-A saved report or dashboard block may use one source organisation, record type, and grant. Its definition may be stored by the recipient because it contains identifiers, fields, filters, grouping, and presentation settings rather than source record values. Rows, counts, groups, and totals are calculated by the source on each run and are not materialised in recipient storage. A report cannot mix source-owned and recipient-owned values or combine several source organisations into one total.
-
-Approved export uses the same source-executed query and field projection. It is described in [record export](16-copying-sharing-import-export.md#record-export). Workflows, connection messages, bulk changes, cross-source relationships, and offline use of live shared records remain outside the first release.
-
-Shared queries bypass the cross-request business-data cache under [runtime and caching](17-runtime-storage-and-caching.md#grant-cache-invalidation). Pagination, counts, and fields are calculated in the source cluster using one independently sufficient active grant; a query cannot combine scope from one grant with fields or actions from another. A source or network outage fails closed and shows that the source organisation is temporarily unavailable; the recipient does not display an older persisted result.
 
 ## Search
 
@@ -316,20 +283,19 @@ sequenceDiagram
 - Sensitive fields are never copied into the search index.
 - Personal fields are indexed only if explicitly marked searchable and permitted by the organisation privacy policy.
 - Results are scoped by organisation, application discoverability, record visibility, and field access.
-- A recipient organisation's index never receives another organisation's shared record content. Shared search is executed by the source and merged only into the current response.
 - Candidate results are rechecked against current access before display.
 - Access removal affects the next search request because results are access-checked at read time. Ordinary record creates and changes appear in search within 10 seconds under normal operation. A delayed index shows a freshness warning and triggers recovery; it never bypasses the current access check.
 - Search priority `first`, `normal`, and `last` affects ranking without overriding access.
 
-The local literal-search matcher accepts an optional `expressionMode` with only `literal` and `or` values; omitting it keeps the existing literal AND grammar, and any other value is refused. In `or` mode, an expression is one or more nonempty AND groups separated by an exact uppercase, unquoted, whitespace-delimited `OR` token. Lowercase `or`, quoted `"OR"`, and other punctuation remain literal terms. AND binds within each group, and a candidate matches when every term in at least one group occurs in the current readable requested fields. A quoted phrase must match as consecutive normalized tokens within one field. A malformed quote or empty group refuses the complete expression before candidate text is read. Positive term indices remain global and left to right; separators have no index, and matched fields report actual matches even for an incomplete group. The existing 2,000-character expression, 32-term, 64-phrase-token, and 1,000-candidate bounds and result shape remain unchanged. This local grammar does not define application serving, ranking changes, or the remaining search features.
+The local literal-search matcher parses whitespace-delimited tokens and whole-token quoted phrases; a leading `-` excludes a word or phrase from the expression. Quotes have no escape syntax and are valid only at token boundaries. A candidate matches only when every included term occurs in the current readable requested fields, and a quoted phrase must match as consecutive normalized tokens within one field. The expression is bounded at 2,000 characters and 32 terms, with at most 64 tokens in a phrase; an empty expression, malformed quote or over-long phrase refuses the expression before candidate text is read.
 
 ## Live updates
 
 Live updates use [private Supabase Realtime Broadcast channels](https://supabase.com/docs/guides/realtime/authorization) to tell an open page that relevant data may have changed. They carry organisation, application, record type, record identifier, change kind, data version, and sequence—not private field values. Channel access is protected by row rules on `realtime.messages` and is recalculated when the connection or identity token changes.
 
-The client treats every message as an invalidation only: it re-runs a permitted query or reloads the permitted record through the ordinary server path. Subscription channels are organisation-scoped and narrowly split by application and surface so a connection does not subscribe to an organisation-wide firehose. A shared-record screen may receive a content-free invalidation tied to an active grant, then re-run its authorised source query. A live message never carries source record values, acts as evidence of access, or makes an unreadable record visible.
+The client treats every message as an invalidation only: it re-runs a permitted query or reloads the permitted record through the ordinary server path. Subscription channels are organisation-scoped and narrowly split by application and surface so a connection does not subscribe to an organisation-wide firehose.  A live message never carries source record values, acts as evidence of access, or makes an unreadable record visible.
 
-Business-record changes use Broadcast rather than exposing direct table-change subscriptions to browsers. This keeps payloads deliberate and permits the same content-free message for derived changes, source-owned shared records, and access-version changes. Complicated business access remains in the normal server and database read path rather than in the channel policy.
+Business-record changes use Broadcast rather than exposing direct table-change subscriptions to browsers. This keeps payloads deliberate and permits the same content-free message for derived changes and access-version changes. Complicated business access remains in the normal server and database read path rather than in the channel policy.
 
 ```mermaid
 sequenceDiagram
@@ -351,14 +317,10 @@ sequenceDiagram
 - Pagination neither duplicates nor skips records when several records share the visible sort value.
 - Removing access prevents live updates and makes subsequent refreshes refuse the record.
 - A captured live message contains no field value and cannot be used to fetch data after access is removed.
-- Shared records can use ordinary list, detail, search-result, report, dashboard-block, and approved-export components while retaining a visible source marker and source-authoritative checks.
-- Shared search, report, and dashboard results leave no recipient search document, materialised report result, or cross-request business-data cache entry.
-- Shared records do not enter workflow selections, connection messages, bulk changes, cross-source relationships, or offline storage in the first release.
-- Same-cluster and cross-cluster shared lists return the same fields and refusal meanings for the same grant; only measured latency and source-availability states may differ.
 
 ## Page context and derived-value safety
 
-Use [explicit typed binding contexts](appendices/page-builder-contracts.md#data-context-and-related-records) for the page subject, related panels and row items. A valid employee-to-department example does not require every query on the page to target Employees. This is ordinary related-record querying, not permission to join different shared sources.
+Use [explicit typed binding contexts](appendices/page-builder-contracts.md#data-context-and-related-records) for the page subject, related panels and row items. A valid employee-to-department example does not require every query on the page to target Employees. This is ordinary related-record querying, not permission to join records across organisations.
 
 Evaluate access before grouping, aggregation, counts and pagination. A cached or stored derived result must not expose inputs the reader cannot access. Caller-filtered totals are computed for that caller, not stored as one universal business value. Invalid predicates refuse the affected query rather than being silently dropped.
 
@@ -369,56 +331,6 @@ Every query-bound page block maps query inputs through `query_parameters`. Each 
 The server resolves each binding per request. Record fields reuse the authorised subject read; a withheld field is logged without its value and yields `awaiting_input`. Missing required values render the authored awaiting message and make no query. Missing optional values omit their comparison from the query condition, including within conjunctions, alternatives and negation. Additional grid filters only narrow the resulting query. Relative dates use the organisation time zone; date-time inputs receive the start-of-day instant.
 
 Current person supplies a record reference to the signed-in viewer's directory person. Studio offers it only for record inputs accepting that directory type, and publication uses the same type check. The server derives both the installed person type and its record identity from the verified human context, never from a page address or control. A viewer without a directory person is refused, including for optional inputs, so a missing person cannot broaden a "My records" query. Organisation-account-valued inputs are not supported by page bindings.
-
-### Grid grouping execution
-
-Grid grouping is state of the Data grid, executed by `run_module_query_group_summary` and the protected
-`groupedMembers` reader. Query-authored grouping and totals supply defaults; they are not a second
-grid engine. Data grid is the only record-table block. Its List preset renders the same bounded
-record page as cards at every screen size; Table can use those same cards on phones. Presets write
-ordinary grid settings and never select a second query or renderer. The former standalone list
-and grouped-data blocks have been removed; grouped preset authoring follows the grid grouping feature.
-
-The protected readers accept `grouping: { fieldId, limit, dateBucket? }` to replace those defaults
-with one query-selected, filterable dimension. A choice field has at most 50 options; a lifecycle
-stage uses its canonical choice field identity, never its label. A date or date-time field requires
-`dateBucket: { unit, timeZone }`, with a day, week (Monday start), month, quarter or year unit and an
-explicit recognised time zone. Date-only values retain calendar dates. Date-time values bucket the
-stored instant in that zone and return the bucket's start as canonical UTC, independent of session
-time zone or display format. Both readers refuse this override unless the field is guaranteed
-readable under the current read plan.
-
-The authored `limit` is 1–200 groups. A summary returns only that page of groups, ordered by its
-canonical JSON group key. `nextGroupKey` is the last visible key when more groups exist and null
-otherwise; the next request supplies it as `groupAfter`. Each page rechecks current access and
-recomputes counts over the complete filtered set. `totalRowCount` and aggregate totals do not shrink
-to the visible group page. The summary retains the 100,000-candidate ceiling and returns a neutral
-`dataset_limit_exceeded` refusal above it. Counts describe the currently readable result,
-independently of a later member page.
-
-Summary and member requests carry the same resolved query inputs, narrowing filter and search.
-Search matches only the current readable scalar or choice-array values of fields the record type
-marks searchable. A component's searchable-field set may narrow that set; an empty set searches all
-searchable fields. Summary search uses per-record access decisions, retaining the candidate ceiling
-before it reads records. It does not derive counts from a loaded member page.
-
-Generic member pages take the ordinary ordered sort contract and forward/backward keysets. They
-carry at most 200 records, with only the requested field projection. Choice grouping narrows the
-candidate scan by its stored key; date grouping uses typed half-open calendar ranges. Instant
-grouping widens the index range around the bucket boundaries and applies exact authored-zone
-bucket equality before the candidate page limit, so repeated local midnight retains both
-occurrences (including 23/25-hour DST days). These predicates apply only after guaranteed
-readability is established, then membership is rechecked by the same canonical bucket operation
-on the current readable record. A noncanonical bucket start is refused. JSON null denotes the unassigned group; a missing or
-withheld value never establishes generic group membership. Continuations bind the actor, scope,
-release, query, resolved inputs, exact selector, grouping dimension/bucket/zone/cap, sort, filters, search, projection,
-page size and direction. Member reads remain uncached.
-
-These reader capabilities are the execution foundation of #3027 and the date/group-cap part of
-#3032. Link dimensions still require permitted batched titles and neutral unreadable-target groups;
-they are refused as grid overrides until that support lands. The grid feature gate, Studio
-controls, single URL codec, group headers and active-group interactions are supplied by that
-feature's UI/runtime integration, rather than inferred by the query readers.
 
 ### Row editing
 

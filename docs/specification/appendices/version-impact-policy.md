@@ -22,7 +22,7 @@ flowchart LR
     M --> A[Assign minimum next version]
     A --> F[Bind result to draft and published revisions]
     F --> B{Builder confirms current result?}
-    B -- Yes --> P[Phase 2 may publish]
+    B -- Yes --> P[Builder may publish]
     B -- No or stale --> Q[Refuse or cancel]
 ```
 
@@ -51,18 +51,17 @@ Components are matched by permanent identifiers, never labels or array positions
 | Collection | Identity | Ordering rule |
 |---|---|---|
 | Module dependencies and application module bindings | `moduleRootId` | Unordered. |
-| Record types, fields, relationships, permissions, actions, events, flows, extension points, saved sharing conditions | Their permanent identifiers | Unordered. |
+| Record types, fields, relationships, permissions, actions, events, flows, extension points, saved visibility conditions | Their permanent identifiers | Unordered. |
 | Action inputs | Key | Order is presentation-only patch. |
-| Action tasks | Parent action flow plus sequence | Order is executable behaviour; any change is major. |
 | Navigation items | Item identifier | Sibling order is patch; target, parent, access, or type change is major. |
 | Pages, roles, queries, blocks, pipelines, flows, connections, interfaces, public addresses | Their permanent identifiers | Top-level collection order is irrelevant. |
 | Page placements and guided steps | Placement or step identifier | Display order and pure geometry are patch. |
 | Query fields, grouping, aggregates, and sort | Declared sequence | Existing query output/ordering change is major. |
-| Flow tasks and their order | Task identifier and declared sequence | Any task addition, removal, retype, reorder or configuration change is major. |
+| Flow steps and their order | Step identifier and declared sequence | Any step addition, removal, retype, reorder or configuration change is major. |
 | Pipeline stages | Stage key | Display order is patch; entry/exit work is executable order. |
 | Choice options and table columns | Stored value or column key | Reordering is patch; identity/value/type removal is major. |
 
-Duplicate comparison identities are refused as `ambiguous_component_identity`; the comparator never guesses which item is which. Cross-reference and full definition validity remain owned by [validation stages](../03-composition-and-publication.md#validation-before-publication) and [issue #15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15).
+Duplicate comparison identities are refused as `ambiguous_component_identity`; the comparator never guesses which item is which. Cross-reference and full definition validity remain owned by [validation stages](../03-composition-and-publication.md#validation-before-publication).
 
 ## Module policy
 
@@ -74,13 +73,13 @@ Duplicate comparison identities are refused as `ambiguous_component_identity`; t
 | Standard/custom action membership | — | Add | Remove; membership order has no meaning |
 | Relationship | — | Add | Remove or any existing relationship change |
 | Permission | Label or description | Add | Remove; change key, record-type scope, action kind, named action, or administrative status |
-| Action | Label and input display order | Add; add optional input; widen an input constraint | Remove; key/subject/permission/sharing/precondition/effect change; required input; remove/narrow/change input |
+| Action | Label and input display order | Add; add optional input; widen an input constraint | Remove; key/subject/permission/precondition/effect change; required input; remove/narrow/change input |
 | Event | — | Add or add a carried field | Remove; key/record type/privacy choice or carried-field removal |
-| Rule flow | — | — | Add, remove, priority, condition, trigger, task order, or behaviour change |
+| Rule flow | - | - | Add, remove, condition, trigger, step order or behaviour change |
 | Extension point | — | Add or widen accepted kinds | Remove, retarget, rename key, or narrow accepted kinds |
-| Saved sharing condition | Publication-test name/order only | Add | Remove or change record type, key, parameters, condition, declared fields, or test field/parameter values or expected result |
+| Saved visibility condition | Publication-test name/order only | Add | Remove or change record type, key, parameters, condition, declared fields, or test field/parameter values or expected result |
 
-The saved sharing-condition collection is part of canonical module content. A sharing grant pins its condition identifier, revision, and fingerprint as specified in [record sharing](../16-copying-sharing-import-export.md#scope-and-saved-sharing-conditions). Revision and fingerprint are derived publication evidence, not independently authored changes, so the comparator ignores those two fields and classifies the underlying resolved contract change that caused them.
+The saved visibility-condition collection is part of canonical module content. A record permission pins its condition identifier, revision and fingerprint. Revision and fingerprint are derived publication evidence, not independently authored changes, so the comparator ignores those two fields and classifies the underlying resolved contract change that caused them.
 
 ### Action inputs
 
@@ -138,8 +137,7 @@ An input label or input display-order change is patch. Adding an optional input,
 | Block registration | Name, icon, palette, pure phone geometry | Add | Remove or change version, settings, children, live/public/security behaviour |
 | Pipeline | Stage label/display order | — | Add, remove, transition, target, gate, or entry/exit behaviour change |
 | Action/event | Same module policy | Same module policy | Same module policy |
-| Flow (rule, action, screen, background or durable) | Name only | — | Add, remove, task order, trigger, execution policy, value, or behaviour change |
-| Interface | Description, declared interface version, supported → deprecated notice | Add private interface/operation; add optional target-compatible input; widen output/error/limits | Partner/public exposure; removal; method/path/required input/input or output target binding/auth/access/target/duplicate change; narrowing or any other state transition |
+| Flow (rule, action, screen or background) | Name only | - | Add, remove, step order, trigger, execution policy, value or behaviour change |
 | Public address | — | — | Any add, removal, path, page, state, or rate-limit change |
 
 Changing a placed block's tagged setting value or reference is major unless the owning block contract explicitly classifies that literal as presentation-only. Conditions, expressions, filters, and executable values are major when changed because the comparator cannot prove their effect safely.
@@ -148,33 +146,27 @@ Changing a placed block's tagged setting value or reference is major unless the 
 
 ## Flow-task policy
 
-The governed [task types in the shared registry](../09-workflows-and-pipelines.md#task-types-in-the-shared-registry) are generic. Adding a flow or reachable task changes executable behaviour and is major. Removing, retyping, reordering or reconfiguring any task is major; task order is executable behaviour, so reordering is never a no-change.
+The governed [task types in the shared registry](../09-workflows-and-pipelines.md#task-types-in-the-shared-registry) are generic. Adding a flow or reachable step changes executable behaviour and is major. Removing, retyping, reordering or reconfiguring any step is major; step order is executable behaviour, so reordering is never a no-change.
 
-| Task | Major configuration |
+| Step | Major configuration |
 |---|---|
 | If / Switch | Condition or formula tree, branch order and declared outcomes |
 | For each | Collection and maximum items |
-| Sequential | Ordered child task list |
+| Sequential | Ordered child step list |
 | Run flow | Target flow and typed input map |
-| Run background flow | Target durable flow and typed input map |
 | Stop | Declared outcome |
-| Parallel | Branch task lists |
-| Wait until | Declared time or date-time value |
-| Wait for a person | Form, assignee, due time, timeout outcome and outputs |
+| Run on back end | Target flow and typed input map |
 | Save record / Create record / Set fields / Link records / Delete record / Restore record / Apply record changes | Record type, target record, relationship keys and field values |
 | Query records | Query and typed parameters |
 | Call protected operation | Operation and typed inputs |
 | Announce event | Event and record |
-| Call connection | Binding, operation and inputs |
-| Acknowledge message | Message key |
-| Export to file | Query and maximum rows |
 | Calculate / Format value | Formula or formatter and inputs |
-| Set values / Set variable | Target and values |
+| Set variable / Build list / Build record link value | Target and values |
 | Require field / Warn / Refuse save | Field, condition and safe message |
 | Show message / Show form / Confirm | Form, safe message, defaults and declared outputs |
 | Navigate / Refresh / Open or close panel / Set filter | Semantic target and declared parameters |
 
-Every task's permission, timeout, retry, duplicate protection, activity key, and redaction policy is executable behaviour and therefore major when changed. Flow-value source, literal, field, record, actor, time, or prior-task reference changes are also major. Any change to a custom component bundle that a release carries is major ([Decision 7](../../build-plan/architecture-decisions-2026-09-25.md#decision-7--applications-are-delivered-as-packages-and-custom-logic-follows-a-ladder)).
+Every step's permission, timeout, duplicate protection and redaction policy is executable behaviour and therefore major when changed. Flow-value source, literal, field, record, actor, time or prior-step reference changes are also major. Any change to a custom component bundle that a release carries is major ([Decision 7](../../build-plan/architecture-decisions.md#decision-7--applications-are-delivered-as-packages-and-custom-logic-follows-a-ladder)).
 
 ## Integrity, history, and confirmation
 
@@ -190,13 +182,13 @@ Exact content fingerprints use deterministic canonical JSON with sorted object k
 
 Confirmation identifies the root and draft revision and carries the assigned version and dependency manifest. Publication locks the root and draft, recomputes the assessment and accepts only the same confirmation. A stale result, override, or `no_change` confirmation is refused.
 
-## Boundary with later work
+## Boundary
 
-Version impact does not prove installed dependant compatibility, resolve authored aliases, assess migrations, publish, restore, or query a database. [Validation ownership #15](https://github.com/Abzum-NZ/Abzum-Vortex/issues/15) owns full canonical/source validity, cross-definition resolution, dependency checks, and migration feasibility boundaries. Phase 2 owns persistence and atomic publication.
+Version impact does not prove installed dependant compatibility, resolve authored aliases, assess migrations, publish, restore, or query a database. Validation owns full canonical/source validity, cross-definition resolution, dependency checks, and migration feasibility boundaries.
 
-## Page-representation completion
+## Page representation
 
-[#249](https://github.com/Abzum-NZ/Abzum-Vortex/issues/249) aligns this policy with the current source/canonical schemas, compiler and publication readers. Shell/slot identity, binding context, typed operation input/output and access changes receive explicit classification. Pure presentation changes may remain patch; structural changes cannot silently lower executable or access impact. Apply the [current page representation](page-builder-contracts.md#current-representation) consistently without retaining obsolete format readers or conversion paths.
+This policy follows the current source/canonical schemas, compiler and publication readers. Shell/slot identity, binding context, typed operation input/output and access changes are classified explicitly. Pure presentation changes may remain patch; structural changes cannot silently lower executable or access impact. Apply the [current page representation](page-builder-contracts.md#current-representation) consistently without retaining obsolete format readers or conversion paths.
 
 ### Current composition comparison
 

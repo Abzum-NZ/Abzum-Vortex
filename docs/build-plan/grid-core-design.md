@@ -1,7 +1,7 @@
-# Data grid core (#3015)
+# Data grid core
 
 The Records table grid has one SQL function per query mode, one state owner per page and one feature
-definition contract. [grid-feature-fanout.md](grid-feature-fanout.md) lists the per-feature work.
+definition contract.
 
 ## SQL: one function per query mode
 
@@ -18,6 +18,7 @@ requested_system_field_keys text[], filter jsonb, filterable_field_ids uuid[]`, 
 | `run_module_query_board_column` | `choice_field_id uuid, board_column jsonb` (closed `{kind,value}`), `page_size, after` | the same |
 | `run_module_query_board_columns` | `choice_field_id uuid, board_columns jsonb` (1..13), `page_size` | `columns[]`, `fieldBounds` |
 | `run_module_query_group_members` | `sort, search, sortable, searchable, grouping jsonb` (or null), `group_values jsonb, page_size, after, direction` | rows plus `groupByFieldIds`, `groupValues` |
+| `run_module_query_members` | `sort, search, sortable, searchable, record_ids uuid[]` (1..200) | rows plus `groupByFieldIds`, `groupValues` |
 | `run_module_query_tree_level` | `sort, search, sortable, searchable, parent_field_id uuid, parent_record_id uuid` (null means roots), `page_size, after, direction` | rows plus `hasChildren` |
 
 Shared owner-only helpers (`security invoker`, owner `vortex_record_adapter`, no grants) hold the

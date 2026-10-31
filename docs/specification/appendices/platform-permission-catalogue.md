@@ -26,12 +26,12 @@ The declaration sources and aggregate used by runtime packages are:
 
 | Purpose | Source |
 | --- | --- |
-| Organisation Administration's 15 platform permissions | `packages/definitions/src/organisation-administration/module.ts` |
+| Organisation Administration's 15 platform permissions | `packages/definitions/src/organisation-administration/platform-permissions.ts` |
 | The eight permissions without a system record type; declaration only, not an installable module | `packages/definitions/src/system-core/platform-permissions.ts` |
 | Aggregate platform permission declarations consumed by runtime packages | `packages/definitions/src/platform-permissions.ts` in `@vortex/definitions` |
-| Permission declaration schema only | `packages/platform/src/access/permissions.ts` in `@vortex/contracts` |
+| Permission declaration schema only | `packages/platform/src/access/permissions.ts` in `@vortex/platform` |
 
-`@vortex/contracts` keeps the permission declaration schema; it does not import `@vortex/definitions`. The `pinnedPermissionId` field preserves an existing permanent ID in these platform declaration sources. `stewardMinimum` marks the 13 permissions required by the permanent-steward safeguard. Authority meaning is represented by the declared fields and permission continuity revision.
+`@vortex/platform` keeps the permission declaration schema; it does not import `@vortex/definitions`. The `pinnedPermissionId` field preserves an existing permanent ID in these platform declaration sources. `stewardMinimum` marks the 13 permissions required by the permanent-steward safeguard. Authority meaning is represented by the declared fields and permission continuity revision.
 
 At organisation creation, one generic registration function reads the seeded declaration table and registers the declared platform permissions. This path does not depend on installing Organisation Administration or another module. It preserves `registration_kind = 'platform'` and the `platform_catalogue` source kind. The current revision 6 is registered from the seeded declarations; the registration function does not embed catalogue JSON.
 
@@ -67,10 +67,11 @@ Action kinds and permanent identifiers below match the shipped `1.4.0` catalogue
 | `dfdd5aba-2b85-4169-b570-92be284e7b5c` | `platform.organization.definition_releases.manage` | `manage` | System core | No |
 | `d1be247f-094d-47c1-a38d-762290868c91` | `platform.organization.custom_code.manage` | `manage` | System core | No |
 | `eaade6fd-7390-44d2-a7ef-343324c7384a` | `platform.organization.system_applications.manage` | `manage` | System core | No |
+| `ca1fb1ae-056c-4596-9c70-36a42c0de87b` | `platform.records.views.share` | `manage` | Organisation Administration | No |
 
 ## History
 
-The shipped `1.4.0` catalogue currently mirrors platform registration revision 6. The current declarations preserve the permanent identities and meanings recorded by earlier revisions. Revisions 1-6 remain as history, and revision 7 registers the current declared set from the seeded table at organisation creation. This replaces the separate per-version adoption path; it does not change which permissions are available or assigned.
+The shipped `1.4.0` catalogue currently mirrors platform registration revision 6. The current declarations preserve the permanent identities and meanings recorded by earlier revisions. Revision 6 registers the current declared set from the seeded table at organisation creation.
 
 ### Expected catalogue and exactness
 

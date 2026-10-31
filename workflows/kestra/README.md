@@ -1,10 +1,12 @@
-# The workflow engine
+# The operations scheduler
 
 ## Operational reference
 
-Kestra open source runs on the Coolify-managed server with its own PostgreSQL. It is the workflow and
-operations service in the [current hosting boundary](../../docs/specification/17-runtime-storage-and-caching.md#hosting-boundaries).
-The operations instance runs scheduled event-dispatch recovery and runtime-bundle cleanup. The separate application instance is retained for future durable workflows.
+Kestra open source runs on the Coolify-managed server with its own PostgreSQL. It is the operations
+scheduler in the [current hosting boundary](../../docs/specification/17-runtime-storage-and-caching.md#hosting-boundaries).
+It runs the two scheduled operations flows below. It does not run application flows: those are
+compiled and executed by the in-house flow engine (ADR #1127), and Kestra holds no application
+credentials or application database access.
 
 No application user sees it. The two operations flows use only their protected route credentials.
 
@@ -47,6 +49,14 @@ Every secret is supplied by the environment. Nothing in this directory holds one
 These values are stored as protected Coolify runtime variables. The operations instance receives
 only the route URL and credential for each scheduled flow; it has no database-delivery credentials.
 
+Kestra open source recognises sensitive flow values only when the container variable begins
+`SECRET_` and its value is base64-encoded. Coolify therefore stores the `_BASE64` values above;
+the compose file maps them to Kestra's required names and each flow reads them with `secret()`. Base64
+is not encryption, so Coolify remains the protected host boundary. Kestra masks resolved secrets in
+execution logs.
+
+## The two flows
+
 `event_dispatch_recovery` is the scheduled recovery half of the event dispatch boundary. Its
 schedule trigger calls the protected Vercel dispatch route every minute, so an event
 occurrence committed while a web deployment was unavailable is still
@@ -54,7 +64,8 @@ delivered. After a Kestra outage it runs one catch-up tick rather than every mis
 overlapping tick is cancelled because the running one already covers it. The flow holds only two
 values: the route address and the route bearer credential. It never receives a database URL,
 migration credential or application secret, and it never reads the database. The route accepts
-only an optional `source` label and refuses any batch or consumer tuning.
+only an optional `source` label and refuses any batch or consumer tuning. Vercel holds only the
+bearer credential's SHA-256 digest in `VORTEX_EVENT_DISPATCHER_CREDENTIAL_SHA256`.
 
 Each authenticated wake-up reclaims work after every successful nonempty batch for up to ten
 seconds or 200 dispatches. Every dispatch rechecks the system actor grant and uses the existing
@@ -67,43 +78,29 @@ outbox insert or an in-process timer.
 
 `runtime_bundle_cleanup` calls the protected Vercel `POST /api/runtime-bundles/cleanup` route daily
 with concurrency one. It carries only the route URL and bearer credential; Kestra never receives a
-Vortex database URL or credential. Keep the raw bearer credential in the secret manager, set the base64
-route URL and credential as the protected Coolify inputs `VORTEX_RUNTIME_BUNDLE_CLEANUP_URL_BASE64`
-and `VORTEX_RUNTIME_BUNDLE_CLEANUP_CREDENTIAL_BASE64`, and configure its lowercase SHA-256 digest
+Vortex database URL or credential. One call removes three things in one bounded run:
+
+- runtime bundles superseded by a newer installation;
+- preview installations whose lifetime ended, then the storage of replaced previews;
+- at most 25 expired, never-activated attachment uploads, including clean inspections awaiting Save
+  and rejected content.
+
+Upload cleanup locks and marks each abandoned upload before deleting its exact private object
+through the Storage API with a server-only, short-lived credential. Successful deletion removes
+upload state and marks file metadata removed. Failed calls keep their claims and become eligible for
+retry after five minutes; active attachments and held files are excluded. Provision the flow and
+route credential in every environment that accepts uploads; without scheduled maintenance abandoned
+objects are not reclaimed.
+
+Keep the raw bearer credential in the secret manager, set the base64 route URL and credential as the
+protected Coolify inputs `VORTEX_RUNTIME_BUNDLE_CLEANUP_URL_BASE64` and
+`VORTEX_RUNTIME_BUNDLE_CLEANUP_CREDENTIAL_BASE64`, and configure its lowercase SHA-256 digest
 in the Vercel server-side environment as `VORTEX_RUNTIME_BUNDLE_CLEANUP_CREDENTIAL_SHA256`.
 
-The same maintenance call reclaims at most 25 expired, never-activated attachment uploads per run,
-including clean inspections awaiting Save and rejected content. It locks and marks them abandoned
-before deleting each exact private object through the Storage API with a server-only, short-lived
-credential. Successful deletion removes upload state and marks file metadata removed. Failed calls
-keep their claims and become eligible for retry after five minutes; active attachments and held
-files are excluded. Provision the existing scheduled flow and route credential in every environment
-that accepts uploads; without scheduled maintenance abandoned objects are not reclaimed.
-
-The event-dispatch recovery route requires the configured bearer credential. Vercel holds only its
-SHA-256 digest in `VORTEX_EVENT_DISPATCHER_CREDENTIAL_SHA256`.
-
-Kestra open source recognises sensitive flow values only when the container variable begins
-`SECRET_` and its value is base64-encoded. Coolify therefore stores the `_BASE64` values above;
-the compose file maps them to Kestra's required names and each flow reads them with `secret()`. Base64
-is not encryption, so Coolify remains the protected host boundary. Kestra masks resolved secrets in
-execution logs.
-
 These two scheduled flows use the Kestra HTTP task and need no database client, delivery CLI, or
-repository checkout at runtime. Vortex builders cannot upload Kestra YAML, choose a Process runner,
-or interpolate Kestra environment values. Customer durable workflow compilation and callbacks are not currently implemented; the future backend must preserve this boundary.
+repository checkout at runtime.
 
-## Application instance
-
-The pinned application Kestra instance is retained for future durable execution; the product callback and compiler are not present. Operational flows run only on the separate operations instance.
-
-## Retired database delivery
-
-The Testing and Production database-delivery flows were removed during the takeover reset (#2209).
-This operations image has no database-delivery flows or credentials. Any replacement will be
-designed against the squashed migration baseline (#2236).
-
-## Three deliberate departures from Kestra's published compose file
+## Pins and deliberate departures from Kestra's published compose file
 
 **The Docker socket is not mounted.** Kestra's own file mounts `/var/run/docker.sock` into a
 container running as `root`. Anything able to schedule a Docker task could then start a container on
@@ -116,26 +113,6 @@ exact release and multi-platform image digest, and pins its state database to an
 patch release, distribution and digest. The workflow engine and its database therefore change only
 as their own reviewed change, the same rule
 [#6](https://github.com/Abzum-NZ/Abzum-Vortex/issues/6) applies to Next.js and Puck.
-
-The image remains temporarily pinned to the exact `v1.0.57` deployment that this repository has
-verified. Kestra's current [release policy](https://kestra.io/docs/releases) identifies 1.3 as the
-current LTS and states that 1.0 support ends in September 2026; its
-[changelog](https://kestra.io/docs/changelog) also records `v1.0.58` after this pin. The required
-forward upgrade and state-database compatibility rehearsal belong to
-[#198](https://github.com/Abzum-NZ/Abzum-Vortex/issues/198), rather than an unreviewed tag change.
-A first attempt used `v1.3.35` because it appeared in the release list, but no image was published
-under that tag at the time. Confirm the registry artifact and digest before changing any pin.
-
-A fresh disposable startup with the pinned PostgreSQL 18.4 image succeeds, applies all Kestra
-migrations and loads the two reviewed operational flows. Its bundled Flyway nevertheless warns that
-PostgreSQL 18 is newer than its tested maximum of 17. The two scheduled operational flows use the
-Kestra HTTP task and no database client. Application-workflow execution
-[#76](https://github.com/Abzum-NZ/Abzum-Vortex/issues/76) must validate its generated flows,
-execution and restart behaviour against the existing pinned runtime; a real compatibility failure
-is not waived. Engine upgrades and backup work are deferred. [#198](https://github.com/Abzum-NZ/Abzum-Vortex/issues/198)
-governs a later forward upgrade, not a mandatory engine-version change before core workflow
-implementation.
-The existing PostgreSQL 18 data directory must never be opened by PostgreSQL 17.
 
 **No password is written down.** Kestra's file publishes `POSTGRES_PASSWORD: k3str4` in its own
 public repository.
@@ -156,20 +133,3 @@ refuse unapproved third-party analytics; this is the same rule one layer down.
 
 The server has 8 GB and already runs Coolify and a STUN/TURN service. Kestra is a JVM and takes what
 it is given, so both containers carry a limit: 3 GB for Kestra, 1 GB for PostgreSQL.
-
-## Recovering
-
-The [workflow recovery contract](../../docs/specification/09-workflows-and-pipelines.md#failure-and-display-behaviour)
-requires runs to resume safely when the server returns. That holds only
-while `kestra-postgres-data` survives, so it is backed up on a schedule. Losing it loses every run in
-flight, and nobody would find out until a restore.
-
-The backup runs nightly and the archive is sent to Cloudflare R2. As of 31 August 2026 no local copy
-is kept: the Coolify backup's **Local copy** setting is *Delete after S3 upload*, so the only copy
-that survives the server is the one in R2. The full backup and restore procedure, with the checksums
-and row counts from a rehearsal, is written out on
-[issue #132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132).
-
-The current backup and restore procedure, including its rehearsal record, is maintained on
-[#132](https://github.com/Abzum-NZ/Abzum-Vortex/issues/132). This repository does not ship a backup
-verification script or backup credentials in the Kestra image.

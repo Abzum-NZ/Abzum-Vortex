@@ -1,163 +1,108 @@
-# Groups and privileged role activation
+# Roles and Groups
 
 [Access specification](../04-access-and-permissions.md) · [IAM application](iam-application.md) · [Data contracts](data-contracts.md#permission-and-role-contracts) · [Build plan](../../build-plan/README.md)
 
 ## Product model
 
-The access-management model is **Roles and Groups**. A role defines exact permissions; a group collects organisation accounts and can receive role assignments. A group is not a business department, work queue or application-specific team. Those business concepts remain ordinary application records and can refer to a group when their definitions require it.
+The access-management model is **Roles and Groups**. A role defines exact permissions; a group
+collects organisation accounts and can receive role assignments. A group is not a business
+department, work queue or application-specific team. Those business concepts remain ordinary
+application records and can refer to a group when their definitions require it.
 
-An account may belong to several groups in its own organisation. Group membership does not cross organisation or global-identity boundaries. The initial implementation uses explicit account memberships, not nested groups or rule-driven membership. Adding those capabilities later requires their own access-expansion, revocation and continuity rules.
+An account may belong to several groups in its own organisation. Group membership does not cross
+organisation or global-identity boundaries. Membership is explicit; there are no nested groups and
+no rule-driven membership.
 
-Some roles are classified as privileged. A privileged role may require **Privileged Identity Management (PIM)**: eligibility to request that role is separate from permission to use it now. This follows the useful distinction in [Microsoft Entra PIM](https://learn.microsoft.com/en-us/entra/id-governance/privileged-identity-management/pim-configure), without promising an Entra clone or directory synchronisation.
+## Assignment
 
-## Privileged classification and policy
+| Fact | Effect |
+| --- | --- |
+| Role assignment to an account | Gives the role's currently accepted permissions while the assignment and all other access conditions are valid. |
+| Role assignment to a group | Makes each currently valid member receive the role's currently accepted permissions while the assignment and membership are valid. It does not create permissions for the whole group beyond what current members hold. |
+| Removal, expiry or revocation | Ends the assignment's contribution on the next request. |
 
-Each live organisation role has protected, revisioned privilege classification and an explicit assignment policy: standing access is permitted, or activation is required. Privileged does not itself mean active or permanently assigned. Application publication and template registration create neither classification authority nor assignments; the organisation governs the accepted local role and policy through IAM.
+An account's effective permissions are the union of its valid direct and group-derived assignments,
+narrowed by field restrictions and record scopes. A role assignment never substitutes for the
+central Access decision; every protected operation still checks its current permission, tenant,
+organisation, application, record and field conditions.
 
-A role containing a permission marked administrative is always classified as privileged; an administrator cannot downgrade that classification. Organisations may classify additional roles as privileged. Classification alone does not force PIM or grant access: the separately governed assignment policy determines whether activation is required.
+Membership, role-assignment and delegation time bounds stay fixed for each grant identity. Restore is
+possible only while the membership's original expiry is absent or still in the future. After natural
+expiry, renewal closes the old membership and creates a new membership identity and window through
+one authorised change. It does not extend the old window or make the gap look like continuous access.
+Only one non-revoked membership may occupy an organisation/Group/account pair, including a scheduled
+or naturally expired row; renewal closes that predecessor before creating its replacement.
 
-For newly configured privileged operational roles, recommend activation-required access. An authorised administrator can deliberately retain standing access where required; the UI must make that choice and its consequences visible. Role names, copied templates, record fields and client-supplied flags cannot select or weaken the policy.
-
-An activation policy defines the finite maximum activation duration, whether a reason is required, and required recent authentication. These are explicit organisation settings, not hardcoded universal durations. An incomplete policy cannot enable activation. The protected Access facts hold the policy revision and enforce those preconditions; a protected operation checks only current authority and the declared preconditions, never an approval field or an approver check. No new general-purpose approval engine belongs in core. When an organisation wants an approval step, it builds a Kestra flow with a wait-for-a-person task that then calls the activation operation; if that approval must be unavoidable, the operation's policy names the published flow that is its only permitted caller.
-
-For the initial closed contract, a standing-access role has no activation-policy reference and accepts standing assignments only. An activation-required role pins a complete immutable activation-policy identity and revision and accepts eligible assignments only. A standard role may also deliberately select activation-required policy; privileged classification and assignment policy remain separate. Changing the policy cannot grandfather incompatible assignments into active use or convert them automatically. This avoids an unused activation policy for the standing minimum steward.
-
-The assignment itself has an immutable kind, `standing` or `eligible`; it does not pin the activation-policy continuity number. Changes to activation duration, reason or authentication requirements leave compatible eligibility in place. Old requests and activation windows fail the changed policy-period check, while a fresh activation must satisfy the new exact policy. Eligibility still grants no permission.
-
-Changing between standing and activation-required makes incompatible assignments dormant, without converting or rewriting them. Returning deliberately to an earlier mode may make a still-current matching-kind assignment usable again only after the protected policy change reviews the [complete affected-assignment manifest](data-contracts.md#permission-and-role-contracts). Standing use may then resume under current role permissions; eligibility still requires a fresh activation. Revoked or expired assignments do not resume. Every mode change, including a return, pins the exact proposed role/policy revision and all non-revoked direct-account and Group assignments, including scheduled and naturally expired rows; their current revisions bind assignment kind and time bounds. The protected transaction refuses a missing, extra or stale entry under the existing governance and role locks. A combined permission expansion and mode change reuses one manifest and one check. Same-mode policy-detail edits require normal protected policy authority but no assignment regrant, rewrite or separate assignment manifest.
-
-Each role also records a policy continuity number, beginning at one. Every later role revision requires its immediate predecessor. An unchanged assignment policy and exact activation-policy reference retain that number; changing either advances it exactly once. Returning from policy A to B and then A therefore starts a new period, rather than reviving earlier requests or activations. Classification, display, lifecycle or permission-only changes do not themselves advance this policy-specific number; their separate authority and continuity checks still apply. Revisions and continuity numbers cannot exceed the shared safe-integer limit. See the [concrete role-policy contract](data-contracts.md#permission-and-role-contracts).
-
-Changing privilege classification, weakening policy, granting eligibility or changing membership that supplies eligibility is an access-management operation. It requires current management permission, the grantor's delegated scope and the IAM journey; holding the role for personal use alone cannot authorise it. A lower-security clone is a new governed role and grant, never a shortcut around these checks.
+The initial [membership operations in #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) are
+add, remove, restore and renew. Add, restore and renew require an active Group and active account in
+that same organisation; removal can still revoke a retained membership after its source becomes
+inactive. Renewal accepts an expired, non-revoked predecessor and derives the same Group/account from
+it. If the predecessor was already revoked, use a fresh authorised add instead. Every successful
+operation changes Access once, including renewal's two membership rows. Competing changes use the
+existing reviewed revision and organisation transaction lock. The
+[protected invocation #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) checks caller
+authority, and the [IAM application](iam-application.md) supplies the human journey.
 
 ## Editing a role versus accepting permissions
 
-Changing a role's local name, description or activation policy is not permission acceptance. An application-role edit preserves its accepted permission entries, original acceptance evidence and current lifecycle, including a pending-review or unavailable state. It cannot make pending additions live or restore a withdrawn permission. A custom-role edit likewise preserves its selected entries unless the administrator explicitly chooses to replace or refresh that selection. A custom role copied from a template remains independent and retains its original template provenance. The copy may keep a nonempty exact subset of that template's currently assignable permissions, but cannot add unrelated permissions within the copy operation; those require explicit custom-role selection. Accepting a supplied application role uses the complete currently assignable template projection.
+Changing a role's local name or description is not permission acceptance. An application-role edit
+preserves its accepted permission entries, original acceptance evidence and current lifecycle,
+including a pending-review or unavailable state. It cannot make pending additions live or restore a
+withdrawn permission. A custom-role edit likewise preserves its selected entries unless the
+administrator explicitly chooses to replace or refresh that selection. A custom role copied from a
+template remains independent and retains its original template provenance. The copy may keep a
+nonempty exact subset of that template's currently assignable permissions, but cannot add unrelated
+permissions within the copy operation; those require explicit custom-role selection. Accepting a
+supplied application role uses the complete currently assignable template projection.
 
-Accepting the current application template is a separate operation. It uses the exact currently registered application release and template, not an arbitrary historical release. Replacing or refreshing custom-role permissions also uses exact current permission evidence. Both operations apply the [complete affected-assignment review](data-contracts.md#permission-and-role-contracts) whenever authority is broadened or restored. A standing/activation-required mode change requires that review even when no permission is added; a same-mode policy-detail change does not.
+Accepting the current application template is a separate operation. It uses the exact currently
+registered application release and template, not an arbitrary historical release. Replacing or
+refreshing custom-role permissions also uses exact current permission evidence. Both operations
+apply the [complete affected-assignment review](data-contracts.md#permission-and-role-contracts)
+whenever authority is broadened or restored.
 
-Retirement preserves the role's accepted snapshot and permanently prevents further use or restoration. It must not depend on reading a currently available source application or accepting new permissions. A stale request, duplicate creation, repeated retirement or request that changes none of the stored configuration or acceptance evidence is refused without advancing the role or Access version. There is no separate successful-replay receipt.
+Retirement preserves the role's accepted snapshot and permanently prevents further use or
+restoration. It must not depend on reading a currently available source application or accepting new
+permissions. A stale request, duplicate creation, repeated retirement or request that changes none
+of the stored configuration or acceptance evidence is refused without advancing the role or Access
+version. There is no separate successful-replay receipt.
 
 ```mermaid
 flowchart TD
-    CHANGE[Choose a role change] --> EDIT[Edit local details or activation policy]
+    CHANGE[Choose a role change] --> EDIT[Edit local details]
     EDIT --> KEEP[Preserve accepted permissions and lifecycle]
     CHANGE --> ACCEPT[Explicitly accept or refresh permissions]
     ACCEPT --> CURRENT[Verify the exact current permission evidence]
     CURRENT --> REVIEW[Review all affected assignments if access expands or returns]
-    KEEP --> MODE[Review all affected assignments if the access mode changes]
+    KEEP --> COMMIT[Commit one complete role change]
+    REVIEW --> COMMIT
     CHANGE --> RETIRE[Retire without accepting permissions]
-    REVIEW --> COMMIT[Commit one complete role change]
-    MODE --> COMMIT
     RETIRE --> COMMIT
 ```
 
-These are the required behaviours of the private [role-change composition #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33). The [protected operation #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) and [IAM journey #267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267) must add current caller authority and the permanent-steward safeguard before users can perform them.
-
-## Eligibility is not active access
-
-| Fact                              | Effect                                                                                                                                                                                 |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Standing role assignment          | Gives the role's currently accepted permissions while the assignment and all other access conditions are valid, only where the role policy permits standing access.                    |
-| Eligible assignment to an account | Permits that account to request activation within its eligibility window; grants no role permissions by itself.                                                                        |
-| Eligible assignment to a group    | Makes each currently valid member eligible to request the role; it does not activate the role for the whole group.                                                                     |
-| Activated role                    | Gives one exact organisation account time-limited use of the accepted role after its current activation requirements succeed. It is protected Access state, not a new sign-in session. |
-
-Use **role activation**, rather than a second temporary group-membership mechanism, for the first PIM implementation. Microsoft documents both approaches in [PIM for Groups](https://learn.microsoft.com/en-us/entra/id-governance/privileged-identity-management/concept-pim-for-groups); Vortex starts with one activation path. Group membership can remain valid when a role activation expires, but it provides only eligibility for an activation-required role.
-
-An activation-required role cannot be made usable through a direct standing assignment, an active group role assignment, an invitation, a role-copy operation or delegated management scope. Eligibility and delegation never substitute for the role's active-use requirement. Activating a role also does not manufacture delegation: management operations still require both the active management permission and the independently bounded delegation.
-
-```mermaid
-flowchart TD
-    ACCOUNT[Organisation account] --> DIRECT[Direct role eligibility]
-    ACCOUNT --> MEMBER[Current group membership]
-    MEMBER --> GROUP[Group role eligibility]
-    DIRECT --> REQUEST[Request activation in IAM]
-    GROUP --> REQUEST
-    REQUEST --> CHECK[Check current role, policy and eligibility]
-    CHECK --> FLOW{Organisation approval flow configured?}
-    FLOW -- Yes --> WAIT[Wait for a person]
-    FLOW -- No --> AUTH[Recheck required recent authentication at activation]
-    WAIT --> AUTH
-    AUTH --> ACTIVE[Time-limited activation for this account]
-    ACTIVE --> ACCESS[Normal role, record and field access checks]
-    ACTIVE --> END[Expiry, deactivation or revocation]
-    END --> NONE[Role no longer contributes access]
-```
-
-## Activation and immediate loss of access
-
-Activation is requested by the beneficiary through the currently authenticated organisation account. The server selects that beneficiary; a form cannot activate another person's role by supplying an account identifier. Bind the request to the exact role, accepted permission evidence, eligibility assignment, policy revision, requested duration and originating membership when group-derived. The protected operation checks only current authority and the declared preconditions; it performs no approver check. An organisation that wants approval places a wait-for-a-person step in a Kestra flow that then calls the operation, and it may make that flow the operation's only permitted caller.
-
-Pending, refused, cancelled or stale requests grant nothing. A human response inside an organisation's flow is not activation; activation exists only when the protected operation succeeds. Check recent-authentication evidence at activation, after any workflow wait, using [verified evidence #276](https://github.com/Abzum-NZ/Abzum-Vortex/issues/276); token refresh, token issue time or an authentication-strength label alone is not recent MFA. The governed IAM action and protected checks are the same whether or not the organisation wraps them in an approval flow; core consumes no approval evidence and checks no approver.
-
-Protected activation evidence identifies one account, role, the historical role revision used at activation, its authority continuity number, exact eligibility and policy evidence, originating membership when applicable, start, finite expiry and revocation. Eligibility and originating membership are pinned by exact identity and current revision. The end cannot exceed the requested/policy duration or known eligibility and membership end times. Do not copy the permission set into every activation; bind the accepted role authority so newly added permissions cannot enter an existing activation silently.
-
-Activation starts when its protected operation succeeds; scheduling a future activation is not part of the initial model. A direct activation records its exact eligibility assignment, while a Group-derived activation also records the exact membership that supplied eligibility. “Active” on a timing-only assignment or activation view is not an access decision: current account, role, source and policy checks still apply, and active eligibility alone grants nothing. The [closed fact contracts](data-contracts.md#permission-and-role-contracts) reject incomplete source evidence rather than guessing a membership.
-
-An account may have several independently authorised activation windows for the same role. Each has its own identity and exact eligibility source; revoking one does not revoke another valid window. There is no automatic replacement or extension. Ending all use of the role requires removing the relevant eligibility or otherwise invalidating every contributing window through the normal access rules.
-
-The initial [activation composition in #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) activates or terminally revokes one such window. Its command binds the reviewed role revision and exact eligibility/membership revisions, not a caller-supplied policy or permission snapshot. The database derives the policy and authority evidence and samples time after acquiring the existing organisation/source locks. Requested duration is explicit; the resulting end is the earliest permitted by that request, current policy and source expiry. A source expiring while the operation waits cannot supply a new activation. Revocation remains possible after expiry or source inactivity and preserves the original activation evidence. Each change advances Access once using `role_activation_changed`; eligibility assignments themselves remain unchanged.
-
-The private composition is not an authentication decision. Before exposing it, [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) must bind the authenticated beneficiary and recheck the required reason and recent authentication inside its protected invocation. [IAM #267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267) presents those requests through ordinary records and workflows. There is no additional core request store or granting screen in this slice.
-
-### Retained permissions during role review
-
-Every role has an authority continuity number, starting at one, separate from its policy continuity number. An immediate successor retains the authority number only when its accepted permission set is a subset of the predecessor's set and it is not restoring a non-granting role (`unavailable` or `retired`) to `active` or `acceptance_required`. Otherwise the number advances exactly once. Restoration advances it even when the sets are equal or empty. Exhaustion refuses the change; it never wraps or resets.
-
-This defensive calculation does not authorise a lifecycle transition: retired roles cannot be restored, and automatic application changes leave them untouched. Returning an unavailable role to an empty pending-review state and later accepting actual permissions are two distinct transitions, each advancing the number under the same rule.
-
-Compare exact application context, permission owner kind and identity, permission identity, permission continuity number. Labels and entry order are not permission identity; original source release and catalogue evidence remain provenance. Compare only the sealed immediate predecessor, not a complete history on every access request. The [role contracts](data-contracts.md#permission-and-role-contracts) name this field `authorityContinuityRevision`.
-
-An existing activation checks the current authority number and policy number, then uses the role's current retained accepted entries and current permission availability/continuity. It does not require the historical role revision to equal the latest revision. Display changes, pure narrowing and pending additions therefore preserve still-valid use; removed permissions stop contributing immediately. Explicit acceptance of added, restored or changed authority advances the number and makes old activation windows ineffective. A fresh activation is required; permissions never silently enter an existing window.
-
-This number binds activation windows, not the lifetime of the underlying standing or eligible assignment. Broader role acceptance still checks the complete affected-assignment manifest. Existing eligibility may request a fresh activation of the retained, nonempty accepted remainder while the role is `acceptance_required`; that is not a new assignment and cannot include pending additions. New assignments still require an active role. A pending activation request pins the exact proposed role revision and must be refreshed after a role change, even when an already active window can retain reduced access.
-
-```mermaid
-flowchart TD
-    CURRENT[Active window using accepted permissions] --> CHANGE[Role changes]
-    CHANGE --> RETAIN[Display change, narrowing or pending additions]
-    RETAIN --> SAME[Same authority period: only current retained permissions]
-    CHANGE --> ACCEPT[Added or restored authority is accepted]
-    ACCEPT --> NEW[New authority period: old window no longer works]
-    NEW --> FRESH[Existing eligibility can request fresh activation]
-    SAME --> POLICY[Current policy and source checks still apply]
-    FRESH --> POLICY
-```
-
-### Current-state checks and revocation
-
-Every access check requires the activation, originating eligibility, membership, account, role and relevant permission continuity to remain valid. Expiry uses current database time; it does not wait for Kestra, a scheduled cleanup or a notification. Cache validity ends no later than the next relevant transition. Explicit changes use the existing atomic Access-version mechanism and governance lock.
-
-Removing the originating membership or revoking its eligibility ends that activation, even if another eligibility path exists. Restoration or a new membership cannot resurrect it. The person may make a fresh request using a currently valid path. Revocation of a role or application, loss of accepted permission continuity, or changing activation policy cannot preserve broader old access. Role/policy changes invalidate pending requests; the separate authority and policy continuity rules prevent active windows from gaining new authority after reacceptance while preserving the valid remainder during pending review.
-
-For the initial release, removing or suspending a membership means the same inactive membership state, stored as `revoked`; there is no separate suspension lifecycle. An authorised IAM restore may make that same membership identity live at a higher revision. It clears the current revocation fields, retains the original grant provenance and records the restoring actor, time and correlation as the current change. Earlier activation windows remain invalid because they name the old membership revision. By contrast, revoked role assignments and delegation are terminal: granting them again requires a new identity and an authorised grant. Group retirement is also terminal. Never simulate suspension by changing a start or expiry time.
-
-Membership, role-assignment and delegation time bounds stay fixed for each grant identity. Restore is possible only while the membership's original expiry is absent or still in the future. A restored future-start membership remains scheduled; a permanent membership can be restored without inventing an expiry. After natural expiry, renewal closes the old membership and creates a new membership identity and window through one authorised change. It does not extend the old window or make the gap look like continuous access. Only one non-revoked membership may occupy an organisation/Group/account pair, including a scheduled or naturally expired row; renewal must therefore close that predecessor before creating its replacement. None of these changes revives an old activation.
-
-The initial [membership operations in #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) are add, remove, restore and renew. Add, restore and renew require an active Group and active account in that same organisation; removal can still revoke a retained membership after its source becomes inactive. Renewal accepts an expired, non-revoked predecessor and derives the same Group/account from it. If the predecessor was already revoked, use a fresh authorised add instead. Every successful operation changes Access once, including renewal's two membership rows. Competing changes use the existing reviewed revision and organisation transaction lock; no separate membership approval mechanism or continuity counter is introduced. The [protected invocation #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) checks caller authority, and the [IAM application](iam-application.md) supplies the human journey.
-
-```mermaid
-flowchart TD
-    MEMBERSHIP[Membership with fixed access window] --> REMOVE[Removed or suspended]
-    REMOVE --> RESTORE[Explicit restore before original expiry]
-    RESTORE --> SAME[Same membership identity, new revision]
-    MEMBERSHIP --> EXPIRE[Original window expires]
-    EXPIRE --> RENEW[Authorised renewal closes old membership]
-    RENEW --> NEW[New membership identity and window]
-    SAME --> FRESH[Privileged use requires a fresh activation]
-    NEW --> FRESH
-```
-
-Users can end their own activation; authorised administrators can revoke it immediately. These reductions take effect at once and do not wait for any workflow. Requests and review history remain visible as ordinary IAM records under their normal permissions, separately from whether access is effective now.
-
-Permitted administrators can inspect the retained [activation ledger](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40). It distinguishes the beneficiary, current role label, historical role revision, exact eligibility-source references, fixed activation window and safe policy settings used at activation. Revoked or expired facts remain inspectable when their underlying authority changes. Its active-window label is descriptive, not a claim that access remains effective; only the current Access decision establishes that.
+These are the required behaviours of the private
+[role-change composition #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33). The
+[protected operation #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) and
+[IAM journey #267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267) add current caller authority
+and the permanent-steward safeguard.
 
 ## Creating, renaming and retiring Groups
 
-An organisation creates a Group with a permanent identity and key plus an editable display label. Renaming does not change its memberships or assigned roles. Retirement is permanent: the Group stops supplying access, but its related membership, assignment, activation and delegation records remain available as evidence under their normal read permissions. It cannot be restored by reusing its key or changing its label. Removing retained grants remains possible after retirement.
+An organisation creates a Group with a permanent identity and key plus an editable display label.
+Renaming does not change its memberships or assigned roles. Retirement is permanent: the Group stops
+supplying access, but its related membership, assignment and delegation records remain available as
+evidence under their normal read permissions. It cannot be restored by reusing its key or changing
+its label. Removing retained grants remains possible after retirement.
 
-Creation, rename and retirement each commit one complete revisioned change and one Access-version increment. Rename and retirement require the revision the administrator reviewed; a competing change requires refresh rather than silently overwriting it. A role assignment racing retirement either commits first and then becomes ineffective through the retired Group, or is refused after retirement. The private [#33 composition](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) does not itself expose administration: [#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) evaluates current access, [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) invokes protected changes with #33's stewardship safeguards, and [IAM](iam-application.md) presents the authorised journey. Membership changes are separate operations.
+Creation, rename and retirement each commit one complete revisioned change and one Access-version
+increment. Rename and retirement require the revision the administrator reviewed; a competing change
+requires refresh rather than silently overwriting it. A role assignment racing retirement either
+commits first and then becomes ineffective through the retired Group, or is refused after retirement.
+The private [#33 composition](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) does not itself
+expose administration: [#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) evaluates current
+access, [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) invokes protected changes with
+#33's stewardship safeguards, and [IAM](iam-application.md) presents the authorised journey.
+Membership changes are separate operations.
 
 ```mermaid
 flowchart LR
@@ -170,12 +115,23 @@ flowchart LR
 
 ## Permanent management access
 
-The existing [permanent-steward invariant](../04-access-and-permissions.md#initial-organisation-stewardship) remains explicit. At least one nominated active account retains the exact direct, non-expiring minimum management role and delegation, plus the required IAM operating role after setup. Those narrowly scoped recovery/management roles permit standing access. They grant no unrelated business-data use.
+The existing [permanent-steward invariant](../04-access-and-permissions.md#initial-organisation-stewardship)
+remains explicit. At least one nominated active account retains the exact direct, non-expiring
+minimum management role and delegation, plus the required IAM operating role after setup. Those
+narrowly scoped recovery/management roles permit standing access. They grant no unrelated
+business-data use.
 
-This is not a bypass flag on arbitrary assignments. A change that would make the final qualifying steward activation-only, remove its management application, or otherwise leave the organisation unable to administer itself is refused unless a qualifying replacement is established atomically. Ordinary privileged operational roles can use PIM without making the organisation unable to administer itself. Never infer this exception from a name, tenant status or first sign-in.
+This is not a bypass flag on arbitrary assignments. A change that would remove the final qualifying
+steward's management application or otherwise leave the organisation unable to administer itself is
+refused unless a qualifying replacement is established atomically. Never infer this exception from a
+name, tenant status or first sign-in.
 
 ## Current Group contract
 
-Group is the single collective-principal term in current contracts, Definition ownership, Access reasons and user-facing text. [#283](https://github.com/Abzum-NZ/Abzum-Vortex/issues/283) removes obsolete Team discriminators and format-bound translation adapters and aligns current readers/writers together. Do not introduce a second principal model. Membership, assignment, activation and stewardship still use the protected operations described above.
+Group is the single collective-principal term in current contracts, Definition ownership, Access
+reasons and user-facing text. Do not introduce a second principal model. Membership, assignment and
+stewardship use the protected operations described above.
 
-Permanent identity is independent of display terminology. Coordinate any stored development-data change with its owning schema; do not silently reinterpret an identity or edit an already-applied migration.
+Permanent identity is independent of display terminology. Coordinate any stored development-data
+change with its owning schema; do not silently reinterpret an identity or edit an already-applied
+migration.

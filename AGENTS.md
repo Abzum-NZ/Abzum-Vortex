@@ -50,7 +50,7 @@ host supports and their ports. Use only the lane you were given.
 Lanes are disposable. Each lane has one holder. Reset only a lane you hold (`lane.mjs reset`,
 `pnpm db:reset` or `pnpm demo:setup`, which always resets its target database); never reset
 another agent's lane. When `main` moves, forward migrate the lane or reset it. To set up without a
-reset, run `pnpm --filter @vortex/web demo:owner` and then `pnpm setup:local --
+reset, run `pnpm demo:owner` and then `pnpm setup:local --
 --local-development --first-owner-identity-id <uuid>` with the printed identity.
 
 ```
@@ -107,7 +107,7 @@ The [target architecture](docs/build-plan/target-architecture.md) is binding: re
 
 `pnpm guard` has two tiers, blocking and warning. For the rules see `tooling/guard/config.ts` (each
 rule has an owner and a review-by date). Any blocking finding fails the run (there is no baseline).
-Unused code is `pnpm knip`'s job, not the guard's.
+Unused code is `pnpm knip`'s job, not the guard's: run `pnpm knip` before READY.
 
 Use `// guard-allow: <rule> <reason>` on the offending line or the line directly above it. SQL supports `-- guard-allow: <rule> <reason>`, and block comments support `/* guard-allow: <rule> <reason> */`. The rule must be a real guard rule and the reason must contain at least 10 characters. Each directive covers one occurrence; the guard counts used exceptions per rule. An exception is appropriate only when the finding is intentional and a direct fix is not suitable; the reviewer must agree with the stated reason. Unmatched directives warn, while an unknown rule or short reason blocks the run.
 

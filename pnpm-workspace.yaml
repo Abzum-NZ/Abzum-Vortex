@@ -10,7 +10,10 @@ catalog:
   turbo: 2.11.10
   typescript-eslint: 8.72.0
   react-dom: 19.3.1
-  postcss: 8.5.31
+  next: 16.4.3
+  zod: 4.6.7
+  server-only: 0.0.1
+  "@types/react-dom": 19.3.0
   "@tabler/icons-react": 3.49.0
   lucide-react: 1.61.0
   motion: 14.6.0
