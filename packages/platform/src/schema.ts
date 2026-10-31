@@ -17,6 +17,7 @@ export * from "./definition/component-request-generation";
 export * from "./workflows/flow-result-descriptors";
 export * from "./workflows/flow-run-start";
 export * from "./rules/flow-interpreter-core";
+export * from "./rules/flow-interpreter-segments";
 export type { BrowserFlowPlan } from "./workflows/flow-plan";
 export * from "./rules/flow-page-inputs";
 export * from "./rules/form-submit-inputs";
