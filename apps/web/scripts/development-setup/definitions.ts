@@ -1,5 +1,5 @@
 import {
-  DEFAULT_PLATFORM_THEME_RELEASE,
+  PLATFORM_THEME_RELEASES,
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
   PLATFORM_CONNECTION_TYPE_RELEASES,
   PLATFORM_BLOCK_RELEASES,
@@ -58,12 +58,12 @@ export const developmentPublicationCatalogue: ImmutableDefinitionPublicationCata
         return definition;
       },
     ),
-    platformThemeReleases: [
-      (({ contentFingerprint, ...definition }) => {
+    platformThemeReleases: Object.values(PLATFORM_THEME_RELEASES).map(
+      ({ contentFingerprint, ...definition }) => {
         void contentFingerprint;
         return definition;
-      })(DEFAULT_PLATFORM_THEME_RELEASE),
-    ],
+      },
+    ),
   },
 };
 

@@ -1,11 +1,12 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import {
+  StudioOptionControl,
   studioRecordPageChoices,
   studioRecordPageKinds,
   type StudioRecordPageCommand,
@@ -47,22 +48,25 @@ export function StudioRecordPageForm({
   const [listName, setListName] = useState("");
   const chooseKind = (next: StudioRecordPageKind) => {
     setKind(next);
-    setAddToMenu(next === "list");
+    setAddToMenu(next === "list" || next === "board");
   };
   const effectiveRecordType = recordTypes.some((entry) => entry.recordType === recordType)
     ? recordType
     : (recordTypes[0]?.recordType ?? "");
+  const selectedRecord = recordTypes.find((record) => record.recordType === effectiveRecordType);
   const availableKinds = studioRecordPageKinds.filter((entry) =>
-    recordTypes
-      .find((record) => record.recordType === effectiveRecordType)
-      ?.kinds.includes(entry.kind),
+    selectedRecord?.kinds.includes(entry.kind),
   );
+  const boardUnavailable = selectedRecord !== undefined && !selectedRecord.kinds.includes("board");
   const effectiveKind = availableKinds.some((entry) => entry.kind === kind)
     ? kind
     : availableKinds[0]?.kind;
   // A detail page or edit form opens one record, so it is never a menu entry.
   const menuAllowed =
-    effectiveKind === "list" || effectiveKind === "form_create" || effectiveKind === "guided";
+    effectiveKind === "list" ||
+    effectiveKind === "board" ||
+    effectiveKind === "form_create" ||
+    effectiveKind === "guided";
   const command = useMemo(
     (): StudioRecordPageCommand => ({
       kind: "add_record_page",
@@ -70,7 +74,9 @@ export function StudioRecordPageForm({
       type: effectiveKind ?? "list",
       shellAlias: shellChoice === "" ? null : shellChoice,
       addToMenu: menuAllowed && addToMenu,
-      ...(effectiveKind === "list" && listName.trim() !== "" ? { name: listName } : {}),
+      ...((effectiveKind === "list" || effectiveKind === "board") && listName.trim() !== ""
+        ? { name: listName }
+        : {}),
     }),
     [effectiveRecordType, effectiveKind, shellChoice, addToMenu, menuAllowed, listName],
   );
@@ -119,18 +125,16 @@ export function StudioRecordPageForm({
     >
       <StudioField label="Record type">
         {(control) => (
-          <NativeSelect
+          <StudioOptionControl
             {...control}
             value={effectiveRecordType}
             disabled={disabled}
-            onChange={(event) => setRecordType(event.target.value)}
-          >
-            {recordTypes.map((entry) => (
-              <NativeSelectOption key={entry.recordType} value={entry.recordType}>
-                {entry.label}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+            options={recordTypes.map((entry) => ({
+              value: entry.recordType,
+              label: entry.label,
+            }))}
+            onChange={setRecordType}
+          />
         )}
       </StudioField>
       <StudioField
@@ -143,21 +147,21 @@ export function StudioRecordPageForm({
         }
       >
         {(control) => (
-          <NativeSelect
+          <StudioOptionControl
             {...control}
             value={effectiveKind ?? ""}
             disabled={disabled}
-            onChange={(event) => chooseKind(event.target.value as StudioRecordPageKind)}
-          >
-            {availableKinds.map((entry) => (
-              <NativeSelectOption key={entry.kind} value={entry.kind}>
-                {entry.label}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+            options={availableKinds.map((entry) => ({ value: entry.kind, label: entry.label }))}
+            onChange={(next) => chooseKind(next as StudioRecordPageKind)}
+          />
         )}
       </StudioField>
-      {effectiveKind === "list" && (
+      {boardUnavailable && (
+        <p className="text-xs text-muted-foreground">
+          Board pages need a pipeline: add one on a choice field in Data first.
+        </p>
+      )}
+      {(effectiveKind === "list" || effectiveKind === "board") && (
         <StudioField
           label="Page name"
           hint="Leave empty to name it after the record type. A further list of the same records needs a name of its own."
@@ -176,18 +180,16 @@ export function StudioRecordPageForm({
       )}
       <StudioField label="Layout" hint="The frame the page is drawn in.">
         {(control) => (
-          <NativeSelect
+          <StudioOptionControl
             {...control}
             value={shellChoice}
             disabled={disabled}
-            onChange={(event) => setShellChoice(event.target.value)}
-          >
-            {choices.map((choice) => (
-              <NativeSelectOption key={choice.shellAlias ?? ""} value={choice.shellAlias ?? ""}>
-                {choice.label}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+            options={choices.map((choice) => ({
+              value: choice.shellAlias ?? "",
+              label: choice.label,
+            }))}
+            onChange={setShellChoice}
+          />
         )}
       </StudioField>
       {menuAllowed ? (
@@ -213,9 +215,9 @@ export function StudioRecordPageForm({
         {current === undefined ? (
           <p className="text-sm text-muted-foreground">Working it out…</p>
         ) : current.kind === "refused" ? (
-          <p role="alert" className="text-sm text-destructive">
-            {current.message}
-          </p>
+          <Alert variant="destructive">
+            <AlertDescription>{current.message}</AlertDescription>
+          </Alert>
         ) : (
           <ul className="list-disc space-y-1 pl-4 text-sm text-muted-foreground">
             {current.details.map((detail, index) => (

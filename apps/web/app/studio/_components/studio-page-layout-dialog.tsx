@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
 import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
@@ -10,18 +11,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@vortex/ui/components/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@vortex/ui/components/select";
 import type {
   StudioPageLayoutPlan,
   StudioStructureCommand,
   StudioStructureResult,
 } from "@vortex/ui/studio";
+import { StudioOptionControl } from "@vortex/ui/studio";
 import { StudioField } from "./studio-field";
 
 /** Collect every destination before applying a layout and its blocks as one draft edit. */
@@ -109,38 +104,29 @@ export function StudioPageLayoutDialog({
                 }
               >
                 {(control) => (
-                  <Select
-                    value={mapping[area.id] ?? null}
+                  <StudioOptionControl
+                    {...control}
+                    value={mapping[area.id] ?? ""}
                     disabled={disabled || noDestination}
-                    items={area.destinations.map((target) => ({
+                    unset="Choose an area"
+                    options={area.destinations.map((target) => ({
                       value: target.id,
                       label: target.label,
                     }))}
-                    onValueChange={(value) => {
-                      setMapping((current) => ({ ...current, [area.id]: value ?? "" }));
+                    onChange={(value) => {
+                      setMapping((current) => ({ ...current, [area.id]: value }));
                       setProblem(null);
                     }}
-                  >
-                    <SelectTrigger {...control}>
-                      <SelectValue placeholder="Choose an area" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {area.destinations.map((target) => (
-                        <SelectItem key={target.id} value={target.id}>
-                          {target.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                 )}
               </StudioField>
             );
           })}
         </div>
         {refusal !== null && (
-          <p role="alert" className="text-sm text-destructive">
-            {refusal}
-          </p>
+          <Alert variant="destructive">
+            <AlertDescription>{refusal}</AlertDescription>
+          </Alert>
         )}
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>

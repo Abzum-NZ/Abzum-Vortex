@@ -855,7 +855,7 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
                 recordCount={rows.length}
                 totals={values.totals ?? []}
                 columns={layout.shown}
-                label={accessibleName}
+                noun={values.recordNoun}
               />
             </div>
           ) : null}

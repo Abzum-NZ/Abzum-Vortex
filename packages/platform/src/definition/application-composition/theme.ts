@@ -197,30 +197,30 @@ applicationThemeSelectionSchema.parse(DEFAULT_APPLICATION_THEME_SELECTION);
 
 /** Studio's platform chrome; the authored application keeps its own selection on the canvas. */
 export const STUDIO_THEME_SELECTION = applicationThemeSelectionSchema.parse({
-  style: "vega",
-  baseColor: "zinc",
-  theme: "indigo",
-  chartColor: "indigo",
-  radius: "medium",
+  style: "sera",
+  baseColor: "mist",
+  theme: "mist",
+  chartColor: "mist",
+  radius: "none",
   menuColor: "default",
   menuAccent: "subtle",
   iconLibrary: "lucide",
-  bodyFont: "geist",
-  headingFont: "inherit",
+  bodyFont: "inter",
+  headingFont: "inter",
 });
 
 export const DEFAULT_SOURCE_APPLICATION_THEME_SELECTION =
   sourceApplicationThemeSelectionSchema.parse({
-    style: "nova",
-    base_color: "neutral",
-    theme: "neutral",
-    chart_color: "neutral",
-    radius: "default",
+    style: "sera",
+    base_color: "mist",
+    theme: "mist",
+    chart_color: "mist",
+    radius: "none",
     menu_color: "default",
     menu_accent: "subtle",
     icon_library: "lucide",
     body_font: "inter",
-    heading_font: "inherit",
+    heading_font: "inter",
   });
 
 /** Maps an authored selection onto its canonical form. */

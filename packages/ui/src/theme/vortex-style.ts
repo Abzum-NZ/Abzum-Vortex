@@ -1,3 +1,4 @@
+import { DEFAULT_APPLICATION_THEME_SELECTION } from "@vortex/platform/schema";
 import type { ApplicationThemeSelection } from "@vortex/platform/schema";
 import type { CSSProperties } from "react";
 import { createVortexStyleComponentVariables } from "./vortex-style-variables";
@@ -20,8 +21,15 @@ export const VORTEX_STYLES = [
 
 export type VortexStyle = (typeof VORTEX_STYLES)[number];
 
-/** The style a page paints with when the resolved selection names none that ships. */
-export const DEFAULT_VORTEX_STYLE: VortexStyle = "nova";
+/**
+ * The style a page paints with when the resolved selection names none that ships: the platform
+ * default definition's style, never a value chosen here.
+ */
+const definitionStyle = VORTEX_STYLES.find(
+  (style) => style === DEFAULT_APPLICATION_THEME_SELECTION.style,
+);
+if (definitionStyle === undefined) throw new Error("THEME_DEFAULT_STYLE_NOT_SHIPPED");
+export const DEFAULT_VORTEX_STYLE: VortexStyle = definitionStyle;
 
 /**
  * The menu treatments the catalogue offers. The catalogue carries each option as a shadcn variant
@@ -37,14 +45,24 @@ export const VORTEX_MENU_COLORS = [
 
 export type VortexMenuColor = (typeof VORTEX_MENU_COLORS)[number];
 
-export const DEFAULT_VORTEX_MENU_COLOR: VortexMenuColor = "default";
+/** The menu colour the platform default definition names, never a value chosen here. */
+const definitionMenuColor = VORTEX_MENU_COLORS.find(
+  (menu) => menu === DEFAULT_APPLICATION_THEME_SELECTION.menuColor,
+);
+if (definitionMenuColor === undefined) throw new Error("THEME_DEFAULT_MENU_COLOR_NOT_SHIPPED");
+export const DEFAULT_VORTEX_MENU_COLOR: VortexMenuColor = definitionMenuColor;
 
 /** The menu accent effects the catalogue offers, published on the root as an attribute. */
 export const VORTEX_MENU_ACCENTS = ["subtle", "bold"] as const;
 
 export type VortexMenuAccent = (typeof VORTEX_MENU_ACCENTS)[number];
 
-export const DEFAULT_VORTEX_MENU_ACCENT: VortexMenuAccent = "subtle";
+/** The menu accent the platform default definition names, never a value chosen here. */
+const definitionMenuAccent = VORTEX_MENU_ACCENTS.find(
+  (accent) => accent === DEFAULT_APPLICATION_THEME_SELECTION.menuAccent,
+);
+if (definitionMenuAccent === undefined) throw new Error("THEME_DEFAULT_MENU_ACCENT_NOT_SHIPPED");
+export const DEFAULT_VORTEX_MENU_ACCENT: VortexMenuAccent = definitionMenuAccent;
 
 /**
  * The one resolved selection the application root attributes come from: the style id when it is a

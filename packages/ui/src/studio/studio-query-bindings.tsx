@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "../components/alert";
 import { useId } from "react";
 import {
   checkQueryBindings,
@@ -16,17 +17,10 @@ import {
 } from "@vortex/platform/schema";
 import { Badge } from "../components/badge";
 import { Input } from "../components/input";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "../components/select";
 import { StudioReferencePicker } from "./studio-reference-picker";
 import { StudioField } from "./studio-field";
 import { StudioRecordReferenceControl } from "./studio-record-reference-control";
-import type { StudioSettingChoices } from "./studio-setting-controls";
+import { StudioOptionControl, type StudioSettingChoices } from "./studio-setting-controls";
 import type { StudioQueryChoice } from "./contextual-palette";
 
 type Value = SourceBlockPropertyValueContract;
@@ -88,9 +82,9 @@ export function StudioSelectionControlBinding({
         )}
       </StudioField>
       {facts.pageProblems.map((problem) => (
-        <p key={problem.sentence} role="alert" className="text-sm text-destructive">
-          {problem.sentence}
-        </p>
+        <Alert variant="destructive" key={problem.sentence}>
+          <AlertDescription>{problem.sentence}</AlertDescription>
+        </Alert>
       ))}
     </>
   );
@@ -169,9 +163,9 @@ export function StudioQueryBindings({
     <div className="space-y-4" aria-label="Query inputs">
       {[...problems.filter((problem) => problem.input === undefined), ...facts.pageProblems].map(
         (problem) => (
-          <p key={problem.sentence} role="alert" className="text-sm text-destructive">
-            {problem.sentence}
-          </p>
+          <Alert variant="destructive" key={problem.sentence}>
+            <AlertDescription>{problem.sentence}</AlertDescription>
+          </Alert>
         ),
       )}
       {inputs.map((input) => {
@@ -303,21 +297,14 @@ export function StudioQueryBindings({
               )}
               {input.required && <Badge variant="outline">Required</Badge>}
             </div>
-            <Select value={source || "unset"} disabled={disabled} onValueChange={selectSource}>
-              <SelectTrigger aria-label={`${input.label} source`}>
-                <SelectValue>
-                  {labels[source as QueryBindingSourceKind] ?? "Choose a source"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="unset">Choose a source</SelectItem>
-                {sources.map((kind) => (
-                  <SelectItem key={kind} value={kind}>
-                    {labels[kind]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <StudioOptionControl
+              aria-label={`${input.label} source`}
+              value={source}
+              disabled={disabled}
+              unset="Choose a source"
+              options={sources.map((kind) => ({ value: kind, label: labels[kind] }))}
+              onChange={(value) => selectSource(value === "" ? "unset" : value)}
+            />
             {["page_parameter", "control", "record_field"].includes(source) && (
               <StudioReferencePicker
                 id={`${id}-${input.key}`}
@@ -359,30 +346,13 @@ export function StudioQueryBindings({
               />
             )}
             {source === "current_person" && partsFitting.length > 1 && (
-              <Select
+              <StudioOptionControl
+                aria-label={`${input.label} part`}
                 disabled={disabled}
                 value={props.part?.kind === "choice" ? props.part.value : partsFitting[0]!}
-                onValueChange={(value) =>
-                  change({ ...props, part: choice(value ?? partsFitting[0]!) })
-                }
-              >
-                <SelectTrigger aria-label={`${input.label} part`}>
-                  <SelectValue>
-                    {partLabels[
-                      (props.part?.kind === "choice"
-                        ? props.part.value
-                        : partsFitting[0]!) as CurrentPersonPart
-                    ] ?? partLabels[partsFitting[0]!]}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {partsFitting.map((part) => (
-                    <SelectItem key={part} value={part}>
-                      {partLabels[part]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                options={partsFitting.map((part) => ({ value: part, label: partLabels[part] }))}
+                onChange={(value) => change({ ...props, part: choice(value) })}
+              />
             )}
             {source === "fixed" &&
               (input.type?.kind === "record" ? (
@@ -416,46 +386,25 @@ export function StudioQueryBindings({
                   }
                 />
               ) : input.choices !== undefined ? (
-                <Select
+                <StudioOptionControl
+                  aria-label={`${input.label} value`}
                   value={props.value?.kind === "text" ? props.value.value : ""}
                   disabled={disabled}
-                  onValueChange={(value) => change(fixedWith(props, "value", text(value ?? "")))}
-                >
-                  <SelectTrigger aria-label={`${input.label} value`}>
-                    <SelectValue>
-                      {input.choices.find(
-                        (option) =>
-                          props.value?.kind === "text" && option.value === props.value.value,
-                      )?.label ??
-                        (props.value?.kind === "text" && props.value.value !== ""
-                          ? props.value.value
-                          : "Choose a value")}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {input.choices.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  unset="Choose a value"
+                  options={input.choices}
+                  onChange={(value) => change(fixedWith(props, "value", text(value)))}
+                />
               ) : input.type?.kind === "yes_no" ? (
-                <Select
+                <StudioOptionControl
+                  aria-label={`${input.label} value`}
                   value={props.value?.kind === "text" ? props.value.value : "false"}
                   disabled={disabled}
-                  onValueChange={(value) => change(fixedWith(props, "value", text(value ?? "")))}
-                >
-                  <SelectTrigger aria-label={`${input.label} value`}>
-                    <SelectValue>
-                      {props.value?.kind === "text" && props.value.value === "true" ? "Yes" : "No"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="true">Yes</SelectItem>
-                    <SelectItem value="false">No</SelectItem>
-                  </SelectContent>
-                </Select>
+                  options={[
+                    { value: "true", label: "Yes" },
+                    { value: "false", label: "No" },
+                  ]}
+                  onChange={(value) => change(fixedWith(props, "value", text(value)))}
+                />
               ) : (
                 <Input
                   aria-label={`${input.label} value`}
@@ -499,28 +448,16 @@ export function StudioQueryBindings({
             )}
             {source === "relative_date" && (
               <>
-                <Select
+                <StudioOptionControl
+                  aria-label={`${input.label} date`}
                   disabled={disabled}
                   value={props.anchor?.kind === "choice" ? props.anchor.value : "today"}
-                  onValueChange={(value) => change({ ...props, anchor: choice(value ?? "today") })}
-                >
-                  <SelectTrigger aria-label={`${input.label} date`}>
-                    <SelectValue>
-                      {anchorLabels[
-                        (props.anchor?.kind === "choice"
-                          ? props.anchor.value
-                          : "today") as RelativeDateAnchor
-                      ] ?? anchorLabels.today}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {relativeDateAnchors.map((anchor) => (
-                      <SelectItem key={anchor} value={anchor}>
-                        {anchorLabels[anchor]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  options={relativeDateAnchors.map((anchor) => ({
+                    value: anchor,
+                    label: anchorLabels[anchor],
+                  }))}
+                  onChange={(value) => change({ ...props, anchor: choice(value) })}
+                />
                 <Input
                   aria-label={`${input.label} offset days`}
                   type="number"
@@ -537,9 +474,9 @@ export function StudioQueryBindings({
               </>
             )}
             {problem !== undefined && (
-              <p role="alert" className="text-sm text-destructive">
-                {problem}
-              </p>
+              <Alert variant="destructive">
+                <AlertDescription>{problem}</AlertDescription>
+              </Alert>
             )}
           </div>
         );

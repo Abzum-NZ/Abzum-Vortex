@@ -302,7 +302,8 @@ const themeRequestSchema = z
 /**
  * Resolves a candidate application theme with the producer publication uses, for the Theme tab's
  * check before an edit and for the canvas, which draws the draft's theme as it is edited. The
- * theme must keep the draft's pinned base release; only its selection and overrides change.
+ * candidate's base may be any registered platform theme release: choosing one of the platform's
+ * themes in the Theme tab changes the pin as well as the selection.
  */
 export async function resolveStudioApplicationTheme(
   organizationId: string,
@@ -319,11 +320,8 @@ export async function resolveStudioApplicationTheme(
   const loaded = await loadStudioApplicationDraft(organizationId, request.data.rootId);
   if (loaded.kind !== "available") return { kind: loaded.kind };
   const draft = loaded.draft;
-  if (
-    draft.rootId !== request.data.rootId ||
-    canonicalJson(draft.source.body.theme.base) !== canonicalJson(request.data.theme.base)
-  )
-    return refuse("resolve-theme", "STUDIO_THEME_BASE_MISMATCH", {
+  if (draft.rootId !== request.data.rootId)
+    return refuse("resolve-theme", "STUDIO_THEME_ROOT_MISMATCH", {
       kind: "refused",
     } as const);
   try {

@@ -1,9 +1,9 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type FormEvent } from "react";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import {
   currentIso4217Alpha3CodeSetV2026_01_01,
   type ApplicationSourceDocument,
@@ -15,6 +15,7 @@ import {
   type StudioPageValueCommand,
   type StudioPageValueResult,
   type StudioPageValueType,
+  StudioOptionControl,
 } from "@vortex/ui/studio";
 import { StudioReferencesAlert, StudioUsedIn } from "./studio-used-in";
 
@@ -121,9 +122,9 @@ export function StudioPageValuesPanel({
         />
       )}
       {problem !== "" && refusedUsers.length === 0 && (
-        <p role="alert" className="text-sm text-destructive">
-          {problem}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{problem}</AlertDescription>
+        </Alert>
       )}
       <form onSubmit={add} className="space-y-2">
         <Label className="flex flex-col items-start gap-1 text-xs">
@@ -148,33 +149,26 @@ export function StudioPageValuesPanel({
         </Label>
         <Label className="flex flex-col items-start gap-1 text-xs">
           Type
-          <NativeSelect
+          <StudioOptionControl
             value={type}
             disabled={disabled}
-            onChange={(event) => setType(event.target.value as StudioPageValueType)}
-          >
-            {studioPageValueTypes.map((entry) => (
-              <NativeSelectOption key={entry.type} value={entry.type}>
-                {entry.label}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+            options={studioPageValueTypes.map((entry) => ({
+              value: entry.type,
+              label: entry.label,
+            }))}
+            onChange={(value) => setType(value as StudioPageValueType)}
+          />
         </Label>
         {type === "money" && (
           <Label className="flex flex-col items-start gap-1 text-xs">
             Currency
-            <NativeSelect
+            <StudioOptionControl
               value={currency}
               disabled={disabled}
-              onChange={(event) => setCurrency(event.target.value)}
-            >
-              <NativeSelectOption value="">Choose a currency…</NativeSelectOption>
-              {currencies.map((code) => (
-                <NativeSelectOption key={code} value={code}>
-                  {code}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+              unset="Choose a currency…"
+              options={currencies.map((code) => ({ value: code, label: code }))}
+              onChange={setCurrency}
+            />
           </Label>
         )}
         <Button type="submit" size="sm" variant="outline" disabled={disabled}>

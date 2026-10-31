@@ -34,7 +34,7 @@ import { ensureStudioBoardQuickAdd } from "./board-quick-add";
 import { StructureRefusal } from "./application-structure-common";
 import { resolveStudioDataQuery } from "./default-record-query";
 import { ensureStudioRecordSheet } from "./application-record-sheet";
-import { placed } from "./application-record-pages";
+import { placed } from "./application-record-page-shared";
 import { studioLayoutOutletPlacementUses } from "./application-layout-outlets";
 import { createStudioDiscoveryAdapter } from "./discovery-adapter";
 import {

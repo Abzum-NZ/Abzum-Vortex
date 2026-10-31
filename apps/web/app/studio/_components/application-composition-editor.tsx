@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { plainSourceSettingValue, recordsTableBoardFeature } from "@vortex/platform/schema";
 import type { StudioCompiledFields } from "../_lib/studio-data-model";
 import {
@@ -516,9 +517,9 @@ export function ApplicationCompositionEditor(props: Props) {
           </fieldset>
           <StudioHelp hint="A setting you leave unset uses its default." />
           {settings.problem !== "" && problemArea === "settings" && (
-            <p role="alert" className="text-sm text-destructive">
-              {settings.problem}
-            </p>
+            <Alert variant="destructive">
+              <AlertDescription>{settings.problem}</AlertDescription>
+            </Alert>
           )}
         </StudioInspectorGroup>
       ) : (
@@ -758,9 +759,9 @@ export function ApplicationCompositionEditor(props: Props) {
             </StudioField>
           )}
           {layout.problem !== "" && (
-            <p role="alert" className="text-sm text-destructive">
-              {layout.problem}
-            </p>
+            <Alert variant="destructive">
+              <AlertDescription>{layout.problem}</AlertDescription>
+            </Alert>
           )}
           <StudioHelp
             hint={

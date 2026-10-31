@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
   changeInlineQuery,
@@ -203,9 +204,9 @@ function InputName({
         onChange={(event) => name.change(event.target.value)}
       />
       {name.problem === "" ? null : (
-        <p role="alert" className="text-sm text-destructive">
-          {name.problem}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{name.problem}</AlertDescription>
+        </Alert>
       )}
     </div>
   );
@@ -596,9 +597,9 @@ export function StudioQueryEditor({
           />
         )}
         {filter.problem === "" ? null : (
-          <p role="alert" className="text-sm text-destructive">
-            {filter.problem}
-          </p>
+          <Alert variant="destructive">
+            <AlertDescription>{filter.problem}</AlertDescription>
+          </Alert>
         )}
       </Section>
 
@@ -842,9 +843,9 @@ export function StudioQueryEditor({
           onChange={(event) => pageSize.change(event.target.value)}
         />
         {pageSize.problem === "" ? null : (
-          <p role="alert" className="text-sm text-destructive">
-            {pageSize.problem}
-          </p>
+          <Alert variant="destructive">
+            <AlertDescription>{pageSize.problem}</AlertDescription>
+          </Alert>
         )}
       </Section>
 

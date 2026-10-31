@@ -1,5 +1,6 @@
 "use client";
 
+import { Alert, AlertDescription } from "../components/alert";
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import {
   canonicalJson,
@@ -1421,14 +1422,20 @@ function SettingFields({
                 {field === undefined &&
                 touched.id === idPrefix &&
                 (touched.keys.has(fieldProperty.key) || touched.keys.has(property.key)) ? (
-                  <p role="alert">Choose a field offered by this data to resolve its label.</p>
+                  <Alert variant="destructive">
+                    <AlertDescription>
+                      Choose a field offered by this data to resolve its label.
+                    </AlertDescription>
+                  </Alert>
                 ) : field === undefined ? null : label?.kind === "text" ? (
                   <>
                     {fieldChanged && label.value !== field.label && (
-                      <p role="alert">
-                        The field changed since this label was set. Keep it as a custom label, or
-                        use &ldquo;{field.label}&rdquo;.
-                      </p>
+                      <Alert variant="destructive">
+                        <AlertDescription>
+                          The field changed since this label was set. Keep it as a custom label, or
+                          use &ldquo;{field.label}&rdquo;.
+                        </AlertDescription>
+                      </Alert>
                     )}
                     <Button
                       type="button"

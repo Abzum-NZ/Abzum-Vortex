@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactElement } from "react";
+import { formatCount, recordsPhrase } from "./date-format";
 import { recordsTableAggregateLabels, type RecordsTableTotal } from "@vortex/platform/schema";
 
 const totalText = (total: RecordsTableTotal): string => {
@@ -84,12 +85,13 @@ export function TableSummary({
   recordCount,
   totals,
   columns,
-  label,
+  noun,
 }: Readonly<{
   recordCount: number;
   totals: readonly RecordsTableTotal[];
   columns: readonly Readonly<{ key: string; label: string }>[];
-  label: string;
+  /** The record type's plural name from the list's data; never a block or placement label. */
+  noun: string | undefined;
 }>): ReactElement | null {
   const sums = columns.flatMap((column) =>
     totals.flatMap((total) =>
@@ -107,9 +109,11 @@ export function TableSummary({
       className="m-0 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-muted-foreground tabular-nums"
     >
       <span className="font-medium text-foreground">
-        {recordCount === 1
-          ? `1 ${label.replace(/ies$/i, "y").replace(/s$/i, "")}`
-          : `${recordCount} ${label.toLowerCase()}`}
+        {noun === undefined
+          ? recordsPhrase(recordCount)
+          : recordCount === 1
+            ? `1 ${noun.toLowerCase().replace(/ies$/, "y").replace(/s$/, "")}`
+            : `${formatCount(recordCount)} ${noun.toLowerCase()}`}
       </span>
       {sums.map((sum) => (
         <span key={sum.key}>{sum.text}</span>

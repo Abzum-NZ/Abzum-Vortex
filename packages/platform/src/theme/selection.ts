@@ -15,10 +15,10 @@ import {
 import { isShadcnIconLibrary } from "../pages/shadcn-icon-libraries";
 import {
   findShadcnThemeCatalogueOption,
-  isShadcnThemeCatalogueBaseRelease,
   shadcnThemeCatalogueDimensionKeys,
 } from "./shadcn-theme-catalogue";
 import { findShadcnThemeRelease } from "./shadcn-theme-releases";
+import { isRegisteredPlatformThemeRelease } from "./platform-theme-catalogue";
 import { validateThemeContrast } from "./contrast";
 import { createLocatedFailure, createThemeLocation } from "./errors";
 import { validateFocusVisibility } from "./focus";
@@ -101,11 +101,11 @@ const checkSelectionOptions = (
   base: ThemeSelectionResolutionInput["base"] | undefined,
   addFailure: FailureSink,
 ): void => {
-  if (base !== undefined && !isShadcnThemeCatalogueBaseRelease(base))
+  if (base !== undefined && !isRegisteredPlatformThemeRelease(base))
     addFailure({
       code: "THEME_SELECTION_BASE_MISMATCH",
       family: "broken_reference",
-      message: `Theme selection requires the catalogue's base platform theme release; the theme pins release ${base.releaseVersion}`,
+      message: `Theme selection requires a registered platform theme release; the theme pins release ${base.releaseVersion}`,
     });
   for (const dimension of shadcnThemeCatalogueDimensionKeys) {
     const optionId = selection[dimension];

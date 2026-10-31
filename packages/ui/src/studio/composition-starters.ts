@@ -5,7 +5,7 @@ import type {
   SourceItem,
 } from "@vortex/platform/schema";
 import { freshBlockName } from "./stored-composition";
-import { studioRecordDetailItem } from "./application-record-pages";
+import { studioRecordDetailItem } from "./application-record-page-detail";
 import { refuse } from "./application-structure-common";
 
 /** Authoring templates fill required slots before the ordinary composition validation runs. */

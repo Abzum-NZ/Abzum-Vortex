@@ -128,8 +128,8 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
                 data-vortex-field-key={contract?.headingField}
                 data-vortex-heading-field-key={contract?.headingField}
               >
-                <div className="flex min-w-0 items-start justify-between gap-[var(--vortex-space-md)]">
-                  <div className="min-w-0 flex-1 *:mb-0">
+                <div className="flex min-w-0 flex-wrap items-start justify-between gap-[var(--vortex-space-md)]">
+                  <div className="min-w-48 flex-1 *:mb-0">
                     <DisplayHeader
                       title={title}
                       accessibleName={accessibleName}

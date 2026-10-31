@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useId, useState, type FormEvent } from "react";
 import {
   changeInlineModuleExtensionPoint,
@@ -128,9 +129,9 @@ function ExtensionEditor({
         </StudioField>
       </StudioInspectorGroup>
       {(field !== undefined && field !== "key") || problem === undefined ? null : (
-        <p id={keyProblemId} role="alert" className="text-sm text-destructive">
-          {problem}
-        </p>
+        <Alert variant="destructive" id={keyProblemId}>
+          <AlertDescription>{problem}</AlertDescription>
+        </Alert>
       )}
       <StudioReferencesAlert
         name={moduleExtensionPointName(key)}
@@ -275,9 +276,9 @@ export function StudioModuleExtensionPoints({
         );
       })}
       {problem === undefined ? null : (
-        <p role="alert" className="text-sm text-destructive">
-          {problem}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{problem}</AlertDescription>
+        </Alert>
       )}
       <StudioReferencesAlert name="This extension" action="deleted" references={references} />
       {expanded === "new" ? (
