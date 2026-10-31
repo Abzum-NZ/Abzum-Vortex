@@ -38,9 +38,6 @@ type ThemeVariableName =
   | "--vortex-space-sm"
   | "--vortex-space-md"
   | "--vortex-space-lg"
-  | "--vortex-radius-sm"
-  | "--vortex-radius-md"
-  | "--vortex-radius-lg"
   | "--vortex-border-width"
   | "--vortex-border-style"
   | "--vortex-elevation-low"
@@ -402,9 +399,6 @@ function generateThemeCssVariables(
     "--vortex-space-sm": spacing("space_sm", "0.5rem"),
     "--vortex-space-md": spacing("space_md", "1rem"),
     "--vortex-space-lg": spacing("space_lg", "1.5rem"),
-    "--vortex-radius-sm": corners("radius_sm", "0.125rem"),
-    "--vortex-radius-md": corners("radius_md", "0.25rem"),
-    "--vortex-radius-lg": corners("radius_lg", "0.5rem"),
     "--vortex-border-width":
       (border === undefined ? undefined : rem(border.widthRem, 0.0625)) ?? "0.0625rem",
     "--vortex-border-style": border?.style === "dashed" ? "dashed" : "solid",

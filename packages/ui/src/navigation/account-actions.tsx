@@ -132,7 +132,7 @@ export function ApplicationAccountMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-48">
         <DropdownMenuGroup>
-          <DropdownMenuLabel className="flex flex-col gap-1">
+          <DropdownMenuLabel className="flex flex-col gap-[var(--vortex-space-xs)]">
             {account === undefined ? (
               <span>{organizationName}</span>
             ) : (
@@ -153,16 +153,20 @@ export function ApplicationAccountMenu({
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         {source === undefined ? null : releaseAdoption === undefined ? (
-          <div role="status" aria-busy="true" className="px-2 py-1.5 text-sm text-muted-foreground">
+          <DropdownMenuLabel
+            role="status"
+            aria-busy="true"
+            className="font-normal text-muted-foreground"
+          >
             Loading release adoption…
-          </div>
+          </DropdownMenuLabel>
         ) : releaseAdoption.state !== "available" ? (
           <>
-            <div role="status" className="px-2 py-1.5 text-sm text-muted-foreground">
+            <DropdownMenuLabel role="status" className="font-normal text-muted-foreground">
               {releaseAdoption.state === "temporarily_unavailable"
                 ? "Release adoption temporarily unavailable"
                 : "Release adoption unavailable"}
-            </div>
+            </DropdownMenuLabel>
             <DropdownMenuItem closeOnClick={false} onClick={() => void read()}>
               Retry
             </DropdownMenuItem>
@@ -202,7 +206,7 @@ export function ApplicationAccountActionsBlock(): ReactElement {
     <nav
       aria-label="Account and organisation"
       data-vortex-account-actions=""
-      className="flex min-w-0 items-center gap-3"
+      className="flex min-w-0 items-center gap-[var(--vortex-space-sm)]"
     >
       {organizationName === undefined ? null : (
         <span className="min-w-0 truncate text-sm font-medium text-muted-foreground">
