@@ -1,0 +1,2111 @@
+{
+  "id": "mod_organisation_administration",
+  "key": "vortex.organisation_administration",
+  "name": "Organisation Administration",
+  "description": "Ordinary organisation notices and privacy request cases for an organisation administrator.",
+  "record_types": [
+    {
+      "id": "rt_organisation_notice",
+      "key": "organisation_notice",
+      "name": "Organisation notice",
+      "plural_name": "Organisation notices",
+      "title_field": "title",
+      "storage_contract_id": "srt_org_admin_notice",
+      "storage_scope": "application_contained",
+      "ownership_mode": "none",
+      "standard_actions": ["create", "read", "update", "soft_delete", "restore", "export"],
+      "custom_actions": ["act_record_notice", "act_withdraw_notice"],
+      "before_save_rules": [],
+      "fields": [
+        {
+          "id": "fld_notice_title",
+          "key": "title",
+          "label": "Title",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "search_priority": "first",
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 120
+          }
+        },
+        {
+          "id": "fld_notice_body",
+          "key": "body",
+          "label": "Notice text",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "long_text",
+          "settings": {
+            "max_length": 2000
+          }
+        },
+        {
+          "id": "fld_notice_state",
+          "key": "state",
+          "label": "State",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "choice",
+          "settings": {
+            "options": [
+              {
+                "value": "draft",
+                "label": "Draft"
+              },
+              {
+                "value": "published",
+                "label": "Published"
+              },
+              {
+                "value": "withdrawn",
+                "label": "Withdrawn"
+              }
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
+          },
+          "default": "draft"
+        },
+        {
+          "id": "fld_notice_published_at",
+          "key": "published_at",
+          "label": "Published at",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "date_time",
+          "settings": {
+            "display_time_zone": "organization"
+          }
+        }
+      ],
+      "relationships": [],
+      "pipelines": []
+    },
+    {
+      "id": "rt_privacy_request_case",
+      "key": "privacy_request_case",
+      "name": "Privacy request case",
+      "plural_name": "Privacy request cases",
+      "title_field": "subject",
+      "storage_contract_id": "srt_org_admin_privacy_case",
+      "storage_scope": "application_contained",
+      "ownership_mode": "none",
+      "standard_actions": ["create", "read", "update", "soft_delete", "restore", "export"],
+      "custom_actions": [
+        "act_record_privacy_request",
+        "act_complete_privacy_request",
+        "act_refuse_privacy_request"
+      ],
+      "before_save_rules": [],
+      "fields": [
+        {
+          "id": "fld_case_subject",
+          "key": "subject",
+          "label": "Subject",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "search_priority": "first",
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 120
+          }
+        },
+        {
+          "id": "fld_case_request_kind",
+          "key": "request_kind",
+          "label": "Request kind",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "choice",
+          "settings": {
+            "options": [
+              {
+                "value": "access",
+                "label": "Access to personal data"
+              },
+              {
+                "value": "correction",
+                "label": "Correction of personal data"
+              },
+              {
+                "value": "deletion",
+                "label": "Deletion request"
+              },
+              {
+                "value": "objection",
+                "label": "Objection to processing"
+              }
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
+          }
+        },
+        {
+          "id": "fld_case_details",
+          "key": "details",
+          "label": "Request details",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "search_priority": "normal",
+          "personal_data": "personal",
+          "public_display": "refused",
+          "type": "long_text",
+          "settings": {
+            "max_length": 2000
+          }
+        },
+        {
+          "id": "fld_case_state",
+          "key": "state",
+          "label": "State",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "choice",
+          "settings": {
+            "options": [
+              {
+                "value": "received",
+                "label": "Received"
+              },
+              {
+                "value": "completed",
+                "label": "Completed"
+              },
+              {
+                "value": "refused",
+                "label": "Refused"
+              }
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
+          },
+          "default": "received"
+        },
+        {
+          "id": "fld_case_received_at",
+          "key": "received_at",
+          "label": "Received at",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "date_time",
+          "settings": {
+            "display_time_zone": "organization"
+          }
+        },
+        {
+          "id": "fld_case_closed_at",
+          "key": "closed_at",
+          "label": "Closed at",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "date_time",
+          "settings": {
+            "display_time_zone": "organization"
+          }
+        }
+      ],
+      "relationships": [],
+      "pipelines": []
+    },
+    {
+      "id": "rt_permission",
+      "key": "permission",
+      "name": "Permission",
+      "plural_name": "Permissions",
+      "title_field": "label",
+      "storage_contract_id": "srt_org_admin_permission",
+      "storage_scope": "organization_shared",
+      "system_projection": {
+        "protected_view": "permissions",
+        "organization_field": "organization_id",
+        "revision_field": "revision",
+        "filterable_fields": ["owner_kind", "action_kind", "administrative", "label"],
+        "sortable_fields": ["key", "label", "administrative"]
+      },
+      "ownership_mode": "none",
+      "standard_actions": ["read"],
+      "custom_actions": [],
+      "before_save_rules": [],
+      "fields": [
+        {
+          "id": "fld_permission_organization_id",
+          "key": "organization_id",
+          "label": "Organisation",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 36
+          }
+        },
+        {
+          "id": "fld_permission_revision",
+          "key": "revision",
+          "label": "Revision",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "whole_number",
+          "settings": {}
+        },
+        {
+          "id": "fld_permission_key",
+          "key": "key",
+          "label": "Key",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": true,
+          "search_priority": "first",
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 120
+          }
+        },
+        {
+          "id": "fld_permission_label",
+          "key": "label",
+          "label": "Label",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "search_priority": "normal",
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 60
+          }
+        },
+        {
+          "id": "fld_permission_description",
+          "key": "description",
+          "label": "Description",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "long_text",
+          "settings": {
+            "max_length": 1000
+          }
+        },
+        {
+          "id": "fld_permission_owner_kind",
+          "key": "owner_kind",
+          "label": "Owner kind",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "choice",
+          "settings": {
+            "options": [
+              {
+                "value": "platform",
+                "label": "Platform"
+              },
+              {
+                "value": "application",
+                "label": "Application"
+              },
+              {
+                "value": "module",
+                "label": "Module"
+              }
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
+          }
+        },
+        {
+          "id": "fld_permission_action_kind",
+          "key": "action_kind",
+          "label": "Action kind",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "choice",
+          "settings": {
+            "options": [
+              {
+                "value": "create",
+                "label": "Create"
+              },
+              {
+                "value": "read",
+                "label": "Read"
+              },
+              {
+                "value": "update",
+                "label": "Update"
+              },
+              {
+                "value": "delete",
+                "label": "Delete"
+              },
+              {
+                "value": "restore",
+                "label": "Restore"
+              },
+              {
+                "value": "export",
+                "label": "Export"
+              },
+              {
+                "value": "share",
+                "label": "Share"
+              },
+              {
+                "value": "manage",
+                "label": "Manage"
+              },
+              {
+                "value": "transfer",
+                "label": "Transfer"
+              },
+              {
+                "value": "named",
+                "label": "Named"
+              }
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
+          }
+        },
+        {
+          "id": "fld_permission_named_action",
+          "key": "named_action",
+          "label": "Named action",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 40
+          }
+        },
+        {
+          "id": "fld_permission_administrative",
+          "key": "administrative",
+          "label": "Administrative",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "yes_no",
+          "settings": {}
+        }
+      ],
+      "relationships": [],
+      "pipelines": []
+    },
+    {
+      "id": "rt_organization_settings",
+      "key": "organization_settings",
+      "name": "Organisation settings",
+      "plural_name": "Organisation settings",
+      "title_field": "organization_id",
+      "storage_contract_id": "srt_org_admin_settings",
+      "storage_scope": "organization_shared",
+      "system_projection": {
+        "protected_view": "organization_runtime_settings",
+        "organization_field": "organization_id",
+        "revision_field": "revision",
+        "filterable_fields": ["organization_id"],
+        "sortable_fields": ["language"]
+      },
+      "ownership_mode": "none",
+      "standard_actions": ["read", "update"],
+      "custom_actions": [],
+      "before_save_rules": [],
+      "fields": [
+        {
+          "id": "fld_settings_organization_id",
+          "key": "organization_id",
+          "label": "Organisation",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 36
+          }
+        },
+        {
+          "id": "fld_settings_revision",
+          "key": "revision",
+          "label": "Revision",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "whole_number",
+          "settings": {}
+        },
+        {
+          "id": "fld_settings_language",
+          "key": "language",
+          "label": "Language",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 35
+          }
+        },
+        {
+          "id": "fld_settings_time_zone",
+          "key": "time_zone",
+          "label": "Time zone",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 100
+          }
+        },
+        {
+          "id": "fld_settings_currency",
+          "key": "currency",
+          "label": "Currency",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 3
+          }
+        },
+        {
+          "id": "fld_settings_date_format",
+          "key": "date_format",
+          "label": "Date format",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "choice",
+          "settings": {
+            "options": [
+              {
+                "value": "short",
+                "label": "Short"
+              },
+              {
+                "value": "medium",
+                "label": "Medium"
+              },
+              {
+                "value": "long",
+                "label": "Long"
+              },
+              {
+                "value": "full",
+                "label": "Full"
+              }
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
+          }
+        },
+        {
+          "id": "fld_settings_number_format",
+          "key": "number_format",
+          "label": "Number format",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "choice",
+          "settings": {
+            "options": [
+              {
+                "value": "auto",
+                "label": "Automatic"
+              },
+              {
+                "value": "always",
+                "label": "Always show decimals"
+              },
+              {
+                "value": "min2",
+                "label": "At least two decimals"
+              },
+              {
+                "value": "never",
+                "label": "Never show decimals"
+              }
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
+          }
+        },
+        {
+          "id": "fld_settings_default_application_root_id",
+          "key": "default_application_root_id",
+          "label": "Default application",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 36
+          }
+        },
+        {
+          "id": "fld_settings_app_store_address",
+          "key": "app_store_address",
+          "label": "App Store address",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 120
+          }
+        }
+      ],
+      "relationships": [],
+      "pipelines": []
+    },
+    {
+      "id": "rt_installed_application",
+      "key": "installed_application",
+      "name": "Installed application",
+      "plural_name": "Installed applications",
+      "title_field": "key",
+      "storage_contract_id": "srt_org_admin_installed_application",
+      "storage_scope": "organization_shared",
+      "system_projection": {
+        "protected_view": "installed_applications",
+        "organization_field": "organization_id",
+        "revision_field": "revision",
+        "filterable_fields": ["is_default", "key"],
+        "sortable_fields": ["key", "release_revision"]
+      },
+      "ownership_mode": "none",
+      "standard_actions": ["read"],
+      "custom_actions": [],
+      "before_save_rules": [],
+      "fields": [
+        {
+          "id": "fld_installed_application_organization_id",
+          "key": "organization_id",
+          "label": "Organisation",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 36
+          }
+        },
+        {
+          "id": "fld_installed_application_revision",
+          "key": "revision",
+          "label": "Revision",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "whole_number",
+          "settings": {}
+        },
+        {
+          "id": "fld_installed_application_key",
+          "key": "key",
+          "label": "Key",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "search_priority": "first",
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 120
+          }
+        },
+        {
+          "id": "fld_installed_application_release_revision",
+          "key": "release_revision",
+          "label": "Installed release",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "whole_number",
+          "settings": {}
+        },
+        {
+          "id": "fld_installed_application_is_default",
+          "key": "is_default",
+          "label": "Default application",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "yes_no",
+          "settings": {}
+        }
+      ],
+      "relationships": [],
+      "pipelines": []
+    },
+    {
+      "id": "rt_application_role_template",
+      "key": "application_role_template",
+      "name": "Application role template",
+      "plural_name": "Application role templates",
+      "title_field": "label",
+      "storage_contract_id": "srt_org_admin_application_role_template",
+      "storage_scope": "organization_shared",
+      "system_projection": {
+        "protected_view": "application_role_templates",
+        "organization_field": "organization_id",
+        "revision_field": "revision",
+        "filterable_fields": ["application_root_id", "label"],
+        "sortable_fields": ["key", "label", "source_role_id"]
+      },
+      "ownership_mode": "none",
+      "standard_actions": ["read"],
+      "custom_actions": [],
+      "before_save_rules": [],
+      "fields": [
+        {
+          "id": "fld_application_role_template_organization_id",
+          "key": "organization_id",
+          "label": "Organisation",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 36
+          }
+        },
+        {
+          "id": "fld_application_role_template_revision",
+          "key": "revision",
+          "label": "Registration revision",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "whole_number",
+          "settings": {}
+        },
+        {
+          "id": "fld_application_role_template_application_root_id",
+          "key": "application_root_id",
+          "label": "Application",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 36
+          }
+        },
+        {
+          "id": "fld_application_role_template_source_role_id",
+          "key": "source_role_id",
+          "label": "Source role",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 36
+          }
+        },
+        {
+          "id": "fld_application_role_template_key",
+          "key": "key",
+          "label": "Key",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 120
+          }
+        },
+        {
+          "id": "fld_application_role_template_label",
+          "key": "label",
+          "label": "Label",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "search_priority": "first",
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 120
+          }
+        },
+        {
+          "id": "fld_application_role_template_continuity_revision",
+          "key": "continuity_revision",
+          "label": "Continuity revision",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "whole_number",
+          "settings": {}
+        }
+      ],
+      "relationships": [],
+      "pipelines": []
+    },
+    {
+      "id": "rt_activity_entry",
+      "key": "activity_entry",
+      "name": "Activity entry",
+      "plural_name": "Activity",
+      "title_field": "action",
+      "storage_contract_id": "srt_org_admin_activity_entry",
+      "storage_scope": "organization_shared",
+      "system_projection": {
+        "protected_view": "activity_entry",
+        "organization_field": "organization_id",
+        "revision_field": "revision",
+        "filterable_fields": ["action"],
+        "sortable_fields": ["occurred_at"]
+      },
+      "ownership_mode": "none",
+      "standard_actions": ["read"],
+      "custom_actions": [],
+      "before_save_rules": [],
+      "fields": [
+        {
+          "id": "fld_activity_organization_id",
+          "key": "organization_id",
+          "label": "Organisation",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 36
+          }
+        },
+        {
+          "id": "fld_activity_revision",
+          "key": "revision",
+          "label": "Revision",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "whole_number",
+          "settings": {}
+        },
+        {
+          "id": "fld_activity_occurred_at",
+          "key": "occurred_at",
+          "label": "Occurred",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "date_time",
+          "settings": {
+            "display_time_zone": "organization"
+          }
+        },
+        {
+          "id": "fld_activity_actor_kind",
+          "key": "actor_kind",
+          "label": "Actor kind",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 40
+          }
+        },
+        {
+          "id": "fld_activity_actor",
+          "key": "actor",
+          "label": "Actor",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "personal",
+          "public_display": "refused",
+          "type": "link",
+          "settings": {
+            "target": "vortex.system_directory:person",
+            "reverse_key": "activity_entries",
+            "reverse_name": "Activity entries",
+            "on_parent_delete": "empty_optional",
+            "application_root_required": false,
+            "options_source": {
+              "kind": "query"
+            }
+          }
+        },
+        {
+          "id": "fld_activity_action",
+          "key": "action",
+          "label": "Action",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 40
+          }
+        },
+        {
+          "id": "fld_activity_subject_count",
+          "key": "subject_count",
+          "label": "Subjects",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "whole_number",
+          "settings": {}
+        },
+        {
+          "id": "fld_activity_changed_field_count",
+          "key": "changed_field_count",
+          "label": "Changed fields",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "whole_number",
+          "settings": {}
+        }
+      ],
+      "relationships": [
+        {
+          "id": "rel_activity_actor",
+          "key": "actor",
+          "from_field": "actor",
+          "to_record_type": "vortex.system_directory:person",
+          "cardinality": "many_to_one",
+          "on_parent_delete": "empty_optional"
+        }
+      ],
+      "pipelines": []
+    }
+  ],
+  "permissions": [
+    {
+      "id": "perm_activity_entry_read",
+      "key": "vortex.organisation_administration.activity_entry.read",
+      "label": "Read activity",
+      "description": "Read the current person's recent Activity, or the organisation audit view when independently authorised.",
+      "record_type": "activity_entry",
+      "action_kind": "read",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "organization_id",
+          "revision",
+          "occurred_at",
+          "actor_kind",
+          "actor",
+          "action",
+          "subject_count",
+          "changed_field_count"
+        ],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_notice_create",
+      "key": "vortex.organisation_administration.organisation_notice.create",
+      "label": "Create organisation notice",
+      "description": "Allows the standard create operation for organisation notices.",
+      "record_type": "organisation_notice",
+      "action_kind": "create",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["title", "body", "state", "published_at"],
+        "changeable_fields": ["title", "body"]
+      }
+    },
+    {
+      "id": "perm_notice_read",
+      "key": "vortex.organisation_administration.organisation_notice.read",
+      "label": "Read organisation notices",
+      "description": "Allows the standard read operation for organisation notices.",
+      "record_type": "organisation_notice",
+      "action_kind": "read",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["title", "body", "state", "published_at"],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_notice_update",
+      "key": "vortex.organisation_administration.organisation_notice.update",
+      "label": "Update organisation notice",
+      "description": "Allows the standard update operation for organisation notices.",
+      "record_type": "organisation_notice",
+      "action_kind": "update",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["title", "body", "state", "published_at"],
+        "changeable_fields": ["title", "body"]
+      }
+    },
+    {
+      "id": "perm_notice_soft_delete",
+      "key": "vortex.organisation_administration.organisation_notice.soft_delete",
+      "label": "Remove organisation notice",
+      "description": "Allows the standard soft-delete operation for organisation notices.",
+      "record_type": "organisation_notice",
+      "action_kind": "delete",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_notice_restore",
+      "key": "vortex.organisation_administration.organisation_notice.restore",
+      "label": "Restore organisation notice",
+      "description": "Allows the standard restore operation for organisation notices.",
+      "record_type": "organisation_notice",
+      "action_kind": "restore",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_notice_export",
+      "key": "vortex.organisation_administration.organisation_notice.export",
+      "label": "Export organisation notice",
+      "description": "Allows the standard export operation for organisation notices.",
+      "record_type": "organisation_notice",
+      "action_kind": "export",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["title", "body", "state", "published_at"],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_notice_record",
+      "key": "vortex.organisation_administration.organisation_notice.record_notice",
+      "label": "Record organisation notice",
+      "description": "Allows recording a draft organisation notice's text and publishing it.",
+      "record_type": "organisation_notice",
+      "action_kind": "named",
+      "named_action": "record_notice",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["title", "body", "state", "published_at"],
+        "changeable_fields": ["title", "body", "state", "published_at"]
+      }
+    },
+    {
+      "id": "perm_notice_withdraw",
+      "key": "vortex.organisation_administration.organisation_notice.withdraw",
+      "label": "Withdraw organisation notice",
+      "description": "Allows withdrawing a published organisation notice.",
+      "record_type": "organisation_notice",
+      "action_kind": "named",
+      "named_action": "withdraw",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["state"],
+        "changeable_fields": ["state"]
+      }
+    },
+    {
+      "id": "perm_privacy_create",
+      "key": "vortex.organisation_administration.privacy_request_case.create",
+      "label": "Create privacy request case",
+      "description": "Allows the standard create operation for privacy request cases.",
+      "record_type": "privacy_request_case",
+      "action_kind": "create",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "subject",
+          "request_kind",
+          "details",
+          "state",
+          "received_at",
+          "closed_at"
+        ],
+        "changeable_fields": ["subject", "request_kind", "details"]
+      }
+    },
+    {
+      "id": "perm_privacy_read",
+      "key": "vortex.organisation_administration.privacy_request_case.read",
+      "label": "Read privacy request case",
+      "description": "Allows the standard read operation for privacy request cases.",
+      "record_type": "privacy_request_case",
+      "action_kind": "read",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "subject",
+          "request_kind",
+          "details",
+          "state",
+          "received_at",
+          "closed_at"
+        ],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_privacy_update",
+      "key": "vortex.organisation_administration.privacy_request_case.update",
+      "label": "Update privacy request case",
+      "description": "Allows the standard update operation for privacy request cases.",
+      "record_type": "privacy_request_case",
+      "action_kind": "update",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "subject",
+          "request_kind",
+          "details",
+          "state",
+          "received_at",
+          "closed_at"
+        ],
+        "changeable_fields": ["subject", "request_kind", "details"]
+      }
+    },
+    {
+      "id": "perm_privacy_soft_delete",
+      "key": "vortex.organisation_administration.privacy_request_case.soft_delete",
+      "label": "Remove privacy request case",
+      "description": "Allows the standard soft-delete operation for privacy request cases.",
+      "record_type": "privacy_request_case",
+      "action_kind": "delete",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_privacy_restore",
+      "key": "vortex.organisation_administration.privacy_request_case.restore",
+      "label": "Restore privacy request case",
+      "description": "Allows the standard restore operation for privacy request cases.",
+      "record_type": "privacy_request_case",
+      "action_kind": "restore",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_privacy_export",
+      "key": "vortex.organisation_administration.privacy_request_case.export",
+      "label": "Export privacy request case",
+      "description": "Allows the standard export operation for privacy request cases.",
+      "record_type": "privacy_request_case",
+      "action_kind": "export",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "subject",
+          "request_kind",
+          "details",
+          "state",
+          "received_at",
+          "closed_at"
+        ],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_privacy_record",
+      "key": "vortex.organisation_administration.privacy_request_case.record_privacy_request",
+      "label": "Record privacy request case",
+      "description": "Allows recording a privacy request case and opening it as received.",
+      "record_type": "privacy_request_case",
+      "action_kind": "named",
+      "named_action": "record_privacy_request",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["subject", "details", "state", "received_at"],
+        "changeable_fields": ["subject", "details", "state", "received_at"]
+      }
+    },
+    {
+      "id": "perm_privacy_complete",
+      "key": "vortex.organisation_administration.privacy_request_case.complete",
+      "label": "Complete privacy request case",
+      "description": "Allows closing a received privacy request case as completed.",
+      "record_type": "privacy_request_case",
+      "action_kind": "named",
+      "named_action": "complete",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["state", "closed_at"],
+        "changeable_fields": ["state", "closed_at"]
+      }
+    },
+    {
+      "id": "perm_privacy_refuse",
+      "key": "vortex.organisation_administration.privacy_request_case.refuse",
+      "label": "Refuse privacy request case",
+      "description": "Allows closing a received privacy request case as refused.",
+      "record_type": "privacy_request_case",
+      "action_kind": "named",
+      "named_action": "refuse",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["state", "closed_at"],
+        "changeable_fields": ["state", "closed_at"]
+      }
+    },
+    {
+      "id": "perm_permission_read",
+      "key": "vortex.organisation_administration.permission.read",
+      "label": "Read permissions",
+      "description": "Allows reading the protected permission projection as a system record.",
+      "record_type": "permission",
+      "action_kind": "read",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "organization_id",
+          "revision",
+          "key",
+          "label",
+          "description",
+          "owner_kind",
+          "action_kind",
+          "named_action",
+          "administrative"
+        ],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_settings_read",
+      "key": "vortex.organisation_administration.organization_settings.read",
+      "label": "Read organisation settings",
+      "description": "Allows reading the protected organisation settings projection as a system record.",
+      "record_type": "organization_settings",
+      "action_kind": "read",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "organization_id",
+          "revision",
+          "language",
+          "time_zone",
+          "currency",
+          "date_format",
+          "number_format",
+          "default_application_root_id",
+          "app_store_address"
+        ],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_installed_application_read",
+      "key": "vortex.organisation_administration.installed_application.read",
+      "label": "Read installed applications",
+      "description": "Allows reading the protected installed-application projection as a system record.",
+      "record_type": "installed_application",
+      "action_kind": "read",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["organization_id", "revision", "key", "release_revision", "is_default"],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_application_role_template_read",
+      "key": "vortex.organisation_administration.application_role_template.read",
+      "label": "Read application role templates",
+      "description": "Allows reading the protected application-role-template projection as a system record.",
+      "record_type": "application_role_template",
+      "action_kind": "read",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "organization_id",
+          "revision",
+          "application_root_id",
+          "source_role_id",
+          "key",
+          "label",
+          "continuity_revision"
+        ],
+        "changeable_fields": []
+      }
+    }
+  ],
+  "actions": [
+    {
+      "id": "act_record_notice",
+      "key": "vortex.organisation_administration.organisation_notice.record_notice",
+      "label": "Record organisation notice",
+      "record_type": "organisation_notice",
+      "permission": "vortex.organisation_administration.organisation_notice.record_notice",
+      "shareable": false,
+      "inputs": [
+        {
+          "key": "title",
+          "label": "Title",
+          "required": true,
+          "type": "text",
+          "validation": {
+            "maximum_length": 120
+          }
+        },
+        {
+          "key": "body",
+          "label": "Notice text",
+          "required": true,
+          "type": "text",
+          "validation": {
+            "maximum_length": 2000
+          }
+        }
+      ],
+      "precondition": {
+        "field": "state",
+        "operator": "equals",
+        "value": "draft"
+      },
+      "flow": "flow_record_notice"
+    },
+    {
+      "id": "act_withdraw_notice",
+      "key": "vortex.organisation_administration.organisation_notice.withdraw",
+      "label": "Withdraw organisation notice",
+      "record_type": "organisation_notice",
+      "permission": "vortex.organisation_administration.organisation_notice.withdraw",
+      "shareable": false,
+      "inputs": [],
+      "precondition": {
+        "field": "state",
+        "operator": "equals",
+        "value": "published"
+      },
+      "flow": "flow_withdraw_notice"
+    },
+    {
+      "id": "act_record_privacy_request",
+      "key": "vortex.organisation_administration.privacy_request_case.record_privacy_request",
+      "label": "Record privacy request case",
+      "record_type": "privacy_request_case",
+      "permission": "vortex.organisation_administration.privacy_request_case.record_privacy_request",
+      "shareable": false,
+      "inputs": [
+        {
+          "key": "subject",
+          "label": "Subject",
+          "required": true,
+          "type": "text",
+          "validation": {
+            "maximum_length": 120
+          }
+        },
+        {
+          "key": "details",
+          "label": "Request details",
+          "required": true,
+          "type": "text",
+          "validation": {
+            "maximum_length": 2000
+          }
+        }
+      ],
+      "precondition": {
+        "field": "received_at",
+        "operator": "is_empty"
+      },
+      "flow": "flow_record_privacy_request"
+    },
+    {
+      "id": "act_complete_privacy_request",
+      "key": "vortex.organisation_administration.privacy_request_case.complete",
+      "label": "Complete privacy request case",
+      "record_type": "privacy_request_case",
+      "permission": "vortex.organisation_administration.privacy_request_case.complete",
+      "shareable": false,
+      "inputs": [],
+      "precondition": {
+        "field": "state",
+        "operator": "equals",
+        "value": "received"
+      },
+      "flow": "flow_complete_privacy_request"
+    },
+    {
+      "id": "act_refuse_privacy_request",
+      "key": "vortex.organisation_administration.privacy_request_case.refuse",
+      "label": "Refuse privacy request case",
+      "record_type": "privacy_request_case",
+      "permission": "vortex.organisation_administration.privacy_request_case.refuse",
+      "shareable": false,
+      "inputs": [],
+      "precondition": {
+        "field": "state",
+        "operator": "equals",
+        "value": "received"
+      },
+      "flow": "flow_refuse_privacy_request"
+    }
+  ],
+  "events": [],
+  "flows": [
+    {
+      "id": "flow_record_notice",
+      "key": "record_notice",
+      "labels": {},
+      "execution": "transaction",
+      "runAs": {
+        "kind": "saver"
+      },
+      "inputs": {
+        "record": {
+          "type": "record_reference",
+          "recordTypeIds": ["organisation_notice"],
+          "description": "The record the action runs on.",
+          "required": true
+        },
+        "title": {
+          "type": "text",
+          "required": true
+        },
+        "body": {
+          "type": "text",
+          "required": true
+        }
+      },
+      "recordInput": "record",
+      "variables": {},
+      "triggers": [],
+      "tasks": [
+        {
+          "id": "set_fields",
+          "type": "record.set_fields",
+          "version": "1.0.0",
+          "properties": {
+            "values": {
+              "kind": "map",
+              "entries": {
+                "title": {
+                  "kind": "reference",
+                  "reference": {
+                    "source": "input",
+                    "name": "title"
+                  }
+                },
+                "body": {
+                  "kind": "reference",
+                  "reference": {
+                    "source": "input",
+                    "name": "body"
+                  }
+                },
+                "state": {
+                  "kind": "literal",
+                  "literal": {
+                    "type": "json",
+                    "value": "published"
+                  }
+                },
+                "published_at": {
+                  "kind": "reference",
+                  "reference": {
+                    "source": "execution_now"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "outputs": {},
+      "errors": [],
+      "finally": []
+    },
+    {
+      "id": "flow_withdraw_notice",
+      "key": "withdraw_notice",
+      "labels": {},
+      "execution": "transaction",
+      "runAs": {
+        "kind": "saver"
+      },
+      "inputs": {
+        "record": {
+          "type": "record_reference",
+          "recordTypeIds": ["organisation_notice"],
+          "description": "The record the action runs on.",
+          "required": true
+        }
+      },
+      "recordInput": "record",
+      "variables": {},
+      "triggers": [],
+      "tasks": [
+        {
+          "id": "set_fields",
+          "type": "record.set_fields",
+          "version": "1.0.0",
+          "properties": {
+            "values": {
+              "kind": "map",
+              "entries": {
+                "state": {
+                  "kind": "literal",
+                  "literal": {
+                    "type": "json",
+                    "value": "withdrawn"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "outputs": {},
+      "errors": [],
+      "finally": []
+    },
+    {
+      "id": "flow_record_privacy_request",
+      "key": "record_privacy_request",
+      "labels": {},
+      "execution": "transaction",
+      "runAs": {
+        "kind": "saver"
+      },
+      "inputs": {
+        "record": {
+          "type": "record_reference",
+          "recordTypeIds": ["privacy_request_case"],
+          "description": "The record the action runs on.",
+          "required": true
+        },
+        "subject": {
+          "type": "text",
+          "required": true
+        },
+        "details": {
+          "type": "text",
+          "required": true
+        }
+      },
+      "recordInput": "record",
+      "variables": {},
+      "triggers": [],
+      "tasks": [
+        {
+          "id": "set_fields",
+          "type": "record.set_fields",
+          "version": "1.0.0",
+          "properties": {
+            "values": {
+              "kind": "map",
+              "entries": {
+                "subject": {
+                  "kind": "reference",
+                  "reference": {
+                    "source": "input",
+                    "name": "subject"
+                  }
+                },
+                "details": {
+                  "kind": "reference",
+                  "reference": {
+                    "source": "input",
+                    "name": "details"
+                  }
+                },
+                "state": {
+                  "kind": "literal",
+                  "literal": {
+                    "type": "json",
+                    "value": "received"
+                  }
+                },
+                "received_at": {
+                  "kind": "reference",
+                  "reference": {
+                    "source": "execution_now"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "outputs": {},
+      "errors": [],
+      "finally": []
+    },
+    {
+      "id": "flow_complete_privacy_request",
+      "key": "complete_privacy_request",
+      "labels": {},
+      "execution": "transaction",
+      "runAs": {
+        "kind": "saver"
+      },
+      "inputs": {
+        "record": {
+          "type": "record_reference",
+          "recordTypeIds": ["privacy_request_case"],
+          "description": "The record the action runs on.",
+          "required": true
+        }
+      },
+      "recordInput": "record",
+      "variables": {},
+      "triggers": [],
+      "tasks": [
+        {
+          "id": "set_fields",
+          "type": "record.set_fields",
+          "version": "1.0.0",
+          "properties": {
+            "values": {
+              "kind": "map",
+              "entries": {
+                "state": {
+                  "kind": "literal",
+                  "literal": {
+                    "type": "json",
+                    "value": "completed"
+                  }
+                },
+                "closed_at": {
+                  "kind": "reference",
+                  "reference": {
+                    "source": "execution_now"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "outputs": {},
+      "errors": [],
+      "finally": []
+    },
+    {
+      "id": "flow_refuse_privacy_request",
+      "key": "refuse_privacy_request",
+      "labels": {},
+      "execution": "transaction",
+      "runAs": {
+        "kind": "saver"
+      },
+      "inputs": {
+        "record": {
+          "type": "record_reference",
+          "recordTypeIds": ["privacy_request_case"],
+          "description": "The record the action runs on.",
+          "required": true
+        }
+      },
+      "recordInput": "record",
+      "variables": {},
+      "triggers": [],
+      "tasks": [
+        {
+          "id": "set_fields",
+          "type": "record.set_fields",
+          "version": "1.0.0",
+          "properties": {
+            "values": {
+              "kind": "map",
+              "entries": {
+                "state": {
+                  "kind": "literal",
+                  "literal": {
+                    "type": "json",
+                    "value": "refused"
+                  }
+                },
+                "closed_at": {
+                  "kind": "reference",
+                  "reference": {
+                    "source": "execution_now"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "outputs": {},
+      "errors": [],
+      "finally": []
+    }
+  ],
+  "extension_points": [],
+  "sharing_conditions": [],
+  "queries": [
+    {
+      "id": "qry_activity_entries",
+      "key": "activity_entries",
+      "exposure": "private",
+      "record_type": "activity_entry",
+      "inputs": [],
+      "select": [
+        "occurred_at",
+        "actor_kind",
+        "actor",
+        "action",
+        "subject_count",
+        "changed_field_count"
+      ],
+      "filter": null,
+      "group_by": [],
+      "aggregates": [],
+      "sort": [
+        {
+          "field": "occurred_at",
+          "direction": "descending"
+        }
+      ],
+      "page_size": 50,
+      "relationship_hops": 0
+    },
+    {
+      "id": "qry_organisation_notices",
+      "key": "organisation_notices",
+      "label": "Notices",
+      "exposure": "private",
+      "record_type": "organisation_notice",
+      "inputs": [],
+      "select": ["title", "body", "state", "published_at"],
+      "filter": null,
+      "group_by": [],
+      "aggregates": [],
+      "sort": [
+        {
+          "field": "title",
+          "direction": "ascending"
+        }
+      ],
+      "page_size": 50,
+      "relationship_hops": 0
+    },
+    {
+      "id": "qry_privacy_request_cases",
+      "key": "privacy_request_cases",
+      "label": "Privacy requests",
+      "exposure": "private",
+      "record_type": "privacy_request_case",
+      "inputs": [],
+      "select": ["subject", "request_kind", "state", "received_at", "closed_at"],
+      "filter": null,
+      "group_by": [],
+      "aggregates": [],
+      "sort": [
+        {
+          "field": "received_at",
+          "direction": "descending"
+        }
+      ],
+      "page_size": 50,
+      "relationship_hops": 0
+    },
+    {
+      "id": "qry_organization_settings",
+      "key": "organization_settings",
+      "label": "Organisation settings",
+      "exposure": "private",
+      "record_type": "organization_settings",
+      "inputs": [],
+      "select": [
+        "organization_id",
+        "language",
+        "time_zone",
+        "currency",
+        "date_format",
+        "number_format",
+        "default_application_root_id",
+        "app_store_address"
+      ],
+      "filter": null,
+      "group_by": [],
+      "aggregates": [],
+      "sort": [
+        {
+          "field": "language",
+          "direction": "ascending"
+        }
+      ],
+      "page_size": 50,
+      "relationship_hops": 0
+    },
+    {
+      "id": "qry_installed_applications",
+      "key": "installed_applications",
+      "label": "Installed applications",
+      "exposure": "private",
+      "record_type": "installed_application",
+      "inputs": [],
+      "select": ["key", "release_revision", "is_default"],
+      "filter": null,
+      "group_by": [],
+      "aggregates": [],
+      "sort": [
+        {
+          "field": "key",
+          "direction": "ascending"
+        }
+      ],
+      "page_size": 50,
+      "relationship_hops": 0
+    },
+    {
+      "id": "qry_application_role_templates",
+      "key": "application_role_templates",
+      "exposure": "private",
+      "record_type": "application_role_template",
+      "inputs": [
+        {
+          "key": "selected_application",
+          "label": "Selected application",
+          "required": true,
+          "type": "text",
+          "validation": {
+            "minimum_length": 36,
+            "maximum_length": 36
+          }
+        }
+      ],
+      "select": ["application_root_id", "source_role_id", "key", "label", "continuity_revision"],
+      "filter": {
+        "field": "application_root_id",
+        "operator": "equals",
+        "parameter": "selected_application"
+      },
+      "group_by": [],
+      "aggregates": [],
+      "sort": [
+        {
+          "field": "label",
+          "direction": "ascending"
+        }
+      ],
+      "page_size": 40,
+      "relationship_hops": 0
+    }
+  ]
+}

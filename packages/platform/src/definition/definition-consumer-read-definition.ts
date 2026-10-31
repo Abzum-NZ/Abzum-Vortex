@@ -188,7 +188,7 @@ export const verifyDefinitionCatalogueDependencies = async (
     )
       continue;
     // A platform-theme dependency exists only in an Application manifest, and the sole
-    // Application validation contract is 4.2.0.
+    // Application validation contract is the current definition contract.
     if (validationContractVersion !== definitionContractVersion) return "invalid";
     const catalogueThemeId = platformIdSchema.safeParse(dependency.catalogueThemeId);
     if (!catalogueThemeId.success) return "invalid";

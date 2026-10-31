@@ -243,7 +243,7 @@ export function validateApplicationSourceCatalogue(
     const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
     if (
       release.key === "platform.display.record_detail" &&
-      settings.detail_fields !== undefined &&
+      settings.sections !== undefined &&
       detail === undefined
     ) {
       report("vortex.definition.application_block_settings", "required_value", [

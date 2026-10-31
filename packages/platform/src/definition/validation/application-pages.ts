@@ -833,7 +833,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
       const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
       if (
         blockKey === "platform.display.record_detail" &&
-        settings.detail_fields !== undefined &&
+        settings.sections !== undefined &&
         detail === undefined
       )
         failures.push(

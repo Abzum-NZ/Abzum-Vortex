@@ -7,7 +7,7 @@ import {
 } from "@vortex/platform/schema";
 import authoredSource from "./application.json";
 import { loadApplicationSource } from "../application-source-loader";
-import { iamModule } from "./module";
+import { iamModules } from "./module";
 
 const accessRequest = "vortex.iam.core:access_request";
 
@@ -15,7 +15,7 @@ const accessRequest = "vortex.iam.core:access_request";
 export const iamApplication: ApplicationSourceDocument = loadApplicationSource(
   authoredSource,
   DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
-  [iamModule],
+  iamModules,
   [
     {
       ...defaultSaveFlowSource({

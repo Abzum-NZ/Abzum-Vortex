@@ -87,7 +87,7 @@ export const applicationDefinitionConsumerReadResultSchema = z
   })
   .strict();
 
-/** The Module 4.2.0 stored consumer projection and its exact immutable release identity. */
+/** The Module stored consumer projection and its exact immutable release identity. */
 export const moduleDefinitionConsumerReadResultSchema = z
   .object({
     kind: z.literal("module"),

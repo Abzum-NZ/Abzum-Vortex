@@ -1,5 +1,6 @@
 import {
   DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
+  definitionContractVersion,
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
   defaultDeleteFlowSource,
   defaultOpenFlowSource,
@@ -489,7 +490,7 @@ const applicationPages = pages.map(({ blocks, ...page }) => ({
  */
 export const operationsApplication: ApplicationSourceDocument = loadApplicationSource(
   {
-    source_contract_version: "4.3.0",
+    source_contract_version: definitionContractVersion,
     root_alias: "app_operations",
     key: "vortex.app.operations",
     kind: "application",

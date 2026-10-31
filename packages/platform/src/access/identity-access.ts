@@ -509,7 +509,7 @@ const authenticatedHumanContext = {
   identityAuthorityId: identityAuthorityIdSchema,
   identityId: identityIdSchema,
   organizationAccountId: organizationAccountIdSchema,
-  authenticationStrength: z.enum(["single_factor", "multi_factor", "recent_multi_factor"]),
+  authenticationStrength: z.enum(["single_factor", "multi_factor"]),
 };
 const humanSessionContextSchema = z
   .object({
@@ -534,8 +534,7 @@ const humanSessionContextSchema = z
       });
     if (
       value.multiFactorAuthenticatedAt !== undefined &&
-      value.authenticationStrength !== "multi_factor" &&
-      value.authenticationStrength !== "recent_multi_factor"
+      value.authenticationStrength !== "multi_factor"
     )
       context.addIssue({
         code: "custom",

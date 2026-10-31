@@ -193,7 +193,7 @@ export const applicationVersionImpactRequestSchema = z
   })
   .strict();
 
-/** Immutable Module history evidence; publication dispatch requires the exact 4.2.0 pair. */
+/** Immutable Module history evidence; publication dispatch requires the exact current contract pair. */
 export const moduleVersionImpactHistoryEntrySchema = z
   .object({
     publication: publishedModuleReferenceSchema.extend({
