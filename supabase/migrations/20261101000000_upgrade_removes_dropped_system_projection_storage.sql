@@ -5,6 +5,13 @@
 -- option that no stored row holds (IAM access_request.request_type drops role_activation and
 -- role_deactivation). Every other removal behaves as before. Stored drafts lose role references to
 -- the permissions the 4.3.0 conversion removed.
+
+-- The removal check reads two tables of stored record state as the provisioning function's owner.
+set role vortex_record_adapter;
+grant select on table vortex_record.preview_reference_counters,
+  vortex_record.record_lifecycle_command_effects to vortex_owner;
+reset role;
+
 set role vortex_owner;
 
 create or replace function vortex_record.provision_exact_module_storage(
@@ -516,6 +523,11 @@ begin
             and counter.field_id = stored_field.field_id
         )
         or exists (
+          select 1 from vortex_record.preview_reference_counters as counter
+          where counter.storage_contract_id = storage_id
+            and counter.field_id = stored_field.field_id
+        )
+        or exists (
           select 1 from vortex_record.relationship_storage_mappings as relationship
           where relationship.source_storage_contract_id = storage_id
             and relationship.source_field_id = stored_field.field_id
@@ -614,6 +626,10 @@ begin
         where counter.storage_contract_id = storage_id
       )
       or exists (
+        select 1 from vortex_record.preview_reference_counters as counter
+        where counter.storage_contract_id = storage_id
+      )
+      or exists (
         select 1 from vortex_record.preview_storage_bindings as preview
         where storage_id in (preview.storage_contract_id, preview.release_storage_contract_id)
       )
@@ -633,6 +649,10 @@ begin
       or exists (
         select 1 from vortex_access.record_share_grants as grant_row
         where grant_row.record_type_id = stored_catalogue.record_type_id
+      )
+      or exists (
+        select 1 from vortex_record.record_lifecycle_command_effects as effect
+        where effect.storage_contract_id = storage_id
       )
       or exists (
         select 1 from vortex_record.documents as document
@@ -727,7 +747,6 @@ grant execute on function vortex_record.provision_exact_module_storage(uuid, big
   to vortex_owner;
 comment on function vortex_record.provision_exact_module_storage(uuid, bigint) is
   'Private exact-release Module storage provisioner: creates or evolves generated record_data storage, or registers definition and field mappings for a system projection read only through its bounded protected reader, for one published Module release; removes a system projection record type or field, or a choice option, that the newest release drops when nothing stored holds or refers to it.';
-
 
 -- The contract 4.3.0 conversion removed every permission whose only route was direct sharing but
 -- left its key in the roles of the same draft, and such a role can never compile. Every stored
