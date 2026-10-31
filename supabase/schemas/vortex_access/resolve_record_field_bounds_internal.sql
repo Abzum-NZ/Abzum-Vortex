@@ -152,8 +152,6 @@ begin
   );
 end
 $function$;
-alter function vortex_access.resolve_record_field_bounds_internal(jsonb) owner to vortex_owner;
-
 
 revoke execute on function vortex_access.resolve_record_field_bounds_internal(jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;

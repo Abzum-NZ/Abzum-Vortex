@@ -14,8 +14,6 @@ as $function$
     and declaration.steward_minimum
   order by declaration.permission_id
 $function$;
-alter function vortex_access.read_guarded_platform_permission_minimum_internal() owner to vortex_owner;
-
 
 revoke all on function vortex_access.read_guarded_platform_permission_minimum_internal()
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;

@@ -247,8 +247,6 @@ begin
   return null;
 end
 $function$;
-alter function vortex_access.validate_organization_role_revision() owner to vortex_owner;
-
 
 revoke execute on function vortex_access.validate_organization_role_revision()
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;

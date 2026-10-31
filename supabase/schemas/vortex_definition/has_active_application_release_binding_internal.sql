@@ -18,8 +18,6 @@ as $function$
       and binding.state = 'active'
   );
 $function$;
-alter function vortex_definition.has_active_application_release_binding_internal(uuid,uuid,bigint) owner to vortex_owner;
-
 
 revoke all on function vortex_definition.has_active_application_release_binding_internal(
   uuid, uuid, bigint

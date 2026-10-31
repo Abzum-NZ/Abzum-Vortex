@@ -88,8 +88,6 @@ begin
   );
 end
 $function$;
-alter function vortex_definition.remove_installation_runtime_bundles(uuid) owner to vortex_owner;
-
 
 alter function vortex_definition.remove_installation_runtime_bundles(uuid)
   owner to vortex_owner;

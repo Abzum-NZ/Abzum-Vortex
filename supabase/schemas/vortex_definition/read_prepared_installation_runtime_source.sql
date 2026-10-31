@@ -73,8 +73,6 @@ exception
       message = 'Prepared runtime source evidence is ambiguous';
 end
 $function$;
-alter function vortex_definition.read_prepared_installation_runtime_source(uuid,bigint,jsonb) owner to vortex_owner;
-
 
 alter function vortex_definition.read_prepared_installation_runtime_source(uuid,bigint,jsonb)
   owner to vortex_owner;

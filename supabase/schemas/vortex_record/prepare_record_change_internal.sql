@@ -183,8 +183,6 @@ begin
   );
 end
 $function$;
-alter function vortex_record.prepare_record_change_internal(uuid,uuid,bigint,jsonb,uuid[],jsonb,jsonb) owner to vortex_record_adapter;
-
 
 alter function vortex_record.prepare_record_change_internal(uuid, uuid, bigint, jsonb, uuid[], jsonb, jsonb)
   owner to vortex_record_adapter;

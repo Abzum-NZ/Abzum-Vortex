@@ -52,8 +52,6 @@ begin
     vortex_definition.private_form_draft_to_json_internal(stored, 'abandoned');
 end
 $function$;
-alter function vortex_definition.abandon_private_form_draft(uuid,bigint) owner to vortex_owner;
-
 
 revoke all on function vortex_definition.abandon_private_form_draft(uuid, bigint)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;

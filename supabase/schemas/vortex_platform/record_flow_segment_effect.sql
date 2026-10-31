@@ -34,6 +34,6 @@ alter function vortex_platform.record_flow_segment_effect(uuid, text, text, text
 revoke all on function vortex_platform.record_flow_segment_effect(uuid, text, text, text, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_platform.record_flow_segment_effect(uuid, text, text, text, jsonb)
-  to vortex_request, postgres;
+  to postgres;
 comment on function vortex_platform.record_flow_segment_effect(uuid, text, text, text, jsonb) is
   'Records a completed human flow effect within the current admitted segment transaction.';

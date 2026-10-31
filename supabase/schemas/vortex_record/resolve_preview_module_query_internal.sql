@@ -329,8 +329,6 @@ begin
   );
 end
 $function$;
-alter function vortex_record.resolve_preview_module_query_internal(uuid,uuid) owner to vortex_record_adapter;
-
 
 alter function vortex_record.resolve_preview_module_query_internal(uuid, uuid)
   owner to vortex_record_adapter;

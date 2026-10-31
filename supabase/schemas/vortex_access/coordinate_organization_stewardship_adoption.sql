@@ -452,3 +452,5 @@ revoke execute on function
   ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 grant execute on function vortex_access.coordinate_organization_stewardship_adoption(uuid, uuid, uuid, text, text, text, uuid, uuid, uuid, uuid) to postgres;
+
+alter function vortex_access.coordinate_organization_stewardship_adoption(uuid, uuid, uuid, text, text, text, uuid, uuid, uuid, uuid) owner to vortex_owner;

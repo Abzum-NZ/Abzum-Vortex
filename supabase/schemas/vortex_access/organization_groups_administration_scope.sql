@@ -33,8 +33,6 @@ begin
     decision.organization_account_id, decision.access_version;
 end
 $function$;
-alter function vortex_access.organization_groups_administration_scope() owner to vortex_owner;
-
 
 revoke execute on function vortex_access.organization_groups_administration_scope()
 from public, anon, authenticated, service_role, vortex_runtime, vortex_request;

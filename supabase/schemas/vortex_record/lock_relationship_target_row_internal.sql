@@ -61,8 +61,6 @@ begin
   end if;
 end
 $function$;
-alter function vortex_record.lock_relationship_target_row_internal(uuid,uuid,uuid) owner to vortex_record_adapter;
-
 
 alter function vortex_record.lock_relationship_target_row_internal(uuid, uuid, uuid)
   owner to vortex_record_adapter;

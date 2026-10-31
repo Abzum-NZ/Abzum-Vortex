@@ -79,8 +79,6 @@ begin
     || suffix_value;
 end
 $function$;
-alter function vortex_record.allocate_preview_reference_number_internal(uuid,uuid,uuid,jsonb) owner to vortex_record_adapter;
-
 
 alter function vortex_record.allocate_preview_reference_number_internal(uuid, uuid, uuid, jsonb)
   owner to vortex_record_adapter;

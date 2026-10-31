@@ -56,8 +56,6 @@ begin
   return new;
 end
 $function$;
-alter function vortex_access.protect_platform_permission_declarations() owner to vortex_owner;
-
 
 revoke all on function
   vortex_access.protect_platform_permission_declarations()

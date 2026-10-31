@@ -19,8 +19,6 @@ $function$;
 
 revoke all on function vortex_platform.change_topic(uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_platform.change_topic(uuid, uuid)
-  to vortex_request, vortex_runtime;
 
 comment on function vortex_platform.change_topic(uuid, uuid) is
   'Returns the deterministic private Broadcast topic for one organisation and application.';

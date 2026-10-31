@@ -180,8 +180,6 @@ begin
     alternatives;
 end
 $function$;
-alter function vortex_access.resolve_record_read_scan_routes_internal(jsonb,text) owner to vortex_owner;
-
 
 revoke all on function vortex_access.resolve_record_read_scan_routes_internal(jsonb, text)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;

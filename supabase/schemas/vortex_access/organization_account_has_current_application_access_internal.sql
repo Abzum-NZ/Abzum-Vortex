@@ -175,8 +175,6 @@ begin
   );
 end
 $function$;
-alter function vortex_access.organization_account_has_current_application_access_internal(uuid,uuid,uuid) owner to vortex_owner;
-
 
 revoke all on function vortex_access.organization_account_has_current_application_access_internal(uuid, uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
