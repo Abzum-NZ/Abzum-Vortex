@@ -16,7 +16,7 @@ import { Icon } from "../icons/icon";
  * Vortex places navigation as a block inside an application shell whose geometry the definition
  * declares, so the sidebar is the registry's static (`collapsible="none"`) form: it fills the
  * placement it is given and never fixes itself to the viewport. The registry's provider, trigger,
- * rail, inset, input, skeleton and menu action parts, and the collapsed-icon tooltip, exist for a
+ * rail, inset, input and menu action parts, and the collapsed-icon tooltip, exist for a
  * page-owned off-canvas sidebar and are not part of this port; the navigation block supplies its
  * own compact phone disclosure over the same menu.
  */

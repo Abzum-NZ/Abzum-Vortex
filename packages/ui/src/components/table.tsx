@@ -4,8 +4,7 @@ import * as React from "react";
 import { cn } from "../lib/utils";
 
 /**
- * The data table: a bordered surface that scrolls inside its own container, with a header
- * that stays visible while the rows scroll and a quiet hover state on every row.
+ * The data table: the shadcn table parts inside their scroll container, painted from the theme.
  */
 function Table({
   className,
@@ -15,10 +14,7 @@ function Table({
   return (
     <div
       data-slot="table-container"
-      className={cn(
-        "cn-table-container max-h-[70vh] max-w-full border bg-card text-card-foreground",
-        containerClassName,
-      )}
+      className={cn("cn-table-container", containerClassName)}
     >
       <table
         data-slot="table"
@@ -31,11 +27,7 @@ function Table({
 
 function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
-    <thead
-      data-slot="table-header"
-      className={cn("cn-table-header sticky top-0 z-10 bg-muted/60 backdrop-blur-sm", className)}
-      {...props}
-    />
+    <thead data-slot="table-header" className={cn("cn-table-header", className)} {...props} />
   );
 }
 
@@ -51,7 +43,10 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
   return (
     <tr
       data-slot="table-row"
-      className={cn("cn-table-row has-aria-expanded:bg-muted/50", className)}
+      className={cn(
+        "cn-table-row hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted",
+        className,
+      )}
       {...props}
     />
   );
@@ -61,10 +56,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
   return (
     <th
       data-slot="table-head"
-      className={cn(
-        "cn-table-head text-xs font-medium tracking-wide text-muted-foreground uppercase",
-        className,
-      )}
+      className={cn("cn-table-head tracking-wider", className)}
       {...props}
     />
   );
