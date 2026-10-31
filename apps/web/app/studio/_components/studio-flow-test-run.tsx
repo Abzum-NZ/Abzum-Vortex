@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
@@ -86,9 +87,11 @@ function TraceStep({ step, flowKey }: Readonly<{ step: Step; flowKey: string }>)
         <p className="text-muted-foreground">{notRunSentences[step.notRun]}</p>
       ) : null}
       {step.refusal !== undefined ? (
-        <p role="alert">
-          {step.refusal.sentence} <code className="text-xs">{step.refusal.code}</code>
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>
+            {step.refusal.sentence} <code className="text-xs">{step.refusal.code}</code>
+          </AlertDescription>
+        </Alert>
       ) : null}
       {Object.keys(step.outputs).length > 0 ? (
         <pre className="m-0 overflow-x-auto rounded bg-muted p-2 text-xs">
@@ -273,7 +276,11 @@ export function StudioFlowTestRun({
           <span className="text-xs text-muted-foreground">{blocked}</span>
         ) : null}
       </div>
-      {problem !== undefined ? <p role="alert">{problem}</p> : null}
+      {problem !== undefined ? (
+        <Alert variant="destructive">
+          <AlertDescription>{problem}</AlertDescription>
+        </Alert>
+      ) : null}
       {reply === undefined ? null : reply.kind === "ran" ? (
         <div className="space-y-2" aria-label="Step trace">
           <p className="m-0 text-sm" role="status">
@@ -299,9 +306,13 @@ export function StudioFlowTestRun({
           </ol>
         </div>
       ) : reply.kind === "temporarily_unavailable" ? (
-        <p role="alert">The test run is temporarily unavailable. Try again.</p>
+        <Alert variant="destructive">
+          <AlertDescription>The test run is temporarily unavailable. Try again.</AlertDescription>
+        </Alert>
       ) : (
-        <p role="alert">{failureSentences[reply.kind]}</p>
+        <Alert variant="destructive">
+          <AlertDescription>{failureSentences[reply.kind]}</AlertDescription>
+        </Alert>
       )}
     </section>
   );

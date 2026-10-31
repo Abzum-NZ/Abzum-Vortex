@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type FormEvent } from "react";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
@@ -121,9 +122,9 @@ export function StudioPageValuesPanel({
         />
       )}
       {problem !== "" && refusedUsers.length === 0 && (
-        <p role="alert" className="text-sm text-destructive">
-          {problem}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{problem}</AlertDescription>
+        </Alert>
       )}
       <form onSubmit={add} className="space-y-2">
         <Label className="flex flex-col items-start gap-1 text-xs">

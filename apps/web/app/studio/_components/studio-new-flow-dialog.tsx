@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type FormEvent } from "react";
 import { Button } from "@vortex/ui/components/button";
 import {
@@ -318,9 +319,9 @@ export function StudioNewFlowDialog({
               </div>
             ))}
           {problem === "" ? null : (
-            <p role="alert" className="text-sm text-destructive">
-              {problem}
-            </p>
+            <Alert variant="destructive">
+              <AlertDescription>{problem}</AlertDescription>
+            </Alert>
           )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

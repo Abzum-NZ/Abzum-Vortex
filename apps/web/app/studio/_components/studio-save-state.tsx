@@ -1,5 +1,6 @@
 "use client";
 
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useStudioFieldProblems } from "@vortex/ui/studio";
 import { useState, type ReactNode } from "react";
 import { FormattedTime, Icon } from "@vortex/ui";
@@ -241,9 +242,9 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
           )}
           <p className="text-sm text-muted-foreground">Your unsaved change will be discarded.</p>
           {loadFailed && (
-            <p role="alert" className="text-sm text-destructive">
-              The latest draft could not be loaded. Try again.
-            </p>
+            <Alert variant="destructive">
+              <AlertDescription>The latest draft could not be loaded. Try again.</AlertDescription>
+            </Alert>
           )}
           <AlertDialogFooter>
             <Button
@@ -272,9 +273,9 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           {draft.session.message && (
-            <p role="alert" className="text-sm text-destructive">
-              {draft.session.message}
-            </p>
+            <Alert variant="destructive">
+              <AlertDescription>{draft.session.message}</AlertDescription>
+            </Alert>
           )}
           <AlertDialogFooter>
             <Button

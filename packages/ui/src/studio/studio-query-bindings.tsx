@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "../components/alert";
 import { useId } from "react";
 import {
   checkQueryBindings,
@@ -81,9 +82,9 @@ export function StudioSelectionControlBinding({
         )}
       </StudioField>
       {facts.pageProblems.map((problem) => (
-        <p key={problem.sentence} role="alert" className="text-sm text-destructive">
-          {problem.sentence}
-        </p>
+        <Alert variant="destructive" key={problem.sentence}>
+          <AlertDescription>{problem.sentence}</AlertDescription>
+        </Alert>
       ))}
     </>
   );
@@ -162,9 +163,9 @@ export function StudioQueryBindings({
     <div className="space-y-4" aria-label="Query inputs">
       {[...problems.filter((problem) => problem.input === undefined), ...facts.pageProblems].map(
         (problem) => (
-          <p key={problem.sentence} role="alert" className="text-sm text-destructive">
-            {problem.sentence}
-          </p>
+          <Alert variant="destructive" key={problem.sentence}>
+            <AlertDescription>{problem.sentence}</AlertDescription>
+          </Alert>
         ),
       )}
       {inputs.map((input) => {
@@ -473,9 +474,9 @@ export function StudioQueryBindings({
               </>
             )}
             {problem !== undefined && (
-              <p role="alert" className="text-sm text-destructive">
-                {problem}
-              </p>
+              <Alert variant="destructive">
+                <AlertDescription>{problem}</AlertDescription>
+              </Alert>
             )}
           </div>
         );

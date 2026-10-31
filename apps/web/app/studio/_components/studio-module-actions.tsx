@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useMemo, useState, type FormEvent } from "react";
 import {
   applicationUses,
@@ -222,9 +223,9 @@ export function ActionDialog({
               />
             )}
             {conditionProblem === "" ? null : (
-              <p role="alert" className="text-sm text-destructive">
-                {conditionProblem}
-              </p>
+              <Alert variant="destructive">
+                <AlertDescription>{conditionProblem}</AlertDescription>
+              </Alert>
             )}
           </fieldset>
           <div className="flex items-start gap-2">

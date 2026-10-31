@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import {
   Suspense,
   useMemo,
@@ -358,10 +359,12 @@ export function StudioMenuPanel({
         library={isShadcnIconLibrary(library) ? library : DEFAULT_SHADCN_ICON_LIBRARY}
       >
         {!isShadcnIconLibrary(library) && (
-          <p role="alert" className="text-sm text-destructive">
-            The theme names an icon library Studio does not offer, so icons here are drawn with
-            Lucide. Choose an icon library in Theme.
-          </p>
+          <Alert variant="destructive">
+            <AlertDescription>
+              The theme names an icon library Studio does not offer, so icons here are drawn with
+              Lucide. Choose an icon library in Theme.
+            </AlertDescription>
+          </Alert>
         )}
         <Button
           type="button"

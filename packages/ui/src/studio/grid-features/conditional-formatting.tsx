@@ -1,5 +1,6 @@
 "use client";
 
+import { Alert, AlertDescription } from "../components/alert";
 import { useId, useMemo, useState, type DragEvent, type ReactElement } from "react";
 import {
   recordsTableConditionalFormattingFeature,
@@ -685,9 +686,9 @@ function ColumnFormatEditor({
         ))
       )}
       {issue === undefined ? null : (
-        <p role="alert" className="text-sm text-destructive">
-          {issue}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{issue}</AlertDescription>
+        </Alert>
       )}
     </div>
   );

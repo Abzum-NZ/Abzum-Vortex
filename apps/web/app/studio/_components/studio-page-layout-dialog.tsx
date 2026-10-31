@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
 import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
@@ -123,9 +124,9 @@ export function StudioPageLayoutDialog({
           })}
         </div>
         {refusal !== null && (
-          <p role="alert" className="text-sm text-destructive">
-            {refusal}
-          </p>
+          <Alert variant="destructive">
+            <AlertDescription>{refusal}</AlertDescription>
+          </Alert>
         )}
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>

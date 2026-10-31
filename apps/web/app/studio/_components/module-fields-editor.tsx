@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useMemo, useState, type FormEvent } from "react";
 import { Icon } from "@vortex/ui";
 import {
@@ -1187,14 +1188,14 @@ export function ModuleFieldsEditor({
           </>
         )}
         {settingsValue.problem === "" ? null : (
-          <p role="alert" className="text-sm text-destructive">
-            {settingsValue.problem}
-          </p>
+          <Alert variant="destructive">
+            <AlertDescription>{settingsValue.problem}</AlertDescription>
+          </Alert>
         )}
         {computedValue.problem === "" ? null : (
-          <p role="alert" className="text-sm text-destructive">
-            {computedValue.problem}
-          </p>
+          <Alert variant="destructive">
+            <AlertDescription>{computedValue.problem}</AlertDescription>
+          </Alert>
         )}
       </StudioInspectorGroup>
       {existing !== undefined && optionsSourceTypes.has(form.type) && (
@@ -1257,9 +1258,9 @@ export function ModuleFieldsEditor({
           <p className="text-sm text-muted-foreground">Default value: {defaultModel.reason}</p>
         )}
         {defaultValue.problem === "" ? null : (
-          <p role="alert" className="text-sm text-destructive">
-            {defaultValue.problem}
-          </p>
+          <Alert variant="destructive">
+            <AlertDescription>{defaultValue.problem}</AlertDescription>
+          </Alert>
         )}
       </StudioInspectorGroup>
       <StudioInspectorGroup title="Behaviour">
@@ -1359,12 +1360,14 @@ export function ModuleFieldsEditor({
       </StudioInspectorGroup>
       <StudioInspectorGroup title="Privacy">
         {privacyEvents.length === 0 ? null : (
-          <p role="alert" className="text-sm text-destructive">
-            {existing!.label} contains personal or sensitive data, but is still carried by{" "}
-            {privacyEvents.map((event) => event.label ?? event.key).join(", ")}. Publishing is
-            refused. Set Personal data to None to correct the event&apos;s carried fields, then
-            apply the privacy choice again.
-          </p>
+          <Alert variant="destructive">
+            <AlertDescription>
+              {existing!.label} contains personal or sensitive data, but is still carried by{" "}
+              {privacyEvents.map((event) => event.label ?? event.key).join(", ")}. Publishing is
+              refused. Set Personal data to None to correct the event&apos;s carried fields, then
+              apply the privacy choice again.
+            </AlertDescription>
+          </Alert>
         )}
         <StudioField
           label="Personal data"

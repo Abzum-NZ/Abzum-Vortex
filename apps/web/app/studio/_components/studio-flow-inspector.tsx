@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@vortex/ui";
 
@@ -299,9 +300,9 @@ export function StudioFlowInspector({
   const messages = (
     <>
       {problem === "" ? null : (
-        <p role="alert" className="text-sm text-destructive">
-          {problem}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{problem}</AlertDescription>
+        </Alert>
       )}
       <p role="status" className="text-sm">
         {status}
@@ -473,14 +474,16 @@ export function StudioFlowInspector({
       {stepPicker}
       <StudioInspectorGroup title="Settings">
         {form === null && (
-          <p role="alert" className="text-sm">
-            The settings of this step could not be read from the draft.
-          </p>
+          <Alert variant="destructive">
+            <AlertDescription>
+              The settings of this step could not be read from the draft.
+            </AlertDescription>
+          </Alert>
         )}
         {form?.kind === "unavailable" && (
-          <p role="alert" className="text-sm text-destructive">
-            {form.reason}
-          </p>
+          <Alert variant="destructive">
+            <AlertDescription>{form.reason}</AlertDescription>
+          </Alert>
         )}
         {form?.kind === "available" && draft !== null && (
           <>
@@ -558,9 +561,11 @@ export function StudioFlowInspector({
                 </div>
               )}
             {local?.problem == null ? null : (
-              <p role="alert" className="text-sm text-destructive">
-                {local.problem} The step keeps its last valid settings until this is fixed.
-              </p>
+              <Alert variant="destructive">
+                <AlertDescription>
+                  {local.problem} The step keeps its last valid settings until this is fixed.
+                </AlertDescription>
+              </Alert>
             )}
           </>
         )}

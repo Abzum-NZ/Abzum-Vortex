@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type FormEvent } from "react";
 import { saveInlineModuleEvent, type ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
@@ -132,18 +133,18 @@ function EventDialog({
               </div>
             ))}
             {problemField === "carries" && problem !== undefined ? (
-              <p id="event-carries-problem" role="alert" className="text-sm text-destructive">
-                {problem}
-              </p>
+              <Alert variant="destructive" id="event-carries-problem">
+                <AlertDescription>{problem}</AlertDescription>
+              </Alert>
             ) : null}
           </fieldset>
           <p className="text-sm text-muted-foreground">
             Only fields without personal or sensitive data can be carried.
           </p>
           {problem === undefined || problemField !== undefined ? null : (
-            <p role="alert" className="text-sm text-destructive">
-              {problem}
-            </p>
+            <Alert variant="destructive">
+              <AlertDescription>{problem}</AlertDescription>
+            </Alert>
           )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={close}>

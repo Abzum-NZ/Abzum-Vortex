@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type FormEvent } from "react";
 import {
   createOwnedInlineModule,
@@ -97,9 +98,9 @@ export function StudioModuleDialog({
             </StudioField>
           </StudioInspectorGroup>
           {problem === undefined ? null : (
-            <p role="alert" className="text-sm text-destructive">
-              {problem}
-            </p>
+            <Alert variant="destructive">
+              <AlertDescription>{problem}</AlertDescription>
+            </Alert>
           )}
         </form>
         <DialogFooter>

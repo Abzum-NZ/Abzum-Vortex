@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
@@ -214,9 +215,9 @@ export function StudioRecordPageForm({
         {current === undefined ? (
           <p className="text-sm text-muted-foreground">Working it out…</p>
         ) : current.kind === "refused" ? (
-          <p role="alert" className="text-sm text-destructive">
-            {current.message}
-          </p>
+          <Alert variant="destructive">
+            <AlertDescription>{current.message}</AlertDescription>
+          </Alert>
         ) : (
           <ul className="list-disc space-y-1 pl-4 text-sm text-muted-foreground">
             {current.details.map((detail, index) => (

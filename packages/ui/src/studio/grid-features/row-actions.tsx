@@ -1,5 +1,6 @@
 "use client";
 
+import { Alert, AlertDescription } from "../components/alert";
 import { useId, useState, type ReactElement } from "react";
 import {
   applicationSourceDocumentSchema,
@@ -349,9 +350,9 @@ function StudioRowActionsEditor({
         />
       </StudioEntryList>
       {problem === "" ? null : (
-        <p role="alert" className="text-sm text-destructive">
-          {problem}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{problem}</AlertDescription>
+        </Alert>
       )}
     </div>
   );
