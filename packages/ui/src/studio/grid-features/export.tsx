@@ -12,7 +12,15 @@ import {
 import { Input } from "../../components/input";
 import { Label } from "../../components/label";
 import { Checkbox } from "../../components/checkbox";
-import { StudioGridFieldPicker } from "./field-picker";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from "../../components/field";
+import { ToggleGroup, ToggleGroupItem } from "../../components/toggle-group";
 
 type Group = Extract<SourceBlockPropertyValueContract, { kind: "group" }>;
 
@@ -82,31 +90,50 @@ export function StudioExportEditor({
           );
         })}
       </fieldset>
-      <fieldset className="space-y-2" disabled={disabled}>
-        <legend className="text-sm font-medium">Raw value columns</legend>
-        <p className="text-xs text-muted-foreground">
-          Every column downloads as the table shows it. Switch a column on to download its stored
+      <FieldSet disabled={disabled}>
+        <FieldLegend variant="label">Values per column</FieldLegend>
+        <FieldDescription>
+          Every column downloads as the table shows it. Choose Raw to download a column's stored
           value instead: the choice key, the ISO date, the canonical number.
-        </p>
-        <StudioGridFieldPicker
-          fields={facts.fields.filter((field) => columns.includes(field.field))}
-          chosen={rawChosen}
-          disabled={disabled}
-          reason={() => undefined}
-          onChange={(fields) =>
-            onChange({
-              kind: "group",
-              properties: {
-                ...value.properties,
-                raw_columns: {
-                  kind: "list",
-                  items: fields.map((field) => ({ kind: "field_reference" as const, field })),
-                },
-              },
-            })
-          }
-        />
-      </fieldset>
+        </FieldDescription>
+        <FieldGroup className="gap-2">
+          {facts.fields
+            .filter((field) => columns.includes(field.field))
+            .map((field) => (
+              <Field key={field.field} orientation="horizontal">
+                <FieldLabel>{field.label}</FieldLabel>
+                <ToggleGroup
+                  variant="outline"
+                  size="sm"
+                  disabled={disabled}
+                  value={[rawChosen.includes(field.field) ? "raw" : "shown"]}
+                  onValueChange={(next) => {
+                    const raw = next[0] === "raw";
+                    const fields = raw
+                      ? [...rawChosen.filter((key) => key !== field.field), field.field]
+                      : rawChosen.filter((key) => key !== field.field);
+                    onChange({
+                      kind: "group",
+                      properties: {
+                        ...value.properties,
+                        raw_columns: {
+                          kind: "list",
+                          items: fields.map((key) => ({
+                            kind: "field_reference" as const,
+                            field: key,
+                          })),
+                        },
+                      },
+                    });
+                  }}
+                >
+                  <ToggleGroupItem value="shown">As shown</ToggleGroupItem>
+                  <ToggleGroupItem value="raw">Raw</ToggleGroupItem>
+                </ToggleGroup>
+              </Field>
+            ))}
+        </FieldGroup>
+      </FieldSet>
       <Label htmlFor={`${id}-max-rows`}>Most records in one export</Label>
       <Input
         id={`${id}-max-rows`}
