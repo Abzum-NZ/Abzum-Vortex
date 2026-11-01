@@ -27,6 +27,7 @@ export const VORTEX_ICON_NAMES = [
   "contact-round",
   "users",
   "sliders-horizontal",
+  "table-columns",
   "filter",
   "pencil",
   "chevrons-left",

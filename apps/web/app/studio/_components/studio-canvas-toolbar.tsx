@@ -91,9 +91,9 @@ export function StudioCanvasToolbar({
                   />
                 }
               >
-                <Icon name="sliders-horizontal" />
+                <Icon name="table-columns" />
               </TooltipTrigger>
-              <TooltipContent>Arrange grid columns, widths and density</TooltipContent>
+              <TooltipContent>Arrange grid columns</TooltipContent>
             </Tooltip>
             <label className="flex items-center gap-2 text-sm">
               <span>View as:</span>

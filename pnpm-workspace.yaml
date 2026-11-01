@@ -21,7 +21,7 @@ catalog:
   "@types/node": 26.6.5
   typescript: 6.0.3
   "@js-temporal/polyfill": 0.5.1
-  "@puckeditor/core": 0.23.0
+  "@puckeditor/core": 0.24.0
   "@supabase/ssr": 0.12.7
   "@supabase/supabase-js": 2.118.0
   "@tailwindcss/postcss": 4.3.3

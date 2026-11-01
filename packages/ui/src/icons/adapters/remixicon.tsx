@@ -1,4 +1,5 @@
 import {
+  RiLayoutColumnLine,
   RiFileTextLine,
   RiInformationLine,
   RiDraggable,
@@ -116,6 +117,7 @@ export const icons: VortexIconAdapter = {
   "contact-round": remixIcon(RiContactsBookLine),
   users: remixIcon(RiGroupLine),
   "sliders-horizontal": remixIcon(RiEqualizerLine),
+  "table-columns": remixIcon(RiLayoutColumnLine),
   filter: remixIcon(RiFilter3Line),
   pencil: remixIcon(RiPencilLine),
   "chevrons-left": remixIcon(RiArrowLeftDoubleLine),

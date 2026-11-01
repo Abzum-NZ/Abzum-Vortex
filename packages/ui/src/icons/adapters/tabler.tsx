@@ -1,4 +1,5 @@
 import {
+  IconColumns3,
   IconFileText,
   IconInfoCircle,
   IconGripVertical,
@@ -116,6 +117,7 @@ export const icons: VortexIconAdapter = {
   "contact-round": tablerIcon(IconAddressBook),
   users: tablerIcon(IconUsers),
   "sliders-horizontal": tablerIcon(IconAdjustmentsHorizontal),
+  "table-columns": tablerIcon(IconColumns3),
   filter: tablerIcon(IconFilter),
   pencil: tablerIcon(IconPencil),
   "chevrons-left": tablerIcon(IconChevronsLeft),

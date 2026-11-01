@@ -1,4 +1,5 @@
 import {
+  ColumnsIcon,
   FileTextIcon,
   InfoIcon,
   DotsSixVerticalIcon,
@@ -116,6 +117,7 @@ export const icons: VortexIconAdapter = {
   "contact-round": phosphorIcon(AddressBookIcon),
   users: phosphorIcon(UsersIcon),
   "sliders-horizontal": phosphorIcon(SlidersHorizontalIcon),
+  "table-columns": phosphorIcon(ColumnsIcon),
   filter: phosphorIcon(FunnelIcon),
   pencil: phosphorIcon(PencilSimpleIcon),
   "chevrons-left": phosphorIcon(CaretDoubleLeftIcon),
