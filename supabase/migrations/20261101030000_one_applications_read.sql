@@ -327,13 +327,13 @@ begin
         member.key, pg_temp.application_store_source(member.value)
       ) into rewritten
       from pg_catalog.jsonb_each(p_value) as member(key, value);
-      return rewritten;
+      return coalesce(rewritten, '{}'::jsonb);
     when 'array' then
       select pg_catalog.jsonb_agg(
         pg_temp.application_store_source(item.value) order by item.ordinality
       ) into rewritten
       from pg_catalog.jsonb_array_elements(p_value) with ordinality as item(value, ordinality);
-      return rewritten;
+      return coalesce(rewritten, '[]'::jsonb);
     when 'string' then
       return case when p_value #>> '{}' = 'installed_applications'
         then '"application_store_entries"'::jsonb else p_value end;
