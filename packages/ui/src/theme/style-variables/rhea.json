@@ -145,7 +145,6 @@
   "--vs-ef71eb85": "0 0 0 1px var(--tw-shadow-color, hsl(var(--sidebar-accent)))",
   "--vs-2f15b929": "calc(var(--radius) * 1.4)",
   "--vs-95ff1f08": "calc(var(--spacing, 0.25rem) * 3)",
-  "--vs-f73fa31d": "calc(var(--radius) * 1.8)",
   "--vs-baee2b68": "calc(var(--radius) * 1.8)",
   "--vs-80247871": "var(--input)",
   "--vs-105074d4": "calc(var(--spacing, 0.25rem) * 4)",
