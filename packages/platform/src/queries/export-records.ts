@@ -13,7 +13,7 @@ import {
  * always what the cell shows; `typed` carries the exact value and the spreadsheet number format
  * that reproduces the text, so Excel cells read the same and still sort and sum.
  */
-export type RecordsExportTyped =
+type RecordsExportTyped =
   | Readonly<{ kind: "number"; amount: string; format: string }>
   | Readonly<{ kind: "date"; iso: string; format: string }>
   | Readonly<{ kind: "yes_no"; value: boolean; words: boolean }>;
