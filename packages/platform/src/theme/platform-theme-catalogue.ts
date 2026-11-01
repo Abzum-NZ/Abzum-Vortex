@@ -21,7 +21,6 @@ const release = (definition: {
   catalogueThemeId: string;
   releaseVersion: string;
   tokens: unknown;
-  loaderMark: unknown;
 }): PlatformThemeRelease =>
   deepFreeze(
     platformThemeReleaseSchema.parse({
@@ -29,7 +28,6 @@ const release = (definition: {
       releaseVersion: definition.releaseVersion,
       ...platformThemeReleaseContentHash(definition),
       tokens: definition.tokens,
-      loaderMark: definition.loaderMark,
     }),
   );
 
@@ -55,7 +53,7 @@ export const DEFAULT_PLATFORM_THEME_RELEASE: PlatformThemeRelease =
 
 // The one theme changes in place. Applications pinning older content must be republished.
 const DEFAULT_PLATFORM_THEME_CONTENT_FINGERPRINT =
-  "sha256:109cb8dd3e28073c9b684a7b20c8e4b24b22e0390b2fc6b4764c92f8e4ed5e9b";
+  "sha256:9c67529226e29aa5cc9fa63ac1099b11271448fa3d96adfa171da839c4b0ecc4";
 
 if (
   DEFAULT_PLATFORM_THEME_RELEASE.contentFingerprint !== DEFAULT_PLATFORM_THEME_CONTENT_FINGERPRINT

@@ -2,17 +2,6 @@
   "PLATFORM_THEME_RELEASE_3_1_0": {
     "catalogueThemeId": "3f0a2b14-9c6d-4e58-8a71-6d2e5f4b1c09",
     "releaseVersion": "3.1.0",
-    "loaderMark": {
-      "segments": [
-        [12, 101.569, 60, 18.431],
-        [60, 18.431, 108, 101.569],
-        [108, 101.569, 12, 101.569],
-        [12, 101.569, 84, 60],
-        [84, 60, 36, 60],
-        [36, 60, 48, 80.784]
-      ],
-      "cycleSeconds": 5
-    },
     "tokens": {
       "background": {
         "kind": "color_pair",
@@ -261,17 +250,6 @@
   "PLATFORM_THEME_MIRA_SLATE": {
     "catalogueThemeId": "73710ee4-9c1c-4405-b878-076f694a8748",
     "releaseVersion": "1.0.0",
-    "loaderMark": {
-      "segments": [
-        [12, 101.569, 60, 18.431],
-        [60, 18.431, 108, 101.569],
-        [108, 101.569, 12, 101.569],
-        [12, 101.569, 84, 60],
-        [84, 60, 36, 60],
-        [36, 60, 48, 80.784]
-      ],
-      "cycleSeconds": 5
-    },
     "tokens": {
       "background": {
         "kind": "color_pair",
@@ -520,17 +498,6 @@
   "PLATFORM_THEME_LYRA_SAND": {
     "catalogueThemeId": "37c40d16-d616-4ce3-a6ff-5d797c1a803d",
     "releaseVersion": "1.0.0",
-    "loaderMark": {
-      "segments": [
-        [12, 101.569, 60, 18.431],
-        [60, 18.431, 108, 101.569],
-        [108, 101.569, 12, 101.569],
-        [12, 101.569, 84, 60],
-        [84, 60, 36, 60],
-        [36, 60, 48, 80.784]
-      ],
-      "cycleSeconds": 5
-    },
     "tokens": {
       "background": {
         "kind": "color_pair",
@@ -779,17 +746,6 @@
   "PLATFORM_THEME_VEGA_INK": {
     "catalogueThemeId": "0d975618-c40b-4910-9e43-12e88466a5f9",
     "releaseVersion": "1.0.0",
-    "loaderMark": {
-      "segments": [
-        [12, 101.569, 60, 18.431],
-        [60, 18.431, 108, 101.569],
-        [108, 101.569, 12, 101.569],
-        [12, 101.569, 84, 60],
-        [84, 60, 36, 60],
-        [36, 60, 48, 80.784]
-      ],
-      "cycleSeconds": 5
-    },
     "tokens": {
       "background": {
         "kind": "color_pair",
@@ -1038,17 +994,6 @@
   "PLATFORM_THEME_MAIA_CLAY": {
     "catalogueThemeId": "5dc2d49a-4fd2-426d-b98d-5eaf3d3f7e37",
     "releaseVersion": "1.0.0",
-    "loaderMark": {
-      "segments": [
-        [12, 101.569, 60, 18.431],
-        [60, 18.431, 108, 101.569],
-        [108, 101.569, 12, 101.569],
-        [12, 101.569, 84, 60],
-        [84, 60, 36, 60],
-        [36, 60, 48, 80.784]
-      ],
-      "cycleSeconds": 5
-    },
     "tokens": {
       "background": {
         "kind": "color_pair",

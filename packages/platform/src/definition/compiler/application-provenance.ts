@@ -106,17 +106,6 @@ function applicationSpecialSourceTargets(
           ...sourcePath.slice(3).map((segment) => camelCase(String(segment))),
         ],
       ];
-    if (sourcePath[2] === "loader_mark")
-      return [
-        [
-          "content",
-          "theme",
-          "loaderMark",
-          ...sourcePath
-            .slice(3)
-            .map((segment) => (typeof segment === "number" ? segment : camelCase(segment))),
-        ],
-      ];
   }
   if (sourcePath[1] === "shells" && typeof sourcePath[2] === "number") {
     const shell = source.body.shells[sourcePath[2]];
