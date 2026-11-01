@@ -108,7 +108,7 @@ export const applyOrganizationCurrency = (
       "organization_default"
     )
       return;
-    props.currency = { kind: "text", value: currency };
+    props.currency = currency;
   });
 };
 
