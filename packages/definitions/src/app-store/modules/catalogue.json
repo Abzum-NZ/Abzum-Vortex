@@ -247,7 +247,7 @@
           "id": "fld_store_application_is_system_application",
           "key": "is_system_application",
           "label": "Platform application",
-          "type": "boolean",
+          "type": "yes_no",
           "settings": {}
         },
         {

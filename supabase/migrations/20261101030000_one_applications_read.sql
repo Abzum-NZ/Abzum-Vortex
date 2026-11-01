@@ -1,3 +1,5 @@
+set role vortex_owner;
+
 -- The organisation's application catalogue: every Application it has, ordinary or a platform
 -- system application, with its latest published version and the version installed now, if any.
 -- The App Store's Applications page and the Landing Zone's application tiles both read this one
@@ -225,3 +227,5 @@ grant execute on function vortex_access.list_application_store_entries_projectio
 alter function vortex_access.list_application_store_entries_projection(
   uuid[], text, text, jsonb, integer, jsonb
 ) owner to vortex_owner;
+
+reset role;
