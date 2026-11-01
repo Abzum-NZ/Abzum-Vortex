@@ -161,7 +161,12 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
                                   variant="ghost"
                                   size="sm"
                                   nativeButton={false}
-                                  render={<NavigationLink href={link.href} />}
+                                  render={
+                                    <NavigationLink
+                                      href={link.href}
+                                      onClick={(event) => event.stopPropagation()}
+                                    />
+                                  }
                                 >
                                   {link.label}
                                   <span className="sr-only">: {name}</span>
