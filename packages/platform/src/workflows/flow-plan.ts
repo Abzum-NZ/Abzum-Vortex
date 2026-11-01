@@ -1083,7 +1083,17 @@ const linkFlowPlans = (plans: ReadonlyMap<string, FlowPlan>, applicationKey?: st
         const childId = String(step.flowId);
         if (!plans.has(childId))
           throw new FlowPlanError(id, step.id, `Flow ${id} cannot run unavailable flow ${childId}`);
-        const child = visit(childId, next);
+        let child: FlowPlan;
+        try {
+          child = visit(childId, next);
+        } catch (error) {
+          if (!(error instanceof FlowPlanError)) throw error;
+          throw new FlowPlanError(
+            id,
+            step.id,
+            `Step ${step.id} cannot run flow ${plans.get(childId)!.definition.key}: ${error.reason}`,
+          );
+        }
         const pageReference = (value: unknown) =>
           flowValueReferences(value).some(
             (reference) => reference.source === "page" || reference.source === "form",

@@ -10,7 +10,7 @@ import {
   readBuilderApplicationOrigin,
   compileFlowPlans,
   installedFlowFormTypes,
-  FlowPlanError,
+  type FlowPlanError,
   type FlowPlan,
 } from "@vortex/platform/server";
 import type { FieldInputControlReleaseMap, PlatformThemeTokens } from "@vortex/ui";
