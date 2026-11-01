@@ -51,12 +51,12 @@ import type { StudioStructureForm } from "./studio-structure-editor";
 /** Where the workspace sits: the organisation it belongs to and the running application it builds. */
 export type StudioWorkspacePlace = Readonly<{
   organizationName: string;
-  /** The running application, for Back to app; absent when the organisation's address is unknown. */
+  /** The running application, for Back to app; absent when the builder may not open it or the organisation's address is unknown. */
   applicationHref: string | undefined;
   /** The App Store, where a published version is installed or upgraded to; absent like the above. */
   appStoreHref: string | undefined;
-  /** Whether this application is installed in the builder's organisation. */
-  installed: boolean;
+  /** Whether the organisation has this application installed; undefined when that cannot be read. */
+  installed: boolean | undefined;
   /** The other applications a Navigate step can open, with their pages. */
   navigationTargets: readonly StudioNavigationApplication[];
 }>;
