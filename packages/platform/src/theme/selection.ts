@@ -206,7 +206,12 @@ export function resolveThemeSelection(
   if (failures.length > 0) return { valid: false, failures, ruleFailures };
 
   for (const dimension of TOKEN_DIMENSION_ORDER) {
-    const optionId = selection[dimension];
+    const optionId =
+      dimension === "radius" &&
+      selection.radius === "default" &&
+      (selection.style === "sera" || selection.style === "lyra")
+        ? "none"
+        : selection[dimension];
     const option = findShadcnThemeCatalogueOption(dimension, optionId);
     const release =
       option?.releaseKey === undefined ? undefined : findShadcnThemeRelease(option.releaseKey);
