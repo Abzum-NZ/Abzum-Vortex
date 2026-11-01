@@ -12,6 +12,7 @@ import type { SlotGapName } from "../layout-styles";
 import {
   createAppearanceRootProps,
   createThemeRootProps,
+  VortexStyleRoot,
   type PlatformThemeTokens,
 } from "../theme";
 import type { StudioCanvasFrame } from "./studio-canvas-bridge";
@@ -82,6 +83,9 @@ export function StudioCanvasIframe({
         (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
       )
         return;
+      // A dialog inside the canvas owns its keys: they are not Studio's shortcuts.
+      if (isElement(target) && target.closest('[role="dialog"],[role="alertdialog"]') !== null)
+        return;
       const copy = new KeyboardEvent("keydown", {
         key: event.key,
         code: event.code,
@@ -122,7 +126,11 @@ export function StudioCanvasIframe({
       onAuxClickCapture={inert}
     >
       {frame === undefined ? (
-        <div {...createThemeRootProps(undefined, studio.platformThemeTokens)}>{children}</div>
+        // No frame yet (a page the compiled frames do not list): blocks still get their own style
+        // root, so their popovers open inside the iframe and not in Studio's document.
+        <VortexStyleRoot {...createThemeRootProps(undefined, studio.platformThemeTokens)}>
+          {children}
+        </VortexStyleRoot>
       ) : (
         <PagePuckRenderer
           readSettings={compiledItemSettings}

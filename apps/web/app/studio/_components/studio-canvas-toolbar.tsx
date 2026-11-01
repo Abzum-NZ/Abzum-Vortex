@@ -42,8 +42,11 @@ export function StudioCanvasToolbar({
   viewAs,
   arrangeGrid,
   arrangeableGrids,
+  locked,
   onArrangeGrid,
 }: Readonly<{
+  /** The draft is locked: nothing on the canvas can be arranged. */
+  locked: boolean;
   title: string;
   arrangeGrid: boolean;
   /** Whether a data grid on the open page has columns to arrange. */
@@ -91,7 +94,7 @@ export function StudioCanvasToolbar({
                     aria-label="Arrange grid columns"
                     aria-pressed={arrangeGrid}
                     // Stays focusable and hoverable, so its tooltip explains why it is off.
-                    disabled={!arrangeGrid && !arrangeableGrids}
+                    disabled={locked || (!arrangeGrid && !arrangeableGrids)}
                     focusableWhenDisabled
                     className="aria-disabled:opacity-50"
                     onClick={onArrangeGrid}
@@ -101,9 +104,11 @@ export function StudioCanvasToolbar({
                 <Icon name="table-columns" />
               </TooltipTrigger>
               <TooltipContent>
-                {arrangeGrid || arrangeableGrids
-                  ? "Arrange grid columns"
-                  : "Arrange grid columns: this page has no data grid with columns yet"}
+                {locked
+                  ? "Arrange grid columns: the draft is locked"
+                  : arrangeGrid || arrangeableGrids
+                    ? "Arrange grid columns"
+                    : "Arrange grid columns: this page has no data grid with columns yet"}
               </TooltipContent>
             </Tooltip>
             <label className="flex items-center gap-2 text-sm">

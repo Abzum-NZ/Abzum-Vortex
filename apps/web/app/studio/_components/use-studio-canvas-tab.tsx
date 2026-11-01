@@ -1150,6 +1150,7 @@ export function useStudioCanvasTab({
       showsCanvas={showsCanvas && canvasPage !== undefined}
       arrangeGrid={arrangeGrid}
       arrangeableGrids={arrangeableGrids}
+      locked={draft.locked}
       onArrangeGrid={() => setArrangeGrid((held) => !held)}
       appearance={appearance}
       onAppearance={setAppearance}

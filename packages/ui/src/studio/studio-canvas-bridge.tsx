@@ -118,6 +118,14 @@ export function StudioCanvasBridge({
   });
   const previewMode = usePuckSelector((state) => state.appState.ui.previewMode);
   const dragging = usePuckSelector((state) => state.appState.ui.isDragging);
+  const recorded = usePuckSelector((state) => state.history.histories.length);
+  // Studio's draft history is the one undo. Puck records its own drags and deletes and answers
+  // Ctrl+Z / Ctrl+Y with its older states, which Studio would then take as new edits, so Puck's
+  // history is kept at the current state alone and its Undo and Redo have nothing to go back to.
+  useEffect(() => {
+    const { history, appState } = getPuck();
+    if (history.histories.length > 1) history.setHistories([{ id: "studio", state: appState }]);
+  }, [recorded]);
   useEffect(() => {
     onDragging?.(dragging);
   }, [dragging]);

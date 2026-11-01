@@ -79,21 +79,38 @@ const readStoredWidths = (): Record<string, number> => {
   }
 };
 const collapsedStorageKey = "vortex.studio.panel-collapsed";
+// Without storage (a private window) the choice lasts for this visit only.
+let heldCollapsed: boolean | undefined;
+const collapsedListeners = new Set<() => void>();
 const readCollapsed = (): boolean => {
+  if (heldCollapsed !== undefined) return heldCollapsed;
   try {
     return window.localStorage.getItem(collapsedStorageKey) === "true";
   } catch {
-    // A private window or blocked storage: the panel opens, as it does by default.
+    // Blocked storage: the panel opens, as it does by default.
     return false;
   }
 };
 const storeCollapsed = (collapsed: boolean): void => {
+  heldCollapsed = collapsed;
   try {
     window.localStorage.setItem(collapsedStorageKey, String(collapsed));
   } catch {
-    // The choice is a convenience; without storage it lasts for this visit only.
+    // The choice is a convenience; the held value covers this visit.
   }
+  for (const notify of collapsedListeners) notify();
 };
+const subscribeCollapsed = (notify: () => void): (() => void) => {
+  collapsedListeners.add(notify);
+  window.addEventListener("storage", notify);
+  return () => {
+    collapsedListeners.delete(notify);
+    window.removeEventListener("storage", notify);
+  };
+};
+// The server and the first client render do not know the choice (`null`); it resolves in the same
+// post-hydration render as the layout width, so the panel never shows and then folds away.
+const readCollapsedOnServer = (): boolean | null => null;
 const storeWidths = (widths: Readonly<Record<string, number>>): void => {
   try {
     window.localStorage.setItem(widthStorageKey, JSON.stringify(widths));
@@ -237,7 +254,7 @@ function StudioRail<Key extends string>({
         aria-orientation="vertical"
         aria-label={label}
         onKeyDown={move}
-        className="flex w-full flex-col items-center gap-1"
+        className="flex min-h-0 w-full flex-1 flex-col items-center gap-1"
       >
         {tabs.map((tab, index) => {
           const selected = tab.key === active;
@@ -279,6 +296,10 @@ function StudioRail<Key extends string>({
     </div>
   );
 }
+
+/** Whether an event target is in the rail or in its panel (a portal whose host sits inside the rail). */
+const inRailOrPanel = (rail: HTMLElement | null, target: EventTarget | null): boolean =>
+  rail !== null && target instanceof Node && rail.contains(target);
 
 /** The drag handle between the panel and the canvas; arrow keys resize it a quarter rem at a time. */
 function PanelResizer({
@@ -389,33 +410,32 @@ export function StudioFrame<Key extends string>({
   const [panelOpen, setPanelOpen] = useState(true);
   // Collapsed: the panel is closed until the pointer visits the rail, and then it overlays the canvas.
   // `null` until the stored choice is read, so a reload never shows the panel and then folds it away.
-  const [storedCollapsed, setCollapsed] = useState<boolean | null>(null);
+  const storedCollapsed = useSyncExternalStore<boolean | null>(
+    subscribeCollapsed,
+    readCollapsed,
+    readCollapsedOnServer,
+  );
   const collapsed = storedCollapsed === true;
   const [peeking, setPeeking] = useState(false);
   const peekTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const pointerInside = useRef(false);
+  const rail = useRef<HTMLDivElement>(null);
   // Opening waits a moment, so passing over the rail does not pop the panel; closing waits longer.
   const peek = useCallback((open: boolean, immediately = false) => {
     clearTimeout(peekTimer.current);
     if (open && immediately) setPeeking(true);
     else peekTimer.current = setTimeout(() => setPeeking(open), open ? 150 : 300);
   }, []);
-  useEffect(() => {
-    setCollapsed(readCollapsed());
-    return () => clearTimeout(peekTimer.current);
-  }, []);
+  useEffect(() => () => clearTimeout(peekTimer.current), []);
   const toggleCollapsed = useCallback(() => {
     if (!wide) return;
     const inPanel = document.activeElement?.closest("#studio-rail-panel") != null;
-    setCollapsed((held) => {
-      storeCollapsed(held !== true);
-      return held !== true;
-    });
+    storeCollapsed(!collapsed);
     clearTimeout(peekTimer.current);
     setPeeking(false);
     // The panel leaves the page with the focus inside it: the toggle keeps it.
     if (inPanel) document.getElementById("studio-panel-toggle")?.focus();
-  }, [wide]);
+  }, [wide, collapsed]);
   // The drag ended: the overlay closes after the drop.
   const wasDragging = useRef(false);
   useEffect(() => {
@@ -522,10 +542,34 @@ export function StudioFrame<Key extends string>({
   const overlayPanel = wide && panelOpen && collapsed && (peeking || dragging);
   const showInspector = hasInspector && dockInspector && inspectorOpen;
   return (
-    <div className="flex h-dvh min-w-0 flex-col bg-background text-foreground">
+    <div
+      className="flex h-dvh min-w-0 flex-col bg-background text-foreground"
+      // The panel's content is a portal: its events reach this element through React, not the rail's
+      // wrapper, so the overlay's keyboard path lives here and asks where the event came from.
+      onKeyDown={(event) => {
+        if (event.key !== "Escape" || event.defaultPrevented || !collapsed || !overlayPanel) return;
+        if (!inRailOrPanel(rail.current, event.target)) return;
+        event.stopPropagation();
+        clearTimeout(peekTimer.current);
+        setPeeking(false);
+        document.getElementById(`studio-rail-${activeTab}`)?.focus();
+      }}
+      onBlur={(event) => {
+        // Keyboard use: focus leaving the rail and its panel closes the overlay.
+        if (
+          !collapsed ||
+          pointerInside.current ||
+          !inRailOrPanel(rail.current, event.target) ||
+          inRailOrPanel(rail.current, event.relatedTarget)
+        )
+          return;
+        peek(false);
+      }}
+    >
       {topBar}
       <div className="flex min-h-0 min-w-0 flex-1">
         <div
+          ref={rail}
           className="relative flex min-h-0 shrink-0"
           onPointerEnter={() => {
             pointerInside.current = true;
@@ -534,22 +578,6 @@ export function StudioFrame<Key extends string>({
           onPointerLeave={() => {
             pointerInside.current = false;
             if (collapsed) peek(false);
-          }}
-          onBlur={(event) => {
-            // Keyboard use: focus leaving the rail and its panel closes the overlay.
-            if (
-              collapsed &&
-              !pointerInside.current &&
-              !event.currentTarget.contains(event.relatedTarget)
-            )
-              peek(false);
-          }}
-          onKeyDown={(event) => {
-            if (event.key !== "Escape" || !collapsed || !overlayPanel) return;
-            event.stopPropagation();
-            clearTimeout(peekTimer.current);
-            setPeeking(false);
-            document.getElementById(`studio-rail-${activeTab}`)?.focus();
           }}
         >
           <StudioRail

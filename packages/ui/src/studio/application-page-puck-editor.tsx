@@ -77,7 +77,7 @@ import { StudioCanvasFrameProvider } from "./studio-canvas-root";
 import { StudioCanvasActions, studioCanvasOverrides } from "./studio-canvas-actions";
 import {
   StudioCanvasGridContext,
-  studioCanvasGridArrangeable,
+  studioCanvasGridSetup,
   type StudioCanvasGridChange,
   type StudioCanvasGridRead,
 } from "./studio-canvas-grid";
@@ -668,7 +668,8 @@ function ApplicationPageSlotPuckEditor({
             const settings = compiled.settings?.[item.props.id];
             return (
               settings !== undefined &&
-              studioCanvasGridArrangeable(item.props, settings, storedItemRelease(catalogue, item))
+              studioCanvasGridSetup(item.props, settings, storedItemRelease(catalogue, item)) !==
+                undefined
             );
           }),
     [slot, catalogue, compiled],
