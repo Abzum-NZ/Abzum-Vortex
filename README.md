@@ -110,6 +110,18 @@ idempotency keys. Re-running setup for the same organisation reuses its publishe
 installations and role assignments. A different nominated account is refused. `pnpm demo:setup`
 deliberately resets the local database before starting a fresh demo.
 
+An older setup state may lack `databaseSystemId`. Setup names the state file and refuses to change it.
+If its database has not been reset since that state was written, query the identifier from the same
+local Supabase workdir, then add `"databaseSystemId": "<identifier>"` to the JSON file by hand:
+
+```sh
+node node_modules/supabase/dist/supabase.js db query --local --workdir <workdir> "select system_identifier::text from pg_control_system()"
+```
+
+For the main local stack, omit `--workdir <workdir>`. If the state does not describe the current
+database, delete that state file and reset the local database before running setup; a reset removes
+all data in that database. Never reset a lane held by someone else.
+
 ### Local environment variables
 
 `pnpm dev`, `pnpm demo:setup`, and `pnpm setup:local` read server-only values from

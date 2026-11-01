@@ -154,6 +154,15 @@ const readSetupStateDocument = (): unknown | undefined => {
 };
 
 const requiredStateEnvelope = (value: unknown) => {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    !("databaseSystemId" in value)
+  )
+    throw new Error(
+      `Development setup state ${stateFile()} has no databaseSystemId. If the database has not been reset since the state was written, query pg_control_system() and add its system_identifier as a JSON string; otherwise delete this state file and reset the local database. See README.md for the steps.`,
+    );
   const parsed = setupStateEnvelopeSchema.safeParse(value);
   if (!parsed.success)
     throw stateFailure(
