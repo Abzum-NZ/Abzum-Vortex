@@ -1,59 +1,39 @@
-import { notFound } from "next/navigation";
-import { namespacedKeySchema } from "@vortex/platform/schema";
+import { notFound, redirect } from "next/navigation";
 import { continueStudioSession } from "../_lib/studio-session";
 import { StudioUnavailable } from "../_components/studio-unavailable";
 import { loadOrganizationLauncher } from "../../_lib/organization-context";
-import { loadStudioOrganizationHome } from "../../_lib/studio-organization-home";
-import { StudioHome } from "../_components/studio-home";
+import { loadApplicationsPageHref } from "../../_lib/applications-page";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * One organisation's Studio address lands on the Applications page: the App Store's list in the
+ * shared application frame is the one place applications are listed, opened, edited and upgraded.
+ */
 export default async function StudioOrganizationPage({
   params,
-  searchParams,
-}: Readonly<{
-  params: Promise<{ organizationId: string }>;
-  searchParams: Promise<{ after?: string }>;
-}>) {
+}: Readonly<{ params: Promise<{ organizationId: string }> }>) {
   const { organizationId } = await params;
-  const { after } = await searchParams;
-  if (after !== undefined && !namespacedKeySchema.safeParse(after).success) notFound();
   const resolved = await continueStudioSession();
   if (resolved.kind === "temporarily_unavailable")
-    return <StudioUnavailable subject="Studio" result={resolved} />;
+    return <StudioUnavailable subject="Studio" result={resolved} reloadHref="/studio" />;
   const launcher = await loadOrganizationLauncher(resolved.session);
-  const result = await loadStudioOrganizationHome(organizationId, after ?? null);
-  if (result.kind !== "available" || launcher.kind !== "available") {
-    console.error(
-      `[studio] organization listing unavailable: ${result.kind}, launcher ${launcher.kind}`,
-    );
+  if (launcher.kind !== "available") {
+    console.error(`[studio] organization landing could not list organisations: ${launcher.kind}`);
     return (
       <main className="mx-auto max-w-4xl space-y-4 p-6">
-        <h1 className="text-3xl font-semibold tracking-tight">Studio unavailable</h1>
-        <p role="status">
-          {result.kind === "refused"
-            ? result.reason
-            : "Studio could not load this organization. Try again shortly."}
-        </p>
+        <h1 className="text-2xl font-semibold">Studio</h1>
+        <p role="status">Studio could not load your organisations. Try again shortly.</p>
       </main>
     );
   }
-  const entry = launcher.entries.find((entry) => entry.organizationId === result.organizationId);
+  const entry = launcher.entries.find((candidate) => candidate.organizationId === organizationId);
   if (entry === undefined) notFound();
-  return (
-    <StudioHome
-      filtered
-      organizations={[
-        {
-          organizationId: result.organizationId,
-          name: entry.organizationDisplayName,
-          tenantName: entry.tenantDisplayName,
-          roots: result.roots,
-          editorNames: result.editorNames,
-          nextCursor: result.nextCursor,
-          after: after ?? null,
-        },
-      ]}
-    />
-  );
+  const href = await loadApplicationsPageHref(resolved.session, {
+    organizationId: entry.organizationId,
+    tenantShortName: entry.tenantShortName,
+    organizationShortName: entry.organizationShortName,
+  });
+  if (href === undefined) notFound();
+  redirect(href);
 }

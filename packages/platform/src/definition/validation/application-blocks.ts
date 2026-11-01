@@ -279,6 +279,7 @@ export function applicationControlBindingRule(
           : blockKey === actionButtonBlockKey &&
             sourceButtonActionKind(placement) !== "submit" &&
             sourceButtonActionKind(placement) !== "reset" &&
+            sourceBlockSetting(placement, "link", "string") === undefined &&
             sourceBlockSetting(placement, "disabled", "boolean") !== true &&
             !bound.has("action");
       if (!unbound) continue;

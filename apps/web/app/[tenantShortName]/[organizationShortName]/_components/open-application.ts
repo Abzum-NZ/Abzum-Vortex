@@ -11,6 +11,7 @@ import { continueSessionOrEnd } from "../../../auth/_lib/session-redirect";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { loadStudioCreateAccess } from "../../../_lib/studio-application-draft";
+import { loadApplicationsPageHref } from "../../../_lib/applications-page";
 import {
   applicationPageAddressPath as addressPath,
   organizationAddressPath as launcherPath,
@@ -79,7 +80,14 @@ export const openPermittedApplication = async (
     studio.kind === "available" &&
     studio.organizationId === event.recordId &&
     studio.organizationId === rechecked.read.organizationId
-  )
-    redirect(`/studio/${encodeURIComponent(studio.organizationId)}`);
+  ) {
+    // Studio has no list of its own: its landing is the Applications page in the App Store frame.
+    const applications = await loadApplicationsPageHref(currentIdentity.session, {
+      organizationId: rechecked.read.organizationId,
+      tenantShortName,
+      organizationShortName,
+    });
+    redirect(applications ?? chooser);
+  }
   redirect(chooser);
 };

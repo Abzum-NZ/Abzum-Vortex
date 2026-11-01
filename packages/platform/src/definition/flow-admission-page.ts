@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { BoundHumanOrganizationRequest } from "../access/human-organization-request";
+import type { PlatformPermissionSource } from "../access/platform-permissions";
 import { recordIdSchema } from "../catalogue/identifiers";
 import { isRecord, sameId } from "../catalogue/runtime-primitives";
 import { readPageSubjectInTransaction } from "../pages/page-subject-read";
@@ -22,6 +23,7 @@ import type { FlowControlOptionRequest, FlowInvocationRequest } from "./flow-inv
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
 
 type PageAdmissionHost = Readonly<{
+  permissions: PlatformPermissionSource;
   validateOption: (input: FlowControlOptionRequest) => Promise<boolean>;
   projectRowForm: (
     bound: BoundHumanOrganizationRequest,
@@ -131,7 +133,11 @@ export const admitPageGesture = async (
     binding,
     inputs,
     state.subject,
-    async (operation) => ({ kind: "available", value: await operation(bound.transaction) }),
+    host.permissions,
+    async (operation) => ({
+      kind: "available",
+      value: await operation(bound.transaction, bound.scope),
+    }),
   );
   if (refusal !== undefined) {
     console.error(`[flows] table binding refused: ${refusal.reason}`);

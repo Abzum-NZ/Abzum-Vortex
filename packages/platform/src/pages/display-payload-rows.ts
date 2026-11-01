@@ -5,6 +5,7 @@ import {
   displayFieldKeySchema,
   displayScalarCellSchema,
   displayTextSchema,
+  isInternalAddress,
   refineUniqueKeys,
 } from "./display-payload-parts";
 
@@ -73,6 +74,25 @@ const displayRowSchema = z
      */
     edit: z.record(displayFieldKeySchema, jsonValueSchema).readonly().exactOptional(),
     cells: z.record(displayFieldKeySchema, displayScalarCellSchema).readonly(),
+    /**
+     * The internal links this row offers, already resolved for the viewer by the read; absent when
+     * the block declares none or the person is not offered any. Each opens in place.
+     */
+    links: z
+      .array(
+        z
+          .object({
+            label: displayTextSchema,
+            href: z
+              .string()
+              .refine(isInternalAddress, "A row link opens an address inside this app"),
+          })
+          .strict()
+          .readonly(),
+      )
+      .max(4)
+      .readonly()
+      .exactOptional(),
     /** The style keys and measures the table's formatting gives the row, decided on the server. */
     format: displayRowFormatSchema.exactOptional(),
     /**

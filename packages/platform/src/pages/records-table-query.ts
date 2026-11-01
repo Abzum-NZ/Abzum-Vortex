@@ -175,6 +175,8 @@ type RecordsTableQueryRequest = Readonly<{
    * protected request carries the read and every decision.
    */
   decide?: RecordsTableReadDecider;
+  /** Fields used only by the server's row decisions, stripped before projecting visible rows. */
+  decisionFieldIds?: readonly string[];
   /**
    * Set when the table is a tree: the read is one level of it, the roots (no parent) or the
    * children of one record, `pageSize` at a time, over the link that names each record's parent.
@@ -614,6 +616,7 @@ export const buildRecordsTableQueryCommand = (
     requestedFieldIds: lowerUnique([
       ...fieldIds,
       ...formattingFieldIds,
+      ...(request.decisionFieldIds ?? []),
       ...(request.titleFieldId === undefined ? [] : [request.titleFieldId]),
     ]),
     requestedSystemFieldKeys: [],

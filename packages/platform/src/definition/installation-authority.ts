@@ -409,7 +409,11 @@ export const readBuilderOperationDeadlines = async (
   const facts = await installationTargetFacts(
     transaction,
     scope,
-    operation.kind === "installation" ? operation.applicationRootId : operation.rootId,
+    operation.kind === "installation"
+      ? operation.applicationRootId
+      : operation.kind === "application_management"
+        ? undefined
+        : operation.rootId,
   );
   const requirements = deriveBuilderRequirements(operation, facts);
   if (requirements.refused || requirements.permissionKeys.length === 0)

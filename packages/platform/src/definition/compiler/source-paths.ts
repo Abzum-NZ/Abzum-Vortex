@@ -87,6 +87,7 @@ const directSourceKeyMap: Readonly<Record<string, string>> = Object.freeze({
   responder_permission: "responderPermissionKey",
   view_permission: "viewPermissionKey",
   use_permission: "usePermissionKey",
+  application_audience: "applicationAudience",
   public_action: "publicActionKey",
   secret_fields: "secretFieldKeys",
 });

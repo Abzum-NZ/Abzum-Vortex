@@ -1,19 +1,16 @@
-import { notFound } from "next/navigation";
-import { namespacedKeySchema } from "@vortex/platform/schema";
-import { StudioHome } from "./_components/studio-home";
+import { notFound, redirect } from "next/navigation";
 import { continueStudioSession } from "./_lib/studio-session";
 import { StudioUnavailable } from "./_components/studio-unavailable";
 import { loadOrganizationLauncher } from "../_lib/organization-context";
-import { loadStudioOrganizationHome } from "../_lib/studio-organization-home";
+import { loadFirstApplicationsPageHref } from "../_lib/applications-page";
 
 export const dynamic = "force-dynamic";
 
-export default async function StudioLandingPage({
-  searchParams,
-}: Readonly<{ searchParams: Promise<{ after?: string; organization?: string }> }>) {
-  const paging = await searchParams;
-  if (paging.after !== undefined && !namespacedKeySchema.safeParse(paging.after).success)
-    notFound();
+/**
+ * Studio's landing: the one Applications page of the first organisation this person may build in.
+ * Studio has no list of its own; the editor keeps its own workspace.
+ */
+export default async function StudioLandingPage() {
   const resolved = await continueStudioSession();
   if (resolved.kind === "temporarily_unavailable")
     return <StudioUnavailable subject="Studio" result={resolved} reloadHref="/studio" />;
@@ -27,44 +24,14 @@ export default async function StudioLandingPage({
       </main>
     );
   }
-
-  const homes = await Promise.all(
-    launcher.entries.map(async (entry) => ({
-      entry,
-      home: await loadStudioOrganizationHome(
-        entry.organizationId,
-        paging.organization === entry.organizationId ? (paging.after ?? null) : null,
-      ),
+  const href = await loadFirstApplicationsPageHref(
+    resolved.session,
+    launcher.entries.map((entry) => ({
+      organizationId: entry.organizationId,
+      tenantShortName: entry.tenantShortName,
+      organizationShortName: entry.organizationShortName,
     })),
   );
-  const buildable = homes.flatMap(({ entry, home }) =>
-    home.kind === "available" ? [{ entry, home }] : [],
-  );
-  if (buildable.length === 0) {
-    if (homes.some(({ home }) => home.kind === "temporarily_unavailable"))
-      return (
-        <main className="mx-auto max-w-4xl space-y-4 p-6">
-          <h1 className="text-2xl font-semibold">Studio</h1>
-          <p role="status">Studio could not load right now. Try again shortly.</p>
-        </main>
-      );
-    notFound();
-  }
-
-  const organizations = [...buildable].sort((left, right) =>
-    left.entry.organizationDisplayName.localeCompare(right.entry.organizationDisplayName),
-  );
-  return (
-    <StudioHome
-      organizations={organizations.map(({ entry, home }) => ({
-        organizationId: home.organizationId,
-        name: entry.organizationDisplayName,
-        tenantName: entry.tenantDisplayName,
-        roots: home.roots,
-        editorNames: home.editorNames,
-        nextCursor: home.nextCursor,
-        after: paging.organization === entry.organizationId ? (paging.after ?? null) : null,
-      }))}
-    />
-  );
+  if (href === undefined) notFound();
+  redirect(href);
 }

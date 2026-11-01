@@ -71,6 +71,7 @@ import {
 import { resolvePageComposition } from "./page-composition-resolution";
 import { pageSubjectFromRead, type PageSubjectReadResult } from "./page-subject-read";
 import { activeInstallationBundleStateSchema } from "../definition/active-installation-bundle-repository";
+import type { ApplicationAudience } from "../catalogue/application-link";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
 
 /** The page subject and, when it is readable, its bound named actions' availability by action id. */
@@ -96,6 +97,8 @@ type StoredPageCapabilityDependencies = HumanOrganizationRequestDependencies &
     selection: StoredPageCapabilitySelection;
     /** The shipped platform permission catalogue page requirements may name. */
     permissions: PlatformPermissionSource;
+    /** The audiences this page read allows; a placement for any other audience is not shown. */
+    applicationAudiences?: Readonly<Record<ApplicationAudience, boolean>>;
   }>;
 
 class StoredPageCapabilityFailure extends Error {
@@ -653,6 +656,10 @@ export const createStoredPageCapabilityService = (
     // One preview per bound action, however many placements share it.
     const availabilities = new Map<string, Promise<boolean | undefined>>();
     const evaluators: PageCapabilityEvaluators = {
+      applicationAudiences: dependencies.applicationAudiences ?? {
+        builders: false,
+        installers: false,
+      },
       evaluateActionAvailability: async (transaction, scope, page, placementId) => {
         const action = boundActions.get(placementId.toLowerCase());
         const selectedType =

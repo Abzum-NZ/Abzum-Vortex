@@ -534,14 +534,38 @@
                       "value": "automatic"
                     },
                     "options": [
-                      { "key": "automatic", "label": "Automatic" },
-                      { "key": "text", "label": "Text" },
-                      { "key": "number", "label": "Number" },
-                      { "key": "currency", "label": "Currency" },
-                      { "key": "percent", "label": "Percent" },
-                      { "key": "date", "label": "Date" },
-                      { "key": "date_time", "label": "Date and time" },
-                      { "key": "boolean", "label": "Yes or no" }
+                      {
+                        "key": "automatic",
+                        "label": "Automatic"
+                      },
+                      {
+                        "key": "text",
+                        "label": "Text"
+                      },
+                      {
+                        "key": "number",
+                        "label": "Number"
+                      },
+                      {
+                        "key": "currency",
+                        "label": "Currency"
+                      },
+                      {
+                        "key": "percent",
+                        "label": "Percent"
+                      },
+                      {
+                        "key": "date",
+                        "label": "Date"
+                      },
+                      {
+                        "key": "date_time",
+                        "label": "Date and time"
+                      },
+                      {
+                        "key": "boolean",
+                        "label": "Yes or no"
+                      }
                     ]
                   }
                 ]
@@ -688,7 +712,10 @@
     "icon": "type",
     "paletteGroup": "input",
     "rendererKey": "platform.renderer.text_input",
-    "value_type": { "kind": "fixed", "type": "text" },
+    "value_type": {
+      "kind": "fixed",
+      "type": "text"
+    },
     "properties": [
       {
         "kind": "text",
@@ -961,7 +988,10 @@
     "icon": "check-square",
     "paletteGroup": "input",
     "rendererKey": "platform.renderer.boolean_input",
-    "value_type": { "kind": "fixed", "type": "yes_no" },
+    "value_type": {
+      "kind": "fixed",
+      "type": "yes_no"
+    },
     "properties": [
       {
         "kind": "text",
@@ -1046,7 +1076,10 @@
     "icon": "calendar",
     "paletteGroup": "input",
     "rendererKey": "platform.renderer.date_input",
-    "value_type": { "kind": "fixed", "type": "date" },
+    "value_type": {
+      "kind": "fixed",
+      "type": "date"
+    },
     "properties": [
       {
         "kind": "text",
@@ -1130,7 +1163,10 @@
     "icon": "list",
     "paletteGroup": "input",
     "rendererKey": "platform.renderer.choice_input",
-    "value_type": { "kind": "fixed", "type": "choice" },
+    "value_type": {
+      "kind": "fixed",
+      "type": "choice"
+    },
     "properties": [
       {
         "kind": "text",
@@ -1378,6 +1414,31 @@
           {
             "key": "reset",
             "label": "Reset form"
+          }
+        ]
+      },
+      {
+        "kind": "choice",
+        "key": "link",
+        "label": "Link",
+        "help": "Internal destination the button opens instead of emitting an action; the server offers it only to the people the destination allows",
+        "required": false,
+        "options": [
+          {
+            "key": "open_application",
+            "label": "Open the application"
+          },
+          {
+            "key": "studio_editor",
+            "label": "Edit in Studio"
+          },
+          {
+            "key": "studio_new_application",
+            "label": "New application in Studio"
+          },
+          {
+            "key": "app_store_upgrade",
+            "label": "Upgrade in the App Store"
           }
         ]
       },
@@ -1888,7 +1949,10 @@
     "icon": "link",
     "paletteGroup": "input",
     "rendererKey": "platform.renderer.link_input",
-    "value_type": { "kind": "fixed", "type": "record_reference" },
+    "value_type": {
+      "kind": "fixed",
+      "type": "record_reference"
+    },
     "properties": [
       {
         "kind": "text",
@@ -2038,7 +2102,10 @@
     "icon": "file-text",
     "paletteGroup": "input",
     "rendererKey": "platform.renderer.rich_text_input",
-    "value_type": { "kind": "fixed", "type": "json" },
+    "value_type": {
+      "kind": "fixed",
+      "type": "json"
+    },
     "properties": [
       {
         "kind": "text",
@@ -2404,14 +2471,38 @@
               "help": "The colour role shown with this option",
               "required": false,
               "options": [
-                { "key": "neutral", "label": "Neutral" },
-                { "key": "primary", "label": "Primary" },
-                { "key": "destructive", "label": "Destructive" },
-                { "key": "chart_1", "label": "Chart 1" },
-                { "key": "chart_2", "label": "Chart 2" },
-                { "key": "chart_3", "label": "Chart 3" },
-                { "key": "chart_4", "label": "Chart 4" },
-                { "key": "chart_5", "label": "Chart 5" }
+                {
+                  "key": "neutral",
+                  "label": "Neutral"
+                },
+                {
+                  "key": "primary",
+                  "label": "Primary"
+                },
+                {
+                  "key": "destructive",
+                  "label": "Destructive"
+                },
+                {
+                  "key": "chart_1",
+                  "label": "Chart 1"
+                },
+                {
+                  "key": "chart_2",
+                  "label": "Chart 2"
+                },
+                {
+                  "key": "chart_3",
+                  "label": "Chart 3"
+                },
+                {
+                  "key": "chart_4",
+                  "label": "Chart 4"
+                },
+                {
+                  "key": "chart_5",
+                  "label": "Chart 5"
+                }
               ]
             }
           ]
@@ -2622,7 +2713,7 @@
         "key": "maximum_size_mb",
         "label": "Maximum size (MiB)",
         "required": true,
-        "minimum": 1e-6,
+        "minimum": 0.000001,
         "maximum": 5000,
         "integer": false
       },
@@ -2708,6 +2799,26 @@
           "kind": "text",
           "value": "Open"
         }
+      },
+      {
+        "kind": "text",
+        "key": "studio_link_label",
+        "presentation": true,
+        "label": "Studio link",
+        "help": "Word on each tile's link to the Studio editor; leave it out to offer none",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 40
+      },
+      {
+        "kind": "text",
+        "key": "upgrade_link_label",
+        "presentation": true,
+        "label": "Upgrade link",
+        "help": "Word on each tile's link to the App Store upgrade while a newer release waits; leave it out to offer none",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 40
       },
       {
         "kind": "text",
@@ -3514,10 +3625,52 @@
               "kind": "text",
               "key": "event_id",
               "label": "Event identity",
-              "help": "Stable identity of the flow binding this command runs",
-              "required": true,
+              "help": "Stable identity of the flow binding this command runs; leave it out for a link",
+              "required": false,
               "minLength": 1,
               "maxLength": 60
+            },
+            {
+              "kind": "choice",
+              "key": "link",
+              "label": "Link",
+              "help": "Internal destination the server resolves for each row; leave it out for a flow",
+              "required": false,
+              "options": [
+                {
+                  "key": "open_application",
+                  "label": "Open the application"
+                },
+                {
+                  "key": "studio_editor",
+                  "label": "Edit in Studio"
+                },
+                {
+                  "key": "studio_new_application",
+                  "label": "New application in Studio"
+                },
+                {
+                  "key": "app_store_upgrade",
+                  "label": "Upgrade in the App Store"
+                }
+              ]
+            },
+            {
+              "kind": "choice",
+              "key": "application_capability",
+              "label": "Needs of the application",
+              "help": "What the viewer must be able to do with the row's application for this command to appear",
+              "required": false,
+              "options": [
+                {
+                  "key": "install_application",
+                  "label": "Install or upgrade it"
+                },
+                {
+                  "key": "remove_application",
+                  "label": "Remove it"
+                }
+              ]
             },
             {
               "kind": "text",
@@ -4544,7 +4697,10 @@
     "icon": "table",
     "paletteGroup": "input",
     "rendererKey": "platform.renderer.table_input",
-    "value_type": { "kind": "fixed", "type": "json" },
+    "value_type": {
+      "kind": "fixed",
+      "type": "json"
+    },
     "properties": [
       {
         "kind": "text",
@@ -4762,7 +4918,10 @@
     "icon": "paperclip",
     "paletteGroup": "input",
     "rendererKey": "platform.renderer.attachment_input",
-    "value_type": { "kind": "fixed", "type": "json" },
+    "value_type": {
+      "kind": "fixed",
+      "type": "json"
+    },
     "properties": [
       {
         "kind": "text",
@@ -4844,7 +5003,7 @@
         "key": "maximum_size_mb",
         "label": "Maximum size (MiB)",
         "required": true,
-        "minimum": 1e-6,
+        "minimum": 0.000001,
         "maximum": 5000,
         "integer": false
       },
@@ -4879,7 +5038,10 @@
     "icon": "key-round",
     "paletteGroup": "input",
     "rendererKey": "platform.renderer.connection_secret_input",
-    "value_type": { "kind": "fixed", "type": "text" },
+    "value_type": {
+      "kind": "fixed",
+      "type": "text"
+    },
     "properties": [
       {
         "kind": "text",

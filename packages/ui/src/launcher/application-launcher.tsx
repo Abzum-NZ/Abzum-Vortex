@@ -2,6 +2,7 @@
 
 import type { ReactElement } from "react";
 import { Icon, resolveVortexIconName } from "../icons";
+import { Button } from "../components/button";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "../components/card";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "../components/empty";
 import { cellValueToText } from "../display/cell";
@@ -10,6 +11,7 @@ import { rowActionEventIdOf } from "../display/context";
 import { DisplayStateContainer } from "../display/display-state-container";
 import type { DisplayDetailCell } from "../display/projected-data";
 import { cn } from "../lib/utils";
+import { NavigationLink } from "../routing/navigation-link";
 import {
   readLauncherSettings,
   resolveLauncherListContext,
@@ -151,6 +153,27 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
                               />
                             </CardFooter>
                           ) : null}
+                          {row.links === undefined || row.links.length === 0 ? null : (
+                            <CardFooter className="mt-auto flex flex-wrap gap-1">
+                              {row.links.map((link) => (
+                                <Button
+                                  key={link.href}
+                                  variant="ghost"
+                                  size="sm"
+                                  nativeButton={false}
+                                  render={
+                                    <NavigationLink
+                                      href={link.href}
+                                      onClick={(event) => event.stopPropagation()}
+                                    />
+                                  }
+                                >
+                                  {link.label}
+                                  <span className="sr-only">: {name}</span>
+                                </Button>
+                              ))}
+                            </CardFooter>
+                          )}
                         </Card>
                       </li>
                     );

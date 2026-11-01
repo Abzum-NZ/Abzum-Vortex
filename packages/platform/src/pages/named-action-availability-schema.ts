@@ -30,7 +30,14 @@ export const namedActionAvailabilityRequestSchema = z
 export type NamedActionAvailabilityRequest = z.infer<typeof namedActionAvailabilityRequestSchema>;
 
 const actionSchema = z.discriminatedUnion("eligible", [
-  z.object({ action: z.string().min(1).max(200), eligible: z.literal(true) }).strict(),
+  z
+    .object({
+      action: z.string().min(1).max(200),
+      eligible: z.literal(true),
+      /** The internal address a server-resolved link action opens; absent for a flow action. */
+      href: z.string().min(1).max(2048).optional(),
+    })
+    .strict(),
   z
     .object({
       action: z.string().min(1).max(200),

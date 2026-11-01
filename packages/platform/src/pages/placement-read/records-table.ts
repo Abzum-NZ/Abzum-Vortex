@@ -13,9 +13,13 @@ import { tableReadValuesSchema } from "../display-payload-table";
 import type { RecordsTableGroupRead } from "../records-table-features/grouping";
 import { decideRecordTypeExport } from "../records-table-features/record-type-access";
 import {
+  applicationLinkRowOf,
+  projectApplicationRowActions,
   projectRowActionAvailability,
   rowActionInstallationOf,
 } from "../records-table-features/row-actions";
+import type { ApplicationLinkRow } from "../../catalogue/application-link";
+import type { ProtectedQueryRow } from "../../queries/protected-query-contracts";
 import type { RecordsTableReadDecider, RecordsTableReadDecisions } from "../records-table-query";
 import {
   conditionalFormattingRelativeDates,
@@ -286,10 +290,29 @@ export const readRecordsTable = async (
   const wantsExport = contract.features.export.enabled && recordType.state === "resolved";
   const wantsRowActions =
     contract.features.rowActions.enabled && contract.rowBehaviours.rowActions.length > 0;
+  const wantsApplicationRowActions =
+    wantsRowActions &&
+    read.applicationSurfaces !== undefined &&
+    contract.rowBehaviours.rowActions.some(
+      (action) => action.link !== undefined || action.applicationCapability !== undefined,
+    );
   if (wantsRowActions && recordType.state !== "resolved")
     throw new Error("ROW_ACTION_RECORD_TYPE_UNRESOLVED");
   const resolvedRecordTypeId =
     recordType.state === "resolved" ? String(recordType.recordTypeId) : undefined;
+  // The application facts a row action's link or capability is decided from: the row's stable
+  // identity and its key, status and platform origin as the shared applications read projects them.
+  const applicationFieldIds = new Map(
+    (listed?.fields ?? []).map((field) => [field.key, String(field.fieldId).toLowerCase()]),
+  );
+  const decisionFieldIds = wantsApplicationRowActions
+    ? ["key", "status", "is_system_application"].flatMap((key) => {
+        const fieldId = applicationFieldIds.get(key);
+        return fieldId === undefined ? [] : [fieldId];
+      })
+    : [];
+  const applicationOf = (row: ProtectedQueryRow): ApplicationLinkRow | undefined =>
+    applicationLinkRowOf(row, applicationFieldIds);
   // A draft preview offers no export.
   const previewing = read.selection.previewInstallationId !== undefined;
   const decide: RecordsTableReadDecider | undefined =
@@ -318,13 +341,29 @@ export const readRecordsTable = async (
                 rows,
               )
             : undefined;
-          if (implied !== undefined && resolvedRecordTypeId !== undefined)
+          const applications =
+            wantsApplicationRowActions && implied !== undefined
+              ? new Map(
+                  rows.map((row) => [row.recordId.toLowerCase(), applicationOf(row)] as const),
+                )
+              : undefined;
+          const decided =
+            implied !== undefined &&
+            applications !== undefined &&
+            read.applicationSurfaces !== undefined
+              ? projectApplicationRowActions(
+                  implied,
+                  (recordId) => applications.get(recordId.toLowerCase()),
+                  read.applicationSurfaces,
+                )
+              : implied;
+          if (decided !== undefined && resolvedRecordTypeId !== undefined)
             decisions.rowActions = await projectRowActionAvailability(
               transaction,
               rowActionInstallationOf(read.context),
               placementId,
               resolvedRecordTypeId,
-              implied,
+              decided,
             );
           return decisions;
         };
@@ -351,6 +390,7 @@ export const readRecordsTable = async (
         ? { fieldEditors: fieldEditorsOf(bound.module, read.context.releaseSet.modules) }
         : {}),
       ...(decide === undefined ? {} : { decide }),
+      ...(decisionFieldIds.length === 0 ? {} : { decisionFieldIds }),
       ...(timeZone === undefined ? {} : { timeZone }),
       titleRecordLinks: read.services.titleRecordLinks,
       state: { ...effectiveState, page },

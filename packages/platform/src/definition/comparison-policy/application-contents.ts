@@ -61,6 +61,7 @@ const placementSubtreeIsOptionalPresentation = (item: RecordValue): boolean => {
   return (
     vortex.viewPermissionKey === undefined &&
     vortex.usePermissionKey === undefined &&
+    vortex.applicationAudience === undefined &&
     vortex.visibilityCondition === undefined &&
     vortex.requiredCondition === undefined &&
     vortex.readOnlyCondition === undefined &&

@@ -6,3 +6,4 @@ export * from "./icon-names";
 export * from "./currencies";
 export * from "./runtime-primitives";
 export * from "./validation-errors";
+export * from "./application-link";

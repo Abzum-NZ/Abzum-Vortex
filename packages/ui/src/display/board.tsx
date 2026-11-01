@@ -554,7 +554,9 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
   // The board's cards offer the grid's own declared row actions, each by its event identity.
   const contract = recordsTableContractOrLog(props.settings, "board display");
   const rowActions: readonly BoardRowAction[] = contract?.features.rowActions.enabled
-    ? contract.rowBehaviours.rowActions
+    ? contract.rowBehaviours.rowActions.flatMap((action) =>
+        action.eventId === undefined ? [] : [{ eventId: action.eventId, label: action.label }],
+      )
     : [];
   const [pendingKeys, setPendingKeys] = useState<ReadonlySet<string>>(new Set());
   const [failedKeys, setFailedKeys] = useState<ReadonlySet<string>>(new Set());
