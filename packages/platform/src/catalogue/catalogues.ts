@@ -111,8 +111,8 @@ const blockPaletteGroupKeys = [
 
 export const fieldTypeSchema = z.enum(fieldTypeKeys);
 /**
- * The fixed application experience states. A page refused and a page missing share `not_found`,
- * so their surfaces stay indistinguishable and never reveal why an address is unavailable.
+ * The fixed application experience states. `not_found` is the application's own page for an
+ * address naming no page of it; a page the viewer's role can't open shows the platform refusal.
  */
 const applicationExperienceStateKeys = ["not_found", "unavailable", "error"] as const;
 export const applicationExperienceStateSchema = z.enum(applicationExperienceStateKeys);

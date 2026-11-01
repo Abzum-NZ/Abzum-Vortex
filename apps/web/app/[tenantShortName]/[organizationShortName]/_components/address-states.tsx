@@ -27,12 +27,18 @@ import { platformBlockReleasesFor } from "../../../_lib/platform-block-releases"
 import { OrganizationAddressStatePage } from "./organization-launcher-page";
 
 /**
- * What an address shows when it shows no application page. A refused and a missing address stay
- * indistinguishable: neither names a reason or whether anything exists.
+ * What an address shows when it shows no application page. Outside an application the viewer may
+ * open, a refused and a missing address stay indistinguishable: neither names a reason or whether
+ * anything exists. Inside one, a page the role can't open and a page that no longer exists each
+ * say so.
  */
 type AddressState =
   | Readonly<{ kind: "unavailable"; back: "organization" | "chooser" }>
-  | Readonly<{ kind: "page_not_open"; applicationName: string; homeHref: string }>
+  | Readonly<{
+      kind: "page_not_open" | "page_missing";
+      applicationName: string;
+      homeHref: string;
+    }>
   | Readonly<{ kind: "temporarily_unavailable"; retryHref: string }>
   | Readonly<{ kind: "suspended" }>
   | Readonly<{ kind: "preview_not_runnable"; sentence: string; studioHref: string }>;
@@ -77,8 +83,17 @@ const stateContent = (
         page: {
           key: "page_not_open",
           title: "You don't have access to this page",
-          detail:
-            "Your role can't open this page, or it no longer exists. Ask an administrator if you need it.",
+          detail: "Your role can't open this page. Ask an administrator if you need it.",
+          actionLabel: `Back to ${state.applicationName}`,
+        },
+        href: state.homeHref,
+      };
+    case "page_missing":
+      return {
+        page: {
+          key: "page_missing",
+          title: "This page no longer exists",
+          detail: `${state.applicationName} has no page at this address. It may have been removed or renamed.`,
           actionLabel: `Back to ${state.applicationName}`,
         },
         href: state.homeHref,

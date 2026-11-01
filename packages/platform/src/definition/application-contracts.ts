@@ -451,9 +451,8 @@ const calendarTitleFieldTypes: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * One declared application experience page: a normal page rendered for a fixed state. A
- * refused page and a missing page both resolve to `not_found`, so the two surfaces stay
- * identical and never disclose why an address is unavailable.
+ * One declared application experience page: a normal page rendered for a fixed state, shown only
+ * to a viewer who may open the application. `not_found` answers an address naming no page of it.
  */
 export const applicationExperienceSchema = z
   .object({ state: applicationExperienceStateSchema, pageId: pageIdSchema })

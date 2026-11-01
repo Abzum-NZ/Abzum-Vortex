@@ -20,18 +20,18 @@ import { mapWebError } from "./web-error-mapper";
 import { attributePageReadScope } from "./page-read-attribution";
 
 type ApplicationAddressResult =
+  /** No application the viewer may open: nothing about the address is disclosed. */
+  | Readonly<{ kind: "unavailable" }>
+  /**
+   * An application the viewer may open whose addressed page is not open to them: `refused` when the
+   * release has the page, `missing` when it has no page of that key. Only a missing page carries
+   * the application's own not-found page, when it defines one.
+   */
   | Readonly<{
       kind: "unavailable";
-      /**
-       * The addressed application's own not-found page, present only when the viewer may open
-       * that application. A refused page and a missing page of it both carry the same page.
-       */
+      application: PermittedApplication;
+      page: "refused" | "missing";
       experience?: ApplicationExperience;
-      /**
-       * The addressed application, present only when the viewer may open it but not this page (or
-       * the page does not exist), so the refusal can lead back into the application.
-       */
-      application?: PermittedApplication;
     }>
   | Readonly<{ kind: "temporarily_unavailable" }>
   | Readonly<{ kind: "suspended_super_administrator_account" }>
@@ -124,14 +124,21 @@ export const resolveApplicationAddress = cache(
 
     const resolved = resolvePermittedApplicationAddress(read, applicationKey, pageKey);
     if (resolved.kind !== "available") {
-      // Experiences are carried only for an application the viewer may open, so an unknown or
-      // refused application falls back to the neutral page and discloses nothing about itself.
-      const experience = addressed.experiences.find((entry) => entry.state === "not_found");
+      // An unknown or refused application falls back to the neutral page and discloses nothing
+      // about itself. Inside an application the viewer may open, a page of the release they may
+      // not open is refused; an address naming no page of the release is missing.
       const application = read.applications.find((entry) => entry.key === applicationKey);
+      if (application === undefined) return { kind: "unavailable" };
+      if (addressed.releasePageKeys === undefined)
+        throw new Error("Addressed application read carries no release page keys");
+      if (pageKey !== undefined && addressed.releasePageKeys.includes(pageKey))
+        return { kind: "unavailable", application, page: "refused" };
+      const experience = addressed.experiences.find((entry) => entry.state === "not_found");
       return {
         kind: "unavailable",
+        application,
+        page: "missing",
         ...(experience === undefined ? {} : { experience }),
-        ...(application === undefined ? {} : { application }),
       };
     }
     attributePageReadScope(read.organizationId, resolved.application.applicationRootId);
