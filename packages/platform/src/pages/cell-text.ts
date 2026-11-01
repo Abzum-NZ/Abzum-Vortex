@@ -7,7 +7,7 @@ export const UNAVAILABLE_TEXT = "Unavailable";
 export const NO_ROWS_TEXT = "No rows";
 
 /** The text of a table field's cell: how many rows it holds. */
-export const rowCountText = (count: number): string =>
+const rowCountText = (count: number): string =>
   count === 0 ? NO_ROWS_TEXT : count === 1 ? "1 row" : `${count} rows`;
 
 type RichTextDocument = Extract<DisplayDetailCell, { kind: "rich_text" }>["document"];
