@@ -13,6 +13,41 @@
 -- releases keep their read-model key as history; the live registry no longer names it.
 set role vortex_owner;
 
+create or replace function vortex_definition.accepted_contract_version(
+  p_kind text
+)
+returns text[]
+language plpgsql
+immutable
+set search_path = ''
+as $function$
+begin
+  case p_kind
+    when 'application' then
+      return array['4.5.0'];
+    when 'module' then
+      return array['4.5.0'];
+    when 'record_type' then
+      return array['4.5.0'];
+    else
+      raise exception using errcode = '22023',
+        message = 'Accepted contract version kind is unknown';
+  end case;
+end
+$function$;
+
+revoke all on function vortex_definition.accepted_contract_version(text)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_definition.accepted_contract_version(text)
+  to vortex_owner, vortex_record_adapter;
+comment on function vortex_definition.accepted_contract_version(text) is
+  'The one accepted definition contract version per contract kind (a one-element array); the single SQL source of truth, compared with the TypeScript definitionContractVersion constant by the guard. application: vortex_definition.provision_module_installation_storage and vortex_definition.activate_application_installation (detach checks release identity only). module: vortex_record.provision_exact_module_storage. record_type: vortex_access.evaluate_organization_record_access_internal.';
+
+alter function vortex_definition.accepted_contract_version(p_kind text) owner to vortex_owner;
+
+grant execute on function vortex_definition.accepted_contract_version(p_kind text) to postgres;
+
+
 create or replace function vortex_access.list_application_store_entries_projection(
   p_record_ids uuid[], p_sort_key text, p_direction text,
   p_after jsonb, p_limit integer, p_predicate jsonb
@@ -253,11 +288,9 @@ alter function vortex_access.list_application_store_entries_projection(
   uuid[], text, text, jsonb, integer, jsonb
 ) owner to vortex_owner;
 
--- A stored release's authored source is the base of its next publication, and it is read back
--- through the current source contract; a stored draft is the same. Both still name the retired
--- read, so the forward migration rewrites that one value in place for every draft and every
--- release, recomputes each recorded fingerprint with the same canonical JSON the contract uses,
--- and verifies every recorded fingerprint before it touches anything. One read, one name.
+-- Removing a protected read is a contract change. Every draft moves to 4.5.0 and names the one
+-- applications read; releases stay append-only history under their original contract. The
+-- superseded-contract publication path publishes the current draft against the current catalogue.
 create function pg_temp.application_store_canonical_json(p_value jsonb)
 returns text
 language plpgsql
@@ -372,12 +405,15 @@ begin
   for stored in
     select d.root_id, d.draft_source
     from vortex_definition.drafts as d
-    where d.draft_source::text like '%"installed_applications"%'
     order by d.root_id
   loop
-    converted := pg_temp.application_store_source(stored.draft_source);
+    converted := pg_catalog.jsonb_set(
+      pg_temp.application_store_source(stored.draft_source),
+      '{source_contract_version}', '"4.5.0"'::jsonb
+    );
     update vortex_definition.drafts as d set
       draft_source = converted,
+      source_contract_version = '4.5.0',
       source_fingerprint = pg_temp.application_store_fingerprint(converted),
       draft_revision = d.draft_revision + 1,
       updated_at = greatest(pg_catalog.statement_timestamp(), d.updated_at),
@@ -388,31 +424,6 @@ begin
   end loop;
 end
 $convert$;
-
-alter table vortex_definition.releases disable trigger releases_append_only;
-
-do $convert$
-declare
-  stored record;
-  converted jsonb;
-begin
-  for stored in
-    select release.root_id, release.release_revision, release.authored_source
-    from vortex_definition.releases as release
-    where release.authored_source::text like '%"installed_applications"%'
-    order by release.root_id, release.release_revision
-  loop
-    converted := pg_temp.application_store_source(stored.authored_source);
-    update vortex_definition.releases as release set
-      authored_source = converted,
-      authored_source_fingerprint = pg_temp.application_store_fingerprint(converted)
-    where release.root_id = stored.root_id
-      and release.release_revision = stored.release_revision;
-  end loop;
-end
-$convert$;
-
-alter table vortex_definition.releases enable trigger releases_append_only;
 
 drop function pg_temp.application_store_source(jsonb);
 drop function pg_temp.application_store_fingerprint(jsonb);
