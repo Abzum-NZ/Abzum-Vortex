@@ -418,6 +418,21 @@ const gridSource = (props: Readonly<Record<string, unknown>>, release: PlatformB
 };
 
 /**
+ * The compiled settings a canvas table draws from. A draft that turns on adding records before it
+ * names the form they open is drawn without that button, so the canvas shows the table while the
+ * inspector still asks for the form: an incomplete draft is not a release defect. Any other
+ * setting that cannot be read is still a defect, and the reader logs it.
+ */
+const drawableTableSettings = (
+  settings: ReturnType<typeof compiledItemSettings>,
+): ReturnType<typeof compiledItemSettings> => {
+  const adding = settings["inline_create"];
+  if (adding?.kind !== "boolean" || !adding.value || settings["create_page"] !== undefined)
+    return settings;
+  return { ...settings, inline_create: { kind: "boolean", value: false } };
+};
+
+/**
  * The table's contract and field names; undefined while the compiled table is behind its draft
  * settings (it catches up on the next compilation). Only a table release is ever passed here, so a
  * contract that does not read is a real defect and is logged.
@@ -428,7 +443,7 @@ const gridSetup = (
   release: PlatformBlockRelease,
 ) => {
   const contract = recordsTableContractOrLog(
-    compiledItemSettings(compiled, release),
+    drawableTableSettings(compiledItemSettings(compiled, release)),
     "studio canvas grid",
   );
   if (contract === undefined) return undefined;
