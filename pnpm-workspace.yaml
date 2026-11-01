@@ -19,8 +19,9 @@ catalog:
   motion: 14.9.0
   "@base-ui/react": 1.9.0
   "@types/node": 26.6.6
-  # TypeScript 7 ships no compiler API yet. typescript (the API that typescript-eslint, Next.js and knip
-  # import) is the 6.0 compatibility package; @typescript/native is TypeScript 7 and provides tsc.
+  # TypeScript 7 ships no compiler API yet. typescript is the 6.0 compatibility package: typescript-eslint,
+  # Next.js and the guard import its API. @typescript/native is TypeScript 7 and provides tsc. Remove the
+  # alias once typescript-eslint and Next.js accept TypeScript 7.1.
   typescript: npm:@typescript/typescript6@6.0.2
   "@typescript/native": npm:typescript@7.0.2
   "@js-temporal/polyfill": 0.5.1
@@ -54,12 +55,8 @@ catalogMode: strict
 saveExact: true
 strictPeerDependencies: true
 
-# motion's own packages float on caret ranges; hold them to the pinned motion release.
 overrides:
   "exceljs>uuid": 11.1.1
-  framer-motion: 14.9.0
-  motion-dom: 14.9.0
-  motion-utils: 14.7.0
   happy-dom: 21.0.4
   # GHSA-g3hv-75wg-m249: eslint and typescript-eslint pull 10.x; 11 keeps the named exports they use.
   # exceljs reaches 3.x and 5.x through glob 7, which needs minimatch 3 internals, so they stay.
