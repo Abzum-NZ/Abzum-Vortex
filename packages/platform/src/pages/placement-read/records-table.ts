@@ -13,6 +13,7 @@ import { tableReadValuesSchema } from "../display-payload-table";
 import type { RecordsTableGroupRead } from "../records-table-features/grouping";
 import { decideRecordTypeExport } from "../records-table-features/record-type-access";
 import {
+  applicationLinkRowOf,
   projectApplicationRowActions,
   projectRowActionAvailability,
   rowActionInstallationOf,
@@ -310,26 +311,8 @@ export const readRecordsTable = async (
         return fieldId === undefined ? [] : [fieldId];
       })
     : [];
-  const applicationOf = (row: ProtectedQueryRow): ApplicationLinkRow | undefined => {
-    const values = new Map(
-      Object.entries(row.values).map(([fieldId, value]) => [fieldId.toLowerCase(), value] as const),
-    );
-    const valueOf = (key: string): unknown => {
-      const fieldId = applicationFieldIds.get(key);
-      return fieldId === undefined ? undefined : values.get(fieldId);
-    };
-    const key = valueOf("key");
-    const isSystemApplication = valueOf("is_system_application");
-    if (typeof key !== "string" || key.length === 0 || typeof isSystemApplication !== "boolean")
-      return undefined;
-    const status = valueOf("status");
-    return {
-      applicationRootId: row.recordId,
-      key,
-      status: typeof status === "string" ? status : null,
-      isSystemApplication,
-    };
-  };
+  const applicationOf = (row: ProtectedQueryRow): ApplicationLinkRow | undefined =>
+    applicationLinkRowOf(row, applicationFieldIds);
   // A draft preview offers no export.
   const previewing = read.selection.previewInstallationId !== undefined;
   const decide: RecordsTableReadDecider | undefined =

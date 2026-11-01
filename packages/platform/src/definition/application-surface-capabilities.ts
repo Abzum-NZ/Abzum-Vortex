@@ -6,7 +6,12 @@ import {
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "../access/human-organization-request";
-import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import type {
+  IdentitySession,
+  OrganizationSelectionCandidate,
+  SelectedOrganizationScope,
+} from "../access/identity-access";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import { describeFailure } from "../catalogue/runtime-primitives";
 import { BuilderAuthorityError, requireBuilderAuthority } from "./builder-authority";
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "../access/builder-authority";
@@ -61,6 +66,32 @@ const allows = async (
   }
 };
 
+/** The same capability decision for a page read and a command's current protected request. */
+export const readApplicationSurfaceCapabilitiesInTransaction = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  permissions: PlatformPermissionSource,
+): Promise<ApplicationSurfaceCapabilities> => {
+  const ordinary = createBuilderAuthority({
+    transaction,
+    scope,
+    targetFacts: ordinaryApplicationFacts,
+    permissions,
+  });
+  const system = createBuilderAuthority({
+    transaction,
+    scope,
+    targetFacts: systemApplicationFacts,
+    permissions,
+  });
+  const mayBuild = await allows(ordinary, { kind: "draft_change" });
+  return {
+    mayBuild,
+    mayBuildSystemApplications: mayBuild && (await allows(system, { kind: "draft_change" })),
+    mayInstall: await allows(ordinary, { kind: "application_management" }),
+  };
+};
+
 /**
  * The one application-capability read. It asks the same builder authority every builder operation
  * passes through, in the person's own request transaction: draft changes need
@@ -76,26 +107,8 @@ export const readApplicationSurfaceCapabilities = async (
   const result = await createHumanOrganizationRequestService(dependencies).run(
     session,
     selection,
-    async (transaction, scope) => {
-      const ordinary = createBuilderAuthority({
-        transaction,
-        scope,
-        targetFacts: ordinaryApplicationFacts,
-        permissions: dependencies.permissions,
-      });
-      const system = createBuilderAuthority({
-        transaction,
-        scope,
-        targetFacts: systemApplicationFacts,
-        permissions: dependencies.permissions,
-      });
-      const mayBuild = await allows(ordinary, { kind: "draft_change" });
-      return {
-        mayBuild,
-        mayBuildSystemApplications: mayBuild && (await allows(system, { kind: "draft_change" })),
-        mayInstall: await allows(ordinary, { kind: "application_management" }),
-      };
-    },
+    (transaction, scope) =>
+      readApplicationSurfaceCapabilitiesInTransaction(transaction, scope, dependencies.permissions),
   );
   if (result.kind !== "available") {
     console.error(

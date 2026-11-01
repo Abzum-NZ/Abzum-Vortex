@@ -25,6 +25,31 @@ type RowActionInstallation = Readonly<{
   namedActions: ReadonlyMap<string, FlowNamedAction>;
 }>;
 
+/** Application facts from the current row and its installed record type's field identities. */
+export const applicationLinkRowOf = (
+  row: Readonly<{ recordId: string; values: Readonly<Record<string, unknown>> }>,
+  fieldIds: ReadonlyMap<string, string>,
+): ApplicationLinkRow | undefined => {
+  const values = new Map(
+    Object.entries(row.values).map(([fieldId, value]) => [fieldId.toLowerCase(), value] as const),
+  );
+  const valueOf = (key: string): unknown => {
+    const fieldId = fieldIds.get(key);
+    return fieldId === undefined ? undefined : values.get(fieldId);
+  };
+  const key = valueOf("key");
+  const isSystemApplication = valueOf("is_system_application");
+  if (typeof key !== "string" || key.length === 0 || typeof isSystemApplication !== "boolean")
+    return undefined;
+  const status = valueOf("status");
+  return {
+    applicationRootId: row.recordId,
+    key,
+    status: typeof status === "string" ? status : null,
+    isSystemApplication,
+  };
+};
+
 /** The flow bindings, flows and named actions of the installed release a row's commands run in. */
 export const rowActionInstallationOf = ({
   releaseSet,
@@ -75,30 +100,16 @@ const namedActionFor = (
 };
 
 /**
- * Whether the surface capabilities allow one application capability for the row's application. An
- * open needs the application among the ones the person may open; a build needs the organisation's
- * draft permission (plus the system-application permission for a platform application); installing
- * and removing need the installation permission, and removing never applies to a platform
- * application.
+ * Installing and removing need the installation permission; removing also needs current row facts
+ * proving the application is not supplied by the platform. Opening and editing use declared links.
  */
 export const applicationCapabilityAllowed = (
   capability: ApplicationActionCapability,
   application: Parameters<ApplicationSurfaceAccess["isOpenable"]>[0] | undefined,
-  surfaces: ApplicationSurfaceAccess,
-): boolean => {
-  if (capability === "install_application") return surfaces.capabilities.mayInstall;
-  if (application === undefined) return false;
-  switch (capability) {
-    case "open_application":
-      return surfaces.isOpenable(application);
-    case "build_application":
-      return application.isSystemApplication
-        ? surfaces.capabilities.mayBuildSystemApplications
-        : surfaces.capabilities.mayBuild;
-    case "remove_application":
-      return surfaces.capabilities.mayInstall && !application.isSystemApplication;
-  }
-};
+  capabilities: ApplicationSurfaceAccess["capabilities"],
+): boolean =>
+  capabilities.mayInstall &&
+  (capability === "install_application" || application?.isSystemApplication === false);
 
 /**
  * The application row actions of one read: a link action resolves its address per row (and is
@@ -140,7 +151,7 @@ export const projectApplicationRowActions = (
             return applicationCapabilityAllowed(
               declaration.applicationCapability,
               application,
-              surfaces,
+              surfaces.capabilities,
             )
               ? { action: decision.action, eligible: true }
               : { action: decision.action, eligible: false, reason: "not_permitted" };

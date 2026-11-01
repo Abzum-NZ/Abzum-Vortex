@@ -21,12 +21,7 @@ export const applicationLinkTargetSchema = z.enum(applicationLinkTargets);
 export type ApplicationLinkTarget = z.infer<typeof applicationLinkTargetSchema>;
 
 /** What a row action needs of the application its row is about, beyond the link it declares. */
-export const applicationActionCapabilities = [
-  "open_application",
-  "build_application",
-  "install_application",
-  "remove_application",
-] as const;
+export const applicationActionCapabilities = ["install_application", "remove_application"] as const;
 export const applicationActionCapabilitySchema = z.enum(applicationActionCapabilities);
 export type ApplicationActionCapability = z.infer<typeof applicationActionCapabilitySchema>;
 

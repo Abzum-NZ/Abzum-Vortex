@@ -336,6 +336,7 @@ export async function invokeInstalledFlow(
         if (guided !== undefined && refusesGuidedBinding(guided, binding.event)) return false;
         return admitPageGesture(
           {
+            permissions: dependencies.releaseCatalogue.permissions,
             validateOption: dependencies.validateControlOption,
             projectRowForm: (rowBound, rowContext, rowPage, tableId, formId, recordId) =>
               admitRowForm(
@@ -586,6 +587,7 @@ export async function invokeInstalledFlow(
             binding,
             invocation.callerInputs ?? {},
             invocation.subject,
+            dependencies.releaseCatalogue.permissions,
             (operation) => requests.run(identity.session, selection, operation),
           );
     if (featureRefusal !== undefined) {

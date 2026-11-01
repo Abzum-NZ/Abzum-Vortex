@@ -8,6 +8,8 @@ import { recordsTableInlineEditEvent } from "../../definition/application-compos
 import { recordsTableRowEditEvent } from "../../definition/application-composition/records-table-features/row-edit";
 import type { ComponentFlowBinding } from "../../definition/application-flow-bindings";
 import type { RequestDatabaseTransaction } from "../../db/request-transaction";
+import type { PlatformPermissionSource } from "../../access/platform-permissions";
+import { readApplicationSurfaceCapabilitiesInTransaction } from "../../definition/application-surface-capabilities";
 import type {
   BoundHumanOrganizationRequest,
   HumanOrganizationRequestResult,
@@ -20,7 +22,11 @@ import {
   placementSettings,
   TABLE_BLOCK_RELEASE,
 } from "../../definition/application-composition-catalogue";
-import { projectRowActionAvailability } from "./row-actions";
+import {
+  applicationCapabilityAllowed,
+  applicationLinkRowOf,
+  projectRowActionAvailability,
+} from "./row-actions";
 import { fieldEditorsOf } from "../placement-read/shared";
 import { pageSubjectFromRead, readPageSubjectInTransaction } from "../page-subject-read";
 import {
@@ -182,8 +188,12 @@ export const recordsTableBindingRefusal = async (
   binding: ComponentFlowBinding,
   inputs: Readonly<Record<string, unknown>>,
   subject: Readonly<{ recordId: string; revision: number }> | undefined,
+  permissions: PlatformPermissionSource,
   run: <Result>(
-    operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
+    operation: (
+      transaction: RequestDatabaseTransaction,
+      scope: SelectedOrganizationScope,
+    ) => Promise<Result>,
   ) => Promise<HumanOrganizationRequestResult<Result>>,
 ): Promise<RecordsTableRequestRefusal | undefined> => {
   const event = binding.event;
@@ -341,7 +351,25 @@ export const recordsTableBindingRefusal = async (
     (recordIds.length !== 1 || !sameId(subject.recordId, recordIds[0] as string))
   )
     return recordsTableRequestRefusal(event, "subject_not_the_record");
-  const read = await run(async (transaction) => {
+  const read = await run(async (transaction, scope) => {
+    const applicationCapabilities =
+      command?.applicationCapability === undefined
+        ? undefined
+        : await readApplicationSurfaceCapabilitiesInTransaction(transaction, scope, permissions);
+    const applicationRecordType =
+      applicationCapabilities === undefined
+        ? undefined
+        : installation.modules
+            ?.flatMap((module) => module.content.recordTypes)
+            .find((type) => sameId(String(type.recordTypeId), String(recordTypeId)));
+    if (applicationCapabilities !== undefined && applicationRecordType === undefined)
+      throw new Error("GRID_COMMAND_RECORD_TYPE_MISSING");
+    const applicationFieldIds = new Map(
+      (applicationRecordType?.fields ?? []).map((field) => [
+        field.key,
+        String(field.fieldId).toLowerCase(),
+      ]),
+    );
     const rows = await transaction.query<{
       record_id: string;
       record: unknown;
@@ -387,6 +415,14 @@ export const recordsTableBindingRefusal = async (
         // Only the invoked command is re-decided; the row's other commands are not this request's.
         const invoked = <Decision extends { action: string }>(actions: readonly Decision[]) =>
           actions.filter((action) => sameId(action.action, binding.eventId));
+        const applicationAllowed =
+          command?.applicationCapability === undefined || applicationCapabilities === undefined
+            ? undefined
+            : applicationCapabilityAllowed(
+                command.applicationCapability,
+                applicationLinkRowOf(row, applicationFieldIds),
+                applicationCapabilities,
+              );
         const current = await projectRowActionAvailability(
           transaction,
           { ...installation, namedActions: installation.namedActions },
@@ -396,7 +432,17 @@ export const recordsTableBindingRefusal = async (
             actions: projected.actions.filter((action) => sameId(action.eventId, binding.eventId)),
             availability: projected.availability.map((entry) => ({
               ...entry,
-              actions: invoked(entry.actions),
+              actions: invoked(entry.actions).map((decision) =>
+                applicationAllowed === undefined
+                  ? decision
+                  : applicationAllowed
+                    ? { action: decision.action, eligible: true as const }
+                    : {
+                        action: decision.action,
+                        eligible: false as const,
+                        reason: "not_permitted" as const,
+                      },
+              ),
             })),
           },
         );
