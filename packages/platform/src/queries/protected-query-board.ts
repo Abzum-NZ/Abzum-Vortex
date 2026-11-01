@@ -5,6 +5,7 @@ import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import type { SelectedOrganizationScope } from "../access/identity-access";
 import type { JsonValue } from "../catalogue/common";
 import { sameId } from "../catalogue/runtime-primitives";
+import { defaultRecordOrderField } from "../definition/record-default-order";
 import {
   type QueryContinuation,
   type QueryContinuationKey,
@@ -55,6 +56,7 @@ const readBoardMemberPage = async (
   command: ProtectedQueryBoardMembersCommand,
   releaseRevision: number,
   inputValues: Readonly<Record<string, JsonValue>>,
+  sort: readonly { fieldId: string; direction: "ascending" }[],
   after: QueryContinuation | undefined,
 ) => {
   const rows = await transaction.query<ResultRow>`
@@ -70,6 +72,7 @@ const readBoardMemberPage = async (
       ${command.selector.choiceFieldId}::uuid,
       ${JSON.stringify(command.selector.column)}::text::jsonb,
       ${command.pageSize}::integer,
+      ${JSON.stringify(sort)}::text::jsonb,
       ${after === undefined ? null : JSON.stringify({ sort: after.sort, sortKey: after.sortKey, phase: after.phase, recordId: after.recordId })}::text::jsonb
     ) as result
   `;
@@ -104,9 +107,6 @@ export const boardMembersCommand = async (
       after.direction !== "forward"
     )
       return refusal("cursor_stale");
-    // Board pages have one fixed record-identity order. A row-query keyset can
-    // never be interpreted as a member-page position.
-    if (after.sortKey.length !== 0) return refusal("cursor_stale");
   }
 
   const admitted = await admitQueryInputs(transaction, command, after?.moduleReleaseRevision);
@@ -122,6 +122,7 @@ export const boardMembersCommand = async (
     command,
     declared.moduleReleaseRevision,
     inputValues,
+    boardDefaultSort(declared),
     after,
   );
   if (page.outcome === "refused") return refusal(page.reasonCode);
@@ -152,8 +153,18 @@ const boardMemberFingerprint = (
     requestedFieldIds: command.requestedFieldIds.map((fieldId) => fieldId.toLowerCase()).sort(),
     requestedSystemFieldKeys: [...command.requestedSystemFieldKeys].sort(),
     pageSize: command.pageSize,
-    memberOrder: "record_id_ascending",
+    memberOrder: "record_default_ascending",
   });
+
+/** The same published order is used for the first and continued column pages. */
+const boardDefaultSort = (record: {
+  titleFieldId: string;
+  sortableFieldIds: readonly string[];
+}): readonly { fieldId: string; direction: "ascending" }[] => {
+  const fields = record.sortableFieldIds.map((fieldId) => ({ fieldId, sortable: true }));
+  const field = defaultRecordOrderField(fields, record.titleFieldId, (item) => item.fieldId);
+  return field === undefined ? [] : [{ fieldId: field.fieldId, direction: "ascending" }];
+};
 
 /** One column's member page with its continuation, whichever read produced it. */
 const boardMemberResult = (
@@ -214,6 +225,7 @@ const readBoardColumnPages = async (
   command: z.infer<typeof boardColumnPagesCommandSchema>,
   releaseRevision: number,
   inputValues: Readonly<Record<string, JsonValue>>,
+  sort: readonly { fieldId: string; direction: "ascending" }[],
 ) => {
   const rows = await transaction.query<ResultRow>`
     select vortex_record.run_module_query_board_columns(
@@ -227,7 +239,8 @@ const readBoardColumnPages = async (
       ${sqlArray(command.filterableFieldIds)}::text::uuid[],
       ${command.selectors[0]!.choiceFieldId}::uuid,
       ${JSON.stringify(command.selectors.map((selector) => selector.column))}::text::jsonb,
-      ${command.pageSize}::integer
+      ${command.pageSize}::integer,
+      ${JSON.stringify(sort)}::text::jsonb
     ) as result
   `;
   return boardColumnPagesReadSchema.parse(one(rows));
@@ -264,6 +277,7 @@ export const boardColumnPagesCommand = async (
     command,
     declared.moduleReleaseRevision,
     inputValues,
+    boardDefaultSort(declared),
   );
   if (read.outcome === "refused") return refusal(read.reasonCode);
   if (

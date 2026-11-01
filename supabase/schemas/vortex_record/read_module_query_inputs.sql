@@ -45,7 +45,14 @@ begin
     'outcome', 'resolved',
     'moduleReleaseRevision', resolved -> 'moduleReleaseRevision',
     'moduleReleaseVersion', resolved -> 'moduleReleaseVersion',
-    'inputs', coalesce(resolved #> '{query,inputs}', '[]'::jsonb)
+    'inputs', coalesce(resolved #> '{query,inputs}', '[]'::jsonb),
+    'titleFieldId', resolved #> '{recordType,titleFieldId}',
+    'sortableFieldIds', coalesce((
+      select pg_catalog.jsonb_agg(field.value -> 'fieldId' order by field.ordinality)
+      from pg_catalog.jsonb_array_elements(resolved #> '{recordType,fields}')
+        with ordinality as field(value, ordinality)
+      where (field.value ->> 'sortable')::boolean is true
+    ), '[]'::jsonb)
   );
 end
 $function$;
@@ -59,4 +66,4 @@ grant execute on function vortex_record.read_module_query_inputs(uuid, uuid)
   to vortex_request;
 
 comment on function vortex_record.read_module_query_inputs(uuid, uuid) is
-  'The typed input contract of one installed or exact current human-owned preview Module query, or one refusal.';
+  'The typed input contract and record type ordering metadata of one installed or exact current human-owned preview Module query, or one refusal.';

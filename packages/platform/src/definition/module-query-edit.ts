@@ -2,6 +2,8 @@ import { builderKeySchema } from "../catalogue/identifiers";
 import type { ModuleQueryExposure } from "./module-query-exposure";
 import { readTimeCalculations } from "./module-field-formulas";
 import { queryTotalAccepts, queryTotalOperationLabels } from "./module-query-totals";
+import { defaultRecordOrderField } from "./record-default-order";
+export { defaultRecordOrderField } from "./record-default-order";
 import {
   applicationSourceDocumentSchema,
   type ApplicationSourceDocument,
@@ -379,8 +381,7 @@ export const createInlineQuery = (
   else if (module.queries.some((query) => query.key === key))
     issues.push(`This module already has a query with the key "${key}".`);
   const title = record.fields.find((field) => field.key === record.title_field) ?? record.fields[0];
-  const sorted: Field | undefined =
-    title?.sortable === true ? title : record.fields.find((field) => field.sortable);
+  const sorted = defaultRecordOrderField(record.fields, record.title_field, (field) => field.key);
   if (sorted === undefined)
     issues.push(
       `A query needs a field to sort by, and no field of ${record.name} is sortable. Turn on "People can sort by it" on one first.`,
