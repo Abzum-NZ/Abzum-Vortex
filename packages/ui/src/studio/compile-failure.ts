@@ -15,6 +15,8 @@ export type StudioCompileFailure = Readonly<{
   recordTypeKey?: string;
   fieldKey?: string;
   queryKey?: string;
+  /** The page the refusal is about, when the compiler located one. */
+  pageKey?: string;
   /** The flow and the step in it the refusal is about. */
   flowKey?: string;
   taskId?: string;

@@ -35,7 +35,7 @@ import type {
 } from "../_lib/studio-data-model";
 import { studioViewRequest, type StudioViewRequest } from "../_lib/studio-view-request";
 import { summarizeSourceChange, type SourceChangeRow } from "../_lib/source-change-summary";
-import { conflictMessage, refusalMessage } from "./studio-refusal-messages";
+import { conflictMessage, refusalMessage, unavailableMessage } from "./studio-refusal-messages";
 import { useLeaveWarning } from "./use-leave-warning";
 import { useStudioSession } from "./use-studio-session";
 
@@ -140,7 +140,7 @@ export type StudioDraft = Readonly<{
   /** Live immutable resources, including an agent read completed before the next render. */
   readCatalogue: () => StudioCompiledView["catalogue"];
   loadingView: boolean;
-  viewProblem: string;
+  viewProblem: Readonly<{ message: string; retry: boolean }> | null;
   refreshView: () => Promise<void>;
   /** Resources for an invoked agent tool, read at the saved revision through the same view loader. */
   loadAuthoringResources: () => Promise<Pick<
@@ -341,7 +341,7 @@ export function useStudioDraft({
   const catalogue = view.catalogue;
   const catalogueRef = useRef(catalogue);
   catalogueRef.current = catalogue;
-  const [viewProblem, setViewProblem] = useState("");
+  const [viewProblem, setViewProblem] = useState<StudioDraft["viewProblem"]>(null);
   const [lifetime, setLifetime] = useState(0);
   const lifetimeRef = useRef(0);
 
@@ -460,7 +460,7 @@ export function useStudioDraft({
       lifetimeRef.current += 1;
       setLifetime(lifetimeRef.current);
       setStatus({ kind: "saved" });
-      setViewProblem("");
+      setViewProblem(null);
       return true;
     },
     [history, remember],
@@ -477,7 +477,7 @@ export function useStudioDraft({
       do {
         compileAgain.current = false;
         const target = savedRef.current;
-        setViewProblem("");
+        setViewProblem(null);
         try {
           const requested = requestRef.current;
           // A view asked for while this read ran may have been read meanwhile, for this revision.
@@ -536,7 +536,18 @@ export function useStudioDraft({
                 `[studio] the saved draft's compile did not answer for revision ${savedRef.current.draftRevision}: STUDIO_COMPILE_REFRESH_${result.kind.toUpperCase()}`,
               );
             setViewProblem(
-              "This editor could not load the saved draft with your current access. Try again or reload the latest draft.",
+              result.kind === "validation_failed"
+                ? {
+                    message: unavailableMessage(result.kind, result.reason),
+                    retry: false,
+                  }
+                : {
+                    message:
+                      result.kind === "refused"
+                        ? "This editor could not load the saved draft with your current access."
+                        : "This editor could not load the saved draft. Try again or reload the latest draft.",
+                    retry: result.kind !== "refused",
+                  },
             );
             continue;
           }
@@ -545,12 +556,15 @@ export function useStudioDraft({
           const loaded = { ...result.views[0]!, catalogue: result.catalogue };
           setView((previous) => viewOf(result, loaded, generation.current, previous));
         } catch (error) {
-          console.error(
+          console.info(
             "[studio] compiling the saved draft for the canvas failed",
             describeFailure(error),
           );
           if (active.current)
-            setViewProblem("This editor could not load the saved draft. Try again.");
+            setViewProblem({
+              message: "This editor could not load the saved draft. Try again.",
+              retry: true,
+            });
         }
       } while (compileAgain.current && active.current);
     })();
@@ -580,7 +594,7 @@ export function useStudioDraft({
       result.draft.draftRevision !== savedRef.current.draftRevision ||
       result.draft.sourceFingerprint !== savedRef.current.sourceFingerprint
     ) {
-      console.error(
+      console.info(
         "[studio] agent authoring resources did not answer for the current saved draft",
         result.kind,
       );
@@ -859,14 +873,14 @@ export function useStudioDraft({
         result.organizationId !== draft.organizationId ||
         !adoptLatest(result, requested)
       ) {
-        console.error(
+        console.info(
           `[studio] the latest saved draft could not be loaded: STUDIO_RELOAD_${result.kind.toUpperCase()}`,
         );
         return false;
       }
       return true;
     } catch (error) {
-      console.error("[studio] loading the latest saved draft failed", describeFailure(error));
+      console.info("[studio] loading the latest saved draft failed", describeFailure(error));
       return false;
     } finally {
       hold("reopening", false);
