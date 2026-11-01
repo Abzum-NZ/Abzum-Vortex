@@ -78,6 +78,7 @@ import {
   studioEditProblem,
   type StudioCompiledFields,
   type StudioDataEdit,
+  type StudioPublishedData,
 } from "../_lib/studio-data-model";
 import { StudioCalculationEditor } from "./studio-calculation-editor";
 import { StudioTotalEditor } from "./studio-total-editor";
@@ -1454,25 +1455,14 @@ export function ModuleFieldsEditor({
 }
 
 /**
- * The published record types and fields, loaded with Data or record-page creation, even when
- * compilation fails. Other views carry no publication facts and conservatively count saved fields
- * as published; consumers that change storage settings must first load their authorized view.
+ * The published record types and field capabilities, loaded with Data or record-page creation,
+ * even when compilation fails. Consumers that change storage first load their authorized view.
  */
 export const studioFieldPublication = (
-  published: Readonly<{ recordTypes: readonly string[]; fields: readonly string[] }> | null,
-  saved: Source,
+  published: StudioPublishedData | null,
 ): ModuleFieldPublication => {
-  if (published !== null)
-    return { recordTypes: new Set(published.recordTypes), fields: new Set(published.fields) };
-  const records = saved.body.modules.flatMap((module) =>
-    module.record_types.map((record) => ({ module, record })),
-  );
   return {
-    recordTypes: new Set(records.map(({ module, record }) => `${module.key}:${record.key}`)),
-    fields: new Set(
-      records.flatMap(({ module, record }) =>
-        record.fields.map((field: SourceField) => `${module.key}:${record.key}.${field.key}`),
-      ),
-    ),
+    recordTypes: new Set(published?.recordTypes),
+    fields: new Map(published?.fields.map((field) => [field.key, field])),
   };
 };

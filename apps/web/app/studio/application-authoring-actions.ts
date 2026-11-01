@@ -78,7 +78,7 @@ export async function reviewStudioApplicationAuthoring(organizationId: string, c
         },
         {
           publication: {
-            fields: new Set(view.published.fields),
+            fields: new Map(view.published.fields.map((field) => [field.key, field])),
             recordTypes: new Set(view.published.recordTypes),
           },
           peopleDirectory: view.peopleDirectory,

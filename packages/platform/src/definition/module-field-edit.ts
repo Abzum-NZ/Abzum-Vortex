@@ -35,13 +35,20 @@ type Relationship = RecordType["relationships"][number];
 /**
  * What the published versions of the application hold, by qualified reference: a field
  * (`module:record.field`) or a record type (`module:record`) in a published version has stored
- * records. The stored shape of such a field (its type, settings, and its required, unique, filter
- * and sort choices) is fixed, it cannot be removed, and a field added to such a record type must be
- * optional: an upgrade refuses anything else.
+ * records. Its type, stored settings, required and unique choices stay fixed, and it cannot be
+ * removed. Filtering and sorting can be added; once published they stay on. A field added to a
+ * published record type must be optional: an upgrade refuses anything else.
  */
 export type ModuleFieldPublication = Readonly<{
-  fields: ReadonlySet<string>;
+  fields: ReadonlyMap<string, Readonly<{ filterable: boolean; sortable: boolean }>>;
   recordTypes: ReadonlySet<string>;
+}>;
+
+/** A published field's qualified key and the query capabilities already released for it. */
+export type PublishedModuleField = Readonly<{
+  key: string;
+  filterable: boolean;
+  sortable: boolean;
 }>;
 
 /** What a field change is checked against besides the draft: what is published, and the people directory. */
@@ -463,7 +470,7 @@ export const changeInlineModuleField = (
           `A pipeline follows ${field.label}, so its filtering can't be turned off: its board groups ${record.plural_name} by it. Delete the pipeline first.`,
         ],
       };
-    const published = publication.fields.has(`${qualifiedRecord}.${field.key}`);
+    const published = publication.fields.get(`${qualifiedRecord}.${field.key}`);
     // Turning filtering or sorting on is additive: an installation adopting the release builds the
     // field's index. Turning it off is refused once published: installed apps may filter or sort by it.
     const turnedOff = (
@@ -471,8 +478,8 @@ export const changeInlineModuleField = (
         ["filterable", "filtering", "filter"],
         ["sortable", "sorting", "sort"],
       ] as const
-    ).filter(([key]) => field[key] && !change[key]);
-    if (published && turnedOff.length > 0)
+    ).filter(([key]) => published?.[key] && !change[key]);
+    if (turnedOff.length > 0)
       return {
         kind: "invalid",
         issues: [

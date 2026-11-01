@@ -445,7 +445,15 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
           publication: z
             .object({
               recordTypes: z.array(z.string().min(1)),
-              fields: z.array(z.string().min(1)),
+              fields: z.array(
+                z
+                  .object({
+                    key: z.string().min(1),
+                    filterable: z.boolean(),
+                    sortable: z.boolean(),
+                  })
+                  .strict(),
+              ),
               extensionPointUses: z.array(moduleExtensionPointUseSchema),
             })
             .strict(),
